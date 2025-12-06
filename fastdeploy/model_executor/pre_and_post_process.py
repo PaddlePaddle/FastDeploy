@@ -23,6 +23,7 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.input_batch import recover_batch_index_for_tokens
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -417,8 +418,10 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
+    recover_batch_index_for_tokens(sampler_output, model_output.index_to_batch_id)
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:

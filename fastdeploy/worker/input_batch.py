@@ -66,6 +66,8 @@ class InputBatch:
         """
         Initialize all share buffers for model inputs.
         """
+        self.num_running_requests = 0
+        self.running_requests_ids = []
         self.model_config: ModelConfig = fd_config.model_config
         self.cache_config: CacheConfig = fd_config.cache_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
@@ -75,6 +77,7 @@ class InputBatch:
 
         max_num_seqs = fd_config.scheduler_config.max_num_seqs
 
+        self.index_to_batch_id = {}
         self.pre_ids = paddle.full(
             [max_num_seqs, self.model_config.max_model_len],
             -1,
@@ -284,79 +287,125 @@ class InputBatch:
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
 
-        def swap_tensor_slice(tensor, idx1, idx2):
+        def swap_data(tensor, idx1, idx2):
             """Safely swap tensor slices using clone"""
             temp = tensor[idx1].clone()
             tensor[idx1] = tensor[idx2].clone()
             tensor[idx2] = temp
 
-        swap_tensor_slice(self.pre_ids, i1, i2)
-        swap_tensor_slice(self.input_ids, i1, i2)
-        swap_tensor_slice(self.prompt_ids, i1, i2)
-        swap_tensor_slice(self.top_p, i1, i2)
-        swap_tensor_slice(self.top_k, i1, i2)
-        swap_tensor_slice(self.min_p, i1, i2)
-        swap_tensor_slice(self.temperature, i1, i2)
-        swap_tensor_slice(self.penalty_score, i1, i2)
-        swap_tensor_slice(self.frequency_score, i1, i2)
-        swap_tensor_slice(self.presence_score, i1, i2)
-        swap_tensor_slice(self.temp_scaled_logprobs, i1, i2)
-        swap_tensor_slice(self.top_p_normalized_logprobs, i1, i2)
-        swap_tensor_slice(self.min_dec_len, i1, i2)
-        swap_tensor_slice(self.max_dec_len, i1, i2)
-        swap_tensor_slice(self.seq_lens_this_time_buffer, i1, i2)
+        self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
+        swap_data(self.pre_ids, i1, i2)
+        swap_data(self.input_ids, i1, i2)
+        swap_data(self.prompt_ids, i1, i2)
+        swap_data(self.top_p, i1, i2)
+        swap_data(self.top_k, i1, i2)
+        swap_data(self.min_p, i1, i2)
+        swap_data(self.temperature, i1, i2)
+        swap_data(self.penalty_score, i1, i2)
+        swap_data(self.frequency_score, i1, i2)
+        swap_data(self.presence_score, i1, i2)
+        swap_data(self.temp_scaled_logprobs, i1, i2)
+        swap_data(self.top_p_normalized_logprobs, i1, i2)
+        swap_data(self.min_dec_len, i1, i2)
+        swap_data(self.max_dec_len, i1, i2)
+        swap_data(self.seq_lens_this_time_buffer, i1, i2)
         if self.enable_expert_parallel:
-            swap_tensor_slice(self.seq_lens_this_time, i1, i2)
-        swap_tensor_slice(self.seq_lens_encoder, i1, i2)
-        swap_tensor_slice(self.seq_lens_decoder, i1, i2)
-        swap_tensor_slice(self.step_seq_lens_encoder, i1, i2)
-        swap_tensor_slice(self.step_seq_lens_decoder, i1, i2)
-        swap_tensor_slice(self.prompt_lens, i1, i2)
-        swap_tensor_slice(self.step_idx, i1, i2)
-        swap_tensor_slice(self.stop_flags, i1, i2)
+            swap_data(self.seq_lens_this_time, i1, i2)
+        swap_data(self.seq_lens_encoder, i1, i2)
+        swap_data(self.seq_lens_decoder, i1, i2)
+        swap_data(self.step_seq_lens_encoder, i1, i2)
+        swap_data(self.step_seq_lens_decoder, i1, i2)
+        swap_data(self.prompt_lens, i1, i2)
+        swap_data(self.step_idx, i1, i2)
+        swap_data(self.stop_flags, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
 
         # Swap 1D arrays
-        swap_tensor_slice(self.bad_tokens, i1, i2)
-        swap_tensor_slice(self.bad_tokens_len, i1, i2)
-        swap_tensor_slice(self.next_tokens, i1, i2)
-        swap_tensor_slice(self.is_block_step, i1, i2)
-        swap_tensor_slice(self.encoder_block_lens, i1, i2)
-        swap_tensor_slice(self.step_block_list, i1, i2)
-        swap_tensor_slice(self.recover_block_list, i1, i2)
-        swap_tensor_slice(self.need_block_list, i1, i2)
-        swap_tensor_slice(self.used_list_len, i1, i2)
-        swap_tensor_slice(self.infer_seed, i1, i2)
-        swap_tensor_slice(self.first_token_ids, i1, i2)
-        swap_tensor_slice(self.ori_seq_lens_encoder, i1, i2)
-        swap_tensor_slice(self.system_lens, i1, i2)
-        swap_tensor_slice(self.system_ids, i1, i2)
-        swap_tensor_slice(self.max_think_lens, i1, i2)
-        swap_tensor_slice(self.limit_think_status, i1, i2)
+        swap_data(self.bad_tokens, i1, i2)
+        swap_data(self.bad_tokens_len, i1, i2)
+        swap_data(self.next_tokens, i1, i2)
+        swap_data(self.is_block_step, i1, i2)
+        swap_data(self.encoder_block_lens, i1, i2)
+        swap_data(self.step_block_list, i1, i2)
+        swap_data(self.recover_block_list, i1, i2)
+        swap_data(self.need_block_list, i1, i2)
+        swap_data(self.used_list_len, i1, i2)
+        swap_data(self.infer_seed, i1, i2)
+        swap_data(self.first_token_ids, i1, i2)
+        swap_data(self.ori_seq_lens_encoder, i1, i2)
+        swap_data(self.system_lens, i1, i2)
+        swap_data(self.system_ids, i1, i2)
+        swap_data(self.max_think_lens, i1, i2)
+        swap_data(self.limit_think_status, i1, i2)
 
         # # Swap block tables
-        swap_tensor_slice(self.block_tables, i1, i2)
+        swap_data(self.block_tables, i1, i2)
 
         # # Swap stop sequences
-        swap_tensor_slice(self.stop_seqs_len, i1, i2)
-        swap_tensor_slice(self.stop_seqs, i1, i2)
+        swap_data(self.stop_seqs_len, i1, i2)
+        swap_data(self.stop_seqs, i1, i2)
 
         # Swap speculative decoding buffers if enabled
         if self.speculative_decoding:
-            swap_tensor_slice(self.input_ids_cpu, i1, i2)
-            swap_tensor_slice(self.accept_tokens, i1, i2)
-            swap_tensor_slice(self.accept_num, i1, i2)
-            swap_tensor_slice(self.draft_tokens, i1, i2)
-            swap_tensor_slice(self.actual_draft_token_num, i1, i2)
-            swap_tensor_slice(self.output_cum_offsets, i1, i2)
-            swap_tensor_slice(self.step_draft_tokens, i1, i2)
-            swap_tensor_slice(self.step_seq_lens_this_time, i1, i2)
+            swap_data(self.input_ids_cpu, i1, i2)
+            swap_data(self.accept_tokens, i1, i2)
+            swap_data(self.accept_num, i1, i2)
+            swap_data(self.draft_tokens, i1, i2)
+            swap_data(self.actual_draft_token_num, i1, i2)
+            swap_data(self.output_cum_offsets, i1, i2)
+            swap_data(self.step_draft_tokens, i1, i2)
+            swap_data(self.step_seq_lens_this_time, i1, i2)
 
         # Swap mask rollback
-        swap_tensor_slice(self.mask_rollback, i1, i2)
+        swap_data(self.mask_rollback, i1, i2)
+
+    def condense(self) -> None:
+        """
+        Condense the input batch by keeping only the running requests and moving their data to the front.
+        Running requests are identified by self.running_requests_ids.
+        Also updates index_to_batch_id to remove mappings for non-running requests.
+        """
+        # Get the indices of running requests from index_to_batch_id
+        running_indices = [
+            idx for idx, batch_id in self.index_to_batch_id.items() if batch_id in self.running_requests_ids
+        ]
+
+        # Sort the indices to maintain order
+        running_indices.sort()
+
+        # Move data of running requests to the front
+        for new_idx, old_idx in enumerate(running_indices):
+            if new_idx != old_idx:
+                self.swap_states(new_idx, old_idx)
+
+        # Update index_to_batch_id mapping - only keep mappings for running requests
+        # After swap_states, the mapping has been updated, just remove non-running ones
+        keys_to_remove = [
+            key
+            for key in list(self.index_to_batch_id.keys())
+            if self.index_to_batch_id[key] not in self.running_requests_ids
+        ]
+        for key in keys_to_remove:
+            del self.index_to_batch_id[key]
+
+    def get_index_by_batch_id(self, batch_id):
+        """
+        Get the index corresponding to the given batch_id
+
+        Args:
+            batch_id: The batch_id to look up
+
+        Returns:
+            The index corresponding to the batch_id, or add new key if not found
+        """
+        for index, bid in self.index_to_batch_id.items():
+            if bid == batch_id:
+                return index
+        self.index_to_batch_id[len(self.index_to_batch_id)] = batch_id
+        return batch_id
 
 
 def reorder_split_prefill_and_decode(input_batch: InputBatch):
@@ -373,12 +422,11 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
     decode_mask = input_batch.seq_lens_encoder == 0
 
     # Get batch size
-    batch_size = input_batch.seq_lens_this_time.shape[0]
+    batch_size = input_batch.num_running_requests
 
     # 2. Use two-pointer algorithm to swap prefill to the back and decode to the front
     left = 0  # Pointer for decode section start
     right = batch_size - 1  # Pointer for prefill section start
-
     while left <= right:
         if decode_mask[left]:  # Left position is decode request, no swap needed, move right
             left += 1
@@ -389,3 +437,32 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             input_batch.swap_states(left, right)
             left += 1
             right -= 1
+
+
+def recover_batch_index_for_tokens(sampler_output, index_to_batch_id):
+    """
+    Reorder sampled_token_ids according to index_to_batch_id mapping.
+
+    Args:
+        sampler_output: Sampler output object containing sampled_token_ids and other attributes
+        index_to_batch_id: Dict mapping indices to original batch IDs
+
+    Returns:
+        Updated sampler_output object with reordered sampled_token_ids
+    """
+    if all(i == v for i, v in index_to_batch_id.items()):
+        return
+
+    sampled_token_ids = sampler_output.sampled_token_ids
+    # Create a new tensor to store the reordered results
+    sorted_keys = sorted(index_to_batch_id.keys())
+    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+
+    # Use scatter_nd to place sampled_token_ids values at specified positions in reordered_token_ids
+    reordered_token_ids = paddle.scatter_nd(
+        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
+    )
+
+    # Update sampled_token_ids in sampler_output
+    sampler_output.sampled_token_ids = reordered_token_ids

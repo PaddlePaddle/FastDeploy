@@ -484,7 +484,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
 
         position_ids = request.multimodal_inputs["position_ids"]
-        rope_3d_position_ids["position_ids_idx"].append(request.idx)
+        rope_3d_position_ids["position_ids_idx"].append(self.share_inputs.get_index_by_batch_id(request.idx))
         rope_3d_position_ids["position_ids_lst"].append(position_ids)
         rope_3d_position_ids["position_ids_offset"].append(
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
@@ -507,6 +507,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         batch_pooling_params = []
         self.share_inputs["image_features"] = None
+        self.share_inputs["num_running_requests"] = num_running_requests
+        self.share_inputs["running_requests_ids"] = range(num_running_requests)
         multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
         rope_3d_position_ids = {
             "position_ids_idx": [],
@@ -514,10 +516,9 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
-
         for i in range(req_len):
             request = req_dicts[i]
-            idx = request.idx
+            idx = self.share_inputs.get_index_by_batch_id(request.idx)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -675,6 +676,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
+
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
@@ -694,7 +696,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
-            idx = request.idx
+            idx = self.share_inputs.get_index_by_batch_id(request.idx)
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
@@ -1405,6 +1407,8 @@ class GPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
+            index_to_batch_id=self.share_inputs["index_to_batch_id"],
+            seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
         )
 
         post_process(
@@ -1506,6 +1510,8 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
+            index_to_batch_id=self.share_inputs["index_to_batch_id"],
+            seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
         )
 
         post_process(
@@ -1571,9 +1577,7 @@ class GPUModelRunner(ModelRunnerBase):
             # 1. Initialize forward meta and attention meta data
             # Initialize forward meta data
             self.initialize_forward_meta(is_dummy_or_profile_run=True)
-            # Reorder inputs to split prefill and decode tokens
-            if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
-                reorder_split_prefill_and_decode(input_batch=self.share_inputs)
+
             self._prepare_inputs()
 
             # 2. Padding inputs for cuda graph
@@ -1643,7 +1647,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.restore_chunked_prefill_request[task.request_id] = task
 
         for id, task in list(self.restore_chunked_prefill_request.items()):
-            idx = task.idx
+            idx = self.share_inputs.get_index_by_batch_id(task.idx)
             logger.debug(f"{task.request_id} chunked prefill {task.chunk_idx}/{len(task.prefill_chunk_info)}")
             if not self.enable_mm:
                 start_idx = sum(task.prefill_chunk_info[: task.chunk_idx])
@@ -1834,8 +1838,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         prefill_done_idxs = []
         for idx in range(0, num_running_requests):
-            if self.share_inputs["step_idx"][idx] == 0:
-                prefill_done_idxs.append(idx)
+            batch_id = self.share_inputs.get_index_by_batch_id(idx)
+            if self.share_inputs["step_idx"][batch_id] == 0:
+                prefill_done_idxs.append(batch_id)
 
         if self.cache_config.enable_chunked_prefill:
             if model_forward_batch is not None:
@@ -1874,8 +1879,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=False)
+
         # Reorder inputs to split prefill and decode tokens
         if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
+            self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
 
         self._prepare_inputs()
@@ -1911,7 +1918,6 @@ class GPUModelRunner(ModelRunnerBase):
             model_output = model_output[: self.real_token_num]
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
-
         if self.is_pooling_model:
             hidden_states = model_output
             pooler_output = self._pool(hidden_states, num_running_requests)
@@ -1943,6 +1949,8 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
+                index_to_batch_id=self.share_inputs["index_to_batch_id"],
+                seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
             )
 
             post_process(
@@ -1958,7 +1966,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             return None
         else:
-            logger.info(f"model output: {model_output}")
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cu_seqlens_q"],
@@ -1968,7 +1975,6 @@ class GPUModelRunner(ModelRunnerBase):
                 (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
                 self.model_config.max_model_len,
             )
-            logger.info(f"rebuild model output: {hidden_states}")
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
@@ -2022,7 +2028,6 @@ class GPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
-
             # 5. Post Process
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2053,6 +2058,8 @@ class GPUModelRunner(ModelRunnerBase):
                 prompt_lens=self.share_inputs["prompt_lens"],
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,
+                index_to_batch_id=self.share_inputs["index_to_batch_id"],
+                seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
             )
 
             if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
@@ -2072,6 +2079,7 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
             )
+
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
 
@@ -2117,7 +2125,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
-
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
@@ -2533,6 +2540,7 @@ class GPUModelRunner(ModelRunnerBase):
             start_idx = request.prefill_start_index
             start_tok = start_idx + 1
             num_remaining_tokens = num_prompt_tokens - start_tok
+            batch_id = self.share_inputs.get_index_by_batch_id(request.idx)
             if num_tokens <= num_remaining_tokens:
                 # This is a chunk, more tokens remain.
                 # In the == case, there are no more prompt logprobs to produce
@@ -2543,13 +2551,13 @@ class GPUModelRunner(ModelRunnerBase):
                 # This is the last chunk of prompt tokens to return.
                 num_logits = num_remaining_tokens
                 completed_prefill_reqs.append(request)
-                prompt_logprobs_list[request.idx] = logprobs_tensors
+                prompt_logprobs_list[batch_id] = logprobs_tensors
             if num_logits <= 0:
                 # This can happen for the final chunk if we prefilled exactly
                 # (num_prompt_tokens - 1) tokens for this request in the prior
                 # step. There are no more prompt logprobs to produce.
                 continue
-            offset = self.share_inputs["cu_seqlens_q"][request.idx]
+            offset = self.share_inputs["cu_seqlens_q"][batch_id]
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
             logits = self.model.compute_logits(prompt_hidden_states)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]

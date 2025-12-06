@@ -275,6 +275,16 @@ class ModelOutputData:
     """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
+    """
+        index -> request_id
+    """
+    index_to_batch_id: list = None
+
+    """
+        seq_lens_this_time's data from seq_lens_this_time_buffer
+    """
+    seq_lens_this_time_buffer: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
