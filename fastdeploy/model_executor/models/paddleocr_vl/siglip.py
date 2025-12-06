@@ -23,6 +23,7 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddleformers.transformers.model_utils import PretrainedModel
 
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 
 from .config import PaddleOCRVisionConfig
@@ -69,6 +70,7 @@ class SiglipAttention(nn.Layer):
             self.flash_attn_kwargs = {"scale": self.scale, "training": False}
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        # loaded_weight = get_tensor(loaded_weight)
         # Tensor parallelism splits the weight along the output_dim
         if loaded_weight.dim() == 2:
             loaded_weight = loaded_weight.transpose([1, 0])
@@ -100,6 +102,8 @@ class SiglipAttention(nn.Layer):
 
     def out_proj_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -109,7 +113,8 @@ class SiglipAttention(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
+
 
     def forward(
         self,
@@ -287,6 +292,8 @@ class SiglipMLP(nn.Layer):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -296,7 +303,8 @@ class SiglipMLP(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
+
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
