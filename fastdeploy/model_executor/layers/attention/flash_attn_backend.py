@@ -199,6 +199,7 @@ class FlashAttentionBackend(AttentionBackend):
             metadata.pre_cache_num_blocks_cpu,
             metadata.kv_token_num_cpu,
         ) = pre_cache_len_concat(
+            forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.max_len_tensor_cpu[2],
@@ -315,8 +316,8 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.decoder_batch_ids,  # from buffer
-            forward_meta.decoder_tile_ids_per_batch,  # from buffer
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
             metadata.max_len_tensor_cpu_decoder,
             forward_meta.rotary_embs,
