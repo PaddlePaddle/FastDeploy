@@ -45,6 +45,9 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    RoutingReplayManager,
+)
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
@@ -202,6 +205,11 @@ class GPUModelRunner(ModelRunnerBase):
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
+        # Rollout routing replay config
+        self.routing_replay_manager = None
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
+
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -275,11 +283,11 @@ class GPUModelRunner(ModelRunnerBase):
             token_num = self.share_inputs["ids_remove_padding"].shape[0]
 
             if token_num > chunk_size:
-                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+                self.forward_meta.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
             else:
-                self.fd_config.parallel_config.moe_num_chunk = 1
+                self.forward_meta.moe_num_chunk = 1
 
-            dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
+            dist_status_obj.moe_num_chunk = self.forward_meta.moe_num_chunk
 
         # only ep need to collect and sync distributed status
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
@@ -478,12 +486,14 @@ class GPUModelRunner(ModelRunnerBase):
                 multi_vision_inputs["grid_thw_lst"].extend(
                     inputs["grid_thw"][request.num_image_start : request.num_image_end]
                 )
-                multi_vision_inputs["cu_seqlens"].extend(
-                    inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                )
-                multi_vision_inputs["vit_position_ids_lst"].extend(
-                    inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
-                )
+                if "vit_seqlen" in inputs:
+                    multi_vision_inputs["cu_seqlens"].extend(
+                        inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                    )
+                if "vit_position_ids" in inputs:
+                    multi_vision_inputs["vit_position_ids_lst"].extend(
+                        inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                    )
             else:
                 vision_inputs = inputs
                 if self.encoder_cache:
@@ -646,6 +656,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -654,6 +665,12 @@ class GPUModelRunner(ModelRunnerBase):
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
                 has_prefill_task = True
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    if prefill_start_index == 0:
+                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
@@ -1003,10 +1020,14 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        input_length = min(
-            num_tokens // (1 if capture_prefill else batch_size),
-            self.model_config.max_model_len - max_dec_len,
-        )
+        if batch_size == 0:
+            # Note(ZKK): divided by 0 is invalid, here we give a input_length = 1
+            input_length = 1
+        else:
+            input_length = min(
+                num_tokens // (1 if capture_prefill else batch_size),
+                self.model_config.max_model_len - max_dec_len,
+            )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -1146,6 +1167,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
+        self.share_inputs["is_chunk_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32")
@@ -1416,6 +1438,9 @@ class GPUModelRunner(ModelRunnerBase):
         Initialize forward meta, attention meta data and update some config.
         """
         # Initialize forward meta
+        routing_replay_table = None
+        if self.routing_replay_manager is not None:
+            routing_replay_table = self.routing_replay_manager.get_routing_table()
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1442,13 +1467,14 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            routing_replay_table=routing_replay_table,
         )
 
         dist_status = self.collect_distributed_status()
 
         if_only_decode = dist_status.if_only_decode
         if self.fd_config.parallel_config.enable_chunked_moe:
-            self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
+            self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
@@ -1930,6 +1956,9 @@ class GPUModelRunner(ModelRunnerBase):
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.clear_routing_table()
+
     def _update_chunked_prefill(self, tasks):
         """
         Update chunked prefill related parameters
@@ -2198,13 +2227,6 @@ class GPUModelRunner(ModelRunnerBase):
         for proc in self.sampling_metadata.logits_processors:
             proc.update_state(self.share_inputs)
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
-
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
@@ -2220,6 +2242,14 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta.ids_remove_padding,
                 self.forward_meta,
             )
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # Then there is data on other runner, the current runner is required to execute part of the model.
+        # But not need to run the below code.
+        if not self.not_need_stop():
+            return None
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
@@ -2427,6 +2457,15 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
+        # Routing replay
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            if (
+                not self.exist_prefill()
+                and not self.exist_decode()
+                and self.share_inputs["is_block_step"].sum() == 0
+                and self.share_inputs["is_chunk_step"].sum() == 0
+            ):
+                self.routing_replay_manager.put_table_to_store()
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
@@ -2457,12 +2496,12 @@ class GPUModelRunner(ModelRunnerBase):
 
         for i, (seq_len, prompt_len) in enumerate(zip(seq_lens_cpu, pooling_metadata.prompt_lens)):
             if not self.cache_config.enable_prefix_caching:
-                output = raw_pooler_output[i].data if int(seq_len) == int(prompt_len) else None
+                output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
                 pooler_output.append(output)
             else:
                 current_seq_len_decoder = seq_lens_decoder_batch[i]
                 if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
-                    output = raw_pooler_output[i].data
+                    output = raw_pooler_output[0].data
                 else:
                     output = None
                 pooler_output.append(output)
@@ -2473,14 +2512,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         return pooler_output
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
@@ -2737,9 +2776,13 @@ class GPUModelRunner(ModelRunnerBase):
         return image_features
 
     def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
-        images = inputs["images"]
+        if envs.FD_ENABLE_MAX_PREFILL:
+            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
+            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
+        else:
+            assert inputs["images"] is not None
+            grid_thw = inputs["grid_thw"]
+            images = inputs["images"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,

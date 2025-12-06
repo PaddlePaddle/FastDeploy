@@ -568,6 +568,7 @@ class LLMEngine:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -787,7 +788,7 @@ class LLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

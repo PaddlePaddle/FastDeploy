@@ -26,14 +26,14 @@ fi
     rm -rf output* xvllm* xtdk-llvm* output.tar.gz xtdk-llvm*tar.gz
 
     # Download and install xvllm
-    if ! wget "https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/${version_xvllm}/output.tar.gz"; then
+    if ! wget -q "https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/${version_xvllm}/output.tar.gz"; then
         echo "Error downloading xvllm"
         exit 2
     fi
     tar -zxf output.tar.gz && mv output xvllm && rm output.tar.gz
 
     # Download and install xtdk
-    if ! wget "https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/${version_xtdk}/xtdk-llvm15-ubuntu2004_x86_64.tar.gz"; then
+    if ! wget -q "https://klx-sdk-release-public.su.bcebos.com/xtdk_15fusion/dev/${version_xtdk}/xtdk-llvm15-ubuntu2004_x86_64.tar.gz"; then
         echo "Error downloading xtdk"
         exit 3
     fi
