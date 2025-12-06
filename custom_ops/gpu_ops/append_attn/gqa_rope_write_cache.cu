@@ -28,7 +28,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const float *k_norm_weight,
     const int *batch_id_per_token,
     const int *cu_seqlens_q,
-    const int *seq_lens,
+    const int *seq_lens_encoder,
     const int *seq_lens_decoder,
     const int *cu_seqlens_k,
     T *qkv_out,
@@ -38,7 +38,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int64_t elem_cnt,
     const int q_num_head,
     const int kv_num_head,
-    const int seq_len,
+    const int max_model_len,
     const int last_dim,
     const bool rope_3d,
     const float rms_norm_eps) {
@@ -64,15 +64,18 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int token_idx =
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
-    if (seq_lens[ori_bi] == 0) continue;
+
+    int cache_kv_len = seq_lens_decoder[ori_bi];
+    // 这里其实是不需要处理的，但是由于FA3的bug，所以必须！
+    if (seq_lens_encoder[ori_bi] == 0) cache_kv_len = 0;
+
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
     const int ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) +
-        seq_lens_decoder
-            [ori_bi];  // 在当前seq中的id(拼接了seq到一个batch的情况下有效)
+        cache_kv_len;  // 在当前seq中的id(拼接了seq到一个batch的情况下有效)
     const int64_t emb_idx =
         ori_seq_id * half_lastdim + h_bias / 2;  // embedding的id
     const int64_t base_idx =
@@ -98,7 +101,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
 
     // TODO check this correct or not
     int64_t new_emb_idx =
-        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+        rope_3d ? emb_idx + ori_bi * last_dim * max_model_len : emb_idx;
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
 
@@ -181,7 +184,7 @@ void gqa_rotary_qk_split_variable(
     const int token_num,
     const int num_heads,
     const int kv_num_heads,
-    const int seq_len,
+    const int max_model_len,
     const int input_output_len,
     const int dim_head,
     const bool rope_3d,
@@ -222,7 +225,7 @@ void gqa_rotary_qk_split_variable(
                            elem_nums,
                            num_heads,
                            kv_num_heads,
-                           seq_len,
+                           max_model_len,
                            dim_head,
                            rope_3d,
                            rms_norm_eps);
