@@ -144,7 +144,8 @@ class FlashAttentionBackend(AttentionBackend):
                     "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
                 )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
-        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
+        # Note(ZKK): here must be consistent with append_attn_backend.py
+        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.zero_seq_enc_lens_for_decode = paddle.zeros(
             shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
         )
