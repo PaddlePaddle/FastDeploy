@@ -70,7 +70,6 @@ class SiglipAttention(nn.Layer):
             self.flash_attn_kwargs = {"scale": self.scale, "training": False}
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # loaded_weight = get_tensor(loaded_weight)
         # Tensor parallelism splits the weight along the output_dim
         if loaded_weight.dim() == 2:
             loaded_weight = loaded_weight.transpose([1, 0])
