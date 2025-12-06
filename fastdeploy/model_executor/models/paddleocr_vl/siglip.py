@@ -23,7 +23,6 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddleformers.transformers.model_utils import PretrainedModel
 
-from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 
 from .config import PaddleOCRVisionConfig
@@ -113,7 +112,6 @@ class SiglipAttention(nn.Layer):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
         h2d_copy(param, loaded_weight)
-
 
     def forward(
         self,
@@ -303,7 +301,6 @@ class SiglipMLP(nn.Layer):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
         h2d_copy(param, loaded_weight)
-
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
