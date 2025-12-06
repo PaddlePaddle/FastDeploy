@@ -253,7 +253,9 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
-        if forward_meta.max_len_tensor_cpu[1] > 0:
+        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+
+        if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
@@ -355,7 +357,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.speculative_method is not None,
         )
 
-        if forward_meta.max_len_tensor_cpu[1] > 0:
+        if use_fa_do_prefill:
             merge_prefill_decode_output(
                 res_encoder,
                 res_decoder,
