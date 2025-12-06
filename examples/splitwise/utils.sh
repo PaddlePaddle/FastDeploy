@@ -2,7 +2,7 @@
 
 is_port_free() {
   local port=$1
-  if ss -ltn | awk '{print $4}' | grep -q ":${port}$"; then
+  if ss -ltun | awk '{print $4}' | grep -q ":${port}$"; then
     return 1  # Port is occupied
   fi
   return 0  # Port is free
@@ -28,6 +28,7 @@ wait_for_health() {
     local NC='\033[0m' # No Color
     local start_time=$(date +%s)
 
+    echo "-------- WAIT FOR HEALTH --------"
     while true; do
         local all_ready=true
         for port in "${server_ports[@]}"; do
@@ -44,11 +45,12 @@ wait_for_health() {
             echo "All services are ready!    [$((cur_time-start_time))s]"
             break
         else
-            echo "Waiting for services...    [$((cur_time-start_time))s]"
+            echo "Services not ready..       [$((cur_time-start_time))s]"
             printf "\033[%dA" "$total_lines"  # roll back cursor
             sleep 1
         fi
     done
+    echo "---------------------------------"
 }
 
 get_free_ports() {

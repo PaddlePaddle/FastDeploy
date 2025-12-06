@@ -605,7 +605,7 @@ def get_random_port():
 
 def parse_ports(ports):
     if ports is None:
-        return []
+        return None
     elif isinstance(ports, int):
         return [ports]
     elif isinstance(ports, str):

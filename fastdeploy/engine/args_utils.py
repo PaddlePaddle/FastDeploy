@@ -538,66 +538,47 @@ class EngineArgs:
 
     def post_init_all_ports(self):
 
-        def check_ports(name, ports, expected_num_ports=None):
-            if expected_num_ports is not None and len(ports) != expected_num_ports:
-                raise ValueError(
-                    f"Parameter `{name}` expected {expected_num_ports} ports, but got {len(ports)}: {ports}."
-                )
+        def post_init_ports(name: str, ports: list, num_total_ports: int):
+            num_expected_ports = num_total_ports
+            if envs.FD_ENABLE_MULTI_API_SERVER:
+                num_expected_ports //= self.data_parallel_size
+            if ports is None:
+                ports = find_free_ports(num_ports=num_expected_ports)
+                console_logger.info(f"Parameter `{name}` is not specified, found available ports for use: {ports}")
+            else:
+                assert (
+                    len(ports) == num_total_ports
+                ), f"Parameter `{name}` should have {num_total_ports} ports, got {len(ports)}."
+            ports = parse_ports(ports)
             for port in ports:
-                assert is_port_available("0.0.0.0", int(port)), f"Parameter `{name}`:{port} is already in use."
+                assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+            return ports
 
-        # Ports for EngineWorkerQueue
-        engine_worker_queue_port = self.engine_worker_queue_port
-        expected_ports = self.data_parallel_size
-        if engine_worker_queue_port is None:
-            engine_worker_queue_port = find_free_ports(num_ports=expected_ports)
-            console_logger.info(
-                f"Parameter `engine_worker_queue_port` is not specified, found available ports: {engine_worker_queue_port}"
-            )
-        engine_worker_queue_port = parse_ports(engine_worker_queue_port)
-        check_ports("engine_worker_queue_port", engine_worker_queue_port, expected_num_ports=expected_ports)
-        self.engine_worker_queue_port = engine_worker_queue_port
-        console_logger.info(f"Use engine_worker_queue_port: {self.engine_worker_queue_port}")
-
-        # Ports for EngineCacheQueue
-        cache_queue_port = self.cache_queue_port
-        expected_ports = self.data_parallel_size
-        if cache_queue_port is None:
-            cache_queue_port = find_free_ports(num_ports=expected_ports)
-            console_logger.info(
-                f"Parameter `cache_queue_port` is not specified, found available ports: {cache_queue_port}"
-            )
-        cache_queue_port = parse_ports(cache_queue_port)
-        check_ports("cache_queue_port", cache_queue_port, expected_num_ports=expected_ports)
-        self.cache_queue_port = cache_queue_port
-
-        # Ports for RDMACommunicator
-        rdma_comm_ports = self.rdma_comm_ports
         num_nodes = len(self.ips) if self.ips else 1
         if self.data_parallel_size % num_nodes != 0:
             raise ValueError(
                 f"data_parallel_size ({self.data_parallel_size}) must be divisible by num_nodes ({num_nodes})."
             )
-        dp_per_node = self.data_parallel_size // num_nodes
-        expected_ports = self.tensor_parallel_size * dp_per_node
-        if rdma_comm_ports is None:
-            rdma_comm_ports = find_free_ports(num_ports=expected_ports)
-            console_logger.info(
-                f"Parameter `rdma_comm_ports` is not specified, found available ports: {rdma_comm_ports}"
-            )
-        rdma_comm_ports = parse_ports(rdma_comm_ports)
-        check_ports("rdma_comm_ports", rdma_comm_ports, expected_num_ports=expected_ports)
-        self.rdma_comm_ports = rdma_comm_ports
-
-        # Ports for SplitwiseConnector
-        pd_comm_port = self.pd_comm_port
-        expected_ports = self.data_parallel_size
-        if pd_comm_port is None:
-            pd_comm_port = find_free_ports(num_ports=expected_ports)
-            console_logger.info(f"Parameter `pd_comm_port` is not specified, found available ports: {pd_comm_port}")
-        pd_comm_port = parse_ports(pd_comm_port)
-        check_ports("pd_comm_port", pd_comm_port, expected_num_ports=expected_ports)
-        self.pd_comm_port = pd_comm_port
+        self.engine_worker_queue_port = post_init_ports(
+            "engine_worker_queue_port",
+            self.engine_worker_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.cache_queue_port = post_init_ports(
+            "cache_queue_port",
+            self.cache_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.rdma_comm_ports = post_init_ports(
+            "rdma_comm_ports",
+            self.rdma_comm_ports,
+            self.tensor_parallel_size * self.data_parallel_size // num_nodes,
+        )
+        self.pd_comm_port = post_init_ports(
+            "pd_comm_port",
+            self.pd_comm_port,
+            self.data_parallel_size // num_nodes,
+        )
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:

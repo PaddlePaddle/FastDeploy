@@ -167,7 +167,7 @@ class PrefixCacheManager:
         device_ids,
         pod_ip,
         engine_worker_queue_port,
-        pid_suffix,
+        ipc_suffix,
         create_cache_tensor,
     ):
         """
@@ -210,7 +210,7 @@ class PrefixCacheManager:
                 val_cache_shape,
                 pod_ip,
                 engine_worker_queue_port,
-                pid_suffix,
+                ipc_suffix,
             )
             if cache_messager_processes is None:
                 raise RuntimeError("Launch cache messager failed")
@@ -274,10 +274,10 @@ class PrefixCacheManager:
                 + f" --pod_ip {pod_ip}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                + f" --engine_pid {pid_suffix}"
+                + f" --ipc_suffix {ipc_suffix}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
+                + f" --rdma_port {cache_config.rdma_comm_ports[0] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
                 + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
@@ -320,7 +320,7 @@ class PrefixCacheManager:
         value_cache_shape,
         pod_ip,
         engine_worker_queue_port,
-        pid_suffix,
+        ipc_suffix,
     ):
         """
         launch_cache_messager function used to initialize the cache messager.
@@ -333,7 +333,7 @@ class PrefixCacheManager:
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=pid_suffix,
+            suffix=ipc_suffix,
             create=False,
         )
 
@@ -369,8 +369,8 @@ class PrefixCacheManager:
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --engine_pid {pid_suffix}"
-                + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
+                + f" --ipc_suffix {ipc_suffix}"
+                + f" --rdma_port {cache_config.rdma_comm_ports[0] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
             )

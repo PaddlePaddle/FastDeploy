@@ -73,7 +73,7 @@ class SplitwiseConnector:
         self.router_socket.setsockopt(zmq.LINGER, 0)
         self.router_socket.setsockopt(zmq.SNDHWM, 1000)
         self.router_socket.setsockopt(zmq.ROUTER_MANDATORY, 1)
-        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[0]}")
+        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port}")
         self.logger.info(f"_init_network: bind {self.cfg.cache_config.pd_comm_port}")
 
         self.poller = zmq.Poller()
@@ -335,7 +335,7 @@ class SplitwiseConnector:
             if dsg_info["transfer_protocol"] == "ipc":
                 info = {
                     "request_id": tasks[i].request_id,
-                    "device_ids": self.cfg.parallel_config.device_ids.split(","),
+                    "device_ids": self.cfg.local_device_ids,
                     "transfer_protocol": "ipc",
                     "dest_block_ids": dsg_info["block_tables"],
                 }
@@ -351,11 +351,9 @@ class SplitwiseConnector:
                 else:
                     info = {
                         "request_id": tasks[i].request_id,
-                        "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
+                        "device_ids": self.cfg.local_device_ids,
                         "ip": self.cfg.host_ip,
-                        "rdma_ports": [
-                            self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]
-                        ],
+                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
                         "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,

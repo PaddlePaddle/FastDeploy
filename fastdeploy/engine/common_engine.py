@@ -106,9 +106,7 @@ class EngineService:
 
         self.start_worker_queue_service(start_queue)
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.parallel_config.engine_worker_queue_port[
-            self.cfg.parallel_config.local_data_parallel_id
-        ]
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.cfg.parallel_config.local_engine_worker_queue_port)
 
         self.split_connector = SplitwiseConnector(cfg, self.engine_worker_queue, self.resource_manager)
         self.token_processor = TokenProcessor(
@@ -137,9 +135,7 @@ class EngineService:
         self._init_worker_monitor_signals()
 
         if self.cfg.eplb_config.enable_eplb:
-            current_suffix = int(
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            )
+            current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
             init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
@@ -171,9 +167,7 @@ class EngineService:
         self.data_processor = self.input_processor.create_processor()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
-        current_suffix = int(
-            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-        )
+        current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
         self.llm_logger.info(f"current_suffix: {current_suffix}")
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -265,16 +259,10 @@ class EngineService:
         """
         start queue service for engine worker communication
         """
-
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (
-                self.cfg.master_ip,
-                int(
-                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                ),
-            )
+            address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]}.sock"
+            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
@@ -286,23 +274,19 @@ class EngineService:
             )
             # Dynamically updates the port value if an anonymous port is used
             if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
-                    str(self.engine_worker_queue_server.get_server_port())
+                self.cfg.parallel_config.local_engine_worker_queue_port = (
+                    self.engine_worker_queue_server.get_server_port()
                 )
                 address = (
                     self.cfg.master_ip,
-                    int(
-                        self.cfg.parallel_config.engine_worker_queue_port[
-                            self.cfg.parallel_config.local_data_parallel_id
-                        ]
-                    ),
+                    self.cfg.parallel_config.local_engine_worker_queue_port,
                 )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id],
+                        self.cfg.cache_config.cache_queue_port,
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
@@ -1207,10 +1191,8 @@ class EngineService:
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
-            engine_worker_queue_port=int(
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            ),
-            pid_suffix=ipc_signal_suffix,
+            engine_worker_queue_port=self.cfg.parallel_config.local_engine_worker_queue_port,
+            ipc_suffix=ipc_signal_suffix,
             create_cache_tensor=False,
         )
 
