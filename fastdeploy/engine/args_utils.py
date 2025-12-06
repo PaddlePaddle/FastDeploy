@@ -46,7 +46,9 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
+    find_free_ports,
     is_port_available,
+    parse_ports,
     parse_quantization,
 )
 
@@ -223,7 +225,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "0"
+    cache_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for cache queue.
     """
@@ -265,7 +267,7 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
-    engine_worker_queue_port: str = "0"
+    engine_worker_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for worker queue communication.
     """
@@ -300,17 +302,17 @@ class EngineArgs:
     Chunk size of moe input.
     """
 
-    cache_transfer_protocol: str = "ipc"
+    cache_transfer_protocol: str = "ipc,rdma"
     """
     Protocol to use for cache transfer.
     """
 
-    pd_comm_port: Optional[List[int]] = None
+    pd_comm_port: Optional[Union[int, str, list]] = None
     """
     Port for splitwise communication.
     """
 
-    rdma_comm_ports: Optional[List[int]] = None
+    rdma_comm_ports: Optional[Union[int, str, list]] = None
     """
     Ports for rdma communication.
     """
@@ -504,8 +506,6 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
-        # if self.dynamic_load_weight:
-        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
                 raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
@@ -526,27 +526,6 @@ class EngineArgs:
                     f"scheduler, please provide --router argument."
                 )
 
-            if "rdma" in self.cache_transfer_protocol:
-                if self.rdma_comm_ports is None:
-                    raise ValueError(
-                        "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
-                    )
-                num_nodes = len(self.ips) if self.ips else 1
-                if self.data_parallel_size % num_nodes != 0:
-                    raise ValueError(
-                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
-                        f"num_nodes ({num_nodes})."
-                    )
-                dp_per_node = self.data_parallel_size // num_nodes
-                expected_ports = self.tensor_parallel_size * dp_per_node
-                if len(self.rdma_comm_ports) != expected_ports:
-                    raise ValueError(
-                        f"The number of rdma_comm_ports must equal "
-                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
-                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
-                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
-                    )
-
         if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
@@ -554,6 +533,52 @@ class EngineArgs:
             envs.FD_ENABLE_MAX_PREFILL = 1
             self.enable_prefix_caching = False
             self.max_encoder_cache = 0
+
+        self.post_init_all_ports()
+
+    def post_init_all_ports(self):
+
+        def post_init_ports(name: str, ports: list, num_total_ports: int):
+            num_expected_ports = num_total_ports
+            if envs.FD_ENABLE_MULTI_API_SERVER:
+                num_expected_ports //= self.data_parallel_size
+            if ports is None:
+                ports = find_free_ports(num_ports=num_expected_ports)
+                console_logger.info(f"Parameter `{name}` is not specified, found available ports for use: {ports}")
+            else:
+                assert (
+                    len(ports) == num_total_ports
+                ), f"Parameter `{name}` should have {num_total_ports} ports, got {len(ports)}."
+            ports = parse_ports(ports)
+            for port in ports:
+                assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+            return ports
+
+        num_nodes = len(self.ips) if self.ips else 1
+        if self.data_parallel_size % num_nodes != 0:
+            raise ValueError(
+                f"data_parallel_size ({self.data_parallel_size}) must be divisible by num_nodes ({num_nodes})."
+            )
+        self.engine_worker_queue_port = post_init_ports(
+            "engine_worker_queue_port",
+            self.engine_worker_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.cache_queue_port = post_init_ports(
+            "cache_queue_port",
+            self.cache_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.rdma_comm_ports = post_init_ports(
+            "rdma_comm_ports",
+            self.rdma_comm_ports,
+            self.tensor_parallel_size * self.data_parallel_size // num_nodes,
+        )
+        self.pd_comm_port = post_init_ports(
+            "pd_comm_port",
+            self.pd_comm_port,
+            self.data_parallel_size // num_nodes,
+        )
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -1266,11 +1291,6 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
-
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1285,10 +1305,6 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
         structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
-        if port_availability_check:
-            assert is_port_available(
-                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,

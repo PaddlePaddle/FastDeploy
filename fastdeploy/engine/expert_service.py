@@ -48,10 +48,7 @@ class ExpertService:
         """
 
         self.cfg = cfg
-        start_pos = (local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size) % cfg.worker_num_per_node
-        end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
         if cfg.scheduler_config.splitwise_role != "mixed":
-            self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
             if envs.FD_ENABLE_INTERNAL_ADAPTER:
                 envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[
                     local_data_parallel_id
@@ -59,7 +56,6 @@ class ExpertService:
                 envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[
                     local_data_parallel_id
                 ]
-        self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
@@ -67,13 +63,6 @@ class ExpertService:
         else:
             self.do_profile = False
 
-        if cfg.scheduler_config.splitwise_role != "mixed":
-            if len(self.cfg.cache_config.pd_comm_port) == 1:
-                self.cfg.cache_config.pd_comm_port[0] = (
-                    int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
-                )
-            else:
-                self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
         self.engine = EngineService(self.cfg, start_queue)
         if self.cfg.scheduler_config.name == "splitwise":

@@ -522,7 +522,7 @@ class LLMEngine:
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
-        ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
+        ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
             ips = ",".join(self.cfg.ips)
@@ -730,7 +730,7 @@ class LLMEngine:
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
-            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            if self.cfg.parallel_config.data_parallel_size > 1:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
@@ -741,10 +741,12 @@ class LLMEngine:
                     if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
                         address = (
                             self.cfg.master_ip,
-                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
+                            int(self.cfg.parallel_config.local_engine_worker_queue_port),
                         )
                     else:
-                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        address = (
+                            f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+                        )
 
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
