@@ -1408,7 +1408,6 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             index_to_batch_id=self.share_inputs["index_to_batch_id"],
-            seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
         )
 
         post_process(
@@ -1511,7 +1510,6 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
             index_to_batch_id=self.share_inputs["index_to_batch_id"],
-            seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
         )
 
         post_process(
@@ -1950,7 +1948,6 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 index_to_batch_id=self.share_inputs["index_to_batch_id"],
-                seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
             )
 
             post_process(
@@ -2059,7 +2056,6 @@ class GPUModelRunner(ModelRunnerBase):
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,
                 index_to_batch_id=self.share_inputs["index_to_batch_id"],
-                seq_lens_this_time_buffer=self.share_inputs["seq_lens_this_time_buffer"],
             )
 
             if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":

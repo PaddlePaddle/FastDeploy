@@ -280,11 +280,6 @@ class ModelOutputData:
     """
     index_to_batch_id: list = None
 
-    """
-        seq_lens_this_time's data from seq_lens_this_time_buffer
-    """
-    seq_lens_this_time_buffer: paddle.Tensor = None
-
 
 @dataclass
 class ModelRunnerOutput:
