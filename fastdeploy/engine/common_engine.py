@@ -878,10 +878,11 @@ class EngineService:
                                 LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
                             )
                             trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
-                        if self.cfg.scheduler_config.splitwise_role == "decode":
-                            task.metrics.decode_inference_start_time = time.time()
-                        else:
-                            task.metrics.inference_start_time = time.time()
+                        if isinstance(task, Request):
+                            if self.cfg.scheduler_config.splitwise_role == "decode":
+                                task.metrics.decode_inference_start_time = time.time()
+                            else:
+                                task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
