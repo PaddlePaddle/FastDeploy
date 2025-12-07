@@ -192,19 +192,20 @@ class FlashAttentionBackend(AttentionBackend):
             self.block_size,
         )
 
-        (
-            metadata.cu_seqlens_k,
-            metadata.pre_cache_batch_ids,
-            metadata.pre_cache_tile_ids_per_batch,
-            metadata.pre_cache_num_blocks_cpu,
-            metadata.kv_token_num_cpu,
-        ) = pre_cache_len_concat(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.max_len_tensor_cpu[2],
-            self.block_size,
-        )
+        if forward_meta.max_len_tensor_cpu[1] > 0:
+            (
+                metadata.cu_seqlens_k,
+                metadata.pre_cache_batch_ids,
+                metadata.pre_cache_tile_ids_per_batch,
+                metadata.pre_cache_num_blocks_cpu,
+                metadata.kv_token_num_cpu,
+            ) = pre_cache_len_concat(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.max_len_tensor_cpu[2],
+                self.block_size,
+            )
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -253,7 +254,11 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
-        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0 and qkv.shape[0] > 1000
+
+        if use_fa_do_prefill:
+            print("use_fa_do_prefill", use_fa_do_prefill)
+            print(qkv.shape[0])
 
         if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
@@ -306,7 +311,7 @@ class FlashAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            self.zero_seq_enc_lens_for_decode,
+            self.zero_seq_enc_lens_for_decode if use_fa_do_prefill else forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,
@@ -321,7 +326,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
-            metadata.max_len_tensor_cpu_decoder,
+            metadata.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
             forward_meta.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,
