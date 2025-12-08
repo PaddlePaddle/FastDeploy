@@ -36,6 +36,7 @@ import os
 
 from safetensors import safe_open
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import default_weight_loader
 
@@ -187,6 +188,29 @@ class Attention(nn.Layer):
                 ],
                 dtype=paddle.get_default_dtype(),
             )
+
+        if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
+            if fd_config.quant_config.kv_cache_quant_type == "dynamic_int2_zp":
+                self.c16_remain_seq_len = envs.FD_DYNAMIC_QUANT_CACHE_C16_LEN
+                self.block_size = fd_config.cache_config.block_size
+                self.cache_k_c16 = paddle.zeros(
+                    [
+                        fd_config.scheduler_config.max_num_seqs,
+                        self.c16_remain_seq_len + self.block_size,
+                        self.kv_num_heads,
+                        self.head_dim,
+                    ],
+                    dtype="float16",
+                )
+                self.cache_v_c16 = paddle.zeros(
+                    [
+                        fd_config.scheduler_config.max_num_seqs,
+                        self.c16_remain_seq_len + self.block_size,
+                        self.kv_num_heads,
+                        self.head_dim,
+                    ],
+                    dtype="float16",
+                )
 
     def init_weight(self):
         if self.quant_method is not None:

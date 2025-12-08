@@ -356,6 +356,16 @@ class ResourceManagerV1(ResourceManager):
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+
+        # There may be issues with using the current scheduling for dynamic 2-bit quantization cache. During scheduling, if the remaining token for the first query is less than chunk_Size, the token for the second query will be pulled. However, dynamic 2-bit quantization cache cannot support this situation
+        if envs.FD_ATTENTION_BACKEND == "DYNAMIC_QUANT_CACHE_ATTN":
+            remain_tokens = request.need_prefill_tokens - request.prefill_end_index
+            if remain_tokens < self.config.scheduler_config.max_num_batched_tokens:
+                #  last chunk
+                return remain_tokens
+            else:
+                return self.config.scheduler_config.max_num_batched_tokens
+
         num_new_tokens = min(num_new_tokens, token_budget)
         request.with_image = False
 

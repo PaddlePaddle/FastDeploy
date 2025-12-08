@@ -1463,6 +1463,8 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+            step_idx=self.share_inputs["step_idx"],
             routing_replay_table=routing_replay_table,
         )
 
@@ -2619,6 +2621,11 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
+        elif cache_quant_dtype is not None and "dynamic" in cache_quant_dtype:
+            if cache_quant_dtype == "dynamic_int2_zp":
+                cache_size = self.cache_config.block_size // 4 * hidden_dim
+                scale_size = self.cache_config.block_size // 32 * hidden_dim * 4
+                required_memory = byte_of_dtype * 2 * (cache_size + scale_size) * num_layers
         else:
             required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory

@@ -64,6 +64,9 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.FLASH_ATTN:
             logger.info("Using FLASH ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.FlashAttentionBackend"
+        elif selected_backend == _Backend.DYNAMIC_QUANT_CACHE_ATTN:
+            logger.info("Using DYNAMIC QUANT CACHE ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.DynamciQuantCacheAttentionBackend"
         elif selected_backend == _Backend.PLAS_ATTN:
             logger.info("Using PLAS ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.PlasAttentionBackend"
