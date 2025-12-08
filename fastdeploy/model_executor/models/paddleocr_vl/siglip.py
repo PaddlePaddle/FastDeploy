@@ -544,18 +544,18 @@ class SiglipEncoder(nn.Layer):
     # TODO(SigureMo): Use a new decorator to mark the function for CINN compilation
     def _run_encoder_layer(
         self,
-        encoder_states,
-        all_attentions,
-        attn_cu_seqlens,
-        output_hidden_states,
-        reversed_window_indices,
-        use_window_attn,
-        hidden_states,
-        attention_mask,
-        output_attentions,
-        cos_emb,
-        sin_emb,
-    ):
+        encoder_states: Optional[Tuple[()]],
+        all_attentions: Optional[Tuple[()]],
+        attn_cu_seqlens: Optional[paddle.Tensor],
+        output_hidden_states: Optional[bool],
+        reversed_window_indices: paddle.Tensor,
+        use_window_attn: bool,
+        hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor],
+        output_attentions: bool,
+        cos_emb: Optional[paddle.Tensor],
+        sin_emb: Optional[paddle.Tensor],
+    ) -> paddle.Tensor:
         max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max().cpu()
 
         for encoder_layer in self.layers:
