@@ -127,12 +127,12 @@ class DealerConnectionManager:
                 response = ForkingPickler.loads(raw_data[-1])
                 _zmq_metrics_stats = ZMQMetricsStats()
                 _zmq_metrics_stats.msg_recv_total += 1
-                if "zmq_send_time" in response:
-                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
+                if getattr(response, "zmq_send_time", None):
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response.zmq_send_time
                 address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
                 main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
 
-                request_id = response[-1]["request_id"]
+                request_id = response[-1].request_id
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
                 elif "reward" == request_id[:6]:
@@ -142,7 +142,7 @@ class DealerConnectionManager:
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
-                        if response[-1]["finished"]:
+                        if response[-1].finished:
                             self.request_num[request_id] -= 1
                             if self.request_num[request_id] == 0:
                                 self._update_load(conn_index, -1)

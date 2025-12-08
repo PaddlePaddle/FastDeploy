@@ -281,7 +281,8 @@ class ZmqServerBase(ABC):
                 if self.aggregate_send:
                     result = self.pack_aggregated_data(new_data)
                 else:
-                    result = ForkingPickler.dumps([response.to_dict() for response in new_data])
+                    # result = ForkingPickler.dumps([response.to_dict() for response in new_data])
+                    result = ForkingPickler.dumps(new_data)
                 with self.response_token_lock:
 
                     _zmq_metrics_stats = ZMQMetricsStats()

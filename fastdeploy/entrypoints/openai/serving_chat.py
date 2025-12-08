@@ -561,16 +561,16 @@ class OpenAIServingChat:
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
                 async for data in generator:
-                    if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
-                    idx = int(data["request_id"].split("_")[-1])
+                    if getattr(data, "error_code", 200) != 200:
+                        raise ValueError("{}".format(getattr(data, "error_msg", "")))
+                    idx = int(getattr(data, "request_id", "").split("_")[-1])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
-                    previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
-                    completion_token_ids[idx].extend(data["outputs"]["token_ids"])
+                    previous_num_tokens[idx] += len(getattr(data.outputs, "token_ids", []))
+                    completion_token_ids[idx].extend(getattr(data.outputs, "token_ids", []))
                     # The logprob for handling the response
-                    output = data["outputs"]
-                    output_top_logprobs = output["top_logprobs"]
-                    output_draft_top_logprobs = output["draft_top_logprobs"]
+                    output = data.outputs
+                    output_top_logprobs = getattr(output, "top_logprobs")
+                    output_draft_top_logprobs = getattr(output, "draft_top_logprobs")
                     if output_top_logprobs is not None:
                         num_top_logprobs = (
                             request.top_logprobs if request.top_logprobs != -1 else self.engine_client.ori_vocab_size
@@ -589,7 +589,7 @@ class OpenAIServingChat:
                             )
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
                                 draft_logprob_contents[idx].extend(draft_logprobs_res.content)
-                    prompt_logprobs_tensors = data.get("prompt_logprobs", None)
+                    prompt_logprobs_tensors = getattr(data, "prompt_logprobs", None)
                     if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                         num_prompt_logprobs = (
                             request.prompt_logprobs
@@ -599,12 +599,12 @@ class OpenAIServingChat:
                         prompt_logprobs_res = self._build_prompt_logprobs(prompt_logprobs_tensors, num_prompt_logprobs)
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
-                    if data["finished"]:
+                    if getattr(data, "finished", None):
                         num_choices -= 1
-                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
-                        if data["outputs"].get("image_token_num"):
-                            previous_num_tokens[idx] += data["outputs"].get("image_token_num")
-                            num_image_tokens[idx] = data["outputs"].get("image_token_num")
+                        reasoning_num_tokens[idx] = getattr(data.outputs, "reasoning_token_num", 0)
+                        if getattr(data.outputs, "image_token_num", None):
+                            previous_num_tokens[idx] += getattr(data.outputs, "image_token_num", 0)
+                            num_image_tokens[idx] = getattr(data.outputs, "image_token_num", None)
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
@@ -675,29 +675,33 @@ class OpenAIServingChat:
         response_processor: ChatResponseProcessor,
         max_tokens: int,
     ) -> ChatCompletionResponseChoice:
-        idx = int(data["request_id"].split("_")[-1])
-        output = data["outputs"]
+        idx = int(getattr(data, "request_id", "").split("_")[-1])
+        output = data.outputs
 
-        if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
+        if (
+            data is not None
+            and getattr(data, "metrics", None)
+            and getattr(getattr(data, "metrics"), "request_start_time", None)
+        ):
             main_process_metrics.e2e_request_latency.observe(
-                time.time() - data.get("metrics").get("request_start_time")
+                time.time() - getattr(getattr(output, "metrics"), "request_start_time")
             )
         message = ChatMessage(
             role="assistant",
-            reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
+            reasoning_content=getattr(output, "reasoning_content"),
+            tool_calls=getattr(output, "tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
             completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
         )
         if response_processor.enable_multimodal_content():
-            message.multimodal_content = output.get("multipart")
+            message.multimodal_content = getattr(output, "multipart")
         else:
-            message.content = output["text"]
+            message.content = getattr(output, "text")
 
-        if output.get("audio_content", None) is not None:
-            message.audio_content = output["audio_content"]
+        if getattr(output, "audio_content", None) is not None:
+            message.audio_content = getattr(output, "audio_content")
 
         logprobs_full_res = None
         draft_logprobs_full_res = None
@@ -709,19 +713,19 @@ class OpenAIServingChat:
         if prompt_logprobs_res_list[idx]:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
 
-        num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
-        num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
-        num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
-        num_image_tokens[idx] = output.get("num_image_tokens", 0)
+        num_cached_tokens[idx] = getattr(data, "num_cached_tokens", 0)
+        num_input_image_tokens[idx] = getattr(data, "num_input_image_tokens", 0)
+        num_input_video_tokens[idx] = getattr(data, "num_input_video_tokens", 0)
+        num_image_tokens[idx] = getattr(output, "num_image_tokens", 0)
 
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if output.get("tool_call"):
+            if getattr(output, "tool_call", None):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
+        if getattr(data, "error_msg", None) is not None and "Recover" in data.error_msg:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
