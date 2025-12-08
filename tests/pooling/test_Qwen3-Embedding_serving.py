@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import concurrent.futures
 import json
 import os
 import signal
@@ -32,6 +33,8 @@ from e2e.utils.serving_utils import (
     is_port_open,
 )
 
+from fastdeploy import envs
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_embedding_server():
@@ -49,6 +52,8 @@ def setup_and_run_embedding_server():
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model path not found: {model_path}")
+
+    envs.FD_ENABLE_MAX_PREFILL = 1
 
     log_path = "embedding_server.log"
     cmd = [
@@ -73,6 +78,12 @@ def setup_and_run_embedding_server():
         "256",
         "--runner",
         "pooling",
+        "--convert",
+        "embed",
+        "--max-num-partial-prefills",
+        "10",
+        "--max-long-partial-prefills",
+        "10",
     ]
 
     with open(log_path, "w") as logfile:
@@ -240,6 +251,67 @@ def test_single_text_embedding(embedding_api_url, headers):
         check_embedding_against_baseline(embedding, baseline_file, threshold=0.02)
 
 
+def send_embedding_request(
+    api_url: str,
+    input_texts,
+    headers: dict,
+    model: str = "default",
+    timeout: int = 120,
+    request_id: int = 0,
+):
+    """
+    Send a single embedding request.
+
+    Returns:
+        Tuple of (request_id, response_dict, latency_ms)
+    """
+    payload = {
+        "model": model,
+        "input": input_texts,
+    }
+
+    start_time = time.time()
+    try:
+        response = requests.post(
+            api_url,
+            headers=headers,
+            json=payload,
+            timeout=timeout,
+        )
+        latency_ms = (time.time() - start_time) * 1000
+
+        if response.status_code == 200:
+            result = response.json()
+            result["_success"] = True
+            result["_latency_ms"] = latency_ms
+            result["_request_id"] = request_id
+            return request_id, result, latency_ms
+        else:
+            return (
+                request_id,
+                {
+                    "_success": False,
+                    "_error": f"HTTP {response.status_code}: {response.text}",
+                    "_latency_ms": latency_ms,
+                    "_request_id": request_id,
+                },
+                latency_ms,
+            )
+
+    except Exception as e:
+        latency_ms = (time.time() - start_time) * 1000
+        return (
+            request_id,
+            {
+                "_success": False,
+                "_error": str(e),
+                "_latency_ms": latency_ms,
+                "_request_id": request_id,
+            },
+            latency_ms,
+        )
+
+
 def test_multi_text_embedding(embedding_api_url, headers):
     """Test embedding generation for batch text inputs."""
     payload = {
@@ -329,5 +401,131 @@ def test_multi_text_embedding(embedding_api_url, headers):
                     f"Embedding {idx} differs from baseline by too much "
                     f"(mean_abs_diff={mean_abs_diff:.6f} >= 0.01):\n"
                     f"Current batch saved to: {temp_file}\n"
+                    f"Please check the differences."
+                )
+
+
+def test_multi_batch_concurrent_threading(embedding_api_url, headers):
+    """
+    Test multiple concurrent batch requests using ThreadPoolExecutor.
+    Each request contains multiple texts.
+    """
+    batch_input = ["北京天安门在哪里?", "杭州在哪里?", "你是谁啊"]
+    concurrent_requests = 5
+
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
+        futures = {}
+        for i in range(concurrent_requests):
+            future = executor.submit(
+                send_embedding_request,
+                embedding_api_url,
+                batch_input,
+                headers,
+                "default",
+                120,
+                i,
+            )
+            futures[future] = i
+
+        for future in concurrent.futures.as_completed(futures):
+            req_id = futures[future]
+            try:
+                _, result, latency = future.result()
+                result["_request_id"] = req_id
+                results.append(result)
+            except Exception as exc:
+                print(f"   Request {req_id} failed with exception: {exc}")
+                results.append({"_success": False, "_error": str(exc), "_request_id": req_id})
+
+    # Validate results
+    successful = [r for r in results if r.get("_success", False)]
+    assert (
+        len(successful) == concurrent_requests
+    ), f"Expected {concurrent_requests} successful responses, got {len(successful)}"
+    successful_sorted = sorted(successful, key=lambda x: x.get("_request_id", 0))
+
+    first_result = successful_sorted[0]
+    first_embeddings = [item["embedding"] for item in first_result["data"]]
+    print("first_embedding", first_embeddings)
+
+    CONCURRENT_CONSISTENCY_THRESHOLD = 0.05
+
+    print(
+        f"\n Checking embedding consistency across concurrent requests (threshold={CONCURRENT_CONSISTENCY_THRESHOLD})..."
+    )
+    for result in successful_sorted[1:]:
+        req_id = result.get("_request_id", "?")
+        current_embeddings = [item["embedding"] for item in result["data"]]
+
+        all_consistent = True
+        for idx, (first_emb, current_emb) in enumerate(zip(first_embeddings, current_embeddings)):
+            mean_abs_diff = compare_embeddings(first_emb, current_emb, threshold=CONCURRENT_CONSISTENCY_THRESHOLD)
+            if mean_abs_diff >= CONCURRENT_CONSISTENCY_THRESHOLD:
+                all_consistent = False
+                raise AssertionError(
+                    f"Request {req_id}, embedding {idx} differs from request 0 "
+                    f"(mean_abs_diff={mean_abs_diff:.6f} >= {CONCURRENT_CONSISTENCY_THRESHOLD})"
+                )
+
+        if all_consistent:
+            print(f"   Request {req_id} vs Request 0:  consistent (within threshold)")
+
+    BASELINE_THRESHOLD = 0.05
+
+    base_path = os.getenv("MODEL_PATH", "")
+    baseline_filename = "test-Qwen3-Embedding-0.6B-multi-batch-concurrent-baseline.json"
+
+    if base_path:
+        baseline_file = os.path.join(base_path, "torch", baseline_filename)
+    else:
+        baseline_file = baseline_filename
+
+    if not os.path.exists(baseline_file):
+        print("\nBaseline file not found. Saving current embeddings as baseline...")
+        baseline_data = {
+            "embeddings": first_embeddings,
+            "dimension": len(first_embeddings[0]),
+            "count": len(first_embeddings),
+            "inputs": batch_input,
+            "concurrent_requests": concurrent_requests,
+        }
+        with open(baseline_file, "w", encoding="utf-8") as f:
+            json.dump(baseline_data, f, indent=2)
+        print(f"Baseline saved to: {baseline_file}")
+    else:
+        print(f"\nComparing with baseline: {baseline_file}")
+        with open(baseline_file, "r", encoding="utf-8") as f:
+            baseline_data = json.load(f)
+            baseline_embeddings = baseline_data["embeddings"]
+
+        assert len(first_embeddings) == len(
+            baseline_embeddings
+        ), f"Embedding count mismatch: current={len(first_embeddings)}, baseline={len(baseline_embeddings)}"
+
+        # Compare each embedding with baseline
+        for idx, (current_emb, baseline_emb) in enumerate(zip(first_embeddings, baseline_embeddings)):
+            print(f"\n--- Comparing embedding {idx}: '{batch_input[idx]}' ---")
+            mean_abs_diff = compare_embeddings(current_emb, baseline_emb, threshold=BASELINE_THRESHOLD)
+
+            if mean_abs_diff >= BASELINE_THRESHOLD:
+                # Save current embeddings for debugging
+                temp_file = f"{baseline_file}.current"
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(
+                        {
+                            "embeddings": first_embeddings,
+                            "dimension": len(first_embeddings[0]),
+                            "count": len(first_embeddings),
+                            "inputs": batch_input,
+                        },
+                        f,
+                        indent=2,
+                    )
+
+                raise AssertionError(
+                    f"Embedding {idx} differs from baseline by too much "
+                    f"(mean_abs_diff={mean_abs_diff:.6f} >= {BASELINE_THRESHOLD}):\n"
+                    f"Current embeddings saved to: {temp_file}\n"
                     f"Please check the differences."
                 )
