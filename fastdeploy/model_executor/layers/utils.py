@@ -587,8 +587,6 @@ def modules_to_convert(prefix: str, fd_config: FDConfig):
             for p in patterns:
                 if fnmatch.fnmatch(prefix, p) or fnmatch.fnmatch(prefix, p + ".*"):
                     return False
-            return True
-        else:
-            return True
+        return True
     else:
         return True

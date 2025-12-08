@@ -17,7 +17,7 @@
 import importlib
 import importlib.util
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 import paddle
 from paddle import nn
@@ -331,7 +331,9 @@ class MXFP4MoeMethod(QuantMethodBase):
         routing_weights = routing_weights.float()
         return routing_weights, selected_experts
 
-    def apply(self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer) -> paddle.Tensor:
+    def apply(
+        self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer, topk_ids_hookfunc: Callable = None
+    ) -> paddle.Tensor:
         router_out = router(x.cast("float32"))
 
         if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
@@ -342,7 +344,7 @@ class MXFP4MoeMethod(QuantMethodBase):
                 _,
                 topk_weights,
                 topk_idx,
-                _,
+                *_,
             ) = moe_expert_dispatch(
                 x,
                 router_out,
@@ -355,6 +357,10 @@ class MXFP4MoeMethod(QuantMethodBase):
                 self.quant_config.name(),
                 topk_only_mode=False,
             )
+
+            if topk_ids_hookfunc is not None:
+                topk_ids_hookfunc(topk_ids=topk_idx)
+
             topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
 
             quant_scales = [

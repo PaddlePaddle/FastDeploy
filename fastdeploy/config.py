@@ -350,7 +350,11 @@ class ModelConfig:
             elif "dtype" in self.model_config:
                 self.model_format = "paddle"
                 logger.info("The model format is Paddle")
-            elif "model_type" in self.model_config and self.model_config["model_type"] == "gpt_oss":
+            elif (
+                "quantization_config" in self.model_config
+                and "quant_method" in self.model_config["quantization_config"]
+                and "mxfp4" == self.model_config["quantization_config"]["quant_method"]
+            ):
                 self.model_format = "torch"
                 logger.info("The model format is Hugging Face")
             else:
