@@ -134,6 +134,11 @@ class ForwardMeta:
     # Accumulated sequence length of key
     cu_seqlens_k: Optional[paddle.Tensor] = None
 
+    # Note(ZKK): every ForwardMeta should have a attention_metadata!
+    # attention_metadata should not be in a member of AttentionBackend!
+    # This variable must be initialized when calling init_attention_metadata method.
+    attention_metadata = None
+
     # Pre-cache length
     pre_caches_length: int = 0
     # Block tables

@@ -125,7 +125,6 @@ class AppendAttentionBackend(AttentionBackend):
         AppendAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: AppendAttentionMetadata = None
         self.block_size: int = fd_config.cache_config.block_size
         self.max_seq_len: int = fd_config.model_config.max_model_len
         self.rope_theta: float = (
@@ -191,11 +190,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.rank, int(self.device_id), self.keep_pd_step_flag
             )
 
-        self.attention_metadata: AttentionMetadata = metadata
-
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
-        return self.attention_metadata
+        forward_meta.attention_metadata = metadata
 
     def get_kv_cache_shape(
         self,
@@ -225,7 +220,7 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
-        metadata = self.attention_metadata
+        metadata = forward_meta.attention_metadata
 
         sliding_window = layer.sliding_window
 
