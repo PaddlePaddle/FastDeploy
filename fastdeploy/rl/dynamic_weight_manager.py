@@ -257,7 +257,7 @@ class DynamicWeightManager:
         """
         check model weights status
         """
-        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        # logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
         while (
             model_weights_status.value[0] != ModelWeightsStatus.NORMAL
             and model_weights_status.value[0] != ModelWeightsStatus.CLEARED
