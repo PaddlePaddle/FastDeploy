@@ -256,13 +256,13 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
-        request.llm_engine_recv_req_timestamp = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
-        request.preprocess_start_time = time.time()
+        request.metrics.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
@@ -324,7 +324,8 @@ class LLMEngine:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
 
-        request.preprocess_end_time = time.time()
+        request.metrics.preprocess_end_time = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")
@@ -568,6 +569,7 @@ class LLMEngine:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -755,8 +757,9 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
+                    ctx = multiprocessing.get_context("spawn")
                     self.dp_processed.append(
-                        multiprocessing.Process(
+                        ctx.Process(
                             target=start_data_parallel_service,
                             args=(
                                 self.cfg,
@@ -786,7 +789,7 @@ class LLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

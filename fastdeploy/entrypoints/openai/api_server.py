@@ -58,7 +58,6 @@ from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
-from fastdeploy.metrics.metrics_middleware import PrometheusMiddleware
 from fastdeploy.metrics.trace_util import (
     fd_start_span,
     inject_to_metadata,
@@ -181,6 +180,7 @@ async def lifespan(app: FastAPI):
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
         fd_config=fd_config,
         workers=args.workers,
+        max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -253,9 +253,6 @@ env_api_key_func = environment_variables.get("FD_API_KEY")
 env_tokens = env_api_key_func() if env_api_key_func else []
 if tokens := [key for key in (args.api_key or env_tokens) if key]:
     app.add_middleware(AuthenticationMiddleware, tokens)
-
-# add middleware for http metrics
-app.add_middleware(PrometheusMiddleware)
 
 
 @asynccontextmanager
