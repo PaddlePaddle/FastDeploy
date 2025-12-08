@@ -92,8 +92,8 @@ __global__ void speculate_recover_block(int* recover_block_list,  // [bsz]
     GM2LM_ASYNC(
         ori_seq_lens_encoder + recover_id, &ori_seq_len_encoder, sizeof(int));
     if (ori_seq_lens_decoder != nullptr) {
-        GM2LM_ASYNC(
-            ori_seq_lens_decoder + recover_id, &ori_seq_len_decoder, sizeof(int));
+      GM2LM_ASYNC(
+          ori_seq_lens_decoder + recover_id, &ori_seq_len_decoder, sizeof(int));
     }
     GM2LM_ASYNC(step_idx + recover_id, &step_idx_now, sizeof(int));
     GM2LM_ASYNC(
@@ -102,7 +102,8 @@ __global__ void speculate_recover_block(int* recover_block_list,  // [bsz]
     GM2LM_ASYNC(next_tokens + recover_id, &next_token, sizeof(int64_t));
     mfence();
     if (ori_seq_lens_decoder != nullptr) {
-        LM2GM_ASYNC(&ori_seq_len_decoder, seq_lens_decoder + recover_id, sizeof(int));
+      LM2GM_ASYNC(
+          &ori_seq_len_decoder, seq_lens_decoder + recover_id, sizeof(int));
     }
 
     int seq_len = ori_seq_len_encoder + step_idx_now;

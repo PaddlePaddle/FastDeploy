@@ -79,7 +79,7 @@ static int cpu_wrapper(Context *ctx,
     const int recover_id = recover_block_list[bid];
     const int ori_seq_len_encoder = ori_seq_lens_encoder[recover_id];
     if (ori_seq_lens_decoder != nullptr) {
-        seq_lens_decoder[recover_id] = ori_seq_lens_decoder[recover_id];
+      seq_lens_decoder[recover_id] = ori_seq_lens_decoder[recover_id];
     }
     const int step_idx_now = step_idx[recover_id];
     const int seq_len = ori_seq_len_encoder + step_idx_now;

@@ -24,6 +24,7 @@ from fastdeploy.model_executor.ops.xpu import speculate_step_system_cache
 np.random.seed(2023)
 paddle.seed(2023)
 
+
 def generate_test_data():
     """
     生成测试数据的辅助函数。

@@ -95,7 +95,8 @@ void SpeculateStepPaddleBase(
         const_cast<bool *>(stop_flags.data<bool>()),
         const_cast<int *>(seq_lens_this_time.data<int>()),
         ori_seq_lens_encoder.data<int>(),
-        ori_seq_lens_decoder ? ori_seq_lens_decoder.get_ptr()->data<int>() : nullptr,
+        ori_seq_lens_decoder ? ori_seq_lens_decoder.get_ptr()->data<int>()
+                             : nullptr,
         const_cast<int *>(seq_lens_encoder.data<int>()),
         const_cast<int *>(seq_lens_decoder.data<int>()),
         const_cast<int *>(block_tables.data<int>()),
