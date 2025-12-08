@@ -460,7 +460,7 @@ class GPUModelRunner(ModelRunnerBase):
                             multi_vision_inputs["images_lst"].append(
                                 inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
                             )
-                            multi_vision_inputs["grid_thw_lst"].append(grid_thw_list[i])
+                            multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
                             multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
                             multi_vision_inputs["vit_position_ids_lst"].append(vit_position_ids_list[i])
                         else:
@@ -480,7 +480,7 @@ class GPUModelRunner(ModelRunnerBase):
                             inputs["images"][request.image_start : request.image_end].cuda()
                         )
                         multi_vision_inputs["grid_thw_lst"].extend(
-                            inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                            paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
                         )
                         multi_vision_inputs["cu_seqlens"].extend(
                             inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
