@@ -19,9 +19,11 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, TypeVar, Union
 
 from fastdeploy import envs
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -116,6 +118,100 @@ class SamplingParams:
                 field.name: (req_dict[field.name] if field.name in req_dict else field.default)
                 for field in fields(cls)
             }
+        )
+
+    @classmethod
+    def from_generic_request(cls, req: T) -> SamplingParams:
+        logprobs_val = (
+            getattr(req, "top_logprobs", cls.logprobs)
+            if hasattr(req, "top_logprobs") and not getattr(req, "logprobs", None)
+            else getattr(req, "logprobs", cls.logprobs)
+        )
+        max_tokens_val = (
+            req.max_completion_tokens or getattr(req, "max_tokens", cls.max_tokens)
+            if hasattr(req, "max_completion_tokens")
+            else getattr(req, "max_tokens", cls.max_tokens)
+        )
+
+        return cls(
+            n=getattr(req, "n", None) if getattr(req, "n", None) is not None else cls.n,
+            best_of=getattr(req, "best_of", None) if getattr(req, "best_of", None) is not None else cls.best_of,
+            presence_penalty=(
+                getattr(req, "presence_penalty", None)
+                if getattr(req, "presence_penalty", None) is not None
+                else cls.presence_penalty
+            ),
+            frequency_penalty=(
+                getattr(req, "frequency_penalty", None)
+                if getattr(req, "frequency_penalty", None) is not None
+                else cls.frequency_penalty
+            ),
+            repetition_penalty=(
+                getattr(req, "repetition_penalty", None)
+                if getattr(req, "repetition_penalty", None) is not None
+                else cls.repetition_penalty
+            ),
+            temperature=(
+                getattr(req, "temperature", None) if getattr(req, "temperature", None) is not None else cls.temperature
+            ),
+            top_p=getattr(req, "top_p", None) if getattr(req, "top_p", None) is not None else cls.top_p,
+            top_k=getattr(req, "top_k", None) if getattr(req, "top_k", None) is not None else cls.top_k,
+            min_p=getattr(req, "min_p", None) if getattr(req, "min_p", None) is not None else cls.min_p,
+            seed=getattr(req, "seed", None) if getattr(req, "seed", None) is not None else cls.seed,
+            stop=getattr(req, "stop", None) if getattr(req, "stop", None) is not None else cls.stop,
+            stop_token_ids=(
+                getattr(req, "stop_token_ids", None)
+                if getattr(req, "stop_token_ids", None) is not None
+                else cls.stop_token_ids
+            ),
+            stop_seqs_len=(
+                getattr(req, "stop_seqs_len", None)
+                if getattr(req, "stop_seqs_len", None) is not None
+                else cls.stop_seqs_len
+            ),
+            max_tokens=max_tokens_val,
+            reasoning_max_tokens=(
+                getattr(req, "reasoning_max_tokens", None)
+                if getattr(req, "reasoning_max_tokens", None) is not None
+                else cls.reasoning_max_tokens
+            ),
+            min_tokens=(
+                getattr(req, "min_tokens", None) if getattr(req, "min_tokens", None) is not None else cls.min_tokens
+            ),
+            logprobs=logprobs_val,
+            prompt_logprobs=(
+                getattr(req, "prompt_logprobs", None)
+                if getattr(req, "prompt_logprobs", None) is not None
+                else cls.prompt_logprobs
+            ),
+            temp_scaled_logprobs=(
+                getattr(req, "temp_scaled_logprobs", None)
+                if getattr(req, "temp_scaled_logprobs", None) is not None
+                else cls.temp_scaled_logprobs
+            ),
+            top_p_normalized_logprobs=(
+                getattr(req, "top_p_normalized_logprobs", None)
+                if getattr(req, "top_p_normalized_logprobs", None) is not None
+                else cls.top_p_normalized_logprobs
+            ),
+            bad_words=(
+                getattr(req, "bad_words", None) if getattr(req, "bad_words", None) is not None else cls.bad_words
+            ),
+            guided_decoding=(
+                getattr(req, "guided_decoding", None)
+                if getattr(req, "guided_decoding", None) is not None
+                else cls.guided_decoding
+            ),
+            bad_words_token_ids=(
+                getattr(req, "bad_words_token_ids", None)
+                if getattr(req, "bad_words_token_ids", None) is not None
+                else cls.bad_words_token_ids
+            ),
+            logits_processors_args=(
+                getattr(req, "logits_processors_args", None)
+                if getattr(req, "logits_processors_args", None) is not None
+                else cls.logits_processors_args
+            ),
         )
 
     @classmethod

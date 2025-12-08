@@ -139,7 +139,7 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                request_obj = Request.from_chat_completion_request(request, f"{request_id}_0")
+                request_obj = Request.from_generic_request(request, request_id=f"{request_id}_0")
                 if request_obj.chat_template is None:
                     request_obj.chat_template = self.chat_template
                 request_obj.arrival_time = time.time()

@@ -22,7 +22,9 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Generic, Optional, Union
+from typing import Any, Dict, Generic, Optional
+from typing import TypeVar as TypingTypeVar
+from typing import Union
 
 import numpy as np
 from pydantic import BaseModel
@@ -31,12 +33,7 @@ from typing_extensions import TypeVar
 from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.entrypoints.openai.protocol import (
-    ChatCompletionRequest,
-    CompletionRequest,
-    StructuralTagResponseFormat,
-    ToolCall,
-)
+from fastdeploy.entrypoints.openai.protocol import StructuralTagResponseFormat, ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
@@ -59,6 +56,9 @@ class RequestType(Enum):
 class ImagePosition:
     offset: int = 0
     length: int = 0
+
+
+T = TypingTypeVar("T")
 
 
 @dataclass
@@ -207,41 +207,9 @@ class Request:
         self.suffix = suffix
 
     @classmethod
-    def from_chat_completion_request(cls, r: ChatCompletionRequest, request_id=None):
-        max_tokens = r.max_completion_tokens or r.max_tokens
-        logprobs = r.top_logprobs if r.logprobs else r.logprobs
-        if request_id is not None:
-            r.request_id = request_id
-        sampling_params = SamplingParams(
-            n=r.n,
-            presence_penalty=r.presence_penalty,
-            frequency_penalty=r.frequency_penalty,
-            repetition_penalty=r.repetition_penalty,
-            temperature=r.temperature,
-            top_p=r.top_p,
-            top_k=r.top_k if r.top_k is not None else 0,
-            min_p=r.min_p if r.min_p is not None else 0.0,
-            seed=r.seed,
-            stop=r.stop,
-            stop_token_ids=r.stop_token_ids,
-            max_tokens=max_tokens,
-            reasoning_max_tokens=r.reasoning_max_tokens,
-            min_tokens=r.min_tokens if r.min_tokens is not None else 1,
-            logprobs=logprobs,
-            temp_scaled_logprobs=r.temp_scaled_logprobs,
-            top_p_normalized_logprobs=r.top_p_normalized_logprobs,
-            bad_words=r.bad_words,
-            bad_words_token_ids=r.bad_words_token_ids,
-            logits_processors_args=r.logits_processors_args,
-        )
-        if not r.prompt_token_ids:
-            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-            assert len(r.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
-            if r.disable_chat_template:
-                r.prompt = r.messages[0]["content"]
-                r.messages = []
+    def _process_guided_json(cls, r: T):
         guided_json_object = None
-        if r.response_format is not None:
+        if hasattr(r, "response_format") and r.response_format is not None:
             if r.response_format.type == "json_object":
                 guided_json_object = True
             elif r.response_format.type == "json_schema":
@@ -255,101 +223,98 @@ class Request:
                 structural_tag = r.response_format
                 assert structural_tag is not None and isinstance(structural_tag, StructuralTagResponseFormat)
                 r.structural_tag = json.dumps(structural_tag.model_dump(by_alias=True))
-        if guided_json_object:
-            r.guided_json_object = guided_json_object
-        request = cls(
-            request_id=r.request_id,
-            messages=r.messages,
-            tools=[tool.model_dump() for tool in r.tools] if r.tools else None,
-            sampling_params=sampling_params,
-            reasoning_max_tokens=r.reasoning_max_tokens,
-            disable_chat_template=r.disable_chat_template,
-            structural_tag=r.structural_tag,
-            chat_template=r.chat_template,
-            prompt_token_ids=r.prompt_token_ids,
-            disaggregate_info=r.disaggregate_info,
-            guided_json=r.guided_json,
-            guided_choice=r.guided_choice,
-            guided_regex=r.guided_regex,
-            guided_grammar=r.guided_grammar,
-            # top_logprobs=r.top_logprobs,
-            ic_req_data=getattr(r, "ic_req_data", None),
-            user=r.user,
-            metadata=r.metadata,
-            completion_token_ids=r.completion_token_ids,
-            chat_template_kwargs=r.chat_template_kwargs,
-            response_format=r.response_format.model_dump() if r.response_format else None,
-            mm_hashes=r.mm_hashes,
-        )
-        if r.metadata is not None:
+        return guided_json_object
+
+    @classmethod
+    def from_generic_request(cls, req: T, request_id: Optional[str] = None, prompt: Optional[str] = None):
+        if request_id is not None:
+            setattr(req, "request_id", request_id)
+
+        if prompt is not None and hasattr(req, "prompt"):
+            setattr(req, "prompt", prompt)
+
+        if (
+            hasattr(req, "disable_chat_template")
+            and req.disable_chat_template
+            and not getattr(req, "prompt_token_ids", None)
+        ):
             assert (
-                "raw_request" not in r.metadata
+                len(getattr(req, "messages", [])) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
+            setattr(req, "prompt", req.messages[0]["content"])
+            setattr(req, "messages", [])
+
+        sampling_params = SamplingParams.from_generic_request(req)
+
+        guided_json_object = cls._process_guided_json(req)
+
+        # ChatCompletionRequest
+        if hasattr(req, "messages") and hasattr(req, "prompt_token_ids"):
+            if not req.prompt_token_ids:
+                # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+                assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+                if req.disable_chat_template:
+                    req.prompt = req.messages[0]["content"]
+                    req.messages = []
+
+        request = cls(
+            request_id=getattr(req, "request_id", None),
+            prompt_token_ids=getattr(req, "prompt_token_ids", None),
+            prompt=getattr(req, "prompt", None),
+            sampling_params=sampling_params,
+            guided_json_object=guided_json_object,
+            disaggregate_info=getattr(req, "disaggregate_info", None),
+            guided_json=getattr(req, "guided_json", None),
+            guided_regex=getattr(req, "guided_regex", None),
+            guided_choice=getattr(req, "guided_choice", None),
+            guided_grammar=getattr(req, "guided_grammar", None),
+            user=getattr(req, "user", None),
+            response_format=(
+                getattr(req, "response_format", None).model_dump()
+                if (hasattr(getattr(req, "response_format", None), "model_dump"))
+                else None
+            ),
+            mm_hashes=getattr(req, "mm_hashes", None),
+        )
+
+        if hasattr(req, "messages"):
+            if hasattr(req, "prompt_token_ids"):
+                if not req.prompt_token_ids:
+                    # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+                    assert (
+                        len(req.messages) > 0
+                    ), "messages can not be an empty list, unless prompt_token_ids is passed"
+                    if req.disable_chat_template:
+                        request.prompt = req.messages[0]["content"]
+                        request.messages = []
+            request.messages = getattr(req, "messages", None)
+            request.tools = (
+                [tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None
+            )
+            request.reasoning_max_tokens = getattr(req, "reasoning_max_tokens", None)
+            request.disable_chat_template = getattr(req, "disable_chat_template", None)
+            request.structural_tag = getattr(req, "structural_tag", None)
+            request.chat_template = getattr(req, "chat_template", None)
+            request.ic_req_data = getattr(req, "ic_req_data", None)
+            request.metadata = getattr(req, "metadata", None)
+            request.completion_token_ids = getattr(req, "completion_token_ids", None)
+            request.chat_template_kwargs = getattr(req, "chat_template_kwargs", None)
+
+        if getattr(req, "suffix", None):
+            request.suffix = getattr(req, "suffix", None)
+            for key, value in req.suffix.items():
+                setattr(request, key, value)
+
+        if getattr(req, "metadata", None):
+            assert (
+                "raw_request" not in req.metadata
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
-            for key, value in r.metadata.items():
+            for key, value in req.metadata.items():
                 setattr(request, key, value)
             from fastdeploy.utils import api_server_logger
 
             api_server_logger.warning("The parameter metadata is obsolete.")
-        return request
 
-    @classmethod
-    def from_completion_request(cls, r: CompletionRequest, request_id=None, prompt=None):
-        if request_id is not None:
-            r.request_id = request_id
-        if prompt is not None:
-            r.prompt = prompt
-        sampling_params = SamplingParams(
-            n=r.n,
-            best_of=r.best_of,
-            presence_penalty=r.presence_penalty,
-            frequency_penalty=r.frequency_penalty,
-            repetition_penalty=r.repetition_penalty,
-            temperature=r.temperature,
-            top_p=r.top_p,
-            top_k=r.top_k if r.top_k is not None else 0,
-            min_p=r.min_p if r.min_p is not None else 0.0,
-            seed=r.seed,
-            stop=r.stop,
-            stop_token_ids=r.stop_token_ids,
-            max_tokens=r.max_tokens,
-            min_tokens=r.min_tokens if r.min_tokens is not None else 1,
-            logprobs=r.logprobs,
-            temp_scaled_logprobs=r.temp_scaled_logprobs,
-            top_p_normalized_logprobs=r.top_p_normalized_logprobs,
-            bad_words=r.bad_words,
-            bad_words_token_ids=r.bad_words_token_ids,
-            logits_processors_args=r.logits_processors_args,
-        )
-        guided_json_object = None
-        if r.response_format is not None:
-            if r.response_format.type == "json_object":
-                guided_json_object = True
-            elif r.response_format.type == "json_schema":
-                json_schema = r.response_format.json_schema.json_schema
-                assert json_schema is not None, "response_format.json_schema can not be None"
-                if isinstance(json_schema, (BaseModel, type(BaseModel))):
-                    r.guided_json = json_schema.model_json_schema()
-                else:
-                    r.guided_json = json_schema
-        if guided_json_object:
-            r.guided_json_object = guided_json_object
-        request = Request(
-            request_id=r.request_id,
-            prompt_token_ids=r.prompt_token_ids,
-            prompt=r.prompt,
-            sampling_params=sampling_params,
-            disaggregate_info=r.disaggregate_info,
-            guided_json=r.guided_json,
-            guided_regex=r.guided_regex,
-            guided_choice=r.guided_choice,
-            guided_grammar=r.guided_grammar,
-            user=r.user,
-            response_format=r.response_format.model_dump() if r.response_format else None,
-            mm_hashes=r.mm_hashes,
-        )
-        if r.suffix is not None:
-            for key, value in r.suffix.items():
-                setattr(request, key, value)
         return request
 
     @classmethod
