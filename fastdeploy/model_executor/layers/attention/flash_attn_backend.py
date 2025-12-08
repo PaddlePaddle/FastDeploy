@@ -112,7 +112,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.head_dim = fd_config.model_config.head_dim
         self.attn_outputsize_tp = self.num_heads * self.head_dim
         self.block_size = fd_config.cache_config.block_size
-        self.num_layers: int = fd_config.model_config.num_hidden_layers
+        self.num_layers: int = fd_config.model_config.num_layers_this_pp
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 

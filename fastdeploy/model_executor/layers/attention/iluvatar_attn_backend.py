@@ -92,7 +92,7 @@ class IluvatarAttnBackend(AttentionBackend):
         self.hidden_dim = fd_config.model_config.hidden_size
         # note: scale need to change if using MLA
         self.scale = 1.0 / sqrt(head_dim)
-        self.num_layers = fd_config.model_config.num_hidden_layers
+        self.num_layers = fd_config.model_config.num_layers_this_pp
         self.dtype = paddle.get_default_dtype()
         self.enable_mm = fd_config.model_config.enable_mm
 

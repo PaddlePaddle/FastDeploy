@@ -88,6 +88,15 @@ class ModelRunnerBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def execute_model_pp(
+        self,
+    ) -> ModelRunnerOutput:
+        """
+        Execute model pp with and get output
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def profile_run(self) -> None:
         """
         Execute a forward pass with dummy inputs to profile the memory usage of the model."

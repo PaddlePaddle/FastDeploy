@@ -89,6 +89,14 @@ class WorkerBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def execute_model_pp(
+        self,
+        model_forward_batch=None,
+    ) -> Optional[ModelRunnerOutput]:
+        """ """
+        raise NotImplementedError
+
+    @abstractmethod
     def graph_optimize_and_warm_up_model(self) -> None:
         """Prepare model for execution through graph optimizaiton(CudaGrpah/CINN) or warmup."""
         raise NotImplementedError

@@ -96,7 +96,7 @@ class XPUAttentionBackend(AttentionBackend):
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
         self.head_dim: int = head_dim
-        self.num_layers: int = fd_config.model_config.num_hidden_layers
+        self.num_layers: int = fd_config.model_config.num_layers_this_pp
 
         # pd_disaggregation
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode

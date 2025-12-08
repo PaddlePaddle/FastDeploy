@@ -281,6 +281,11 @@ class EngineArgs:
     Number of data parallelism.
     """
 
+    pipeline_parallel_size: int = 1
+    """
+    Number of pipeline parallelism.
+    """
+
     local_data_parallel_id: int = 0
     """
     Local data parallel id.
@@ -862,6 +867,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.data_parallel_size,
             help="Degree of data parallelism.",
+        )
+
+        parallel_group.add_argument(
+            "--pipeline-parallel-size",
+            type=int,
+            default=EngineArgs.pipeline_parallel_size,
+            help="Degree of pipeline parallelism.",
         )
 
         parallel_group.add_argument(

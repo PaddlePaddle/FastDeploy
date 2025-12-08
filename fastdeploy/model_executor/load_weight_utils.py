@@ -247,7 +247,10 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         "mtp_block" if getattr(fd_config.speculative_config, "model_type", "main") == "mtp" else "layers"
     )
 
-    for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
+    for i in range(
+        max(fd_config.model_config.start_layer_id, fd_config.model_config.moe_layer_start_index),
+        fd_config.model_config.end_layer_id,
+    ):
         for j in get_expert_ranges(fd_config):
             up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
@@ -283,7 +286,10 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
     if fd_config.parallel_config.tensor_parallel_size > 1:
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
-            for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
+            for i in range(
+                max(fd_config.model_config.start_layer_id, fd_config.model_config.moe_layer_start_index),
+                fd_config.model_config.end_layer_id,
+            ):
                 no_tp_keys = [
                     f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight",
                     f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.bias",

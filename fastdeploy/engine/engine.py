@@ -547,6 +547,7 @@ class LLMEngine:
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --chunked_moe_size {self.cfg.parallel_config.chunked_moe_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
+            f" --pipeline_parallel_size {self.cfg.parallel_config.pipeline_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --think_end_id {think_end_id}"
