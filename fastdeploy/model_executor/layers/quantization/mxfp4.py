@@ -32,8 +32,6 @@ from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-import torch
-from torch.nn import functional as F
 
 logger = get_logger("config", "config.log")
 
@@ -312,25 +310,6 @@ class MXFP4MoeMethod(QuantMethodBase):
         else:
             raise ValueError(f"Unsupported backend: {self.mxfp4_backend}")
 
-    def compute_routing(self, router_logits: paddle.Tensor, top_k: int):
-        """
-        Compute routing weights and selected experts from router logits.
-
-        Args:
-            router_logits (torch.Tensor): Router logits of shape [batch_size, num_experts]
-            top_k (int): Number of experts to route to per token
-
-        Returns:
-            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
-                - routing_weights: Expert weights of shape [batch_size, top_k]
-                - selected_experts: Expert indices of shape [batch_size, top_k]
-        """
-        routing_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
-        routing_weights, selected_experts = torch.topk(routing_weights, top_k, dim=-1)
-        routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
-        routing_weights = routing_weights.float()
-        return routing_weights, selected_experts
-
     def apply(
         self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer, topk_ids_hookfunc: Callable = None
     ) -> paddle.Tensor:
@@ -385,7 +364,7 @@ class MXFP4MoeMethod(QuantMethodBase):
                 input=x,
                 token_selected_experts=topk_idx,
                 token_final_scales=topk_weights,
-                output_dtype=torch.bfloat16,
+                output_dtype=paddle.bfloat16,
                 output=output,
                 quant_scales=quant_scales,
                 fc1_expert_biases=layer.up_gate_proj_bias,
