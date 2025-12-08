@@ -520,6 +520,7 @@ class CompletionOutput:
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[ToolCall] = None
+    completion_tokens: Optional[str] = None
 
     def to_dict(self):
         """

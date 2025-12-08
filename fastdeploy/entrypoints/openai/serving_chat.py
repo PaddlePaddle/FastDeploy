@@ -684,16 +684,16 @@ class OpenAIServingChat:
             and getattr(getattr(data, "metrics"), "request_start_time", None)
         ):
             main_process_metrics.e2e_request_latency.observe(
-                time.time() - getattr(getattr(output, "metrics"), "request_start_time")
+                time.time() - getattr(getattr(data, "metrics"), "request_start_time")
             )
         message = ChatMessage(
             role="assistant",
             reasoning_content=getattr(output, "reasoning_content"),
-            tool_calls=getattr(output, "tool_call"),
+            tool_calls=getattr(output, "tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
-            completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
+            completion_tokens=getattr(output, "completion_tokens") if request.return_token_ids else None,
         )
         if response_processor.enable_multimodal_content():
             message.multimodal_content = getattr(output, "multipart")
