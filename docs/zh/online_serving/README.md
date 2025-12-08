@@ -224,6 +224,8 @@ logits_processors_args: Optional[Dict] = None
 mm_hashes: Optional[list] = None
 # 多模态（multimodal）输入的哈希值列表，用于验证或跟踪输入内容（如图像、音频等）。默认 None 表示无多模态输入或无需哈希验证。
 
+collect_metrics: Optional[bool] = False
+# 是否返回生成过程中的指标信息，用于性能分析或调试（默认 False 表示不返回）。
 ```
 
 ### 返回字段差异
