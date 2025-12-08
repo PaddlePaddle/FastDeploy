@@ -36,7 +36,11 @@ os.environ["FD_USE_MACHETE"] = "0"
 @pytest.fixture(scope="session", autouse=True, params=[0, 2])
 def setup_and_run_server(request):
     """
-    Pytest fixture that runs once per test session:
+    Pytest fixture that runs once per test session, parameterized by `graph_opt_level`:
+    - Runs tests with graph_opt_level=0 (dynamic graph with fused ops)
+    - Runs tests with graph_opt_level=2 (CINN compilation)
+
+    This ensures the API server is tested under both graph optimization configurations.
     - Cleans ports before tests
     - Starts the API server as a subprocess
     - Waits for server port to open (up to 30 seconds)

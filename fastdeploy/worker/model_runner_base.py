@@ -96,6 +96,6 @@ class ModelRunnerBase(ABC):
 
     def vision_encoder_compile(self):
         """
-        Perform the vision encoder compile if applicable
+        Compile the vision encoder if applicable
         """
-        logger.info(f"No vision encoder compile for base {self.__class__.__name__}")
+        logger.info(f"No vision encoder compilation for base {self.__class__.__name__}")
