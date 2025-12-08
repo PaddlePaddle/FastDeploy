@@ -20,7 +20,7 @@ from typing import Optional
 import paddle
 import paddle.nn as nn
 
-from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import h2d_copy
 
 
 class GELUActivation(nn.Layer):
@@ -98,8 +98,9 @@ class Projector(nn.Layer):
         return hidden_states
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        loaded_weight = get_tensor(loaded_weight)
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -109,16 +110,4 @@ class Projector(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
-
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
-            else:
-                param.copy_(tensor, False)
+        h2d_copy(param, loaded_weight)

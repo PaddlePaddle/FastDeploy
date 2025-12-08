@@ -79,6 +79,7 @@ class LocalScheduler:
 
         self.requests: Dict[str, ScheduledRequest] = dict()
         self.responses: Dict[str, List[ScheduledResponse]] = dict()
+        self.batch_responses_per_step: List[List[ScheduledResponse]] = list()
 
         self.wait_request_timeout = 10
         self.wait_response_timeout = 0.001
@@ -195,6 +196,20 @@ class LocalScheduler:
         results += [(request_id, "duplicated request_id") for request_id in duplicated_ids]
         return results
 
+    def has_request(self, request_id: str) -> bool:
+        """
+        Check if there are any pending requests in the scheduler.
+
+        Args:
+            request_id: Optional specific request ID to check.
+                        If None, checks whether there are any pending requests.
+
+        Returns:
+            True if there are pending requests, False otherwise.
+        """
+        with self.mutex:
+            return request_id in self.requests
+
     def calc_required_blocks(self, token_num, block_size):
         """
         Calculate the number of blocks needed for a given number of tokens.
@@ -271,7 +286,7 @@ class LocalScheduler:
                         if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                             break
                     else:
-                        if current_prefill_tokens > max_num_batched_tokens:
+                        if current_prefill_tokens > max_num_batched_tokens and len(requests) > 0:
                             break
                 requests.append(request.raw)
 
@@ -292,6 +307,7 @@ class LocalScheduler:
         Args:
             results: List of RequestOutput objects containing results
         """
+        scheduler_logger.debug(f"put results: {results}")
         responses: List[ScheduledResponse] = [ScheduledResponse(result) for result in results]
 
         finished_responses = [response.request_id for response in responses if response.finished]
@@ -299,6 +315,7 @@ class LocalScheduler:
             scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
 
         with self.mutex:
+            self.batch_responses_per_step.append([response.raw for response in responses])
             for response in responses:
                 if response.request_id not in self.requests:
                     scheduler_logger.warning(f"Scheduler has received a expired response: {[response.request_id]}")
@@ -337,12 +354,19 @@ class LocalScheduler:
 
         def _get_results():
             responses = self.responses
+            batch_responses_per_step = self.batch_responses_per_step
             self.responses = dict()
-            return responses
+            self.batch_responses_per_step = list()
+            if not responses:
+                return None  # No response yet
+            return responses, batch_responses_per_step
 
         with self.responses_not_empty:
-            responses = self.responses_not_empty.wait_for(_get_results, self.wait_response_timeout)
-
+            wait_response_result = self.responses_not_empty.wait_for(_get_results, self.wait_response_timeout)
+            if wait_response_result is not None:
+                responses, batch_responses_per_step = wait_response_result
+            else:
+                responses, batch_responses_per_step = dict(), list()
             results = dict()
             for request_id, resps in responses.items():
                 finished = False
@@ -354,4 +378,11 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
-            return results
+
+            if results:
+                scheduler_logger.debug(f"get responses, {results}")
+
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                return batch_responses_per_step
+            else:
+                return results

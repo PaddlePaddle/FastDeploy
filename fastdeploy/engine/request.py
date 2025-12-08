@@ -16,7 +16,9 @@
 
 from __future__ import annotations
 
+import copy
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -29,7 +31,7 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -65,11 +67,8 @@ class Request:
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
         eos_token_ids: Optional[list[int]],
-        arrival_time: float,
         sampling_params: Optional[SamplingParams] = None,
         pooling_params: Optional[PoolingParams] = None,
-        preprocess_start_time: Optional[float] = None,
-        preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -95,6 +94,9 @@ class Request:
         prefill_start_index: int = 0,
         prefill_end_index: int = 0,
         num_computed_tokens: int = 0,
+        # for internal adapter
+        ic_req_data: Optional[dict] = (None,),
+        metrics: Optional[RequestMetrics] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -109,10 +111,6 @@ class Request:
         # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
         self.num_cached_tokens = 0
-
-        self.arrival_time = arrival_time
-        self.preprocess_start_time = preprocess_start_time
-        self.preprocess_end_time = preprocess_end_time
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -161,16 +159,47 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
+        self.ic_req_data = ic_req_data
+
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
+
+        if metrics is None:
+            self.metrics = RequestMetrics()
+        else:
+            self.metrics = metrics
 
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
+        metrics: RequestMetrics = None
         if "pooling_params" in d and d["pooling_params"] is not None:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        if "metrics" in d and d["metrics"] is not None:
+            metrics = RequestMetrics.from_dict(d["metrics"])
+        else:
+            metrics = RequestMetrics.from_dict(d)
+
+        if (
+            isinstance(d.get("multimodal_inputs"), dict)
+            and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
+            and len(d["multimodal_inputs"]["mm_positions"]) > 0
+        ):
+            # if mm_positions is not of type ImagePosition, convert to ImagePosition
+            try:
+                for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                )
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -183,9 +212,6 @@ class Request:
             sampling_params=sampling_params,
             pooling_params=pooling_params,
             eos_token_ids=d.get("eos_token_ids"),
-            arrival_time=d.get("arrival_time", time.time()),
-            preprocess_start_time=d.get("preprocess_start_time"),
-            preprocess_end_time=d.get("preprocess_end_time"),
             multimodal_inputs=d.get("multimodal_inputs"),
             multimodal_data=d.get("multimodal_data"),
             disable_chat_template=d.get("disable_chat_template"),
@@ -211,6 +237,8 @@ class Request:
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
+            ic_req_data=d.get("ic_req_data", None),
+            metrics=metrics,
         )
 
     @property
@@ -219,6 +247,22 @@ class Request:
         Total tokens of the request, include prompt tokens and generated tokens.
         """
         return self.prompt_token_ids_len + len(self.output_token_ids)
+
+    def __getstate__(self):
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+        # Create a filtered dictionary without problematic attributes
+        filtered_dict = {}
+        for key, value in self.__dict__.items():
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
+                filtered_dict[key] = []
+            else:
+                filtered_dict[key] = value
+
+        return filtered_dict
 
     def __eq__(self, other):
         """
@@ -230,6 +274,21 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
+        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
+        if (
+            isinstance(multimodal_inputs, dict)
+            and isinstance(multimodal_inputs.get("mm_positions"), list)
+            and len(multimodal_inputs["mm_positions"]) > 0
+        ):
+            # if mm_positions is ImagePosition, convert to dict
+            try:
+                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
+                    multimodal_inputs["mm_positions"][i] = (
+                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
+
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -240,10 +299,7 @@ class Request:
             "history": self.history,
             "tools": self.tools,
             "eos_token_ids": self.eos_token_ids,
-            "arrival_time": self.arrival_time,
-            "preprocess_start_time": self.preprocess_start_time,
-            "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
+            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -261,6 +317,7 @@ class Request:
             "image_end": self.image_end,
             "video_end": self.video_end,
             "audio_end": self.audio_end,
+            "ic_req_data": self.ic_req_data,
         }
         add_params = [
             "guided_json",
@@ -275,6 +332,7 @@ class Request:
                 data[param] = getattr(self, param)
 
         data.update(asdict(self.sampling_params))
+        data.update(asdict(self.metrics))
         return data
 
     def get(self, key: str, default_value=None):
@@ -292,7 +350,7 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        """Safe string representation that ignores private and None fields."""
+        """Sanitized repr without private or None fields."""
         try:
             if not envs.FD_DEBUG:
                 return f"Request(request_id={self.request_id})"
@@ -305,7 +363,7 @@ class Request:
                 ]
                 return f"Request({', '.join(non_none_fields)})"
         except Exception as e:
-            return f"<{self.__class__.__name__} repr failed: {e}>"
+            return f"<Request repr failed: {e}>"
 
 
 @dataclass(slots=True)
@@ -365,6 +423,7 @@ class CompletionOutput:
             f"send_idx={self.send_idx}, "
             f"text={self.text!r}, "
             f"token_ids={self.token_ids}, "
+            f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "
@@ -379,8 +438,22 @@ class RequestMetrics:
 
     Attributes:
         arrival_time: The time when the request arrived.
-        inference_start_time: The time when the inference started.
-        first_token_time: The time when the first token was generated.
+        preprocess_start_time: The time when the preprocess started.
+        preprocess_end_time: The time when the preprocess ended.
+        scheduler_recv_req_time: The time when the scheduler received the request.
+        engine_get_req_time: The time when the engine got the request.
+        ask_decode_resource_start_time: The time when the engine asks for decode resource.
+        ask_decode_resource_finish_time: The time when the engine has asked for decode resource.
+        inference_start_time: The time when engine adds request to the running queue in resource manager.
+        wait_for_sending_cache_time: The time when the engine waited for sending cache.
+        send_request_output_to_decode_time: The time when the engine sent request_output to decode.
+        decode_recv_req_time: The time when the decode received the request.
+        decode_preallocate_req_time: The time when the decode has preallocated resource for the request.
+        decode_recv_first_token_time: The time when the decode received the first token.
+        decode_inference_start_time: The time when the decode sent the request to worker.
+        decode_recv_second_token_time: The time when the decode received the second token.
+
+        first_token_time: The cost time between engine_recv_first_token_time and inference_start_time
         time_in_queue: The time the request spent in the queue.
         model_forward_time: The time spent in the model forward pass when this
                             request was in the batch.
@@ -391,8 +464,37 @@ class RequestMetrics:
 
     """
 
-    arrival_time: float
-    inference_start_time: Optional[float] = None
+    arrival_time: Optional[float] = None  # api server receives request
+    preprocess_start_time: Optional[float] = None  # preprocess start time in api server
+    preprocess_end_time: Optional[float] = None  # preprocess end time in api server
+
+    scheduler_recv_req_time: Optional[float] = None  # scheduler receives request and add to scheduler
+    engine_get_req_time: Optional[float] = None  # engine gets request from scheduler
+    ask_decode_resource_start_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
+    ask_decode_resource_finish_time: Optional[float] = None  # engine has got decode resource (only valid for prefill)
+    add_req_to_resource_manager_time: Optional[float] = None  # engine adds request to resource manager
+    inference_start_time: Optional[float] = None  # requests are added into the engine work queue
+    engine_recv_latest_token_time: Optional[float] = None  # receive the latest token from worker
+    engine_recv_first_token_time: Optional[float] = None  # receive first token from worker
+    wait_for_sending_cache_time: Optional[float] = None  # wait for sending cache (only valid for prefill)
+    send_request_output_to_decode_time: Optional[float] = (
+        None  # send request_output to worker (only valid for prefill)
+    )
+
+    decode_recv_req_time: Optional[float] = None  # decode receive request from prefill (only valid for decode)
+    decode_preallocate_req_time: Optional[float] = (
+        None  # decode has preallocatee resource for req (only valid for decode)
+    )
+    decode_recv_first_token_time: Optional[float] = (
+        None  # decode receive request_output with first token from prefill (only valid for decode)
+    )
+    decode_inference_start_time: Optional[float] = (
+        None  # decode adds request to the engine work queue (only valid for decode)
+    )
+    decode_recv_second_token_time: Optional[float] = (
+        None  # decode receives the second token from worker (only valid for decode)
+    )
+
     first_token_time: Optional[float] = None
     time_in_queue: Optional[float] = None
     preprocess_cost_time: Optional[float] = None
@@ -400,20 +502,13 @@ class RequestMetrics:
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
 
-    def to_dict(self):
-        """
-        Convert the RequestMetrics object to a dictionary.
-        """
-        return {
-            "arrival_time": self.arrival_time,
-            "inference_start_time": self.inference_start_time,
-            "first_token_time": self.first_token_time,
-            "time_in_queue": self.time_in_queue,
-            "preprocess_cost_time": self.preprocess_cost_time,
-            "model_forward_time": self.model_forward_time,
-            "model_execute_time": self.model_execute_time,
-            "request_start_time": self.request_start_time,
-        }
+    llm_engine_recv_req_timestamp: Optional[float] = None
+    llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_recv_latest_token_timestamp: Optional[float] = None
+
+    def __post_init__(self):
+        if self.arrival_time is None:
+            self.arrival_time = time.time()
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> RequestMetrics:
@@ -424,6 +519,50 @@ class RequestMetrics:
                 for field in fields(cls)
             }
         )
+
+    def to_dict(self):
+        """
+        Convert the RequestMetrics object to a dictionary.
+        """
+        return {k: v for k, v in asdict(self).items()}
+
+    def record_recv_first_token(self):
+        cur_time = time.time()
+        self.record_recv_token(cur_time)
+        self.engine_recv_first_token_time = cur_time
+
+    def record_recv_token(self, cur_time: float = None):
+        cur_time = time.time() if cur_time is None else cur_time
+        self.engine_recv_latest_token_time = cur_time
+        self.llm_engine_recv_latest_token_timestamp = cur_time
+        self.model_execute_time = cur_time - self.arrival_time
+        if self.inference_start_time:
+            self.model_forward_time = cur_time - self.inference_start_time
+
+    def record_decode_recv_second_token(self):
+        cur_time = time.time()
+        self.record_recv_token(cur_time)
+        self.decode_recv_second_token_time = cur_time
+
+    def get_inference_start_time(self, is_decode: bool):
+        if is_decode:
+            return self.decode_inference_start_time
+        else:
+            return self.inference_start_time
+
+    def cal_cost_time(self):
+        """Calculates various timing metrics based on the recorded times"""
+        if self.engine_recv_first_token_time and self.inference_start_time:
+            self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
+        if self.inference_start_time and self.preprocess_end_time:
+            self.time_in_queue = self.inference_start_time - self.preprocess_end_time
+        if self.preprocess_end_time and self.preprocess_start_time:
+            self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
+        self.request_start_time = self.arrival_time
+
+        # for compatibility with old metrics
+        self.llm_engine_recv_req_timestamp = self.engine_get_req_time
+        self.llm_engine_send_req_to_engine_timestamp = self.inference_start_time
 
 
 class RequestOutput:
@@ -456,6 +595,7 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        prompt_logprobs: Optional[PromptLogprobs] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -465,10 +605,14 @@ class RequestOutput:
         num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
+        # for internal adapter
+        ic_req_data: Optional[dict] = None,
+        prompt_token_ids_len: Optional[int] = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.prompt_logprobs = prompt_logprobs
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
@@ -478,6 +622,8 @@ class RequestOutput:
         self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
+        self.ic_req_data = ic_req_data
+        self.prompt_token_ids_len = prompt_token_ids_len
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -492,10 +638,12 @@ class RequestOutput:
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
 
-        if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
-            self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
-        if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
-            self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        if next_output.metrics.model_forward_time is not None:
+            self.metrics.model_forward_time = next_output.metrics.model_forward_time
+        if next_output.metrics.model_execute_time is not None:
+            self.metrics.model_execute_time = next_output.metrics.model_execute_time
+        if next_output.metrics.engine_recv_latest_token_time is not None:
+            self.metrics.engine_recv_latest_token_time = next_output.metrics.engine_recv_latest_token_time
         if next_output.outputs.top_logprobs is not None:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
@@ -514,6 +662,7 @@ class RequestOutput:
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"prompt_logprobs={self.prompt_logprobs}, "
             f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
@@ -521,6 +670,8 @@ class RequestOutput:
             f"num_input_image_tokens={self.num_input_image_tokens}, "
             f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg},"
         )
 
     @classmethod
@@ -537,6 +688,7 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "prompt_logprobs": self.prompt_logprobs,
             "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
@@ -546,6 +698,8 @@ class RequestOutput:
             "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
+            "ic_req_data": self.ic_req_data,
+            "prompt_token_ids_len": self.prompt_token_ids_len,
         }
 
 

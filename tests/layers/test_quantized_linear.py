@@ -17,9 +17,9 @@ import os
 import shutil
 import unittest
 
-import numpy as np
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+
 import paddle
-import paddle.device.cuda.graphs as graphs
 
 from fastdeploy.config import (
     CacheConfig,
@@ -30,17 +30,27 @@ from fastdeploy.config import (
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
+    BlockWiseFP8Config,
+)
 from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT4Config,
     WINT8Config,
 )
 from fastdeploy.scheduler import SchedulerConfig
+from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 paddle.seed(1024)
 
+QUANT_CONFIG_MAP = {
+    "wint8": WINT8Config({}),
+    "wint4": WINT4Config({}),
+    "block_wise_fp8": BlockWiseFP8Config(weight_block_size=[128, 128]),
+}
 
-class WeightOnlyLinearWrapper(paddle.nn.Layer):
+
+class QuantizedLinearWrapper(paddle.nn.Layer):
     def __init__(
         self,
         model_config: ModelConfig,
@@ -56,7 +66,7 @@ class WeightOnlyLinearWrapper(paddle.nn.Layer):
         self.fd_config = FDConfig(
             model_config=self.model_config,
             parallel_config=ParallelConfig({"tensor_parallel_size": self.tp_size}),
-            quant_config=WINT8Config({}) if quant_type == "wint8" else WINT4Config({}),
+            quant_config=QUANT_CONFIG_MAP[quant_type],
             load_config=LoadConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             scheduler_config=SchedulerConfig({}),
@@ -103,7 +113,7 @@ class WeightOnlyLinearWrapper(paddle.nn.Layer):
         return x
 
 
-class TestWeightOnlyLinear(unittest.TestCase):
+class TestQuantizedLinear(unittest.TestCase):
     def setUp(self) -> None:
         self.model_name_or_path = None
         self.model_config = self.build_model_config()
@@ -123,11 +133,11 @@ class TestWeightOnlyLinear(unittest.TestCase):
 
     def build_config_json(self) -> str:
         config_dict = {
-            "architectures": ["Qwen3MoeForCausalLM"],
-            "hidden_size": 2048,
-            "head_dim": 128,
-            "num_attention_heads": 32,
-            "num_key_value_heads": 4,
+            "architectures": ["Ernie4_5_MoeForCausalLM"],
+            "hidden_size": 8192,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 8,
+            "num_hidden_layers": 54,
             "dtype": "bfloat16",
         }
 
@@ -138,80 +148,94 @@ class TestWeightOnlyLinear(unittest.TestCase):
         self.model_name_or_path = os.path.join(os.getcwd(), tmp_dir)
         return self.model_name_or_path
 
-    def run_wint_linear(self, type="qkv_proj", quant_type="wint4"):
-        weight_only_linear = WeightOnlyLinearWrapper(self.model_config, quant_type=quant_type)
+    def run_quantized_linear(self, type="qkv_proj", quant_type="wint4"):
+        quantized_linear = QuantizedLinearWrapper(self.model_config, quant_type=quant_type)
         if type == "qkv_proj":
-            input_size = weight_only_linear.qkv_proj.input_size
-            mm = weight_only_linear.qkv_proj
+            input_size = quantized_linear.qkv_proj.input_size
+            weight_size = quantized_linear.qkv_proj.output_size * quantized_linear.qkv_proj.input_size
+            mm = quantized_linear.qkv_proj
+            print(f"Input Size: {input_size}, Output Size: {quantized_linear.qkv_proj.output_size}")
         elif type == "o_proj":
-            input_size = weight_only_linear.o_proj.input_size
-            mm = weight_only_linear.o_proj
+            input_size = quantized_linear.o_proj.input_size
+            weight_size = quantized_linear.o_proj.output_size * quantized_linear.o_proj.input_size
+            mm = quantized_linear.o_proj
+            print(f"Input Size: {input_size}, Output Size: {quantized_linear.o_proj.output_size}")
         else:
-            input_size = weight_only_linear.input_size
-            mm = weight_only_linear
+            input_size = quantized_linear.input_size
+            weight_size = (
+                quantized_linear.qkv_proj.output_size * quantized_linear.qkv_proj.input_size
+                + quantized_linear.o_proj.output_size * quantized_linear.o_proj.input_size
+            )
+            mm = quantized_linear
 
-        print(type, quant_type)
-        print("{:<15} {:<40} {:<15}".format("Batch Size", "Last 5 Times (us)", "Last Time (us)"))
+        tester = OpPerformanceTester(
+            op_name=f"{type}-{quant_type}",
+            op_fn=mm,
+            num_layers=self.model_config.num_hidden_layers,
+            weight_size=weight_size,
+        )
 
-        linear_cuda_graphs = [None] * 100
-        input = [None] * 100
-        for idx, bsz in enumerate([10, 20, 40, 50, 60, 100, 200, 1000, 2000]):
+        tester.benchmark(
+            input_size=input_size,
+            batch_sizes=[1, 8, 16, 32, 128],
+        )
 
-            input[idx] = paddle.rand((bsz, input_size), dtype=paddle.bfloat16)
-
-            num_warmups = 10
-            for _ in range(num_warmups):
-                output = mm(input[idx])
-
-            num_layers = 10
-            linear_cuda_graphs[idx] = graphs.CUDAGraph()
-            linear_cuda_graphs[idx].capture_begin()
-
-            for _ in range(num_layers):
-                output = mm(input[idx])
-
-            linear_cuda_graphs[idx].capture_end()
-
-            num_tests = 10
-            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            for i in range(num_tests):
-                start_events[i].record()
-
-                linear_cuda_graphs[idx].replay()
-
-                end_events[i].record()
-            paddle.device.synchronize()
-
-            times = np.array([round(s.elapsed_time(e), 2) for s, e in zip(start_events, end_events)])[1:]
-            times = times * 1e3 / num_layers
-            last_5_times = times[-5:]
-            last_time = times[-1]
-            print("{:<15} {:<40} {:<15}".format(bsz, str(last_5_times), last_time))
-        return output
-
-    def test_qkv_linear(self):
-        print("===============Test QKV Quantized Linear Layer================")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("qkv_proj")
-
-    def test_out_linear(self):
-        print("================Test OUT Quantized Linear Layer================")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("o_proj")
-
-    def test_both_linear(self):
-        print("===========Test both OUT and QKV Quantized Linear Layer=========")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("out_proj+qkv_proj")
+    def test_quantized_linear(self):
+        for type in ["qkv_proj", "o_proj"]:
+            for quant_type in ["wint4", "wint8"]:
+                for use_machete in ["0", "1"]:
+                    os.environ["FD_USE_MACHETE"] = use_machete
+                    self.run_quantized_linear(type, quant_type)
+            self.run_quantized_linear(type, "block_wise_fp8")
 
     def tearDown(self) -> None:
         if self.model_name_or_path:
             print("Remove tmp model config file")
             shutil.rmtree(self.model_name_or_path)
+
+
+class TestQuantizedLinearGroupSize64(TestQuantizedLinear):
+    def setUp(self) -> None:
+        self.model_name_or_path = None
+        self.model_config = self.build_model_config()
+
+    def build_model_config(self) -> ModelConfig:
+        model_path = os.getenv("TEST_MODEL_PATH")
+        if model_path:
+            model_cofig_path = model_path
+        else:
+            model_cofig_path = self.build_config_json()
+        return ModelConfig(
+            {
+                "model": model_cofig_path,
+                "max_model_len": 2048,
+            }
+        )
+
+    def build_config_json(self) -> str:
+        config_dict = {
+            "architectures": ["Ernie4_5_MoeForCausalLM"],
+            "hidden_size": 2880,
+            "head_dim": 64,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 8,
+            "num_hidden_layers": 24,
+            "dtype": "bfloat16",
+        }
+
+        tmp_dir = "./tmp_wint"
+        os.makedirs(tmp_dir, exist_ok=True)
+        with open(f"./{tmp_dir}/config.json", "w") as f:
+            json.dump(config_dict, f)
+        self.model_name_or_path = os.path.join(os.getcwd(), tmp_dir)
+        return self.model_name_or_path
+
+    def test_quantized_linear(self):
+        for type in ["qkv_proj", "o_proj"]:
+            for quant_type in ["wint4", "wint8"]:
+                for use_machete in ["0", "1"]:
+                    os.environ["FD_USE_MACHETE"] = use_machete
+                    self.run_quantized_linear(type, quant_type)
 
 
 if __name__ == "__main__":
