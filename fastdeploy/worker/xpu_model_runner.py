@@ -342,6 +342,30 @@ class XPUModelRunner(ModelRunnerBase):
         )
         rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
+    def only_decode(self):
+        """
+        Update Batch type for if_only_decode.
+        """
+        if_only_decode = True
+        prefill_exists = None
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            no_need_stop_list = []
+            no_need_stop = self.not_need_stop()
+            paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stop)
+            if_all_device_empty = all(no_need_stop_list)
+            if if_all_device_empty:
+                if_only_decode = False
+            else:
+                only_decode_batch_list = []
+                prefill_exists = self.exist_prefill()
+                paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+                if_only_decode = all(only_decode_batch_list)
+
+        if_only_decode = if_only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
+        return if_only_decode
+
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
@@ -898,8 +922,16 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
+
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
+
+        if (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+        ):  # Centralized scenario: the phase is initialized as "prefill" by default. During inference runtime, different types of batches can achieve phase switching at this point.
+            if_only_decode = self.only_decode()
+            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+
         # Get sampling metadata
         # TODU(lilujia): sync with GPU
         self.sampling_metadata = SamplingMetadata(

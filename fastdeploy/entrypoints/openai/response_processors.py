@@ -146,11 +146,18 @@ class ChatResponseProcessor:
                             image_output["outputs"]["num_image_tokens"] = count_tokens(all_tokens)
                             yield image_output
 
-                    self.data_processor.process_response_dict(
-                        response_dict=request_output,
-                        stream=stream,
-                        include_stop_str_in_output=include_stop_str_in_output,
-                    )
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                        await self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                        )
+                    else:
+                        self.data_processor.process_response_dict(
+                            response_dict=request_output,
+                            stream=stream,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                        )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
                     request_output["outputs"]["multipart"] = [text]
                     yield request_output
@@ -166,11 +173,18 @@ class ChatResponseProcessor:
                     num_image_tokens = 0
                     for part in self._multipart_buffer:
                         if part["decode_type"] == 0:
-                            self.data_processor.process_response_dict(
-                                response_dict=part["request_output"],
-                                stream=False,
-                                include_stop_str_in_output=include_stop_str_in_output,
-                            )
+                            if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                                await self.data_processor.process_response_dict(
+                                    response_dict=part["request_output"],
+                                    stream=False,
+                                    include_stop_str_in_output=include_stop_str_in_output,
+                                )
+                            else:
+                                self.data_processor.process_response_dict(
+                                    response_dict=request_output,
+                                    stream=stream,
+                                    include_stop_str_in_output=include_stop_str_in_output,
+                                )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
                             multipart.append(text)
                         elif part["decode_type"] == 1:
