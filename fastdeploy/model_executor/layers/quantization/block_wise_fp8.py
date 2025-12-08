@@ -17,6 +17,8 @@
 from typing import Optional
 
 import paddle
+paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+import deep_gemm
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
@@ -78,6 +80,8 @@ class BlockWiseFP8Config(QuantConfigBase):
             return BlockWiseFP8MoEMethod(self)
         else:
             return BlockWiseFP8LinearMethod(self)
+            # from fastdeploy.model_executor.layers.linear import UnquantizedLinearMethod
+            # return UnquantizedLinearMethod()
 
 
 class BlockWiseFP8LinearMethod(QuantMethodBase):
@@ -170,7 +174,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         def _process_quantize():
             weight_tensor = layer.weight.transpose([1, 0])
             # quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
-            from fastdeploy.model_executor.ops.gpu import deep_gemm
 
             quanted_weight_tensor, weight_block_scale_tensor = deep_gemm.utils.math.per_block_cast_to_fp8(
                 weight_tensor, use_ue8m0=True
@@ -228,34 +231,15 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
-        # print(f"[FP8Linear] x: {x}")
-        # print(f"[FP8Linear] block_tables 1: {block_tables}")
-        # import os
-
-        # debug_dir = "/workspace2/FastDeploy/debug"
-        # debug_data = {
-        #     "x": x,
-        #     "weight": layer.weight,
-        #     "weight_scale_inv": layer.weight_scale_inv,
-        # }
-        # debug_file = os.path.join(debug_dir, f"fp8_linear_debug.pdparam")
-        # paddle.save(debug_data, debug_file)
-        # print(f"[FP8Linear] Debug data saved to {debug_file}")
-
-        # x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-        #     x, self.quant_config.weight_block_size[0]
-        # )
-        # print(f"[FP8Linear] block_tables 2: {block_tables}")
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
 
         x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
 
         linear_out: paddle.Tensor = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
+        # print(f"[FP8Linear] x_quantized: {x}", x.stride())
+        # print(f"[FP8Linear] x_scale_tensor: {x_scale_tensor}", x_scale_tensor.stride())
+        # print(f"[FP8Linear] layer.weight: {layer.weight}", layer.weight.stride())
+        # print(f"[FP8Linear] layer.weight_scale_inv: {layer.weight_scale_inv}", layer.weight_scale_inv.stride())
 
-        # print(f"[FP8Linear] x_quantized: {x}")
-        # print(f"[FP8Linear] x_scale_tensor: {x_scale_tensor}")
-        # print(f"[FP8Linear] layer.weight: {layer.weight}")
-        # print(f"[FP8Linear] layer.weight_scale_inv: {layer.weight_scale_inv}")
         deep_gemm.fp8_gemm_nt(
             (x, x_scale_tensor),
             (layer.weight, layer.weight_scale_inv),
@@ -267,4 +251,5 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
         # print(f"[FP8Linear] linear_out after bias: {linear_out}")
+        # raise ValueError('xxxxxx')
         return linear_out
