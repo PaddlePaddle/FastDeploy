@@ -52,6 +52,7 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
+from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
 from typing import Callable, List, Optional
@@ -969,13 +970,26 @@ def check_download_links(bos_client, links, timeout=1):
 def init_bos_client():
     from baidubce.auth.bce_credentials import BceCredentials
     from baidubce.bce_client_configuration import BceClientConfiguration
+    from baidubce.exception import BceHttpClientError, BceServerError
     from baidubce.services.bos.bos_client import BosClient
 
     cfg = BceClientConfiguration(
         credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK),
         endpoint=envs.ENCODE_FEATURE_ENDPOINT,
     )
-    return BosClient(cfg)
+
+    try:
+        client = BosClient(cfg)
+        client.list_buckets()
+    except BceServerError as e:
+        if e.status_code == 403:
+            raise Exception("BOS authentication failed: Invalid AK/SK") from e
+        raise Exception(f"BOS connection failed: {str(e)}") from e
+    except BceHttpClientError as e:
+        raise Exception(f"Invalid BOS endpoint configuration: {str(e)}") from e
+    except Exception as e:
+        raise Exception(f"BOS client validation error: {str(e)}") from e
+    return client
 
 
 def download_from_bos(bos_client, bos_links, retry: int = 0):
@@ -1058,6 +1072,21 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
         return parse_type(return_type)(val)
 
     return _optional_type
+
+
+def clamp_prompt_logprobs(
+    prompt_logprobs: PromptLogprobs | None,
+) -> PromptLogprobs | None:
+    if prompt_logprobs is None:
+        return prompt_logprobs
+
+    for logprob_dict in prompt_logprobs:
+        if logprob_dict is None:
+            continue
+        for logprob_values in logprob_dict.values():
+            if logprob_values.logprob == float("-inf"):
+                logprob_values.logprob = -9999.0
+    return prompt_logprobs
 
 
 def to_numpy(tasks: List[Any]):

@@ -101,37 +101,37 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.2, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [3], "text": "c", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.3, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [4], "text": "d", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.4, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [5], "text": "e", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.5, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [6], "text": "f", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.6, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
+                "metrics": {"engine_recv_latest_token_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                 "finished": True,
             },
         ]
@@ -217,7 +217,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 {
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
-                    "metrics": {"arrival_time": 0.2, "first_token_time": None},
+                    "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                     "finished": False,
                 },
             ],
@@ -225,7 +225,11 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 {
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
-                    "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
+                    "metrics": {
+                        "engine_recv_latest_token_time": 0.7,
+                        "first_token_time": None,
+                        "request_start_time": 0.1,
+                    },
                     "finished": True,
                 }
             ],
@@ -445,6 +449,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         prompt_token_ids = [1, 2]
         prompt_tokens = "test_prompt"
         logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
+        draft_logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
         mock_response_processor = Mock()
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
@@ -452,6 +457,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         num_input_image_tokens = [0, 0]
         num_input_video_tokens = [0, 0]
         num_image_tokens = [0, 0]
+        prompt_logprobs_res_list = [[], []]
         max_tokens_list = [10, 1]
 
         for idx, case in enumerate(test_cases):
@@ -467,6 +473,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 num_input_video_tokens=num_input_video_tokens,
                 num_image_tokens=num_image_tokens,
                 logprob_contents=logprob_contents,
+                draft_logprob_contents=draft_logprob_contents,
+                prompt_logprobs_res_list=prompt_logprobs_res_list,
                 response_processor=mock_response_processor,
                 max_tokens=max_tokens_list[idx],
             )
@@ -499,7 +507,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             {
                 "request_id": "test-request-id_0",
                 "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
+                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
                 "finished": True,
             },
         ]
@@ -616,7 +624,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
-                        "arrival_time": 0.3,
+                        "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
                         "inference_start_time": 0.1,
                         "request_start_time": 0.0,
@@ -629,7 +637,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
-                        "arrival_time": 0.3,
+                        "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
                         "inference_start_time": 0.1,
                         "request_start_time": 0.0,

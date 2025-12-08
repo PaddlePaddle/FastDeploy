@@ -402,7 +402,7 @@ class AsyncLLMEngine:
 
         try:
             request = Request.from_dict(prompt)
-            request.llm_engine_recv_req_timestamp = time.time()
+            request.metrics.scheduler_recv_req_time = time.time()
 
             # Check if already preprocessed by AsyncEngineClient
             is_preprocessed = prompt.get("_preprocessed", False)
@@ -419,7 +419,7 @@ class AsyncLLMEngine:
             request.need_prefill_tokens = prompt_token_ids_len
 
             if not is_preprocessed:
-                request.preprocess_start_time = arrival_time
+                request.metrics.preprocess_start_time = arrival_time
                 input_ids_len = request.prompt_token_ids_len
 
                 request.set(
@@ -448,7 +448,7 @@ class AsyncLLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-                request.preprocess_end_time = time.time()
+                request.metrics.preprocess_end_time = time.time()
 
             # Register output queue first, then add request
             await self.output_processor.register_request(request_id, output_queue)
@@ -722,7 +722,7 @@ class AsyncLLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "OMP_NUM_THREADS": 3,
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -812,6 +812,7 @@ class AsyncLLMEngine:
             f" --splitwise_role {self.cfg.scheduler_config.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --chunked_moe_size {self.cfg.parallel_config.chunked_moe_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
@@ -969,7 +970,7 @@ class AsyncLLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

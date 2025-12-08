@@ -1,9 +1,26 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.engine.request import CompletionOutput, RequestOutput
+from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.output import LogprobsLists
 
@@ -33,14 +50,17 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         self.task_mock.messages = None
         self.task_mock.disaggregate_info = None
         self.task_mock.eos_token_ids = [2]
-        self.task_mock.inference_start_time = 100.0  # Set a float value for time calculation
-        self.task_mock.arrival_time = 90.0
-        self.task_mock.preprocess_end_time = 95.0
-        self.task_mock.preprocess_start_time = 90.0
-        self.task_mock.schedule_start_time = 95.0
-        self.task_mock.llm_engine_recv_req_timestamp = 95.0
         self.task_mock.ic_req_data = {}
         self.task_mock.prompt_token_ids_len = 0
+
+        now = time.time()
+        self.task_mock.metrics = RequestMetrics(
+            arrival_time=now,
+            preprocess_start_time=now - 0.2,
+            preprocess_end_time=now - 0.1,
+            scheduler_recv_req_time=now + 0.1,
+            inference_start_time=now + 0.2,
+        )
 
         self.processor.resource_manager.tasks_list = [self.task_mock]
 
@@ -121,7 +141,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
             result = self.processor._process_batch_output_use_zmq([stream_data])
 
             self.assertEqual(len(result), 1)
-            self.assertIsNone(getattr(result[0], "prompt_logprobs_tensors", None))
+            self.assertIsNone(getattr(result[0], "prompt_logprobs", None))
 
     def test_process_batch_with_stop_flag(self):
         """Test processing when stop flag is True"""
