@@ -27,6 +27,7 @@ import numpy as np
 import paddle
 import zmq
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.engine.request import (
     CompletionOutput,
@@ -339,6 +340,7 @@ class TokenProcessor:
         """
         read tokens from paddle inference engine and process
         """
+        tracing.trace_set_thread_info("Token Processor")
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import (
@@ -641,6 +643,10 @@ class TokenProcessor:
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
+            rid = task_id.split("_")[0]
+            trace_carrier = task.trace_carrier
+            ts = int(task.metrics.inference_start_time * 1e9)
+            tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 if accept_num[i] == -3:
                     recovery_stop = True
@@ -684,11 +690,21 @@ class TokenProcessor:
 
             self.total_step += 1
             current_time = time.time()
+            trace_carrier = None
             if self.tokens_counter[task_id] == 0:
                 task.metrics.record_recv_first_token()
                 task.metrics.cal_cost_time()
                 metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
+
+                tracing.trace_report_span(
+                    name=tracing.TraceSpanName.PREFILL,
+                    rid=rid,
+                    start_time_ns=int(task.metrics.inference_start_time * 1e9),
+                    end_time_ns=int(time.time() * 1e9),
+                    thread_finish_flag=False,
+                )
+
             else:
                 task.metrics.record_recv_token()
                 if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
@@ -710,6 +726,7 @@ class TokenProcessor:
                 metrics=metrics,
                 ic_req_data=task.ic_req_data,
                 prompt_token_ids_len=task.prompt_token_ids_len,
+                trace_carrier=trace_carrier,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
@@ -764,6 +781,15 @@ class TokenProcessor:
 
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
+                    trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
+                    result.trace_carrier = trace_carrier
+                    tracing.trace_report_span(
+                        name=tracing.TraceSpanName.DECODE,
+                        rid=rid,
+                        start_time_ns=int(task.metrics.inference_start_time * 1e9),
+                        end_time_ns=int(time.time() * 1e9),
+                        thread_finish_flag=True,
+                    )
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(
