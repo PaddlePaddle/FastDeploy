@@ -182,6 +182,7 @@ class Request:
         self.async_process_futures = []
         self.error_message = None
         self.error_code = None
+        self.last_recv_token_time = None
 
     @classmethod
     def from_dict(cls, d: dict):

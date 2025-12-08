@@ -131,6 +131,8 @@ class TokenProcessor:
         self.timestamp_for_alive_before_handle_batch = None
         self.timestamp_for_alive_after_handle_batch = None
         self.health_lock = threading.Lock()
+        self.engine_output_token_hang = False
+        threading.Thread(target=self._monitor_output_token_hang).start()
 
     def healthy(self):
         """
@@ -146,7 +148,24 @@ class TokenProcessor:
                     return False
                 else:
                     return True
+            if self.engine_output_token_hang:
+                return False
             return True
+
+    def _monitor_output_token_hang(self):
+        while True:
+            for i in range(self.resource_manager.max_num_seqs):
+                if self.resource_manager.stop_flags[i]:
+                    continue
+                task = self.resource_manager.tasks_list[i]
+
+                if (
+                    task.last_recv_token_time
+                    and time.time() - task.last_recv_token_time > envs.FD_OUTPUT_TOKEN_HANG_TIMEOUT
+                ):
+                    llm_logger.error(f"Task {task.request_id} hangs")
+                    self.engine_output_token_hang = True
+            time.sleep(1)
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
@@ -211,6 +230,7 @@ class TokenProcessor:
                 if self.resource_manager.requests[request_id].idx >= (
                     batch_size - 1
                 ):  # No more token generated for preempted request
+                    self.resource_manager.requests[request_id].last_recv_token_time = None
                     self.resource_manager.reschedule_preempt_task(request_id)
 
     def _process_per_token(self, task, batch_id: int, token_ids: np.ndarray, result: RequestOutput, is_prefill: bool):
@@ -713,6 +733,7 @@ class TokenProcessor:
                 if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
             else:
@@ -724,6 +745,7 @@ class TokenProcessor:
                 if not recovery_stop and token_id < 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
 
@@ -803,6 +825,7 @@ class TokenProcessor:
                         result.outputs.token_ids.append(token_id)
 
                     task.output_token_ids.append(token_id)
+                    task.last_recv_token_time = time.time()
 
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
