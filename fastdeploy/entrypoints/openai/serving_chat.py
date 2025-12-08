@@ -286,11 +286,11 @@ class OpenAIServingChat:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
-                    if res["metrics"]["first_token_time"] is not None:
+                    if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
+                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -427,6 +427,11 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
+
+                        inference_start_time[idx] = 0
+
+                    if request.collect_metrics:
+                        chunk.metrics = res["metrics"]
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
