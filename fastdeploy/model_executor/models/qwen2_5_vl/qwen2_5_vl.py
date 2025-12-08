@@ -147,7 +147,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         super(Qwen2_5_VLForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
-        self.visual = self._init_vision_model(fd_config.model_config)
+        self.visual = self._init_vision_model(fd_config)
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
@@ -202,8 +202,10 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             ("qkv_proj", "q_proj", "q"),
             ("qkv_proj", "k_proj", "k"),
             ("qkv_proj", "v_proj", "v"),
-            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "gate_proj", "gate"), # for language model
             ("up_gate_proj", "up_proj", "up"),
+            ("gate_up_proj", "gate_proj", "gate"), # for vision model
+            ("gate_up_proj", "up_proj", "up"),
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]

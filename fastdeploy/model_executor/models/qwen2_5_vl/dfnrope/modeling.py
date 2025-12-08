@@ -26,16 +26,25 @@ from paddle.distributed.fleet.meta_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
+from fastdeploy.model_executor.layers.linear import (
+    MergedColumnParallelLinear,
+    RowParallelLinear as FDRowParallelLinear,
+)
+from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.activation import SiluAndMul
 from paddle.nn.functional.flash_attention import (
     flash_attn_unpadded as flash_attn_varlen_func,
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
-from fastdeploy.model_executor.utils import fd_cast, set_weight_attrs
+from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 
 from .activation import ACT2FN
+from fastdeploy.model_executor.utils import dumper
 from .configuration import DFNRopeVisionTransformerConfig
+from fastdeploy.model_executor.layers.normalization import RMSNorm
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
@@ -151,8 +160,7 @@ class VisionFlashAttention2(nn.Layer):
         assert param.shape == shard_weight.shape, (
             f" Attempted to load weight ({shard_weight.shape}) " f"into parameter ({param.shape})"
         )
-        shard_weight = get_tensor(shard_weight)
-        param.copy_(shard_weight, False)
+        h2d_copy(param, shard_weight)
 
     def forward(
         self,
@@ -263,58 +271,41 @@ class VisionMlp(nn.Layer):
 
     def __init__(
         self,
+        fd_config: FDConfig,
         dim: int,
         hidden_dim: int,
         bias: bool = False,
         hidden_act: str = "gelu",
         tensor_parallel_degree: int = 1,
         model_format: str = "",
+        prefix: str = "",
     ) -> None:
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
 
-        if self.tensor_parallel_degree > 1:
-            self.gate_proj = ColumnParallelLinear(
-                dim,
-                hidden_dim,
-                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
-                gather_output=False,
-                has_bias=bias,
-            )
+        self.gate_up_proj = MergedColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.gate_up_proj",
+            input_size=dim,
+            output_size=hidden_dim * 2,
+            with_bias=bias,
+            activation=hidden_act,
+        )
 
-            self.up_proj = ColumnParallelLinear(
-                dim,
-                hidden_dim,
-                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
-                gather_output=False,
-                has_bias=bias,
-            )
+        self.down_proj = FDRowParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.down_proj",
+            input_size=hidden_dim,
+            output_size=dim,
+            with_bias=bias,
+            reduce_results=True,
+        )
 
-            self.down_proj = RowParallelLinear(
-                hidden_dim,
-                dim,
-                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
-                input_is_parallel=True,
-                has_bias=bias,
-            )
-            set_weight_attrs(self.gate_proj.weight, {"output_dim": True})
-            set_weight_attrs(self.up_proj.weight, {"output_dim": True})
-            set_weight_attrs(self.down_proj.weight, {"output_dim": False})
-            if bias:
-                set_weight_attrs(self.gate_proj.bias, {"output_dim": True})
-                set_weight_attrs(self.up_proj.bias, {"output_dim": True})
-                # set_weight_attrs(self.down_proj.bias, {"output_dim": False})
-
-        else:
-            self.gate_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
-            self.up_proj = nn.Linear(dim, hidden_dim, bias_attr=bias)
-            self.down_proj = nn.Linear(hidden_dim, dim, bias_attr=bias)
-
-        set_weight_attrs(self.gate_proj.weight, {"weight_need_transpose": model_format == "torch"})
-        set_weight_attrs(self.up_proj.weight, {"weight_need_transpose": model_format == "torch"})
-        set_weight_attrs(self.down_proj.weight, {"weight_need_transpose": model_format == "torch"})
-
-        self.act = ACT2FN[hidden_act]
+        self.act = SiluAndMul(
+            fd_config=fd_config,
+            bias=None,
+            act_method=hidden_act,
+        )
 
     def forward(self, x) -> paddle.Tensor:
         """_summary_
@@ -325,10 +316,9 @@ class VisionMlp(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        x_gate = self.gate_proj(x)
-        x_gate = self.act(x_gate)
-        x_up = self.up_proj(x)
-        x_down = self.down_proj(x_gate * x_up)
+        gate_up = self.gate_up_proj(x)
+        x = self.act(gate_up)
+        x_down = self.down_proj(x)
         return x_down
 
 
@@ -376,33 +366,6 @@ class VisionRotaryEmbedding(nn.Layer):
         return self._freqs_cached[:seqlen]
 
 
-class Qwen2RMSNorm(nn.Layer):
-    def __init__(self, hidden_size, eps=1e-6):
-        """
-        Qwen2RMSNorm is equivalent to T5LayerNorm
-        """
-        super().__init__()
-        self.weight = paddle.create_parameter(
-            shape=[hidden_size],
-            dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(1.0),
-        )
-        self.variance_epsilon = eps
-
-    def forward(self, hidden_states):
-        if paddle.in_dynamic_mode():
-            with paddle.amp.auto_cast(False):
-                variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-                hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
-        else:
-            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
-
-        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
-            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
-        return hidden_states * self.weight
-
-
 class DFNRopeVisionBlock(nn.Layer):
     """_summary_
 
@@ -412,6 +375,7 @@ class DFNRopeVisionBlock(nn.Layer):
 
     def __init__(
         self,
+        fd_config: FDConfig,
         dim: int,
         num_heads: int,
         mlp_hidden_dim: int,
@@ -420,6 +384,7 @@ class DFNRopeVisionBlock(nn.Layer):
         tensor_parallel_rank: int = 0,
         attn_implementation: str = "sdpa",
         model_format: str = "",
+        prefix: str = "",
     ) -> None:
         """_summary_
 
@@ -428,8 +393,21 @@ class DFNRopeVisionBlock(nn.Layer):
             attn_implementation (str, optional): _description_. Defaults to "sdpa".
         """
         super().__init__()
-        self.norm1 = Qwen2RMSNorm(dim, eps=1e-6)
-        self.norm2 = Qwen2RMSNorm(dim, eps=1e-6)
+        layer_id = int(prefix.split(sep=".")[-1])
+        self.norm1 = RMSNorm(
+            fd_config,
+            hidden_size=dim,
+            eps=1e-6,
+            prefix=f"{prefix}.norm1",
+            layer_id=layer_id,
+        )
+        self.norm2 = RMSNorm(
+            fd_config,
+            hidden_size=dim,
+            eps=1e-6,
+            prefix=f"{prefix}.norm2",
+            layer_id=layer_id,
+        )
 
         self.attn = VisionFlashAttention2(
             dim=dim,
@@ -440,12 +418,14 @@ class DFNRopeVisionBlock(nn.Layer):
         )
 
         self.mlp = VisionMlp(
+            fd_config=fd_config,
             dim=dim,
             hidden_dim=mlp_hidden_dim,
             bias=True,
             hidden_act=hidden_act,
             tensor_parallel_degree=tensor_parallel_degree,
             model_format=model_format,
+            prefix=f"{prefix}.mlp",
         )
 
     def forward(self, hidden_states, cu_seqlens, max_seqlen, rotary_pos_emb) -> paddle.Tensor:
@@ -459,14 +439,15 @@ class DFNRopeVisionBlock(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-
+        norm1_out, _ = self.norm1(hidden_states)
         hidden_states = hidden_states + self.attn(
-            self.norm1(hidden_states),
+            norm1_out,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
             rotary_pos_emb=rotary_pos_emb,
         )
-        hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
+        norm2_out, _ = self.norm2(hidden_states)
+        hidden_states = hidden_states + self.mlp(norm2_out)
         return hidden_states
 
 
@@ -479,10 +460,12 @@ class PatchMerger(nn.Layer):
 
     def __init__(
         self,
+        fd_config: FDConfig,
         dim: int,
         context_dim: int,
         spatial_merge_size: int = 2,
         model_format: str = "",
+        prefix: str = "",
     ) -> None:
         """_summary_
 
@@ -493,7 +476,12 @@ class PatchMerger(nn.Layer):
         """
         super().__init__()
         self.hidden_size = context_dim * (spatial_merge_size**2)
-        self.ln_q = Qwen2RMSNorm(context_dim, eps=1e-6)
+        self.ln_q = RMSNorm(
+            fd_config,
+            hidden_size=context_dim,
+            eps=1e-6,
+            prefix=f"{prefix}.ln_q",
+        )
         self.mlp = nn.Sequential(
             nn.Linear(self.hidden_size, self.hidden_size, bias_attr=True),
             nn.GELU(),
@@ -512,7 +500,8 @@ class PatchMerger(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        x = self.mlp(self.ln_q(x).reshape([-1, self.hidden_size]))
+        ln_q_out, _ = self.ln_q(x)
+        x = self.mlp(ln_q_out.reshape([-1, self.hidden_size]))
 
         return x
 
@@ -529,7 +518,8 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
     config_class = DFNRopeVisionTransformerConfig
 
-    def __init__(self, config, prefix_name: str = "") -> None:
+    def __init__(self, fd_config, prefix_name: str = "") -> None:
+        config = fd_config.model_config
         super().__init__(config.vision_config)
         self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.prefix_name = prefix_name
@@ -556,6 +546,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         self.blocks = nn.LayerList(
             [
                 DFNRopeVisionBlock(
+                    fd_config=fd_config,
                     dim=config.vision_config.hidden_size,
                     num_heads=config.vision_config.num_heads,
                     mlp_hidden_dim=config.vision_config.intermediate_size,
@@ -563,15 +554,18 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
                     tensor_parallel_degree=config.pretrained_config.tensor_parallel_degree,
                     tensor_parallel_rank=config.pretrained_config.tensor_parallel_rank,
                     model_format=model_format,
+                    prefix=f"{self.prefix_name}.block.{layer_idx}",
                 )
-                for _ in range(config.vision_config.depth)
+                for layer_idx in range(config.vision_config.depth)
             ]
         )
 
         self.merger = PatchMerger(
+            fd_config,
             dim=config.vision_config.out_hidden_size,
             context_dim=config.vision_config.hidden_size,
             model_format=model_format,
+            prefix=f"{self.prefix_name}.merger"
         )
 
     @property
@@ -584,7 +578,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         Returns:
             paddle.dtype: _description_
         """
-        return self.blocks[0].mlp.fc2.weight.dtype
+        return self.blocks[0].mlp.down_proj.weight.dtype
 
     def get_window_index(self, grid_thw):
         window_index: list = []
