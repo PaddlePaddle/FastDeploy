@@ -18,7 +18,8 @@ from typing import Callable
 
 import paddle
 from paddle import nn
-
+paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+import deep_gemm
 import fastdeploy
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
@@ -1357,128 +1358,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
     def process_weights_after_loading(self, layer):
 
         def _process_quantize(weight_idx):
-
-            # ======新加的
-            # =======aaaaaaaaaaaaaaaaaaaaa 以下是调试代码新加的
-
-            from fastdeploy.model_executor.ops.gpu import deep_gemm
-
-            def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
-                x: paddle.Tensor,
-            ):
-                """将FP32张量转换为TMA对齐的packed UE8M0格式张量"""
-
-                from deep_gemm.utils import align, get_tma_aligned_size
-
-                # 输入验证：必须是FP32类型的2D或3D张量
-                assert x.dtype == paddle.float and x.dim() in (2, 3)
-
-                # 第一步：将FP32转换为UE8M0格式的uint8张量
-                # 通过位移操作提取FP32的指数部分，转换为无符号8位整数
-                ue8m0_tensor = (x.view(paddle.int) >> 23).to(paddle.uint8)
-
-                # 第二步：创建padding并打包张量
-                # 获取输入张量的最后两个维度尺寸
-                mn, k = x.shape[-2], x.shape[-1]
-                remove_dim = False
-                # 如果是2D张量，添加batch维度以便统一处理
-                if x.dim() == 2:
-                    x, remove_dim = x.unsqueeze(0), True
-                b = x.shape[0]
-                # 计算TMA对齐的尺寸（对齐到4字节边界）
-                aligned_mn = get_tma_aligned_size(mn, 4)
-                aligned_k = align(k, 4)
-                # 创建对齐后的padded张量，并填充有效数据
-                padded = paddle.zeros((b, aligned_mn, aligned_k), device=x.device, dtype=paddle.uint8)
-                padded[:, :mn, :k] = ue8m0_tensor
-                # 将uint8数据打包成int32（每4个uint8打包成1个int32）
-                padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
-
-                # 第三步：转置张量以满足TMA的内存访问模式要求
-                # 转置张量维度以便TMA能够以MN主序高效访问
-                transposed = paddle.zeros((b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int).mT
-                transposed[:, :, :] = padded
-                # 截取原始非padding部分
-                aligned_x = transposed[:, :mn, :]
-                # 如果输入是2D张量，移除batch维度
-                return aligned_x.squeeze(0) if remove_dim else aligned_x
-
-            def block_quant_dequant(
-                x_q_block,
-                x_s,
-                block_size,
-                dtype,
-            ):
-                """This function converts block-wise quantization to unquantized.
-                The inputs are block-wise quantization tensor `x_q_block`, block-wise quantization scale
-                and the block size.
-                The output is an unquantized tensor with dtype.
-                """
-                block_n, block_k = block_size[0], block_size[1]
-                *_, n, k = x_q_block.shape
-
-                # ... n_scale k_scale -> ... (n_scale block_n) (k_scale block_k)
-                x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(block_k, dim=-1)
-                x_scale_repeat = x_scale_repeat[..., :n, :k]
-
-                return (x_q_block.to(paddle.float32) * x_scale_repeat).to(dtype)
-
-            def requant_weight_ue8m0(
-                weight,
-                weight_scale_inv,
-                weight_block_size,
-            ):
-                assert weight_block_size == [128, 128]
-
-                *_, n, k = weight.shape
-
-                weight_dequant = block_quant_dequant(
-                    weight,
-                    weight_scale_inv,
-                    weight_block_size,
-                    paddle.bfloat16,
-                )
-
-                out_w, out_s = quant_weight_ue8m0(
-                    weight_dequant=weight_dequant,
-                    weight_block_size=weight_block_size,
-                )
-
-                out_s = transform_scale_ue8m0(out_s, mn=out_w.shape[-2])
-
-                return out_w, out_s
-
-            def quant_weight_ue8m0(weight_dequant, weight_block_size):
-                assert weight_block_size == [128, 128]
-                assert weight_dequant.dtype == paddle.bfloat16, f"{weight_dequant.dtype=} {weight_dequant.shape=}"
-
-                *batch_dims, n, k = weight_dequant.shape
-
-                weight_dequant_flat = weight_dequant.view((-1, k))
-                out_w_flat, out_s_flat = deep_gemm.utils.math.per_block_cast_to_fp8(
-                    weight_dequant_flat, use_ue8m0=True
-                )
-
-                out_w = out_w_flat.view((*batch_dims, n, k))
-                out_s = out_s_flat.view(
-                    (
-                        *batch_dims,
-                        deep_gemm.utils.math.ceil_div(n, weight_block_size[0]),
-                        deep_gemm.utils.math.ceil_div(k, weight_block_size[1]),
-                    )
-                )
-
-                return out_w, out_s
-
-            # NOTE copy and modified from DeepGEMM
-            def transform_scale_ue8m0(sf, mn, use_torch_impl: bool = False):
-                # get_mn_major_tma_aligned_packed_ue8m0_tensor = deep_gemm.utils.layout.get_mn_major_tma_aligned_packed_ue8m0_tensor
-                get_mn_major_tma_aligned_packed_ue8m0_tensor = _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl
-                sf = sf.index_select(-2, paddle.arange(mn, device=sf.device) // 128)
-                sf = get_mn_major_tma_aligned_packed_ue8m0_tensor(sf)
-                return sf
-
-            # ======aaaaaaaaa 以上是调试代码新加的
 
             # 1.init shape and type
             self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
