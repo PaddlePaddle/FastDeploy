@@ -87,7 +87,6 @@ async def consumer_task(consumer_id, total_msgs, result_q, consumer_event):
         send_ts = msg.payload["send_ts"]
         latencies.append((recv_ts - send_ts) * 1000)  # ms
         pbar.update(1)
-        # pbar.write(f"recv {msg.payload['i']} = {msg.msg_id}")
         recv += 1
 
     pbar.close()
