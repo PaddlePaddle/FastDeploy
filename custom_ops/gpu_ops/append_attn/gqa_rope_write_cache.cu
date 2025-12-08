@@ -1170,7 +1170,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
     if (use_neox_rotary_style) {
       // Note(ZKK) Qwen3 like model
-      // the [0,head_dim/2), [head_dim/2,head_dim)] data are totally same!
+      // the [0,head_dim/2), [head_dim/2,head_dim) data are totally same!
       PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim);
     } else {
       PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 2);
