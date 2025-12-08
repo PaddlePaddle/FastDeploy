@@ -1161,15 +1161,18 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
 
   PADDLE_ENFORCE_EQ(batch_id_per_token.dims().size(), 1);
   PADDLE_ENFORCE_EQ(batch_id_per_token.dims()[0], token_num);
-  PADDLE_ENFORCE_EQ(rotary_embs.dims().size(), 5);
-  PADDLE_ENFORCE_EQ(rotary_embs.dims()[0], 2);
-  PADDLE_ENFORCE_EQ(rotary_embs.dims()[1], 1);
-  PADDLE_ENFORCE_EQ(rotary_embs.dims()[2], max_seq_len);
-  PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
-  if (use_neox_rotary_style) {
-    PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim);
-  } else {
-    PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 2);
+
+  if (!rope_3d) {
+    PADDLE_ENFORCE_EQ(rotary_embs.dims().size(), 5);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[0], 2);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[1], 1);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[2], max_seq_len);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
+    if (use_neox_rotary_style) {
+      PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim);
+    } else {
+      PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 2);
+    }
   }
 
   AppendAttnMetaData meta_data;
