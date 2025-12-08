@@ -27,7 +27,6 @@ moviepy
 wheel
 use-triton-in-paddle
 crcmod
-fastsafetensors==0.1.14
 msgpack
 gunicorn
 opentelemetry-api>=1.24.0
@@ -40,4 +39,4 @@ opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser
 msgspec
-safetensors==0.7.0rc0
+safetensors>=0.7.0

@@ -50,6 +50,7 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    to_tensor,
 )
 
 
@@ -389,6 +390,8 @@ class EngineClient:
         if not self.enable_mm:
             self.zmq_client.send_json(task)
         else:
+            if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+                to_tensor([task])
             self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):

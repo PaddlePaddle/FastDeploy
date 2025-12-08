@@ -393,7 +393,19 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
                                         smooth_data,         \
                                         hadamard_blocksize)
   if (quant_method == "weight_only_int8") {
-    FFN_IMPL(XPU_TX1, XPU_TX2, int8_t, float);
+    static const char* xft_moe_fc_wint8_tgemm =
+        std::getenv("XFT_MOE_FC_WINT8_TGEMM");
+    if (xft_moe_fc_wint8_tgemm != nullptr) {
+      if (std::string(xft_moe_fc_wint8_tgemm) == "INT8") {
+        FFN_IMPL(XPU_TX1, XPU_TX2, int8_t, int8_wo_t);
+      } else if (std::string(xft_moe_fc_wint8_tgemm) == "FLOAT16") {
+        FFN_IMPL(XPU_TX1, XPU_TX2, int8_t, float16);
+      } else {
+        FFN_IMPL(XPU_TX1, XPU_TX2, int8_t, float);
+      }
+    } else {
+      FFN_IMPL(XPU_TX1, XPU_TX2, int8_t, float);
+    }
   } else if (quant_method == "weight_only_int4") {
     FFN_IMPL(XPU_TX1, XPU_TX2, int4_t, int4_wo_int15);
   } else if (quant_method == "w4a8") {

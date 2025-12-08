@@ -231,6 +231,8 @@ mm_hashes: Optional[list] = None
 # Hash values for multimodal (e.g., image/audio) inputs, used for verification or tracking.
 # Default None indicates no multimodal input or hash validation required.
 
+collect_metrics: Optional[bool] = False
+# Whether to return metrics information, for performance analysis or debugging (default is False, meaning no metrics are returned).
 ```
 
 ### Differences in Return Fields

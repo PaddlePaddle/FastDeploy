@@ -91,6 +91,7 @@ class Router:
         self.prefill_servers = []
         self.decode_servers = []
         self.lock = asyncio.Lock()  # async-safe lock
+        logger.info("Router started at http://{}:{}".format(self.host, self.port))
 
     async def register_instance(self, instance_info_dict: dict):
         """Register an instance asynchronously"""
@@ -172,6 +173,8 @@ class Router:
     async def handle_splitwise_request(self, request_data: dict, endpoint_name: str):
         logger.debug(f"Received request: {request_data}")
         prefill_server, decode_server = await self.select_pd()
+        logger.debug(f"Selected prefill server: {prefill_server}")
+        logger.debug(f"Selected decode server: {decode_server}")
 
         if prefill_server.tp_size != decode_server.tp_size and decode_server.tp_size != 1:
             raise HTTPException(
@@ -371,4 +374,4 @@ def launch_router(router_args: RouterArgs):
         app.state.router = Router(app.state.router_args)
         asyncio.create_task(app.state.router.monitor_instance_health(interval_secs=5))
 
-    uvicorn.run(app, host=router_args.host, port=router_args.port)
+    uvicorn.run(app, host=router_args.host, port=int(router_args.port))
