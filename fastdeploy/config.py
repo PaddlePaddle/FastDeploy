@@ -241,6 +241,12 @@ class ModelConfig:
 
         self._post_init()
 
+    def disable_mm_prefill_batch(self):
+        """
+        check if the model architecture disable for mm prefill
+        """
+        return self._architecture in ["Ernie5ForCausalLM"]
+
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
