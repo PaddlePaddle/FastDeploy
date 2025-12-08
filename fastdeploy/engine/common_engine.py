@@ -344,7 +344,9 @@ class EngineService:
         for task in tasks:
             if self.cfg.scheduler_config.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
-                if not status:
+                if status:
+                    task.metrics.ask_decode_resource_finish_time = time.time()
+                else:
                     self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
                     self.scheduler.put_results(
                         [
@@ -660,6 +662,8 @@ class EngineService:
 
                 llm_logger.debug(f"get tasks from scheduler: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    for task in tasks:
+                        task.metrics.ask_decode_resource_start_time = time.time()
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
                 insert_successful = self.insert_tasks(tasks, current_id)
