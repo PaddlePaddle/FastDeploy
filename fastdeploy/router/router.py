@@ -32,7 +32,7 @@ class RouterArgs:
     """
     Host address to bind the router server
     """
-    port: str = "9000"
+    port: int = 9000
     """
     Port to bind the router server.
     """
@@ -55,7 +55,7 @@ class RouterArgs:
         )
         parser.add_argument(
             "--port",
-            type=str,
+            type=int,
             default=RouterArgs.port,
             help="Port number to bind the router server",
         )
@@ -91,11 +91,12 @@ class Router:
         self.prefill_servers = []
         self.decode_servers = []
         self.lock = asyncio.Lock()  # async-safe lock
+        logger.info("Router started at http://{}:{}".format(self.host, self.port))
 
     async def register_instance(self, instance_info_dict: dict):
         """Register an instance asynchronously"""
         try:
-            inst_info = InstanceInfo(**instance_info_dict)
+            inst_info = InstanceInfo.from_dict(instance_info_dict)
         except Exception as e:
             logger.error(f"register instance failed: {e}")
             raise
@@ -172,12 +173,20 @@ class Router:
     async def handle_splitwise_request(self, request_data: dict, endpoint_name: str):
         logger.debug(f"Received request: {request_data}")
         prefill_server, decode_server = await self.select_pd()
+        logger.debug(f"Selected prefill server: {prefill_server}")
+        logger.debug(f"Selected decode server: {decode_server}")
+
+        if prefill_server.tp_size != decode_server.tp_size and decode_server.tp_size != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="The tp_size of prefill and decode should be equal or the tp_size of decode is 1",
+            )
 
         # TODO: unify the disaggregate_info in server and remove redundancy params
         is_same_node = prefill_server.host_ip == decode_server.host_ip
-        use_ipc = (
-            is_same_node and "ipc" in prefill_server.transfer_protocol and "ipc" in decode_server.transfer_protocol
-        )
+        is_support_ipc = "ipc" in prefill_server.transfer_protocol and "ipc" in decode_server.transfer_protocol
+        is_same_tp_size = prefill_server.tp_size == decode_server.tp_size
+        use_ipc = is_same_node and is_support_ipc and is_same_tp_size
 
         cache_info = {}
         if use_ipc:
@@ -365,4 +374,4 @@ def launch_router(router_args: RouterArgs):
         app.state.router = Router(app.state.router_args)
         asyncio.create_task(app.state.router.monitor_instance_health(interval_secs=5))
 
-    uvicorn.run(app, host=router_args.host, port=router_args.port)
+    uvicorn.run(app, host=router_args.host, port=int(router_args.port))
