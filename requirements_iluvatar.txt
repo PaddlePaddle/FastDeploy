@@ -35,6 +35,9 @@ opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-mysql
 opentelemetry-distro
 opentelemetry-exporter-otlp
+opentelemetry-exporter-otlp-proto-grpc
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-common
 opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser

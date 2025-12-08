@@ -35,7 +35,6 @@ import numpy as np
 import paddle
 import requests
 import zmq
-from opentelemetry import trace
 from tqdm import tqdm
 
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
@@ -51,7 +50,6 @@ from fastdeploy.inter_communicator import (
     ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
@@ -417,8 +415,6 @@ class EngineService:
         """
         if not isinstance(tasks, list):
             tasks = [tasks]
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
 
         self.resource_manager.check_and_free_block_tables()
 
@@ -1067,7 +1063,6 @@ class EngineService:
                     try:
                         request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
-                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))

@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -103,6 +104,7 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -134,6 +136,8 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
+            tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+            del request.trace_context
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
             max_tokens = None
@@ -487,6 +491,7 @@ class OpenAIServingChat:
             )
             yield f"data: {error_data}\n\n"
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
@@ -629,6 +634,7 @@ class OpenAIServingChat:
                         )
                         choices.append(choice)
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")

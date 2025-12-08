@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
@@ -82,6 +83,7 @@ class OpenAIServingCompletion:
         """
         Create a completion for the given prompt.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -106,6 +108,8 @@ class OpenAIServingCompletion:
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
         api_server_logger.info(f"Initialize request {request_id}: {request}")
+        tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+        del request.trace_context
         request_prompt_ids = None
         request_prompts = None
 
@@ -340,6 +344,7 @@ class OpenAIServingCompletion:
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
         finally:
+            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
             if dealer is not None:
@@ -598,6 +603,7 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
+            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
             if dealer is not None:
