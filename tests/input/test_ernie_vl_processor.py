@@ -120,6 +120,283 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
 
+    def test_init(self):
+        """Test __init__ method"""
+        with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
+            mock_dp = MagicMock()
+            mock_dp.image_patch_id = 1001
+            mock_dp.spatial_conv_size = 14
+            mock_dp.tokenizer = MagicMock()
+            mock_dp.tokenizer.pad_token_id = 0
+            mock_dp.eval = MagicMock()
+
+            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.DataProcessor") as mock_dp_class:
+                mock_dp_class.return_value = mock_dp
+                with patch(
+                    "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.GenerationConfig"
+                ) as mock_gen_config:
+                    mock_gen_config.from_pretrained.return_value = MagicMock()
+                    with patch("paddleformers.trl.llm_utils.get_eos_token_id") as mock_get_eos:
+                        mock_get_eos.return_value = [1, 2]
+
+                        # Test normal initialization
+                        mock_reasoning_parser_class = MagicMock()
+                        processor = Ernie4_5_VLProcessor(
+                            "model_path",
+                            limit_mm_per_prompt={"image": 2, "video": 1},
+                            mm_processor_kwargs={"spatial_conv_size": 14},
+                            reasoning_parser_obj=lambda tokenizer: mock_reasoning_parser_class,
+                            tool_parser_obj=MagicMock(),
+                            enable_processor_cache=True,
+                        )
+
+                        self.assertEqual(processor.image_patch_id, 1001)
+                        self.assertEqual(processor.spatial_conv_size, 14)
+                        self.assertIsNotNone(processor.tokenizer)
+                        self.assertIsNotNone(processor.generation_config)
+                        self.assertEqual(processor.eos_token_ids, [1, 2])
+                        self.assertEqual(processor.limit_mm_per_prompt["image"], 2)
+                        self.assertEqual(processor.limit_mm_per_prompt["video"], 1)
+                        mock_dp.eval.assert_called_once()
+
+                        # Test with generation config exception
+                        mock_gen_config.from_pretrained.side_effect = Exception("Config not found")
+                        processor2 = Ernie4_5_VLProcessor("model_path")
+                        self.assertIsNone(processor2.generation_config)
+
+                        # Test with reasoning_parser_obj
+                        mock_reasoning_parser = MagicMock()
+                        processor3 = Ernie4_5_VLProcessor(
+                            "model_path", reasoning_parser_obj=lambda tokenizer: mock_reasoning_parser
+                        )
+                        self.assertIsNotNone(processor3.reasoning_parser)
+
+    def test_parse_processor_kwargs(self):
+        """Test _parse_processor_kwargs with various inputs"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_processor_kwargs = Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            # Test with valid kwargs
+            valid_kwargs = {
+                "spatial_conv_size": 14,
+                "temporal_conv_size": 2,
+                "image_min_pixels": 1000,
+                "image_max_pixels": 10000,
+            }
+            result = processor._parse_processor_kwargs(valid_kwargs)
+            self.assertEqual(result, valid_kwargs)
+
+            # Test with invalid type (implementation catches exception and returns empty dict)
+            invalid_kwargs = {"spatial_conv_size": "invalid"}  # Should be int
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, invalid_kwargs)
+            self.assertEqual(result, {})
+
+            # Test with non-dict input (implementation catches exception and returns empty dict)
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, "not a dict")
+            self.assertEqual(result, {})
+
+            # Test exception handling with None
+            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
+                result = processor._parse_processor_kwargs(None)
+                self.assertEqual(result, {})
+
+    def test_parse_limits(self):
+        """Test _parse_limits with various inputs"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            # Test with valid limits
+            valid_limits = {"image": 5, "video": 3}
+            result = processor._parse_limits(valid_limits)
+            self.assertEqual(result["image"], 5)
+            self.assertEqual(result["video"], 3)
+            self.assertEqual(result["audio"], 1)  # Default value
+
+            # Test with empty input (None)
+            result = processor._parse_limits(None)
+            self.assertEqual(result["image"], 1)
+            self.assertEqual(result["video"], 1)
+            self.assertEqual(result["audio"], 1)
+
+            # Test with invalid type (implementation catches exception and returns default limits)
+            result = Ernie4_5_VLProcessor._parse_limits(processor, "not a dict")
+            self.assertEqual(result["image"], 1)
+            self.assertEqual(result["video"], 1)
+            self.assertEqual(result["audio"], 1)
+
+    def test_check_mm_limits(self):
+        """Test _check_mm_limits with various inputs"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            # Test with dict input (should not raise)
+            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
+            mm_data = {"image": [1, 2], "video": [1]}
+            processor._check_mm_limits(mm_data)
+
+            # Test with messages input (should not raise)
+            messages = [
+                {"role": "user", "content": [{"type": "image", "data": "img1"}]},
+                {"role": "user", "content": [{"type": "video", "data": "vid1"}]},
+            ]
+            processor._check_mm_limits(messages)
+
+            # Test when limit is exceeded (should raise ValueError)
+            processor.limit_mm_per_prompt = {"image": 1, "video": 1}
+            mm_data = {"image": [1, 2, 3], "video": []}  # 3 images, limit is 1
+            with self.assertRaises(ValueError) as context:
+                processor._check_mm_limits(mm_data)
+            self.assertIn("Too many image items", str(context.exception))
+
+    def test_process_request(self):
+        """Test process_request method"""
+        from fastdeploy.engine.request import Request
+
+        # Mock the process_request_dict method
+        self.processor.process_request_dict = MagicMock()
+
+        # Create a mock Request object
+        mock_request = MagicMock(spec=Request)
+        mock_request.to_dict.return_value = {"messages": [{"role": "user", "content": "Hello"}]}
+
+        # Mock Request.from_dict to return a mock request
+        with patch.object(Request, "from_dict") as mock_from_dict:
+            mock_result_request = MagicMock(spec=Request)
+            mock_from_dict.return_value = mock_result_request
+
+            self.processor.process_request(mock_request, max_model_len=100, chat_template_kwargs={"key": "value"})
+
+            # Verify to_dict was called
+            mock_request.to_dict.assert_called_once()
+
+            # Verify process_request_dict was called
+            self.processor.process_request_dict.assert_called_once()
+
+            # Verify from_dict was called
+            mock_from_dict.assert_called_once()
+
+    def test_get_pad_id(self):
+        """Test get_pad_id method"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.tokenizer = MagicMock()
+            processor.tokenizer.pad_token_id = 100
+            processor.get_pad_id = Ernie4_5_VLProcessor.get_pad_id.__get__(processor, Ernie4_5_VLProcessor)
+
+            result = processor.get_pad_id()
+            self.assertEqual(result, 100)
+
+    def test_load_tokenizer(self):
+        """Test _load_tokenizer method"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            mock_tokenizer = MagicMock()
+            processor.ernie4_5_processor = MagicMock()
+            processor.ernie4_5_processor.tokenizer = mock_tokenizer
+            processor._load_tokenizer = Ernie4_5_VLProcessor._load_tokenizer.__get__(processor, Ernie4_5_VLProcessor)
+
+            processor._load_tokenizer()
+            self.assertEqual(processor.tokenizer, mock_tokenizer)
+
+    def test_process_request_dict_with_stop_sequences(self):
+        """Test process_request_dict with stop sequences and bad words"""
+        # Test with stop sequences
+        self.processor.update_stop_seq = MagicMock(return_value=([100, 101], [1, 1]))
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "stop": ["stop1", "stop2"],
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.processor.update_stop_seq.assert_called_once_with(["stop1", "stop2"])
+        self.assertEqual(request_dict["stop_token_ids"], [100, 101])
+        self.assertEqual(request_dict["stop_seqs_len"], [1, 1])
+
+        # Test with bad words
+        self.processor.update_bad_words = MagicMock(return_value=[[200], [201]])
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "bad_words": ["bad1", "bad2"],
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.processor.update_bad_words.assert_called_once()
+        self.assertEqual(request_dict["bad_words_token_ids"], [[200], [201]])
+
+    def test_process_request_dict_with_prompt(self):
+        """Test process_request_dict with prompt"""
+        self.processor.ernie4_5_processor.text2ids = MagicMock(
+            return_value={
+                "input_ids": [1, 2, 3],
+                "token_type_ids": [0, 0, 0],
+                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+                "images": [],
+                "grid_thw": [],
+                "image_type_ids": [],
+                "cur_position": 3,
+            }
+        )
+
+        # Test with multimodal_data
+        request_dict = {
+            "prompt": "Hello world",
+            "multimodal_data": {"image": [], "video": []},
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.processor.ernie4_5_processor.text2ids.assert_called_once()
+        self.assertEqual(request_dict["prompt_tokens"], "Hello world")
+
+        # Test without multimodal_data - should default to empty dict
+        self.processor.ernie4_5_processor.text2ids.reset_mock()
+        request_dict = {
+            "prompt": "Hello world",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.processor.ernie4_5_processor.text2ids.assert_called_once()
+        self.assertEqual(request_dict["prompt_tokens"], "Hello world")
+
+    def test_process_request_dict_with_messages(self):
+        """Test process_request_dict with messages and various options"""
+        self.processor.ernie4_5_processor.request2ids = MagicMock(
+            return_value={
+                "input_ids": [1, 2, 3],
+                "token_type_ids": [0, 0, 0],
+                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+                "images": [],
+                "grid_thw": [],
+                "image_type_ids": [],
+                "cur_position": 3,
+            }
+        )
+
+        # Test with messages only
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.processor.ernie4_5_processor.request2ids.assert_called_once()
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        # Test with chat_template_kwargs values copied to request
+        self.processor.ernie4_5_processor.request2ids.reset_mock()
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "chat_template_kwargs": {
+                "custom_key": "custom_value",
+                "enable_thinking": False,
+            },
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["custom_key"], "custom_value")
+        self.assertEqual(request_dict["enable_thinking"], False)
+
+        # Test thinking_mode = "close" (should set enable_thinking to False)
+        self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
@@ -127,6 +404,8 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
+        # Test thinking_mode = "false" (should set enable_thinking to False)
+        self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
@@ -134,12 +413,220 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
+        # Test thinking_mode = "open" (should set enable_thinking to True)
+        self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": False},
+            "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
         }
         self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+    def test_process_request_dict_with_chat_template_kwargs_not_dict(self):
+        """Test process_request_dict with invalid chat_template_kwargs"""
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "chat_template_kwargs": "not_a_dict",
+        }
+
+        with self.assertRaises(ValueError) as context:
+            self.processor.process_request_dict(request_dict, 100)
+        self.assertIn("chat_template_kwargs must be a dict", str(context.exception))
+
+    def test_process_request_dict_no_valid_input(self):
+        """Test process_request_dict with no valid input"""
+        request_dict = {}
+
+        with self.assertRaises(ValueError) as context:
+            self.processor.process_request_dict(request_dict, 100)
+        self.assertIn("Request must contain", str(context.exception))
+
+    def test_process_request_dict_with_completion_token_ids(self):
+        """Test process_request_dict with completion_token_ids"""
+        self.processor.append_completion_tokens = MagicMock()
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "completion_token_ids": [10, 11, 12],
+        }
+        self.processor.process_request_dict(request_dict, 100)
+
+        self.processor.append_completion_tokens.assert_called_once()
+
+    def test_process_request_dict_prompt_truncation(self):
+        """Test process_request_dict prompt truncation"""
+        mock_outputs = MagicMock()
+        mock_outputs.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "input_ids": np.array([1] * 150),
+                "token_type_ids": np.array([0] * 150),
+                "position_ids": np.array([[i, i, i] for i in range(150)]),
+                "images": None,
+                "grid_thw": None,
+                "image_type_ids": None,
+                "image_patch_id": 1001,
+            }.get(k)
+        )
+        self.processor.pack_outputs = MagicMock(return_value=mock_outputs)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1] * 150,  # 150 tokens
+        }
+        self.processor.process_request_dict(request_dict, 100)  # max_model_len=100
+
+        # Should be truncated to max_model_len - 1 = 99
+        self.assertEqual(len(request_dict["prompt_token_ids"]), 99)
+
+    def test_process_request_dict_max_tokens_calculation(self):
+        """Test process_request_dict max_tokens calculation"""
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "max_tokens": 200,  # Larger than available
+        }
+        self.processor.process_request_dict(request_dict, 100)
+
+        # max_tokens should be min(max_model_len - prompt_len, max_tokens)
+        self.assertLessEqual(request_dict["max_tokens"], 100 - 3)
+
+    def test_process_request_dict_top_p_adjustment(self):
+        """Test process_request_dict top_p adjustment"""
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "top_p": 1e-10,  # Very small value
+        }
+        self.processor.process_request_dict(request_dict, 100)
+
+        # top_p should be adjusted to _SAMPLING_EPS
+        self.assertGreaterEqual(request_dict["top_p"], 1e-5)
+
+    def test_append_completion_tokens(self):
+        """Test append_completion_tokens method"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.append_completion_tokens = Ernie4_5_VLProcessor.append_completion_tokens.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            multimodal_inputs = {
+                "input_ids": [1, 2, 3],
+                "token_type_ids": [0, 0, 0],
+                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+                "cur_position": 3,
+            }
+            completion_token_ids = [10, 11, 12]
+
+            processor.append_completion_tokens(multimodal_inputs, completion_token_ids)
+
+            self.assertEqual(multimodal_inputs["input_ids"], [1, 2, 3, 10, 11, 12])
+            self.assertEqual(multimodal_inputs["token_type_ids"], [0, 0, 0, 0, 0, 0])
+            self.assertEqual(len(multimodal_inputs["position_ids"]), 6)
+            self.assertEqual(multimodal_inputs["cur_position"], 6)
+
+    def test_pack_outputs(self):
+        """Test pack_outputs with and without images"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.image_patch_id = 1001
+            processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(processor, Ernie4_5_VLProcessor)
+
+            # Test with images
+            outs_with_images = {
+                "input_ids": [1, 2, 3],
+                "token_type_ids": [0, 0, 0],
+                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+                "images": [np.array([[1, 2], [3, 4]])],
+                "grid_thw": [np.array([[1, 2, 2]])],
+                "image_type_ids": [0],
+            }
+
+            result = processor.pack_outputs(outs_with_images)
+            self.assertIsNotNone(result["images"])
+            self.assertIsNotNone(result["grid_thw"])
+            self.assertIsNotNone(result["image_type_ids"])
+            self.assertEqual(result["image_patch_id"], 1001)
+            self.assertIsInstance(result["input_ids"], np.ndarray)
+            self.assertIsInstance(result["token_type_ids"], np.ndarray)
+            self.assertIsInstance(result["position_ids"], np.ndarray)
+
+            # Test without images
+            outs_without_images = {
+                "input_ids": [1, 2, 3],
+                "token_type_ids": [0, 0, 0],
+                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+                "images": [],
+                "grid_thw": [],
+                "image_type_ids": [],
+            }
+
+            result = processor.pack_outputs(outs_without_images)
+            self.assertIsNone(result["images"])
+            self.assertIsNone(result["grid_thw"])
+            self.assertIsNone(result["image_type_ids"])
+
+    def test_process_response_dict(self):
+        """Test process_response_dict with different parameters"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.process_response_dict = Ernie4_5_VLProcessor.process_response_dict.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            # Test with stream=True
+            processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
+            response_dict = {"ids": [1, 2, 3]}
+            result = processor.process_response_dict(response_dict, stream=True)
+            processor.process_response_dict_streaming.assert_called_once()
+            self.assertEqual(result, {"text": "response"})
+
+            # Test with stream=False
+            processor.process_response_dict_normal = MagicMock(return_value={"text": "response"})
+            response_dict = {"ids": [1, 2, 3]}
+            result = processor.process_response_dict(response_dict, stream=False)
+            processor.process_response_dict_normal.assert_called_once()
+            self.assertEqual(result, {"text": "response"})
+
+            # Test with enable_thinking=None (should default to True)
+            processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
+            response_dict = {"ids": [1, 2, 3]}
+            processor.process_response_dict(response_dict, stream=True, enable_thinking=None)
+            processor.process_response_dict_streaming.assert_called_once_with(response_dict, enable_thinking=True)
+
+    def test_apply_default_parameters(self):
+        """Test _apply_default_parameters with dict and object request"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.generation_config = MagicMock()
+            processor.generation_config.top_p = 0.8
+            processor.generation_config.temperature = 0.9
+            processor._apply_default_parameters = Ernie4_5_VLProcessor._apply_default_parameters.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            # Test with dict request
+            request = {}
+            result = processor._apply_default_parameters(request)
+            self.assertEqual(result["top_p"], 0.8)
+            self.assertEqual(result["temperature"], 0.9)
+
+            # Test with object request
+            class MockRequest:
+                def __init__(self):
+                    self.top_p = None
+                    self.temperature = None
+
+                def get(self, key):
+                    return getattr(self, key, None)
+
+                def set(self, key, value):
+                    setattr(self, key, value)
+
+            request = MockRequest()
+            result = processor._apply_default_parameters(request)
+            self.assertEqual(result.top_p, 0.8)
 
 
 class TestDataProcessorTargetMethods(unittest.TestCase):
