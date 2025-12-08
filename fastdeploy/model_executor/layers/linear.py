@@ -875,7 +875,7 @@ class RowParallelLinear(LinearBase):
 
         self.reduce_results = reduce_results and not self.split_token
 
-        if self.tp_size > 1 and self.reduce_results:
+        if self.with_bias and self.tp_size > 1 and self.reduce_results:
             set_weight_attrs(self.bias, {"tp_row_bias": True})
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
