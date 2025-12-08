@@ -90,7 +90,6 @@ class EngineService:
             self.llm_logger = llm_logger
 
         self.scheduler = cfg.scheduler_config.scheduler()
-        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.llm_logger.info("Use V1 KVCache Scheduler")
@@ -1160,38 +1159,31 @@ class EngineService:
                     prefilled_request_ouputs.extend(tasks)
 
         def _process_allocate_resource_requests():
-            processed_indices = []
-            for idx, task in enumerate(allocate_resource_requests):
+            nonlocal allocate_resource_requests
+            requests = allocate_resource_requests
+            allocate_resource_requests = []
+
+            for req in requests:
                 is_success = False
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                    if self.resource_manager.preallocate_resource_in_d(task):
-                        task.metrics.decode_preallocate_req_time = time.time()
-                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
-                        self.split_connector.send_cache_info_to_prefill([task])
-                        self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
-                        processed_indices.append(idx)
+                    if self.resource_manager.preallocate_resource_in_d(req):
+                        req.metrics.decode_preallocate_req_time = time.time()
+                        self.llm_logger.info(f"Resource available, processing task {req.request_id}")
+                        self.split_connector.send_cache_info_to_prefill([req])
+                        self.llm_logger.debug(f"D has successfully sent cache infos for task {req.request_id}")
                         is_success = True
                 else:
-                    if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
-                        self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
-                        self.insert_tasks([task])
-                        task.metrics.decode_preallocate_req_time = time.time()
-                        processed_indices.append(idx)
+                    if self.resource_manager.is_resource_sufficient(req.prompt_token_ids_len):
+                        self.llm_logger.debug(f"D Resource available, processing task {req.request_id}")
+                        self.insert_tasks([req])
+                        req.metrics.decode_preallocate_req_time = time.time()
                         is_success = True
 
                 if not is_success:
-                    if not self.enable_decode_cache_task:
-                        task.error_msg = "Not enough resources"
-                        self.split_connector.send_cache_info_to_prefill([task])
-                        self.llm_logger.warning(f"D has failed to send cache infos for task {task.request_id}")
-                        processed_indices.append(idx)
-                    else:
-                        self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
-                        break
-
-            for idx in sorted(processed_indices, reverse=True):
-                allocate_resource_requests.pop(idx)
+                    req.error_msg = "Not enough resources"
+                    self.split_connector.send_cache_info_to_prefill([req])
+                    self.llm_logger.warning(f"D has failed to send cache infos for task {req.request_id}")
 
         def _process_prefilled_requests():
             nonlocal prefilled_request_ouputs
