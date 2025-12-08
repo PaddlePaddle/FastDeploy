@@ -33,8 +33,8 @@ from utils.serving_utils import (
 os.environ["FD_USE_MACHETE"] = "0"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_and_run_server():
+@pytest.fixture(scope="session", autouse=True, params=[0, 2])
+def setup_and_run_server(request):
     """
     Pytest fixture that runs once per test session:
     - Cleans ports before tests
@@ -55,6 +55,7 @@ def setup_and_run_server():
         model_path = "./PaddleOCR-VL-0.9B"
 
     log_path = "server.log"
+    graph_opt_level = request.param
 
     cmd = [
         sys.executable,
@@ -80,7 +81,7 @@ def setup_and_run_server():
         "--gpu-memory-utilization",
         "0.9",
         "--graph-optimization-config",
-        '{"graph_opt_level":0, "use_cudagraph":true}',
+        f'{{"graph_opt_level":{graph_opt_level}, "use_cudagraph":true}}',
     ]
 
     # Start subprocess in new process group
