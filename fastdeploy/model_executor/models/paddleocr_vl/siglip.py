@@ -281,7 +281,6 @@ class SiglipMLP(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.activation_fn = get_activation_fn(config.hidden_act)
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
         self.fc1.weight.weight_loader = self.weight_loader
         self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
@@ -304,7 +303,7 @@ class SiglipMLP(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = self.activation_fn(hidden_states[0])
+        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states[0])
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
