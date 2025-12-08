@@ -26,25 +26,22 @@ from paddle.distributed.fleet.meta_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
-from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear,
-    RowParallelLinear as FDRowParallelLinear,
-)
-from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.layers.activation import SiluAndMul
 from paddle.nn.functional.flash_attention import (
     flash_attn_unpadded as flash_attn_varlen_func,
 )
 from paddleformers.transformers.model_utils import PretrainedModel
 
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.activation import SiluAndMul
+from fastdeploy.model_executor.layers.linear import MergedColumnParallelLinear
+from fastdeploy.model_executor.layers.linear import (
+    RowParallelLinear as FDRowParallelLinear,
+)
+from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
 from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 
-from .activation import ACT2FN
-from fastdeploy.model_executor.utils import dumper
 from .configuration import DFNRopeVisionTransformerConfig
-from fastdeploy.model_executor.layers.normalization import RMSNorm
 
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
@@ -565,7 +562,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             dim=config.vision_config.out_hidden_size,
             context_dim=config.vision_config.hidden_size,
             model_format=model_format,
-            prefix=f"{self.prefix_name}.merger"
+            prefix=f"{self.prefix_name}.merger",
         )
 
     @property
