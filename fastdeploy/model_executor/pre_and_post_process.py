@@ -352,8 +352,6 @@ def post_process_normal(
     )
 
     if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
-        print("model_output.min_tokens", model_output.min_tokens)
-        print("stop_token_ids", model_output.stop_token_ids)
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
