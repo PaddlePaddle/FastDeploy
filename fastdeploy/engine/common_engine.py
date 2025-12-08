@@ -170,67 +170,7 @@ class EngineService:
         self.running = True
 
         if self.use_async_llm:
-            # Initialize IPC signals for worker management
-            self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
-            self._init_worker_signals()
-
-            # Create data processor if not exists
-            if not hasattr(self, "data_processor"):
-                self.create_data_processor()
-
-            # Launch components: scheduler, cache_manager, expert_service et.al.
-            self.launch_components()
-
-            # If block number is specified and model is deployed in splitwise mode, start cache manager first
-            if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
-                device_ids = self.cfg.parallel_config.device_ids.split(",")
-                self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
-
-            # Start worker processes
-            self.worker_proc = self._start_worker_service()
-            time.sleep(5)
-            self.worker_init_status = dict()
-            result_container = {}
-
-            def check_worker_initialize_status_func(res: dict):
-                res["worker_is_alive"] = True
-                if not self.check_worker_initialize_status():
-                    llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
-                    res["worker_is_alive"] = False
-
-            self.check_worker_initialize_status_func_thread = threading.Thread(
-                target=check_worker_initialize_status_func, args=(result_container,), daemon=True
-            )
-            self.check_worker_initialize_status_func_thread.start()
-
-            # Wait model loading
-            while self.loaded_model_signal.value[0] == 0:
-                # Make sure worker process is alive
-                if not self.check_worker_initialize_status_func_thread.is_alive():
-                    return False
-                time.sleep(1)
-
-            # If block number is not specified, let workers do profiling to determine the block number,
-            # and then start the cache manager
-            if self.do_profile:
-                self._stop_profile()
-            elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
-                device_ids = self.cfg.parallel_config.device_ids.split(",")
-                self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
-
-            # Set cache manager signal
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.launched_cache_manager_signal.value[0] = 1
-
-            # Worker launched
-            self.check_worker_initialize_status_func_thread.join()
-            if not result_container["worker_is_alive"]:
-                llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
-                return False
-
-            # Start ZMQ service for communication with AsyncLLM
-            if async_llm_pid:
-                self.start_zmq_service(async_llm_pid)
+            self.start_worker_service(async_llm_pid)
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.insert_task_to_worker_thread = threading.Thread(
@@ -245,6 +185,69 @@ class EngineService:
             self._decode_process_splitwise_requests()
 
         self._register_to_router()
+
+    def start_worker_service(self, async_llm_pid=None):
+        # Initialize IPC signals for worker management
+        self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
+        self._init_worker_signals()
+
+        # Create data processor if not exists
+        if not hasattr(self, "data_processor"):
+            self.create_data_processor()
+
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        self.launch_components()
+
+        # If block number is specified and model is deployed in splitwise mode, start cache manager first
+        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
+            self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
+
+        # Start worker processes
+        self.worker_proc = self._start_worker_service()
+        time.sleep(5)
+        self.worker_init_status = dict()
+        result_container = {}
+
+        def check_worker_initialize_status_func(res: dict):
+            res["worker_is_alive"] = True
+            if not self.check_worker_initialize_status():
+                llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+                res["worker_is_alive"] = False
+
+        self.check_worker_initialize_status_func_thread = threading.Thread(
+            target=check_worker_initialize_status_func, args=(result_container,), daemon=True
+        )
+        self.check_worker_initialize_status_func_thread.start()
+
+        # Wait model loading
+        while self.loaded_model_signal.value[0] == 0:
+            # Make sure worker process is alive
+            if not self.check_worker_initialize_status_func_thread.is_alive():
+                return False
+            time.sleep(1)
+
+        # If block number is not specified, let workers do profiling to determine the block number,
+        # and then start the cache manager
+        if self.do_profile:
+            self._stop_profile()
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
+            self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
+
+        # Set cache manager signal
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
+            self.launched_cache_manager_signal.value[0] = 1
+
+        # Worker launched
+        self.check_worker_initialize_status_func_thread.join()
+        if not result_container["worker_is_alive"]:
+            llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+            return False
+
+        # Start ZMQ service for communication with AsyncLLM
+        if async_llm_pid:
+            self.start_zmq_service(async_llm_pid)
 
     def create_data_processor(self):
         self.input_processor = InputPreprocessor(
