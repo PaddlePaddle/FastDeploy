@@ -252,8 +252,17 @@ class ResourceManagerV1(ResourceManager):
     def reschedule_preempt_task(self, request_id):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
-                request = self.requests[request_id]
-                self.waiting.appendleft(request)
+                if self.config.scheduler_config.splitwise_role == "decode":
+                    request = self.requests[request_id]
+                    self.tasks_list[request.idx] = None
+                    self.stop_flags[request.idx] = True
+                    if request_id in self.requests:
+                        del self.requests[request_id]
+                    if request_id in self.req_dict:
+                        del self.req_dict[request_id]
+                else:
+                    request = self.requests[request_id]
+                    self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _info_each_block(self):
@@ -287,20 +296,10 @@ class ResourceManagerV1(ResourceManager):
                     continue
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
-                if self.config.scheduler_config.splitwise_role == "decode":
-                    self.tasks_list[preempted_req.idx] = None
-                    self.stop_flags[preempted_req.idx] = True
-                    if preempted_req.request_id in self.requests:
-                        del self.requests[preempted_req.request_id]
-                    if preempted_req.request_id in self.req_dict:
-                        del self.req_dict[preempted_req.request_id]
-                    self._free_blocks(preempted_req)
-                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
-                else:
-                    self._free_blocks(preempted_req)
-                    preempted_req.cached_block_num = 0
-                    self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
-                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+                self._free_blocks(preempted_req)
+                preempted_req.cached_block_num = 0
+                llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+                self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
 

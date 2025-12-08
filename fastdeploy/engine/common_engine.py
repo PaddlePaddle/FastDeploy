@@ -716,7 +716,6 @@ class EngineService:
                     is_fetching = False
                     return
 
-                self.llm_logger.debug(f"get tasks from {type(self.scheduler)}: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
