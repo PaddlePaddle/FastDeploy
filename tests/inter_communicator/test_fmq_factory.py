@@ -23,7 +23,7 @@ from fastdeploy.inter_communicator.fmq_factory import FMQFactory as factory
 class TestFMQFactory(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_queues(self):
-        """测试能否创建所有 producer / consumer 队列"""
+        """Test whether all producer/consumer queues can be created."""
         q1 = factory.q_a2e_producer()
         q2 = factory.q_a2e_consumer()
         q3 = factory.q_e2w_producer()
