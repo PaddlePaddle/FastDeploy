@@ -677,7 +677,7 @@ class RequestOutput:
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        if "output" in d and isinstance(d["outputs"], dict):
+        if "outputs" in d and isinstance(d["outputs"], dict):
             completion_output = CompletionOutput.from_dict(d.pop("outputs"))
         else:
             d.pop("outputs", None)
