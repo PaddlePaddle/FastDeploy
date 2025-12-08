@@ -1620,7 +1620,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=self.parallel_config.max_num_seqs,
+            batch_size=min(self.parallel_config.max_num_seqs, 3),
         )
 
         # 3. gc
