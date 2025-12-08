@@ -14,13 +14,9 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
-        with patch.object(
-            Ernie4_5_VLProcessor, "__init__", return_value=None
-        ) as mock_init:
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None) as mock_init:
             self.processor = Ernie4_5_VLProcessor("model_path")
-            mock_init.side_effect = lambda *args, **kwargs: print(
-                f"__init__ called with {args}, {kwargs}"
-            )
+            mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
@@ -125,16 +121,15 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
 
-    def test_parse_processor_kwargs_valid(self):
-        """Test _parse_processor_kwargs with valid kwargs (lines 128-163)"""
+    def test_parse_processor_kwargs(self):
+        """Test _parse_processor_kwargs with various inputs (lines 128-163)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_processor_kwargs = (
-                Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
+            processor._parse_processor_kwargs = Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
+                processor, Ernie4_5_VLProcessor
             )
 
+            # Test with valid kwargs
             valid_kwargs = {
                 "spatial_conv_size": 14,
                 "temporal_conv_size": 2,
@@ -144,135 +139,65 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             result = processor._parse_processor_kwargs(valid_kwargs)
             self.assertEqual(result, valid_kwargs)
 
-    def test_parse_processor_kwargs_invalid_type(self):
-        """Test _parse_processor_kwargs with invalid type (line 155)
-
-        Note: The implementation catches ValueError and returns empty dict with warning log,
-        rather than raising the exception.
-        """
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-
+            # Test with invalid type (implementation catches exception and returns empty dict)
             invalid_kwargs = {"spatial_conv_size": "invalid"}  # Should be int
-            # Implementation catches exception and returns empty dict
-            result = Ernie4_5_VLProcessor._parse_processor_kwargs(
-                processor, invalid_kwargs
-            )
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, invalid_kwargs)
             self.assertEqual(result, {})
 
-    def test_parse_processor_kwargs_not_dict(self):
-        """Test _parse_processor_kwargs with non-dict input (line 135)
-
-        Note: The implementation catches ValueError and returns empty dict with warning log,
-        rather than raising the exception.
-        """
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-
-            # Implementation catches exception and returns empty dict
-            result = Ernie4_5_VLProcessor._parse_processor_kwargs(
-                processor, "not a dict"
-            )
+            # Test with non-dict input (implementation catches exception and returns empty dict)
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, "not a dict")
             self.assertEqual(result, {})
 
-    def test_parse_processor_kwargs_exception_handling(self):
-        """Test _parse_processor_kwargs exception handling (line 162)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_processor_kwargs = (
-                Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
-            )
-
-            # This should return empty dict on exception
-            with patch(
-                "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"
-            ):
+            # Test exception handling with None
+            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
                 result = processor._parse_processor_kwargs(None)
                 self.assertEqual(result, {})
 
-    def test_parse_limits_valid(self):
-        """Test _parse_limits with valid input (lines 165-179)"""
+    def test_parse_limits(self):
+        """Test _parse_limits with various inputs (lines 165-179)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(processor, Ernie4_5_VLProcessor)
 
+            # Test with valid limits
             valid_limits = {"image": 5, "video": 3}
             result = processor._parse_limits(valid_limits)
             self.assertEqual(result["image"], 5)
             self.assertEqual(result["video"], 3)
             self.assertEqual(result["audio"], 1)  # Default value
 
-    def test_parse_limits_invalid_type(self):
-        """Test _parse_limits with invalid type (line 174)
-
-        Note: The implementation catches ValueError and returns DEFAULT_LIMITS with warning log,
-        rather than raising the exception.
-        """
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-
-            # Implementation catches exception and returns default limits
-            result = Ernie4_5_VLProcessor._parse_limits(processor, "not a dict")
-            # Should return DEFAULT_LIMITS = {"image": 1, "video": 1, "audio": 1}
-            self.assertEqual(result["image"], 1)
-            self.assertEqual(result["video"], 1)
-            self.assertEqual(result["audio"], 1)
-
-    def test_parse_limits_empty(self):
-        """Test _parse_limits with empty input (line 170)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
-
+            # Test with empty input (None)
             result = processor._parse_limits(None)
             self.assertEqual(result["image"], 1)
             self.assertEqual(result["video"], 1)
             self.assertEqual(result["audio"], 1)
 
-    def test_check_mm_limits_with_dict(self):
-        """Test _check_mm_limits with dict input (lines 182-184)"""
+            # Test with invalid type (implementation catches exception and returns default limits)
+            result = Ernie4_5_VLProcessor._parse_limits(processor, "not a dict")
+            self.assertEqual(result["image"], 1)
+            self.assertEqual(result["video"], 1)
+            self.assertEqual(result["audio"], 1)
+
+    def test_check_mm_limits(self):
+        """Test _check_mm_limits with various inputs (lines 182-201)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
-            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
-            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
 
+            # Test with dict input (should not raise)
+            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
             mm_data = {"image": [1, 2], "video": [1]}
-            # Should not raise
             processor._check_mm_limits(mm_data)
 
-    def test_check_mm_limits_with_messages(self):
-        """Test _check_mm_limits with messages input (lines 186-195)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
-            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
-
+            # Test with messages input (should not raise)
             messages = [
                 {"role": "user", "content": [{"type": "image", "data": "img1"}]},
                 {"role": "user", "content": [{"type": "video", "data": "vid1"}]},
             ]
-            # Should not raise
             processor._check_mm_limits(messages)
 
-    def test_check_mm_limits_exceeded(self):
-        """Test _check_mm_limits when limit is exceeded (line 201)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
+            # Test when limit is exceeded (should raise ValueError)
             processor.limit_mm_per_prompt = {"image": 1, "video": 1}
-            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
-
             mm_data = {"image": [1, 2, 3], "video": []}  # 3 images, limit is 1
             with self.assertRaises(ValueError) as context:
                 processor._check_mm_limits(mm_data)
@@ -287,18 +212,14 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # Create a mock Request object
         mock_request = MagicMock(spec=Request)
-        mock_request.to_dict.return_value = {
-            "messages": [{"role": "user", "content": "Hello"}]
-        }
+        mock_request.to_dict.return_value = {"messages": [{"role": "user", "content": "Hello"}]}
 
         # Mock Request.from_dict to return a mock request
         with patch.object(Request, "from_dict") as mock_from_dict:
             mock_result_request = MagicMock(spec=Request)
             mock_from_dict.return_value = mock_result_request
 
-            self.processor.process_request(
-                mock_request, max_model_len=100, chat_template_kwargs={"key": "value"}
-            )
+            self.processor.process_request(mock_request, max_model_len=100, chat_template_kwargs={"key": "value"})
 
             # Verify to_dict was called
             mock_request.to_dict.assert_called_once()
@@ -315,9 +236,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             processor = Ernie4_5_VLProcessor("model_path")
             processor.tokenizer = MagicMock()
             processor.tokenizer.pad_token_id = 100
-            processor.get_pad_id = Ernie4_5_VLProcessor.get_pad_id.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+            processor.get_pad_id = Ernie4_5_VLProcessor.get_pad_id.__get__(processor, Ernie4_5_VLProcessor)
 
             result = processor.get_pad_id()
             self.assertEqual(result, 100)
@@ -329,9 +248,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             mock_tokenizer = MagicMock()
             processor.ernie4_5_processor = MagicMock()
             processor.ernie4_5_processor.tokenizer = mock_tokenizer
-            processor._load_tokenizer = Ernie4_5_VLProcessor._load_tokenizer.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+            processor._load_tokenizer = Ernie4_5_VLProcessor._load_tokenizer.__get__(processor, Ernie4_5_VLProcessor)
 
             processor._load_tokenizer()
             self.assertEqual(processor.tokenizer, mock_tokenizer)
@@ -379,35 +296,21 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             }
         )
 
+        # Test with multimodal_data
         request_dict = {
             "prompt": "Hello world",
             "multimodal_data": {"image": [], "video": []},
         }
         self.processor.process_request_dict(request_dict, 100)
-
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
         self.assertEqual(request_dict["prompt_tokens"], "Hello world")
 
-    def test_process_request_dict_with_prompt_no_multimodal_data(self):
-        """Test process_request_dict with prompt and no multimodal_data (line 231)"""
-        self.processor.ernie4_5_processor.text2ids = MagicMock(
-            return_value={
-                "input_ids": [1, 2, 3],
-                "token_type_ids": [0, 0, 0],
-                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-                "images": [],
-                "grid_thw": [],
-                "image_type_ids": [],
-                "cur_position": 3,
-            }
-        )
-
         # Test without multimodal_data - should default to empty dict
+        self.processor.ernie4_5_processor.text2ids.reset_mock()
         request_dict = {
             "prompt": "Hello world",
         }
         self.processor.process_request_dict(request_dict, 100)
-
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
         self.assertEqual(request_dict["prompt_tokens"], "Hello world")
 
@@ -459,8 +362,8 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.assertEqual(request_dict["custom_key"], "custom_value")
         self.assertEqual(request_dict["enable_thinking"], False)
 
-    def test_process_request_dict_messages_with_thinking_mode_close(self):
-        """Test process_request_dict with messages and thinking_mode close (lines 248-255)"""
+    def test_process_request_dict_messages_with_thinking_mode(self):
+        """Test process_request_dict with messages and different thinking_mode values (lines 248-255)"""
         self.processor.ernie4_5_processor.request2ids = MagicMock(
             return_value={
                 "input_ids": [1, 2, 3],
@@ -473,7 +376,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             }
         )
 
-        # Test thinking_mode = "close"
+        # Test thinking_mode = "close" (should set enable_thinking to False)
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
@@ -481,21 +384,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
-    def test_process_request_dict_messages_with_thinking_mode_false(self):
-        """Test process_request_dict with messages and thinking_mode false (lines 248-255)"""
-        self.processor.ernie4_5_processor.request2ids = MagicMock(
-            return_value={
-                "input_ids": [1, 2, 3],
-                "token_type_ids": [0, 0, 0],
-                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-                "images": [],
-                "grid_thw": [],
-                "image_type_ids": [],
-                "cur_position": 3,
-            }
-        )
-
-        # Test thinking_mode = "false"
+        # Test thinking_mode = "false" (should set enable_thinking to False)
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
@@ -503,21 +392,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
-    def test_process_request_dict_messages_with_thinking_mode_open(self):
-        """Test process_request_dict with messages and thinking_mode open (lines 248-255)"""
-        self.processor.ernie4_5_processor.request2ids = MagicMock(
-            return_value={
-                "input_ids": [1, 2, 3],
-                "token_type_ids": [0, 0, 0],
-                "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-                "images": [],
-                "grid_thw": [],
-                "image_type_ids": [],
-                "cur_position": 3,
-            }
-        )
-
-        # Test thinking_mode = "open" (any value other than "close" or "false")
+        # Test thinking_mode = "open" (should set enable_thinking to True)
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
@@ -610,10 +485,8 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         """Test append_completion_tokens method (lines 293-300)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
-            processor.append_completion_tokens = (
-                Ernie4_5_VLProcessor.append_completion_tokens.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
+            processor.append_completion_tokens = Ernie4_5_VLProcessor.append_completion_tokens.__get__(
+                processor, Ernie4_5_VLProcessor
             )
 
             multimodal_inputs = {
@@ -631,16 +504,15 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             self.assertEqual(len(multimodal_inputs["position_ids"]), 6)
             self.assertEqual(multimodal_inputs["cur_position"], 6)
 
-    def test_pack_outputs_with_images(self):
-        """Test pack_outputs with images (lines 304-319)"""
+    def test_pack_outputs(self):
+        """Test pack_outputs with and without images (lines 304-319)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
             processor.image_patch_id = 1001
-            processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+            processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(processor, Ernie4_5_VLProcessor)
 
-            outs = {
+            # Test with images
+            outs_with_images = {
                 "input_ids": [1, 2, 3],
                 "token_type_ids": [0, 0, 0],
                 "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
@@ -649,8 +521,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
                 "image_type_ids": [0],
             }
 
-            result = processor.pack_outputs(outs)
-
+            result = processor.pack_outputs(outs_with_images)
             self.assertIsNotNone(result["images"])
             self.assertIsNotNone(result["grid_thw"])
             self.assertIsNotNone(result["image_type_ids"])
@@ -659,16 +530,8 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             self.assertIsInstance(result["token_type_ids"], np.ndarray)
             self.assertIsInstance(result["position_ids"], np.ndarray)
 
-    def test_pack_outputs_without_images(self):
-        """Test pack_outputs without images (lines 305-307)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.image_patch_id = 1001
-            processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
-
-            outs = {
+            # Test without images
+            outs_without_images = {
                 "input_ids": [1, 2, 3],
                 "token_type_ids": [0, 0, 0],
                 "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
@@ -677,103 +540,57 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
                 "image_type_ids": [],
             }
 
-            result = processor.pack_outputs(outs)
-
+            result = processor.pack_outputs(outs_without_images)
             self.assertIsNone(result["images"])
             self.assertIsNone(result["grid_thw"])
             self.assertIsNone(result["image_type_ids"])
 
-    def test_process_response_dict_streaming(self):
-        """Test process_response_dict with stream=True (line 334)"""
+    def test_process_response_dict(self):
+        """Test process_response_dict with different parameters (lines 331-336)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
-            processor.process_response_dict_streaming = MagicMock(
-                return_value={"text": "response"}
-            )
-            processor.process_response_dict = (
-                Ernie4_5_VLProcessor.process_response_dict.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
+            processor.process_response_dict = Ernie4_5_VLProcessor.process_response_dict.__get__(
+                processor, Ernie4_5_VLProcessor
             )
 
+            # Test with stream=True
+            processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
             response_dict = {"ids": [1, 2, 3]}
             result = processor.process_response_dict(response_dict, stream=True)
-
             processor.process_response_dict_streaming.assert_called_once()
             self.assertEqual(result, {"text": "response"})
 
-    def test_process_response_dict_normal(self):
-        """Test process_response_dict with stream=False (line 336)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.process_response_dict_normal = MagicMock(
-                return_value={"text": "response"}
-            )
-            processor.process_response_dict = (
-                Ernie4_5_VLProcessor.process_response_dict.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
-            )
-
+            # Test with stream=False
+            processor.process_response_dict_normal = MagicMock(return_value={"text": "response"})
             response_dict = {"ids": [1, 2, 3]}
             result = processor.process_response_dict(response_dict, stream=False)
-
             processor.process_response_dict_normal.assert_called_once()
             self.assertEqual(result, {"text": "response"})
 
-    def test_process_response_dict_enable_thinking_none(self):
-        """Test process_response_dict with enable_thinking=None (line 331)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.process_response_dict_streaming = MagicMock(
-                return_value={"text": "response"}
-            )
-            processor.process_response_dict = (
-                Ernie4_5_VLProcessor.process_response_dict.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
-            )
-
+            # Test with enable_thinking=None (should default to True)
+            processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
             response_dict = {"ids": [1, 2, 3]}
-            processor.process_response_dict(
-                response_dict, stream=True, enable_thinking=None
-            )
+            processor.process_response_dict(response_dict, stream=True, enable_thinking=None)
+            processor.process_response_dict_streaming.assert_called_once_with(response_dict, enable_thinking=True)
 
-            # enable_thinking should default to True when None
-            processor.process_response_dict_streaming.assert_called_once_with(
-                response_dict, enable_thinking=True
-            )
-
-    def test_apply_default_parameters_with_dict(self):
-        """Test _apply_default_parameters with dict request (lines 102-116)"""
+    def test_apply_default_parameters(self):
+        """Test _apply_default_parameters with dict and object request (lines 102-116)"""
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
             processor.generation_config = MagicMock()
             processor.generation_config.top_p = 0.8
             processor.generation_config.temperature = 0.9
-            processor._apply_default_parameters = (
-                Ernie4_5_VLProcessor._apply_default_parameters.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
+            processor._apply_default_parameters = Ernie4_5_VLProcessor._apply_default_parameters.__get__(
+                processor, Ernie4_5_VLProcessor
             )
 
+            # Test with dict request
             request = {}
             result = processor._apply_default_parameters(request)
             self.assertEqual(result["top_p"], 0.8)
             self.assertEqual(result["temperature"], 0.9)
 
-    def test_apply_default_parameters_with_object(self):
-        """Test _apply_default_parameters with object request (lines 108-109)"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.generation_config = MagicMock()
-            processor.generation_config.top_p = 0.8
-            processor._apply_default_parameters = (
-                Ernie4_5_VLProcessor._apply_default_parameters.__get__(
-                    processor, Ernie4_5_VLProcessor
-                )
-            )
-
+            # Test with object request
             class MockRequest:
                 def __init__(self):
                     self.top_p = None
@@ -794,13 +611,9 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
     def setUp(self):
         self.mock_tokenizer = MagicMock(spec=Ernie4_5Tokenizer)
         self.mock_tokenizer.ignored_index = -100
-        self.mock_tokenizer.convert_tokens_to_ids.side_effect = (
-            self._mock_convert_tokens_to_ids
-        )
+        self.mock_tokenizer.convert_tokens_to_ids.side_effect = self._mock_convert_tokens_to_ids
         self.mock_tokenizer.chat_template = "mock_template"
-        self.mock_tokenizer.apply_chat_template.return_value = (
-            "User: Hello<|image@placeholder|>"
-        )
+        self.mock_tokenizer.apply_chat_template.return_value = "User: Hello<|image@placeholder|>"
 
         def mock_load_tokenizer(dp_instance):
             dp_instance.tokenizer = self.mock_tokenizer
@@ -811,9 +624,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             side_effect=mock_load_tokenizer,
             autospec=True,
         ):
-            with patch.object(
-                AdaptiveImageProcessor, "from_pretrained"
-            ) as mock_image_preprocessor:
+            with patch.object(AdaptiveImageProcessor, "from_pretrained") as mock_image_preprocessor:
                 mock_image_preprocessor.return_value = MagicMock()
                 self.data_processor = DataProcessor(
                     tokenizer_name="mock_tokenizer",
@@ -830,9 +641,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             "assistant": "Assistant: ",
         }
         self.data_processor.enable_processor_cache = False
-        self.data_processor.extract_mm_items = MagicMock(
-            return_value=([], [], [], [], None, [], [])
-        )
+        self.data_processor.extract_mm_items = MagicMock(return_value=([], [], [], [], None, [], []))
 
     def _mock_convert_tokens_to_ids(self, token):
         token_id_map = {
@@ -863,9 +672,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             f"input_ids 涓嶅尮閰嶏細瀹為檯{outputs['input_ids']}锛岄鏈焄{test_prompt_token_ids}]",
         )
 
-        self.assertEqual(
-            outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]] * prompt_len
-        )
+        self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]] * prompt_len)
 
         expected_position_ids = [[i] * 3 for i in range(prompt_len)]
         self.assertEqual(outputs["position_ids"], expected_position_ids)
@@ -903,9 +710,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
 
         self.assertEqual(outputs["input_ids"], test_prompt_token_ids)
 
-        self.assertEqual(
-            outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]] * prompt_len
-        )
+        self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]] * prompt_len)
 
         expected_position_ids = [[i] * 3 for i in range(prompt_len)]
         self.assertEqual(outputs["position_ids"], expected_position_ids)
@@ -927,9 +732,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": mock_img, "uuid": "img_uuid"}
-                    ],
+                    "content": [{"type": "image_url", "image_url": mock_img, "uuid": "img_uuid"}],
                 }
             ],
         }
@@ -943,9 +746,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             [{"type": "image", "data": mock_img}],
         )
         mock_resize = (None, (2, 4))
-        self.data_processor.image_preprocessor.get_smarted_resize.return_value = (
-            mock_resize
-        )
+        self.data_processor.image_preprocessor.get_smarted_resize.return_value = mock_resize
         mock_preprocess = {
             "pixel_values": np.random.randn(1, 16, 16, 3),
             "image_grid_thw": np.array([[2, 4]]),
@@ -1041,9 +842,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "video_url", "video_url": frames, "uuid": "vid_uuid"}
-                    ],
+                    "content": [{"type": "video_url", "video_url": frames, "uuid": "vid_uuid"}],
                 }
             ],
         }
@@ -1068,9 +867,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         }
         self.data_processor.image_preprocessor.preprocess.return_value = mock_preprocess
         outputs = self.data_processor.prompt_token_ids2outputs(request)
-        self.assertEqual(
-            outputs["input_ids"], [101, 1004, 1001, 1001, 1001, 1001, 1005, 102]
-        )
+        self.assertEqual(outputs["input_ids"], [101, 1004, 1001, 1001, 1001, 1001, 1005, 102])
         self.assertEqual(
             outputs["token_type_ids"],
             [
@@ -1101,18 +898,14 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         temporal_conv_size = self.data_processor.temporal_conv_size
         token_per_frame = (h // spatial_conv_size) * (w // spatial_conv_size)
         num_tokens = (t // temporal_conv_size) * token_per_frame
-        mock_frames_data = np.random.randn(
-            num_tokens * spatial_conv_size**2 * temporal_conv_size, 28, 28
-        )
+        mock_frames_data = np.random.randn(num_tokens * spatial_conv_size**2 * temporal_conv_size, 28, 28)
         mock_frames_cache = (mock_frames_data, {"thw": (t, h, w)})
         request = {
             "prompt_token_ids": test_prompt_token_ids,
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "video", "data": mock_frames_cache, "uuid": "vid_uuid"}
-                    ],
+                    "content": [{"type": "video", "data": mock_frames_cache, "uuid": "vid_uuid"}],
                 }
             ],
         }
@@ -1126,9 +919,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             [{"type": "video", "data": mock_frames_cache}],
         )
         outputs = self.data_processor.prompt_token_ids2outputs(request)
-        self.assertEqual(
-            outputs["input_ids"], [101, 1004, 1001, 1001, 1001, 1001, 1005, 102]
-        )
+        self.assertEqual(outputs["input_ids"], [101, 1004, 1001, 1001, 1001, 1001, 1005, 102])
         self.assertEqual(
             outputs["token_type_ids"],
             [
@@ -1162,9 +953,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": mock_img, "uuid": "img_uuid"}
-                    ],
+                    "content": [{"type": "image_url", "image_url": mock_img, "uuid": "img_uuid"}],
                 }
             ],
         }
@@ -1241,9 +1030,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "video_url", "video_url": frames, "uuid": "vid_uuid"}
-                    ],
+                    "content": [{"type": "video_url", "video_url": frames, "uuid": "vid_uuid"}],
                 }
             ],
         }
@@ -1278,18 +1065,14 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         temporal_conv_size = self.data_processor.temporal_conv_size
 
         num_tokens = 4
-        mock_frames_data = np.random.randn(
-            num_tokens * spatial_conv_size**2 * temporal_conv_size, 28, 28
-        )
+        mock_frames_data = np.random.randn(num_tokens * spatial_conv_size**2 * temporal_conv_size, 28, 28)
         mock_frames_cache = (mock_frames_data, {"thw": (t, h, w)})
         request = {
             "prompt_token_ids": test_prompt_token_ids,
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "video", "data": mock_frames_cache, "uuid": "vid_uuid"}
-                    ],
+                    "content": [{"type": "video", "data": mock_frames_cache, "uuid": "vid_uuid"}],
                 }
             ],
         }
