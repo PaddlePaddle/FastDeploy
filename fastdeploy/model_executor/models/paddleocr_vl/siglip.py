@@ -100,6 +100,8 @@ class SiglipAttention(nn.Layer):
 
     def out_proj_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -109,7 +111,7 @@ class SiglipAttention(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
 
     def forward(
         self,
@@ -287,6 +289,8 @@ class SiglipMLP(nn.Layer):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -296,7 +300,7 @@ class SiglipMLP(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
