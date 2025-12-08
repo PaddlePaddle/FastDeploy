@@ -161,7 +161,7 @@ class Glm4Moe(nn.Layer):
             reduce_results=False,
         )
 
-    def forward(self, x, forward_meta):
+    def forward(self, x, forward_meta: ForwardMeta = None):
         shared_experts_out = self.shared_experts(x)
         out = self.experts(x, self.gate, forward_meta)
         out = out + shared_experts_out
@@ -306,10 +306,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(
-            hidden_states,
-            forward_meta,
-        )
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 

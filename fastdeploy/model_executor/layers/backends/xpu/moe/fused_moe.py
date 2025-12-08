@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
@@ -235,6 +237,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply TP Fused Op.
@@ -262,6 +265,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply TP Scatter Op.
@@ -318,6 +322,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         apply tp
@@ -368,6 +373,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -442,6 +448,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -488,6 +495,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         compute Fused MoE.

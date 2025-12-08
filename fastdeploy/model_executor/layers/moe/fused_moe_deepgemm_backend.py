@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 from paddle.distributed.communication import deep_ep
@@ -139,6 +141,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -147,6 +150,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0]
@@ -264,6 +271,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -271,6 +279,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, use_fp8=True
@@ -335,6 +347,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
@@ -362,6 +375,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # apply_norm_weight
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
