@@ -86,6 +86,7 @@ class DynamicWeightManager:
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
             "ipc": self._update_ipc,
+            "normal": self._normal_load_weight,
         }
 
         if handler := strategy_handlers.get(self.load_config.load_strategy):
@@ -99,6 +100,14 @@ class DynamicWeightManager:
         # step4: reinitialze kv_cache in the runner
         # step5: recapture cuda_graph
         # step6: update weight status signal
+
+    def _normal_load_weight(self):
+        """use for RL mock."""
+        from fastdeploy.model_executor.model_loader import get_model_loader
+
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        state_dict = model_loader.load_rl_mock_model(fd_config=self.fd_config).state_dict()
+        self._update_model_from_state(state_dict, "raw")
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
