@@ -351,11 +351,9 @@ class SplitwiseConnector:
                 else:
                     info = {
                         "request_id": tasks[i].request_id,
-                        "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
+                        "device_ids": self.cfg.parallel_config.device_ids.split(","),
                         "ip": self.cfg.host_ip,
-                        "rdma_ports": [
-                            self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]
-                        ],
+                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
                         "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,
