@@ -34,6 +34,7 @@ void PrefillFusedPagedAttnKernel(
     bool q_rope,
     bool k_rope,
     bool v_rope,
+    bool is_interleaved_rope_mode,
     paddle::Tensor& out) {
   // check dtype and contiguous
   const auto& dtype = qkv.dtype();
@@ -230,8 +231,8 @@ void PrefillFusedPagedAttnKernel(
       cos_desc,
       CUINFER_DATA_FLOAT,
       2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+      std::vector<int>({batch_size, max_seq_len, head_dim}).data(),
+      std::vector<int>({max_seq_len * head_dim, 1}).data()));
 
   cuinferTensorDescriptor_t sin_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&sin_desc));
@@ -239,9 +240,10 @@ void PrefillFusedPagedAttnKernel(
       sin_desc,
       CUINFER_DATA_FLOAT,
       2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+      std::vector<int>({batch_size, max_seq_len, head_dim}).data(),
+      std::vector<int>({max_seq_len * head_dim, 1}).data()));
 
+  cuinferAttentionRopeMode_t rope_mode =  is_interleaved_rope_mode ? CUINFER_ATTEN_NORMAL : CUINFER_ATTEN_OCRV1;
   CUINFER_CHECK(cuinferFmhaFwdMergedFuseRopeFunc(cuinfer_handle,
                                                  qkv_desc,
                                                  qkv.data(),
@@ -269,7 +271,8 @@ void PrefillFusedPagedAttnKernel(
                                                  scale,
                                                  q_rope,
                                                  k_rope,
-                                                 v_rope));
+                                                 v_rope,
+                                                 rope_mode));
 
   CUINFER_CHECK(cuinferDestroyTensorDescriptor(qkv_desc));
   CUINFER_CHECK(cuinferDestroyTensorDescriptor(qkv_seqlens_desc));
@@ -298,7 +301,8 @@ std::vector<paddle::Tensor> PrefillFusedPagedAttn(
     bool causal,
     bool q_rope,
     bool k_rope,
-    bool v_rope) {
+    bool v_rope,
+    bool is_interleaved_rope_mode) {
   const auto dtype = qkv.dtype();
   auto out =
       paddle::empty({qkv.shape()[0], num_heads * head_dim}, dtype, qkv.place());
@@ -322,6 +326,7 @@ std::vector<paddle::Tensor> PrefillFusedPagedAttn(
                                                               q_rope,
                                                               k_rope,
                                                               v_rope,
+                                                              is_interleaved_rope_mode,
                                                               out);
       break;
     case paddle::DataType::FLOAT16:
@@ -342,6 +347,7 @@ std::vector<paddle::Tensor> PrefillFusedPagedAttn(
                                                              q_rope,
                                                              k_rope,
                                                              v_rope,
+                                                             is_interleaved_rope_mode,
                                                              out);
       break;
     default:
@@ -394,7 +400,8 @@ PD_BUILD_STATIC_OP(prefill_fused_paged_attn)
             "causal:bool",
             "q_rope:bool",
             "k_rope:bool",
-            "v_rope:bool"})
+            "v_rope:bool",
+            "is_interleaved_rope_mode:bool"})
     .SetKernelFn(PD_KERNEL(PrefillFusedPagedAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(PrefillFusedPagedAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PrefillFusedPagedAttnInferDtype));
