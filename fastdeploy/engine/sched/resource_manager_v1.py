@@ -698,7 +698,6 @@ class ResourceManagerV1(ResourceManager):
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                            request.inference_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -939,7 +938,6 @@ class ResourceManagerV1(ResourceManager):
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
-                request.inference_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -1046,7 +1044,7 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if request_output.request_id not in self.requests:
-            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            llm_logger.error(f"Request {request_output.request_id} not found in requests")
             return
         request = self.requests[request_output.request_id]
 
@@ -1059,8 +1057,10 @@ class ResourceManagerV1(ResourceManager):
         ):
             request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
         request.need_prefill_tokens = len(request.prompt_token_ids) + 1
-        request.inference_start_time = time.time()
-        request.schedule_start_time = time.time()
+
+        request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
+        request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
+        request.metrics = request_output.metrics
         self.running.append(request)
 
     def _free_blocks(self, request: Request):
