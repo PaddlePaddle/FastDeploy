@@ -96,6 +96,19 @@ def parse_args():
     return args
 
 
+def get_decode_ip_idx(task):
+    """For compatibility, get decode ip and idx from task"""
+    if "decode_ip" in task:
+        decode_ip = task["decode_ip"]
+    else:
+        decode_ip = task["ip"]
+    if "decode_rdma_ports" in task:
+        decode_rdma_ports = task["decode_rdma_ports"]
+    else:
+        decode_rdma_ports = task["rdma_ports"]
+    return decode_ip, decode_rdma_ports
+
+
 class CacheMessager:
     """
     CacheMessager is used to send the cache data between the engine worker and the cache server.
@@ -317,10 +330,7 @@ class CacheMessager:
                         continue
                     current_transfer_protocol = item["transfer_protocol"]
                     if item["transfer_protocol"] == "rdma":
-                        decode_ip = item["decode_ip"] if "decode_ip" in item else item["ip"]
-                        decode_rdma_ports = (
-                            item["decode_rdma_ports"] if "decode_rdma_ports" in item else item["rdma_ports"]
-                        )
+                        decode_ip, decode_rdma_ports = get_decode_ip_idx(item)
                         decode_idx = int(decode_rdma_ports[self.rank])
                         status = self.messager[current_transfer_protocol].connect(decode_ip, decode_idx)
                         if not status:
@@ -394,8 +404,7 @@ class CacheMessager:
                     self.engine_worker_queue.connect_task_barrier.wait()
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
-                decode_ip = task["decode_ip"] if "decode_ip" in task else task["ip"]
-                decode_rdma_ports = task["decode_rdma_ports"] if "decode_rdma_ports" in task else task["rdma_ports"]
+                decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
                 rdma_port = decode_rdma_ports[self.rank]
                 status = self.messager["rdma"].connect(decode_ip, rdma_port)
                 if not status:
@@ -660,12 +669,7 @@ class CacheMessagerV1:
                             else:
                                 current_transfer_protocol = task["transfer_protocol"]
                                 if task["transfer_protocol"] == "rdma":
-                                    decode_ip = task["decode_ip"] if "decode_ip" in task else task["ip"]
-                                    decode_rdma_ports = (
-                                        task["decode_rdma_ports"]
-                                        if "decode_rdma_ports" in task
-                                        else task["rdma_ports"]
-                                    )
+                                    decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
                                     # Default decode_tp_size to prefill tp_size (self.nranks) if not specified
                                     decode_tp_size = task.get("decode_tp_size", self.nranks)
                                     if len(decode_rdma_ports) == self.nranks:
@@ -821,8 +825,7 @@ class CacheMessagerV1:
                     self.engine_worker_queue.connect_task_barrier.wait()
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
-                decode_ip = task["decode_ip"] if "decode_ip" in task else task["ip"]
-                decode_rdma_ports = task["decode_rdma_ports"] if "decode_rdma_ports" in task else task["rdma_ports"]
+                decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
                 # Default decode_tp_size to self.nranks (number of ranks) if not specified in the task.
                 decode_tp_size = task.get("decode_tp_size", self.nranks)
                 rdma_ports_len = len(decode_rdma_ports)
