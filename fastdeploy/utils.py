@@ -36,7 +36,7 @@ from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
-from typing import Literal, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -52,9 +52,10 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
+from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -969,13 +970,26 @@ def check_download_links(bos_client, links, timeout=1):
 def init_bos_client():
     from baidubce.auth.bce_credentials import BceCredentials
     from baidubce.bce_client_configuration import BceClientConfiguration
+    from baidubce.exception import BceHttpClientError, BceServerError
     from baidubce.services.bos.bos_client import BosClient
 
     cfg = BceClientConfiguration(
         credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK),
         endpoint=envs.ENCODE_FEATURE_ENDPOINT,
     )
-    return BosClient(cfg)
+
+    try:
+        client = BosClient(cfg)
+        client.list_buckets()
+    except BceServerError as e:
+        if e.status_code == 403:
+            raise Exception("BOS authentication failed: Invalid AK/SK") from e
+        raise Exception(f"BOS connection failed: {str(e)}") from e
+    except BceHttpClientError as e:
+        raise Exception(f"Invalid BOS endpoint configuration: {str(e)}") from e
+    except Exception as e:
+        raise Exception(f"BOS client validation error: {str(e)}") from e
+    return client
 
 
 def download_from_bos(bos_client, bos_links, retry: int = 0):
@@ -1058,3 +1072,95 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
         return parse_type(return_type)(val)
 
     return _optional_type
+
+
+def clamp_prompt_logprobs(
+    prompt_logprobs: PromptLogprobs | None,
+) -> PromptLogprobs | None:
+    if prompt_logprobs is None:
+        return prompt_logprobs
+
+    for logprob_dict in prompt_logprobs:
+        if logprob_dict is None:
+            continue
+        for logprob_values in logprob_dict.values():
+            if logprob_values.logprob == float("-inf"):
+                logprob_values.logprob = -9999.0
+    return prompt_logprobs
+
+
+def to_numpy(tasks: List[Any]):
+    """
+    Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
+
+    Args:
+        tasks: List of tasks containing multimodal inputs.
+    """
+    try:
+        for task in tasks:
+            if not hasattr(task, "multimodal_inputs"):
+                continue
+            images = task.multimodal_inputs.get("images", None)
+            if isinstance(images, paddle.Tensor):
+                llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                task.multimodal_inputs["images"] = images.numpy()
+
+            list_keys = [
+                "image_features",
+                "video_features",
+                "audio_features",
+            ]
+            for key in list_keys:
+                value = task.multimodal_inputs.get(key, None)
+                if value is None:
+                    continue
+                if isinstance(value, list):
+                    task.multimodal_inputs[key] = [v.numpy() for v in value]
+    except Exception as e:
+        llm_logger.warning(f"Failed to convert to numpy: {e}")
+
+
+def to_tensor(tasks: List[Any]):
+    """
+    Convert NumPy arrays in multimodal inputs to Paddle tensors.
+
+    Args:
+        tasks (tuple): ([request], bsz)
+    """
+    try:
+        for task in tasks:
+            multimodal_inputs = getattr(task, "multimodal_inputs", None)
+            if not multimodal_inputs:
+                continue
+            # tensor keys
+            tensor_keys = [
+                "images",
+                "patch_idx",
+                "token_type_ids",
+                "position_ids",
+                "attention_mask_offset",
+            ]
+
+            list_keys = [
+                "image_features",
+                "video_features",
+                "audio_features",
+            ]
+
+            llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys + list_keys}")
+
+            for key in tensor_keys:
+                value = multimodal_inputs.get(key)
+                if value is None:
+                    continue
+                if not isinstance(value, paddle.Tensor):
+                    multimodal_inputs[key] = paddle.to_tensor(value)
+
+            for key in list_keys:
+                value = multimodal_inputs.get(key)
+                if value is None:
+                    continue
+                if isinstance(value, list):
+                    multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
+    except Exception as e:
+        llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")

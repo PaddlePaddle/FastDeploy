@@ -414,7 +414,6 @@ class ResourceManagerV1(ResourceManager):
         ):
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
-            input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             image_patch_id = inputs["image_patch_id"]
 
             if request.multimodal_img_boundaries is None:
@@ -505,6 +504,13 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def cache_output_tokens(self, request):
+        if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
+            with self.lock:
+                self.cache_manager.update_cache_blocks(
+                    request, self.config.cache_config.block_size, request.num_total_tokens - 1
+                )
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -514,8 +520,6 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
-
-            self.check_and_free_block_tables()
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -650,12 +654,14 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
-                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
-                    ):
+                    if (
+                        not envs.FD_ENABLE_MAX_PREFILL
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
                         break
                     if request.status == RequestStatus.WAITING:
-                        result = self._waiting_async_process(request)
+                        result = self.waiting_async_process(request)
                         if result is None:
                             error_reqs.append((request.request_id, request.error_message))
                             self.waiting.popleft()
@@ -693,7 +699,6 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
-                            request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -763,7 +768,7 @@ class ResourceManagerV1(ResourceManager):
 
             return scheduled_reqs, error_reqs
 
-    def _waiting_async_process(self, request: Request) -> None:
+    def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
         Args:
@@ -782,7 +787,7 @@ class ResourceManagerV1(ResourceManager):
         request.async_process_futures = []
         return False
 
-    def _apply_async_preprocess(self, request: Request) -> None:
+    def apply_async_preprocess(self, request: Request) -> None:
         request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
 
     def _has_features_info(self, task):
@@ -824,7 +829,14 @@ class ResourceManagerV1(ResourceManager):
             return None
 
         if self.bos_client is None:
-            self.bos_client = init_bos_client()
+            try:
+                self.bos_client = init_bos_client()
+            except Exception as e:
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                llm_logger.error(error_msg)
+                request.error_message = error_msg
+                request.error_code = 540
+                return None
 
         inputs = request.multimodal_inputs
         if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
@@ -905,7 +917,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_request(self, request: Request) -> None:
         with self.lock:
-            self._apply_async_preprocess(request)
+            self.apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
@@ -928,7 +940,6 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             for request in requests:
                 request.inference_start_time = time.time()
-                request.schedule_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):

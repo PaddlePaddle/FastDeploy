@@ -34,6 +34,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
@@ -81,9 +82,9 @@ class EngineService:
                     self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
                 )
 
-        if self.cfg.parallel_config.enable_expert_parallel:
+        if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
-                "fastdeploy", f"fastdeploy_rank{self.cfg.parallel_config.local_data_parallel_id}.log"
+                "fastdeploy", f"fastdeploy_dprank{self.cfg.parallel_config.local_data_parallel_id}.log"
             )
         else:
             self.llm_logger = llm_logger
@@ -141,6 +142,12 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        if self.cfg.eplb_config.enable_eplb:
+            current_suffix = int(
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+            init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -312,9 +319,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -676,7 +680,6 @@ class EngineService:
         def _fetch_request():
             try:
                 nonlocal is_fetching
-                is_fetching = True
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
@@ -687,14 +690,23 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
+                # in the frequency domain due to insufficient blocks
+                if self.cfg.model_config.enable_mm:
+                    self.resource_manager.check_and_free_block_tables()
+                    available_blocks = self.resource_manager.available_block_num()
+                else:
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
                 tasks = self.scheduler.get_requests(
-                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
+                    available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
-                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
+                    reserved_output_blocks=0,  # self.cfg.cache_config.enc_dec_block_num
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
+                    task.schedule_start_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -704,30 +716,40 @@ class EngineService:
                     is_fetching = False
                     return
 
-                self.llm_logger.debug(f"get tasks from {type(self.scheduler)}: {tasks}")
+                if tasks:
+                    self.llm_logger.debug(
+                        f"Engine has fetched tasks from {self.scheduler.__class__.__name__}: {[task.request_id for task in tasks]}"
+                    )
+
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    if self.cfg.scheduler_config.splitwise_role == "prefill":
+                        for task in tasks:
+                            # start async preprocess
+                            self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
                                 time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
                             while True:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(f"{task.request_id} ask D resource failed, try again.")
+                                    self.llm_logger.error(
+                                        f"D failed to allocate resource for request {task.request_id}, try again."
+                                    )
                                     time.sleep(0.05)
                                 else:
                                     break
+                            self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
                     else:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
-                                self.llm_logger.info("wait for preallocate_resource_in_p")
                                 time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
                         for task in tasks:
@@ -735,7 +757,9 @@ class EngineService:
                                 # assure fetch block ids from D
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                    self.llm_logger.error(
+                                        f"D failed to allocate resource for request {task.request_id}, message: {msg}."
+                                    )
                                     self.scheduler.put_results(
                                         [
                                             RequestOutput(
@@ -748,25 +772,53 @@ class EngineService:
                                     )
                                     need_delete_tasks.append(task)
                                     continue
+                                else:
+                                    self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
+
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
                         self.resource_manager.pre_recycle_resource(tmp_task.request_id)
+
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
+                        need_check_req_ids = [task.request_id for task in tasks]
                         self.split_connector.send_cache_info_to_messager(tasks, 0)
                         # ensure cache tasks has sent to cache_messager
                         need_check_req_ids = [task.request_id for task in tasks]
+                        finished_ids, delete_tasks_list = [], []
                         while need_check_req_ids:
-                            req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {req_ids}")
-                            if req_ids:
-                                for req_id in req_ids:
-                                    assert req_id in need_check_req_ids
-                                    need_check_req_ids.remove(req_id)
+                            finished_ids.extend(self.engine_worker_queue.get_finished_add_cache_task_req())
+                            self.llm_logger.debug(
+                                f"P has successfully sent cache infos to cache messager for requests: {finished_ids}"
+                            )
+                            if finished_ids:
+                                for task in tasks:
+                                    result = self.resource_manager.waiting_async_process(task)
+                                    if result is None:
+                                        self.scheduler.put_results(
+                                            [
+                                                RequestOutput(
+                                                    request_id=task.request_id,
+                                                    finished=True,
+                                                    error_code=task.error_code,
+                                                    error_msg=task.error_message,
+                                                )
+                                            ]
+                                        )
+                                        delete_tasks_list.append(task)
+                                    elif result is False:
+                                        if task.request_id in finished_ids:
+                                            need_check_req_ids.remove(task.request_id)
+                                            finished_ids.remove(task.request_id)
                             else:
                                 time.sleep(0.001)
+
+                        for tmp_task in delete_tasks_list:
+                            tasks.remove(tmp_task)
+                            # release resource in P
+                            self.resource_manager.pre_recycle_resource(tmp_task.request_id)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:
@@ -775,6 +827,9 @@ class EngineService:
                         )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
+                        self.llm_logger.info(
+                            f"P add requests into running queue: {[task.request_id for task in tasks]}"
+                        )
                     else:
                         for task in tasks:
                             self.resource_manager.add_request(task)
@@ -790,6 +845,7 @@ class EngineService:
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
+                        is_fetching = True
                         get_request_pool.submit(_fetch_request)
 
                 else:
@@ -800,6 +856,7 @@ class EngineService:
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
+                            is_fetching = True
                             get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
@@ -807,6 +864,7 @@ class EngineService:
                                 break
                             else:
                                 raise
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -829,9 +887,14 @@ class EngineService:
                                 )
                     self.resource_manager.get_real_bsz()
                     for task in tasks:
-                        trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                        if task.task_type == RequestType.PREFILL:
+                            trace_print(
+                                LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(
+                                LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
@@ -902,7 +965,6 @@ class EngineService:
                         request.llm_engine_recv_req_timestamp = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
-                        self.llm_logger.debug(f"Receive request: {request}")
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
@@ -958,7 +1020,10 @@ class EngineService:
         )
         # Since the request is not in scheduler
         # Send result by zmq directly
-        self.send_response_server.send_response(request_id, [error_result])
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.send_response_server.send_response(None, [[error_result]])
+        else:
+            self.send_response_server.send_response(request_id, [error_result])
 
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
@@ -984,33 +1049,67 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
                     new_contents = []
-                    for content in contents:
-                        if isinstance(content, RequestOutput) and content.outputs is not None:
-                            decode_type = content.outputs.decode_type
-                            delta_text = ""
-                            if decode_type == 0:
-                                delta_text, token_ids = self._decode_token(
-                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                                )
+                    for step_batch_results in results:
+                        new_step_contents = []
+                        for content in step_batch_results:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids,
+                                        req_id=content.request_id,
+                                        is_end=content.finished,
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_step_contents.append(content)
+                                elif content.finished:
+                                    new_step_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {content.request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                token_ids = content.outputs.token_ids
-                            if len(token_ids):
-                                content.outputs.token_ids = token_ids
-                                content.outputs.text = delta_text
-                                new_contents.append(content)
-                            elif content.finished:
-                                new_contents.append(content)
+                                new_step_contents.append(content)
+                        if new_step_contents:
+                            new_contents.append(new_step_contents)
+                    if new_contents:
+                        self.send_response_server.send_response(None, new_contents)
+
+                else:
+                    for request_id, contents in results.items():
+                        new_contents = []
+                        for content in contents:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_contents.append(content)
+                                elif content.finished:
+                                    new_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                llm_logger.warning(
-                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                                )
-                        else:
-                            new_contents.append(content)
-                    if len(new_contents):
-                        llm_logger.debug(f"Send response for request id: {request_id}, {new_contents}")
-                        self.send_response_server.send_response(request_id, new_contents)
+                                new_contents.append(content)
+                        if len(new_contents):
+                            llm_logger.debug(f"Send response for request id: {request_id}")
+                            self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
@@ -1030,10 +1129,14 @@ class EngineService:
             for item in items:
                 tasks = item[1]
                 if isinstance(tasks[0], Request):
-                    self.llm_logger.debug(f"receive tasks to preallocate resource, {tasks}")
+                    self.llm_logger.debug(
+                        f"D has received tasks to preallocate resource for tasks: {[task.request_id for task in tasks]}"
+                    )
                     allocate_resource_requests.extend(tasks)
                 elif isinstance(tasks[0], RequestOutput):
-                    self.llm_logger.debug(f"receive prefilled tasks, {tasks}")
+                    self.llm_logger.debug(
+                        f"D has received tasks to process prefilled tasks: {[task.request_id for task in tasks]}"
+                    )
                     if not isinstance(tasks, list):
                         tasks = [tasks]
                     for task in tasks:
@@ -1047,13 +1150,13 @@ class EngineService:
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
-                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
                         self.split_connector.send_cache_info_to_prefill([task])
+                        self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
-                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
+                        self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
                         self.insert_tasks([task])
                         processed_indices.append(idx)
                         is_success = True
@@ -1062,6 +1165,7 @@ class EngineService:
                     if not self.enable_decode_cache_task:
                         task.error_msg = "Not enough resources"
                         self.split_connector.send_cache_info_to_prefill([task])
+                        self.llm_logger.warning(f"D has failed to send cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                     else:
                         self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
@@ -1081,7 +1185,7 @@ class EngineService:
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
                     continue
-
+                req_output.finished = False
                 ready_request_outputs.append(req_output)
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
@@ -1101,6 +1205,8 @@ class EngineService:
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]
+                        req_output.finished = True
+                        self.scheduler.put_results([req_output])
                         continue
                     if req_output.error_code != 200:
                         self.llm_logger.warning(
@@ -1112,8 +1218,10 @@ class EngineService:
                         self.scheduler.put_results([req_output])
                         continue
                     self.token_processor.tokens_counter[request_id] = 1
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
+                        self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
-                    self.llm_logger.debug(f"add prefilled request success, {request_id}")
+                    self.llm_logger.info(f"D has successfully added prefilled request, {request_id}")
 
         def decode_loop():
             while self.running:
