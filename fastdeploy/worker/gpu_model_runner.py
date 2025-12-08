@@ -1357,7 +1357,7 @@ class GPUModelRunner(ModelRunnerBase):
             logprobs_reqs = [
                 req
                 for req in self.forward_batch_reqs_list
-                if req is not None and req.sampling_params is not None and req.sampling_params.logprobs
+                if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
                 self.max_logprobs = max([req.sampling_params.logprobs for req in logprobs_reqs])
