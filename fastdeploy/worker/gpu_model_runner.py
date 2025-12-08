@@ -1360,7 +1360,12 @@ class GPUModelRunner(ModelRunnerBase):
                 if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
-                self.max_logprobs = max([req.sampling_params.logprobs for req in logprobs_reqs])
+                self.max_logprobs = max(
+                    [
+                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                        for req in logprobs_reqs
+                    ]
+                )
                 self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
                 self.top_p_normalized_logprobs = any(
                     req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
@@ -2678,6 +2683,7 @@ class GPUModelRunner(ModelRunnerBase):
         # prompt_logprobs
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
+        self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
