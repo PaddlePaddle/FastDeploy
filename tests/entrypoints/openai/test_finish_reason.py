@@ -120,7 +120,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 metrics["first_token_time"] = 0.1
                 metrics["inference_start_time"] = 0.1
             else:
-                metrics["arrival_time"] = 0.1 * (i + 1)
+                metrics["engine_recv_latest_token_time"] = 0.1 * (i + 1)
                 metrics["first_token_time"] = None
 
             if i == total_token_num - 1:

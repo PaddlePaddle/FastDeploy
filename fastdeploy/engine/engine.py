@@ -256,13 +256,13 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
-        request.llm_engine_recv_req_timestamp = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
-        request.preprocess_start_time = time.time()
+        request.metrics.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
@@ -324,7 +324,8 @@ class LLMEngine:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
 
-        request.preprocess_end_time = time.time()
+        request.metrics.preprocess_end_time = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")

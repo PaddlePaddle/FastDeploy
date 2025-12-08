@@ -402,7 +402,7 @@ class AsyncLLMEngine:
 
         try:
             request = Request.from_dict(prompt)
-            request.llm_engine_recv_req_timestamp = time.time()
+            request.metrics.scheduler_recv_req_time = time.time()
 
             # Check if already preprocessed by AsyncEngineClient
             is_preprocessed = prompt.get("_preprocessed", False)
@@ -419,7 +419,7 @@ class AsyncLLMEngine:
             request.need_prefill_tokens = prompt_token_ids_len
 
             if not is_preprocessed:
-                request.preprocess_start_time = arrival_time
+                request.metrics.preprocess_start_time = arrival_time
                 input_ids_len = request.prompt_token_ids_len
 
                 request.set(
@@ -448,7 +448,7 @@ class AsyncLLMEngine:
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-                request.preprocess_end_time = time.time()
+                request.metrics.preprocess_end_time = time.time()
 
             # Register output queue first, then add request
             await self.output_processor.register_request(request_id, output_queue)
