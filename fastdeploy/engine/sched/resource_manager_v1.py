@@ -514,6 +514,13 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def cache_output_tokens(self, request):
+        if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
+            with self.lock:
+                self.cache_manager.update_cache_blocks(
+                    request, self.config.cache_config.block_size, request.num_total_tokens - 1
+                )
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -657,12 +664,14 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
-                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
-                    ):
+                    if (
+                        not envs.FD_ENABLE_MAX_PREFILL
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
                         break
                     if request.status == RequestStatus.WAITING:
-                        result = self._waiting_async_process(request)
+                        result = self.waiting_async_process(request)
                         if result is None:
                             error_reqs.append((request.request_id, request.error_message))
                             self.waiting.popleft()
@@ -699,7 +708,6 @@ class ResourceManagerV1(ResourceManager):
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                            request.inference_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -769,7 +777,7 @@ class ResourceManagerV1(ResourceManager):
 
             return scheduled_reqs, error_reqs
 
-    def _waiting_async_process(self, request: Request) -> None:
+    def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
         Args:
@@ -788,7 +796,7 @@ class ResourceManagerV1(ResourceManager):
         request.async_process_futures = []
         return False
 
-    def _apply_async_preprocess(self, request: Request) -> None:
+    def apply_async_preprocess(self, request: Request) -> None:
         request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
 
     def _has_features_info(self, task):
@@ -918,7 +926,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_request(self, request: Request) -> None:
         with self.lock:
-            self._apply_async_preprocess(request)
+            self.apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
@@ -940,7 +948,6 @@ class ResourceManagerV1(ResourceManager):
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
-                request.inference_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -1047,7 +1054,7 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if request_output.request_id not in self.requests:
-            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            llm_logger.error(f"Request {request_output.request_id} not found in requests")
             return
         request = self.requests[request_output.request_id]
 
@@ -1060,8 +1067,10 @@ class ResourceManagerV1(ResourceManager):
         ):
             request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
         request.need_prefill_tokens = len(request.prompt_token_ids) + 1
-        request.inference_start_time = time.time()
-        request.schedule_start_time = time.time()
+
+        request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
+        request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
+        request.metrics = request_output.metrics
         self.running.append(request)
 
     def _free_blocks(self, request: Request):
