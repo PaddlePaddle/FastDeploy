@@ -383,7 +383,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
                 self.processor.preprocess(images=valid_images_list)
             self.assertIn("Invalid image type", str(context.exception))
 
-
     def test_preprocess_predetermined_grid_thw_multiple_images(self):
         """Test preprocess with predetermined_grid_thw for multiple images (lines 307-310)"""
         imgs = [Image.new("RGB", (224, 224)) for _ in range(2)]
@@ -524,7 +523,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertIn("pixel_values_videos", result)
         self.assertIn("video_grid_thw", result)
 
-
     def test_preprocess_with_scaled_image_warning(self):
         """Test preprocess with scaled image triggers warning (lines 294-298)
 
@@ -587,7 +585,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         # Verify shape is correct after reshape
         self.assertEqual(len(pixel_values.shape), 2)  # Should be [grid_t * grid_h * grid_w, C * psz * psz]
 
-
     def test_preprocess_videos_loop_numpy_output(self):
         """Test preprocess videos loop (lines 496-521)"""
         videos = [
@@ -640,7 +637,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             self.processor.preprocess(images=invalid_images)
         self.assertIn("Could not make batched images", str(context.exception))
-
 
 
 if __name__ == "__main__":
