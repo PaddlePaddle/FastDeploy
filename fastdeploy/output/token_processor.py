@@ -699,6 +699,12 @@ class TokenProcessor:
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
 
+            if self.cfg.scheduler_config.splitwise_role == "decode":
+                # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
+
             if task.get("prefill_chunk_info", None) is not None:
                 prefill_chunk_num = task.get("prefill_chunk_num", 0)
                 task.prefill_chunk_num = prefill_chunk_num + 1
