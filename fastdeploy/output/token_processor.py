@@ -127,6 +127,27 @@ class TokenProcessor:
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
         self._batch_result_buffer = None
 
+        # health monitor
+        self.timestamp_for_alive_before_handle_batch = None
+        self.timestamp_for_alive_after_handle_batch = None
+        self.health_lock = threading.Lock()
+
+    def healthy(self):
+        """
+        whether token processor is healthy
+        """
+        with self.health_lock:
+            if self.timestamp_for_alive_after_handle_batch is None:  # has entered handle batch
+                if (
+                    self.timestamp_for_alive_before_handle_batch is not None
+                    and time.time() - self.timestamp_for_alive_before_handle_batch
+                    > envs.FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT
+                ):
+                    return False
+                else:
+                    return True
+            return True
+
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
         if hasattr(self, "prefill_time_signal"):
@@ -417,7 +438,14 @@ class TokenProcessor:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 self._process_prefill_metrics()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = time.time()
+                    self.timestamp_for_alive_after_handle_batch = None
                 self._process_batch_output()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = None
+                    self.timestamp_for_alive_after_handle_batch = time.time()
+
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
 
