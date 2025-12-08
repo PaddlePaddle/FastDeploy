@@ -549,7 +549,6 @@ class APIScheduler:
                 "decode_rdma_ports": dnode.disaggregated["rdma_ports"],
                 "transfer_protocol": "ipc" if use_ipc else "rdma",
                 "decode_tp_size": dnode.disaggregated["tp_size"],
-                "role": "decode",  # TODO: remove role
             }
 
             req.disaggregate_info = disaggregate_info

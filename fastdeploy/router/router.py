@@ -197,7 +197,6 @@ class Router:
             "decode_rdma_ports": decode_server.rdma_ports,
             "transfer_protocol": "ipc" if use_ipc else "rdma",
             "decode_tp_size": decode_server.tp_size,
-            "role": "decode",  # TODO: remove role
         }
 
         modified_request = request_data.copy()

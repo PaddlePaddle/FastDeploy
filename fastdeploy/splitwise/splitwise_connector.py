@@ -52,7 +52,6 @@ class SplitwiseConnector:
             self.logger = get_logger("splitwise_connector", "splitwise_connector.log")
         self.engine_worker_queue = worker_queue
         self.resource_manager = resource_manager
-        self.connect_innode_instances = {}
         self.current_request_ids = dict()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
