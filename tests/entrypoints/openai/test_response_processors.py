@@ -56,6 +56,28 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0]["processed"], True)
         self.assertEqual(results[0]["raw"]["outputs"]["text"], "hello")
 
+    async def test_audio_tts(self):
+        """不开启 multimodal，直接走 data_processor"""
+        processor = ChatResponseProcessor(self.mock_data_processor)
+        request_outputs = [
+            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [[11, 22]]}},
+            {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [1]}},
+            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [[11, 22]]}},
+            {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [2]}},
+        ]
+
+        results = [
+            r
+            async for r in processor.process_response_chat(
+                request_outputs, stream=True, enable_thinking=False, include_stop_str_in_output=False
+            )
+        ]
+
+        self.assertEqual(results[0]["processed"], True)
+        self.assertEqual(results[0]["raw"]["outputs"]["token_ids"], [1])
+        self.assertEqual(results[1]["processed"], True)
+        self.assertEqual(results[1]["raw"]["outputs"]["token_ids"], [2])
+
     async def test_streaming_text_and_image(self):
         """流式模式下：text → image → text"""
         request_outputs = [

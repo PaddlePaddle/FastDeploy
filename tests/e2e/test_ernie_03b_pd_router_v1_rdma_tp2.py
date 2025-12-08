@@ -13,7 +13,8 @@
 # limitations under the License.
 
 # Test splitwise deployment: use local_scheduler + router,
-# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache.
+# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache,
+# the tp_size of prefill is 2 and the tp_size of decode is 1.
 
 import json
 import os
@@ -47,12 +48,13 @@ PORTS_TO_CLEAN = [
     FD_CACHE_QUEUE_PORT,
     FD_CONNECTOR_PORT,
     FD_RDMA_PORT,
+    FD_RDMA_PORT + 1,
     FD_API_PORT + 1,
     FD_ENGINE_QUEUE_PORT + 1,
     FD_METRICS_PORT + 1,
     FD_CACHE_QUEUE_PORT + 1,
     FD_CONNECTOR_PORT + 1,
-    FD_RDMA_PORT + 1,
+    FD_RDMA_PORT + 2,
     FD_ROUTER_PORT,
 ]
 
@@ -118,7 +120,7 @@ def setup_and_run_server():
     # prefill实例
     print("start prefill...")
     env_prefill = os.environ.copy()
-    env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
+    env_prefill["CUDA_VISIBLE_DEVICES"] = "0,1"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
     env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
 
@@ -139,12 +141,14 @@ def setup_and_run_server():
         str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "8192",
+        "--tensor-parallel-size",
+        "2",
         "--splitwise-role",
         "prefill",
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        str(FD_RDMA_PORT),
+        f"{FD_RDMA_PORT},{FD_RDMA_PORT+1}",
         "--pd-comm-port",
         str(FD_CONNECTOR_PORT),
         "--router",
@@ -191,7 +195,7 @@ def setup_and_run_server():
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        str(FD_RDMA_PORT + 1),
+        str(FD_RDMA_PORT + 2),
         "--pd-comm-port",
         str(FD_CONNECTOR_PORT + 1),
         "--router",
@@ -271,7 +275,7 @@ def test_metrics_config(metrics_url):
     assert res.status_code == 200
 
 
-def send_request(url, payload, timeout=600):
+def send_request(url, payload, timeout=60):
     """
     发送请求到指定的URL，并返回响应结果。
     """
