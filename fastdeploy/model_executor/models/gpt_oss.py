@@ -67,7 +67,6 @@ class GptOssAttention(nn.Layer):
             input_size=self.num_attention_heads * self.head_dim,
             output_size=self.hidden_size,
             with_bias=True,
-            add_bias=True,
         )
 
         self.attn = Attention(
