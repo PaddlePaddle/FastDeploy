@@ -217,7 +217,18 @@ class Queue(BaseComponent):
         fmq_logger.info(f"Queue {name} initialized on {full_ep}")
 
     async def put(self, data: Any, shm_threshold: int = 1024 * 1024):
-        # Send data to queue
+        """
+        Send data to the queue.
+
+        Args:
+            data: The data to send. Can be any serializable object or bytes.
+            shm_threshold: Size threshold in bytes. If the data is of type bytes and its size is
+                greater than or equal to this threshold, shared memory will be used to send the message.
+                Default is 1MB (1024 * 1024 bytes).
+
+        Raises:
+            PermissionError: If called by a non-producer role.
+        """
         if self.role != Role.PRODUCER:
             raise PermissionError("Only producers can send messages.")
 
