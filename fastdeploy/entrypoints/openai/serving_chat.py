@@ -282,23 +282,23 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = int(res["request_id"].split("_")[-1])
-                    if res.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(res["error_msg"]))
+                    idx = int(getattr(res, "request_id", "").split("_")[-1])
+                    if getattr(res, "error_code", 200) != 200:
+                        raise ValueError("{}".format(getattr(res, "error_msg", "")))
 
-                    if res["metrics"]["first_token_time"] is not None:
-                        arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
+                    if getattr(res, "metrics", None) and getattr(res.metrics, "first_token_time", None):
+                        arrival_time = res.metrics.first_token_time
+                        inference_start_time[idx] = res.metrics.inference_start_time
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
+                        arrival_time = getattr(res.metrics, "arrival_time") - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
-                        num_cached_tokens = res.get("num_cached_tokens", 0)
-                        num_input_image_tokens = res.get("num_input_image_tokens", 0)
-                        num_input_video_tokens = res.get("num_input_video_tokens", 0)
+                        num_cached_tokens = getattr(res, "num_cached_tokens", 0)
+                        num_input_image_tokens = getattr(res, "num_input_image_tokens", 0)
+                        num_input_video_tokens = getattr(res, "num_input_video_tokens", 0)
                         for i in range(num_choices):
                             prompt_logprobs_res: Optional[PromptLogprobs] = None
-                            prompt_logprobs_tensors = res.get("prompt_logprobs", None)
+                            prompt_logprobs_tensors = getattr(res, "prompt_logprobs", None)
                             if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                                 num_prompt_logprobs = (
                                     request.prompt_logprobs
@@ -329,8 +329,8 @@ class OpenAIServingChat:
                             else:
                                 choice.delta.content = ""
 
-                            if res["outputs"].get("audio_content", None) is not None:
-                                choice.delta.audio_content = res["outputs"]["audio_content"]
+                            if getattr(res.outputs, "audio_content", None) is not None:
+                                choice.delta.audio_content = getattr(res.outputs, "audio_content")
 
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
@@ -358,14 +358,14 @@ class OpenAIServingChat:
                             api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
                         first_iteration = False
 
-                    output = res["outputs"]
-                    output_top_logprobs = output["top_logprobs"]
-                    output_draft_top_logprobs = output["draft_top_logprobs"]
-                    previous_num_tokens[idx] += len(output["token_ids"])
-                    if output.get("num_image_tokens"):
-                        previous_num_tokens[idx] += output.get("num_image_tokens")
-                        num_image_tokens[idx] += output.get("num_image_tokens")
-                    reasoning_num_tokens[idx] += output.get("reasoning_token_num", 0)
+                    output = res.outputs
+                    output_top_logprobs = getattr(output, "top_logprobs")
+                    output_draft_top_logprobs = getattr(output, "draft_top_logprobs")
+                    previous_num_tokens[idx] += len(getattr(output, "token_ids", []))
+                    if getattr(output, "num_image_tokens", None):
+                        previous_num_tokens[idx] += getattr(output, "num_image_tokens")
+                        num_image_tokens[idx] += getattr(output, "num_image_tokens")
+                    reasoning_num_tokens[idx] += getattr(output, "reasoning_token_num", 0)
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -389,15 +389,15 @@ class OpenAIServingChat:
                     )
 
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = output["multipart"]
+                        delta_message.multimodal_content = getattr(output, "multipart", None)
                     else:
-                        delta_message.content = output["text"]
+                        delta_message.content = getattr(output, "text", "")
 
-                    if output.get("audio_content", None) is not None:
-                        delta_message.audio_content = output["audio_content"]
+                    if getattr(output, "audio_content", None) is not None:
+                        delta_message.audio_content = getattr(output, "audio_content")
 
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
+                    if not getattr(res, "finished", None) and getattr(output, "delta_message", None):
+                        delta_message_output = output.delta_message
                         if delta_message_output is None:
                             continue
                         delta_message.content = delta_message_output.content or ""
@@ -413,10 +413,10 @@ class OpenAIServingChat:
                         draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
                     )
-                    if res["finished"]:
+                    if getattr(res, "finished"):
                         num_choices -= 1
                         main_process_metrics.e2e_request_latency.observe(
-                            time.time() - res["metrics"]["request_start_time"]
+                            time.time() - getattr(res.metrics, "request_start_time")
                         )
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
@@ -425,15 +425,17 @@ class OpenAIServingChat:
                         else:
                             choice.finish_reason = "length"
 
-                        if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
+                        if getattr(res, "error_msg", None) is not None and "Recover" in res.error_msg:
                             choice.finish_reason = "recover_stop"
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
-                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
+                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(
+                                getattr(output, "token_ids")
+                            )
                         else:
-                            choice.delta.completion_token_ids = list(output["token_ids"])
-                        choice.delta.completion_tokens = output.get("completion_tokens")
+                            choice.delta.completion_token_ids = list(getattr(output, "token_ids"))
+                        choice.delta.completion_tokens = getattr(output, "completion_tokens")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -447,10 +449,10 @@ class OpenAIServingChat:
                         )
                     choices.append(choice)
 
-                    if len(choices) == max_streaming_response_tokens or res["finished"]:
+                    if len(choices) == max_streaming_response_tokens or getattr(res, "finished", None):
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        if res["finished"]:
+                        if getattr(res, "finished", None):
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 

@@ -33,7 +33,11 @@ from typing_extensions import TypeVar
 from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.entrypoints.openai.protocol import StructuralTagResponseFormat, ToolCall
+from fastdeploy.entrypoints.openai.protocol import (
+    DeltaMessage,
+    StructuralTagResponseFormat,
+    ToolCall,
+)
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
@@ -519,8 +523,10 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    reasoning_token_num: Optional[int] = None
     tool_calls: Optional[ToolCall] = None
     completion_tokens: Optional[str] = None
+    delta_message: Optional[DeltaMessage] = None
 
     def to_dict(self):
         """

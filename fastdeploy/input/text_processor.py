@@ -392,30 +392,31 @@ class DataProcessor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
-        token_ids = response_dict["outputs"]["token_ids"]
-        is_end = response_dict["finished"]
-        req_id = response_dict["request_id"]
+        output = getattr(response_dict, "outputs", None)
+        token_ids = getattr(output, "token_ids", [])
+        is_end = getattr(response_dict, "finished", None)
+        req_id = getattr(response_dict, "request_id", "")
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            response_dict["outputs"]["completion_tokens"] = full_text
+            setattr(response_dict.output, "completion_tokens", full_text)
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
-                response_dict["outputs"]["text"] = text
-                response_dict["outputs"]["reasoning_content"] = reasoning_content
+                setattr(response_dict.outputs, "text", text)
+                setattr(response_dict.outputs, "reasoning_content", reasoning_content)
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
-                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+                setattr(response_dict.outputs, "reasoning_token_num", len(reasoning_tokens))
             else:
-                response_dict["outputs"]["text"] = full_text
+                setattr(response_dict.outputs, "text", full_text)
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
-                    response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
-                    response_dict["outputs"]["text"] = tool_call_info.content
+                    setattr(response_dict.outputs, "tool_call", tool_call_info.tool_calls)
+                    setattr(response_dict.outputs, "text", tool_call_info.content)
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict
@@ -431,15 +432,16 @@ class DataProcessor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
-        is_end = response_dict["finished"]
-        req_id = response_dict["request_id"]
-        token_ids = response_dict["outputs"]["token_ids"]
+        output = getattr(response_dict, "outputs", None)
+        token_ids = getattr(output, "token_ids", [])
+        is_end = getattr(response_dict, "finished", None)
+        req_id = getattr(response_dict, "request_id", "")
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["completion_tokens"] = delta_text
+        setattr(response_dict.outputs, "completion_tokens", delta_text)
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -451,10 +453,10 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids + token_ids,
                 token_ids,
             )
-            response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            setattr(response_dict.outputs, "delta_message", reasoning_delta_message)
             reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
-            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+            setattr(response_dict.outputs, "reasoning_token_num", len(reasoning_tokens))
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -469,8 +471,8 @@ class DataProcessor(BaseDataProcessor):
                 response_dict,
             )
             if tool_call is None or tool_call.tool_calls:
-                response_dict["outputs"]["delta_message"] = tool_call
-        response_dict["outputs"]["text"] = delta_text
+                setattr(response_dict.outputs, "delta_message", tool_call)
+        setattr(response_dict.outputs, "text", delta_text)
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
