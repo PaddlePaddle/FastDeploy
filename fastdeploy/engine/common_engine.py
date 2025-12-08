@@ -1294,12 +1294,11 @@ class EngineService:
         def _register():
             while True:
                 try:
-                    time.sleep(sleep_seconds)
-
                     api_server_host = self.cfg.router_config.api_server_host
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
+                        time.sleep(sleep_seconds)
                         continue
 
                     router_url = self.cfg.router_config.router
@@ -1308,11 +1307,16 @@ class EngineService:
                         json=self.cfg.register_info,
                         timeout=timeout,
                     )
-                    if not resp.ok:
+
+                    if resp.ok:
+                        llm_logger.info("Successfully registered to the router!")
+                        break
+                    else:
                         llm_logger.error(
                             f"Router registration failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
+                        time.sleep(sleep_seconds)
                 except requests.exceptions.RequestException as e:
                     llm_logger.error(f"Register to router request error: {e}")
                 except Exception as e:
