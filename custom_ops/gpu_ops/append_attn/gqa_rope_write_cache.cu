@@ -174,7 +174,7 @@ void gqa_rotary_qk_split_variable(
     T *k,
     T *v,
     const T *qkv_input,
-    const float *rotary_emb,  // [2, 1, 1, seq_len, head_dim / 2]
+    const float *rotary_emb,  // [2, 1, seq_len, 1, head_dim / 2]
     const float *q_norm_weight,
     const float *k_norm_weight,
     const int *batch_id_per_token,
@@ -1159,6 +1159,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       qkv_dims[qkv_dims.size() - 1] / head_dim - 2 * kv_num_heads;
   const float softmax_scale = 1.f / sqrt(head_dim);
 
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims().size(), 1);
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims()[0], token_num);
   PADDLE_ENFORCE_EQ(rotary_embs.dims().size(), 5);
   PADDLE_ENFORCE_EQ(rotary_embs.dims()[0], 2);
   PADDLE_ENFORCE_EQ(rotary_embs.dims()[1], 1);
