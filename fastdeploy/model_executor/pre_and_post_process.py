@@ -438,8 +438,6 @@ def post_process_normal(
                     save_each_rank,
                 )
             else:
-                print(f"{sampler_output.logprobs_tensors.logprob_token_ids=}")
-                print(f"{sampler_output.logprobs_tensors.logprobs=}")
                 save_output_topk(
                     sampler_output.sampled_token_ids,
                     sampler_output.logprobs_tensors.logprob_token_ids,
