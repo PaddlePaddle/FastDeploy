@@ -1578,7 +1578,7 @@ class FDConfig:
         self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
         if self.parallel_config.use_ep:
-            self.graph_opt_config.cudagraph_capture_sizes = [0] + self.graph_opt_config.cudagraph_capture_sizes
+            self.graph_opt_config.cudagraph_capture_sizes += [0]
 
         self.tokenizer = tokenizer
         self.ips = ips
