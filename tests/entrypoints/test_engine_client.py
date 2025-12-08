@@ -1993,7 +1993,3 @@ class TestEngineClientValidParameters(unittest.TestCase):
         expected_content = {"code": 1, "msg": "invalid action invalid_action"}
         self.assertEqual(content, expected_content)
         self.assertEqual(status_code.value, 400)  # BAD_REQUEST
-
-
-if __name__ == "__main__":
-    unittest.main()
