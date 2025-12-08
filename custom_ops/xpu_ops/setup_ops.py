@@ -48,6 +48,8 @@ def download_and_extract(url, destination_directory):
         print(f"Downloading: {url}")
         subprocess.run(
             ["wget", "-O", file_path, url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             check=True,
         )
         print(f"Downloaded to: {file_path}")
@@ -152,12 +154,8 @@ def xpu_setup_ops():
 
     XDNN_PATH = os.getenv("XDNN_PATH")
     if XDNN_PATH is None:
-        version_cmd = 'python -c "import paddle; print(paddle.version.xpu_xhpc())"'
-        try:
-            XHPC_VERSION = subprocess.check_output(version_cmd, shell=True).strip().decode()
-            print(f"Fetched XHPC_VERSION from paddle: {XHPC_VERSION}")
-        except Exception as e:
-            raise Exception(f"PaddlePaddle-xpu not installed, please install it first. {e}")
+        XHPC_VERSION = paddle.version.xpu_xhpc()
+        print(f"Fetched XHPC_VERSION from paddle: {XHPC_VERSION}")
 
         XHPC_URL = f"https://klx-sdk-release-public.su.bcebos.com/xhpc/{XHPC_VERSION}/xhpc-ubuntu2004_x86_64.tar.gz"
         THIRD_PARTY_PATH = os.path.join(current_file.parent, "third_party")

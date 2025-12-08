@@ -194,6 +194,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const bool rope_3d);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
+    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const int max_dec_len,
