@@ -52,20 +52,17 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertEqual(self.processor.merge_size, 2)
 
     def test_set_pixels(self):
-        """Test setting pixels"""
+        """Test setting pixels with valid and invalid values"""
+        # Valid case
         self.processor.set_pixels(min_pixels=100, max_pixels=200, msg="test")
         self.assertEqual(self.processor.min_pixels, 100)
         self.assertEqual(self.processor.max_pixels, 200)
         self.assertEqual(self.processor.size["min_pixels"], 100)
         self.assertEqual(self.processor.size["max_pixels"], 200)
 
-    def test_set_pixels_negative_min(self):
-        """Test setting negative min_pixels should raise error"""
+        # Invalid cases
         with self.assertRaises(AssertionError):
             self.processor.set_pixels(min_pixels=-1)
-
-    def test_set_pixels_zero_max(self):
-        """Test setting 0 or negative max_pixels should raise error"""
         with self.assertRaises(AssertionError):
             self.processor.set_pixels(max_pixels=0)
 
@@ -88,25 +85,42 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertIsInstance(resized_w, int)
 
     def test_round_by_factor(self):
-        """Test round_by_factor"""
+        """Test round_by_factor with various cases"""
         self.assertEqual(round_by_factor(100, 28), 112)  # 100/28 ≈ 3.57, round(3.57) = 4, 4*28 = 112
         self.assertEqual(round_by_factor(50, 10), 50)
         self.assertEqual(round_by_factor(55, 10), 60)
+        # Edge cases
+        self.assertEqual(round_by_factor(0, 14), 0)
+        self.assertEqual(round_by_factor(14, 14), 14)
+        self.assertEqual(round_by_factor(13, 14), 14)  # Round up
+        self.assertEqual(round_by_factor(15, 14), 14)  # Round down
 
     def test_ceil_by_factor(self):
-        """Test ceil_by_factor"""
+        """Test ceil_by_factor with various cases"""
         self.assertEqual(ceil_by_factor(100, 28), 112)  # ceil(100/28)*28 = ceil(3.57)*28 = 4*28 = 112
         self.assertEqual(ceil_by_factor(50, 10), 50)
         self.assertEqual(ceil_by_factor(55, 10), 60)
+        # Edge cases
+        self.assertEqual(ceil_by_factor(0, 14), 0)
+        self.assertEqual(ceil_by_factor(14, 14), 14)
+        self.assertEqual(ceil_by_factor(13, 14), 14)  # Ceil up
+        self.assertEqual(ceil_by_factor(15, 14), 28)  # Ceil up to next multiple
 
     def test_floor_by_factor(self):
-        """Test floor_by_factor"""
+        """Test floor_by_factor with various cases"""
         self.assertEqual(floor_by_factor(100, 28), 84)  # floor(100/28)*28 = floor(3.57)*28 = 3*28 = 84
         self.assertEqual(floor_by_factor(50, 10), 50)
         self.assertEqual(floor_by_factor(55, 10), 50)
+        # Edge cases
+        self.assertEqual(floor_by_factor(0, 14), 0)
+        self.assertEqual(floor_by_factor(14, 14), 14)
+        self.assertEqual(floor_by_factor(13, 14), 0)  # Floor down
+        self.assertEqual(floor_by_factor(15, 14), 14)  # Floor down to multiple
+        self.assertEqual(floor_by_factor(28, 14), 28)  # Exact multiple
 
-    def test_smart_resize_basic(self):
-        """Test smart_resize basic functionality"""
+    def test_smart_resize(self):
+        """Test smart_resize with various scenarios"""
+        # Basic functionality
         height, width = 224, 224
         new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
         self.assertIsInstance(new_h, int)
@@ -114,106 +128,145 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertEqual(new_h % 28, 0)
         self.assertEqual(new_w % 28, 0)
 
-    def test_smart_resize_high_aspect_ratio(self):
-        """Test case when aspect ratio exceeds MAX_RATIO"""
+        # High aspect ratio (height > width)
         height, width = 1000, 10  # aspect ratio = 100
         new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
         self.assertIsInstance(new_h, int)
         self.assertIsInstance(new_w, int)
         self.assertLessEqual(max(new_h, new_w) / min(new_h, new_w), 200)
 
-    def test_smart_resize_too_large(self):
-        """Test case when pixel count exceeds max_pixels"""
+        # High aspect ratio (width > height)
+        height, width = 10, 10000
+        new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
+        self.assertIsInstance(new_h, int)
+        self.assertIsInstance(new_w, int)
+        self.assertLessEqual(max(new_h, new_w) / min(new_h, new_w), 200)
+
+        # Too large
         height, width = 10000, 10000
         new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
         self.assertLessEqual(new_h * new_w, 28 * 28 * 1280)
 
-    def test_smart_resize_too_small(self):
-        """Test case when pixel count is less than min_pixels"""
+        # Too small
         height, width = 10, 10
         new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
         self.assertGreaterEqual(new_h * new_w, 56 * 56)
 
-    def test_smart_resize_invalid_result(self):
-        """Test case when smart_resize returns invalid result"""
-        # This case should not happen, but if it does, ValueError will be raised
-        # We test by setting extreme parameters
-        # Note: This test may not trigger ValueError, as smart_resize logic may not produce invalid results
-        # If testing is really needed, try other extreme cases
+        # Exceeds max_pixels with custom parameters
+        height, width = 10000, 10000
+        max_pixels = 10000
+        min_pixels = 1000
+        new_h, new_w = smart_resize(height, width, factor=14, min_pixels=min_pixels, max_pixels=max_pixels)
+        self.assertLessEqual(new_h * new_w, max_pixels)
+        self.assertGreaterEqual(new_h * new_w, min_pixels)
+
+        # Below min_pixels with custom parameters
+        height, width = 10, 10
+        min_pixels = 10000
+        max_pixels = 100000
+        new_h, new_w = smart_resize(height, width, factor=14, min_pixels=min_pixels, max_pixels=max_pixels)
+        self.assertGreaterEqual(new_h * new_w, min_pixels)
+        self.assertLessEqual(new_h * new_w, max_pixels)
+
+        # Invalid result (extreme parameters)
         try:
             result = smart_resize(1, 1, factor=100000, min_pixels=100, max_pixels=1000)
-            # If successful, verify result
             self.assertIsInstance(result, tuple)
             self.assertEqual(len(result), 2)
         except ValueError:
-            # If ValueError is raised, this is also expected
             pass
 
-    def test_is_scaled_image_uint8(self):
-        """Test is_scaled_image for uint8 image"""
+    def test_is_scaled_image(self):
+        """Test is_scaled_image with various image types"""
+        # uint8 image
         image = np.array([[0, 255], [128, 200]], dtype=np.uint8)
         self.assertFalse(is_scaled_image(image))
-
-    def test_is_scaled_image_scaled(self):
-        """Test is_scaled_image for scaled image"""
-        image = np.array([[0.0, 0.5], [0.3, 1.0]], dtype=np.float32)
-        self.assertTrue(is_scaled_image(image))
-
-    def test_is_scaled_image_not_scaled(self):
-        """Test is_scaled_image for unscaled float image"""
-        image = np.array([[0.0, 255.0], [128.0, 300.0]], dtype=np.float32)
+        image = np.random.rand(224, 224, 3).astype(np.uint8) * 255
         self.assertFalse(is_scaled_image(image))
 
-    def test_make_batched_images_single(self):
-        """Test make_batched_images handling single image"""
+        # Scaled float image (values in [0, 1])
+        image = np.array([[0.0, 0.5], [0.3, 1.0]], dtype=np.float32)
+        self.assertTrue(is_scaled_image(image))
+        image = np.random.rand(224, 224, 3).astype(np.float32) * 0.5
+        self.assertTrue(is_scaled_image(image))
+
+        # Unscaled float image (values > 1)
+        image = np.array([[0.0, 255.0], [128.0, 300.0]], dtype=np.float32)
+        self.assertFalse(is_scaled_image(image))
+        image = np.random.rand(224, 224, 3).astype(np.float32) * 255
+        self.assertFalse(is_scaled_image(image))
+
+        # Edge cases
+        image = np.array([[0.0, 1.0]], dtype=np.float32)
+        self.assertTrue(is_scaled_image(image))
+        image = np.array([[0.0, 1.1]], dtype=np.float32)
+        self.assertFalse(is_scaled_image(image))
+        image = np.array([[-0.1, 1.0]], dtype=np.float32)
+        self.assertFalse(is_scaled_image(image))
+
+    def test_make_batched_images(self):
+        """Test make_batched_images with various input types"""
+        # Single image
         img = Image.new("RGB", (224, 224))
         result = make_batched_images(img)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], img)
 
-    def test_make_batched_images_list(self):
-        """Test make_batched_images handling image list"""
+        # List of images
         imgs = [Image.new("RGB", (224, 224)) for _ in range(3)]
         result = make_batched_images(imgs)
         self.assertEqual(len(result), 3)
         self.assertEqual(result, imgs)
 
-    def test_make_batched_images_nested_list(self):
-        """Test make_batched_images handling nested list"""
+        # Nested list
         imgs = [[Image.new("RGB", (224, 224)) for _ in range(2)] for _ in range(2)]
         result = make_batched_images(imgs)
         self.assertEqual(len(result), 4)  # 2*2 = 4
 
-    def test_make_batched_images_invalid(self):
-        """Test make_batched_images handling invalid input"""
-        with self.assertRaises(ValueError):
+        # Invalid inputs
+        with self.assertRaises(ValueError) as context:
             make_batched_images("invalid")
+        self.assertIn("Could not make batched images", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            make_batched_images([[1, 2, 3], [4, 5, 6]])
+        self.assertIn("Could not make batched images", str(context.exception))
 
-    def test_make_batched_videos_list_of_images(self):
-        """Test make_batched_videos handling image list"""
+    def test_make_batched_videos(self):
+        """Test make_batched_videos with various input types"""
+        # List of images
         imgs = [Image.new("RGB", (224, 224)) for _ in range(3)]
         result = make_batched_videos(imgs)
         self.assertEqual(len(result), 1)
         self.assertEqual(len(result[0]), 3)
 
-    def test_make_batched_videos_nested_list(self):
-        """Test make_batched_videos handling nested list"""
+        # Single image in list
+        img = Image.new("RGB", (224, 224))
+        result = make_batched_videos([img])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0]), 1)
+
+        # Nested list
         imgs = [[Image.new("RGB", (224, 224)) for _ in range(2)] for _ in range(2)]
         result = make_batched_videos(imgs)
         self.assertEqual(len(result), 2)
         self.assertEqual(len(result[0]), 2)
 
-    def test_make_batched_videos_4d_array(self):
-        """Test make_batched_videos handling 4D array"""
+        # 4D array (single)
         video = np.random.rand(3, 224, 224, 3).astype(np.uint8)
         result = make_batched_videos(video)
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[0], list)
 
-    def test_make_batched_videos_invalid(self):
-        """Test make_batched_videos handling invalid input"""
-        with self.assertRaises(ValueError):
+        # 4D array in list
+        videos = [np.random.rand(3, 224, 224, 3).astype(np.uint8)]
+        result = make_batched_videos(videos)
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], list)
+
+        # Invalid input
+        with self.assertRaises(ValueError) as context:
             make_batched_videos("invalid")
+        self.assertIn("Could not make batched video", str(context.exception))
 
     def test_preprocess_images(self):
         """Test preprocess handling images"""
@@ -330,52 +383,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
                 self.processor.preprocess(images=valid_images_list)
             self.assertIn("Invalid image type", str(context.exception))
 
-    def test_smart_resize_high_aspect_ratio_height_gt_width(self):
-        """Test smart_resize when aspect ratio exceeds MAX_RATIO, height > width case (lines 558-560)"""
-        height, width = 10000, 10  # height > width, aspect ratio = 1000
-        new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
-        self.assertIsInstance(new_h, int)
-        self.assertIsInstance(new_w, int)
-        self.assertLessEqual(max(new_h, new_w) / min(new_h, new_w), 200)
-
-    def test_smart_resize_high_aspect_ratio_width_gt_height(self):
-        """Test smart_resize when aspect ratio exceeds MAX_RATIO, width > height case (lines 561-563)"""
-        height, width = 10, 10000  # width > height, aspect ratio = 1000
-        new_h, new_w = smart_resize(height, width, factor=28, min_pixels=56 * 56, max_pixels=28 * 28 * 1280)
-        self.assertIsInstance(new_h, int)
-        self.assertIsInstance(new_w, int)
-        self.assertLessEqual(max(new_h, new_w) / min(new_h, new_w), 200)
-
-    def test_is_scaled_image_edge_cases(self):
-        """Test is_scaled_image edge cases (lines 80-84)"""
-        # Test with values exactly at boundaries
-        image1 = np.array([[0.0, 1.0]], dtype=np.float32)
-        self.assertTrue(is_scaled_image(image1))
-        image2 = np.array([[0.0, 1.1]], dtype=np.float32)
-        self.assertFalse(is_scaled_image(image2))
-        image3 = np.array([[-0.1, 1.0]], dtype=np.float32)
-        self.assertFalse(is_scaled_image(image3))
-
-    def test_make_batched_images_nested_list_edge_case(self):
-        """Test make_batched_images with nested list edge case (lines 98-107)"""
-        # Test with nested list where first element is a list of images
-        imgs = [[Image.new("RGB", (224, 224)) for _ in range(2)] for _ in range(2)]
-        result = make_batched_images(imgs)
-        self.assertEqual(len(result), 4)
-
-    def test_make_batched_videos_edge_cases(self):
-        """Test make_batched_videos edge cases (lines 113-125)"""
-        # Test with single Image.Image in list
-        img = Image.new("RGB", (224, 224))
-        result = make_batched_videos([img])
-        self.assertEqual(len(result), 1)
-        self.assertEqual(len(result[0]), 1)
-
-        # Test with 4D array (video)
-        video = np.random.rand(3, 224, 224, 3).astype(np.uint8)
-        result = make_batched_videos(video)
-        self.assertEqual(len(result), 1)
-        self.assertIsInstance(result[0], list)
 
     def test_preprocess_predetermined_grid_thw_multiple_images(self):
         """Test preprocess with predetermined_grid_thw for multiple images (lines 307-310)"""
@@ -517,79 +524,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertIn("pixel_values_videos", result)
         self.assertIn("video_grid_thw", result)
 
-    def test_make_batched_images_invalid_nested_list(self):
-        """Test make_batched_images with invalid nested list (line 98)"""
-        # Test with nested list but first element is not an image
-        invalid_input = [[1, 2, 3], [4, 5, 6]]
-        with self.assertRaises(ValueError) as context:
-            make_batched_images(invalid_input)
-        self.assertIn("Could not make batched images", str(context.exception))
-
-    def test_make_batched_images_invalid_single(self):
-        """Test make_batched_images with invalid single input (line 107)"""
-        invalid_input = "not an image"
-        with self.assertRaises(ValueError) as context:
-            make_batched_images(invalid_input)
-        self.assertIn("Could not make batched images", str(context.exception))
-
-    def test_make_batched_videos_nested_list_of_images(self):
-        """Test make_batched_videos with nested list of images (line 113)"""
-        images = [[Image.new("RGB", (224, 224)) for _ in range(2)]]
-        result = make_batched_videos(images)
-        self.assertEqual(result, images)
-
-    def test_make_batched_videos_list_of_images_nested_output(self):
-        """Test make_batched_videos with list of images (line 117)"""
-        images = [Image.new("RGB", (224, 224)) for _ in range(2)]
-        result = make_batched_videos(images)
-        self.assertEqual(result, [images])
-
-    def test_make_batched_videos_4d_array_in_list_variant(self):
-        """Test make_batched_videos with 4D array in list (line 119)
-
-        Note: make_batched_videos expects 4D array (time, height, width, channels),
-        not 5D array (batch, time, height, width, channels).
-        """
-        # Create a 4D numpy array (time, height, width, channels)
-        video_array = np.random.rand(4, 224, 224, 3).astype(np.uint8)
-        result = make_batched_videos([video_array])
-        self.assertIsInstance(result, list)
-
-    def test_make_batched_videos_4d_array_single(self):
-        """Test make_batched_videos with single 4D array (line 122)
-
-        Note: make_batched_videos expects 4D array (time, height, width, channels),
-        not 5D array (batch, time, height, width, channels).
-        """
-        # Create a 4D numpy array (time, height, width, channels)
-        video_array = np.random.rand(4, 224, 224, 3).astype(np.uint8)
-        result = make_batched_videos(video_array)
-        self.assertIsInstance(result, list)
-
-    def test_make_batched_videos_invalid_input(self):
-        """Test make_batched_videos with invalid input (line 125)"""
-        invalid_input = "not a video"
-        with self.assertRaises(ValueError) as context:
-            make_batched_videos(invalid_input)
-        self.assertIn("Could not make batched video", str(context.exception))
-
-    def test_is_scaled_image_uint8_false(self):
-        """Test is_scaled_image with uint8 image (line 80)"""
-        image = np.random.rand(224, 224, 3).astype(np.uint8) * 255
-        result = is_scaled_image(image)
-        self.assertFalse(result)
-
-    def test_is_scaled_image_scaled_true(self):
-        """Test is_scaled_image with scaled float image (line 84)"""
-        image = np.random.rand(224, 224, 3).astype(np.float32) * 0.5  # Values in [0, 0.5]
-        result = is_scaled_image(image)
-        self.assertTrue(result)
-
-    def test_is_scaled_image_not_scaled_false(self):
-        """Test is_scaled_image with non-scaled float image (line 84)"""
-        image = np.random.rand(224, 224, 3).astype(np.float32) * 255  # Values > 1
-        result = is_scaled_image(image)
-        self.assertFalse(result)
 
     def test_preprocess_with_scaled_image_warning(self):
         """Test preprocess with scaled image triggers warning (lines 294-298)
@@ -653,71 +587,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         # Verify shape is correct after reshape
         self.assertEqual(len(pixel_values.shape), 2)  # Should be [grid_t * grid_h * grid_w, C * psz * psz]
 
-    def test_smart_resize_high_aspect_ratio_height_gt_width_case(self):
-        """Test smart_resize with high aspect ratio, height > width (lines 557-563)"""
-        # Create image with very high aspect ratio
-        height, width = 1000, 50  # Aspect ratio = 20
-        factor = 14
-        min_pixels = 1000
-        max_pixels = 100000
-
-        new_h, new_w = smart_resize(height, width, factor, min_pixels, max_pixels)
-        self.assertIsInstance(new_h, int)
-        self.assertIsInstance(new_w, int)
-        self.assertGreater(new_h, 0)
-        self.assertGreater(new_w, 0)
-
-    def test_smart_resize_high_aspect_ratio_width_gt_height_case(self):
-        """Test smart_resize with high aspect ratio, width > height (lines 562-563)"""
-        # Create image with very high aspect ratio (wide)
-        height, width = 50, 1000  # Aspect ratio = 20
-        factor = 14
-        min_pixels = 1000
-        max_pixels = 100000
-
-        new_h, new_w = smart_resize(height, width, factor, min_pixels, max_pixels)
-        self.assertIsInstance(new_h, int)
-        self.assertIsInstance(new_w, int)
-
-    def test_smart_resize_exceeds_max_pixels(self):
-        """Test smart_resize when h_bar * w_bar > max_pixels (lines 575-578)"""
-        height, width = 10000, 10000  # Very large image
-        factor = 14
-        min_pixels = 1000
-        max_pixels = 10000  # Small max_pixels
-
-        new_h, new_w = smart_resize(height, width, factor, min_pixels, max_pixels)
-        self.assertLessEqual(new_h * new_w, max_pixels)
-        self.assertGreaterEqual(new_h * new_w, min_pixels)
-
-    def test_smart_resize_below_min_pixels(self):
-        """Test smart_resize when h_bar * w_bar < min_pixels (lines 579-582)"""
-        height, width = 10, 10  # Very small image
-        factor = 14
-        min_pixels = 10000  # Large min_pixels
-        max_pixels = 100000
-
-        new_h, new_w = smart_resize(height, width, factor, min_pixels, max_pixels)
-        self.assertGreaterEqual(new_h * new_w, min_pixels)
-        self.assertLessEqual(new_h * new_w, max_pixels)
-
-    def test_smart_resize_invalid_result_constraints(self):
-        """Test smart_resize with invalid result (line 585)"""
-        # This is hard to trigger, but we can test the validation
-        height, width = 100, 100
-        factor = 14
-        min_pixels = 10000
-        max_pixels = 1000  # max < min, which is invalid but should be caught
-
-        # This should raise an error or return valid values
-        try:
-            new_h, new_w = smart_resize(height, width, factor, min_pixels, max_pixels)
-            # If it doesn't raise, verify the result is valid
-            self.assertGreaterEqual(new_h * new_w, min_pixels)
-            self.assertLessEqual(new_h * new_w, max_pixels)
-        except ValueError:
-            # Expected if validation catches the issue
-            pass
 
     def test_preprocess_videos_loop_numpy_output(self):
         """Test preprocess videos loop (lines 496-521)"""
@@ -772,27 +641,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
             self.processor.preprocess(images=invalid_images)
         self.assertIn("Could not make batched images", str(context.exception))
 
-    def test_round_by_factor_edge_cases(self):
-        """Test round_by_factor with edge cases (lines 526-530)"""
-        self.assertEqual(round_by_factor(0, 14), 0)
-        self.assertEqual(round_by_factor(14, 14), 14)
-        self.assertEqual(round_by_factor(13, 14), 14)  # Round up
-        self.assertEqual(round_by_factor(15, 14), 14)  # Round down
-
-    def test_ceil_by_factor_edge_cases(self):
-        """Test ceil_by_factor with edge cases (lines 532-536)"""
-        self.assertEqual(ceil_by_factor(0, 14), 0)
-        self.assertEqual(ceil_by_factor(14, 14), 14)
-        self.assertEqual(ceil_by_factor(13, 14), 14)  # Ceil up
-        self.assertEqual(ceil_by_factor(15, 14), 28)  # Ceil up to next multiple
-
-    def test_floor_by_factor_edge_cases(self):
-        """Test floor_by_factor with edge cases (lines 538-542)"""
-        self.assertEqual(floor_by_factor(0, 14), 0)
-        self.assertEqual(floor_by_factor(14, 14), 14)
-        self.assertEqual(floor_by_factor(13, 14), 0)  # Floor down
-        self.assertEqual(floor_by_factor(15, 14), 14)  # Floor down to multiple
-        self.assertEqual(floor_by_factor(28, 14), 28)  # Exact multiple
 
 
 if __name__ == "__main__":
