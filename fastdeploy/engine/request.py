@@ -677,13 +677,15 @@ class RequestOutput:
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        if hasattr(d, "outputs") and isinstance(d["outputs"], dict):
+        if "output" in d and isinstance(d["outputs"], dict):
             completion_output = CompletionOutput.from_dict(d.pop("outputs"))
         else:
+            d.pop("outputs", None)
             completion_output = None
-        if hasattr(d, "metrics") and isinstance(d["metrics"], dict):
+        if "metrics" in d and isinstance(d["metrics"], dict):
             metrics = RequestMetrics.from_dict(d.pop("metrics"))
         else:
+            d.pop("metrics", None)
             metrics = None
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
