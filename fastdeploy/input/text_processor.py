@@ -21,6 +21,7 @@ from paddleformers.generation import GenerationConfig
 from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
+from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
@@ -212,12 +213,8 @@ class DataProcessor(BaseDataProcessor):
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
 
-        # processing stop_sequences
-        stop_sequences = request.get("stop", [])
-        if stop_sequences is not None and len(stop_sequences) != 0:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request.set("stop_token_ids", stop_seqs)
-            request.set("stop_seqs_len", stop_seqs_len)
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         # processing bad_words
         bad_words = request.get("bad_words")
@@ -290,12 +287,8 @@ class DataProcessor(BaseDataProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        # processing stop_sequences
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         # processing bad_words
         bad_words = request.get("bad_words")
