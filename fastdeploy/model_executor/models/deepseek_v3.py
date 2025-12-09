@@ -411,14 +411,14 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
+            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
 
             fmha_out_decode = (
                 self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
                 .transpose([1, 0, 2])
-                .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+                .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
             if fmha_out is None:

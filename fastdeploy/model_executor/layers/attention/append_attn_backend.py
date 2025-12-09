@@ -43,6 +43,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.platforms import current_platform
 
 
 @dataclass
@@ -87,7 +88,10 @@ def allocate_launch_related_buffer(
     res = {}
     res["decoder_batch_ids"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
     res["decoder_tile_ids_per_batch"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
-    res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+    if current_platform.is_maca():
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+    else:
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
     # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
     # adapted to cudagraph.
     res["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
