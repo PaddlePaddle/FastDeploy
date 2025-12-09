@@ -319,7 +319,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
-                    setattr(response_dict.outputs, "tool_call", tool_call_info.tool_calls)
+                    setattr(response_dict.outputs, "tool_calls", tool_call_info.tool_calls)
                     setattr(response_dict.outputs, "text", tool_call_info.content)
             setattr(response_dict.outputs, "completion_tokens", full_text)
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")

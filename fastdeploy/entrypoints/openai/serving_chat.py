@@ -365,7 +365,7 @@ class OpenAIServingChat:
                     if getattr(output, "num_image_tokens", None):
                         previous_num_tokens[idx] += getattr(output, "num_image_tokens")
                         num_image_tokens[idx] += getattr(output, "num_image_tokens")
-                    reasoning_num_tokens[idx] += getattr(output, "reasoning_token_num", 0)
+                    reasoning_num_tokens[idx] += getattr(output, "reasoning_token_num") or 0
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -603,10 +603,10 @@ class OpenAIServingChat:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
                     if getattr(data, "finished", None):
                         num_choices -= 1
-                        reasoning_num_tokens[idx] = getattr(data.outputs, "reasoning_token_num", 0)
+                        reasoning_num_tokens[idx] = getattr(data.outputs, "reasoning_token_num") or 0
                         if getattr(data.outputs, "image_token_num", None):
                             previous_num_tokens[idx] += getattr(data.outputs, "image_token_num", 0)
-                            num_image_tokens[idx] = getattr(data.outputs, "image_token_num", None)
+                            num_image_tokens[idx] = getattr(data.outputs, "image_token_num", None) or 0
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
@@ -718,12 +718,12 @@ class OpenAIServingChat:
         num_cached_tokens[idx] = getattr(data, "num_cached_tokens", 0)
         num_input_image_tokens[idx] = getattr(data, "num_input_image_tokens", 0)
         num_input_video_tokens[idx] = getattr(data, "num_input_video_tokens", 0)
-        num_image_tokens[idx] = getattr(output, "num_image_tokens", 0)
+        num_image_tokens[idx] = getattr(output, "num_image_tokens", 0) or 0
 
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if getattr(output, "tool_call", None):
+            if getattr(output, "tool_calls", None):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"

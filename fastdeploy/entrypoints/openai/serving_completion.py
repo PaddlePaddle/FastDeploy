@@ -510,7 +510,7 @@ class OpenAIServingCompletion:
                     if getattr(output, "num_image_tokens", None):
                         output_tokens[idx] += output.num_image_tokens
                         num_image_tokens[idx] += output.num_image_tokens
-                    reasoning_tokens[idx] += getattr(output, "reasoning_token_num", 0)
+                    reasoning_tokens[idx] += getattr(output, "reasoning_token_num", 0) or 0
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=getattr(output, "text", ""),
@@ -693,7 +693,7 @@ class OpenAIServingCompletion:
                 num_generated_tokens += output.num_image_tokens
                 num_image_tokens += output.num_image_tokens
 
-            num_reasoning_tokens += getattr(output, "reasoning_token_num", 0)
+            num_reasoning_tokens += getattr(output, "reasoning_token_num") or 0
 
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
