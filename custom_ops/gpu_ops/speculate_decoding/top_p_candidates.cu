@@ -18,7 +18,7 @@
 
 template <typename T>
 __forceinline__ __device__ T
-CudaShuffleDownSync(unsigned mask, T val, int delta, int width = warpSize) {
+CudaShuffleDownSync(unsigned mask, T val, int delta, int width = WARP_SIZE) {
   return __shfl_down_sync(mask, val, static_cast<unsigned>(delta), width);
 }
 
