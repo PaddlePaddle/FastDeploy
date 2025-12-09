@@ -1020,14 +1020,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        if batch_size == 0:
-            # Note(ZKK): divided by 0 is invalid, here we give a input_length = 1
-            input_length = 1
-        else:
-            input_length = min(
-                num_tokens // (1 if capture_prefill else batch_size),
-                self.model_config.max_model_len - max_dec_len,
-            )
+        input_length = min(
+            num_tokens // (1 if capture_prefill else batch_size),
+            self.model_config.max_model_len - max_dec_len,
+        )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -1490,7 +1486,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
+            only_prefill_use_cudagraph
+            if self.cudagraph_only_prefill
+            else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
