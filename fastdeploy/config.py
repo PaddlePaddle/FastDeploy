@@ -1923,15 +1923,19 @@ class FDConfig:
         )
 
         # the information for registering this server to router or splitwise_scheduler
+        port = self.router_config.api_server_port if self.router_config else None
+        transfer_protocol = (
+            self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
+        )
         self.register_info = {
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
-            "port": self.router_config.api_server_port if self.router_config else None,
+            "port": port,
             "connector_port": connector_port,
             "rdma_ports": self.cache_config.rdma_comm_ports,
             "engine_worker_queue_port": engine_worker_queue_port,
             "device_ids": self.local_device_ids,
-            "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+            "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,
         }
         logger.info(f"register_info: {self.register_info}")
