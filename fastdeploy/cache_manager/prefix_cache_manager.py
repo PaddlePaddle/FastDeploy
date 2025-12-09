@@ -277,7 +277,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --rdma_port {cache_config.rdma_comm_ports[0] if cache_config.rdma_comm_ports is not None else '0'}"
+                + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
                 + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
@@ -370,7 +370,7 @@ class PrefixCacheManager:
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --ipc_suffix {ipc_suffix}"
-                + f" --rdma_port {cache_config.rdma_comm_ports[0] if cache_config.rdma_comm_ports is not None else '0'}"
+                + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
             )

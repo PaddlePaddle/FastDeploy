@@ -84,7 +84,7 @@ class RDMACommManager:
 
         try:
             import rdma_comm
-        except:
+        except ImportError:
             raise RuntimeError(
                 "The installation of the RDMA library failed. Confirm whether your network card supports RDMA transmission."
             )

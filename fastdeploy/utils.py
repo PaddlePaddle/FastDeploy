@@ -627,12 +627,11 @@ def is_port_available(host, port):
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))
+            return True
         except OSError as e:
             if e.errno == errno.EADDRINUSE:
                 return False
-        finally:
-            s.close()
-            return True
+            raise
 
 
 def find_free_ports(
