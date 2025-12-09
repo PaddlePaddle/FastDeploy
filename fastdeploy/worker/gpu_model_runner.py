@@ -2183,6 +2183,30 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    def vision_encoder_compile(self):
+        if self.graph_opt_config.graph_opt_level == 0:
+            return
+        # Currently only PaddleOCR-VL model is supported for vision encoder layer
+        if self.model_config.model_type != "paddleocr_vl":
+            return
+
+        # Compile for paddleocr_vl vision encoder layer
+        def apply_compile(fn):
+            backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
+            return paddle.jit.to_static(
+                fn,
+                full_graph=False,
+                backend=backend,
+            )
+
+        from fastdeploy.model_executor.models.paddleocr_vl.siglip import SiglipEncoder
+
+        SiglipEncoder._run_encoder_layer = apply_compile(SiglipEncoder._run_encoder_layer)
+
+        # Warmup for paddleocr_vl vision encoder layer
+        logger.info(f"Warmup for {self.model_config.model_type} compile...")
+        self._dummy_run_extract_vision_features()
+
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
@@ -2890,6 +2914,40 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_paddleocr(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
+
+    @paddle.no_grad()
+    def _dummy_run_extract_vision_features(self):
+        grid_thw_list = ([(1, 10, 88), (1, 10, 80)], [(1, 14, 62), (1, 20, 42), (1, 14, 60)])
+        for grid_thw in grid_thw_list:
+            images = []
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                images.append(paddle.uniform(shape=[numel, 3, 14, 14], dtype="float32", min=0.0, max=1.0))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
+
+            images = paddle.concat(images, axis=0)
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+
+            with paddle.amp.auto_cast(
+                True,
+                custom_black_list=self.amp_black,
+                custom_white_list=self.amp_white,
+                level="O2",
+                dtype=self.model_config.dtype,
+            ):
+                self.model.visual(
+                    pixel_values=images,
+                    image_grid_thw=grid_thw,
+                    position_ids=position_ids,
+                    interpolate_pos_encoding=True,
+                    cu_seqlens=cu_seqlens,
+                    use_rope=True,
+                    window_size=-1,
+                )
 
     @paddle.no_grad()
     def prepare_rope3d(
