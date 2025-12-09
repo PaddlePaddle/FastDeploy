@@ -1919,42 +1919,23 @@ class FDConfig:
             else None
         )
 
-        self.disaggregate_info = {}
-        if self.scheduler_config.splitwise_role != "mixed":
-            self.disaggregate_info["role"] = self.scheduler_config.splitwise_role
-            self.disaggregate_info["cache_info"] = dict()
-            current_protocol = self.cache_config.cache_transfer_protocol.split(",")
-            self.disaggregate_info["transfer_protocol"] = current_protocol
-
-            for protocol in current_protocol:
-                if protocol == "ipc":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": engine_worker_queue_port,
-                        "device_ids": self.local_device_ids,
-                    }
-                elif protocol == "rdma":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": connector_port,
-                        "rdma_port": self.cache_config.rdma_comm_ports,
-                    }
-            logger.info(f"disaggregate_info: {self.disaggregate_info}")
-
-        if self.router_config:
-            # the information for registering this server to router
-            self.register_info = {
-                "role": self.scheduler_config.splitwise_role,
-                "host_ip": self.host_ip,
-                "port": self.router_config.api_server_port,
-                "connector_port": connector_port,
-                "rdma_ports": self.cache_config.rdma_comm_ports,
-                "engine_worker_queue_port": engine_worker_queue_port,
-                "device_ids": self.local_device_ids,
-                "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
-                "tp_size": self.parallel_config.tensor_parallel_size,
-            }
-            logger.info(f"register_info: {self.register_info}")
+        # the information for registering this server to router or splitwise_scheduler
+        port = self.router_config.api_server_port if self.router_config else None
+        transfer_protocol = (
+            self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
+        )
+        self.register_info = {
+            "role": self.scheduler_config.splitwise_role,
+            "host_ip": self.host_ip,
+            "port": port,
+            "connector_port": connector_port,
+            "rdma_ports": self.cache_config.rdma_comm_ports,
+            "engine_worker_queue_port": engine_worker_queue_port,
+            "device_ids": self.local_device_ids,
+            "transfer_protocol": transfer_protocol,
+            "tp_size": self.parallel_config.tensor_parallel_size,
+        }
+        logger.info(f"register_info: {self.register_info}")
 
     def read_from_config(self):
         """

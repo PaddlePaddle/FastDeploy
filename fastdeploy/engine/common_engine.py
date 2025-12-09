@@ -426,7 +426,7 @@ class EngineService:
             if trace_carrier:
                 tracing.trace_set_proc_propagate_context(rid, trace_carrier)
                 task.trace_carrier = tracing.trace_get_proc_propagate_context(rid)
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
+            if self.cfg.scheduler_config.splitwise_role == "prefill":
                 status, msg = self.split_connector.check_decode_allocated(task)
                 if status:
                     task.metrics.ask_decode_resource_finish_time = time.time()
@@ -472,7 +472,7 @@ class EngineService:
         is_prefill = False
         for i in range(len(tasks)):
             if tasks[i].disaggregate_info is not None:
-                if tasks[i].disaggregate_info["role"] == "decode":
+                if self.cfg.scheduler_config.splitwise_role == "decode":
                     is_decode = True
                 else:
                     is_prefill = True
@@ -823,11 +823,10 @@ class EngineService:
                         f"Engine has fetched tasks from {self.scheduler.__class__.__name__}: {[task.request_id for task in tasks]}"
                     )
 
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if self.cfg.scheduler_config.splitwise_role == "prefill":
-                        for task in tasks:
-                            # start async preprocess
-                            self.resource_manager.apply_async_preprocess(task)
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    for task in tasks:
+                        # start async preprocess
+                        self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
                         for task in tasks:
@@ -885,7 +884,6 @@ class EngineService:
                         # release resource in P
                         self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
-                if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
                         need_check_req_ids = [task.request_id for task in tasks]
@@ -924,6 +922,7 @@ class EngineService:
                             tasks.remove(tmp_task)
                             # release resource in P
                             self.resource_manager.pre_recycle_resource(tmp_task.request_id)
+
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:
@@ -1609,6 +1608,7 @@ class EngineService:
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
                 "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "SOT_ENABLE_COMPILE_TIME_LIMIT": os.getenv("SOT_ENABLE_COMPILE_TIME_LIMIT", default="0"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
@@ -1788,11 +1788,10 @@ class EngineService:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
         result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
-            self.scheduler.start(role, host_ip, disaggregate)
+            self.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
             result_queue_for_dp_ipc = multiprocessing.Queue()

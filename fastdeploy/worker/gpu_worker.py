@@ -209,6 +209,8 @@ class GpuWorker(WorkerBase):
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1:
+            self.model_runner.vision_encoder_compile()
         # Trigger cuda graph capture
         self.model_runner.capture_model()
 
