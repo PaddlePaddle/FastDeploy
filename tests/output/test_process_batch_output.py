@@ -66,6 +66,7 @@ class MockTask:
         self.llm_engine_recv_req_timestamp = time.time()
         self.ic_req_data = {}
         self.prompt_token_ids_len = 0
+        self.trace_carrier = {}
 
         now = time.time()
         self.metrics = RequestMetrics(
