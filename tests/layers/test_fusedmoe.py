@@ -31,6 +31,7 @@ from fastdeploy.config import (
     LoadConfig,
     ModelConfig,
     ParallelConfig,
+    RoutingReplayConfig,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
@@ -476,6 +477,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
             ips=",".join(["0"] * nnodes),
+            routing_replay_config=RoutingReplayConfig({}),
         )
         self.fd_config.parallel_config.tp_group = None
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
