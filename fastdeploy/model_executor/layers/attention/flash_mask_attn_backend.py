@@ -282,6 +282,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
+                layer.use_neox_rotary_style,
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )

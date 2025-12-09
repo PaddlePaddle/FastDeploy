@@ -132,7 +132,7 @@ void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
   int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * head_dim;
 
   constexpr int HEAD_DIM = 128;
-  constexpr int PackSize = 4;
+  constexpr int PackSize = 8;
   const int pack_num = elem_nums / PackSize;
   const int blocksize = 128;
   int grid_size = 1;
