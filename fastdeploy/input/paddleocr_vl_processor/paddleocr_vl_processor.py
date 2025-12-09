@@ -23,6 +23,7 @@ from fastdeploy.utils import data_processor_logger
 from .process import DataProcessor
 
 _SAMPLING_EPS = 1e-5
+from fastdeploy.input.utils import process_stop_token_ids
 
 
 class PaddleOCRVLProcessor(TextProcessor):
@@ -210,11 +211,8 @@ class PaddleOCRVLProcessor(TextProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")

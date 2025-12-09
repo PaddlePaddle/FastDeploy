@@ -355,6 +355,7 @@ def post_process_normal(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
+            model_output.min_tokens,
             False,
         )  # multi ends
     elif current_platform.is_maca():
@@ -368,6 +369,7 @@ def post_process_normal(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
+            model_output.min_tokens,
             False,
         )  # multi ends
     else:
@@ -472,6 +474,7 @@ def post_process_specualate(
         model_output.stop_token_ids,
         model_output.stop_seqs_len,
         model_output.eos_token_id,
+        model_output.min_tokens,
     )
     speculate_update(
         model_output.seq_lens_encoder,

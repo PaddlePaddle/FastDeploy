@@ -279,6 +279,11 @@ class ModelOutputData:
     """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
+    """
+        the minimum tokens that will be generated
+    """
+    min_tokens: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
