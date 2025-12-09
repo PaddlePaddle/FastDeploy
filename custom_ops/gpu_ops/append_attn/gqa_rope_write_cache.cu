@@ -28,7 +28,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const float *k_norm_weight,
     const int *batch_id_per_token,
     const int *cu_seqlens_q,
-    const int *seq_lens,
+    const int *seq_lens_encoder,
     const int *seq_lens_decoder,
     const int *cu_seqlens_k,
     T *qkv_out,
@@ -38,8 +38,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int64_t elem_cnt,
     const int q_num_head,
     const int kv_num_head,
-    const int seq_len,
-    const int last_dim,
+    const int max_model_len,
+    const int head_dim,
     const bool rope_3d,
     const float rms_norm_eps) {
   using LoadT = AlignedVector<T, VecSize>;
@@ -53,30 +53,33 @@ __global__ void GQAVariableLengthRotarySplitKernel(
   LoadFloat q_norm_vec, k_norm_vec;
   int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
   int64_t all_warp_num = gridDim.x * blockDim.y;
-  const int half_lastdim = last_dim / 2;
+  const int half_headdim = head_dim / 2;
   const int offset =
-      (q_num_head + kv_num_head * 2) * last_dim;  // for all q,k,v
-  const int all_head_num = elem_cnt / last_dim;
+      (q_num_head + kv_num_head * 2) * head_dim;  // for all q,k,v
+  const int all_head_num = elem_cnt / head_dim;
   for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_num;
        gloabl_hi += all_warp_num) {
     int64_t linear_index =
-        gloabl_hi * last_dim + threadIdx.x * VecSize;  // 全局index
+        gloabl_hi * head_dim + threadIdx.x * VecSize;  // 全局index
     const int token_idx =
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
-    if (seq_lens[ori_bi] == 0) continue;
+
+    int cache_kv_len = seq_lens_decoder[ori_bi];
+    // 这里其实是不需要处理的，但是由于FA3的bug，所以必须！
+    if (seq_lens_encoder[ori_bi] == 0) cache_kv_len = 0;
+
     const int bias = linear_index % offset;
-    const int hi = bias / last_dim;
-    const int h_bias = bias % last_dim;
+    const int hi = bias / head_dim;
+    const int h_bias = bias % head_dim;
 
     const int ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) +
-        seq_lens_decoder
-            [ori_bi];  // 在当前seq中的id(拼接了seq到一个batch的情况下有效)
+        cache_kv_len;  // 在当前seq中的id(拼接了seq到一个batch的情况下有效)
     const int64_t emb_idx =
-        ori_seq_id * half_lastdim + h_bias / 2;  // embedding的id
+        ori_seq_id * half_headdim + h_bias / 2;  // embedding的id
     const int64_t base_idx =
-        token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
+        token_idx * (q_num_head + 2 * kv_num_head) * head_dim + hi * head_dim +
         h_bias;
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
     const int kv_write_idx = cu_seqlens_k[ori_bi] + ori_seq_id;
@@ -84,21 +87,21 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     T *out_p = nullptr;
     if (hi < q_num_head) {
       base_split_idx =
-          token_idx * q_num_head * last_dim + hi * last_dim + h_bias;
+          token_idx * q_num_head * head_dim + hi * head_dim + h_bias;
       out_p = q;
     } else if (hi < q_num_head + kv_num_head) {
-      base_split_idx = kv_write_idx * kv_num_head * last_dim +
-                       (hi - q_num_head) * last_dim + h_bias;
+      base_split_idx = kv_write_idx * kv_num_head * head_dim +
+                       (hi - q_num_head) * head_dim + h_bias;
       out_p = k;
     } else {
       out_p = v;
-      base_split_idx = kv_write_idx * kv_num_head * last_dim +
-                       (hi - q_num_head - kv_num_head) * last_dim + h_bias;
+      base_split_idx = kv_write_idx * kv_num_head * head_dim +
+                       (hi - q_num_head - kv_num_head) * head_dim + h_bias;
     }
 
     // TODO check this correct or not
     int64_t new_emb_idx =
-        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+        rope_3d ? emb_idx + ori_bi * head_dim * max_model_len : emb_idx;
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
 
@@ -122,7 +125,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
       WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);  // 单个head的标准差
 
       if (hi < q_num_head + kv_num_head) {  // only q and k need norm
-        float row_variance = max(warp_m2 / last_dim, 0.0f);
+        float row_variance = max(warp_m2 / head_dim, 0.0f);
         float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
         if (hi < q_num_head) {
           Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize],
@@ -165,12 +168,12 @@ __global__ void GQAVariableLengthRotarySplitKernel(
 
 template <typename T>
 void gqa_rotary_qk_split_variable(
-    T *qkv_out,  // [token_num, 3, num_head, dim_head]
+    T *qkv_out,  // [token_num, 3, num_head, head_dim]
     T *q,
     T *k,
     T *v,
     const T *qkv_input,
-    const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
+    const float *rotary_emb,  // [2, 1, 1, seq_len, head_dim / 2]
     const float *q_norm_weight,
     const float *k_norm_weight,
     const int *batch_id_per_token,
@@ -181,14 +184,14 @@ void gqa_rotary_qk_split_variable(
     const int token_num,
     const int num_heads,
     const int kv_num_heads,
-    const int seq_len,
+    const int max_model_len,
     const int input_output_len,
-    const int dim_head,
+    const int head_dim,
     const bool rope_3d,
     const float rms_norm_eps,
     const cudaStream_t &stream) {
-  assert(dim_head == 128 && "dim_head must be 128");
-  int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * dim_head;
+  assert(head_dim == 128 && "head_dim must be 128");
+  int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * head_dim;
 
   constexpr int HEAD_DIM = 128;
   constexpr int PackSize = HEAD_DIM / kWarpSize;
@@ -199,7 +202,7 @@ void gqa_rotary_qk_split_variable(
   dim3 block_size(kWarpSize, blocksize / kWarpSize);
 
   const float *cos_emb = rotary_emb;
-  const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
+  const float *sin_emb = rotary_emb + input_output_len * head_dim / 2;
   launchWithPdlWhenEnabled(GQAVariableLengthRotarySplitKernel<T, PackSize>,
                            grid_size,
                            block_size,
@@ -222,8 +225,8 @@ void gqa_rotary_qk_split_variable(
                            elem_nums,
                            num_heads,
                            kv_num_heads,
-                           seq_len,
-                           dim_head,
+                           max_model_len,
+                           head_dim,
                            rope_3d,
                            rms_norm_eps);
 }
@@ -1162,9 +1165,6 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   meta_data.max_blocks_per_seq = max_blocks_per_seq;
   meta_data.block_size = block_size;
   meta_data.batch_size = seq_lens_this_time.dims()[0];
-
-  phi::GPUContext *dev_ctx = static_cast<phi::GPUContext *>(
-      phi::DeviceContextPool::Instance().Get(qkv.place()));
 
   auto stream = qkv.stream();
   paddle::Tensor qkv_out = GetEmptyTensor(qkv.dims(), qkv.dtype(), qkv.place());

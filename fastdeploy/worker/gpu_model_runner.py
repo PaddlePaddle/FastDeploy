@@ -826,6 +826,20 @@ class GPUModelRunner(ModelRunnerBase):
                         dtype="int64",
                     )
                     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
+                if self.enable_mm:
+                    # Fix for V0 mode: Add position encoding for decode nodes in multimodal models
+                    # to prevent garbled output. Position_ids are transmitted from prefill nodes.
+                    if (
+                        "position_ids" in request.multimodal_inputs
+                        and request.multimodal_inputs["position_ids"] is not None
+                    ):
+                        position_ids = paddle.to_tensor(
+                            request.multimodal_inputs["position_ids"],
+                            dtype="int64",
+                        )
+                        self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                            position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                        )[0]
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -1020,14 +1034,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        if batch_size == 0:
-            # Note(ZKK): divided by 0 is invalid, here we give a input_length = 1
-            input_length = 1
-        else:
-            input_length = min(
-                num_tokens // (1 if capture_prefill else batch_size),
-                self.model_config.max_model_len - max_dec_len,
-            )
+        input_length = min(
+            num_tokens // (1 if capture_prefill else batch_size),
+            self.model_config.max_model_len - max_dec_len,
+        )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -1490,7 +1500,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
+            only_prefill_use_cudagraph
+            if self.cudagraph_only_prefill
+            else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
@@ -2735,7 +2747,7 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids = one["token_type_ids"][np.newaxis, :]
         token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
 
-        if one["images"] is not None:
+        if "images" in one and one["images"] is not None:
             image_type_ids = one["image_type_ids"][np.newaxis, :]
             images = one["images"]
             image_type_ids = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
