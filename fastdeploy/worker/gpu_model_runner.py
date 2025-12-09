@@ -126,11 +126,18 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
-        self.max_logprobs = (
-            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
-        )
+        self.max_logprobs = None
+        if self.enable_logprob:
+            self.max_logprobs = (
+                self.ori_vocab_size
+                if fd_config.model_config.max_logprobs == -1
+                else fd_config.model_config.max_logprobs
+            )
+        self.temp_scaled_logprobs = True
+        self.top_p_normalized_logprobs = True
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
+        self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
         # VL model config:
         if self.enable_mm:
@@ -664,6 +671,7 @@ class GPUModelRunner(ModelRunnerBase):
                 # pooling model request.sampling_params is None
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
+                self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
 
                 # Routing Replay
@@ -696,6 +704,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
+                self.forward_batch_reqs_list[idx] = None
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -1355,6 +1364,24 @@ class GPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+            logprobs_reqs = [
+                req
+                for req in self.forward_batch_reqs_list
+                if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
+            ]
+            if len(logprobs_reqs):
+                self.max_logprobs = max(
+                    [
+                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                        for req in logprobs_reqs
+                    ]
+                )
+                self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
+                self.top_p_normalized_logprobs = any(
+                    req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
+                )
+            else:
+                self.max_logprobs = None
 
         # Remove padding
         (
@@ -1410,9 +1437,11 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
+            max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
+            temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
+            top_p_normalized_logprobs_flag=self.top_p_normalized_logprobs,
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
@@ -1750,6 +1779,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
         )
 
@@ -1850,6 +1880,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
         )
@@ -2154,6 +2185,30 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    def vision_encoder_compile(self):
+        if self.graph_opt_config.graph_opt_level == 0:
+            return
+        # Currently only PaddleOCR-VL model is supported for vision encoder layer
+        if self.model_config.model_type != "paddleocr_vl":
+            return
+
+        # Compile for paddleocr_vl vision encoder layer
+        def apply_compile(fn):
+            backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
+            return paddle.jit.to_static(
+                fn,
+                full_graph=False,
+                backend=backend,
+            )
+
+        from fastdeploy.model_executor.models.paddleocr_vl.siglip import SiglipEncoder
+
+        SiglipEncoder._run_encoder_layer = apply_compile(SiglipEncoder._run_encoder_layer)
+
+        # Warmup for paddleocr_vl vision encoder layer
+        logger.info(f"Warmup for {self.model_config.model_type} compile...")
+        self._dummy_run_extract_vision_features()
+
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
@@ -2296,6 +2351,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
             )
 
@@ -2401,6 +2457,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,
@@ -2481,7 +2538,6 @@ class GPUModelRunner(ModelRunnerBase):
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
-
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
         hidden_states = hidden_states[:num_scheduled_tokens]
 
@@ -2493,36 +2549,40 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_token_ids=prompt_token_ids,
             pooling_params=self.pooling_params,
         )
+
         num_scheduled_tokens_list = [
             int(self.share_inputs["seq_lens_this_time"][i]) for i in range(num_running_requests)
         ]
+
         device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
 
-        seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
+        seq_lens_decoder = self.share_inputs["seq_lens_decoder"][:num_running_requests]
+        seq_lens_encoder = self.share_inputs["seq_lens_encoder"][:num_running_requests]
+
         pooler_output: list[Optional[paddle.Tensor]] = []
+        pooler_output_idx = 0
 
-        seq_lens_decoder_batch = self.share_inputs["seq_lens_decoder"][:num_running_requests]
+        for i, prompt_len in enumerate(pooling_metadata.prompt_lens):
+            current_seq_len = num_scheduled_tokens_list[i]
 
-        for i, (seq_len, prompt_len) in enumerate(zip(seq_lens_cpu, pooling_metadata.prompt_lens)):
-            if not self.cache_config.enable_prefix_caching:
-                output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
-                pooler_output.append(output)
+            if current_seq_len == 0:
+                pooler_output.append(None)
+                continue
+
+            total_processed = int(seq_lens_decoder[i]) + int(seq_lens_encoder[i])
+
+            if total_processed == int(prompt_len):
+                output = raw_pooler_output[pooler_output_idx]
             else:
-                current_seq_len_decoder = seq_lens_decoder_batch[i]
-                if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
-                    output = raw_pooler_output[0].data
-                else:
-                    output = None
-                pooler_output.append(output)
+                output = None
 
-        pooler_output = PoolerOutput(
-            outputs=pooler_output,
-        )
+            pooler_output.append(output)
+            pooler_output_idx += 1
 
-        return pooler_output
+        return PoolerOutput(outputs=pooler_output)
 
     def _execute_empty_input(self, forward_meta) -> None:
         """
@@ -2666,6 +2726,7 @@ class GPUModelRunner(ModelRunnerBase):
         # prompt_logprobs
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
+        self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2860,6 +2921,40 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_paddleocr(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
+
+    @paddle.no_grad()
+    def _dummy_run_extract_vision_features(self):
+        grid_thw_list = ([(1, 10, 88), (1, 10, 80)], [(1, 14, 62), (1, 20, 42), (1, 14, 60)])
+        for grid_thw in grid_thw_list:
+            images = []
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                images.append(paddle.uniform(shape=[numel, 3, 14, 14], dtype="float32", min=0.0, max=1.0))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
+
+            images = paddle.concat(images, axis=0)
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+
+            with paddle.amp.auto_cast(
+                True,
+                custom_black_list=self.amp_black,
+                custom_white_list=self.amp_white,
+                level="O2",
+                dtype=self.model_config.dtype,
+            ):
+                self.model.visual(
+                    pixel_values=images,
+                    image_grid_thw=grid_thw,
+                    position_ids=position_ids,
+                    interpolate_pos_encoding=True,
+                    cu_seqlens=cu_seqlens,
+                    use_rope=True,
+                    window_size=-1,
+                )
 
     @paddle.no_grad()
     def prepare_rope3d(
