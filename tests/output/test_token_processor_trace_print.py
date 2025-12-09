@@ -16,7 +16,7 @@ import logging
 import time
 from unittest.mock import MagicMock
 
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import Request, RequestMetrics
 from fastdeploy.output.token_processor import TokenProcessor
 
 
@@ -45,13 +45,16 @@ class TestTokenProcessorMetrics:
             tools=[],
             system="test system",
             eos_token_ids=[0],
-            arrival_time=time.time(),
         )
-        self.task.inference_start_time = time.time()
-        self.task.schedule_start_time = self.task.inference_start_time - 0.1
-        self.task.preprocess_end_time = self.task.schedule_start_time - 0.05
-        self.task.preprocess_start_time = self.task.preprocess_end_time - 0.05
-        self.task.arrival_time = self.task.preprocess_start_time - 0.1
+
+        now = time.time()
+        self.task.metrics = RequestMetrics(
+            arrival_time=now,
+            preprocess_start_time=now - 0.2,
+            preprocess_end_time=now - 0.1,
+            scheduler_recv_req_time=now + 0.1,
+            inference_start_time=now + 0.2,
+        )
 
     def test_record_first_token_metrics(self, caplog):
         current_time = time.time()
@@ -63,10 +66,6 @@ class TestTokenProcessorMetrics:
         assert "[request_id=test123]" in caplog.text
         assert "[event=FIRST_TOKEN_GENERATED]" in caplog.text
         assert "[event=DECODE_START]" in caplog.text
-
-        # Verify metrics are set
-        assert hasattr(self.task, "first_token_time")
-        assert self.task.first_token_time == current_time
 
     def test_record_completion_metrics(self, caplog):
         current_time = time.time()

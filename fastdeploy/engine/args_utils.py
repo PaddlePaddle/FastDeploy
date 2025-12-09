@@ -35,6 +35,7 @@ from fastdeploy.config import (
     PlasAttentionConfig,
     PoolerConfig,
     RouterConfig,
+    RoutingReplayConfig,
     RunnerOption,
     SpeculativeConfig,
     StructuredOutputsConfig,
@@ -236,6 +237,10 @@ class EngineArgs:
     enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
+    """
+    enable_output_caching: bool = True
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
 
     disable_custom_all_reduce: bool = False
@@ -487,6 +492,11 @@ class EngineArgs:
     Configuration for eplb.
     """
 
+    routing_replay_config: Optional[Dict[str, Any]] = None
+    """
+    Flag to rollout routing replay(r3)
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -495,8 +505,6 @@ class EngineArgs:
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
-            self.enable_prefix_caching = False
-        if self.speculative_config is not None:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
@@ -881,6 +889,12 @@ class EngineArgs:
             help="Config of eplb.",
         )
         parallel_group.add_argument(
+            "--routing-replay-config",
+            type=json.loads,
+            default=EngineArgs.routing_replay_config,
+            help="Flag of rollout routing replay(r3).",
+        )
+        parallel_group.add_argument(
             "--enable-chunked-moe",
             action="store_true",
             default=EngineArgs.enable_chunked_moe,
@@ -953,6 +967,13 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
+        )
+
+        perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
         )
 
         perf_group.add_argument(
@@ -1226,6 +1247,14 @@ class EngineArgs:
         eplb_args["enable_eplb"] = self.enable_eplb
         return EPLBConfig(eplb_args)
 
+    def create_routing_repaly_config(self) -> RoutingReplayConfig:
+        """ """
+        routing_replay_args = asdict(self)
+        if self.routing_replay_config is not None:
+            for k, v in self.routing_replay_config.items():
+                routing_replay_args[k] = v
+        return RoutingReplayConfig(routing_replay_args)
+
     def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
@@ -1269,6 +1298,7 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
         eplb_cfg = self.create_eplb_config()
+        routing_replay_config = self.create_routing_repaly_config()
         router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()
@@ -1301,4 +1331,5 @@ class EngineArgs:
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
+            routing_replay_config=routing_replay_config,
         )

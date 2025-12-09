@@ -303,7 +303,7 @@ class ResultReader:
         add a req to reader, reader will async fetch infer result from redis
         """
         with self.lock:
-            self.reqs[req.request_id] = {"arrival_time": req.arrival_time}
+            self.reqs[req.request_id] = {"arrival_time": req.metrics.arrival_time}
             self.out_buffer[req.request_id] = []
 
     def read(self):
@@ -835,7 +835,7 @@ class InferScheduler:
                     break
 
                 req = self.reqs_queue.popleft()
-                if cur_time - req.arrival_time > self.ttl:
+                if cur_time - req.metrics.arrival_time > self.ttl:
                     logger.error(f"req({req.request_id}) is expired({self.ttl}) when InferScheduler Get Requests")
                     self.node.finish_req(req.request_id)
                     continue
@@ -860,7 +860,7 @@ class InferScheduler:
                         self.reqs_queue.appendleft(req)
                         break
                 else:
-                    if current_prefill_tokens > max_num_batched_tokens:
+                    if current_prefill_tokens > max_num_batched_tokens and len(reqs) > 0:
                         self.reqs_queue.appendleft(req)
                         break
                 # logger.info(f"Get Requests from Scheduler: {req.request_id}")

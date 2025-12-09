@@ -62,8 +62,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_TRITON_KERNEL_CACHE_DIR": lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
     # Whether transition from standalone PD decoupling to centralized inference
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
-    # Whether to use fastsafetensor load weight (0 or 1)
-    "FD_USE_FASTSAFETENSOR": lambda: bool(int(os.getenv("FD_USE_FASTSAFETENSOR", "0"))),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
     # Whether to use aggregate send.
@@ -153,6 +151,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
 }
 
 
