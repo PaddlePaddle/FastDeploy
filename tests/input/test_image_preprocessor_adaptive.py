@@ -77,17 +77,15 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
             self.processor.set_pixels(max_pixels=0)
 
     def test_get_smarted_resize(self):
-        """Test get_smarted_resize"""
+        """Test get_smarted_resize with default and custom pixels"""
         height, width = 224, 224
+        # Test with default pixels
         (resized_h, resized_w), (patches_h, patches_w) = self.processor.get_smarted_resize(height, width)
         self.assertIsInstance(resized_h, int)
         self.assertIsInstance(resized_w, int)
         self.assertIsInstance(patches_h, int)
         self.assertIsInstance(patches_w, int)
-
-    def test_get_smarted_resize_with_custom_pixels(self):
-        """Test get_smarted_resize with custom pixels"""
-        height, width = 224, 224
+        # Test with custom pixels
         (resized_h, resized_w), (_, _) = self.processor.get_smarted_resize(
             height, width, min_pixels=100, max_pixels=10000
         )
@@ -263,7 +261,7 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertIsInstance(result[0], list)
 
-        # 4D array in list
+        # 4D array in list (lines 119-120)
         videos = [np.random.rand(3, 224, 224, 3).astype(np.uint8)]
         result = make_batched_videos(videos)
         self.assertEqual(len(result), 1)
@@ -280,6 +278,9 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         result = self.processor.preprocess(images=img)
         self.assertIn("pixel_values", result)
         self.assertIn("image_grid_thw", result)
+        # Verify pixel_values shape
+        pixel_values = result["pixel_values"]
+        self.assertIsInstance(pixel_values, np.ndarray)
 
     def test_preprocess_videos(self):
         """Test preprocess handling videos"""
@@ -301,37 +302,30 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         result = self.processor.preprocess(images=img, predetermined_grid_thw=predetermined_grid_thw)
         self.assertIn("pixel_values", result)
 
-    def test_preprocess_no_resize(self):
-        """Test preprocess without resize"""
+    def test_preprocess_flags(self):
+        """Test preprocess with various flags disabled"""
         img = Image.new("RGB", (224, 224))
+        # Test without resize
         result = self.processor.preprocess(images=img, do_resize=False)
         self.assertIn("pixel_values", result)
-
-    def test_preprocess_no_rescale(self):
-        """Test preprocess without rescale"""
-        img = Image.new("RGB", (224, 224))
+        # Test without rescale
         result = self.processor.preprocess(images=img, do_rescale=False)
         self.assertIn("pixel_values", result)
-
-    def test_preprocess_no_normalize(self):
-        """Test preprocess without normalize"""
-        img = Image.new("RGB", (224, 224))
+        # Test without normalize
         result = self.processor.preprocess(images=img, do_normalize=False)
         self.assertIn("pixel_values", result)
 
     def test_preprocess_custom_mean_std(self):
         """Test preprocess using custom mean and std"""
         img = Image.new("RGB", (224, 224))
+        # Test with simple custom mean/std
         result = self.processor.preprocess(images=img, image_mean=[0.5, 0.5, 0.5], image_std=[0.5, 0.5, 0.5])
         self.assertIn("pixel_values", result)
-
-    def test_make_batched_videos_4d_array_in_list(self):
-        """Test make_batched_videos handling 4D array in list (lines 119-120)"""
-        # Create a list of 4D arrays
-        videos = [np.random.rand(3, 224, 224, 3).astype(np.uint8)]
-        result = make_batched_videos(videos)
-        self.assertEqual(len(result), 1)
-        self.assertIsInstance(result[0], list)
+        # Test with ImageNet-style mean/std
+        result = self.processor.preprocess(
+            images=img, image_mean=[0.485, 0.456, 0.406], image_std=[0.229, 0.224, 0.225]
+        )
+        self.assertIn("pixel_values", result)
 
     def test_preprocess_do_convert_rgb(self):
         """Test preprocess with do_convert_rgb=True (line 289)"""
@@ -355,14 +349,6 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
             )
             # Verify warning is called when is_scaled_image returns True and do_rescale is True
             mock_logger.warning.assert_called()
-
-    def test_preprocess_data_format_last(self):
-        """Test preprocess with data_format=LAST (line 351)"""
-        img = Image.new("RGB", (224, 224))
-        from paddleformers.transformers.image_utils import ChannelDimension
-
-        result = self.processor.preprocess(images=img, data_format=ChannelDimension.LAST)
-        self.assertIn("pixel_values", result)
 
     def test_preprocess_invalid_images_check(self):
         """Test invalid image check in preprocess (line 464)"""
@@ -397,7 +383,11 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         img = Image.new("RGB", (224, 224))
         from paddleformers.transformers.image_utils import ChannelDimension
 
+        # Test with FIRST
         result = self.processor.preprocess(images=img, input_data_format=ChannelDimension.FIRST)
+        self.assertIn("pixel_values", result)
+        # Test with None
+        result = self.processor.preprocess(images=img, input_data_format=None)
         self.assertIn("pixel_values", result)
 
     def test_preprocess_do_resize_with_predetermined_grid_thw(self):
@@ -421,24 +411,12 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         result = self.processor.preprocess(images=img, return_tensors="np")
         self.assertIn("pixel_values", result)
 
-    def test_preprocess_channel_dimension_none(self):
-        """Test preprocess with input_data_format=None (lines 299-301)"""
-        img = Image.new("RGB", (224, 224))
-        result = self.processor.preprocess(images=img, input_data_format=None)
-        self.assertIn("pixel_values", result)
-
     def test_preprocess_do_rescale_false_with_scaled_image(self):
         """Test preprocess with do_rescale=False and scaled image (line 335)"""
         # Create a scaled image
         img_array = np.random.rand(224, 224, 3).astype(np.float32) * 0.5  # Values in [0, 0.5]
         img = Image.fromarray((img_array * 255).astype(np.uint8))
         result = self.processor.preprocess(images=img, do_rescale=False)
-        self.assertIn("pixel_values", result)
-
-    def test_preprocess_do_normalize_false(self):
-        """Test preprocess with do_normalize=False (lines 338-344)"""
-        img = Image.new("RGB", (224, 224))
-        result = self.processor.preprocess(images=img, do_normalize=False)
         self.assertIn("pixel_values", result)
 
     def test_preprocess_custom_resample(self):
@@ -455,48 +433,17 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         result = self.processor.preprocess(images=img, rescale_factor=1.0 / 128.0)
         self.assertIn("pixel_values", result)
 
-    def test_preprocess_custom_image_mean_std(self):
-        """Test preprocess with custom image_mean and image_std (lines 339-344)"""
-        img = Image.new("RGB", (224, 224))
-        result = self.processor.preprocess(
-            images=img, image_mean=[0.485, 0.456, 0.406], image_std=[0.229, 0.224, 0.225]
-        )
-        self.assertIn("pixel_values", result)
-
-    def test_preprocess_data_format_channels_first(self):
-        """Test preprocess with data_format=FIRST (line 346)"""
+    def test_preprocess_data_format(self):
+        """Test preprocess with different data_format values"""
         img = Image.new("RGB", (224, 224))
         from paddleformers.transformers.image_utils import ChannelDimension
 
+        # Test with FIRST
         result = self.processor.preprocess(images=img, data_format=ChannelDimension.FIRST)
         self.assertIn("pixel_values", result)
-
-    def test_preprocess_data_format_channels_last(self):
-        """Test preprocess with data_format=LAST (line 350)"""
-        img = Image.new("RGB", (224, 224))
-        from paddleformers.transformers.image_utils import ChannelDimension
-
+        # Test with LAST
         result = self.processor.preprocess(images=img, data_format=ChannelDimension.LAST)
         self.assertIn("pixel_values", result)
-
-    def test_preprocess_patches_reshape(self):
-        """Test preprocess patches reshape logic (lines 349-381)"""
-        img = Image.new("RGB", (224, 224))
-        result = self.processor.preprocess(images=img)
-        self.assertIn("pixel_values", result)
-        # Verify pixel_values shape
-        pixel_values = result["pixel_values"]
-        self.assertIsInstance(pixel_values, np.ndarray)
-
-    def test_preprocess_videos_multiple(self):
-        """Test preprocess with multiple videos (lines 496-521)"""
-        videos = [
-            [Image.new("RGB", (224, 224)) for _ in range(4)],
-            [Image.new("RGB", (224, 224)) for _ in range(4)],
-        ]
-        result = self.processor.preprocess(images=None, videos=videos)
-        self.assertIn("pixel_values_videos", result)
-        self.assertIn("video_grid_thw", result)
 
     def test_preprocess_multiple_images_loop(self):
         """Test preprocess loop with multiple images (lines 312-348, 468-488)"""
@@ -510,6 +457,16 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
 
     def test_preprocess_videos_loop(self):
         """Test preprocess with videos in loop (lines 496-521)"""
+        # Test with multiple videos
+        videos = [
+            [Image.new("RGB", (224, 224)) for _ in range(4)],
+            [Image.new("RGB", (224, 224)) for _ in range(4)],
+        ]
+        result = self.processor.preprocess(images=None, videos=videos)
+        self.assertIn("pixel_values_videos", result)
+        self.assertIn("video_grid_thw", result)
+        self.assertIsInstance(result["pixel_values_videos"], np.ndarray)
+        # Test with nested list format
         videos = [[Image.new("RGB", (224, 224)) for _ in range(4)] for _ in range(2)]
         result = self.processor.preprocess(images=None, videos=videos)
         self.assertIn("pixel_values_videos", result)
