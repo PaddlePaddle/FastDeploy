@@ -77,12 +77,6 @@ def setup_and_run_embedding_server():
         "256",
         "--runner",
         "pooling",
-        "--convert",
-        "embed",
-        "--max-num-partial-prefills",
-        "10",
-        "--max-long-partial-prefills",
-        "10",
     ]
 
     with open(log_path, "w") as logfile:
@@ -248,67 +242,6 @@ def test_single_text_embedding(embedding_api_url, headers):
     else:
         print(f"Comparing with baseline: {baseline_file}")
         check_embedding_against_baseline(embedding, baseline_file, threshold=0.02)
-
-
-def send_embedding_request(
-    api_url: str,
-    input_texts,
-    headers: dict,
-    model: str = "default",
-    timeout: int = 120,
-    request_id: int = 0,
-):
-    """
-    Send a single embedding request.
-
-    Returns:
-        Tuple of (request_id, response_dict, latency_ms)
-    """
-    payload = {
-        "model": model,
-        "input": input_texts,
-    }
-
-    start_time = time.time()
-    try:
-        response = requests.post(
-            api_url,
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-        )
-        latency_ms = (time.time() - start_time) * 1000
-
-        if response.status_code == 200:
-            result = response.json()
-            result["_success"] = True
-            result["_latency_ms"] = latency_ms
-            result["_request_id"] = request_id
-            return request_id, result, latency_ms
-        else:
-            return (
-                request_id,
-                {
-                    "_success": False,
-                    "_error": f"HTTP {response.status_code}: {response.text}",
-                    "_latency_ms": latency_ms,
-                    "_request_id": request_id,
-                },
-                latency_ms,
-            )
-
-    except Exception as e:
-        latency_ms = (time.time() - start_time) * 1000
-        return (
-            request_id,
-            {
-                "_success": False,
-                "_error": str(e),
-                "_latency_ms": latency_ms,
-                "_request_id": request_id,
-            },
-            latency_ms,
-        )
 
 
 def test_multi_text_embedding(embedding_api_url, headers):
