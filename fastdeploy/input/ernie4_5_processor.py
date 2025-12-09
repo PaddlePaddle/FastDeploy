@@ -380,6 +380,14 @@ class Ernie4_5Processor(BaseDataProcessor):
             reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
             response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+            response_dict["outputs"]["reasoning_content"] = reasoning_content
+            response_dict["outputs"]["text"] = (
+                reasoning_delta_message.content or ""
+                if reasoning_delta_message and hasattr(reasoning_delta_message, "content")
+                else ""
+            )
+        else:
+            response_dict["outputs"]["text"] = delta_text
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -395,7 +403,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
                 response_dict["outputs"]["delta_message"] = tool_call_delta_message
-        response_dict["outputs"]["text"] = delta_text
+
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
