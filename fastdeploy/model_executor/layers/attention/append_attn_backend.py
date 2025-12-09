@@ -195,7 +195,11 @@ class AppendAttentionBackend(AttentionBackend):
                 self.rank, int(self.device_id), self.keep_pd_step_flag
             )
 
-        forward_meta.attention_metadata = metadata
+        self.attention_metadata: AttentionMetadata = metadata
+
+    def get_attntion_meta(self) -> AttentionMetadata:
+        """get_attntion_meta"""
+        return self.attention_metadata
 
     def get_kv_cache_shape(
         self,
@@ -225,7 +229,7 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
-        metadata = forward_meta.attention_metadata
+        metadata = self.attention_metadata
 
         sliding_window = layer.sliding_window
 
