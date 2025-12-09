@@ -56,8 +56,9 @@ class TestBuildSampleLogprobs(unittest.TestCase):
 
         expected = [
             {
-                101: Logprob(logprob=-0.5, rank=1, decoded_token="token_101"),
-                102: Logprob(logprob=-1.0, rank=2, decoded_token="token_102"),
+                100: Logprob(logprob=-0.1, rank=1, decoded_token="token_100"),
+                101: Logprob(logprob=-0.5, rank=2, decoded_token="token_101"),
+                102: Logprob(logprob=-1.0, rank=3, decoded_token="token_102"),
             }
         ]
 
@@ -79,7 +80,7 @@ class TestBuildSampleLogprobs(unittest.TestCase):
         logprobs_lists = MagicMock(spec=LogprobsLists)
         logprobs_lists.logprob_token_ids = [[100]]
         result = self.llm._build_sample_logprobs(logprobs_lists, topk_logprobs=2)
-        self.assertIsNone(result)
+        self.assertEqual(result, [])
 
     def test_decode_token(self):
         """
