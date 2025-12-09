@@ -33,8 +33,9 @@ __global__ void speculate_recover_block(int* recover_block_list,  // [bsz]
                                         bool* stop_flags,
                                         int* seq_lens_this_time,
                                         const int* ori_seq_lens_encoder,
+                                        const int* ori_seq_lens_decoder,
                                         int* seq_lens_encoder,
-                                        const int* seq_lens_decoder,
+                                        int* seq_lens_decoder,
                                         int* block_tables,
                                         int* free_list,
                                         int* free_list_len,
@@ -82,6 +83,7 @@ __global__ void speculate_recover_block(int* recover_block_list,  // [bsz]
   for (int bid = cid; bid < recover_len_lm; bid += ncores) {
     int recover_id;
     int ori_seq_len_encoder;
+    int ori_seq_len_decoder;
     int step_idx_now;
     int encoder_block_len;
     int decoder_used_len;
@@ -89,12 +91,20 @@ __global__ void speculate_recover_block(int* recover_block_list,  // [bsz]
     GM2LM(recover_block_list + bid, &recover_id, sizeof(int));
     GM2LM_ASYNC(
         ori_seq_lens_encoder + recover_id, &ori_seq_len_encoder, sizeof(int));
+    if (ori_seq_lens_decoder != nullptr) {
+      GM2LM_ASYNC(
+          ori_seq_lens_decoder + recover_id, &ori_seq_len_decoder, sizeof(int));
+    }
     GM2LM_ASYNC(step_idx + recover_id, &step_idx_now, sizeof(int));
     GM2LM_ASYNC(
         encoder_block_lens + recover_id, &encoder_block_len, sizeof(int));
     GM2LM_ASYNC(used_list_len + recover_id, &decoder_used_len, sizeof(int));
     GM2LM_ASYNC(next_tokens + recover_id, &next_token, sizeof(int64_t));
     mfence();
+    if (ori_seq_lens_decoder != nullptr) {
+      LM2GM_ASYNC(
+          &ori_seq_len_decoder, seq_lens_decoder + recover_id, sizeof(int));
+    }
 
     int seq_len = ori_seq_len_encoder + step_idx_now;
     mfence();

@@ -1484,6 +1484,31 @@ class StructuredOutputsConfig:
         return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
+class RoutingReplayConfig:
+    """Configuration for Routing Replay used in RL training"""
+
+    def __init__(self, args) -> None:
+        self.enable_routing_replay: bool = False
+        self.routing_store_type: str = "local"
+
+        # Local routing store
+        self.local_store_dir: str = "./routing_replay_output"
+
+        # RDMA routing store
+        # TODO: Add RDMA routing store configuration attributes here when the feature is implemented.
+
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key) and value != "None":
+                    setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert routing replay config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1517,6 +1542,7 @@ class FDConfig:
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
+        routing_replay_config: Optional[RoutingReplayConfig] = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1533,6 +1559,7 @@ class FDConfig:
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
+        self.routing_replay_config = routing_replay_config
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -1720,9 +1747,6 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
-        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
-            self.cache_config.enable_prefix_caching = False
-            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -1895,42 +1919,23 @@ class FDConfig:
             else None
         )
 
-        self.disaggregate_info = {}
-        if self.scheduler_config.splitwise_role != "mixed":
-            self.disaggregate_info["role"] = self.scheduler_config.splitwise_role
-            self.disaggregate_info["cache_info"] = dict()
-            current_protocol = self.cache_config.cache_transfer_protocol.split(",")
-            self.disaggregate_info["transfer_protocol"] = current_protocol
-
-            for protocol in current_protocol:
-                if protocol == "ipc":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": engine_worker_queue_port,
-                        "device_ids": self.local_device_ids,
-                    }
-                elif protocol == "rdma":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": connector_port,
-                        "rdma_port": self.cache_config.rdma_comm_ports,
-                    }
-            logger.info(f"disaggregate_info: {self.disaggregate_info}")
-
-        if self.router_config:
-            # the information for registering this server to router
-            self.register_info = {
-                "role": self.scheduler_config.splitwise_role,
-                "host_ip": self.host_ip,
-                "port": self.router_config.api_server_port,
-                "connector_port": connector_port,
-                "rdma_ports": self.cache_config.rdma_comm_ports,
-                "engine_worker_queue_port": engine_worker_queue_port,
-                "device_ids": self.local_device_ids,
-                "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
-                "tp_size": self.parallel_config.tensor_parallel_size,
-            }
-            logger.info(f"register_info: {self.register_info}")
+        # the information for registering this server to router or splitwise_scheduler
+        port = self.router_config.api_server_port if self.router_config else None
+        transfer_protocol = (
+            self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
+        )
+        self.register_info = {
+            "role": self.scheduler_config.splitwise_role,
+            "host_ip": self.host_ip,
+            "port": port,
+            "connector_port": connector_port,
+            "rdma_ports": self.cache_config.rdma_comm_ports,
+            "engine_worker_queue_port": engine_worker_queue_port,
+            "device_ids": self.local_device_ids,
+            "transfer_protocol": transfer_protocol,
+            "tp_size": self.parallel_config.tensor_parallel_size,
+        }
+        logger.info(f"register_info: {self.register_info}")
 
     def read_from_config(self):
         """
