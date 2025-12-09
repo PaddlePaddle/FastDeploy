@@ -79,9 +79,9 @@ class BlockWiseFP8Config(QuantConfigBase):
                 )
             return BlockWiseFP8MoEMethod(self)
         else:
-            return BlockWiseFP8LinearMethod(self)
-            # from fastdeploy.model_executor.layers.linear import UnquantizedLinearMethod
-            # return UnquantizedLinearMethod()
+            # return BlockWiseFP8LinearMethod(self)
+            from fastdeploy.model_executor.layers.linear import UnquantizedLinearMethod
+            return UnquantizedLinearMethod()
 
 
 class BlockWiseFP8LinearMethod(QuantMethodBase):
@@ -173,10 +173,122 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
     def process_weights_after_loading(self, layer) -> None:
         def _process_quantize():
             weight_tensor = layer.weight.transpose([1, 0])
-            # quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
+            quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
 
-            quanted_weight_tensor, weight_block_scale_tensor = deep_gemm.utils.math.per_block_cast_to_fp8(
-                weight_tensor, use_ue8m0=True
+            def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
+                x: paddle.Tensor,
+            ):
+                from deep_gemm.utils import align, get_tma_aligned_size
+
+                assert x.dtype == paddle.float and x.dim() in (2, 3)
+
+                # First, convert into UE8M0 `uint8_t`
+                ue8m0_tensor = (x.view(paddle.int) >> 23).to(paddle.uint8)
+
+                # Second, make padded packed tensors
+                mn, k = x.shape[-2], x.shape[-1]
+                remove_dim = False
+                if x.dim() == 2:
+                    x, remove_dim = x.unsqueeze(0), True
+                b = x.shape[0]
+                aligned_mn = get_tma_aligned_size(mn, 4)
+                aligned_k = align(k, 4)
+                padded = paddle.zeros((b, aligned_mn, aligned_k), device=x.device, dtype=paddle.uint8)
+                padded[:, :mn, :k] = ue8m0_tensor
+                padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
+
+                # Finally, transpose
+                transposed = paddle.zeros(
+                    (b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int
+                ).mT
+                transposed[:, :, :] = padded
+                aligned_x = transposed[:, :mn, :]
+                return aligned_x.squeeze(0) if remove_dim else aligned_x
+
+            def block_quant_dequant(
+                x_q_block,
+                x_s,
+                block_size,
+                dtype,):
+                """This function converts block-wise quantization to unquantized.
+                The inputs are block-wise quantization tensor `x_q_block`, block-wise quantization scale
+                and the block size.
+                The output is an unquantized tensor with dtype.
+                """
+                block_n, block_k = block_size[0], block_size[1]
+                *_, n, k = x_q_block.shape
+
+                # ... n_scale k_scale -> ... (n_scale block_n) (k_scale block_k)
+                x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(
+                    block_k, dim=-1
+                )
+                x_scale_repeat = x_scale_repeat[..., :n, :k]
+
+                return (x_q_block.to(paddle.float32) * x_scale_repeat).to(dtype)
+
+            def requant_weight_ue8m0(
+                weight,
+                weight_scale_inv,
+                weight_block_size,
+            ):
+                assert weight_block_size == [128, 128]
+
+                *_, n, k = weight.shape
+
+                weight_dequant = block_quant_dequant(
+                    weight,
+                    weight_scale_inv,
+                    weight_block_size,
+                    paddle.bfloat16,
+                )
+
+                out_w, out_s = quant_weight_ue8m0(
+                    weight_dequant=weight_dequant,
+                    weight_block_size=weight_block_size,
+                )
+
+                out_s = transform_scale_ue8m0(out_s, mn=out_w.shape[-2])
+
+                return out_w, out_s
+
+
+            def quant_weight_ue8m0(
+                weight_dequant,
+                weight_block_size
+            ):
+                assert weight_block_size == [128, 128]
+                assert (
+                    weight_dequant.dtype == paddle.bfloat16
+                ), f"{weight_dequant.dtype=} {weight_dequant.shape=}"
+
+                *batch_dims, n, k = weight_dequant.shape
+
+                weight_dequant_flat = weight_dequant.view((-1, k))
+                out_w_flat, out_s_flat = deep_gemm.utils.math.per_block_cast_to_fp8(weight_dequant_flat, use_ue8m0=True)
+
+                out_w = out_w_flat.view((*batch_dims, n, k))
+                out_s = out_s_flat.view(
+                    (
+                        *batch_dims,
+                        deep_gemm.utils.math.ceil_div(n, weight_block_size[0]),
+                        deep_gemm.utils.math.ceil_div(k, weight_block_size[1]),
+                    )
+                )
+
+                return out_w, out_s
+
+            # NOTE copy and modified from DeepGEMM
+            def transform_scale_ue8m0(sf, mn, use_torch_impl: bool = False):
+                # get_mn_major_tma_aligned_packed_ue8m0_tensor = deep_gemm.utils.layout.get_mn_major_tma_aligned_packed_ue8m0_tensor
+                get_mn_major_tma_aligned_packed_ue8m0_tensor = _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl
+
+                sf = sf.index_select(-2, paddle.arange(mn, device=sf.device) // 128)
+                sf = get_mn_major_tma_aligned_packed_ue8m0_tensor(sf)
+                return sf
+
+            #======aaaaaaaaa 以上是调试代码新加的
+            quanted_weight_tensor, weight_block_scale_tensor = requant_weight_ue8m0(
+                quanted_weight_tensor.to(weight_block_scale_tensor.place), weight_block_scale_tensor, [128, 128]
             )
 
             if hasattr(layer.weight, "tensor_track"):
@@ -190,13 +302,13 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-            layer.weight_scale_inv = layer.create_parameter(
-                shape=weight_block_scale_tensor.shape,
-                dtype=weight_block_scale_tensor.dtype,
-                is_bias=False,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            )
-
+            # layer.weight_scale_inv = layer.create_parameter(
+            #     shape=weight_block_scale_tensor.shape,
+            #     dtype=weight_block_scale_tensor.dtype,
+            #     is_bias=False,
+            #     default_initializer=paddle.nn.initializer.Constant(0),
+            # )
+            layer.weight_scale_inv = weight_block_scale_tensor
             layer.weight.copy_(quanted_weight_tensor, False)
             layer.weight_scale_inv.copy_(weight_block_scale_tensor, False)
 
