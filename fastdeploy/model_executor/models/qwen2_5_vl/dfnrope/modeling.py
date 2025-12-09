@@ -280,9 +280,9 @@ class VisionMlp(nn.Layer):
         super().__init__()
         self.tensor_parallel_degree = tensor_parallel_degree
 
-        self.gate_up_proj = MergedColumnParallelLinear(
+        self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
-            prefix=f"{prefix}.gate_up_proj",
+            prefix=f"{prefix}.up_gate_proj",
             input_size=dim,
             output_size=hidden_dim * 2,
             with_bias=bias,
@@ -297,7 +297,9 @@ class VisionMlp(nn.Layer):
             with_bias=bias,
             reduce_results=True,
         )
-
+        if bias:
+            set_weight_attrs(self.up_gate_proj.bias, {"output_dim": True})
+            # set_weight_attrs(self.down_proj.bias, {"output_dim": False})
         self.act = SiluAndMul(
             fd_config=fd_config,
             bias=None,
@@ -313,7 +315,7 @@ class VisionMlp(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        gate_up = self.gate_up_proj(x)
+        gate_up = self.up_gate_proj(x)
         x = self.act(gate_up)
         x_down = self.down_proj(x)
         return x_down
