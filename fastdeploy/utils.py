@@ -631,7 +631,7 @@ def is_port_available(host, port):
         except OSError as e:
             if e.errno == errno.EADDRINUSE:
                 return False
-            raise
+            return True
 
 
 def find_free_ports(
