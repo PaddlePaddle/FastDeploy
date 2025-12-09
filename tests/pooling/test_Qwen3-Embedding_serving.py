@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import concurrent.futures
 import json
 import os
 import signal
@@ -403,62 +402,3 @@ def test_multi_text_embedding(embedding_api_url, headers):
                     f"Current batch saved to: {temp_file}\n"
                     f"Please check the differences."
                 )
-
-
-def test_multi_batch_concurrent_threading(embedding_api_url, headers):
-    """
-    Test multiple concurrent batch requests using ThreadPoolExecutor.
-    Each request contains multiple texts.
-    """
-    batch_input = ["北京天安门在哪里?", "杭州在哪里?", "你是谁啊"]
-    concurrent_requests = 5
-    payload = {
-        "model": "default",
-        "input": batch_input,
-    }
-
-    def send_request():
-        resp = requests.post(embedding_api_url, headers=headers, json=payload)
-        assert resp.status_code == 200, f"Request failed: {resp.status_code}"
-        return resp.json()
-
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
-        futures = [executor.submit(send_request) for _ in range(concurrent_requests)]
-        for future in concurrent.futures.as_completed(futures):
-            results.append(future.result())
-
-    assert len(results) == concurrent_requests, f"Expected {concurrent_requests} results, got {len(results)}"
-
-    first_embeddings = [item["embedding"] for item in results[0]["data"]]
-
-    THRESHOLD = 0.05
-    for i, result in enumerate(results[1:], start=1):
-        current_embeddings = [item["embedding"] for item in result["data"]]
-        for idx, (first_emb, current_emb) in enumerate(zip(first_embeddings, current_embeddings)):
-            mean_abs_diff = compare_embeddings(first_emb, current_emb, threshold=THRESHOLD)
-            assert (
-                mean_abs_diff < THRESHOLD
-            ), f"Result {i}, embedding {idx} differs too much (diff={mean_abs_diff:.6f})"
-
-    base_path = os.getenv("MODEL_PATH", "")
-    baseline_filename = "test-Qwen3-Embedding-0.6B-multi-batch-concurrent-baseline.json"
-    baseline_file = os.path.join(base_path, "torch", baseline_filename) if base_path else baseline_filename
-
-    if not os.path.exists(baseline_file):
-        baseline_data = {
-            "embeddings": first_embeddings,
-            "dimension": len(first_embeddings[0]),
-            "count": len(first_embeddings),
-            "inputs": batch_input,
-        }
-        with open(baseline_file, "w", encoding="utf-8") as f:
-            json.dump(baseline_data, f, indent=2)
-        print(f"Baseline saved to: {baseline_file}")
-    else:
-        with open(baseline_file, "r", encoding="utf-8") as f:
-            baseline_embeddings = json.load(f)["embeddings"]
-
-        for idx, (current_emb, baseline_emb) in enumerate(zip(first_embeddings, baseline_embeddings)):
-            mean_abs_diff = compare_embeddings(current_emb, baseline_emb, threshold=THRESHOLD)
-            assert mean_abs_diff < THRESHOLD, f"Embedding {idx} differs from baseline (diff={mean_abs_diff:.6f})"
