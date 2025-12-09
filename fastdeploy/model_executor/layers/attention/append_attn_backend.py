@@ -239,8 +239,8 @@ class AppendAttentionBackend(AttentionBackend):
             if layer.use_neox_rotary_style:
                 assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
                 # 128 is qwen3
-                # 64 is glm
-                assert forward_meta.rotary_embs.shape[4] in [64, 128]
+                # 32 is glm
+                assert forward_meta.rotary_embs.shape[4] in [128, 32]
             else:
                 assert forward_meta.rotary_embs.shape == [2, 1, self.max_seq_len, 1, 64]
 
