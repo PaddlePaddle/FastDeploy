@@ -677,8 +677,16 @@ class RequestOutput:
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        completion_output = CompletionOutput.from_dict(d.pop("outputs"))
-        metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        if "outputs" in d and isinstance(d["outputs"], dict):
+            completion_output = CompletionOutput.from_dict(d.pop("outputs"))
+        else:
+            d.pop("outputs", None)
+            completion_output = None
+        if "metrics" in d and isinstance(d["metrics"], dict):
+            metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        else:
+            d.pop("metrics", None)
+            metrics = None
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
     def to_dict(self):
