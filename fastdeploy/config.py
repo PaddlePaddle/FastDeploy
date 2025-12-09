@@ -1747,9 +1747,6 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
-        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
-            self.cache_config.enable_prefix_caching = False
-            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
