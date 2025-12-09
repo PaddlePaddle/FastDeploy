@@ -17,6 +17,7 @@
 #include "paddle/extension.h"
 #include "paddle/phi/backends/context_pool.h"
 #include "paddle/phi/core/memory/memcpy.h"
+#include "qwen3_rope.h"
 #include "remote_cache_kv_ipc.h"
 
 template <typename T, int VecSize = 1>
@@ -173,7 +174,7 @@ void gqa_rotary_qk_split_variable(
     T *k,
     T *v,
     const T *qkv_input,
-    const float *rotary_emb,  // [2, 1, 1, seq_len, head_dim / 2]
+    const float *rotary_emb,  // [2, 1, seq_len, 1, head_dim / 2]
     const float *q_norm_weight,
     const float *k_norm_weight,
     const int *batch_id_per_token,
@@ -1136,6 +1137,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const int kv_token_num,
     const int max_seq_len,
     const float rms_norm_eps,
+    const bool use_neox_rotary_style,
     const std::string &cache_quant_type,
     const bool rope_3d) {
   typedef PDTraits<paddle::DataType::BFLOAT16> traits_;
@@ -1157,6 +1159,24 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       qkv_dims[qkv_dims.size() - 1] / head_dim - 2 * kv_num_heads;
   const float softmax_scale = 1.f / sqrt(head_dim);
 
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims().size(), 1);
+  PADDLE_ENFORCE_EQ(batch_id_per_token.dims()[0], token_num);
+
+  if (!rope_3d) {
+    PADDLE_ENFORCE_EQ(rotary_embs.dims().size(), 5);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[0], 2);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[1], 1);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[2], max_seq_len);
+    PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
+    if (use_neox_rotary_style) {
+      // Note(ZKK) Qwen3 like model
+      // the [0,head_dim/2), [head_dim/2,head_dim) data are totally same!
+      PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim);
+    } else {
+      PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 2);
+    }
+  }
+
   AppendAttnMetaData meta_data;
   meta_data.token_nums = token_num;
   meta_data.kv_num_heads = kv_num_heads;
@@ -1175,30 +1195,49 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   paddle::Tensor v = GetEmptyTensor(
       {kv_token_num, kv_num_heads, head_dim}, qkv.dtype(), qkv.place());
 
-  // rope
-  gqa_rotary_qk_split_variable<data_t>(
-      qkv_out.data<data_t>(),
-      q.data<data_t>(),
-      k.data<data_t>(),
-      v.data<data_t>(),
-      qkv.data<data_t>(),
-      rotary_embs.data<float>(),
-      q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
-      k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
-      batch_id_per_token.data<int>(),
-      seq_lens_encoder.data<int>(),
-      seq_lens_decoder.data<int>(),
-      cu_seqlens_q.data<int>(),
-      cu_seqlens_k.data<int>(),
-      token_num,
-      num_heads,
-      kv_num_heads,
-      max_seq_len,
-      rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
-      head_dim,
-      rope_3d,
-      rms_norm_eps,
-      stream);
+  if (use_neox_rotary_style) {
+    gqa_rotary_qk_split_variable_qwen3<data_t>(qkv_out.data<data_t>(),
+                                               q.data<data_t>(),
+                                               k.data<data_t>(),
+                                               v.data<data_t>(),
+                                               qkv.data<data_t>(),
+                                               rotary_embs.data<float>(),
+                                               batch_id_per_token.data<int>(),
+                                               seq_lens_encoder.data<int>(),
+                                               seq_lens_decoder.data<int>(),
+                                               cu_seqlens_q.data<int>(),
+                                               cu_seqlens_k.data<int>(),
+                                               token_num,
+                                               num_heads,
+                                               kv_num_heads,
+                                               max_seq_len,
+                                               head_dim,
+                                               stream);
+  } else {
+    gqa_rotary_qk_split_variable<data_t>(
+        qkv_out.data<data_t>(),
+        q.data<data_t>(),
+        k.data<data_t>(),
+        v.data<data_t>(),
+        qkv.data<data_t>(),
+        rotary_embs.data<float>(),
+        q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+        k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
+        batch_id_per_token.data<int>(),
+        seq_lens_encoder.data<int>(),
+        seq_lens_decoder.data<int>(),
+        cu_seqlens_q.data<int>(),
+        cu_seqlens_k.data<int>(),
+        token_num,
+        num_heads,
+        kv_num_heads,
+        max_seq_len,
+        rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
+        head_dim,
+        rope_3d,
+        rms_norm_eps,
+        stream);
+  }
 
   if (token_num < kv_token_num) {
     AppendCacheKV<data_t, 128, 64>(key_cache,
@@ -1347,6 +1386,7 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
     .Attrs({"kv_token_num: int",
             "max_seq_len: int",
             "rms_norm_eps: float",
+            "use_neox_rotary_style: bool",
             "cache_quant_type: std::string",
             "rope_3d: bool"})
     .SetKernelFn(PD_KERNEL(GQARopeWriteCacheKernel));
