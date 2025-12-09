@@ -86,14 +86,13 @@ class TestSpeculateGetPaddingOffset(unittest.TestCase):
 
         input_ids = np.random.randint(0, 1000, (test_case["bsz"], test_case["max_seq_len"]), dtype=np.int64)
         draft_tokens = np.random.randint(0, 1000, (test_case["bsz"], max_draft_tokens), dtype=np.int64)
-        token_num = np.array([test_case["token_num_data"]], dtype=np.int64)
+        token_num_cpu = np.array([test_case["token_num_data"]], dtype=np.int64).item()
 
         input_ids_tensor = paddle.to_tensor(input_ids)
         draft_tokens_tensor = paddle.to_tensor(draft_tokens)
         cum_offsets_tensor = paddle.to_tensor(test_case["cum_offsets"])
         seq_lens_tensor = paddle.to_tensor(test_case["seq_lens"])
         seq_lens_encoder_tensor = paddle.to_tensor(test_case["seq_lens_encoder"])
-        token_num_tensor = paddle.to_tensor(token_num)
 
         (
             x_remove_padding,
@@ -104,9 +103,9 @@ class TestSpeculateGetPaddingOffset(unittest.TestCase):
             input_ids_tensor,
             draft_tokens_tensor,
             cum_offsets_tensor,
-            token_num_tensor,
             seq_lens_tensor,
             seq_lens_encoder_tensor,
+            token_num_cpu,
         )
 
         (

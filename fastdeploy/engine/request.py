@@ -179,6 +179,12 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        logprobs = d.get("logprobs", None)
+        if logprobs is not None:
+            if logprobs is True:
+                sampling_params.logprobs = d.get("top_logprobs", None)
+            elif logprobs is False:
+                sampling_params.logprobs = None
         if "metrics" in d and d["metrics"] is not None:
             metrics = RequestMetrics.from_dict(d["metrics"])
         else:

@@ -18,6 +18,7 @@ import numpy as np
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
+from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
@@ -209,11 +210,8 @@ class QwenVLProcessor(TextProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         bad_words = request.get("bad_words")
         bad_words_token_ids = request.get("bad_words_token_ids")
