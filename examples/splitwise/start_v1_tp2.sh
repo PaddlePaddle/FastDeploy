@@ -39,13 +39,14 @@ nohup python -m fastdeploy.router.launch \
     2>&1 >${FD_LOG_DIR}/nohup &
 
 # start prefill
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1
 export FD_LOG_DIR="log/$LOG_DATE/prefill"
 rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_NAME} \
     --port "${P_PORT}" \
+    --tensor-parallel-size 2 \
     --splitwise-role "prefill" \
     --router "0.0.0.0:${ROUTER_PORT}" \
 2>&1 >${FD_LOG_DIR}/nohup &
@@ -53,13 +54,14 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
 wait_for_health ${P_PORT}
 
 # start decode
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2,3
 export FD_LOG_DIR="log/$LOG_DATE/decode"
 rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_NAME} \
     --port "${D_PORT}" \
+    --tensor-parallel-size 2 \
     --splitwise-role "decode" \
     --router "0.0.0.0:${ROUTER_PORT}" \
 2>&1 >${FD_LOG_DIR}/nohup &

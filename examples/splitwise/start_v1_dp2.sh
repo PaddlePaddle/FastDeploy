@@ -31,7 +31,6 @@ source ${SCRIPT_DIR}/utils.sh
 
 # start router
 ROUTER_PORT=$(get_free_ports 1)
-echo "---------------------------"
 echo ROUTER_PORT:  $ROUTER_PORT
 
 export FD_LOG_DIR="log/$LOG_DATE/router"
@@ -52,7 +51,6 @@ P_ENGINE_WORKER_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 P_CACHE_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 P_RDMA_COMM_PORTS=$(get_free_ports $NUM_GPUS)
 P_PD_COMM_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
-echo "---------------------------"
 echo P_SERVER_PORTS:  $P_SERVER_PORTS
 echo P_METRICS_PORTS:  $P_METRICS_PORTS
 echo P_ENGINE_WORKER_QUEUE_PORTS:  $P_ENGINE_WORKER_QUEUE_PORTS
@@ -82,7 +80,6 @@ nohup python -m fastdeploy.entrypoints.openai.multi_api_server \
     --router "0.0.0.0:${ROUTER_PORT}" \
 2>&1 >${FD_LOG_DIR}/nohup &
 
-echo "--- Health Check Status ---"
 wait_for_health ${P_SERVER_PORTS}
 
 
@@ -93,7 +90,6 @@ D_CACHE_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 D_METRICS_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 D_RDMA_COMM_PORTS=$(get_free_ports $NUM_GPUS)
 D_PD_COMM_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
-echo "---------------------------"
 echo D_SERVER_PORTS:  $D_SERVER_PORTS
 echo D_ENGINE_WORKER_QUEUE_PORTS:  $D_ENGINE_WORKER_QUEUE_PORTS
 echo D_CACHE_QUEUE_PORTS:  $D_CACHE_QUEUE_PORTS
@@ -123,12 +119,10 @@ nohup python -m fastdeploy.entrypoints.openai.multi_api_server \
     --router "0.0.0.0:${ROUTER_PORT}" \
 2>&1 >${FD_LOG_DIR}/nohup &
 
-echo "--- Health Check Status ---"
 wait_for_health ${D_SERVER_PORTS}
 
 
 # send request
-echo "------ Request Check ------"
 sleep 10  # make sure server is registered to router
 curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \

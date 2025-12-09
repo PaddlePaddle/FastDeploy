@@ -539,19 +539,21 @@ class EngineArgs:
     def post_init_all_ports(self):
 
         def post_init_ports(name: str, ports: list, num_total_ports: int):
-            num_expected_ports = num_total_ports
+            ports = parse_ports(ports)
+            num_cur_dp_ports = num_total_ports
             if envs.FD_ENABLE_MULTI_API_SERVER:
-                num_expected_ports //= self.data_parallel_size
+                num_cur_dp_ports //= self.data_parallel_size
             if ports is None:
-                ports = find_free_ports(num_ports=num_expected_ports)
+                ports = find_free_ports(num_ports=num_cur_dp_ports)
                 console_logger.info(f"Parameter `{name}` is not specified, found available ports for use: {ports}")
             else:
                 assert (
                     len(ports) == num_total_ports
                 ), f"Parameter `{name}` should have {num_total_ports} ports, got {len(ports)}."
-            ports = parse_ports(ports)
             for port in ports:
                 assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+
+            console_logger.debug(f"post init {name}: {ports}")
             return ports
 
         num_nodes = len(self.ips) if self.ips else 1

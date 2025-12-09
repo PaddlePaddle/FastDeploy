@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-from fastdeploy.utils import get_logger, is_port_available
+from fastdeploy.utils import find_free_ports, get_logger, is_port_available
 
 logger = get_logger("multi_api_server", "multi_api_server.log")
 
@@ -28,15 +28,22 @@ logger = get_logger("multi_api_server", "multi_api_server.log")
 def start_servers(server_count, server_args, ports, metrics_ports, controller_ports):
     processes = []
     logger.info(f"Starting servers on ports: {ports} with args: {server_args} and metrics ports: {metrics_ports}")
+    port_idx = {}
     for i in range(len(server_args)):
         if server_args[i] == "--engine-worker-queue-port":
-            engine_worker_queue_port = server_args[i + 1].split(",")
-            break
+            port_idx["engine_worker_queue_port"] = i + 1
+    if "engine_worker_queue_port" not in port_idx:
+        port = find_free_ports(num_ports=server_count)
+        server_args += ["--engine-worker-queue-port", ",".join(map(str, port))]
+        port_idx["engine_worker_queue_port"] = len(server_args) - 1
+        logger.info(f"No --engine-worker-queue-port specified, using random ports: {port}")
+    engine_worker_queue_port = server_args[port_idx["engine_worker_queue_port"]].split(",")
+    if not check_param(engine_worker_queue_port, server_count):
+        return
+
     if not check_param(ports, server_count):
         return
     if not check_param(metrics_ports, server_count):
-        return
-    if not check_param(engine_worker_queue_port, server_count):
         return
     if controller_ports != "-1":
         controller_ports = controller_ports.split(",")
@@ -45,6 +52,7 @@ def start_servers(server_count, server_args, ports, metrics_ports, controller_po
     else:
         controller_ports = [-1] * server_count
     # check_param(server_args, server_count)
+    logger.info(f"Modified server_args: {server_args}")
     for i in range(server_count):
         port = int(ports[i])
         metrics_port = int(metrics_ports[i])
