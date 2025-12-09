@@ -386,6 +386,7 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
@@ -404,6 +405,7 @@ class CompletionOutput:
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
+            "reasoning_token_num": self.reasoning_token_num,
         }
 
     @classmethod
@@ -425,6 +427,7 @@ class CompletionOutput:
             f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
+            f"reasoning_token_num={self.reasoning_token_num}, "
             f"logprobs={self.logprobs}, "
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
