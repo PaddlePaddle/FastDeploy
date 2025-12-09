@@ -30,6 +30,7 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_layout,
             unset_data_ipc,
         )
 
@@ -50,6 +51,7 @@ try:
         )
 
         unset_data_ipc = None
+        swap_cache_layout = None
         memory_allocated = paddle.device.xpu.memory_allocated
 
         def get_data_ptr_ipc(*args, **kwargs):
@@ -102,6 +104,7 @@ except:
     ipc_sent_key_value_cache_by_remote_ptr_block_sync = None
     get_peer_mem_addr = None
     get_all_visible_devices = None
+    swap_cache_layout = None
 
 
 __all__ = [
@@ -119,4 +122,5 @@ __all__ = [
     "ipc_sent_key_value_cache_by_remote_ptr_block_sync",
     "get_peer_mem_addr",
     "get_all_visible_devices",
+    "swap_cache_layout",
 ]

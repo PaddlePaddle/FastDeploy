@@ -1,0 +1,7 @@
+{
+    "local_hostname":"localhost",
+    "metadata_server":"http://127.0.0.1:7882/metadata",
+    "protocol":"rdma",
+    "device_name": "mlx5_2,mlx5_3",
+    "master_server_address":"127.0.0.1:7721"
+}
