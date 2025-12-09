@@ -39,7 +39,7 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
-from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
+from fastdeploy.model_executor.utils import fd_cast, set_weight_attrs
 
 from .configuration import DFNRopeVisionTransformerConfig
 
@@ -157,7 +157,8 @@ class VisionFlashAttention2(nn.Layer):
         assert param.shape == shard_weight.shape, (
             f" Attempted to load weight ({shard_weight.shape}) " f"into parameter ({param.shape})"
         )
-        h2d_copy(param, shard_weight)
+        shard_weight = get_tensor(shard_weight)
+        param.copy_(shard_weight, False)
 
     def forward(
         self,
