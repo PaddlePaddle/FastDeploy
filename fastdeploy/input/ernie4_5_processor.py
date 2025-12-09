@@ -352,7 +352,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
-            print(self.model_status_dict)
         return response_dict
 
     def process_response_dict_streaming(self, response_dict, **kwargs):
@@ -411,7 +410,6 @@ class Ernie4_5Processor(BaseDataProcessor):
                 del self.tool_parser_dict[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
-            print(self.model_status_dict)
         return response_dict
 
     def messages2ids(self, request_or_messages, **kwargs):
