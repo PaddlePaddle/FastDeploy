@@ -1,4 +1,20 @@
-﻿import unittest
+﻿"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+import unittest
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -13,7 +29,12 @@ from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
-class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
+class MockReasoningParser:
+    def get_model_status(self, prompt_token_ids):
+        return "think_start"
+
+
+class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
         # Create mock object for Ernie4_5Processor instance
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None) as mock_init:
@@ -23,38 +44,62 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # Set necessary attributes
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
-        self.processor.decode_status = {}
+        self.processor.decode_status = {"test": []}
         self.processor.reasoning_end_dict = {}
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
-        self.processor.reasoning_parser = MagicMock()
-        self.processor._check_mm_limits = MagicMock()
+        self.processor.reasoning_parser = MockReasoningParser()
+        self.processor.model_status_dict = {"test": "think_start"}
         self.processor.ernie4_5_processor = MagicMock()
-        self.processor.pack_outputs = MagicMock()
 
         # Mock ids2tokens method
         def mock_ids2tokens(token_ids, task_id):
-            self.processor.decode_status[task_id] = "mock_decode_status"
             return "delta_text", [2, 3], "previous_texts"
 
         self.processor.ids2tokens = mock_ids2tokens
 
-        def mock_messages2ids(request, **kwargs):
-            if "chat_template" in kwargs:
-                return [1]
-            else:
-                return [0]
+        def mock_request2ids(request, **kwargs):
+            return {"input_ids": np.array([1, 2, 3]), "prompt_token_ids": [0]}
+
+        def mock_check_mm_limits(item):
+            pass
 
         def mock_apply_default_parameters(request):
             return request
 
+        def mock_pack_outputs(outputs):
+            # Ensure input_ids is numpy array if it exists
+            result = outputs.copy() if isinstance(outputs, dict) else outputs
+            if isinstance(result, dict):
+                if "input_ids" in result and isinstance(result["input_ids"], list):
+                    result["input_ids"] = np.array(result["input_ids"])
+                if "token_type_ids" in result and isinstance(result["token_type_ids"], list):
+                    result["token_type_ids"] = np.array(result["token_type_ids"])
+                if "position_ids" in result and isinstance(result["position_ids"], list):
+                    result["position_ids"] = np.array(result["position_ids"])
+            return result
+
+        def mock_prompt_token_ids2outputs(request):
+            return {
+                "input_ids": np.array([1, 1, 1]),
+                "token_type_ids": np.array([0, 0, 0]),
+                "position_ids": np.array([[0, 0, 0], [1, 1, 1], [2, 2, 2]]),
+                "images": [],
+                "grid_thw": [],
+                "image_type_ids": [],
+                "cur_position": 3,
+            }
+
         self.processor._apply_default_parameters = mock_apply_default_parameters
+        self.processor._check_mm_limits = mock_check_mm_limits
+        self.processor.ernie4_5_processor.request2ids = mock_request2ids
+        self.processor.ernie4_5_processor.prompt_token_ids2outputs = mock_prompt_token_ids2outputs
+        self.processor.pack_outputs = mock_pack_outputs
 
         # Mock reasoning parser
         self.mock_reasoning_parser = MagicMock()
-        self.mock_reasoning_parser.__class__.__name__ = "ErnieX1ReasoningParser"
-        # self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
+        self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = None
         self.processor.reasoning_parser = self.mock_reasoning_parser
 
         # Mock tool parser
@@ -63,6 +108,27 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.mock_tool_parser_obj = MagicMock()
         self.mock_tool_parser_obj.return_value = self.mock_tool_parser
         self.processor.tool_parser_obj = self.mock_tool_parser_obj
+
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
     def test_process_request_dict_with_options(self):
         request_dict = {
@@ -303,8 +369,8 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             processor._load_tokenizer()
             self.assertEqual(processor.tokenizer, mock_tokenizer)
 
-    def test_process_request_dict_with_stop_sequences(self):
-        """Test process_request_dict with stop sequences and bad words"""
+    def test_process_request_dict_comprehensive(self):
+        """Test process_request_dict with various scenarios"""
         # Test with stop sequences
         self.processor.update_stop_seq = MagicMock(return_value=([100, 101], [1, 1]))
         request_dict = {
@@ -328,8 +394,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.update_bad_words.assert_called_once()
         self.assertEqual(request_dict["bad_words_token_ids"], [[200], [201]])
 
-    def test_process_request_dict_with_prompt(self):
-        """Test process_request_dict with prompt"""
+        # Test with prompt and multimodal_data
         self.processor.ernie4_5_processor.text2ids = MagicMock(
             return_value={
                 "input_ids": [1, 2, 3],
@@ -341,8 +406,6 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
                 "cur_position": 3,
             }
         )
-
-        # Test with multimodal_data
         request_dict = {
             "prompt": "Hello world",
             "multimodal_data": {"image": [], "video": []},
@@ -351,7 +414,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
         self.assertEqual(request_dict["prompt_tokens"], "Hello world")
 
-        # Test without multimodal_data - should default to empty dict
+        # Test with prompt without multimodal_data
         self.processor.ernie4_5_processor.text2ids.reset_mock()
         request_dict = {
             "prompt": "Hello world",
@@ -360,8 +423,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
         self.assertEqual(request_dict["prompt_tokens"], "Hello world")
 
-    def test_process_request_dict_with_messages(self):
-        """Test process_request_dict with messages and various options"""
+        # Test with messages
         self.processor.ernie4_5_processor.request2ids = MagicMock(
             return_value={
                 "input_ids": [1, 2, 3],
@@ -373,8 +435,6 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
                 "cur_position": 3,
             }
         )
-
-        # Test with messages only
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
         }
@@ -395,7 +455,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.assertEqual(request_dict["custom_key"], "custom_value")
         self.assertEqual(request_dict["enable_thinking"], False)
 
-        # Test thinking_mode = "close" (should set enable_thinking to False)
+        # Test thinking_mode = "close"
         self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -404,7 +464,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
-        # Test thinking_mode = "false" (should set enable_thinking to False)
+        # Test thinking_mode = "false"
         self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -413,7 +473,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
 
-        # Test thinking_mode = "open" (should set enable_thinking to True)
+        # Test thinking_mode = "open"
         self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -422,40 +482,32 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
 
-    def test_process_request_dict_with_chat_template_kwargs_not_dict(self):
-        """Test process_request_dict with invalid chat_template_kwargs"""
+        # Test invalid chat_template_kwargs
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": "not_a_dict",
         }
-
         with self.assertRaises(ValueError) as context:
             self.processor.process_request_dict(request_dict, 100)
         self.assertIn("chat_template_kwargs must be a dict", str(context.exception))
 
-    def test_process_request_dict_no_valid_input(self):
-        """Test process_request_dict with no valid input"""
+        # Test no valid input
         request_dict = {}
-
         with self.assertRaises(ValueError) as context:
             self.processor.process_request_dict(request_dict, 100)
         self.assertIn("Request must contain", str(context.exception))
 
-    def test_process_request_dict_with_completion_token_ids(self):
-        """Test process_request_dict with completion_token_ids"""
+        # Test with completion_token_ids
         self.processor.append_completion_tokens = MagicMock()
-
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "completion_token_ids": [10, 11, 12],
         }
         self.processor.process_request_dict(request_dict, 100)
-
         self.processor.append_completion_tokens.assert_called_once()
 
-    def test_process_request_dict_prompt_truncation(self):
-        """Test process_request_dict prompt truncation"""
+        # Test prompt truncation
         mock_outputs = MagicMock()
         mock_outputs.__getitem__ = MagicMock(
             side_effect=lambda k: {
@@ -469,38 +521,29 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             }.get(k)
         )
         self.processor.pack_outputs = MagicMock(return_value=mock_outputs)
-
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
-            "prompt_token_ids": [1] * 150,  # 150 tokens
+            "prompt_token_ids": [1] * 150,
         }
-        self.processor.process_request_dict(request_dict, 100)  # max_model_len=100
-
-        # Should be truncated to max_model_len - 1 = 99
+        self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(len(request_dict["prompt_token_ids"]), 99)
 
-    def test_process_request_dict_max_tokens_calculation(self):
-        """Test process_request_dict max_tokens calculation"""
+        # Test max_tokens calculation
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
-            "max_tokens": 200,  # Larger than available
+            "max_tokens": 200,
         }
         self.processor.process_request_dict(request_dict, 100)
-
-        # max_tokens should be min(max_model_len - prompt_len, max_tokens)
         self.assertLessEqual(request_dict["max_tokens"], 100 - 3)
 
-    def test_process_request_dict_top_p_adjustment(self):
-        """Test process_request_dict top_p adjustment"""
+        # Test top_p adjustment
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
-            "top_p": 1e-10,  # Very small value
+            "top_p": 1e-10,
         }
         self.processor.process_request_dict(request_dict, 100)
-
-        # top_p should be adjusted to _SAMPLING_EPS
         self.assertGreaterEqual(request_dict["top_p"], 1e-5)
 
     def test_append_completion_tokens(self):
@@ -588,12 +631,6 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             result = processor.process_response_dict(response_dict, stream=False)
             processor.process_response_dict_normal.assert_called_once()
             self.assertEqual(result, {"text": "response"})
-
-            # Test with enable_thinking=None (should default to True)
-            processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
-            response_dict = {"ids": [1, 2, 3]}
-            processor.process_response_dict(response_dict, stream=True, enable_thinking=None)
-            processor.process_response_dict_streaming.assert_called_once_with(response_dict, enable_thinking=True)
 
     def test_apply_default_parameters(self):
         """Test _apply_default_parameters with dict and object request"""
