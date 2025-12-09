@@ -27,10 +27,7 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() and current_platform.available():
     try:
-        from fastdeploy.model_executor.ops.gpu import (
-            get_padding_offset,
-            speculate_get_padding_offset,
-        )
+        from fastdeploy.model_executor.ops.gpu import get_padding_offset
     except Exception:
         raise ImportError(
             "Verify environment consistency between compilation and FastDeploy installation. "
@@ -449,57 +446,6 @@ def remove_padding(
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
-        return (
-            ids_remove_padding,
-            padding_offset,
-            cum_offsets,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        )
-
-
-def speculate_remove_padding(
-    max_len: paddle.Tensor,
-    input_ids: paddle.Tensor,
-    seq_lens_this_time: paddle.Tensor,
-    draft_tokens: paddle.Tensor,
-    seq_lens_encoder: paddle.Tensor,
-) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
-    """
-    Remove padding from sequences.
-
-    Args:
-        max_len (paddle.Tensor): The maximum length of the sequences.
-        input_ids (paddle.Tensor): The IDs of the input sequences.
-        seq_lens_this_time (paddle.Tensor): The lengths of the sequences in the current batch.
-        draft_tokens (paddle.Tensor): The draft tokens.
-        seq_lens_encoder (paddle.Tensor): The lengths of the encoder sequences.
-
-    Returns:
-        tuple: A tuple containing:
-            - The input sequence IDs with padding removed (paddle.Tensor).
-            - Padding offsets (paddle.Tensor).
-            - Cumulative offsets (paddle.Tensor).
-            - Query sequence lengths (paddle.Tensor).
-            - Key sequence lengths (paddle.Tensor).
-    """
-    if current_platform.is_cuda():
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-        token_num = paddle.sum(seq_lens_this_time)
-        (
-            ids_remove_padding,
-            cum_offsets,
-            padding_offset,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
-        )
         return (
             ids_remove_padding,
             padding_offset,

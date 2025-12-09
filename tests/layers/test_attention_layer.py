@@ -270,10 +270,10 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
-        input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
-        token_num = paddle.sum(seq_lens_this_time)
+        input_ids = paddle.zeros([batch_size, seq_len if mode == ForwardMode.EXTEND else 1], dtype="int64")
+        token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, token_num, seq_lens_this_time
+            input_ids, seq_lens_this_time, token_num
         )
 
         forward_meta = ForwardMeta(
