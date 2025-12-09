@@ -230,6 +230,11 @@ class Attention(nn.Layer):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = get_tensor(loaded_weight).cast(paddle.get_default_dtype())
+
+        if self.use_qk_norm and ("q_norm" in param.name or "k_norm" in param.name):
+            param.copy_(loaded_weight, False)
+            return
+
         if self.quant_method.cache_quant_config.has_zero_point:  # cache_int4_zp
             loaded_weight = 1.0 / loaded_weight
         else:
