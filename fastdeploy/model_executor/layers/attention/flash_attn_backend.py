@@ -102,7 +102,6 @@ class FlashAttentionBackend(AttentionBackend):
         FlashAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: FlashAttentionMetadata = None
         self.max_seq_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
 
@@ -149,10 +148,6 @@ class FlashAttentionBackend(AttentionBackend):
         self.zero_seq_enc_lens_for_decode = paddle.zeros(
             shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
         )
-
-    def get_attntion_meta(self):
-        """get_attntion_meta"""
-        return self.attention_metadata
 
     def get_kv_cache_shape(
         self,
@@ -233,7 +228,7 @@ class FlashAttentionBackend(AttentionBackend):
         metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
         metadata.max_len_tensor_cpu_decoder[1] = 0
 
-        self.attention_metadata = metadata
+        forward_meta.attention_metadata = metadata
 
     def forward_mixed(
         self,
@@ -246,7 +241,7 @@ class FlashAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        metadata = self.attention_metadata
+        metadata = forward_meta.attention_metadata
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -287,6 +282,7 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
+                layer.use_neox_rotary_style,
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )

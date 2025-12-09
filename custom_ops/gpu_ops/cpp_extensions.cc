@@ -190,6 +190,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const int kv_token_num,
     const int max_seq_len,
     const float rms_norm_eps,
+    const bool use_neox_rotary_style,
     const std::string& cache_quant_type,
     const bool rope_3d);
 
