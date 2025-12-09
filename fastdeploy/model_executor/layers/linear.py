@@ -25,6 +25,7 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
+    fd_cast,
     h2d_copy,
     process_weight_transpose,
     set_weight_attrs,
@@ -877,6 +878,57 @@ class RowParallelLinear(LinearBase):
 
         if self.with_bias and self.tp_size > 1 and self.reduce_results:
             set_weight_attrs(self.bias, {"tp_row_bias": True})
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        # In some senerio such as tsp, weight and bias of this layer will not be split in specific module.
+        # For example, weight and bias of this layer in shared_experts will not split, but will be split in o_proj.
+        # So, we add a white list to avoid split weight and bias in these layers.
+        layer_white_list = ["shared_experts"]
+        layer_in_white_list = any(key in self.prefix for key in layer_white_list)
+
+        output_dim = getattr(param, "output_dim", None)
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        if weight_need_transpose:
+            loaded_weight = loaded_weight.transpose([1, 0])
+        # Tensor parallelism splits the weight along the output_dim
+        if (
+            output_dim is not None
+            and self.fd_config is not None
+            and self.fd_config.parallel_config.tensor_parallel_size > 1
+        ):
+            dim = -1 if output_dim else 0
+            if isinstance(loaded_weight, paddle.Tensor):
+                size = loaded_weight.shape[dim]
+            else:
+                size = loaded_weight.get_shape()[dim]
+            block_size = size // self.fd_config.parallel_config.tensor_parallel_size
+            shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
+            shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+
+            # when use_sequence_parallel_moe, we don't split.
+            if layer_in_white_list:
+                pass
+            else:
+                loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
+
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if layer_in_white_list:
+            pass
+        else:
+            if tp_row_bias:
+                loaded_weight = loaded_weight / self.fd_config.parallel_config.tensor_parallel_size
+
+        # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+        loaded_weight = fd_cast(loaded_weight, param)
+
+        if param.shape != loaded_weight.shape:
+            # for e_score_correction_bias
+            loaded_weight = loaded_weight.reshape(param.shape)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]

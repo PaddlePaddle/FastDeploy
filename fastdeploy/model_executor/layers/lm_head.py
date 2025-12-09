@@ -102,6 +102,9 @@ class ParallelLMHead(nn.Layer):
                     },
                 )
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
+                if with_bias:
+                    set_weight_attrs(self.linear.bias, {"output_dim": True})
+
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
