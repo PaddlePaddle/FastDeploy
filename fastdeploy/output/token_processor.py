@@ -132,7 +132,6 @@ class TokenProcessor:
         self.timestamp_for_alive_after_handle_batch = None
         self.health_lock = threading.Lock()
         self.engine_output_token_hang = False
-        threading.Thread(target=self._monitor_output_token_hang).start()
 
     def healthy(self):
         """
@@ -151,6 +150,10 @@ class TokenProcessor:
             if self.engine_output_token_hang:
                 return False
             return True
+
+    def enable_monitor_hang(self):
+        self.monitor_thread = threading.Thread(target=self._monitor_output_token_hang)
+        self.monitor_thread.start()
 
     def _monitor_output_token_hang(self):
         while True:
