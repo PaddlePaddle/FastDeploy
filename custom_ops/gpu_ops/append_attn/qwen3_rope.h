@@ -110,24 +110,23 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
 }
 
 template <typename T>
-void gqa_rotary_qk_split_variable_qwen3(
-    T *qkv_out,  // [token_num, 3, num_head, head_dim]
-    T *q,
-    T *k,
-    T *v,
-    const T *qkv_input,
-    const float *rotary_emb,  // [2, 1, 1, seq_len, head_dim]
-    const int *batch_id_per_token,
-    const int *seq_lens_encoder,
-    const int *seq_lens_decoder,
-    const int *cu_seqlens_q,
-    const int *cu_seqlens_k,
-    const int token_num,
-    const int num_heads,
-    const int kv_num_heads,
-    const int max_model_len,
-    const int head_dim,
-    const cudaStream_t &stream) {
+void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
+                                        T *q,
+                                        T *k,
+                                        T *v,
+                                        const T *qkv_input,
+                                        const float *rotary_emb,
+                                        const int *batch_id_per_token,
+                                        const int *seq_lens_encoder,
+                                        const int *seq_lens_decoder,
+                                        const int *cu_seqlens_q,
+                                        const int *cu_seqlens_k,
+                                        const int token_num,
+                                        const int num_heads,
+                                        const int kv_num_heads,
+                                        const int max_model_len,
+                                        const int head_dim,
+                                        const cudaStream_t &stream) {
   assert(head_dim == 128 && "head_dim must be 128");
 
   int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * head_dim;
