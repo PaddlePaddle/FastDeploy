@@ -9,8 +9,6 @@ set -e
 # prepare environment
 export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
-export ENABLE_V1_KVCACHE_SCHEDULER=1
-export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 
 SCRIPT_PATH=$(readlink -f "$0")
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")

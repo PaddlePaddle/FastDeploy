@@ -174,11 +174,7 @@ class PaddleDisWorkerProc:
             model_weights_status:
         """
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if (
-            self.parallel_config.enable_expert_parallel
-            and self.parallel_config.data_parallel_size > 1
-            and not envs.FD_ENABLE_MULTI_API_SERVER
-        ):
+        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
