@@ -183,7 +183,7 @@ def speculate_limit_thinking_content_length(
 
 def pre_process(
     input_ids: paddle.Tensor,
-    seq_lens_this_time: int,
+    seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
@@ -204,15 +204,13 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num = paddle.sum(seq_lens_this_time)
-
+    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, token_num, seq_lens_this_time
+            input_ids, seq_lens_this_time, token_num_cpu
         )
-
         return (
             ids_remove_padding,
             batch_id_per_token,
@@ -221,7 +219,6 @@ def pre_process(
             None,
             None,
         )
-
     # Remove padding
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
@@ -234,12 +231,7 @@ def pre_process(
             cu_seqlens_q,
             cu_seqlens_k,
         ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
+            input_ids, draft_tokens, cum_offsets_now, seq_lens_this_time, seq_lens_encoder, token_num_cpu
         )
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
@@ -257,6 +249,7 @@ def pre_process(
             max_len,
         )
     else:
+        token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,
             batch_id_per_token,
