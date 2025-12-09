@@ -188,26 +188,15 @@ class Router:
         is_same_tp_size = prefill_server.tp_size == decode_server.tp_size
         use_ipc = is_same_node and is_support_ipc and is_same_tp_size
 
-        cache_info = {}
-        if use_ipc:
-            cache_info["ipc"] = {
-                "ip": decode_server.host_ip,
-                "port": decode_server.engine_worker_queue_port,
-                "device_ids": decode_server.device_ids,
-            }
-        else:
-            cache_info["rdma"] = {
-                "ip": decode_server.host_ip,
-                "port": decode_server.connector_port,
-                "rdma_port": decode_server.rdma_ports,
-            }
-
         disaggregate_info = {
-            "prefill": prefill_server.to_dict(),
-            "decode": decode_server.to_dict(),
-            "role": "decode",
-            "cache_info": cache_info,
+            "prefill_ip": prefill_server.host_ip,
+            "decode_ip": decode_server.host_ip,
+            "prefill_connector_port": prefill_server.connector_port,
+            "decode_connector_port": decode_server.connector_port,
+            "decode_device_ids": decode_server.device_ids,
+            "decode_rdma_ports": decode_server.rdma_ports,
             "transfer_protocol": "ipc" if use_ipc else "rdma",
+            "decode_tp_size": decode_server.tp_size,
         }
 
         modified_request = request_data.copy()
