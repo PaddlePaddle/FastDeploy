@@ -43,7 +43,7 @@ jobs:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 90
     needs: check_cov_skip
-    if: needs.check_cov_skip.outputs.can-skip != 'true' || needs.check_cov_skip.outputs.can-skip-docs != 'true'
+    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       all_cov_file_url: ${{ steps.cov_upload.outputs.all_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
