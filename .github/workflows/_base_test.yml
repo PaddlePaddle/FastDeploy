@@ -209,7 +209,7 @@ jobs:
           export TEMPLATE=TOKEN_NORMAL
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-VL-28B-A3B-Thinking\", \"--reasoning-parser\": \"ernie-45-vl-thinking\", \"--tool-call-parser\": \"ernie-45-vl-thinking\", \"--tensor-parallel-size\": 1, \"--quantization\": \"wint4\", \"--max-model-len\": 131072, \"--max-num-seqs\": 32}"
+            -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-VL-28B-A3B-Thinking\", \"--reasoning-parser\": \"ernie-45-vl-thinking\", \"--tool-call-parser\": \"ernie-45-vl-thinking\", \"--tensor-parallel-size\": 1, \"--quantization\": \"wint4\", \"--max-model-len\": 131072, \"--max-num-seqs\": 32, \"--no-enable-prefix-caching\": true}"
           check_service 90
           python -m pytest -sv test_prompt_ids.py || TEST_EXIT_CODE=1
 

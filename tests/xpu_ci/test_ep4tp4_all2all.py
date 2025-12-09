@@ -81,8 +81,6 @@ def test_ep4tp4_all2all(xpu_env):
             str(port_num + 47873),
             "--gpu-memory-utilization",
             "0.9",
-            "--load-choices",
-            "default",
         ]
 
         # 启动服务器
