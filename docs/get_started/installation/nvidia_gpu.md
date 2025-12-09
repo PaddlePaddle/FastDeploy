@@ -104,7 +104,7 @@ cd FastDeploy
 # Argument 1: Whether to build wheel package (1 for yes)
 # Argument 2: Python interpreter path
 # Argument 3: Whether to compile CPU inference operators (false for GPU only)
-# Argument 4: Target GPU architectures (currently supports [90])
+# Argument 4: Target GPU architectures (currently supports 80/90)
 # Argument 5: Whether to use precompiled operators (1 for enable)
 # Argument 6 (optional): Specific commitID for precompiled operators(The default is the current commit ID.)
 
