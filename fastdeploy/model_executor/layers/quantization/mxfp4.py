@@ -65,14 +65,13 @@ def round_up(a, b):
 
 def get_mxfp4_backend():
     if current_platform.is_cuda():
-        if check_device_capability(90) and has_flashinfer() and envs.FD_USE_FLASHINFER_MOE_MXFP4_BF16:
+        if check_device_capability(90) and has_flashinfer() and envs.FD_MXFP4_BACKEND == "flashinfer":
             logger.info("FastDeploy Using FlashInfer MXFP4 BF16 backend for SM90 in MoE")
             return Mxfp4Backend.SM90_FI_MXFP4_BF16
-        else:
+        elif envs.FD_MXFP4_BACKEND == "triton":
             logger.info("FastDeploy Using Triton backend in MoE")
             return Mxfp4Backend.TRITON
-    else:
-        raise NotImplementedError
+    raise NotImplementedError
 
 
 class MXFP4Config(QuantConfigBase):
