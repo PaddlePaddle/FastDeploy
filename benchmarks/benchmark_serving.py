@@ -548,6 +548,7 @@ async def benchmark(
         "generated_texts": [output.generated_text for output in outputs],
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
+        "metrics": [output.metrics for output in outputs],
     }
 
     def process_one_metric(
@@ -582,6 +583,48 @@ async def benchmark(
             p_word = str(int(p)) if int(p) == p else str(p)
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
             result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+
+    def process_pd_metrics(model_outputs, metric_key):
+        # 收集所有该 metric 的数值
+        values = []
+        percentiles = []
+        for p in args.metric_percentiles.split(","):
+            p = p.strip()
+            if p:
+                percentiles.append(float(p))
+        for item in model_outputs:
+            metrics = item.metrics
+            if metric_key in metrics:
+                values.append(metrics[metric_key])
+
+        if not values:
+            print(f"[WARN] metric_key '{metric_key}' not found in outputs.")
+            return
+
+        arr = np.array(values) * 1000  # 秒 -> 毫秒
+
+        print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Successful {metric_key}:",
+                len(arr),
+            )
+        )
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Mean {metric_key} (ms):",
+                np.mean(arr),
+            )
+        )
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Median {metric_key} (ms):",
+                np.median(arr),
+            )
+        )
+        for p in percentiles:
+            v = np.percentile(arr, p)
+            print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
 
     def process_one_length(
         # E.g., "ttft"
@@ -624,6 +667,19 @@ async def benchmark(
     process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
     process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
+    if any(item.metrics for item in outputs):
+        process_pd_metrics(outputs, "prefill_cost_time")
+        process_pd_metrics(outputs, "prefill_prepare_cost_time")
+        process_pd_metrics(outputs, "preprocess_cost_time")
+        process_pd_metrics(outputs, "cache_in_scheduler_cost_time")
+        process_pd_metrics(outputs, "ask_decode_resource_cost_time")
+        process_pd_metrics(outputs, "prefill_first_token_infer_cost_time")
+        process_pd_metrics(outputs, "wait_sending_cache_cost_time")
+        process_pd_metrics(outputs, "decode_preallocate_cost_time")
+        process_pd_metrics(outputs, "decode_prepare_cost_time")
+        process_pd_metrics(outputs, "decode_second_token_infer_cost_time")
+        process_pd_metrics(outputs, "first_token_transmission_cost_time")
+        process_pd_metrics(outputs, "second_token_transmission_cost_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("output_len", "Output Length", "Output Length")
