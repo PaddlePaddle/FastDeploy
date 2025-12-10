@@ -58,6 +58,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         self.tool_parser_dict = dict()
         self.decode_status = dict()
+        self.model_status_dict = dict()
         self._load_tokenizer()
 
         # Generation config
@@ -242,15 +243,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                options = chat_template_kwargs.get("options")
-                if options:
-                    thinking_mode = options.get("thinking_mode")
-                    if thinking_mode:
-                        if thinking_mode == "close" or thinking_mode == "false":
-                            request["enable_thinking"] = False
-                        else:
-                            request["enable_thinking"] = True
-            request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
@@ -279,6 +271,18 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
 
+        if self.reasoning_parser:
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            parts = request["request_id"].split("_")
+            if len(parts) > 1:
+                real_req_id = parts[0]
+                index = int(parts[1])
+                n = request.get("n", 1)
+                for idx in range(index * n, (index + 1) * n):
+                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+            else:
+                self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
         if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
 
@@ -314,21 +318,3 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         outs["position_ids"] = np.array(outs["position_ids"], dtype=np.int64)
 
         return outs
-
-    def process_response_dict(self, response_dict, stream, **kwargs):
-        """
-        Preprocess the response
-
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
-
-        Returns:
-            Dict: response contain text fields
-        """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
-        if stream:
-            return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
-        else:
-            return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)

@@ -72,13 +72,12 @@ class ChatResponseProcessor:
             else:
                 self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
 
-    async def process_response_chat(self, request_outputs, stream, enable_thinking, include_stop_str_in_output):
+    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output):
         """
         Process a list of responses into a generator that yields each processed response as it's generated.
         Args:
             request_outputs: The list of outputs to be processed.
             stream: Whether or not to stream the output.
-            enable_thinking: Whether or not to show thinking messages.
             include_stop_str_in_output: Whether or not to include stop strings in the output.
         """
         for request_output in request_outputs:
@@ -99,7 +98,6 @@ class ChatResponseProcessor:
                             response = await self.data_processor.process_response_dict(
                                 response_dict=request_output,
                                 stream=stream,
-                                enable_thinking=enable_thinking,
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
@@ -108,7 +106,6 @@ class ChatResponseProcessor:
                             response = self.data_processor.process_response_dict(
                                 response_dict=request_output,
                                 stream=stream,
-                                enable_thinking=enable_thinking,
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
@@ -127,7 +124,6 @@ class ChatResponseProcessor:
                     yield self.data_processor.process_response_dict(
                         response_dict=request_output,
                         stream=stream,
-                        enable_thinking=enable_thinking,
                         include_stop_str_in_output=include_stop_str_in_output,
                     )
             elif stream:
@@ -156,14 +152,12 @@ class ChatResponseProcessor:
                         await self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
-                            enable_thinking=enable_thinking,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
                     else:
                         self.data_processor.process_response_dict(
                             response_dict=request_output,
                             stream=stream,
-                            enable_thinking=enable_thinking,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
@@ -185,14 +179,12 @@ class ChatResponseProcessor:
                                 await self.data_processor.process_response_dict(
                                     response_dict=part["request_output"],
                                     stream=False,
-                                    enable_thinking=enable_thinking,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )
                             else:
                                 self.data_processor.process_response_dict(
                                     response_dict=request_output,
                                     stream=stream,
-                                    enable_thinking=enable_thinking,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
