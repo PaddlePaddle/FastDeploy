@@ -733,11 +733,12 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
+
                     continue
             else:
                 token_id = int(tokens[i, 0])
@@ -829,6 +830,8 @@ class TokenProcessor:
 
                     task.output_token_ids.append(token_id)
                     task.last_recv_token_time = time.time()
+                    if token_id == 0:
+                        llm_logger.error(f"Request: {task_id} generates token_id 0, maybe wrong inference.")
 
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
