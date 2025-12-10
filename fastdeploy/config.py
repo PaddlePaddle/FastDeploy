@@ -1266,11 +1266,14 @@ class CacheConfig:
         self.model_cfg = None
         self.enable_chunked_prefill = False
         self.rdma_comm_ports = None
+        self.local_rdma_comm_ports = None
         self.cache_transfer_protocol = None
         self.pd_comm_port = None
+        self.local_pd_comm_port = None
         self.enable_prefix_caching = False
         self.enable_ssd_cache = False
         self.cache_queue_port = None
+        self.local_cache_queue_port = None
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
@@ -1761,6 +1764,9 @@ class FDConfig:
         else:
             raise NotImplementedError
 
+        self.postprocess_devices_and_ports()
+
+    def postprocess_devices_and_ports(self):
         # get devices and ports for current dp
         self.local_device_ids = self.parallel_config.device_ids.split(",")[
             self.parallel_config.local_data_parallel_id
@@ -1770,17 +1776,17 @@ class FDConfig:
         self.parallel_config.local_engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
             self.parallel_config.local_data_parallel_id
         ]
-        self.cache_config.cache_queue_port = (
+        self.cache_config.local_cache_queue_port = (
             self.cache_config.cache_queue_port[self.parallel_config.local_data_parallel_id]
             if self.cache_config.cache_queue_port
             else None
         )
-        self.cache_config.pd_comm_port = (
+        self.cache_config.local_pd_comm_port = (
             self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
             if self.cache_config.pd_comm_port
             else None
         )
-        self.cache_config.rdma_comm_ports = (
+        self.cache_config.local_rdma_comm_ports = (
             self.cache_config.rdma_comm_ports[
                 self.parallel_config.local_data_parallel_id
                 * self.parallel_config.tensor_parallel_size : (self.parallel_config.local_data_parallel_id + 1)
@@ -1947,8 +1953,8 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
-            "connector_port": self.cache_config.pd_comm_port,
-            "rdma_ports": self.cache_config.rdma_comm_ports,
+            "connector_port": self.cache_config.local_pd_comm_port,
+            "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
             "device_ids": self.local_device_ids,
             "transfer_protocol": transfer_protocol,

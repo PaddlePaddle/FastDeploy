@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import multiprocessing
 import os
@@ -365,7 +366,7 @@ class LLMEngine:
             )
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+        if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
             )
@@ -743,12 +744,10 @@ class LLMEngine:
                     if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
                         address = (
                             self.cfg.master_ip,
-                            int(self.cfg.parallel_config.local_engine_worker_queue_port),
+                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
                         )
                     else:
-                        address = (
-                            f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
-                        )
+                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
 
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
@@ -759,12 +758,13 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
-                    ctx = multiprocessing.get_context("spawn")
+                    ctx = multiprocessing.get_context("fork")
+                    cfg = copy.deepcopy(self.cfg)
                     self.dp_processed.append(
                         ctx.Process(
                             target=start_data_parallel_service,
                             args=(
-                                self.cfg,
+                                cfg,
                                 i,
                                 None,
                                 request_queues_for_dp_ipc,
