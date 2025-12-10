@@ -418,6 +418,7 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             # run eplb
