@@ -349,6 +349,7 @@ elif paddle.is_compiled_with_cuda():
 
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
+    nvcc_compile_args += ["-lineinfo"]
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
     nvcc_compile_args += ["-DPy_LIMITED_API=0x03090000"]
@@ -390,6 +391,8 @@ elif paddle.is_compiled_with_cuda():
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
         )
         sources += ["gpu_ops/append_attention.cu"]
+        sources += ["gpu_ops/decoder_write_cache_with_rope.cu"]
+        sources += ["gpu_ops/decode_append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
         sources += ["gpu_ops/multi_head_latent_attention.cu"]
@@ -425,6 +428,7 @@ elif paddle.is_compiled_with_cuda():
                     # "-gencode",
                     # "arch=compute_90a,code=compute_90a",
                     "-O3",
+                    "--ptxas-options=-v",
                     "-DNDEBUG",  # NDEBUG is common, consider moving if not specific to 90a
                 ]
                 print("SM90: Running SM90-specific FP8 kernel auto-generation.")

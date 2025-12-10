@@ -18,6 +18,9 @@
 #include <cuda_runtime.h>
 #include "mem_util.cuh"
 
+#define NUM_WARPS_PER_BLOCK 4
+#define NUM_THREADS_PER_BLOCK 128
+
 struct AppendAttnMetaData {
   int batch_size;
   int block_size;
@@ -512,16 +515,13 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
     __VA_ARGS__                                          \
   }
 
-#define DISPATCH_BLOCKSHAPE_Q_SYSTEM(              \
-    block_shape_q, BLOCK_SHAPE_Q, NUM_WARP_Q, ...) \
-  if (block_shape_q <= 16) {                       \
-    constexpr size_t BLOCK_SHAPE_Q = 16;           \
-    constexpr size_t NUM_WARP_Q = 1;               \
-    __VA_ARGS__                                    \
-  } else if (block_shape_q <= 32) {                \
-    constexpr size_t BLOCK_SHAPE_Q = 32;           \
-    constexpr size_t NUM_WARP_Q = 1;               \
-    __VA_ARGS__                                    \
+#define DISPATCH_IS_FP8(is_fp8, IS_FP8, ...) \
+  if (causal) {                              \
+    constexpr bool IS_FP8 = true;            \
+    __VA_ARGS__                              \
+  } else {                                   \
+    constexpr bool IS_FP8 = false;           \
+    __VA_ARGS__                              \
   }
 
 template <typename T>
