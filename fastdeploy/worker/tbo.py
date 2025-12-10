@@ -78,7 +78,6 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             assert max_bs == forward_meta.block_tables.shape[0]
             assert forward_meta.rotary_embs.shape[1:3] == [2, 1]
             assert forward_meta.rotary_embs.shape[4] == 1
-            # Note(ZKK) might error.
             res[i].rotary_embs = forward_meta.rotary_embs[start_bs:end_bs]
 
         res[i].ids_remove_padding = forward_meta.ids_remove_padding[start_token_id:end_token_id]
