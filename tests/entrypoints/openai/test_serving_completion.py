@@ -519,7 +519,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             results.append(result)
 
         # Verify results
-        self.assertTrue(len(results) > 0)
+        self.assertGreater(len(results), 0)
         # Check that the first response contains prompt_logprobs
         self.assertIn("prompt_logprobs", results[0])
 

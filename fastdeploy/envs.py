@@ -154,6 +154,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
         os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
     ),
+    "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
 }
 
 

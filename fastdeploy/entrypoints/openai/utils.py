@@ -285,7 +285,7 @@ def with_cancellation(handler_func):
     In the case where a `StreamingResponse` is returned by the handler, this
     wrapper will stop listening for disconnects and instead the response object
     will start listening for disconnects.The response object will only correctly
-    listen when the ASGI protocol version used by Uvicorn is less than 2.4.
+    listen when the ASGI protocol version used by Uvicorn is less than 2.4(Excluding 2.4).
     """
 
     # Functools.wraps is required for this wrapper to appear to fastapi as a

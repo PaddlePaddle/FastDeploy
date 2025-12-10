@@ -186,7 +186,7 @@ class TokenProcessor:
                     self.resource_manager.reschedule_preempt_task(request_id)
 
     def _recycle_aborted_task(self, batch_size):
-        """recycle when real batch size is smaller than the insert position of abored task"""
+        """recycle when real batch size is smaller than the insert position of aborted task"""
         abort_req_ids = list(self.resource_manager.abort_req_ids_set)
         for request_id in abort_req_ids:
             if request_id not in self.resource_manager.req_dict:

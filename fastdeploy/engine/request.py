@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import copy
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -181,6 +180,12 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        logprobs = d.get("logprobs", None)
+        if logprobs is not None:
+            if logprobs is True:
+                sampling_params.logprobs = d.get("top_logprobs", None)
+            elif logprobs is False:
+                sampling_params.logprobs = None
         if "metrics" in d and d["metrics"] is not None:
             metrics = RequestMetrics.from_dict(d["metrics"])
         else:
@@ -275,20 +280,6 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
-        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
-        if (
-            isinstance(multimodal_inputs, dict)
-            and isinstance(multimodal_inputs.get("mm_positions"), list)
-            and len(multimodal_inputs["mm_positions"]) > 0
-        ):
-            # if mm_positions is ImagePosition, convert to dict
-            try:
-                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
-                    multimodal_inputs["mm_positions"][i] = (
-                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
-                    )
-            except Exception as e:
-                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
 
         data = {
             "request_id": self.request_id,
@@ -300,7 +291,6 @@ class Request:
             "history": self.history,
             "tools": self.tools,
             "eos_token_ids": self.eos_token_ids,
-            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -320,6 +310,21 @@ class Request:
             "audio_end": self.audio_end,
             "ic_req_data": self.ic_req_data,
         }
+
+        # During multimodal PD separation, position_ids are required
+        if isinstance(self.multimodal_inputs, dict):
+            # Optimize multimodal data transfer during PD separation:
+            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): Only position_ids needed for decode nodes
+            # - V0 mode (ENABLE_V1_KVCACHE_SCHEDULER=0): Full field set required for compatibility
+            # This filtering significantly reduces serialized data size for large numpy arrays
+            allowed_keys = {"position_ids"}
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
+
+            data["multimodal_inputs"] = {
+                key: value for key, value in self.multimodal_inputs.items() if key in allowed_keys
+            }
+
         add_params = [
             "guided_json",
             "guided_regex",
@@ -388,6 +393,7 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
@@ -406,6 +412,7 @@ class CompletionOutput:
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
+            "reasoning_token_num": self.reasoning_token_num,
         }
 
     @classmethod
@@ -427,6 +434,7 @@ class CompletionOutput:
             f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
+            f"reasoning_token_num={self.reasoning_token_num}, "
             f"logprobs={self.logprobs}, "
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
@@ -678,8 +686,16 @@ class RequestOutput:
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        completion_output = CompletionOutput.from_dict(d.pop("outputs"))
-        metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        if "outputs" in d and isinstance(d["outputs"], dict):
+            completion_output = CompletionOutput.from_dict(d.pop("outputs"))
+        else:
+            d.pop("outputs", None)
+            completion_output = None
+        if "metrics" in d and isinstance(d["metrics"], dict):
+            metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        else:
+            d.pop("metrics", None)
+            metrics = None
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
     def to_dict(self):
