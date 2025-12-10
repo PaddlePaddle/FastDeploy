@@ -188,6 +188,18 @@ class MTPProposer(Proposer):
                 value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
                 cache_kvs_list.append(value_cache)
 
+                if kv_cache_quant_type == "block_wise_fp8":
+                    scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_scale_cache = share_external_data(key_scale_cache, scale_key_cache_name, kv_cache_scale_shape)
+                    cache_kvs_list.append(key_scale_cache)
+                    value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    value_scale_cache = share_external_data(
+                        value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
+                    )
+                    cache_kvs_list.append(value_scale_cache)
+
             self.model_inputs["caches"] = cache_kvs_list
         else:
             for i in range(self.model_config.num_hidden_layers):
@@ -745,7 +757,7 @@ class MTPProposer(Proposer):
                         self.model_inputs["is_block_step"],
                         self.model_inputs["decode_states"],
                         self.model_inputs["mask_rollback"],
-                    )[0]
+                    )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
                 # Initialize forward meta data
