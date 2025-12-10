@@ -74,6 +74,37 @@ def get_mxfp4_backend():
     raise NotImplementedError
 
 
+def get_padding_weight(param, shape) -> paddle.Tensor:
+    if len(param.shape) == 4:
+        param = param.reshape([param.shape[0], param.shape[1], param.shape[2] * param.shape[3]])
+
+    if len(shape) == 3:
+        weight = paddle.nn.functional.pad(
+            param.cast("int32"),
+            pad=[0, shape[-1] - param.shape[-1], 0, shape[-2] - param.shape[-2]],
+            mode="constant",
+            value=0,
+        ).cast(param.dtype)
+    elif len(shape) == 2:
+        weight = paddle.nn.functional.pad(
+            param,
+            pad=[0, shape[-1] - param.shape[-1]],
+            mode="constant",
+            value=0,
+        )
+    else:
+        raise ValueError(f"Unsupported shape: {shape}")
+    return weight
+
+
+def _interleave_mxfp4_cutlass_sm90(w):
+    w_shape = w.shape
+    w_interleaved = w.reshape([w_shape[0], w_shape[1], (w_shape[2] // 4), 4])
+    w_interleaved = w_interleaved.permute([0, 2, 1, 3])
+    w_interleaved = w_interleaved.reshape([w_shape[0], w_shape[2] // 4, w_shape[1] * 4])
+    return w_interleaved
+
+
 class MXFP4Config(QuantConfigBase):
     """Base class for quantization configs."""
 
@@ -106,44 +137,38 @@ class MXFP4MoeMethod(QuantMethodBase):
         self.mxfp4_backend = get_mxfp4_backend()
 
     def create_weights(self, layer, **extra_weight_attrs):
+        self.extra_weight_attrs = extra_weight_attrs
 
         block_size = 32
 
-        intermediate_size_pad = layer.moe_intermediate_size
-        hidden_size_pad = layer.hidden_size
-
-        if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
-            intermediate_size_pad = round_up(intermediate_size_pad, 128)
-            hidden_size_pad = round_up(hidden_size_pad, 128)
-        else:
-            intermediate_size_pad = round_up(intermediate_size_pad, 64)
-
-        self.intermediate_size_pad = intermediate_size_pad
-        self.hidden_size_pad = hidden_size_pad
+        self.intermediate_size = layer.moe_intermediate_size
+        self.hidden_size = layer.hidden_size
         self.num_experts = layer.num_local_experts
 
         self.up_gate_proj_weight_shape = [
             self.num_experts,
-            intermediate_size_pad * 2,
-            hidden_size_pad // 2,  # uint8
+            self.intermediate_size * 2,
+            self.hidden_size // block_size,
+            block_size // 2,
         ]
 
         self.down_proj_weight_shape = [
             self.num_experts,
-            hidden_size_pad,
-            intermediate_size_pad // 2,  # uint8
+            self.hidden_size,
+            self.intermediate_size // block_size,
+            block_size // 2,
         ]
 
         self.up_gate_proj_scale_shape = [
             self.num_experts,
-            intermediate_size_pad * 2,
-            hidden_size_pad // block_size,
+            self.intermediate_size * 2,
+            self.hidden_size // block_size,
         ]
 
         self.down_proj_scale_shape = [
             self.num_experts,
-            hidden_size_pad,
-            intermediate_size_pad // block_size,
+            self.hidden_size,
+            self.intermediate_size // block_size,
         ]
 
         self.weight_dtype = "uint8"
@@ -191,19 +216,18 @@ class MXFP4MoeMethod(QuantMethodBase):
 
         set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
         set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
-
         set_weight_attrs(layer.up_gate_proj_scale, extra_weight_attrs)
         set_weight_attrs(layer.down_proj_scale, extra_weight_attrs)
 
         if layer.with_bias:
             layer.up_gate_proj_bias = layer.create_parameter(
-                shape=[self.num_experts, intermediate_size_pad * 2],
+                shape=[self.num_experts, self.intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_bias = layer.create_parameter(
-                shape=[self.num_experts, hidden_size_pad],
+                shape=[self.num_experts, self.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
@@ -243,71 +267,131 @@ class MXFP4MoeMethod(QuantMethodBase):
             setattr(layer, "gemm1_clamp_limit", gemm1_clamp_limit)
 
     def process_weights_after_loading(self, layer) -> None:
-        return
+        extra_weight_attrs = self.extra_weight_attrs
+
         block_size = 32
+
+        intermediate_size_pad = self.intermediate_size
+        hidden_size_pad = self.hidden_size
+
         if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
-            assert (
-                layer.up_gate_proj_weight.dim() == 3
-                and layer.up_gate_proj_weight.shape[0] == self.num_experts
-                and layer.up_gate_proj_weight.shape[1] == self.intermediate_size_pad * 2
-                and layer.up_gate_proj_weight.shape[2] == self.hidden_size_pad // 2
-            )
-            assert (
-                layer.up_gate_proj_scale.dim() == 3
-                and layer.up_gate_proj_scale.shape[0] == self.num_experts
-                and layer.up_gate_proj_scale.shape[1] == self.intermediate_size_pad * 2
-                and layer.up_gate_proj_scale.shape[2] == self.hidden_size_pad // block_size
-            )
-            assert (
-                layer.down_proj_weight.dim() == 3
-                and layer.down_proj_weight.shape[0] == self.num_experts
-                and layer.down_proj_weight.shape[1] == self.hidden_size_pad
-                and layer.down_proj_weight.shape[2] == self.intermediate_size_pad // 2
-            )
-            assert (
-                layer.down_proj_scale.dim() == 3
-                and layer.down_proj_scale.shape[0] == self.num_experts
-                and layer.down_proj_scale.shape[1] == self.hidden_size_pad
-                and layer.down_proj_scale.shape[2] == self.intermediate_size_pad // block_size
-            )
-            if layer.with_bias:
-                assert (
-                    layer.up_gate_proj_bias.dim() == 2
-                    and layer.up_gate_proj_bias.shape[0] == self.num_experts
-                    and layer.up_gate_proj_bias.shape[1] == self.intermediate_size_pad * 2
-                )
-                assert (
-                    layer.down_proj_bias.dim() == 2
-                    and layer.down_proj_bias.shape[0] == self.num_experts
-                    and layer.down_proj_bias.shape[1] == self.hidden_size_pad
-                )
-
-            gate_w, up_w = layer.up_gate_proj_weight[:, ::2, :], layer.up_gate_proj_weight[:, 1::2, :]
-            gate_b, up_b = layer.up_gate_proj_bias[:, ::2].cast("bfloat16"), layer.up_gate_proj_bias[:, 1::2].cast(
-                "bfloat16"
-            )
-            gate_s, up_s = layer.up_gate_proj_scale[:, ::2, :], layer.up_gate_proj_scale[:, 1::2, :]
-
-            layer.up_gate_proj_weight.copy_(paddle.concat([up_w, gate_w], axis=1), False)
-            layer.up_gate_proj_bias.copy_(paddle.concat([up_b, gate_b], axis=-1), False)
-
-            def _interleave_mxfp4_cutlass_sm90(w):
-                w_shape = w.shape
-                w_interleaved = w.reshape([w_shape[0], w_shape[1], (w_shape[2] // 4), 4])
-                w_interleaved = w_interleaved.permute([0, 2, 1, 3])
-                w_interleaved = w_interleaved.reshape([w_shape[0], w_shape[2] // 4, w_shape[1] * 4])
-                return w_interleaved
-
-            up_gate_proj_scale = paddle.concat([up_s, gate_s], axis=1)
-            up_gate_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(up_gate_proj_scale)
-
-            down_proj_scale = layer.down_proj_scale
-            down_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(down_proj_scale)
-
-            layer.up_gate_proj_scale.copy_(up_gate_proj_scale_interleaved, False)
-            layer.down_proj_scale.copy_(down_proj_scale_interleaved, False)
+            intermediate_size_pad = round_up(intermediate_size_pad, 128)
+            hidden_size_pad = round_up(hidden_size_pad, 128)
         else:
-            raise ValueError(f"Unsupported backend: {self.mxfp4_backend}")
+            intermediate_size_pad = round_up(intermediate_size_pad, 64)
+
+        self.intermediate_size_pad = intermediate_size_pad
+        self.hidden_size_pad = hidden_size_pad
+
+        self.up_gate_proj_weight_shape = [
+            self.num_experts,
+            intermediate_size_pad * 2,
+            hidden_size_pad // 2,  # uint8
+        ]
+
+        self.down_proj_weight_shape = [
+            self.num_experts,
+            hidden_size_pad,
+            intermediate_size_pad // 2,  # uint8
+        ]
+
+        self.up_gate_proj_scale_shape = [
+            self.num_experts,
+            intermediate_size_pad * 2,
+            hidden_size_pad // block_size,
+        ]
+
+        self.down_proj_scale_shape = [
+            self.num_experts,
+            hidden_size_pad,
+            intermediate_size_pad // block_size,
+        ]
+
+        self.weight_dtype = "uint8"
+
+        up_gate_proj_weight_padding = layer.create_parameter(
+            shape=self.up_gate_proj_weight_shape,
+            dtype=self.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        weight = get_padding_weight(layer.up_gate_proj_weight, self.up_gate_proj_weight_shape)
+        gate_w, up_w = weight[:, ::2, :], weight[:, 1::2, :]
+        up_gate_proj_weight_padding.copy_(paddle.concat([up_w, gate_w], axis=1), False)
+        layer.up_gate_proj_weight._clear()
+        layer.up_gate_proj_weight = up_gate_proj_weight_padding
+
+        down_proj_weight_padding = layer.create_parameter(
+            shape=self.down_proj_weight_shape,
+            dtype=self.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        weight = get_padding_weight(layer.down_proj_weight, self.down_proj_weight_shape)
+        down_proj_weight_padding.copy_(weight, False)
+        layer.down_proj_weight._clear()
+        layer.down_proj_weight = down_proj_weight_padding
+
+        up_gate_proj_scale_padding = layer.create_parameter(
+            shape=self.up_gate_proj_scale_shape,
+            dtype=self.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        weight = get_padding_weight(layer.up_gate_proj_scale, self.up_gate_proj_scale_shape)
+        gate_s, up_s = weight[:, ::2, :], weight[:, 1::2, :]
+        up_gate_proj_scale = paddle.concat([up_s, gate_s], axis=1)
+        up_gate_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(up_gate_proj_scale)
+        up_gate_proj_scale_padding.copy_(up_gate_proj_scale_interleaved, False)
+        layer.up_gate_proj_scale._clear()
+        layer.up_gate_proj_scale = up_gate_proj_scale_padding
+
+        down_proj_scale_padding = layer.create_parameter(
+            shape=self.down_proj_scale_shape,
+            dtype=self.weight_dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        weight = get_padding_weight(layer.down_proj_scale, self.down_proj_scale_shape)
+        down_proj_scale = weight
+        down_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(down_proj_scale)
+        down_proj_scale_padding.copy_(down_proj_scale_interleaved, False)
+        layer.down_proj_scale._clear()
+        layer.down_proj_scale = down_proj_scale_padding
+
+        extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+
+        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.up_gate_proj_scale, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_scale, extra_weight_attrs)
+
+        if layer.with_bias:
+            up_gate_proj_bias_padding = layer.create_parameter(
+                shape=[self.num_experts, intermediate_size_pad * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            weight = get_padding_weight(layer.up_gate_proj_bias, [self.num_experts, self.intermediate_size_pad * 2])
+            gate_b, up_b = weight[:, ::2].cast("bfloat16"), weight[:, 1::2].cast("bfloat16")
+            up_gate_proj_bias_padding.copy_(paddle.concat([up_b, gate_b], axis=-1), False)
+            layer.up_gate_proj_bias._clear()
+            layer.up_gate_proj_bias = up_gate_proj_bias_padding
+
+            down_proj_bias_padding = layer.create_parameter(
+                shape=[self.num_experts, hidden_size_pad],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            weight = get_padding_weight(layer.down_proj_bias, [self.num_experts, self.hidden_size_pad])
+            down_proj_bias_padding.copy_(weight.cast("bfloat16"), False)
+            layer.down_proj_bias._clear()
+            layer.down_proj_bias = down_proj_bias_padding
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def apply(
         self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer, topk_ids_hookfunc: Callable = None

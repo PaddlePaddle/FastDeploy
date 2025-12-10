@@ -312,7 +312,6 @@ class GptOssForCausalLM(ModelForCasualLM):
                     weight_loader(
                         param,
                         loaded_weight,
-                        loaded_weight_name=loaded_weight_name,
                         shard_id=shard_id,
                         expert_id=expert_id,
                     )
