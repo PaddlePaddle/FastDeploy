@@ -312,7 +312,7 @@ def test_chat_with_thinking(openai_client, capsys):
         max_tokens=10,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
-    assert response.choices[0].message.reasoning_content is None
+    assert response.choices[0].message.reasoning_content == ""
     assert "</think>" not in response.choices[0].message.content
 
     # test logic
@@ -404,4 +404,4 @@ def test_thinking_logic_flag(openai_client, capsys):
             "chat_template_kwargs": {"enable_thinking": False},
         },
     )
-    assert response_case_3.choices[0].message.reasoning_content is None
+    assert response_case_3.choices[0].message.reasoning_content == ""

@@ -210,8 +210,10 @@ class TokenProcessor:
                 llm_logger.info(
                     f"Request: {task_id} finished, number of " f"generated tokens: {self.tokens_counter[task_id]}."
                 )
+                is_decode = self.cfg.scheduler_config.splitwise_role == "decode"
+                inference_start_time = task.metrics.get_inference_start_time(is_decode)
                 llm_logger.info(
-                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
+                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
                 )
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
@@ -233,8 +235,8 @@ class TokenProcessor:
                 continue
 
             task: Request = self.resource_manager.tasks_list[i]
-
             task_id = task.request_id
+
             token_ids = stream_data.tokens  # numpy.array
             if token_ids is not None and token_ids[-1] <= 0:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -244,21 +246,15 @@ class TokenProcessor:
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
-                metrics = RequestMetrics(
-                    arrival_time=task.arrival_time,
-                    inference_start_time=task.inference_start_time,
-                    first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
-                    preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
-                    request_start_time=task.arrival_time,
-                )
+                task.metrics.record_recv_first_token()
+                task.metrics.cal_cost_time()
+                metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
-
             else:
-                metrics = RequestMetrics(
-                    arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
-                )
+                task.metrics.record_recv_token()
+                if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
+                    task.metrics.record_decode_recv_second_token()
+                metrics = copy.copy(task.metrics)
 
             if task.pooling_params is not None:
                 pooler_output = stream_data.pooler_output
@@ -453,6 +449,7 @@ class TokenProcessor:
         """
         if is_prefill:
             start_time = time.time()
+            result.metrics.wait_for_sending_cache_time = time.time()
             while True:
                 finished_task_ids = self.engine_worker_queue.get_finished_req()
                 if len(finished_task_ids) > 0:
@@ -474,6 +471,7 @@ class TokenProcessor:
                     llm_logger.info(
                         f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
                     )
+                    result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
@@ -620,7 +618,7 @@ class TokenProcessor:
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
-            self._record_speculative_decoding_mertics(accept_num)
+            self._record_speculative_decoding_metrics(accept_num)
         elif self.use_logprobs:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
@@ -639,8 +637,10 @@ class TokenProcessor:
 
             recovery_stop = False
             task = self.resource_manager.tasks_list[i]
-
             task_id = task.request_id
+            is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
+            is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
+
             if self.cfg.speculative_config.method:
                 if accept_num[i] == -3:
                     recovery_stop = True
@@ -685,29 +685,16 @@ class TokenProcessor:
             self.total_step += 1
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
-                metrics = RequestMetrics(
-                    arrival_time=task.arrival_time,
-                    inference_start_time=task.inference_start_time,
-                    model_execute_time=time.time() - task.inference_start_time,
-                    first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
-                    preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
-                    request_start_time=task.arrival_time,
-                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
-                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
-                    llm_engine_recv_token_timestamp=time.time(),
-                )
+                task.metrics.record_recv_first_token()
+                task.metrics.cal_cost_time()
+                metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
-
             else:
-                metrics = RequestMetrics(
-                    arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
-                    model_execute_time=time.time() - task.inference_start_time,
-                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
-                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
-                    llm_engine_recv_token_timestamp=time.time(),
-                )
+                task.metrics.record_recv_token()
+                if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
+                    task.metrics.record_decode_recv_second_token()
+                metrics = copy.copy(task.metrics)
+
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)
             result = RequestOutput(
@@ -731,8 +718,6 @@ class TokenProcessor:
             if task.get("multimodal_inputs", None):
                 result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
-
-            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 
             if is_prefill and len(token_ids) > 1:
                 result.outputs.draft_token_ids = copy.deepcopy(token_ids)
@@ -785,8 +770,9 @@ class TokenProcessor:
                         f"Request: {task_id} finished, number of "
                         f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
                     )
+                    inference_start_time = task.metrics.get_inference_start_time(is_decode)
                     llm_logger.info(
-                        f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
+                        f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
                     )
                     llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
@@ -813,26 +799,27 @@ class TokenProcessor:
 
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
-        task.first_token_time = current_time
+        metrics = task.metrics
         trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.time_to_first_token.observe(current_time - task.arrival_time)
-        main_process_metrics.request_queue_time.observe(task.inference_start_time - task.preprocess_end_time)
-        main_process_metrics.request_prefill_time.observe(current_time - task.inference_start_time)
+        main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
+        main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
+        main_process_metrics.request_prefill_time.observe(current_time - metrics.inference_start_time)
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
-        if hasattr(task, "first_token_time"):
-            decode_time = current_time - task.first_token_time
+        metrics = task.metrics
+        if metrics.engine_recv_first_token_time:
+            decode_time = current_time - metrics.engine_recv_first_token_time
             main_process_metrics.request_decode_time.observe(decode_time)
         trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
-        main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
+        main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 
-    def _record_speculative_decoding_mertics(self, accept_num):
+    def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             main_process_metrics._init_speculative_metrics(

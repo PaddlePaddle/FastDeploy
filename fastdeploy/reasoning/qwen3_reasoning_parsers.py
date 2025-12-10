@@ -35,21 +35,49 @@ class Qwen3ReasoningParser(ReasoningParser):
 
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
-        self.think_start_token = "<think>"
-        self.think_end_token = "</think>"
+
+        # 定义所有需要检查的token
+        token_definitions = {
+            "think_start_token": "<think>",
+            "think_end_token": "</think>",
+        }
 
         if not self.model_tokenizer:
-            raise ValueError(
-                "The model tokenizer must be passed to the ReasoningParser " "constructor during construction."
-            )
+            raise ValueError("The model tokenizer must be passed to the ReasoningParser constructor.")
 
-        self.think_start_token_id = self.vocab.get(self.think_start_token)
-        self.think_end_token_id = self.vocab.get(self.think_end_token)
-        if self.think_end_token_id is None:
-            raise RuntimeError("Qwen3  reasoning parser could not locate think end " "tokens in the tokenizer!")
+        missing_tokens = []
+        for name, token_value in token_definitions.items():
+            setattr(self, name, token_value)
+            token_id = self.vocab.get(token_value)
+            setattr(self, f"{name}_id", token_id)
+            if token_id is None:
+                missing_tokens.append(token_value)
+
+        if missing_tokens:
+            raise RuntimeError(
+                f"Qwen3 reasoning parser could not find the following token ids in tokenizer vocabulary: {', '.join(missing_tokens)}"
+            )
+        self.token_status_mapping = {
+            self.think_start_token_id: "think_start",
+            self.think_end_token_id: "think_end",
+        }
 
     def is_reasoning_end(self, input_ids: list[int]) -> bool:
         return self.think_end_token_id in input_ids
+
+    def find_last_special_token(self, prompt_token_ids: list[int]) -> int:
+        for i in range(len(prompt_token_ids) - 1, -1, -1):
+            if prompt_token_ids[i] in self.token_status_mapping:
+                return prompt_token_ids[i]
+        return -1
+
+    def get_model_status(self, prompt_token_ids: list[int]):
+        special_token_id = self.find_last_special_token(prompt_token_ids)
+
+        if special_token_id == -1:
+            return "think_start"
+
+        return self.token_status_mapping[special_token_id]
 
     def extract_reasoning_content_streaming(
         self,
@@ -59,6 +87,7 @@ class Qwen3ReasoningParser(ReasoningParser):
         previous_token_ids: Sequence[int],
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
+        model_status: str,
     ) -> Union[DeltaMessage, None]:
         """
         Extract reasoning content from a delta message.
@@ -71,39 +100,42 @@ class Qwen3ReasoningParser(ReasoningParser):
         if len(delta_token_ids) == 1 and (delta_token_ids[0] in [self.think_start_token_id, self.think_end_token_id]):
             return None
 
-        # </think> in delta
-        if self.think_end_token_id in delta_token_ids:
-            # <think> in delta, </think> in delta, extract reasoning content
-            if self.think_start_token_id in delta_token_ids:
+        if model_status == "think_start":
+            # </think> in delta
+            if self.think_end_token_id in delta_token_ids:
+                # <think> in delta, </think> in delta, extract reasoning content
+                if self.think_start_token_id in delta_token_ids:
+                    start_index = delta_text.find(self.think_start_token)
+                    end_index = delta_token_ids.find(self.think_end_token)
+                    reasoning_content = delta_text[start_index + len(self.think_start_token) : end_index]
+                    content = delta_text[end_index + len(self.think_end_token) :]
+                    return DeltaMessage(reasoning_content=reasoning_content, content=content)
+                # <think> in previous, </think> in delta,
+                else:
+                    end_index = delta_text.find(self.think_end_token)
+                    reasoning_content = delta_text[:end_index]
+                    content = delta_text[end_index + len(self.think_end_token) :]
+                    content = content if content else None
+                    return DeltaMessage(reasoning_content=reasoning_content, content=content)
+            # </think> in previous reasoning content continues
+            elif self.think_end_token_id in previous_token_ids:
+                return DeltaMessage(content=delta_text)
+            # <think> in previous
+            elif self.think_start_token_id in previous_token_ids:
+                return DeltaMessage(reasoning_content=delta_text)
+            # <think> in delta
+            elif self.think_start_token_id in delta_token_ids:
                 start_index = delta_text.find(self.think_start_token)
-                end_index = delta_token_ids.find(self.think_end_token)
-                reasoning_content = delta_text[start_index + len(self.think_start_token) : end_index]
-                content = delta_text[end_index + len(self.think_end_token) :]
+                reasoning_content = delta_text[start_index + len(self.think_start_token) :]
+                content = ""
                 return DeltaMessage(reasoning_content=reasoning_content, content=content)
-            # <think> in previous, </think> in delta,
             else:
-                end_index = delta_text.find(self.think_end_token)
-                reasoning_content = delta_text[:end_index]
-                content = delta_text[end_index + len(self.think_end_token) :]
-                content = content if content else None
-                return DeltaMessage(reasoning_content=reasoning_content, content=content)
-        # </think> in previous reasoning content continues
-        elif self.think_end_token_id in previous_token_ids:
-            return DeltaMessage(content=delta_text)
-        # <think> in previous
-        elif self.think_start_token_id in previous_token_ids:
-            return DeltaMessage(reasoning_content=delta_text)
-        # <think> in delta
-        elif self.think_start_token_id in delta_token_ids:
-            start_index = delta_text.find(self.think_start_token)
-            reasoning_content = delta_text[start_index + len(self.think_start_token) :]
-            content = ""
-            return DeltaMessage(reasoning_content=reasoning_content, content=content)
+                return DeltaMessage(reasoning_content=delta_text)
         else:
-            return DeltaMessage(reasoning_content=delta_text)
+            return DeltaMessage(content=delta_text)
 
     def extract_reasoning_content(
-        self, model_output: str, request: ChatCompletionRequest
+        self, model_output: str, request: ChatCompletionRequest, model_status: str
     ) -> tuple[Optional[str], Optional[str]]:
         """
         Extract reasoning content from the model output.
@@ -116,36 +148,39 @@ class Qwen3ReasoningParser(ReasoningParser):
             tuple[Optional[str], Optional[str]]: reasoning content and content
         """
 
-        # 检查是否包含结束标签
-        if self.think_end_token not in model_output:
-            return None, model_output
-
-        # 检查是否有起始标签
-        if self.think_start_token in model_output:
-            # 标准格式：<think>content</think>answer
-            if self.think_start_token not in model_output or self.think_end_token not in model_output:
-                return None, model_output
-            # Check if the <think> is present in the model output, remove it
-            # if it is present.
-            model_output_parts = model_output.partition(self.think_start_token)
-            model_output = model_output_parts[2] if model_output_parts[1] else model_output_parts[0]
-            # Check if the model output contains the </think> tokens.
-            # If the end token is not found, return the model output as is.
+        if model_status == "think_start":
+            # 检查是否包含结束标签
             if self.think_end_token not in model_output:
                 return None, model_output
 
-            # Extract reasoning content from the model output.
-            reasoning_content, _, content = model_output.partition(self.think_end_token)
+            # 检查是否有起始标签
+            if self.think_start_token in model_output:
+                # 标准格式：<think>content</think>answer
+                if self.think_start_token not in model_output or self.think_end_token not in model_output:
+                    return None, model_output
+                # Check if the <think> is present in the model output, remove it
+                # if it is present.
+                model_output_parts = model_output.partition(self.think_start_token)
+                model_output = model_output_parts[2] if model_output_parts[1] else model_output_parts[0]
+                # Check if the model output contains the </think> tokens.
+                # If the end token is not found, return the model output as is.
+                if self.think_end_token not in model_output:
+                    return None, model_output
 
-            final_content = content or None
-            return reasoning_content, final_content
-        else:
-            # 缺少起始标签的格式：content</think>answer
-            parts = model_output.split(self.think_end_token, 1)
+                # Extract reasoning content from the model output.
+                reasoning_content, _, content = model_output.partition(self.think_end_token)
 
-            if len(parts) == 2:
-                reasoning_content = parts[0].strip()
-                final_content = parts[1].strip() if parts[1].strip() else None
+                final_content = content or None
                 return reasoning_content, final_content
+            else:
+                # 缺少起始标签的格式：content</think>answer
+                parts = model_output.split(self.think_end_token, 1)
 
-        return None, model_output
+                if len(parts) == 2:
+                    reasoning_content = parts[0].strip()
+                    final_content = parts[1].strip() if parts[1].strip() else None
+                    return reasoning_content, final_content
+
+            return None, model_output
+        else:
+            return None, model_output

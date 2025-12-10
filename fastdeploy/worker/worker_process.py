@@ -38,6 +38,7 @@ from fastdeploy.config import (
     ModelConfig,
     ParallelConfig,
     PlasAttentionConfig,
+    RoutingReplayConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
@@ -458,7 +459,7 @@ class PaddleDisWorkerProc:
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
-                    logger.info(
+                    logger.debug(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
                     from fastdeploy.rl.dynamic_weight_manager import (
@@ -472,10 +473,10 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
-                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                    logger.debug(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
-                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    logger.debug(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -885,6 +886,13 @@ def parse_args():
         help="EPLB Configuration.",
     )
 
+    parser.add_argument(
+        "--routing_replay_config",
+        type=json.loads,
+        default=None,
+        help="Configation of Rollout Routing Replay.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -944,6 +952,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     eplb_config = EPLBConfig(args.eplb_config)
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
+    routing_replay_config = RoutingReplayConfig(args.routing_replay_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -1003,6 +1012,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
+        routing_replay_config=routing_replay_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):

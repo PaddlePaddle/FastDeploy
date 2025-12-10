@@ -41,35 +41,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             chat_template=None,
         )
 
-    def test_enable_thinking(self):
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, None)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"enable_thinking": True})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"enable_thinking": False})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "close"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "false"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "open"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "123"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
     def test_build_prompt_logprobs_basic(self):
         """Test basic functionality of _build_prompt_logprobs"""
         # Create mock data
