@@ -223,6 +223,9 @@ include_draft_logprobs: Optional[bool] = False
 # Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
 # for debugging or analysis of the generation process (default False means not returned).
 
+include_logprobs_decode_token: Optional[bool] = True
+# Whether to include decoded token in the logprobs/prompt_logprobs results, (default True means the decoded token is always include in results).
+
 logits_processors_args: Optional[Dict] = None
 # Additional arguments for logits processors, enabling customization of generation logic
 # (e.g., dynamically adjusting probability distributions).
@@ -480,6 +483,9 @@ top_p_normalized_logprobs: Optional[bool] = False
 include_draft_logprobs: Optional[bool] = False
 # Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
 # for debugging or analysis of the generation process (default False means not returned).
+
+include_logprobs_decode_token: Optional[bool] = True
+# Whether to include decoded token in the prompt_logprobs results, (default True means the decoded token is always include in results).
 
 logits_processors_args: Optional[Dict] = None
 # Additional arguments for logits processors, enabling customization of generation logic
