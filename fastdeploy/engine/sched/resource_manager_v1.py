@@ -201,9 +201,9 @@ class ResourceManagerV1(ResourceManager):
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
         if self.config.scheduler_config.splitwise_role == "decode":
             self.preallocated_requests_timestamp = {}
-            threading.Thread(target=self._monitor_recycle_block_ids_in_D, daemon=True).start()
+            threading.Thread(target=self._monitor_decode_kv_block_recycling, daemon=True).start()
 
-    def _monitor_recycle_block_ids_in_D(self):
+    def _monitor_decode_kv_block_recycling(self):
         while True:
             try:
                 with self.lock:
@@ -1057,25 +1057,26 @@ class ResourceManagerV1(ResourceManager):
         NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        if request_output.request_id not in self.requests:
-            self.logger.error(f"Request {request_output.request_id} not found in requests")
-            return
-        request = self.requests[request_output.request_id]
+        with self.lock:
+            if request_output.request_id not in self.requests:
+                self.logger.error(f"Request {request_output.request_id} not found in requests")
+                return
+            request = self.requests[request_output.request_id]
 
-        # update request and insert to running
-        request.output_token_ids.append(request_output.outputs.token_ids[0])
-        if request.request_id in self.preallocated_requests_timestamp:
-            del self.preallocated_requests_timestamp[request.request_id]
-        request.num_cached_tokens = request_output.num_cached_tokens
-        if (
-            self.config.speculative_config.method in ["mtp"]
-            and self.config.scheduler_config.splitwise_role == "decode"
-        ):
-            request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
-        request.need_prefill_tokens = len(request.prompt_token_ids) + 1
-        request.inference_start_time = time.time()
-        request.schedule_start_time = time.time()
-        self.running.append(request)
+            # update request and insert to running
+            request.output_token_ids.append(request_output.outputs.token_ids[0])
+            if request.request_id in self.preallocated_requests_timestamp:
+                del self.preallocated_requests_timestamp[request.request_id]
+            request.num_cached_tokens = request_output.num_cached_tokens
+            if (
+                self.config.speculative_config.method in ["mtp"]
+                and self.config.scheduler_config.splitwise_role == "decode"
+            ):
+                request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
+            request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+            request.inference_start_time = time.time()
+            request.schedule_start_time = time.time()
+            self.running.append(request)
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
