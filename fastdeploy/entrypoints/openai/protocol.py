@@ -210,6 +210,7 @@ class ChatMessage(BaseModel):
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
     reasoning_content: Optional[str] = None
+    audio_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
@@ -272,6 +273,7 @@ class DeltaMessage(BaseModel):
     role: Optional[str] = None
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
+    audio_content: Optional[str] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
@@ -306,6 +308,7 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class CompletionResponseChoice(BaseModel):
@@ -385,6 +388,7 @@ class CompletionStreamResponse(BaseModel):
     model: str
     choices: List[CompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class StreamOptions(BaseModel):
@@ -496,6 +500,8 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -611,7 +617,7 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
-    top_logprobs: Optional[int] = 0
+    top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
 
@@ -669,6 +675,8 @@ class ChatCompletionRequest(BaseModel):
     mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None):
         """
@@ -931,7 +939,7 @@ class EmbeddingChatRequest(BaseModel):
     )
 
     add_special_tokens: bool = Field(
-        default=False,
+        default=True,
         description=(
             "If true, special tokens (e.g. BOS) will be added to the prompt "
             "on top of what is added by the chat template. "
@@ -1013,9 +1021,9 @@ PoolingChatRequest = EmbeddingChatRequest
 
 
 class ChatRewardRequest(BaseModel):
-    model: Optional[str] = None  # 指定模型，例如 "default" 或支持 embedding 的 chat 模型
-    messages: Union[List[Any], List[int]]  # 聊天消息列表（必选）
-    user: Optional[str] = None  # 调用方标识符
+    model: Optional[str] = None
+    messages: Union[List[Any], List[int]]
+    user: Optional[str] = None
 
     dimensions: Optional[int] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
@@ -1084,15 +1092,15 @@ class ChatRewardRequest(BaseModel):
 
 
 class ChatRewardData(BaseModel):
-    index: Optional[int] = None  # 数据索引（可选）
-    object: str = "reward"  # 固定为 "reward"
-    score: List[float]  # reward 分数（浮点数列表）
+    index: Optional[int] = None
+    object: str = "reward"
+    score: List[float]
 
 
 class ChatRewardResponse(BaseModel):
-    id: str  # 响应 ID，例如 chat-reward-<uuid>
-    object: str = "object"  # 固定为 "object"
-    created: int  # 创建时间（Unix 时间戳）
-    model: str  # 使用的模型名
-    data: List[ChatRewardData]  # reward 结果列表
-    usage: Optional[UsageInfo] = None  # Token 使用情况
+    id: str
+    object: str = "object"
+    created: int
+    model: str
+    data: List[ChatRewardData]
+    usage: Optional[UsageInfo] = None

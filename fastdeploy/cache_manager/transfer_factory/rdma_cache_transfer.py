@@ -40,11 +40,10 @@ class RDMACommManager:
         try:
             import rdma_comm
         except:
-            logger.error(
+            raise RuntimeError(
                 "The installation of the RDMA library failed."
                 "Confirm whether your network card supports RDMA transmission."
             )
-            return
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
             gpu_id,
@@ -62,7 +61,7 @@ class RDMACommManager:
             f"init rdma messager {gpu_id} {rdma_port}, prefill_tp_size: {prefill_tp_size}, prefill_tp_idx: {prefill_tp_idx}"
         )
 
-    def connect(self, ip, port, tp_size):
+    def connect(self, ip, port, tp_size=0):
         """
         Connect to remote gpu and write cache.
         """

@@ -175,7 +175,6 @@ class TestGPUPromptLogprobs(unittest.TestCase):
                 tools=None,
                 system=None,
                 eos_token_ids=None,
-                arrival_time=None,
                 request_id="asd1",
                 prompt_token_ids=[1, 2, 3, 4],
                 prompt_token_ids_len=4,

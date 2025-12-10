@@ -245,6 +245,15 @@ class PrefixCacheManager:
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
         visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if val_cache_shape:
+            if isinstance(val_cache_shape, list):
+                val_shape_str = ",".join(map(str, val_cache_shape))
+            else:
+                val_shape_str = str(val_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
@@ -259,7 +268,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {val_cache_shape}"
+                + val_cache_arg_str
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --enable_splitwise {int(self.enable_splitwise)}"
                 + f" --pod_ip {pod_ip}"
@@ -271,7 +280,7 @@ class PrefixCacheManager:
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
             cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -332,6 +341,15 @@ class PrefixCacheManager:
         log_dir = envs.FD_LOG_DIR
         cache_messager_processes = []
         visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if value_cache_shape:
+            if isinstance(value_cache_shape, list):
+                val_shape_str = ",".join(map(str, value_cache_shape))
+            else:
+                val_shape_str = str(value_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
@@ -345,7 +363,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {value_cache_shape}"
+                + val_cache_arg_str
                 + f" --pod_ip {pod_ip}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
@@ -354,7 +372,7 @@ class PrefixCacheManager:
                 + f" --engine_pid {pid_suffix}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_{int(device_ids[i])}.log 2>&1"
+                + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))

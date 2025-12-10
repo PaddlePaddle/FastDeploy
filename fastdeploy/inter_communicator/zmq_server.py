@@ -191,7 +191,7 @@ class ZmqServerBase(ABC):
             return str(e), None
 
     def recv_result_handle(self):
-        while True:
+        while self.running:
             try:
                 with self.response_token_lock:
                     client, _, request_id = self.socket.recv_multipart(flags=zmq.NOBLOCK)
@@ -214,6 +214,9 @@ class ZmqServerBase(ABC):
             except zmq.Again:
                 time.sleep(0.001)
                 continue
+            except zmq.error.ZMQError as e:
+                llm_logger.error(f"recv_result_handle get zmq error: {e}")
+                break
             except Exception as e:
                 llm_logger.error(f"recv_result_handle get unknown exception: {e}")
                 continue
