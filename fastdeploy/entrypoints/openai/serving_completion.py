@@ -309,7 +309,7 @@ class OpenAIServingCompletion:
 
                     aggregated_token_ids[rid].extend(getattr(output, "token_ids", []))
 
-                    self.engine_client.data_processor.process_response_dict(
+                    self.engine_client.data_processor.process_response_obj(
                         data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
                     )
                     output_tokens[rid] += len(getattr(output, "token_ids", []))
@@ -479,7 +479,7 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(
+                    self.engine_client.data_processor.process_response_obj(
                         res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
                     )
                     if (

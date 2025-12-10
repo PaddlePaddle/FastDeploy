@@ -116,7 +116,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         """process the input data"""
         task = request.to_dict()
         task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        self.process_request_dict(task, max_model_len)
+        self.process_request_obj(task, max_model_len)
         request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
 
@@ -197,7 +197,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_dict(self, request, max_model_len=None):
+    def process_request_obj(self, request, max_model_len=None):
         """process the input data"""
 
         request = self._apply_default_parameters(request)
@@ -276,7 +276,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if len(parts) > 1:
                 real_req_id = parts[0]
                 index = int(parts[1])
-                n = request.n or 1
+                n = request.sampling_params.n or 1
                 for idx in range(index * n, (index + 1) * n):
                     self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             else:

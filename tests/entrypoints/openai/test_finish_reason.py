@@ -275,7 +275,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "max_tokens": case["request"].max_tokens,
                 }
                 await self.engine_client.add_requests(request_dict)
-                processed_req = self.multi_modal_processor.process_request_dict(
+                processed_req = self.multi_modal_processor.process_request_obj(
                     request_dict, self.engine_client.max_model_len
                 )
                 mock_response_queue.get.side_effect = self._generate_inference_response(
@@ -350,10 +350,10 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "max_tokens": case["request"].max_tokens,
                 }
                 await self.engine_client.add_requests(request_dict)
-                processed_req = self.multi_modal_processor.process_request_dict(
+                processed_req = self.multi_modal_processor.process_request_obj(
                     request_dict, self.engine_client.max_model_len
                 )
-                self.engine_client.data_processor.process_response_dict = (
+                self.engine_client.data_processor.process_response_obj = (
                     lambda data, stream, include_stop_str_in_output: data
                 )
                 mock_response_queue = AsyncMock()
@@ -460,11 +460,11 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "max_tokens": case["request"].max_tokens,
                 }
                 await self.engine_client.add_requests(request_dict)
-                processed_req = self.multi_modal_processor.process_request_dict(
+                processed_req = self.multi_modal_processor.process_request_obj(
                     request_dict, self.engine_client.max_model_len
                 )
 
-                self.engine_client.data_processor.process_response_dict = (
+                self.engine_client.data_processor.process_response_obj = (
                     lambda data, stream, include_stop_str_in_output: data
                 )
 
@@ -550,10 +550,10 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "max_tokens": case["request"].max_tokens,
                 }
                 await self.engine_client.add_requests(request_dict)
-                processed_req = self.multi_modal_processor.process_request_dict(
+                processed_req = self.multi_modal_processor.process_request_obj(
                     request_dict, self.engine_client.max_model_len
                 )
-                self.engine_client.data_processor.process_response_dict = (
+                self.engine_client.data_processor.process_response_obj = (
                     lambda data, stream, include_stop_str_in_output: data
                 )
 

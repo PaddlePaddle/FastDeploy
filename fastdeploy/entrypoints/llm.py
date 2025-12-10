@@ -731,7 +731,7 @@ class LLM:
             if chat_template_kwargs:
                 enable_thinking = chat_template_kwargs.get("enable_thinking", False)
 
-            # Construct response_dict format and call process_response_dict_streaming
+            # Construct response_dict format and call process_response_obj_streaming
             response_dict = {
                 "request_id": current_result.request_id,
                 "finished": current_result.finished,
@@ -740,7 +740,7 @@ class LLM:
                 },
             }
 
-            processed_response = self.llm_engine.data_processor.process_response_dict_streaming(
+            processed_response = self.llm_engine.data_processor.process_response_obj_streaming(
                 response_dict, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
             )
 

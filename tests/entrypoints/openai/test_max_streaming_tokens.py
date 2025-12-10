@@ -390,7 +390,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         self.assertEqual(mock_response_queue.get.call_count, 2)
 
-        self.assertEqual(self.engine_client.data_processor.process_response_dict.call_count, len(final_response_data))
+        self.assertEqual(self.engine_client.data_processor.process_response_obj.call_count, len(final_response_data))
 
         self.completion_serving.request_output_to_completion_response.assert_called_once()
 
@@ -563,7 +563,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
         mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "Ernie45VLThinkingReasoningParser")
         mock_processor_instance.data_processor = Mock(
-            process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
+            process_response_obj=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
         )
         mock_response_processor.return_value = mock_processor_instance
 

@@ -253,7 +253,7 @@ class Request:
         if pooling_params is None:
             sampling_params = SamplingParams.from_generic_request(req)
         else:
-            sampling_params = None
+            sampling_params = SamplingParams()
 
         guided_json_object = cls._process_guided_json(req)
 

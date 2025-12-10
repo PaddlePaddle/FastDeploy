@@ -223,7 +223,7 @@ class ZmqOpenAIServing(OpenAIServing):
         super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time)
         self.chat_template = chat_template
 
-    def _request_to_dict(self, ctx: ServeContext):
+    def _request_to_obj(self, ctx: ServeContext):
         request = ctx.request
         if hasattr(request, "to_dict_for_infer"):
             request_dict = request.to_dict_for_infer(ctx.request_id)
@@ -235,14 +235,14 @@ class ZmqOpenAIServing(OpenAIServing):
         self._process_chat_template_kwargs(request_dict)
         return request_dict
 
-    def _request_to_batch_dicts(self, ctx: ServeContext):
+    def _request_to_batch_objs(self, ctx: ServeContext):
         """Convert multiple requests to dictionary form"""
-        return [self._request_to_dict(ctx)]
+        return [self._request_to_obj(ctx)]
 
     @override
     async def _preprocess(self, ctx: ServeContext):
         """Preprocess the request into engine format"""
-        request_objs = self._request_to_batch_dicts(ctx)
+        request_objs = self._request_to_batch_objs(ctx)
         ctx.preprocess_requests = request_objs
         for request_obj in request_objs:
             api_server_logger.info(f"batch add request_id: {request_obj.request_id}, request: {request_obj}")

@@ -24,7 +24,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.mock_data_processor = MagicMock()
-        self.mock_data_processor.process_response_dict = MagicMock(
+        self.mock_data_processor.process_response_obj = MagicMock(
             side_effect=lambda response_dict, **_: {"processed": True, "raw": response_dict}
         )
 
@@ -52,7 +52,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        self.mock_data_processor.process_response_dict.assert_called_once()
+        self.mock_data_processor.process_response_obj.assert_called_once()
         self.assertEqual(results[0]["processed"], True)
         self.assertEqual(results[0]["raw"]["outputs"]["text"], "hello")
 

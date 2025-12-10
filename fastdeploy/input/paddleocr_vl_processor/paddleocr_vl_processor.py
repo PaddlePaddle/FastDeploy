@@ -90,7 +90,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         """
         task = request.to_dict()
         task["enable_thinking"] = kwargs.get("enable_thinking", False)
-        self.process_request_dict(task, max_model_len)
+        self.process_request_obj(task, max_model_len)
         request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
         return request
@@ -192,7 +192,7 @@ class PaddleOCRVLProcessor(TextProcessor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_dict(self, request, max_model_len=None):
+    def process_request_obj(self, request, max_model_len=None):
         """
         Process request dictionary into model inputs.
 

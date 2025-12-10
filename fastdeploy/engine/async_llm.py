@@ -59,7 +59,7 @@ class AsyncOutputProcessor:
         enable_thinking: bool = False,
         include_stop_str_in_output: bool = False,
     ) -> Dict[str, Any]:
-        """Process a single response dict via data_processor.process_response_dict.
+        """Process a single response dict via data_processor.process_response_obj.
 
         This mirrors the behavior of ChatResponseProcessor in the OpenAI serving
         path: operate on a dict representation and return a dict. On any error
@@ -68,7 +68,7 @@ class AsyncOutputProcessor:
         """
 
         try:
-            processed = self.data_processor.process_response_dict(
+            processed = self.data_processor.process_response_obj(
                 response_dict,
                 stream=stream,
                 enable_thinking=enable_thinking,
@@ -401,10 +401,10 @@ class AsyncLLM(EngineServiceClient):
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
 
-            if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
-                request = await self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
+            if inspect.iscoroutinefunction(self.data_processor.process_request_obj):
+                request = await self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
             else:
-                request = self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
+                request = self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
 
             request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 

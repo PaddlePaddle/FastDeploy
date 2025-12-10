@@ -305,7 +305,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that raises exception
             mock_data_processor = Mock()
-            mock_data_processor.process_response_dict.side_effect = Exception("Decode error")
+            mock_data_processor.process_response_obj.side_effect = Exception("Decode error")
             processor = AsyncOutputProcessor(mock_data_processor)
 
             # Create response dict without text field
@@ -342,7 +342,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that returns None
             mock_data_processor = Mock()
-            mock_data_processor.process_response_dict.return_value = None
+            mock_data_processor.process_response_obj.return_value = None
             processor = AsyncOutputProcessor(mock_data_processor)
 
             # Create response dict without text field
@@ -594,7 +594,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Mock data_processor to raise exception
             with patch.object(self.engine, "data_processor") as mock_processor:
-                mock_processor.process_request_dict.side_effect = RuntimeError("Processing failed")
+                mock_processor.process_request_obj.side_effect = RuntimeError("Processing failed")
 
                 try:
                     await self.engine.add_request("test_id", "test prompt", SamplingParams(max_tokens=10))

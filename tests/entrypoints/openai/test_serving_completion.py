@@ -437,11 +437,11 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock the data_processor methods
         mock_engine_client.data_processor.process_logprob_response = Mock(side_effect=lambda x, **kwargs: f"token_{x}")
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -537,7 +537,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the data_processor methods
         mock_engine_client.data_processor.process_logprob_response = Mock(side_effect=lambda x, **kwargs: f"token_{x}")
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -632,7 +632,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -737,7 +737,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -870,7 +870,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -962,7 +962,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -1049,7 +1049,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -1147,7 +1147,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_dict = Mock()
+        mock_engine_client.data_processor.process_response_obj = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()

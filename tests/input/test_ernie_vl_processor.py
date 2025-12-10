@@ -98,7 +98,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
-        self.processor.process_request_dict(request, max_model_len=512)
+        self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
         request = {
@@ -106,7 +106,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "request_id": "test",
             "prompt_token_ids": [1, 2, 3],
         }
-        self.processor.process_request_dict(request, max_model_len=512)
+        self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
 

@@ -115,7 +115,7 @@ class MockToolParser:
             self.content = "tool_content"
 
     def extract_tool_calls(self, full_text, response_dict):
-        """Used in process_response and process_response_dict_normal."""
+        """Used in process_response and process_response_obj_normal."""
         return MockToolParser.ToolDelta()
 
     def extract_tool_calls_streaming(
@@ -128,7 +128,7 @@ class MockToolParser:
         delta_token_ids,
         response_dict,
     ):
-        """Used in process_response_dict_streaming."""
+        """Used in process_response_obj_streaming."""
         return MockToolParser.ToolDelta()
 
 
@@ -174,7 +174,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertEqual(token_ids, [5, 6, 1])
 
-    def test_process_request_dict_with_prompt_string(self):
+    def test_process_request_obj_with_prompt_string(self):
         """Test prompt-based tokenization, truncation, and temperature/top_p correction."""
         proc = self._make_processor()
         req = {
@@ -183,7 +183,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             "top_p": 0.0,
         }
 
-        processed = proc.process_request_dict(req, max_model_len=10)
+        processed = proc.process_request_obj(req, max_model_len=10)
 
         self.assertIn("eos_token_ids", processed)
         self.assertEqual(processed["eos_token_ids"], [proc.tokenizer.eos_token_id])
@@ -220,7 +220,7 @@ class TestErnie4_5Processor(unittest.TestCase):
         np.testing.assert_array_equal(padded_empty, np.array([[]], dtype=np.int64))
         np.testing.assert_array_equal(seq_len_empty, np.array([], dtype=np.int64))
 
-    def test_process_response_dict_streaming_with_reasoning_and_tool(self):
+    def test_process_response_obj_streaming_with_reasoning_and_tool(self):
         """Ensure streaming mode handles reasoning and tool-call parsing correctly."""
         proc = self._make_processor(reasoning=True, tool=True)
 
@@ -230,9 +230,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             "outputs": {"token_ids": [10, 11]},
         }
 
-        result = proc.process_response_dict_streaming(
-            response, enable_thinking=False, include_stop_str_in_output=False
-        )
+        result = proc.process_response_obj_streaming(response, enable_thinking=False, include_stop_str_in_output=False)
 
         outputs = result["outputs"]
 
@@ -298,8 +296,8 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertIn("max_tokens", processed)
         self.assertEqual(processed["max_tokens"], max(1, 20 - len(expected_ids)))
 
-    def test_process_request_dict_chat_template_kwargs(self):
-        """Test chat_template_kwargs insertion in process_request_dict."""
+    def test_process_request_obj_chat_template_kwargs(self):
+        """Test chat_template_kwargs insertion in process_request_obj."""
         proc = self._make_processor()
 
         req = {
@@ -309,7 +307,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             "top_p": 0.5,
         }
 
-        result = proc.process_request_dict(req, max_model_len=30)
+        result = proc.process_request_obj(req, max_model_len=30)
 
         self.assertIn("prompt_token_ids", result)
         self.assertEqual(result["A"], "B")
@@ -339,7 +337,7 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertTrue(hasattr(result.outputs, "tool_calls"))
         self.assertEqual(result.outputs.tool_calls[0]["name"], "fake_tool")
 
-    def test_process_response_dict_normal_with_tool(self):
+    def test_process_response_obj_normal_with_tool(self):
         """Verify tool_call extraction in normal (non-streaming) response mode."""
         proc = self._make_processor(tool=True)
 
@@ -349,7 +347,7 @@ class TestErnie4_5Processor(unittest.TestCase):
             "outputs": {"token_ids": [10, 11], "text": ""},
         }
 
-        result = proc.process_response_dict_normal(resp, enable_thinking=False, include_stop_str_in_output=False)
+        result = proc.process_response_obj_normal(resp, enable_thinking=False, include_stop_str_in_output=False)
 
         self.assertIn("tool_call", result["outputs"])
         self.assertEqual(result["outputs"]["tool_call"][0]["name"], "fake_tool")

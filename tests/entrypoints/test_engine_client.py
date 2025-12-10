@@ -146,7 +146,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
         # Set up mock attributes
         self.engine_client.data_processor = Mock()
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
         self.engine_client.zmq_client = Mock()
         self.engine_client.zmq_client.send_json = Mock()
         self.engine_client.zmq_client.send_pyobj = Mock()
@@ -726,7 +726,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
             "messages": "test message",
         }
 
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
 
         with patch.object(self.engine_client, "_send_task") as mock_send:
             await self.engine_client.add_requests(task)
@@ -741,7 +741,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         task = {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100}
 
         async_mock = AsyncMock()
-        self.engine_client.data_processor.process_request_dict = async_mock
+        self.engine_client.data_processor.process_request_obj = async_mock
 
         with patch.object(self.engine_client, "_send_task"):
             await self.engine_client.add_requests(task)
@@ -1799,7 +1799,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.enable_prefix_caching = True
         self.engine_client.disable_prefix_mm = True
         self.engine_client.data_processor = Mock()
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
 
         task = {
             "request_id": "test_request",
@@ -1819,7 +1819,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         """Test add_requests with input length too long."""
         self.engine_client.max_model_len = 10
         self.engine_client.data_processor = Mock()
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
 
         task = {
             "request_id": "test_request",
@@ -1840,7 +1840,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     async def test_add_requests_stop_seqs_num_exceeds_limit(self):
         """Test add_requests with stop sequences number exceeding limit."""
         self.engine_client.data_processor = Mock()
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
 
         task = {
             "request_id": "test_request",
@@ -1863,7 +1863,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     async def test_add_requests_single_stop_seq_len_exceeds_limit(self):
         """Test add_requests with single stop sequence length exceeding limit."""
         self.engine_client.data_processor = Mock()
-        self.engine_client.data_processor.process_request_dict = Mock()
+        self.engine_client.data_processor.process_request_obj = Mock()
 
         task = {
             "request_id": "test_request",

@@ -89,7 +89,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         # Assert
         self.assertEqual(result.data[0].embedding, self.response_data.outputs.data)
 
-    def test_request_to_batch_dicts(self):
+    def test_request_to_batch_objs(self):
         test_cases = [
             ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1_0"]),
             ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1_0"]),
@@ -109,7 +109,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
                     model_name="request.model",
                     request_id="req-1",
                 )
-                result = self.embedding_service._request_to_batch_dicts(ctx)
+                result = self.embedding_service._request_to_batch_objs(ctx)
                 self.assertEqual(len(result), len(expected_prompts))
                 for r, prompt, rid in zip(result, expected_prompts, expected_ids):
                     # print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
@@ -120,7 +120,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         with self.subTest(name="non-embedding request"):
             with self.assertRaises(AttributeError):
                 ctx = ServeContext(request={"foo": "bar"}, model_name="request.model", request_id="req-1")
-                result = self.embedding_service._request_to_batch_dicts(ctx)
+                result = self.embedding_service._request_to_batch_objs(ctx)
 
 
 if __name__ == "__main__":

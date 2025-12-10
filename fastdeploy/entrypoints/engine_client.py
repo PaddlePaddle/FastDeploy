@@ -294,10 +294,10 @@ class EngineClient:
             chat_template_kwargs = task.chat_template_kwargs if task.chat_template_kwargs else {}
             chat_template_kwargs.update({"chat_template": task.chat_template})
             task.chat_template_kwargs = chat_template_kwargs
-            if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
-                await self.data_processor.process_request_dict(task, self.max_model_len)
+            if inspect.iscoroutinefunction(self.data_processor.process_request_obj):
+                await self.data_processor.process_request_obj(task, self.max_model_len)
             else:
-                self.data_processor.process_request_dict(task, self.max_model_len)
+                self.data_processor.process_request_obj(task, self.max_model_len)
 
             if self.enable_mm and self.enable_prefix_caching:
                 if self._check_mm_disable_prefix_cache(task):

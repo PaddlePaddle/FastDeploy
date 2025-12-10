@@ -42,7 +42,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time, chat_template)
 
     @override
-    def _request_to_dict(self, ctx: ServeContext):
+    def _request_to_obj(self, ctx: ServeContext):
         request: ChatRewardRequest = ctx.request
         request_obj = None
         if hasattr(request, "to_pooling_params"):
@@ -56,11 +56,11 @@ class OpenAIServingReward(ZmqOpenAIServing):
         return request_obj
 
     @override
-    def _request_to_batch_dicts(self, ctx: ServeContext):
+    def _request_to_batch_objs(self, ctx: ServeContext):
         """
         Convert the request into dictionary format that can be sent to the inference server
         """
-        request_obj = self._request_to_dict(ctx)
+        request_obj = self._request_to_obj(ctx)
         request_obj.request_id = f"{ctx.request_id}_0"
         request_objs = [request_obj]
         return request_objs

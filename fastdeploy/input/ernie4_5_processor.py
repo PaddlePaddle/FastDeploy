@@ -165,7 +165,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request: {request}")
         return request
 
-    def process_request_dict(self, request, max_model_len=None):
+    def process_request_obj(self, request, max_model_len=None):
         """
         Preprocess the request
 
@@ -241,7 +241,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if len(parts) > 1:
                 real_req_id = parts[0]
                 index = int(parts[1])
-                n = request.n or 1
+                n = request.sampling_params.n or 1
                 for idx in range(index * n, (index + 1) * n):
                     self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             else:
@@ -290,7 +290,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             return None
         return response_dict
 
-    def process_response_dict(self, response_dict, stream, **kwargs):
+    def process_response_obj(self, response_dict, stream, **kwargs):
         """
         Preprocess the response
 
@@ -301,11 +301,11 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         if stream:
-            return self.process_response_dict_streaming(response_dict, **kwargs)
+            return self.process_response_obj_streaming(response_dict, **kwargs)
         else:
-            return self.process_response_dict_normal(response_dict, **kwargs)
+            return self.process_response_obj_normal(response_dict, **kwargs)
 
-    def process_response_dict_normal(self, response_dict, **kwargs):
+    def process_response_obj_normal(self, response_dict, **kwargs):
         """
         Preprocess the response
 
@@ -348,7 +348,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 del self.model_status_dict[req_id]
         return response_dict
 
-    def process_response_dict_streaming(self, response_dict, **kwargs):
+    def process_response_obj_streaming(self, response_dict, **kwargs):
         """
         Preprocess the response streaming
 

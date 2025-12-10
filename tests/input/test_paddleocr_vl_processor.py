@@ -874,7 +874,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.processor.processor.image_token_id = 100
         self.processor.processor.video_token_id = 101
 
-    def test_process_request_dict_basic(self):
+    def test_process_request_obj_basic(self):
         """测试基本请求处理功能"""
         request = {
             "prompt": "test prompt",
@@ -882,12 +882,12 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "metadata": {"generated_token_ids": []},
         }
 
-        result = self.processor.process_request_dict(request, max_model_len=512)
+        result = self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(result["prompt_token_ids"], [1, 2, 3])
         self.assertEqual(result["prompt_token_ids_len"], 3)
         self.assertTrue("multimodal_inputs" in result)
 
-    def test_process_request_dict_with_messages(self):
+    def test_process_request_obj_with_messages(self):
         """测试 messages 格式的请求处理"""
         request = {
             "messages": [
@@ -899,11 +899,11 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "metadata": {"generated_token_ids": []},
         }
 
-        result = self.processor.process_request_dict(request, max_model_len=512)
+        result = self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(result["prompt_token_ids"], [1, 2, 3])
         self.assertTrue("multimodal_inputs" in result)
 
-    def test_process_request_dict_with_max_len(self):
+    def test_process_request_obj_with_max_len(self):
         """测试最大长度限制功能"""
         request = {
             "prompt": "test prompt",
@@ -923,7 +923,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         }
 
         max_model_len = 50
-        result = self.processor.process_request_dict(request, max_model_len)
+        result = self.processor.process_request_obj(request, max_model_len)
         # 验证是否截断到 max_model_len - 1
         self.assertEqual(len(result["prompt_token_ids"]), max_model_len - 1)
         self.assertEqual(result["prompt_token_ids"], list(range(49)))
@@ -1042,13 +1042,13 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.processor._check_mm_limits(messages)
 
-    def test_process_request_dict_no_prompt_or_messages(self):
+    def test_process_request_obj_no_prompt_or_messages(self):
         """测试当请求既没有 prompt 也没有 messages 时抛出异常"""
         request = {"metadata": {"generated_token_ids": []}}
         with self.assertRaises(ValueError):
-            self.processor.process_request_dict(request, max_model_len=512)
+            self.processor.process_request_obj(request, max_model_len=512)
 
-    def test_process_request_dict_with_continuation(self):
+    def test_process_request_obj_with_continuation(self):
         """测试续写逻辑 (metadata 包含 generated_token_ids)"""
         request = {
             "prompt": "test prompt",
@@ -1056,14 +1056,14 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "metadata": {"generated_token_ids": [10, 11, 12]},  # 已生成的 token
         }
 
-        result = self.processor.process_request_dict(request, max_model_len=512)
+        result = self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(result["prompt_token_ids"], [1, 2, 3, 10, 11, 12])
         self.assertEqual(result["prompt_token_ids_len"], 6)
 
-    def test_process_request_dict_with_stop_sequences(self):
+    def test_process_request_obj_with_stop_sequences(self):
         """测试 stop_sequences 处理"""
         request = {"prompt": "test prompt", "stop": ["stop1", "stop2"], "metadata": {"generated_token_ids": []}}
-        result = self.processor.process_request_dict(request, max_model_len=512)
+        result = self.processor.process_request_obj(request, max_model_len=512)
 
         # 验证 update_stop_seq 被调用
         self.processor.update_stop_seq.assert_called_with(["stop1", "stop2"])
@@ -1071,22 +1071,22 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.assertEqual(result["stop_token_ids"], [[99, 98]])
         self.assertEqual(result["stop_seqs_len"], [2])
 
-    def test_process_request_dict_default_max_tokens(self):
+    def test_process_request_objefault_max_tokens(self):
         """测试默认 max_tokens 计算"""
         request = {"prompt": "test prompt", "metadata": {"generated_token_ids": []}}  # 长度为 3
         max_model_len = 10
-        result = self.processor.process_request_dict(request, max_model_len)
+        result = self.processor.process_request_obj(request, max_model_len)
 
         self.assertEqual(result["max_tokens"], 7)
 
-    def test_process_request_dict_top_p_clamping(self):
+    def test_process_request_obj_top_p_clamping(self):
         """测试 top_p 值被修正 (clamping)"""
         request = {
             "prompt": "test prompt",
             "top_p": 0.0,  # 低于 _SAMPLING_EPS
             "metadata": {"generated_token_ids": []},
         }
-        result = self.processor.process_request_dict(request, max_model_len=512)
+        result = self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(result["top_p"], self.processor._SAMPLING_EPS)
 
     def test_append_generated_tokens(self):
@@ -1170,7 +1170,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
-        self.processor.process_request_dict(request, max_model_len=512)
+        self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
         request = {
@@ -1178,7 +1178,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "request_id": "test",
             "prompt_token_ids": [1, 2, 3],
         }
-        self.processor.process_request_dict(request, max_model_len=512)
+        self.processor.process_request_obj(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
 

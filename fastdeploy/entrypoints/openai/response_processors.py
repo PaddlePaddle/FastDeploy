@@ -94,8 +94,8 @@ class ChatResponseProcessor:
                             all_audio_tokens = self._audio_buffer.pop(req_id, [])
                         else:
                             all_audio_tokens = None
-                        if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
-                            response = await self.data_processor.process_response_dict(
+                        if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
+                            response = await self.data_processor.process_response_obj(
                                 response_dict=request_output,
                                 stream=stream,
                                 include_stop_str_in_output=include_stop_str_in_output,
@@ -103,7 +103,7 @@ class ChatResponseProcessor:
                                 tts=tts,
                             )
                         else:
-                            response = self.data_processor.process_response_dict(
+                            response = self.data_processor.process_response_obj(
                                 response_dict=request_output,
                                 stream=stream,
                                 include_stop_str_in_output=include_stop_str_in_output,
@@ -121,7 +121,7 @@ class ChatResponseProcessor:
                         else:
                             self._audio_buffer[req_id] = [token_ids]
                 else:
-                    yield self.data_processor.process_response_dict(
+                    yield self.data_processor.process_response_obj(
                         response_dict=request_output,
                         stream=stream,
                         include_stop_str_in_output=include_stop_str_in_output,
@@ -149,14 +149,14 @@ class ChatResponseProcessor:
                             setattr(image_output.outputs, "num_image_tokens", count_tokens(all_tokens))
                             yield image_output
 
-                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
-                        await self.data_processor.process_response_dict(
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
+                        await self.data_processor.process_response_obj(
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
                     else:
-                        self.data_processor.process_response_dict(
+                        self.data_processor.process_response_obj(
                             response_dict=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
@@ -176,14 +176,14 @@ class ChatResponseProcessor:
                     num_image_tokens = 0
                     for part in self._multipart_buffer:
                         if part["decode_type"] == 0:
-                            if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
-                                await self.data_processor.process_response_dict(
+                            if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
+                                await self.data_processor.process_response_obj(
                                     response_dict=part["request_output"],
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )
                             else:
-                                self.data_processor.process_response_dict(
+                                self.data_processor.process_response_obj(
                                     response_dict=request_output,
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,

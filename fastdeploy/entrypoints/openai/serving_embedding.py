@@ -61,7 +61,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time, chat_template)
 
     @override
-    def _request_to_dict(self, ctx: ServeContext):
+    def _request_to_obj(self, ctx: ServeContext):
         request: EmbeddingRequest = ctx.request
         request_obj = None
         if hasattr(request, "to_pooling_params"):
@@ -75,7 +75,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         return request_obj
 
     @override
-    def _request_to_batch_dicts(self, ctx: ServeContext):
+    def _request_to_batch_objs(self, ctx: ServeContext):
         """
         Convert the request into dictionary format that can be sent to the inference server
         """
@@ -100,12 +100,12 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
                 raise ValueError("Prompt type must be one of: str, list[str], list[int], list[list[int]]")
 
             for idx, prompt in enumerate(request_prompts):
-                request_obj = self._request_to_dict(ctx)
+                request_obj = self._request_to_obj(ctx)
                 request_obj.request_id = f"{ctx.request_id}_{idx}"
                 setattr(request_obj, "prompt", prompt)
                 request_objs.append(request_obj)
         else:
-            request_obj = self._request_to_dict(ctx)
+            request_obj = self._request_to_obj(ctx)
             request_obj.request_id = f"{ctx.request_id}_0"
             request_objs = [request_obj]
         return request_objs
