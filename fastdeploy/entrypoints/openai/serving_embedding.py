@@ -106,7 +106,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
                 request_objs.append(request_obj)
         else:
             request_obj = self._request_to_dict(ctx)
-            request_obj.request_id = f"{ctx.request_id}_{idx}"
+            request_obj.request_id = f"{ctx.request_id}_0"
             request_objs = [request_obj]
         return request_objs
 
