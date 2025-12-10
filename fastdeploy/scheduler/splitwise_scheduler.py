@@ -525,7 +525,7 @@ class APIScheduler:
             req.disaggregate_info = None
             req_dict = req.to_dict()
             req_dict["group"] = group
-            req_str = orjson.dumps(req_dict)
+            req_str = pickle.dumps(req_dict, protocol=5)
             pkey = f"ReqQ_{pnode.nodeid}"
             # logger.info(f"Schedule Req {req_str} to Mixed")
             self.client.lpush(pkey, req_str)
