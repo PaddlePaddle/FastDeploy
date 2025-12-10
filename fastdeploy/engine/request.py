@@ -184,6 +184,22 @@ class Request:
         self.error_code = None
         self.last_recv_token_time = None
 
+    def __getstate__(self):
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+        # Create a filtered dictionary without problematic attributes
+        filtered_dict = {}
+        for key, value in self.__dict__.items():
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
+                filtered_dict[key] = []
+            else:
+                filtered_dict[key] = value
+
+        return filtered_dict
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
