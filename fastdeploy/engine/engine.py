@@ -483,9 +483,6 @@ class LLMEngine:
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
-
         command_prefix = ""
         for k, v in variables.items():
             command_prefix += f"{k}={v} "
@@ -568,6 +565,7 @@ class LLMEngine:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"

@@ -68,11 +68,11 @@ class DynamicWeightManager:
         paddle.device.cuda.empty_cache()
 
         # step1 : restart paddle process group
-        if not self.first_load:
-            paddle.distributed.restart_process_group()
-            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
-            if self.parallel_config.enable_expert_parallel:
-                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
+        # if not self.first_load:
+        #     paddle.distributed.restart_process_group()
+        #     paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+        #     if self.parallel_config.enable_expert_parallel:
+        #         paddle.distributed.restart_process_group(self.parallel_config.ep_group)
 
         # step2 : recreat deepep buffer when enable expert parallel
         if self.parallel_config.enable_expert_parallel and not self.first_load:
@@ -86,6 +86,7 @@ class DynamicWeightManager:
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
             "ipc": self._update_ipc,
+            "normal": self._normal_load_weight,
         }
 
         if handler := strategy_handlers.get(self.load_config.load_strategy):
@@ -99,6 +100,14 @@ class DynamicWeightManager:
         # step4: reinitialze kv_cache in the runner
         # step5: recapture cuda_graph
         # step6: update weight status signal
+
+    def _normal_load_weight(self):
+        """use for RL mock."""
+        from fastdeploy.model_executor.model_loader import get_model_loader
+
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        state_dict = model_loader.load_rl_mock_model(fd_config=self.fd_config).state_dict()
+        self._update_model_from_state(state_dict, "raw")
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
@@ -136,7 +145,7 @@ class DynamicWeightManager:
             # ep barrier
             paddle.distributed.barrier(self.parallel_config.ep_group)
             # shutdown ep group
-            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+            # paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
 
         paddle.device.cuda.empty_cache()
         # step2: release model weight
@@ -149,11 +158,11 @@ class DynamicWeightManager:
         if self.parallel_config.tensor_parallel_size > 1:
             # tp barrier
             paddle.distributed.barrier(self.parallel_config.tp_group)
-            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+            # paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
-            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
-        paddle.distributed.shutdown_process_group()
+            # paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        # paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
@@ -257,7 +266,7 @@ class DynamicWeightManager:
         """
         check model weights status
         """
-        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        # logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
         while (
             model_weights_status.value[0] != ModelWeightsStatus.NORMAL
             and model_weights_status.value[0] != ModelWeightsStatus.CLEARED
