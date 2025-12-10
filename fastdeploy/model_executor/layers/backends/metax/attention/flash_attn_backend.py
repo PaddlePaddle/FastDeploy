@@ -31,7 +31,7 @@ from fastdeploy.model_executor.layers.backends.metax.attention.flash_attention_i
     flash_attn_kvcache_func,
     flash_attn_unpadded_func,
 )
-from fastdeploy.model_executor.ops.gpu import apply_rope
+from fastdeploy.model_executor.ops.gpu import apply_rope_qkv, cache_kv_with_rope
 
 
 @dataclass
@@ -127,15 +127,14 @@ class FlashAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.enable_mm = fd_config.model_config.enable_mm
         max_num_seqs = fd_config.scheduler_config.max_num_seqs
-        if self.enable_mm:
-            self.attention_metadata.rotary_cos_decode = paddle.empty(
-                shape=[max_num_seqs, 1, 1, self.head_dim],
-                dtype="float32",
-            )
-            self.attention_metadata.rotary_sin_decode = paddle.empty(
-                shape=[max_num_seqs, 1, 1, self.head_dim],
-                dtype="float32",
-            )
+        self.attention_metadata.rotary_cos_decode = paddle.empty(
+            shape=[max_num_seqs, 1, 1, self.head_dim],
+            dtype=self.dtype,
+        )
+        self.attention_metadata.rotary_sin_decode = paddle.empty(
+            shape=[max_num_seqs, 1, 1, self.head_dim],
+            dtype=self.dtype,
+        )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -245,6 +244,12 @@ class FlashAttentionBackend(AttentionBackend):
         seq_lens_this_time = forward_meta.seq_lens_this_time[batch_ids]
         cached_kv_lens = forward_meta.seq_lens_decoder[batch_ids, 0]
 
+        self.block_table_prefill = forward_meta.block_tables[batch_ids, :]
+        # mapping token idx to batch idx
+        self.batch_ids_q = paddle.repeat_interleave(
+            paddle.arange(0, batch_ids.shape[0], dtype="int32"), repeats=seq_lens_this_time, axis=0
+        )
+
         all_indices = []
         for i in range(len(batch_ids)):
             start_pos = cached_kv_lens[i]
@@ -285,19 +290,25 @@ class FlashAttentionBackend(AttentionBackend):
         self.attention_metadata.rotary_sin_prefill = paddle.repeat_interleave(rot_sin, repeats=2, axis=-1)
 
     def update_rotary_embs_decoder(self, forward_meta: ForwardMeta):
-        if not self.enable_mm:  # only initialize once for text-only model
-            if self.attention_metadata.rotary_cos_decode is None or self.attention_metadata.rotary_sin_decode is None:
-                self.attention_metadata.rotary_cos_decode = forward_meta.rotary_embs[0, 0, :, 0, :].astype(self.dtype)
-                self.attention_metadata.rotary_sin_decode = forward_meta.rotary_embs[1, 0, :, 0, :].astype(self.dtype)
-        elif self.batch_ids_decode.shape[0] > 0:
-            bs = self.batch_ids_decode.shape[0]
+        if self.batch_ids_decode.shape[0] == 0:
+            return
+
+        bs = self.batch_ids_decode.shape[0]
+        if self.enable_mm:
             index = paddle.concat(
                 [self.batch_ids_decode.view([-1, 1]), self.seq_lens_dec.to("int64").view([-1, 1])], axis=1
             )
             rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
             rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
-            self.attention_metadata.rotary_cos_decode[:bs].copy_(paddle.repeat_interleave(rot_cos, repeats=2, axis=-1))
-            self.attention_metadata.rotary_sin_decode[:bs].copy_(paddle.repeat_interleave(rot_sin, repeats=2, axis=-1))
+        else:
+            rot_cos = paddle.gather(forward_meta.rotary_embs[0, 0, :, 0, :], self.seq_lens_dec).view([bs, 1, 1, -1])
+            rot_sin = paddle.gather(forward_meta.rotary_embs[1, 0, :, 0, :], self.seq_lens_dec).view([bs, 1, 1, -1])
+        self.attention_metadata.rotary_cos_decode[:bs].copy_(
+            paddle.repeat_interleave(rot_cos, repeats=2, axis=-1).astype(self.dtype)
+        )
+        self.attention_metadata.rotary_sin_decode[:bs].copy_(
+            paddle.repeat_interleave(rot_sin, repeats=2, axis=-1).astype(self.dtype)
+        )
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -395,6 +406,25 @@ class FlashAttentionBackend(AttentionBackend):
                             }
                     # non last block: seq_lens_this_time > block_size
                     else:
+                        if bool(self.num_layers_draft_model) and (
+                            seq_len < self.block_size and i < cur_used_num_blocks - 1
+                        ):
+                            cache_end = seq_len - cache_start
+                            assert cache_end <= self.block_size
+
+                            forward_meta.caches[k_cache_id][block_id, 0:cache_end, :, :] = slice_trans_k[
+                                cache_start:seq_len, :, :
+                            ]
+                            forward_meta.caches[v_cache_id][block_id, 0:cache_end, :, :] = slice_trans_v[
+                                cache_start:seq_len, :, :
+                            ]
+                            if layer_id == self.num_layers - 1:
+                                self.record_block_table_metadata[batch_idx] = {
+                                    "block_id": block_id.item(),
+                                    "cache_end": cache_end,
+                                }
+                            break
+
                         assert seq_len > self.block_size
                         cache_end = cache_start + self.block_size
                         forward_meta.caches[k_cache_id][block_id] = slice_trans_k[cache_start:cache_end, :, :]
@@ -403,9 +433,20 @@ class FlashAttentionBackend(AttentionBackend):
             tensor_start = tensor_end
 
     def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        qkv = prefill_qkv.view([-1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
-        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-        q, k = apply_rope(q, k, self.attention_metadata.rotary_cos_prefill, self.attention_metadata.rotary_sin_prefill)
+        q, k, v = cache_kv_with_rope(
+            prefill_qkv,
+            forward_meta.caches[k_cache_id],
+            forward_meta.caches[v_cache_id],
+            self.block_table_prefill,
+            self.attention_metadata.rotary_cos_prefill,
+            self.attention_metadata.rotary_sin_prefill,
+            self.prefill_info_dict["cu_seqlens_q"],
+            self.batch_ids_q,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            self.block_size,
+        )
 
         prefill_out = flash_attn_unpadded_func(
             q,
@@ -419,23 +460,17 @@ class FlashAttentionBackend(AttentionBackend):
             causal=self.causal,
         )[0]
 
-        self.update_kv_cache(k, v, k_cache_id, v_cache_id, layer_id, forward_meta, self.batch_ids_prefill)
-
         return prefill_out
 
     def forward_decode(self, decode_qkv, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        qkv = decode_qkv.view([-1, 1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
-        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-
-        if self.enable_mm:  # vl
-            q, k = apply_rope(
-                q, k, self.attention_metadata.rotary_cos_decode, self.attention_metadata.rotary_sin_decode
-            )
-            rotary_cos = None
-            rotary_sin = None
-        else:
-            rotary_cos = self.attention_metadata.rotary_cos_decode
-            rotary_sin = self.attention_metadata.rotary_sin_decode
+        q, k, v = apply_rope_qkv(
+            decode_qkv,
+            self.attention_metadata.rotary_cos_decode,
+            self.attention_metadata.rotary_sin_decode,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+        )
 
         decode_out = flash_attn_kvcache_func(
             q,
@@ -445,8 +480,8 @@ class FlashAttentionBackend(AttentionBackend):
             self.block_table_dec,
             k,
             v,
-            rotary_cos=rotary_cos,
-            rotary_sin=rotary_sin,
+            rotary_cos=None,
+            rotary_sin=None,
             causal=self.causal,
             is_rotary_interleaved=True,
         )[0].squeeze(1)
