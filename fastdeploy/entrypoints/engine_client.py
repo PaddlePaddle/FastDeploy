@@ -288,7 +288,7 @@ class EngineClient:
             None
         """
 
-        task.preprocess_start_time = time.time()
+        task.metrics.preprocess_start_time = time.time()
         trace_print(LoggingEventName.PREPROCESSING_START, task.request_id, task.user if task.user else "")
         try:
             chat_template_kwargs = task.chat_template_kwargs if task.chat_template_kwargs else {}
@@ -360,8 +360,8 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        task.preprocess_end_time = time.time()
-        preprocess_cost_time = task.preprocess_end_time - task.preprocess_start_time
+        task.metrics.preprocess_end_time = time.time()
+        preprocess_cost_time = task.metrics.preprocess_end_time - task.metrics.preprocess_start_time
         api_server_logger.info(
             f"Cache request with request_id ({task.request_id}), " f"preprocess time cost {preprocess_cost_time}"
         )
@@ -431,7 +431,7 @@ class EngineClient:
                     err_msg = "Logprobs is disabled, please enable it in startup config."
                     api_server_logger.error(err_msg)
                     raise ParameterError("logprobs", err_msg)
-                top_logprobs = data.get("top_logprobs")
+                top_logprobs = getattr(data, "top_logprobs", None)
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:

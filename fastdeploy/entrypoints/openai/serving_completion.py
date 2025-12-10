@@ -172,7 +172,7 @@ class OpenAIServingCompletion:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
                     request_obj = Request.from_generic_request(request, request_id=request_id_idx, prompt=prompt)
-                    request_obj.arrival_time = time.time()
+                    request_obj.metrics.arrival_time = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()

@@ -74,7 +74,6 @@ class Request:
         prompt_token_ids_len: Optional[int] = None,
         messages: Optional[list[Any]] = None,
         tools: Optional[list[Dict]] = None,
-        arrival_time: Optional[float] = None,
         system: Optional[Union[str, list[str]]] = None,
         history: Optional[list[list[str]]] = None,
         eos_token_ids: Optional[list[int]] = None,
@@ -118,6 +117,9 @@ class Request:
         response_format: Optional[dict] = None,
         mm_hashes: Optional[list] = None,
         suffix: Optional[dict] = None,
+        top_logprobs: Optional[int] = None,
+        # from PoolingRequest
+        add_special_tokens: Optional[bool] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -200,6 +202,9 @@ class Request:
         self.response_format = response_format
         self.mm_hashes = mm_hashes
         self.suffix = suffix
+        self.top_logprobs = top_logprobs
+        # from PoolingRequest
+        self.add_special_tokens = add_special_tokens
 
     @classmethod
     def _process_guided_json(cls, r: T):
@@ -221,7 +226,13 @@ class Request:
         return guided_json_object
 
     @classmethod
-    def from_generic_request(cls, req: T, request_id: Optional[str] = None, prompt: Optional[str] = None):
+    def from_generic_request(
+        cls,
+        req: T,
+        request_id: Optional[str] = None,
+        prompt: Optional[Union[str, list[int]]] = None,
+        pooling_params: Optional[PoolingParams] = None,
+    ):
         if request_id is not None:
             setattr(req, "request_id", request_id)
 
@@ -239,7 +250,10 @@ class Request:
             setattr(req, "prompt", req.messages[0]["content"])
             setattr(req, "messages", [])
 
-        sampling_params = SamplingParams.from_generic_request(req)
+        if pooling_params is not None:
+            sampling_params = SamplingParams.from_generic_request(req)
+        else:
+            sampling_params = None
 
         guided_json_object = cls._process_guided_json(req)
 
@@ -252,11 +266,14 @@ class Request:
                     req.prompt = req.messages[0]["content"]
                     req.messages = []
 
+        metrics = RequestMetrics()
         request = cls(
             request_id=getattr(req, "request_id", None),
             prompt_token_ids=getattr(req, "prompt_token_ids", None),
             prompt=getattr(req, "prompt", None),
             sampling_params=sampling_params,
+            pooling_params=pooling_params,
+            metrics=metrics,
             guided_json_object=guided_json_object,
             disaggregate_info=getattr(req, "disaggregate_info", None),
             guided_json=getattr(req, "guided_json", None),
@@ -270,6 +287,7 @@ class Request:
                 else None
             ),
             mm_hashes=getattr(req, "mm_hashes", None),
+            add_special_tokens=getattr(req, "add_special_tokens", None),
         )
 
         if hasattr(req, "messages"):
@@ -288,6 +306,7 @@ class Request:
             )
             request.reasoning_max_tokens = getattr(req, "reasoning_max_tokens", None)
             request.disable_chat_template = getattr(req, "disable_chat_template", None)
+            request.top_logprobs = getattr(req, "top_logprobs", None)
             request.structural_tag = getattr(req, "structural_tag", None)
             request.chat_template = getattr(req, "chat_template", None)
             request.ic_req_data = getattr(req, "ic_req_data", None)

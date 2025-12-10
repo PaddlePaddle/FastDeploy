@@ -242,24 +242,24 @@ class ZmqOpenAIServing(OpenAIServing):
     @override
     async def _preprocess(self, ctx: ServeContext):
         """Preprocess the request into engine format"""
-        request_dicts = self._request_to_batch_dicts(ctx)
-        ctx.preprocess_requests = request_dicts
-        for request_dict in request_dicts:
-            api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
-            await self.engine_client.format_and_add_data(request_dict)
+        request_objs = self._request_to_batch_dicts(ctx)
+        ctx.preprocess_requests = request_objs
+        for request_obj in request_objs:
+            api_server_logger.info(f"batch add request_id: {request_obj.request_id}, request: {request_obj}")
+            await self.engine_client.format_and_add_data(request_obj)
 
-    def _process_chat_template_kwargs(self, request_dict):
+    def _process_chat_template_kwargs(self, request):
         """Add default values to chat template kwargs"""
-        if "chat_template" not in request_dict:
-            request_dict["chat_template"] = self.chat_template
-        chat_template_kwargs = request_dict.get("chat_template_kwargs") or {}
+        if not getattr(request, "chat_template", None):
+            setattr(request, "chat_template", self.chat_template)
+        chat_template_kwargs = getattr(request, "chat_template_kwargs", None) or {}
         chat_template_kwargs.update(
             {
-                "chat_template": request_dict.get("chat_template"),
-                "add_stop_sequences": request_dict.get("add_stop_sequences"),
+                "chat_template": getattr(request, "chat_template", None),
+                "add_stop_sequences": getattr(request, "add_stop_sequences", None),
             }
         )
-        request_dict["chat_template_kwargs"] = chat_template_kwargs
+        setattr(request, "chat_template_kwargs", chat_template_kwargs)
 
     @override
     async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[dict]:
@@ -271,16 +271,16 @@ class ZmqOpenAIServing(OpenAIServing):
                 request_id, num_choices
             )
             for pr in ctx.preprocess_requests:
-                dealer.write([b"", pr["request_id"].encode("utf-8")])
+                dealer.write([b"", pr.request_id.encode("utf-8")])
             # if self.engine_client.check_model_weight_status():
             #     raise ValueError("Engine is clearing model weight")
             while num_choices > 0:
-                request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
-                for request_output_dict in request_output_dicts:
-                    api_server_logger.debug(f"Received RequestOutput: {request_output_dict}")
-                    if request_output_dict["finished"] is True:
+                request_outputs = await asyncio.wait_for(request_output_queue.get(), timeout=60)
+                for request_output in request_outputs:
+                    api_server_logger.debug(f"Received RequestOutput: {request_output}")
+                    if getattr(request_output, "finished", None) is True:
                         num_choices -= 1
-                    yield request_output_dict
+                    yield request_output
 
         except Exception as e:
             raise ValueError(f"Error processing response: {str(e)}")

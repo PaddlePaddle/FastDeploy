@@ -142,7 +142,7 @@ class OpenAIServingChat:
                 request_obj = Request.from_generic_request(request, request_id=f"{request_id}_0")
                 if request_obj.chat_template is None:
                     request_obj.chat_template = self.chat_template
-                request_obj.arrival_time = time.time()
+                request_obj.metrics.arrival_time = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)
                 prompt_tokens = request_obj.prompt_tokens
@@ -437,7 +437,7 @@ class OpenAIServingChat:
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
-                        chunk.metrics = res["metrics"]
+                        chunk.metrics = getattr(res, "metrics", None)
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():

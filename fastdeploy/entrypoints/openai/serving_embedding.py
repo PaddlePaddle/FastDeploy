@@ -15,6 +15,7 @@
 """
 
 import base64
+import time
 from collections.abc import AsyncGenerator
 from typing import Literal, Union
 
@@ -22,11 +23,7 @@ import numpy as np
 from typing_extensions import assert_never, override
 
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import (
-    EmbeddingOutput,
-    EmbeddingRequestOutput,
-    PoolingRequestOutput,
-)
+from fastdeploy.engine.request import EmbeddingOutput, EmbeddingRequestOutput, Request
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingCompletionRequest,
     EmbeddingRequest,
@@ -66,19 +63,23 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     @override
     def _request_to_dict(self, ctx: ServeContext):
         request: EmbeddingRequest = ctx.request
-        request_dict = super()._request_to_dict(ctx)
+        request_obj = None
         if hasattr(request, "to_pooling_params"):
             pooling_params: PoolingParams = request.to_pooling_params()
             pooling_params.verify("embed", self.cfg.model_config)
-            request_dict["pooling_params"] = pooling_params.to_dict()
-        return request_dict
+            request_obj = Request.from_generic_request(
+                req=request, request_id=ctx.request_id, pooling_params=pooling_params
+            )
+            request_obj.metrics.arrival_time = time.time()
+            super()._process_chat_template_kwargs(request_obj)
+        return request_obj
 
     @override
     def _request_to_batch_dicts(self, ctx: ServeContext):
         """
         Convert the request into dictionary format that can be sent to the inference server
         """
-        request_dicts = []
+        request_objs = []
         if isinstance(ctx.request, EmbeddingCompletionRequest):
             # Union[list[int], list[list[int]], str, list[str]]
             request: EmbeddingCompletionRequest = ctx.request
@@ -99,15 +100,15 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
                 raise ValueError("Prompt type must be one of: str, list[str], list[int], list[list[int]]")
 
             for idx, prompt in enumerate(request_prompts):
-                request_dict = self._request_to_dict(ctx)
-                request_dict["request_id"] = f"{ctx.request_id}_{idx}"
-                request_dict["prompt"] = prompt
-                request_dicts.append(request_dict)
+                request_obj = self._request_to_dict(ctx)
+                request_obj.request_id = f"{ctx.request_id}_{idx}"
+                setattr(request_obj, "prompt", prompt)
+                request_objs.append(request_obj)
         else:
-            request_dict = self._request_to_dict(ctx)
-            request_dict["request_id"] = f"{ctx.request_id}_0"
-            request_dicts = [request_dict]
-        return request_dicts
+            request_obj = self._request_to_dict(ctx)
+            request_obj.request_id = f"{ctx.request_id}_{idx}"
+            request_objs = [request_obj]
+        return request_objs
 
     async def create_embedding(self, request: EmbeddingRequest):
         """
@@ -141,7 +142,8 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         """Generate final embedding response"""
         api_server_logger.info(f"[{ctx.request_id}] Embedding RequestOutput received:{ctx.request_output}")
 
-        base = PoolingRequestOutput.from_dict(ctx.request_output)
+        # base = PoolingRequestOutput.from_dict(ctx.request_output)
+        base = ctx.request_output
         embedding_res = EmbeddingRequestOutput.from_base(base)
 
         data = EmbeddingResponseData(
