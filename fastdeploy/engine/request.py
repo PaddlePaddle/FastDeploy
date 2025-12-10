@@ -250,7 +250,7 @@ class Request:
             setattr(req, "prompt", req.messages[0]["content"])
             setattr(req, "messages", [])
 
-        if pooling_params is not None:
+        if pooling_params is None:
             sampling_params = SamplingParams.from_generic_request(req)
         else:
             sampling_params = None
