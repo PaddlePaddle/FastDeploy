@@ -141,7 +141,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
 
-    if envs.FD_MXFP4_BACKEND is not None:
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
         from .mxfp4 import MXFP4Config
 
     method_to_config = {
@@ -158,7 +158,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
     }
-    if envs.FD_MXFP4_BACKEND is not None:
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
         method_to_config["mxfp4"] = MXFP4Config
 
     return method_to_config[quantization]
