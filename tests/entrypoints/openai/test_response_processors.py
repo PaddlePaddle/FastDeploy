@@ -48,7 +48,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         results = [
             r
             async for r in processor.process_response_chat(
-                request_outputs, stream=False, enable_thinking=False, include_stop_str_in_output=False
+                request_outputs, stream=False, include_stop_str_in_output=False
             )
         ]
 
@@ -69,7 +69,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         results = [
             r
             async for r in processor.process_response_chat(
-                request_outputs, stream=True, enable_thinking=False, include_stop_str_in_output=False
+                request_outputs, stream=True, include_stop_str_in_output=False
             )
         ]
 
@@ -89,7 +89,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         results = [
             r
             async for r in self.processor_mm.process_response_chat(
-                request_outputs, stream=True, enable_thinking=False, include_stop_str_in_output=False
+                request_outputs, stream=True, include_stop_str_in_output=False
             )
         ]
 
@@ -116,7 +116,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         results = [
             r
             async for r in self.processor_mm.process_response_chat(
-                request_outputs, stream=True, enable_thinking=False, include_stop_str_in_output=False
+                request_outputs, stream=True, include_stop_str_in_output=False
             )
         ]
 
@@ -134,7 +134,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         results = [
             r
             async for r in self.processor_mm.process_response_chat(
-                request_outputs, stream=False, enable_thinking=False, include_stop_str_in_output=False
+                request_outputs, stream=False, include_stop_str_in_output=False
             )
         ]
 

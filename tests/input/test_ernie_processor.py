@@ -20,6 +20,11 @@ from unittest.mock import MagicMock, patch
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 
 
+class MockReasoningParser:
+    def get_model_status(self, prompt_token_ids):
+        return "think_start"
+
+
 class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
         # 创建 Ernie4_5Processor 实例的模拟对象
@@ -30,12 +35,13 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 设置必要的属性
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
-        self.processor.decode_status = {}
+        self.processor.decode_status = {"test": []}
         self.processor.reasoning_end_dict = {}
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
-        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser = MockReasoningParser()
+        self.processor.model_status_dict = {"request-id_0": "think_start", "test": "think_start"}
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):
@@ -72,7 +78,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def test_process_response_dict_streaming_normal_case(self):
         """测试正常情况下的流式响应处理"""
         # 准备输入
-        response_dict = {"finished": False, "request_id": "req1", "outputs": {"token_ids": [4, 5]}}
+        response_dict = {"finished": False, "request_id": "test", "outputs": {"token_ids": [4, 5]}}
         kwargs = {"enable_thinking": True}
 
         # 调用方法
@@ -83,6 +89,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
 
     def test_process_request_dict(self):
         request_dict = {
+            "request_id": "123",
             "messages": [{"role": "user", "content": "Hello!"}],
             "chat_template_kwargs": {"chat_template": "Hello!"},
             "eos_token_ids": [1],
@@ -117,6 +124,31 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
         self.assertEqual(result["outputs"]["text"], "Mock final text")
         self.assertIn("completion_tokens", result["outputs"])
+
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
 
 if __name__ == "__main__":
