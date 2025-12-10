@@ -60,9 +60,9 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         """不开启 multimodal，直接走 data_processor"""
         processor = ChatResponseProcessor(self.mock_data_processor)
         request_outputs = [
-            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [[11, 22]]}},
+            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [11, 22]}},
             {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [1]}},
-            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [[11, 22]]}},
+            {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [11, 22]}},
             {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [2]}},
         ]
 

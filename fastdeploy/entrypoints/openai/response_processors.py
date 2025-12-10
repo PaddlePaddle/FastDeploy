@@ -115,7 +115,9 @@ class ChatResponseProcessor:
                             )
                         yield response
                     elif decode_type == 2:  # audio
-                        if self.eoa_token_id is not None and self.eoa_token_id in token_ids:
+                        if self.eoa_token_id is not None and any(
+                            token_id >= self.eoa_token_id for token_id in token_ids
+                        ):
                             continue
                         if req_id in self._audio_buffer:
                             self._audio_buffer[req_id].append(token_ids)
