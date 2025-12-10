@@ -24,7 +24,6 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
-from fastdeploy.inter_communicator import EngineWorkerQueue
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
@@ -53,7 +52,6 @@ class SplitwiseConnector:
             self.logger = get_logger("splitwise_connector", "splitwise_connector.log")
         self.engine_worker_queue = worker_queue
         self.resource_manager = resource_manager
-        self.connect_innode_instances = {}
         self.current_request_ids = dict()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
@@ -172,119 +170,59 @@ class SplitwiseConnector:
 
     def send_splitwise_tasks(self, tasks: List[Request], current_id):
         """
-        Send splitwise tasks to all connected addresses.
+        Prefill send splitwise tasks to decode.
 
         Parameters:
         tasks (list): List of tasks.
         current_id (int): Current ID.
         """
-        addr = None
-        decode_diagg = None
         for task in tasks:
             if task.disaggregate_info is None:
                 continue
 
-            if task.disaggregate_info["transfer_protocol"] == "ipc":
-                addr = task.disaggregate_info["cache_info"]["ipc"]["port"]
-                task.disaggregate_info["cache_info"]["ipc"]["current_id"] = current_id
-                self.logger.info(f"send_splitwise_tasks: protocol=ipc, addr={addr}, task={task.request_id}")
-                self.send_splitwise_tasks_innode([task], addr)
-            else:
+            self.current_request_ids[task.request_id] = "init"
+            task.disaggregate_info["role"] = "decode"
+            addr = f"{task.disaggregate_info['decode_ip']}:{task.disaggregate_info['decode_connector_port']}"
+            self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task.request_id}")
+            self._send_message(addr, "prefill", [task])
 
-                addr = (
-                    f"{task.disaggregate_info['cache_info']['rdma']['ip']}:"
-                    + f"{task.disaggregate_info['cache_info']['rdma']['port']}"
-                )
-                self.current_request_ids[task.request_id] = "init"
-                decode_diagg = task.disaggregate_info["cache_info"]
-                task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
-                task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
-                task.disaggregate_info["role"] = "decode"
-                self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task.request_id}")
-                self._send_message(addr, "prefill", [task])
-                task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
-
-    def send_splitwise_tasks_innode(self, tasks, port):
-        """
-        Send splitwise tasks to specific port.
-
-        Parameters:
-        tasks (list): List of tasks.
-        port (int): Port number.
-
-        Returns:
-        int: Current port number, -1 if tasks are not sent.
-        """
-        current_port = -1
-        if port not in self.connect_innode_instances:
-            self.create_connection(port)
-        for task in tasks:
-            task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.parallel_config.engine_worker_queue_port[
-                self.local_data_parallel_id
-            ]
-        self.logger.info(f"send_splitwise_tasks_innode: port={port}, tasks={[task.request_id for task in tasks]}")
-        self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
-        for task in tasks:
-            task.disaggregate_info["cache_info"]["ipc"]["port"] = port
-        current_port = port
-        return current_port
 
     def send_first_token(self, prefill_msg, tasks_list):
         """
-        send first token to specific port
+        Prefill send first token to specific port
         """
         if not isinstance(tasks_list, list):
             tasks_list = [tasks_list]
-        self.logger.info(f"send_first_token: send first token to decode, {[x.request_id for x in tasks_list]}")
-        if prefill_msg["transfer_protocol"] == "ipc":
-            port = prefill_msg["cache_info"]["ipc"]["port"]
-            if port not in self.connect_innode_instances:
-                self.create_connection(port)
-            self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks_list))
-        else:
-            node = f"{prefill_msg['cache_info']['rdma']['ip']}:{prefill_msg['cache_info']['rdma']['port']}"
-            self.logger.info(f"send_first_token: send first token to port {node} decode")
-            self._send_message(node, "decode", tasks_list)
 
-    def create_connection(self, port):
-        """
-        Create a connection to specific port.
-
-        Parameters:
-        port (int): Port number.
-        """
-        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = ("0.0.0.0", int(port))
-        else:
-            address = f"/dev/shm/fd_task_queue_{port}.sock"
-
-        self.connect_innode_instances[port] = EngineWorkerQueue(
-            address=address,
-            num_client=self.cfg.parallel_config.tensor_parallel_size,
-            client_id=0,
+        addr = f"{prefill_msg['decode_ip']}:{prefill_msg['decode_connector_port']}"
+        self.logger.info(
+            f"send_first_token: send first token to decode ({addr}), {[x.request_id for x in tasks_list]}"
         )
+        self._send_message(addr, "decode", tasks_list)
 
     def check_decode_allocated(self, task):
-        self.logger.debug(f"start check decode allocated: {task.request_id}")
+        """Check whether the requests have been allocated resources in decode."""
+        self.logger.debug(f"check_decode_allocated: {task.request_id}")
         start_time = time.time()
         if task.disaggregate_info is None:
             return True, ""
         if self.enable_decode_cache_task:
             return True, ""
-        if task.disaggregate_info["role"] != "prefill":
-            return True, ""
+
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "timeout"
+
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]
         if msg == "finished":
             return True, ""
-        self.logger.error(f"check_decode_allocated: Receive_decode_allocated error: {msg}")
-        return False, msg
+        else:
+            self.logger.error(f"check_decode_allocated: Receive_decode_allocated error: {msg}")
+            return False, msg
 
     def send_cache_info_to_messager(self, tasks: List[Request], current_id):
         """
@@ -308,13 +246,12 @@ class SplitwiseConnector:
                     "need_prefill_tokens": tasks[i].need_prefill_tokens,
                 }
             else:
-                if current_id == -1:
-                    current_id = dsg_info["cache_info"]["ipc"]["current_id"]
                 info = {
                     "request_id": tasks[i].request_id,
                     "src_block_ids": tasks[i].block_tables,
                     "current_id": current_id,
                 }
+            info.update(dsg_info)
             cache_info.append(info)
 
         self.logger.debug(f"send_cache_info_to_messager, {cache_info}")
@@ -333,56 +270,29 @@ class SplitwiseConnector:
             if dsg_info is None:
                 self.logger.debug(f"skip send_cache_infos_to_prefill, {tasks[i].request_id}")
                 continue
-            self.logger.debug(f"send_cache_infos_to_prefill, {dsg_info}")
 
-            if dsg_info["transfer_protocol"] == "ipc":
+            if tasks[i].get("error_msg", None) is not None:
                 info = {
                     "request_id": tasks[i].request_id,
-                    "device_ids": self.cfg.parallel_config.device_ids.split(","),
-                    "transfer_protocol": "ipc",
+                    "error_msg": tasks[i].get("error_msg"),
+                }
+            else:
+                addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
+                info = {
+                    "request_id": tasks[i].request_id,
                     "dest_block_ids": dsg_info["block_tables"],
                 }
-                if dsg_info["cache_info"]["ipc"]["port"] not in cache_info:
-                    cache_info[dsg_info["cache_info"]["ipc"]["port"]] = []
-                cache_info[dsg_info["cache_info"]["ipc"]["port"]].append(info)
-            else:
-                if tasks[i].get("error_msg", None) is not None:
-                    info = {
-                        "request_id": tasks[i].request_id,
-                        "error_msg": tasks[i].get("error_msg"),
-                    }
-                else:
-                    info = {
-                        "request_id": tasks[i].request_id,
-                        "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
-                        "ip": self.cfg.host_ip,
-                        "rdma_ports": [
-                            self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]
-                        ],
-                        "transfer_protocol": "rdma",
-                        "dest_block_ids": dsg_info["block_tables"],
-                        "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,
-                    }
-
-                addr = f"{dsg_info['cache_info']['rdma']['ip']}:" + f"{dsg_info['cache_info']['rdma']['port']}"
                 if addr not in cache_info:
                     cache_info[addr] = []
                 cache_info[addr].append(info)
 
         self.logger.debug(f"send cache info to prefill, {cache_info}")
         if len(cache_info):
-            for k, v in cache_info.items():
-                self.logger.info(f"{k} {v}")
-                if ":" in str(k):
-                    self._send_message(k, "cache_sync", v)
-                else:
-                    if k not in self.connect_innode_instances:
-                        self.create_connection(k)
-                    self.connect_innode_instances[k].put_cache_info(v)
+            for key, info in cache_info.items():
+                self._send_message(key, "cache_sync", info)
 
     def _serialize_message(self, msg_type: str, payload) -> bytes:
         # TODO 压缩
-
         if msg_type == "decode" or msg_type == "prefill":
             payload = [output.to_dict() for output in payload]
 
