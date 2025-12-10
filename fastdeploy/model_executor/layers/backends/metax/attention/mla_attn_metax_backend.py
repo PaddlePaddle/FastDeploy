@@ -206,6 +206,9 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         self.seq_lens = seq_lens_decoder + seq_lens_this_time
         self.block_tables = forward_meta.block_tables[non_zero_index]
 
+        self.tile_scheduler_metadata = None
+        self.num_splits = None
+
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
         return self.attention_metadata
@@ -250,13 +253,13 @@ class MetaxMLAAttentionBackend(AttentionBackend):
                 ]
             )
 
-        query = query.reshape([-1, seq_len_q, num_heads_q, head_dim_qk])
+        query = query.reshape_([-1, seq_len_q, num_heads_q, head_dim_qk])
 
-        tile_scheduler_metadata, num_splits = get_mla_metadata(
-            self.seq_lens, seq_len_q * num_heads_q // num_heads_kv, num_heads_kv
-        )
-
-        assert tile_scheduler_metadata.shape[0] != 0
+        if self.tile_scheduler_metadata is None or self.num_splits is None:
+            self.tile_scheduler_metadata, self.num_splits = get_mla_metadata(
+                self.seq_lens, seq_len_q * num_heads_q // num_heads_kv, num_heads_kv
+            )
+            assert self.tile_scheduler_metadata.shape[0] != 0
 
         out = flash_mla_with_kvcache(
             query,
@@ -264,8 +267,8 @@ class MetaxMLAAttentionBackend(AttentionBackend):
             self.block_tables,
             self.seq_lens,
             head_dim_v,
-            tile_scheduler_metadata,
-            num_splits,
+            self.tile_scheduler_metadata,
+            self.num_splits,
             softmax_scale=self.attn_softmax_scale,
             causal=self.causal,
         )[0]
@@ -273,7 +276,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         if seq_len_q != self.seq_lens_this_time_min:
             out = paddle.concat([paddle.split(x, [n, seq_len_q - n])[0] for x, n in zip(out, self.seq_lens_this_time)])
         else:
-            out = out.reshape([-1, num_heads_q, head_dim_v])
+            out = out.reshape_([-1, num_heads_q, head_dim_v])
 
         return out
 
