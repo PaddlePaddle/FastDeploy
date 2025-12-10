@@ -30,8 +30,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
-    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -76,7 +76,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
 
     const int ori_bi = batch_id_per_token[token_id];
     if (ori_bi == -1) continue;  // NOTE(gongshaotian): For CUDAGraph padding
-    if (seq_lens_encoder[ori_bi] > 0) return;
+    if (seq_lens_encoder[ori_bi] > 0) continue;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
     const int h_bias = bias % head_size;
@@ -88,7 +88,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -343,8 +343,8 @@ __global__ void append_speculate_cache_rope_kernel(
     const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
-    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -394,7 +394,7 @@ __global__ void append_speculate_cache_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -474,8 +474,8 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
-    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -524,7 +524,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
