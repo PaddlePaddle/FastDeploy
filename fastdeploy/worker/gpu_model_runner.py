@@ -1541,6 +1541,9 @@ class GPUModelRunner(ModelRunnerBase):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
+        # for zero size
+        self.forward_meta.is_zero_size = self.forward_meta.ids_remove_padding.shape[0] == 0
+
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
