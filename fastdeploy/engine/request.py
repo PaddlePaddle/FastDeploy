@@ -179,6 +179,12 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        logprobs = d.get("logprobs", None)
+        if logprobs is not None:
+            if logprobs is True:
+                sampling_params.logprobs = d.get("top_logprobs", None)
+            elif logprobs is False:
+                sampling_params.logprobs = None
         if "metrics" in d and d["metrics"] is not None:
             metrics = RequestMetrics.from_dict(d["metrics"])
         else:
@@ -386,6 +392,7 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
 
     def to_dict(self):
@@ -404,6 +411,7 @@ class CompletionOutput:
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
+            "reasoning_token_num": self.reasoning_token_num,
         }
 
     @classmethod
@@ -425,6 +433,7 @@ class CompletionOutput:
             f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
+            f"reasoning_token_num={self.reasoning_token_num}, "
             f"logprobs={self.logprobs}, "
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
@@ -676,8 +685,16 @@ class RequestOutput:
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        completion_output = CompletionOutput.from_dict(d.pop("outputs"))
-        metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        if "outputs" in d and isinstance(d["outputs"], dict):
+            completion_output = CompletionOutput.from_dict(d.pop("outputs"))
+        else:
+            d.pop("outputs", None)
+            completion_output = None
+        if "metrics" in d and isinstance(d["metrics"], dict):
+            metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        else:
+            d.pop("metrics", None)
+            metrics = None
         return RequestOutput(**d, outputs=completion_output, metrics=metrics)
 
     def to_dict(self):

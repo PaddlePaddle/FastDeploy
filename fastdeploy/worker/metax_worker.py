@@ -120,23 +120,28 @@ class MetaxWorker(WorkerBase):
             before_run_meminfo_used = info.vramUse * 1024
             before_run_meminfo_free = before_run_meminfo_total - before_run_meminfo_used
 
-            logger.info("Before running the profile, the memory usage info of Metax GPU is as follows:")
-            logger.info(f"Device Index: {device_id}")
-            logger.info(f"Device Total memory: {before_run_meminfo_total / Gb}")
-            logger.info(f"Device used memory: {before_run_meminfo_used / Gb}")
-            logger.info(f"Device free memory: {before_run_meminfo_free / Gb}")
-            logger.info(f"Paddle reserved memory: {paddle_reserved_mem_before_run / Gb}")
-            logger.info(f"Paddle allocated memory: {paddle_allocated_mem_before_run / Gb}")
+            logger.info(
+                (
+                    "Before running the profile, the memory usage info is as follows:",
+                    f"\nDevice Index: {device_id}",
+                    f"\nDevice Total memory: {before_run_meminfo_total / Gb}",
+                    f"\nDevice used memory: {before_run_meminfo_used / Gb}",
+                    f"\nDevice free memory: {before_run_meminfo_free / Gb}",
+                    f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
+                    f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
+                )
+            )
 
             # 2. Profile run
             self.model_runner.profile_run()
+            set_random_seed(self.fd_config.model_config.seed)
 
             # 3. Statistical memory information
             paddle_reserved_mem_after_run = paddle.device.max_memory_reserved(local_rank)
             paddle_allocated_mem_after_run = paddle.device.max_memory_allocated(local_rank)
 
             model_block_memory_used = self.cal_theortical_kvcache()
-            paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
+            paddle_peak_increase = paddle_allocated_mem_after_run - paddle_allocated_mem_before_run
 
             paddle.device.empty_cache()
 
@@ -154,15 +159,19 @@ class MetaxWorker(WorkerBase):
 
             end_time = time.perf_counter()
 
-            logger.info("After running the profile, the memory usage info of Metax GPU is as follows:")
-            logger.info(f"Device Index: {device_id}")
-            logger.info(f"Device Total memory: {after_run_meminfo_total / Gb}")
-            logger.info(f"Device used memory: {after_run_meminfo_used / Gb}")
-            logger.info(f"Device free memory: {after_run_meminfo_free / Gb}")
-            logger.info(f"Paddle reserved memory: {paddle_reserved_mem_after_run / Gb}")
-            logger.info(f"Paddle allocated memory: {paddle_allocated_mem_after_run / Gb}")
-            logger.info(f"Paddle available_kv_cache_memory: {available_kv_cache_memory / Gb}")
-            logger.info(f"Profile time: {end_time - start_time}")
+            logger.info(
+                (
+                    "After running the profile, the memory usage info is as follows:",
+                    f"\nDevice Index: {device_id}",
+                    f"\nDevice Total memory: {after_run_meminfo_total / Gb}",
+                    f"\nDevice used memory: {after_run_meminfo_used / Gb}",
+                    f"\nDevice free memory: {after_run_meminfo_free / Gb}",
+                    f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+                    f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+                    f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+                    f"\nProfile time: {end_time - start_time}",
+                )
+            )
 
             return available_kv_cache_memory
 

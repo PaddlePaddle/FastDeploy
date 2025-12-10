@@ -41,7 +41,7 @@ class TestW4AFP8(unittest.TestCase):
         self.layer.weight_shape = [8, 4]
         self.layer.create_parameter.return_value = "created_weight"
         self.layer.bias = "bias"
-        self.layer.add_bias = True
+        self.layer.with_bias = True
         self.layer._dtype = "float16"
         self.layer.prefix = "layer"
 
@@ -138,7 +138,7 @@ class TestW4AFP8(unittest.TestCase):
 
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16")
     def test_apply_without_bias(self, mock_gemm):
-        self.layer.add_bias = False
+        self.layer.with_bias = False
         mock_gemm.return_value = "out"
         x = "x"
 
