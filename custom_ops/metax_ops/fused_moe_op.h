@@ -1,28 +1,27 @@
-/*
- * SPDX-FileCopyrightText: Copyright (c) 1993-2023 NVIDIA CORPORATION &
- * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// /*
+//  * SPDX-FileCopyrightText: Copyright (c) 1993-2023 NVIDIA CORPORATION &
+//  * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
+//  *
+//  * Licensed under the Apache License, Version 2.0 (the "License");
+//  * you may not use this file except in compliance with the License.
+//  * You may obtain a copy of the License at
+//  *
+//  * http://www.apache.org/licenses/LICENSE-2.0
+//  *
+//  * Unless required by applicable law or agreed to in writing, software
+//  * distributed under the License is distributed on an "AS IS" BASIS,
+//  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  * See the License for the specific language governing permissions and
+//  * limitations under the License.
+//  */
 
 #pragma once
 
 #include <cuda.h>
 #include <cuda_fp16.h>
-#include "fused_moe_helper.h"
-#include "fused_moe_imp_op.h"
-#include "mctlass/numeric_conversion.h"  // BUILD_MARK
-// Ignore mctlass warnings about type punning
+#include "mctlass/functional.h"
+#include "mctlass/numeric_conversion.h"
+// Ignore CUTLASS warnings about type punning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -33,6 +32,8 @@
 #include "helper.h"
 
 #define WARP_SIZE 32
+
+namespace phi {
 
 struct GpuLaunchConfig {
   dim3 block_per_grid;
@@ -53,6 +54,324 @@ inline GpuLaunchConfig Get1DBlocksAnd2DGridsMoe(const int64_t cols) {
   config.block_per_grid.y = blocks_y;
   config.block_per_grid.z = blocks_z;
   return config;
+}
+
+constexpr static int FINALIZE_THREADS_PER_BLOCK = 256;
+template <class T, class U>
+__host__ __device__ constexpr static U arrayConvert(T const& input) {
+  using Type = typename U::Element;
+  static_assert(T::kElements == U::kElements);
+  U u;
+#pragma unroll
+  for (int i = 0; i < U::kElements; i++) {
+    u[i] = static_cast<Type>(input[i]);
+  }
+  return u;
+}
+
+struct uint8 {
+  uint4 u;
+  uint4 v;
+};
+
+template <int BYTES>
+struct BytesToType {};
+
+template <>
+struct BytesToType<32> {
+  using Type = uint8;
+  static_assert(sizeof(Type) == 32);
+};
+
+template <>
+struct BytesToType<16> {
+  using Type = uint4;
+  static_assert(sizeof(Type) == 16);
+};
+
+template <>
+struct BytesToType<8> {
+  using Type = uint64_t;
+  static_assert(sizeof(Type) == 8);
+};
+
+template <>
+struct BytesToType<4> {
+  using Type = uint32_t;
+  static_assert(sizeof(Type) == 4);
+};
+
+template <>
+struct BytesToType<2> {
+  using Type = uint16_t;
+  static_assert(sizeof(Type) == 2);
+};
+
+template <>
+struct BytesToType<1> {
+  using Type = uint8_t;
+  static_assert(sizeof(Type) == 1);
+};
+
+template <template <typename> class ReductionOp, typename T, int block_size>
+__inline__ __device__ T BlockAllReduce(T val) {
+  typedef cub::BlockReduce<T, block_size> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  __shared__ T result_broadcast;
+  T result = BlockReduce(temp_storage).Reduce(val, ReductionOp<T>());
+  if (threadIdx.x == 0) {
+    result_broadcast = result;
+  }
+  __syncthreads();
+  return result_broadcast;
+}
+
+template <typename T>
+struct SumOp {
+  __device__ __forceinline__ T operator()(T const& x, T const& y) {
+    return x + y;
+  }
+};
+
+template <typename InType, typename OutType>
+__forceinline__ __device__ OutType QuantHelperFunc(const InType input,
+                                                   const float scale,
+                                                   const float max_bound,
+                                                   const float min_bound) {
+  float quant_value = max_bound * scale * static_cast<float>(input);
+  return static_cast<OutType>(
+      ClipFunc<float>(quant_value, min_bound, max_bound));
+}
+
+template <typename T, typename OutT, int VecSize, int Kthread>
+__global__ void masked_quantize_moe_input_kernel(
+    const T* permuted_inputs,
+    const int64_t* expert_idx_per_token,
+    const float* quant_scales,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const int64_t token_num,
+    const int64_t dim,
+    float* permuted_input_row_sum,
+    const int64_t* recv_expert_count,
+    const int num_max_tokens_per_expert,
+    OutT* out) {
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadOutT = AlignedVector<OutT, VecSize>;
+  LoadT input_vec;
+  LoadOutT output_vec;
+  float scale_factor = -7.0f / 512.0f;
+  using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+  for (int token_idx = blockIdx.x; token_idx < token_num;
+       token_idx += gridDim.x) {
+    const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
+    const auto expert_id = token_idx / num_max_tokens_per_expert;
+    if (token_idx_in_expert >= recv_expert_count[expert_id]) {
+      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
+      auto num_iters_to_next_expert =
+          (next_expert_start_idx - token_idx - 1) / gridDim.x;
+      token_idx += num_iters_to_next_expert * gridDim.x;
+      continue;
+    }
+    int64_t expert_idx = expert_idx_per_token[token_idx];
+    float quant_scale = quant_scales[expert_idx];
+    float thread_row_sum = 0.0f;
+    for (int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+      int64_t offset = token_idx * dim + idx * VecSize;
+      Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+#pragma unroll
+      for (int i = 0; i < VecSize; i++) {
+        output_vec[i] = QuantHelperFunc<T, OutT>(
+            input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
+        thread_row_sum += static_cast<float>(output_vec[i]);
+      }
+      *(reinterpret_cast<vec_t*>(&out[offset])) =
+          *(reinterpret_cast<const vec_t*>(&output_vec));
+    }
+    float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+    permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T, typename OutT, int VecSize, int Kthread>
+__global__ void quantize_moe_input_kernel(const T* permuted_inputs,
+                                          const int64_t* expert_idx_per_token,
+                                          const float* quant_scales,
+                                          const float quant_max_bound,
+                                          const float quant_min_bound,
+                                          const int64_t token_num,
+                                          const int64_t dim,
+                                          float* permuted_input_row_sum,
+                                          const int64_t* recv_expert_count,
+                                          const int num_max_tokens_per_expert,
+                                          OutT* out) {
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadOutT = AlignedVector<OutT, VecSize>;
+  LoadT input_vec;
+  LoadOutT output_vec;
+  using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+  float scale_factor = -7.0f / 512.0f;
+  for (int token_idx = blockIdx.x; token_idx < token_num;
+       token_idx += gridDim.x) {
+    int64_t expert_idx = expert_idx_per_token[token_idx];
+    float quant_scale = quant_scales[expert_idx];
+    float thread_row_sum = 0.0f;
+    for (int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+      int64_t offset = token_idx * dim + idx * VecSize;
+      Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+#pragma unroll
+      for (int i = 0; i < VecSize; i++) {
+        output_vec[i] = QuantHelperFunc<T, OutT>(
+            input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
+        thread_row_sum += static_cast<float>(output_vec[i]);
+      }
+      *(reinterpret_cast<vec_t*>(&out[offset])) =
+          *(reinterpret_cast<const vec_t*>(&output_vec));
+    }
+    float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+    permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T, typename OutT>
+void quantize_moe_input(const T* permuted_inputs,
+                        const int64_t* expert_idx_per_token,
+                        const float* quant_scales,
+                        const float quant_max_bound,
+                        const float quant_min_bound,
+                        const int64_t token_num,
+                        const int64_t dim,
+                        float* permuted_input_row_sum,
+                        const int64_t* recv_expert_count,
+                        const int num_max_tokens_per_expert,
+                        bool used_in_ep_low_latency,
+                        OutT* out,
+                        cudaStream_t stream) {
+  constexpr int VecSize = 16 / sizeof(T);
+  constexpr int threads_per_block = 128;
+  const int dev_id = 0;
+  int sm_count;
+  int act_blocks_per_sm;
+  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
+  assert(dim % VecSize == 0);
+  auto kernel =
+      used_in_ep_low_latency
+          ? masked_quantize_moe_input_kernel<T,
+                                             OutT,
+                                             VecSize,
+                                             threads_per_block>
+          : quantize_moe_input_kernel<T, OutT, VecSize, threads_per_block>;
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &act_blocks_per_sm, kernel, threads_per_block, 0);
+  const int num_blocks_per_wave = sm_count * act_blocks_per_sm;
+  dim3 grid;
+  grid.x = min(static_cast<int64_t>(num_blocks_per_wave), token_num);
+  kernel<<<grid, threads_per_block, 0, stream>>>(permuted_inputs,
+                                                 expert_idx_per_token,
+                                                 quant_scales,
+                                                 quant_max_bound,
+                                                 quant_min_bound,
+                                                 token_num,
+                                                 dim,
+                                                 permuted_input_row_sum,
+                                                 recv_expert_count,
+                                                 num_max_tokens_per_expert,
+                                                 out);
+}
+
+template <typename T, int VecSize, int Kthread>
+__global__ void masked_compute_row_sum_kernel(
+    const T* permuted_inputs,
+    const int64_t token_num,
+    const int64_t dim,
+    float* permuted_input_row_sum,
+    const int64_t* recv_expert_count,
+    const int num_max_tokens_per_expert) {
+  using LoadT = AlignedVector<T, VecSize>;
+  LoadT input_vec;
+  float scale_factor = -7.0f / 512.0f;
+  for (int token_idx = blockIdx.x; token_idx < token_num;
+       token_idx += gridDim.x) {
+    const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
+    const auto expert_id = token_idx / num_max_tokens_per_expert;
+    if (token_idx_in_expert >= recv_expert_count[expert_id]) {
+      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
+      auto num_iters_to_next_expert =
+          (next_expert_start_idx - token_idx - 1) / gridDim.x;
+      token_idx += num_iters_to_next_expert * gridDim.x;
+      continue;
+    }
+    float thread_row_sum = 0.0f;
+    for (int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+      int64_t offset = token_idx * dim + idx * VecSize;
+      Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+#pragma unroll
+      for (int i = 0; i < VecSize; i++) {
+        thread_row_sum += static_cast<float>(input_vec[i]);
+      }
+    }
+    float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+    permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T, int VecSize, int Kthread>
+__global__ void compute_row_sum_kernel(const T* permuted_inputs,
+                                       const int64_t token_num,
+                                       const int64_t dim,
+                                       float* permuted_input_row_sum,
+                                       const int64_t* recv_expert_count,
+                                       const int num_max_tokens_per_expert) {
+  using LoadT = AlignedVector<T, VecSize>;
+  LoadT input_vec;
+  float scale_factor = -7.0f / 512.0f;
+  for (int token_idx = blockIdx.x; token_idx < token_num;
+       token_idx += gridDim.x) {
+    float thread_row_sum = 0.0f;
+    for (int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+      int64_t offset = token_idx * dim + idx * VecSize;
+      Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+#pragma unroll
+      for (int i = 0; i < VecSize; i++) {
+        thread_row_sum += static_cast<float>(input_vec[i]);
+      }
+    }
+    float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+    permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T>
+void compute_row_sum(const T* permuted_inputs,
+                     const int64_t token_num,
+                     const int64_t dim,
+                     float* permuted_input_row_sum,
+                     const int64_t* recv_expert_count,
+                     const int num_max_tokens_per_expert,
+                     bool used_in_ep_low_latency,
+                     cudaStream_t stream) {
+  constexpr int VecSize = 16 / sizeof(T);
+  constexpr int threads_per_block = 128;
+  const int dev_id = 0;
+  int sm_count;
+  int act_blocks_per_sm;
+  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
+  assert(dim % VecSize == 0);
+  auto kernel =
+      used_in_ep_low_latency
+          ? masked_compute_row_sum_kernel<T, VecSize, threads_per_block>
+          : compute_row_sum_kernel<T, VecSize, threads_per_block>;
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &act_blocks_per_sm, kernel, threads_per_block, 0);
+  const int num_blocks_per_wave = sm_count * act_blocks_per_sm;
+  dim3 grid;
+  grid.x = min(static_cast<int64_t>(num_blocks_per_wave), token_num);
+  kernel<<<grid, threads_per_block, 0, stream>>>(permuted_inputs,
+                                                 token_num,
+                                                 dim,
+                                                 permuted_input_row_sum,
+                                                 recv_expert_count,
+                                                 num_max_tokens_per_expert);
 }
 
 // ====================== Softmax things ===============================
@@ -133,64 +452,6 @@ __launch_bounds__(TPB) __global__
 }
 
 template <typename T, int TPB>
-__launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
-                                                 T* output,
-                                                 int* indices,
-                                                 int* source_rows,
-                                                 T* softmax_max_prob,
-                                                 const int64_t num_experts,
-                                                 const int64_t k,
-                                                 const int64_t num_rows) {
-  using cub_kvp = cub::KeyValuePair<int, T>;
-  using BlockReduce = cub::BlockReduce<cub_kvp, TPB>;
-  __shared__ typename BlockReduce::TempStorage tmpStorage;
-
-  cub_kvp thread_kvp;
-  cub::ArgMax arg_max;
-
-  const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
-  if (block_row >= num_rows) {
-    return;
-  }
-
-  const bool should_process_row = true;
-  const int thread_read_offset = block_row * num_experts;
-
-  for (int k_idx = 0; k_idx < k; ++k_idx) {
-    thread_kvp.key = 0;
-    thread_kvp.value = T(-1.f);  // This is OK because inputs are probabilities
-
-    cub_kvp inp_kvp;
-    for (int expert = threadIdx.x; expert < num_experts; expert += TPB) {
-      const int idx = thread_read_offset + expert;
-      inp_kvp.key = expert;
-      inp_kvp.value = inputs_after_softmax[idx];
-
-      for (int prior_k = 0; prior_k < k_idx; ++prior_k) {
-        const int prior_winning_expert = indices[k * block_row + prior_k];
-
-        if (prior_winning_expert == expert) {
-          inp_kvp = thread_kvp;
-        }
-      }
-
-      thread_kvp = arg_max(inp_kvp, thread_kvp);
-    }
-
-    const cub_kvp result_kvp =
-        BlockReduce(tmpStorage).Reduce(thread_kvp, arg_max);
-    if (threadIdx.x == 0) {
-      const int idx = k * block_row + k_idx;
-      // restore normalized probes
-      output[idx] = result_kvp.value / T(softmax_max_prob[idx]);
-      indices[idx] = should_process_row ? result_kvp.key : num_experts;
-      source_rows[idx] = k_idx * num_rows + block_row;
-    }
-    __syncthreads();
-  }
-}
-
-template <typename T, int TPB>
 __launch_bounds__(TPB) __global__ void moe_softmax(const T* input,
                                                    T* output,
                                                    const int64_t num_cols,
@@ -243,14 +504,16 @@ __launch_bounds__(TPB) __global__ void moe_softmax(const T* input,
   }
 }
 
-template <typename T, int TPB>
-__launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
-                                                 T* output,
-                                                 int* indices,
-                                                 int* source_rows,
-                                                 const int64_t num_experts,
-                                                 const int64_t k,
-                                                 const int64_t num_rows) {
+template <typename T, int TPB, typename IdxT = int>
+__launch_bounds__(TPB) __global__
+    void group_moe_top_k(const T* inputs_after_softmax,
+                         T* output,
+                         IdxT* indices,
+                         int* source_rows,
+                         T* softmax_max_prob,
+                         const int64_t num_experts,
+                         const int64_t k,
+                         const int64_t num_rows) {
   using cub_kvp = cub::KeyValuePair<int, T>;
   using BlockReduce = cub::BlockReduce<cub_kvp, TPB>;
   __shared__ typename BlockReduce::TempStorage tmpStorage;
@@ -277,6 +540,72 @@ __launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
       inp_kvp.value = inputs_after_softmax[idx];
 
       for (int prior_k = 0; prior_k < k_idx; ++prior_k) {
+        const IdxT prior_winning_expert = indices[k * block_row + prior_k];
+
+        if (prior_winning_expert == expert) {
+          inp_kvp = thread_kvp;
+        }
+      }
+
+      thread_kvp = arg_max(inp_kvp, thread_kvp);
+    }
+
+    const cub_kvp result_kvp =
+        BlockReduce(tmpStorage).Reduce(thread_kvp, arg_max);
+    if (threadIdx.x == 0) {
+      const int idx = k * block_row + k_idx;
+      // restore normalized probes
+      output[idx] = result_kvp.value / T(softmax_max_prob[idx]);
+      indices[idx] = should_process_row ? result_kvp.key : num_experts;
+      source_rows[idx] = k_idx * num_rows + block_row;
+    }
+    __syncthreads();
+  }
+}
+
+template <typename T, int TPB, bool NormWeights = false, typename IdxT = int>
+__launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
+                                                 const T* bias,
+                                                 T* output,
+                                                 IdxT* indices,
+                                                 int* source_rows,
+                                                 const int64_t num_experts,
+                                                 const int64_t k,
+                                                 const int64_t num_rows) {
+  using cub_kvp = cub::KeyValuePair<int, T>;
+  using BlockReduce = cub::BlockReduce<cub_kvp, TPB>;
+  __shared__ typename BlockReduce::TempStorage tmpStorage;
+
+  cub_kvp thread_kvp;
+  cub::ArgMax arg_max;
+
+  const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
+  if (block_row >= num_rows) {
+    return;
+  }
+
+  const bool should_process_row = true;
+  const int thread_read_offset = block_row * num_experts;
+  T weight_sum = static_cast<T>(0);
+  T* row_outputs = nullptr;
+
+  if constexpr (NormWeights) {
+    extern __shared__ char smem[];
+    row_outputs = reinterpret_cast<T*>(smem);
+  }
+
+  for (int k_idx = 0; k_idx < k; ++k_idx) {
+    thread_kvp.key = 0;
+    thread_kvp.value = T(-1.f);  // This is OK because inputs are probabilities
+
+    cub_kvp inp_kvp;
+    for (int expert = threadIdx.x; expert < num_experts; expert += TPB) {
+      const int idx = thread_read_offset + expert;
+      inp_kvp.key = expert;
+      inp_kvp.value = bias ? inputs_after_softmax[idx] + bias[expert]
+                           : inputs_after_softmax[idx];
+
+      for (int prior_k = 0; prior_k < k_idx; ++prior_k) {
         const int prior_winning_expert = indices[k * block_row + prior_k];
 
         if (prior_winning_expert == expert) {
@@ -291,11 +620,252 @@ __launch_bounds__(TPB) __global__ void moe_top_k(const T* inputs_after_softmax,
         BlockReduce(tmpStorage).Reduce(thread_kvp, arg_max);
     if (threadIdx.x == 0) {
       const int idx = k * block_row + k_idx;
-      output[idx] = result_kvp.value;
       indices[idx] = should_process_row ? result_kvp.key : num_experts;
       source_rows[idx] = k_idx * num_rows + block_row;
+
+      if constexpr (NormWeights) {
+        T row_out =
+            bias ? inputs_after_softmax[thread_read_offset + result_kvp.key]
+                 : result_kvp.value;
+        row_outputs[k_idx] = row_out;
+        weight_sum += row_out;
+      } else {
+        output[idx] =
+            bias ? inputs_after_softmax[thread_read_offset + result_kvp.key]
+                 : result_kvp.value;
+      }
     }
     __syncthreads();
+  }
+  if constexpr (NormWeights) {
+    if (threadIdx.x < WARP_SIZE) {
+      weight_sum = __shfl_sync(0xffffffff, weight_sum, 0);
+    }
+    if (threadIdx.x < k) {
+      output[k * block_row + threadIdx.x] =
+          row_outputs[threadIdx.x] / weight_sum;
+    }
+  }
+}
+
+template <typename T, int TPB, bool NormWeights = false, typename IdxT = int>
+__launch_bounds__(TPB) __global__
+    void moe_softmax_top_k_fused(const T* input,
+                                 const T* bias,
+                                 T* output,
+                                 IdxT* indices,
+                                 int* source_rows,
+                                 const int64_t num_experts,
+                                 const int64_t k,
+                                 const int64_t num_rows) {
+  // softmax
+  using BlockReduce = cub::BlockReduce<float, TPB>;
+  __shared__ typename BlockReduce::TempStorage tmpStorage;
+
+  __shared__ float normalizing_factor;
+  __shared__ float float_max;
+
+  int globalIdx = blockIdx.x + blockIdx.y * gridDim.x;
+  if (globalIdx >= num_rows) {
+    return;
+  }
+  const int64_t thread_row_offset = globalIdx * num_experts;
+  const int64_t idx = thread_row_offset + threadIdx.x;
+
+  cub::Sum sum;
+
+  float threadData =
+      (threadIdx.x < num_experts) ? static_cast<float>(input[idx]) : (-FLT_MAX);
+
+  const float maxElem = BlockReduce(tmpStorage).Reduce(threadData, cub::Max());
+  if (threadIdx.x == 0) {
+    float_max = maxElem;
+  }
+  __syncthreads();
+
+  float threadDataSub = threadData - float_max;
+  float threadDataExp = exp(threadDataSub);
+
+  const auto Z = BlockReduce(tmpStorage).Reduce(threadDataExp, sum);
+
+  if (threadIdx.x == 0) {
+    normalizing_factor = 1.f / Z;
+  }
+
+  __syncthreads();
+
+  T val = T(threadDataExp * normalizing_factor);
+
+  // top_k
+  using cub_kvp = cub::KeyValuePair<int, T>;
+  using BlockReduceP = cub::BlockReduce<cub_kvp, TPB>;
+  __shared__ typename BlockReduceP::TempStorage tmpStorageP;
+
+  cub_kvp thread_kvp;
+  cub::ArgMax arg_max;
+
+  T weight_sum = static_cast<T>(0);
+  T* row_outputs = nullptr;
+  if constexpr (NormWeights) {
+    extern __shared__ char smem[];
+    row_outputs = reinterpret_cast<T*>(smem);
+  }
+
+  for (int k_idx = 0; k_idx < k; ++k_idx) {
+    thread_kvp.key = 0;
+    thread_kvp.value = T(-1.f);  // This is OK because inputs are probabilities
+
+    if (threadIdx.x < num_experts) {
+      cub_kvp inp_kvp;
+      int expert = threadIdx.x;
+      inp_kvp.key = expert;
+      inp_kvp.value = bias ? val + bias[expert] : val;
+
+      for (int prior_k = 0; prior_k < k_idx; ++prior_k) {
+        const IdxT prior_winning_expert = indices[k * globalIdx + prior_k];
+
+        if (prior_winning_expert == expert) {
+          inp_kvp = thread_kvp;
+        }
+      }
+      thread_kvp = arg_max(inp_kvp, thread_kvp);
+    }
+
+    const cub_kvp result_kvp =
+        BlockReduceP(tmpStorageP).Reduce(thread_kvp, arg_max);
+    if (threadIdx.x == 0) {
+      const int cur_idx = k * globalIdx + k_idx;
+
+      indices[cur_idx] = result_kvp.key;
+      source_rows[cur_idx] = k_idx * num_rows + globalIdx;
+
+      if constexpr (NormWeights) {
+        T row_out =
+            bias ? (result_kvp.value - bias[result_kvp.key]) : result_kvp.value;
+        row_outputs[k_idx] = row_out;
+        weight_sum += row_out;
+      } else {
+        output[cur_idx] =
+            bias ? (result_kvp.value - bias[result_kvp.key]) : result_kvp.value;
+      }
+    }
+    __syncthreads();
+  }
+  if constexpr (NormWeights) {
+    if (threadIdx.x < WARP_SIZE) {
+      weight_sum = __shfl_sync(0xffffffff, weight_sum, 0);
+    }
+
+    if (threadIdx.x < k) {
+      output[k * globalIdx + threadIdx.x] =
+          row_outputs[threadIdx.x] / weight_sum;
+    }
+  }
+}
+
+inline __device__ unsigned int xorwow_moe(unsigned int& state) {
+  state ^= state >> 7;
+  state ^= state << 9;
+  state ^= state >> 13;
+  return state;
+}
+
+template <typename T, int TPB, typename IdxT = int>
+__launch_bounds__(TPB) __global__
+    void moe_redundant_top_k_normed(const T* inputs_after_softmax,
+                                    const T* bias,
+                                    const int* expert_id_to_ep_rank_array,
+                                    const int* expert_in_rank_num_list,
+                                    int* tokens_per_expert_stats_list,
+                                    T* output,
+                                    IdxT* indices,
+                                    IdxT* indices_tmp,
+                                    int* source_rows,
+                                    const int64_t num_experts,
+                                    const int64_t k,
+                                    const int64_t num_rows,
+                                    const int redundant_ep_rank_num_plus_one) {
+  using cub_kvp = cub::KeyValuePair<int, T>;
+  using BlockReduce = cub::BlockReduce<cub_kvp, TPB>;
+  __shared__ typename BlockReduce::TempStorage tmpStorage;
+
+  cub_kvp thread_kvp;
+  cub::ArgMax arg_max;
+
+  const int block_row = blockIdx.x + blockIdx.y * gridDim.x;
+  // unsigned int state = block_row + blockIdx.x * blockDim.x +
+  // *kernel_call_num;
+  unsigned int state = block_row + blockIdx.x * blockDim.x;
+
+  if (block_row >= num_rows) {
+    return;
+  }
+
+  const bool should_process_row = true;
+  const int thread_read_offset = block_row * num_experts;
+  T weight_sum = static_cast<T>(0);
+
+  extern __shared__ char smem[];
+
+  T* row_outputs = reinterpret_cast<T*>(smem);
+
+  for (int k_idx = 0; k_idx < k; ++k_idx) {
+    thread_kvp.key = 0;
+    thread_kvp.value = T(-1.f);  // This is OK because inputs are probabilities
+
+    cub_kvp inp_kvp;
+    for (int expert = threadIdx.x; expert < num_experts; expert += TPB) {
+      const int idx = thread_read_offset + expert;
+      inp_kvp.key = expert;
+      inp_kvp.value = bias ? inputs_after_softmax[idx] + bias[expert]
+                           : inputs_after_softmax[idx];
+
+      for (int prior_k = 0; prior_k < k_idx; ++prior_k) {
+        const int prior_winning_expert = indices_tmp[k * block_row + prior_k];
+
+        if (prior_winning_expert == expert) {
+          inp_kvp = thread_kvp;
+        }
+      }
+
+      thread_kvp = arg_max(inp_kvp, thread_kvp);
+    }
+
+    const cub_kvp result_kvp =
+        BlockReduce(tmpStorage).Reduce(thread_kvp, arg_max);
+    if (threadIdx.x == 0) {
+      const int idx = k * block_row + k_idx;
+      // output[idx] = bias ? inputs_after_softmax[thread_read_offset +
+      // result_kvp.key]: result_kvp.value;
+      source_rows[idx] = k_idx * num_rows + block_row;
+      int expert_topk = should_process_row ? result_kvp.key : num_experts;
+
+      // runduncy
+      int len = expert_in_rank_num_list[expert_topk];
+      int select = (int)xorwow_moe(state) % len;
+      int selected_rank =
+          expert_id_to_ep_rank_array[expert_topk *
+                                         redundant_ep_rank_num_plus_one +
+                                     select];
+
+      indices[idx] = (IdxT)selected_rank;
+      indices_tmp[idx] = result_kvp.key;
+      atomicAdd(&tokens_per_expert_stats_list[result_kvp.key], 1);
+
+      T row_out =
+          bias ? inputs_after_softmax[thread_read_offset + result_kvp.key]
+               : result_kvp.value;
+      row_outputs[k_idx] = row_out;
+      weight_sum += row_out;
+    }
+    __syncthreads();
+  }
+  if (threadIdx.x < WARP_SIZE) {
+    weight_sum = __shfl_sync(0xffffffff, weight_sum, 0);
+  }
+
+  if (threadIdx.x < k) {
+    output[k * block_row + threadIdx.x] = row_outputs[threadIdx.x] / weight_sum;
   }
 }
 
@@ -319,12 +889,15 @@ template <typename T,
           int VPT,
           int NUM_EXPERTS,
           int WARPS_PER_CTA,
-          int BYTES_PER_LDG>
+          int BYTES_PER_LDG,
+          bool Norm_Weights = false,
+          typename IdxT = int>
 __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
     void topk_gating_softmax(const T* input,
+                             const T* bias,
                              T* output,
                              const int64_t num_rows,
-                             int* indices,
+                             IdxT* indices,
                              int* source_rows,
                              const int64_t k) {
   // We begin by enforcing compile time assertions and setting up compile time
@@ -377,6 +950,7 @@ __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
   // We compute row offset for each thread sub-group
   const int thread_row_in_warp = threadIdx.x / THREADS_PER_ROW;
   const int thread_row = warp_base_row + thread_row_in_warp;
+  const int thread_row_in_cta = thread_row - cta_base_row;
 
   // Threads with indices out of bounds should early exit here.
   if (thread_row >= num_rows) return;
@@ -391,6 +965,9 @@ __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
   const int thread_group_idx = threadIdx.x % THREADS_PER_ROW;
   const int first_elt_read_by_thread = thread_group_idx * ELTS_PER_LDG;
   const T* thread_read_ptr = thread_row_ptr + first_elt_read_by_thread;
+
+  T weight_sum = static_cast<T>(0);
+  extern __shared__ T row_output[];
 
   // Determine the pointer type to use to read in the data depending on the
   // BYTES_PER_LDG template param. In theory, this can support all powers of 2
@@ -460,7 +1037,9 @@ __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
 
 #pragma unroll
   for (int ii = 0; ii < VPT; ++ii) {
-    row_chunk[ii] = row_chunk[ii] * reciprocal_row_sum;
+    row_chunk[ii] = bias ? row_chunk[ii] * reciprocal_row_sum +
+                               bias[first_elt_read_by_thread + ii]
+                         : row_chunk[ii] * reciprocal_row_sum;
   }
 
   // Now, softmax_res contains the softmax of the row chunk. Now, I want to find
@@ -509,12 +1088,19 @@ __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
     }
 
     // Write the max for this k iteration to global memory.
+    T final_val = bias ? T(max_val) - bias[expert] : T(max_val);
     if (thread_group_idx == 0) {
       // The lead thread from each sub-group will write out the final results to
       // global memory. (This will be a single) thread per row of the
       // input/output matrices.
       const int idx = k * thread_row + k_idx;
-      output[idx] = T(max_val);
+      if constexpr (Norm_Weights) {
+        const int idx_in_cta = k * thread_row_in_cta + k_idx;
+        row_output[idx_in_cta] = final_val;
+        weight_sum += final_val;
+      } else {
+        output[idx] = final_val;
+      }
       indices[idx] = should_process_row ? expert : NUM_EXPERTS;
       source_rows[idx] = k_idx * num_rows + thread_row;
     }
@@ -537,6 +1123,16 @@ __launch_bounds__(WARPS_PER_CTA* WARP_SIZE) __global__
       }
     }
   }
+  if constexpr (Norm_Weights) {
+#pragma unroll
+    for (int k_idx = 0; k_idx < k; ++k_idx) {
+      if (thread_group_idx == 0) {
+        const int idx = k * thread_row + k_idx;
+        const int idx_in_cta = k * thread_row_in_cta + k_idx;
+        output[idx] = row_output[idx_in_cta] / weight_sum;
+      }
+    }
+  }
 }
 
 namespace detail {
@@ -556,10 +1152,15 @@ struct TopkConstants {
 };
 }  // namespace detail
 
-template <typename T, int EXPERTS, int WARPS_PER_TB>
+template <typename T,
+          int EXPERTS,
+          int WARPS_PER_TB,
+          bool Norm_Weights = false,
+          typename IdxT = int>
 void topk_gating_softmax_launcher_helper(const T* input,
+                                         const T* bias,
                                          T* output,
-                                         int* indices,
+                                         IdxT* indices,
                                          int* source_row,
                                          const int64_t num_rows,
                                          const int64_t num_experts,
@@ -575,16 +1176,23 @@ void topk_gating_softmax_launcher_helper(const T* input,
   const int num_blocks = (num_warps + WARPS_PER_TB - 1) / WARPS_PER_TB;
 
   dim3 block_dim(WARP_SIZE, WARPS_PER_TB);
-  topk_gating_softmax<T, VPT, EXPERTS, WARPS_PER_TB, BYTES_PER_LDG>
-      <<<num_blocks, block_dim, 0, stream>>>(
-          input, output, num_rows, indices, source_row, k);
+  static constexpr int ROWS_PER_CTA = WARPS_PER_TB * ROWS_PER_WARP;
+  topk_gating_softmax<T,
+                      VPT,
+                      EXPERTS,
+                      WARPS_PER_TB,
+                      BYTES_PER_LDG,
+                      Norm_Weights>
+      <<<num_blocks, block_dim, ROWS_PER_CTA * k * sizeof(T), stream>>>(
+          input, bias, output, num_rows, indices, source_row, k);
 }
 
-template <typename T>
+template <typename T, typename IdxT = int>
 void topk_gating_softmax_kernelLauncher(const T* input,
+                                        const T* gating_correction_bias,
                                         T* output,
                                         T* softmax,
-                                        int* indices,
+                                        IdxT* indices,
                                         int* source_row,
                                         T* softmax_max_prob,
                                         const int64_t num_rows,
@@ -596,19 +1204,36 @@ void topk_gating_softmax_kernelLauncher(const T* input,
   if (topk_only_mode) {
     static constexpr int TPB = 256;
     const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
-    moe_top_k<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
-        input, output, indices, source_row, num_experts, k, num_rows);
+    moe_top_k<T, TPB>
+        <<<config_topk.block_per_grid, TPB, 0, stream>>>(input,
+                                                         gating_correction_bias,
+                                                         output,
+                                                         indices,
+                                                         source_row,
+                                                         num_experts,
+                                                         k,
+                                                         num_rows);
     return;
   }
   static constexpr int WARPS_PER_TB = 4;
 
-#define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
-  case N: {                                                                    \
-    topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
-        input, output, indices, source_row, num_rows, num_experts, k, stream); \
-    break;                                                                     \
+#define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                 \
+  case N: {                                                  \
+    topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>( \
+        input,                                               \
+        gating_correction_bias,                              \
+        output,                                              \
+        indices,                                             \
+        source_row,                                          \
+        num_rows,                                            \
+        num_experts,                                         \
+        k,                                                   \
+        stream);                                             \
+    break;                                                   \
   }
-  switch (num_experts) {
+  int64_t tem_num_experts = num_experts;
+  if (gating_correction_bias != nullptr) tem_num_experts = 0;
+  switch (tem_num_experts) {
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(2)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(4)
     LAUNCH_TOPK_GATING_SOFTMAX_HELPER(8)
@@ -632,7 +1257,7 @@ void topk_gating_softmax_kernelLauncher(const T* input,
                 group_experts,
                 softmax_num_rows);
         const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
-        moe_top_k<T, TPB>
+        group_moe_top_k<T, TPB>
             <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
                                                              output,
                                                              indices,
@@ -646,7 +1271,14 @@ void topk_gating_softmax_kernelLauncher(const T* input,
         moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
             input, softmax, num_experts, num_rows);
         moe_top_k<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
-            softmax, output, indices, source_row, num_experts, k, num_rows);
+            softmax,
+            gating_correction_bias,
+            output,
+            indices,
+            source_row,
+            num_experts,
+            k,
+            num_rows);
       }
     }
   }
@@ -669,11 +1301,13 @@ void topk_gating_softmax_kernelLauncher(const T* input,
 // to row 0 in the original matrix. Thus, to know where to read in the source
 // matrix, we simply take the modulus of the expanded index.
 
-template <typename T, int VecSize>
+template <typename T, int VecSize, typename OutT = T>
 __global__ void initialize_moe_routing_kernel(
     const T* unpermuted_input,
-    T* permuted_output,
+    OutT* permuted_output,
     const int* expanded_dest_row_to_expanded_source_row,
+    const int* expert_idx_per_token,
+    const float* w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
     const int64_t num_rows,
     const int64_t active_rows,
@@ -696,27 +1330,60 @@ __global__ void initialize_moe_routing_kernel(
         expanded_dest_row;
   }
 
-  if ((blockIdx.x + blockIdx.y * gridDim.x) < active_rows) {
-    // Duplicate and permute rows
+  if (expanded_dest_row < active_rows) {
+    const int expert_idx = expert_idx_per_token[expanded_dest_row];
+    const float scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
     const int source_row = expanded_source_row % num_rows;
 
     const T* source_row_ptr = unpermuted_input + source_row * cols;
-    T* dest_row_ptr = permuted_output + expanded_dest_row * cols;
+    OutT* dest_row_ptr = permuted_output + expanded_dest_row * cols;
 
     for (int tid = threadIdx.x * VecSize; tid < cols;
          tid += blockDim.x * VecSize) {
       // dest_row_ptr[tid] = source_row_ptr[tid];
       Load<T, VecSize>(&source_row_ptr[tid], &src_vec);
-      Store<T, VecSize>(src_vec, &dest_row_ptr[tid]);
+
+      if constexpr (std::is_same<OutT, int8_t>::value) {
+        using StoreT = AlignedVector<OutT, VecSize>;
+        StoreT dest_vec;
+        const float max_bound = 127.f;
+        const float min_bound = -127.f;
+        for (int j = 0; j < VecSize; j++) {
+          float quant_value =
+              max_bound * scale * static_cast<float>(src_vec[j]);
+          quant_value = quant_value > max_bound ? max_bound : quant_value;
+          quant_value = quant_value < min_bound ? min_bound : quant_value;
+          dest_vec[j] = static_cast<int8_t>(round(quant_value));
+        }
+        Store<OutT, VecSize>(dest_vec, &dest_row_ptr[tid]);
+      } else if constexpr (std::is_same<OutT,
+                                        phi::dtype::float8_e4m3fn>::value) {
+        using StoreT = AlignedVector<OutT, VecSize>;
+        StoreT dest_vec;
+        const float max_bound = 448.f;
+        const float min_bound = -448.f;
+        for (int j = 0; j < VecSize; j++) {
+          float quant_value =
+              max_bound * scale * static_cast<float>(src_vec[j]);
+          quant_value = quant_value > max_bound ? max_bound : quant_value;
+          quant_value = quant_value < min_bound ? min_bound : quant_value;
+          dest_vec[j] = static_cast<phi::dtype::float8_e4m3fn>(quant_value);
+        }
+        Store<phi::dtype::float8_e4m3fn, VecSize>(dest_vec, &dest_row_ptr[tid]);
+      } else {
+        Store<T, VecSize>(src_vec, &dest_row_ptr[tid]);
+      }
     }
   }
 }
 
-template <typename T>
+template <typename T, typename OutT = T>
 void initialize_moe_routing_kernelLauncher(
     const T* unpermuted_input,
-    T* permuted_output,
+    OutT* permuted_output,
     const int* expanded_dest_row_to_expanded_source_row,
+    const int* expert_idx_per_token,
+    const float* w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
     const int64_t num_rows,
     const int64_t active_rows,
@@ -732,6 +1399,8 @@ void initialize_moe_routing_kernelLauncher(
             unpermuted_input,
             permuted_output,
             expanded_dest_row_to_expanded_source_row,
+            expert_idx_per_token,
+            w4a8_in_scale,
             expanded_source_row_to_expanded_dest_row,
             num_rows,
             k * active_rows,
@@ -743,6 +1412,8 @@ void initialize_moe_routing_kernelLauncher(
             unpermuted_input,
             permuted_output,
             expanded_dest_row_to_expanded_source_row,
+            expert_idx_per_token,
+            w4a8_in_scale,
             expanded_source_row_to_expanded_dest_row,
             num_rows,
             k * active_rows,
@@ -793,43 +1464,66 @@ __global__ void finalize_moe_routing_kernel(
     const bool norm_topk_prob,
     const float routed_scaling_factor,
     const int64_t num_rows) {
-  const int original_row = blockIdx.x + blockIdx.y * gridDim.x;
-  // const int original_row = blockIdx.x;
-  // const int num_rows = gridDim.x;
-  if (original_row >= num_rows) return;
-  T* reduced_row_ptr = reduced_unpermuted_output + original_row * cols;
+  const int original_row = blockIdx.x;
+  auto const offset = original_row * cols;
 
-  for (int tid = threadIdx.x; tid < cols; tid += blockDim.x) {
-    T thread_output{0.f};
+  T* reduced_row_ptr = reduced_unpermuted_output + offset;
+  constexpr int64_t FINALIZE_ELEM_PER_THREAD =
+      128 / mctlass::sizeof_bits<T>::value;
+  int64_t const start_offset = threadIdx.x;
+  int64_t const stride = FINALIZE_THREADS_PER_BLOCK;
+  int64_t const num_elems_in_col = cols / FINALIZE_ELEM_PER_THREAD;
+
+  using BiasElem = mctlass::Array<T, FINALIZE_ELEM_PER_THREAD>;
+  using InputElem = mctlass::Array<T, FINALIZE_ELEM_PER_THREAD>;
+  using OutputElem = mctlass::Array<T, FINALIZE_ELEM_PER_THREAD>;
+  using ComputeElem = mctlass::Array<float, FINALIZE_ELEM_PER_THREAD>;
+  using SharedOutputElem = mctlass::Array<T, FINALIZE_ELEM_PER_THREAD>;
+
+  auto const* bias_v = reinterpret_cast<BiasElem const*>(bias);
+  auto const* expanded_permuted_rows_v =
+      reinterpret_cast<InputElem const*>(expanded_permuted_rows);
+  auto* reduced_row_ptr_v = reinterpret_cast<OutputElem*>(reduced_row_ptr);
+
+#pragma unroll
+  for (int elem_index = start_offset; elem_index < num_elems_in_col;
+       elem_index += stride) {
+    ComputeElem thread_output;
+    thread_output.fill(0);
     float row_rescale{0.f};
     for (int k_idx = 0; k_idx < k; ++k_idx) {
-      const int expanded_original_row = original_row + k_idx * num_rows;
-      const int expanded_permuted_row =
+      int64_t const expanded_original_row = original_row + k_idx * num_rows;
+      int64_t const expanded_permuted_row =
           expanded_source_row_to_expanded_dest_row[expanded_original_row];
-
-      const int64_t k_offset = original_row * k + k_idx;
+      int64_t const k_offset = original_row * k + k_idx;
       const float row_scale = scales[k_offset];
       row_rescale = row_rescale + row_scale;
 
-      const T* expanded_permuted_rows_row_ptr =
-          expanded_permuted_rows + expanded_permuted_row * cols;
+      auto const* expanded_permuted_rows_row_ptr =
+          expanded_permuted_rows_v + expanded_permuted_row * num_elems_in_col;
 
-      const int expert_idx = expert_for_source_row[k_offset];
-      const T* bias_ptr = bias ? bias + expert_idx * cols : nullptr;
-      const T bias_value = bias_ptr ? bias_ptr[tid] : T{0.f};
+      int const expert_idx = expert_for_source_row[k_offset];
+      auto const* bias_ptr = bias_v + expert_idx * num_elems_in_col;
 
-      thread_output =
-          static_cast<float>(thread_output) +
-          row_scale * static_cast<float>(
-                          expanded_permuted_rows_row_ptr[tid] +
-                          bias_value *
-                              static_cast<T>(static_cast<float>(compute_bias)));
+      ComputeElem bias_value;
+      if (bias) {
+        bias_value = arrayConvert<BiasElem, ComputeElem>(bias_ptr[elem_index]);
+      } else {
+        bias_value.fill(0);
+      }
+
+      ComputeElem expert_result = arrayConvert<InputElem, ComputeElem>(
+          expanded_permuted_rows_row_ptr[elem_index]);
+
+      thread_output = thread_output + row_scale * (expert_result + bias_value);
     }
-
-    thread_output = static_cast<float>(thread_output) /
-                    (norm_topk_prob ? row_rescale : 1.0f) *
-                    routed_scaling_factor;
-    reduced_row_ptr[tid] = thread_output;
+    for (auto& elem : thread_output) {
+      elem =
+          elem / (norm_topk_prob ? row_rescale : 1.0f) * routed_scaling_factor;
+    }
+    OutputElem output_elem =
+        arrayConvert<ComputeElem, OutputElem>(thread_output);
+    reduced_row_ptr_v[elem_index] = output_elem;
   }
 }
 
@@ -848,136 +1542,21 @@ void finalize_moe_routing_kernelLauncher(
     const bool norm_topk_prob,
     const float routed_scaling_factor,
     cudaStream_t stream) {
-  const int threads = std::min(cols, int64_t(1024));
-  const auto config_final = Get1DBlocksAnd2DGridsMoe(num_rows);
+  const int blocks = num_rows;
+  const int threads = FINALIZE_THREADS_PER_BLOCK;
 
   finalize_moe_routing_kernel<T, 1>
-      <<<config_final.block_per_grid, threads, 0, stream>>>(
-          expanded_permuted_rows,
-          reduced_unpermuted_output,
-          bias,
-          scales,
-          expanded_source_row_to_expanded_dest_row,
-          expert_for_source_row,
-          cols,
-          k,
-          compute_bias,
-          norm_topk_prob,
-          routed_scaling_factor,
-          num_rows);
+      <<<blocks, threads, 0, stream>>>(expanded_permuted_rows,
+                                       reduced_unpermuted_output,
+                                       bias,
+                                       scales,
+                                       expanded_source_row_to_expanded_dest_row,
+                                       expert_for_source_row,
+                                       cols,
+                                       k,
+                                       compute_bias,
+                                       norm_topk_prob,
+                                       routed_scaling_factor,
+                                       num_rows);
 }
-
-// ========================= TopK Softmax specializations
-// ===========================
-template void topk_gating_softmax_kernelLauncher(const float*,
-                                                 float*,
-                                                 float*,
-                                                 int*,
-                                                 int*,
-                                                 float*,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const bool,
-                                                 cudaStream_t,
-                                                 const bool);
-template void topk_gating_softmax_kernelLauncher(const half*,
-                                                 half*,
-                                                 half*,
-                                                 int*,
-                                                 int*,
-                                                 half*,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const bool,
-                                                 cudaStream_t,
-                                                 const bool);
-#ifdef PADDLE_CUDA_BF16
-template void topk_gating_softmax_kernelLauncher(const __nv_bfloat16*,
-                                                 __nv_bfloat16*,
-                                                 __nv_bfloat16*,
-                                                 int*,
-                                                 int*,
-                                                 __nv_bfloat16*,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const int64_t,
-                                                 const bool,
-                                                 cudaStream_t,
-                                                 const bool);
-#endif
-// ===================== Specializations for init routing
-// =========================
-template void initialize_moe_routing_kernelLauncher(const float*,
-                                                    float*,
-                                                    const int*,
-                                                    int*,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    cudaStream_t);
-template void initialize_moe_routing_kernelLauncher(const half*,
-                                                    half*,
-                                                    const int*,
-                                                    int*,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    cudaStream_t);
-#ifdef PADDLE_CUDA_BF16
-template void initialize_moe_routing_kernelLauncher(const __nv_bfloat16*,
-                                                    __nv_bfloat16*,
-                                                    const int*,
-                                                    int*,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    const int64_t,
-                                                    cudaStream_t);
-#endif
-// ==================== Specializations for final routing
-// ===================================
-template void finalize_moe_routing_kernelLauncher(const float*,
-                                                  float*,
-                                                  const float*,
-                                                  const float*,
-                                                  const int*,
-                                                  const int*,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const bool,
-                                                  const float,
-                                                  cudaStream_t);
-template void finalize_moe_routing_kernelLauncher(const half*,
-                                                  half*,
-                                                  const half*,
-                                                  const float*,
-                                                  const int*,
-                                                  const int*,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const bool,
-                                                  const float,
-                                                  cudaStream_t);
-#ifdef PADDLE_CUDA_BF16
-template void finalize_moe_routing_kernelLauncher(const __nv_bfloat16*,
-                                                  __nv_bfloat16*,
-                                                  const __nv_bfloat16*,
-                                                  const float*,
-                                                  const int*,
-                                                  const int*,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const int64_t,
-                                                  const bool,
-                                                  const float,
-                                                  cudaStream_t);
-#endif
+}  // namespace phi

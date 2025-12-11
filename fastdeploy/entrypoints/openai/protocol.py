@@ -457,6 +457,7 @@ class CompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
     prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -620,6 +621,7 @@ class ChatCompletionRequest(BaseModel):
     top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
 
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False

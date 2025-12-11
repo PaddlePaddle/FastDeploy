@@ -418,6 +418,7 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             # run eplb
@@ -440,7 +441,7 @@ class PaddleDisWorkerProc:
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+                if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -459,7 +460,7 @@ class PaddleDisWorkerProc:
                 else:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
-                    logger.debug(
+                    logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
                     from fastdeploy.rl.dynamic_weight_manager import (
@@ -473,10 +474,12 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
-                    logger.debug(f"current task queue data: {self.task_queue.num_tasks()}")
+                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
-                    logger.debug(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                        time.sleep(0.01)
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
