@@ -66,6 +66,9 @@ class TestAttentionPerformance(unittest.TestCase):
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
 
+        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        os.environ["FLAGS_flash_attn_version"] = "3"
+
         self.model_dir = self.create_model_config_json()
         self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=1)
         self.fd_config.parallel_config.tp_group = [0]
@@ -125,7 +128,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "hidden_size": 8192,
             "num_attention_heads": 64,
             "num_key_value_heads": 8,
-            "num_hidden_layers": 2,
+            "num_hidden_layers": 54,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -302,27 +305,21 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        # prefill_batch_size = 1
-        # prefill_seq_len = 4096
+        prefill_batch_size = 1
+        prefill_seq_len = 4096
 
-        # prefill_hidden_states = paddle.randn(
-        #     [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
-        #     dtype=act_tensor_dtype,
-        # )
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=self.fd_config,
+            attn_backend=self.attn_backend,
+            cache_quant_type_str=self.cache_quant_type_str,
+        )
 
-        # forward_meta = self.create_forward_meta(
-        #     batch_size=prefill_batch_size,
-        #     seq_len=prefill_seq_len,
-        #     mode=ForwardMode.EXTEND,
-        #     fd_config=self.fd_config,
-        #     attn_backend=self.attn_backend,
-        #     cache_quant_type_str=self.cache_quant_type_str,
-        # )
-
-        # self.attn_backend.init_attention_metadata(forward_meta)
-        # self.attn_forward(forward_meta, prefill_hidden_states)
-
-        # paddle.device.synchronize()
+        self.attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(forward_meta, prefill_hidden_states)
+        paddle.device.synchronize()
 
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
@@ -332,21 +329,23 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # for i in range(test_steps):
-        #     start_events[i].record()
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
 
-        #     self.attn_forward(forward_meta, prefill_hidden_states)
+            self.attn_forward(forward_meta, prefill_hidden_states)
 
-        #     end_events[i].record()
-        # paddle.device.synchronize()
+            end_events[i].record()
+        paddle.device.synchronize()
 
-        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        # print(times[-5:])
-        # return
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+        del forward_meta
 
         # p.stop()
+
+        # ----------------------decoder ---------------------#
 
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
@@ -359,7 +358,7 @@ class TestAttentionPerformance(unittest.TestCase):
         for decode_batch_size in [32, 16, 8, 4, 2]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=36 * 1024,
+                seq_len=8 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
