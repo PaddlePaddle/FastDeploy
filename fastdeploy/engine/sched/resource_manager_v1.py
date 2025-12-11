@@ -692,8 +692,6 @@ class ResourceManagerV1(ResourceManager):
 
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                        if num_new_block < request.last_preempted_blocksize:
-                            num_new_block = request.last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
@@ -738,6 +736,8 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        if num_new_block < request.last_preempted_blocksize:
+                            num_new_block = request.last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
