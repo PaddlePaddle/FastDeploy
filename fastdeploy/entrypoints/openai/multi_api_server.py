@@ -59,8 +59,8 @@ def start_servers(
             port_idx["cache_queue_port"] = i + 1
         if server_args[i] == "--pd-comm-port":
             port_idx["pd_comm_port"] = i + 1
-        if server_args[i] == "--rdma-comm-port":
-            port_idx["rdma_comm_port"] = i + 1
+        if server_args[i] == "--rdma-comm-ports":
+            port_idx["rdma_comm_ports"] = i + 1
 
     if "engine_worker_queue_port" not in port_idx:
         port = find_free_ports(num_ports=server_count)
@@ -89,13 +89,13 @@ def start_servers(
     if not check_param(pd_comm_port, server_count):
         return
 
-    if "rdma_comm_port" not in port_idx:
+    if "rdma_comm_ports" not in port_idx:
         port = find_free_ports(num_ports=device_count)
-        server_args += ["--rdma-comm-port", ",".join(map(str, port))]
-        port_idx["rdma_comm_port"] = len(server_args) - 1
-        logger.info(f"No --rdma-comm-port specified, using random ports: {port}")
-    rdma_comm_port = server_args[port_idx["rdma_comm_port"]].split(",")
-    if not check_param(rdma_comm_port, device_count):
+        server_args += ["--rdma-comm-ports", ",".join(map(str, port))]
+        port_idx["rdma_comm_ports"] = len(server_args) - 1
+        logger.info(f"No --rdma-comm-ports specified, using random ports: {port}")
+    rdma_comm_ports = server_args[port_idx["rdma_comm_ports"]].split(",")
+    if not check_param(rdma_comm_ports, device_count):
         return
 
     logger.info(f"Modified server_args: {server_args}")
