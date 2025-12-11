@@ -102,7 +102,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         bad_words_token_ids = request.get("bad_words_token_ids")
         if bad_words:
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
+            request.set("bad_words_token_ids", bad_words_token_ids)
 
         # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
@@ -123,16 +123,15 @@ class Ernie4_5Processor(BaseDataProcessor):
                         f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
                     )
             elif request.messages is not None:
-                task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task or task[k] is None:
-                                task[k] = v
+                            if getattr(request, k, None) is None:
+                                setattr(request, k, v)
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
+                request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 

@@ -296,7 +296,7 @@ class SamplingParams:
             raise ValueError(f"max_tokens must be at least 1, got {self.max_tokens}.")
 
         if self.reasoning_max_tokens is not None and self.reasoning_max_tokens > self.max_tokens:
-            raise ValueError(f"reasoning_max_tokens must be less than max_tokens, got {self.reasoning_max_tokens}.")
+            self.reasoning_max_tokens = self.max_tokens
 
         if self.min_tokens < 0:
             raise ValueError(f"min_tokens must be greater than or equal to 0, " f"got {self.min_tokens}.")

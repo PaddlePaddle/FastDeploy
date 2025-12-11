@@ -239,16 +239,16 @@ class Request:
         if prompt is not None and hasattr(req, "prompt"):
             setattr(req, "prompt", prompt)
 
-        if (
-            hasattr(req, "disable_chat_template")
-            and req.disable_chat_template
-            and not getattr(req, "prompt_token_ids", None)
-        ):
-            assert (
-                len(getattr(req, "messages", [])) > 0
-            ), "messages can not be an empty list, unless prompt_token_ids is passed"
-            setattr(req, "prompt", req.messages[0]["content"])
-            setattr(req, "messages", [])
+        # if (
+        #     hasattr(req, "disable_chat_template")
+        #     and req.disable_chat_template
+        #     and not getattr(req, "prompt_token_ids", None)
+        # ):
+        #     assert (
+        #         len(getattr(req, "messages", [])) > 0
+        #     ), "messages can not be an empty list, unless prompt_token_ids is passed"
+        #     setattr(req, "prompt", req.messages[0]["content"])
+        #     setattr(req, "messages", [])
 
         if pooling_params is None:
             sampling_params = SamplingParams.from_generic_request(req)
@@ -289,6 +289,17 @@ class Request:
             mm_hashes=getattr(req, "mm_hashes", None),
             add_special_tokens=getattr(req, "add_special_tokens", None),
         )
+
+        if (
+            hasattr(req, "disable_chat_template")
+            and req.disable_chat_template
+            and not getattr(req, "prompt_token_ids", None)
+        ):
+            assert (
+                len(getattr(req, "messages", [])) > 0
+            ), "messages can not be an empty list, unless prompt_token_ids is passed"
+            setattr(request, "prompt", req.messages[0]["content"])
+            setattr(request, "messages", [])
 
         if hasattr(req, "messages"):
             if hasattr(req, "prompt_token_ids"):

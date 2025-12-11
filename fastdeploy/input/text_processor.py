@@ -218,13 +218,13 @@ class DataProcessor(BaseDataProcessor):
         bad_words_token_ids = request.get("bad_words_token_ids")
         if bad_words:
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
+            request.set("bad_words_token_ids", bad_words_token_ids)
 
         # processing prompt_token_ids
         if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
             if request.prompt is not None:
                 prompt = request.prompt
-                add_special_tokens = request.get("add_special_tokens", False)
+                add_special_tokens = request.get("add_special_tokens", False) or False
                 assert isinstance(prompt, str) or (
                     isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
                 ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
@@ -237,17 +237,16 @@ class DataProcessor(BaseDataProcessor):
             elif request.messages is not None:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
-                task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task or task[k] is None:
-                                task[k] = v
+                            if getattr(request, k, None) is None:
+                                setattr(request, k, v)
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                task.setdefault("enable_thinking", True)
-                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
+                request.set("enable_thinking", True)
+                request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
 
@@ -425,7 +424,7 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            setattr(response_dict.output, "completion_tokens", full_text)
+            setattr(response_dict.outputs, "completion_tokens", full_text)
             setattr(response_dict.outputs, "text", full_text)
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
