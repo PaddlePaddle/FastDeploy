@@ -52,7 +52,7 @@ def ComputeOrderKernel(
         cur_seq_lens_encoder = seq_lens_encoder[i]
         # 1. eagle encoder. Base step=1
         if cur_seq_lens_encoder > 0:
-           continue
+            continue
         # 2. Base model stop at last verify-step.
         elif cur_base_model_seq_lens_this_time != 0 and cur_seq_lens_this_time == 0:
             in_offset += cur_base_model_seq_lens_this_time

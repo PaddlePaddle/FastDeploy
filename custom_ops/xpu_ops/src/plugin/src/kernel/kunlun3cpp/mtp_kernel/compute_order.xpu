@@ -60,7 +60,7 @@ __global__ void ComputeOrderKernel(const int* seq_lens_this_time,
           in_offset += write_size;
         }
         mfence_lm();
-      } 
+      }
     }
   }
 
