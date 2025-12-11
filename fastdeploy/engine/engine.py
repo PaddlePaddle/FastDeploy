@@ -85,6 +85,7 @@ class LLMEngine:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        self.cfg.print()
         self.running = True
         self.is_started = False
 

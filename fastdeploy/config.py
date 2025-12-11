@@ -1650,7 +1650,7 @@ class FDConfig:
         if test_mode:
             return
         self.check()
-        self.print()
+        # self.print()    # NOTE: it's better to explicitly call .print() when FDConfig is initialized
 
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
