@@ -34,6 +34,16 @@ def ComputeOrderKernel(
 ):
     in_offset = 0
     out_offset = 0
+    # set encoder position map first
+    for i in range(bsz):
+        cur_seq_lens_encoder = seq_lens_encoder[i]
+        cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i]
+        if cur_seq_lens_encoder > 0:
+            for j in range(cur_seq_lens_encoder):
+                position_map[in_offset] = out_offset
+                in_offset += 1
+                out_offset += 1
+
     for i in range(bsz):
         cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i]
         # cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i]
@@ -42,10 +52,7 @@ def ComputeOrderKernel(
         cur_seq_lens_encoder = seq_lens_encoder[i]
         # 1. eagle encoder. Base step=1
         if cur_seq_lens_encoder > 0:
-            for j in range(cur_seq_lens_encoder):
-                position_map[in_offset] = out_offset
-                in_offset += 1
-                out_offset += 1
+            continue
         # 2. Base model stop at last verify-step.
         elif cur_base_model_seq_lens_this_time != 0 and cur_seq_lens_this_time == 0:
             in_offset += cur_base_model_seq_lens_this_time
@@ -135,7 +142,6 @@ class TestEagleGetHiddenStates(unittest.TestCase):
 
         input = np.random.randint(0, 10, (input_token_num, dim_embed), dtype=np.int32)
         input_tensor = paddle.to_tensor(input, dtype=paddle.float16)
-        print("input_tensor:", input_tensor)
         out = eagle_get_hidden_states(
             input_tensor,
             seq_lens_this_time_tensor,
