@@ -18,8 +18,9 @@ from typing import Callable
 
 import paddle
 from paddle import nn
+
 paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-import deep_gemm
+
 import fastdeploy
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
@@ -40,6 +41,10 @@ try:
 except ImportError:
     pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    quant_weight_ue8m0,
+    transform_scale_ue8m0,
+)
 from fastdeploy.model_executor.layers.quantization.ops import scaled_fp8_quant
 
 
@@ -1358,117 +1363,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
     def process_weights_after_loading(self, layer):
 
         def _process_quantize(weight_idx):
-            def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
-                x: paddle.Tensor,
-            ):
-                from deep_gemm.utils import align, get_tma_aligned_size
-
-                assert x.dtype == paddle.float and x.dim() in (2, 3)
-
-                # First, convert into UE8M0 `uint8_t`
-                ue8m0_tensor = (x.view(paddle.int) >> 23).to(paddle.uint8)
-
-                # Second, make padded packed tensors
-                mn, k = x.shape[-2], x.shape[-1]
-                remove_dim = False
-                if x.dim() == 2:
-                    x, remove_dim = x.unsqueeze(0), True
-                b = x.shape[0]
-                aligned_mn = get_tma_aligned_size(mn, 4)
-                aligned_k = align(k, 4)
-                padded = paddle.zeros((b, aligned_mn, aligned_k), device=x.device, dtype=paddle.uint8)
-                padded[:, :mn, :k] = ue8m0_tensor
-                padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
-
-                # Finally, transpose
-                transposed = paddle.zeros(
-                    (b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int
-                ).mT
-                transposed[:, :, :] = padded
-                aligned_x = transposed[:, :mn, :]
-                return aligned_x.squeeze(0) if remove_dim else aligned_x
-
-            def block_quant_dequant(
-                x_q_block,
-                x_s,
-                block_size,
-                dtype,):
-                """This function converts block-wise quantization to unquantized.
-                The inputs are block-wise quantization tensor `x_q_block`, block-wise quantization scale
-                and the block size.
-                The output is an unquantized tensor with dtype.
-                """
-                block_n, block_k = block_size[0], block_size[1]
-                *_, n, k = x_q_block.shape
-
-                # ... n_scale k_scale -> ... (n_scale block_n) (k_scale block_k)
-                x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(
-                    block_k, dim=-1
-                )
-                x_scale_repeat = x_scale_repeat[..., :n, :k]
-
-                return (x_q_block.to(paddle.float32) * x_scale_repeat).to(dtype)
-
-            def requant_weight_ue8m0(
-                weight,
-                weight_scale_inv,
-                weight_block_size,
-            ):
-                assert weight_block_size == [128, 128]
-
-                *_, n, k = weight.shape
-
-                weight_dequant = block_quant_dequant(
-                    weight,
-                    weight_scale_inv,
-                    weight_block_size,
-                    paddle.bfloat16,
-                )
-
-                out_w, out_s = quant_weight_ue8m0(
-                    weight_dequant=weight_dequant,
-                    weight_block_size=weight_block_size,
-                )
-
-                out_s = transform_scale_ue8m0(out_s, mn=out_w.shape[-2])
-
-                return out_w, out_s
-
-
-            def quant_weight_ue8m0(
-                weight_dequant,
-                weight_block_size
-            ):
-                assert weight_block_size == [128, 128]
-                assert (
-                    weight_dequant.dtype == paddle.bfloat16
-                ), f"{weight_dequant.dtype=} {weight_dequant.shape=}"
-
-                *batch_dims, n, k = weight_dequant.shape
-
-                weight_dequant_flat = weight_dequant.view((-1, k))
-                out_w_flat, out_s_flat = deep_gemm.utils.math.per_block_cast_to_fp8(weight_dequant_flat, use_ue8m0=True)
-
-                out_w = out_w_flat.view((*batch_dims, n, k))
-                out_s = out_s_flat.view(
-                    (
-                        *batch_dims,
-                        deep_gemm.utils.math.ceil_div(n, weight_block_size[0]),
-                        deep_gemm.utils.math.ceil_div(k, weight_block_size[1]),
-                    )
-                )
-
-                return out_w, out_s
-
-            # NOTE copy and modified from DeepGEMM
-            def transform_scale_ue8m0(sf, mn, use_torch_impl: bool = False):
-                # get_mn_major_tma_aligned_packed_ue8m0_tensor = deep_gemm.utils.layout.get_mn_major_tma_aligned_packed_ue8m0_tensor
-                get_mn_major_tma_aligned_packed_ue8m0_tensor = _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl
-
-                sf = sf.index_select(-2, paddle.arange(mn, device=sf.device) // 128)
-                sf = get_mn_major_tma_aligned_packed_ue8m0_tensor(sf)
-                return sf
-
             # 1.init shape and type
             self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
             # weight
@@ -1493,49 +1387,19 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             # 3.quantize weight
 
             for expert_id in range(layer.num_local_experts):
-                # weight_quant, scale[expert_id] = per_block_cast_to_fp8(
-                #     getattr(layer, unquantized_weight_name)[expert_id], self.quant_config.weight_block_size
-                # )
                 w_q, s_fp32 = quant_weight_ue8m0(
                     weight_dequant=getattr(layer, unquantized_weight_name)[expert_id].transpose([1, 0]).contiguous(),
                     weight_block_size=self.quant_config.weight_block_size,
                 )
-
-                s_ue8m0 = transform_scale_ue8m0(s_fp32, mn=w_q.shape[-2])
-                # print(f'expert_id:{expert_id}, weight_quant:{weight_quant.shape}, scale:{scale[expert_id].shape}')
+                s_ue8m0 = transform_scale_ue8m0(
+                    s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
+                )
                 weight[expert_id].copy_(w_q, False)
                 scale_list.append(s_ue8m0)
             scale = paddle.to_tensor(scale_list)
-            # print(f'after quant, weight_shape: {weight.shape}, scale_shape: {scale.shape}')
 
             free_tensor(getattr(layer, unquantized_weight_name))
 
-            # create weight
-            # setattr(
-            #     layer,
-            #     weight_name,
-            #     layer.create_parameter(
-            #         shape=weight.shape,
-            #         dtype=weight_dtype,
-            #         default_initializer=paddle.nn.initializer.Constant(0),
-            #     ),
-            # )
-            # # create scale
-            # setattr(
-            #     layer,
-            #     scale_name,
-            #     layer.create_parameter(
-            #         shape=scale.shape,
-            #         dtype=scale_dtype,
-            #         default_initializer=paddle.nn.initializer.Constant(0),
-            #     ),
-            # )
-            # getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]).contiguous(), False)
-            # getattr(layer, scale_name).copy_(scale.transpose([0, 2, 1]).contiguous(), False)
-
-            # new_weight, new_weight_scale = requant_weight_ue8m0(
-            #     weight.transpose([0, 2, 1]).contiguous(), scale.transpose([0, 2, 1]).contiguous(), [128, 128]
-            # )
             free_tensor(getattr(layer, weight_name))
             setattr(
                 layer,
@@ -1558,7 +1422,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             )
             scale_param = getattr(layer, scale_name)
             scale_param.data = scale.transpose([0, 2, 1]).contiguous().mT()
-            # scale_param.copy_(scale, False)
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

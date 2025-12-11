@@ -17,14 +17,17 @@
 from typing import Callable
 
 import paddle
+
 paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
 import deep_gemm
-
 from paddle import nn
 from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    transform_scale_ue8m0,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 from fastdeploy.worker.tbo import let_another_thread_run
@@ -280,11 +283,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         return tmp_ffn_out
 
-
     def _cast_to_e8m0_with_rounding_up(self, x: paddle.Tensor) -> paddle.Tensor:
         temp = x.to(paddle.float32).view(paddle.int32)
-        exp = paddle.bitwise_right_shift(temp, paddle.full([], 23, dtype='int32'))
-        mant = paddle.bitwise_and(temp, paddle.full([], 0x7FFFFF, dtype='int32'))
+        exp = paddle.bitwise_right_shift(temp, paddle.full([], 23, dtype="int32"))
+        mant = paddle.bitwise_and(temp, paddle.full([], 0x7FFFFF, dtype="int32"))
         is_ru = paddle.logical_and(
             paddle.logical_and((mant > 0), (exp != 0xFE)),
             ~paddle.logical_and((exp == 0), (mant <= 0x400000)),
@@ -435,6 +437,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             False,  # use_in_ep
             -1,
         )
+        permute_scale = transform_scale_ue8m0(permute_scale, mn=permute_scale.shape[-2])
 
         # up_gate_proj
         ffn_out = paddle.empty(
@@ -458,6 +461,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
         ffn_in_x, ffn_in_x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(ffn_out, use_ue8m0=True)
+        ffn_in_x_scale_tensor = transform_scale_ue8m0(ffn_in_x_scale_tensor, mn=ffn_in_x_scale_tensor.shape[-2])
         ffn_out = paddle.empty(
             (ffn_out.shape[0], getattr(layer, self.added_weight_attrs[1]).shape[1]),
             dtype=paddle.bfloat16,
