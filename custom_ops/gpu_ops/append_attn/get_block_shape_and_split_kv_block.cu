@@ -179,11 +179,11 @@ __global__ void split_q_block(const int *__restrict__ seq_lens_q,
                               const int num_rows_per_block,
                               const int group_size) {
   // one block one warp
-  const int lane_id = threadIdx.x % warpSize;
+  const int lane_id = threadIdx.x % WARP_SIZE;
   int prev_offset = 0;
 
   // loop on warp tile：[base, base+32)
-  for (int base = 0; base < bsz; base += warpSize) {
+  for (int base = 0; base < bsz; base += WARP_SIZE) {
     const int bid = base + lane_id;
 
     // calculate loop_times for bid
@@ -199,13 +199,13 @@ __global__ void split_q_block(const int *__restrict__ seq_lens_q,
     // prefix sum for each lane, get the start offset in this tile
     // inclusive scan
     int x = loop_times;
-    for (int offset = 1; offset < warpSize; offset <<= 1) {
+    for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
       int y = __shfl_up_sync(0xffffffff, x, offset);
       if (lane_id >= offset) x += y;
     }
     // exclusive prefix sum
     int bid_offset = x - loop_times;
-    int tile_sum = __shfl_sync(0xffffffff, x, warpSize - 1);
+    int tile_sum = __shfl_sync(0xffffffff, x, WARP_SIZE - 1);
 
     // write batch_ids and tile_ids_per_batch
     if (bid < bsz && loop_times > 0) {

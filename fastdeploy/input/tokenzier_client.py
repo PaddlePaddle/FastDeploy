@@ -15,7 +15,6 @@
 """
 
 import asyncio
-import time
 from typing import Any, Optional, Union
 
 import httpx
@@ -71,6 +70,7 @@ class AsyncTokenizerClient:
         timeout: float = 5.0,
         poll_interval: float = 0.5,
         max_wait: float = 60.0,
+        max_retries: int = 10,
     ):
         """
         :param mode: 'local' 或 'remote'
@@ -83,6 +83,7 @@ class AsyncTokenizerClient:
         self.timeout = timeout
         self.poll_interval = poll_interval
         self.max_wait = max_wait
+        self.max_retries = max_retries
 
     async def encode_image(self, request: ImageEncodeRequest):
         return await self._async_encode_request("image", request.__dict__)
@@ -184,8 +185,7 @@ class AsyncTokenizerClient:
                 else:
                     raise ValueError("Invalid type")
 
-                max_retries = 10
-                for attempt in range(max_retries):
+                for attempt in range(self.max_retries):
                     try:
                         resp = await client.post(url, json=request)
                         resp.raise_for_status()
@@ -194,10 +194,10 @@ class AsyncTokenizerClient:
                         return resp.json().get("result")
                     except Exception as e:
                         data_processor_logger.error(f"Attempt to decode_request {attempt + 1} failed: {e}")
-                        if attempt == max_retries - 1:
+                        if attempt == self.max_retries - 1:
                             data_processor_logger.error(
                                 f"Max retries of decode_request reached. Giving up. request is {request}"
                             )
-                        time.sleep(10)
+                        await asyncio.sleep(1)
             except httpx.RequestError as e:
                 raise RuntimeError(f"Failed to decode: {e}") from e
