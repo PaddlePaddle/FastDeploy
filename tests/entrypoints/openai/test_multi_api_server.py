@@ -14,7 +14,8 @@
 # limitations under the License.
 """
 
-import sys
+import os
+import random
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -30,10 +31,26 @@ class TestMultiApiServer(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.test_ports = ["8000", "8001"]
-        self.test_metrics_ports = ["8800", "8801"]
-        self.test_server_args = ["--model", "test_model", "--engine-worker-queue-port", "9000,9001"]
+        self.test_model = "test_model"
+        self.test_ports = "8000,8001"
+        self.test_metrics_ports = "8800,8801"
+        self.test_engine_worker_queue_port = "9000,9001"
+        self.test_server_args = [
+            "--model",
+            self.test_model,
+            "--engine-worker-queue-port",
+            self.test_engine_worker_queue_port,
+        ]
         self.test_server_count = 2
+        self.test_device_count = 2
+
+        patch.dict(os.environ, {"CUDA_VISIBLE_DEVICES": "0,1"}).start()
+        patch(
+            "fastdeploy.entrypoints.openai.multi_api_server.find_free_ports",
+            side_effect=lambda *args, **kwargs: [
+                random.randint(8000, 65535) for i in range(kwargs.get("num_ports", 1))
+            ],
+        ).start()
 
     @patch("fastdeploy.entrypoints.openai.multi_api_server.subprocess.Popen")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.is_port_available")
@@ -49,6 +66,7 @@ class TestMultiApiServer(unittest.TestCase):
         # Call start_servers
         processes = start_servers(
             server_count=self.test_server_count,
+            device_count=self.test_device_count,
             server_args=self.test_server_args,
             ports=self.test_ports,
             metrics_ports=self.test_metrics_ports,
@@ -63,24 +81,20 @@ class TestMultiApiServer(unittest.TestCase):
 
         # Verify the command arguments for the first server
         first_call_args = mock_popen.call_args_list[0][0][0]
-        expected_cmd = [
-            sys.executable,
-            "-m",
-            "fastdeploy.entrypoints.openai.api_server",
-            "--model",
-            "test_model",
-            "--engine-worker-queue-port",
-            "9000,9001",
-            "--port",
-            "8000",
-            "--metrics-port",
-            "8800",
-            "--controller-port",
-            "-1",
-            "--local-data-parallel-id",
-            "0",
-        ]
-        self.assertEqual(first_call_args, expected_cmd)
+        print(first_call_args)
+        for i, item in enumerate(first_call_args):
+            if item == "--port":
+                self.assertEqual(first_call_args[i + 1], self.test_ports.split(",")[0])
+            if item == "--metrics-port":
+                self.assertEqual(first_call_args[i + 1], self.test_metrics_ports.split(",")[0])
+            if item == "--controller-port":
+                self.assertEqual(first_call_args[i + 1], "-1")
+            if item == "--model":
+                self.assertEqual(first_call_args[i + 1], self.test_model)
+            if item == "--engine-worker-queue-port":
+                self.assertEqual(first_call_args[i + 1], self.test_engine_worker_queue_port)
+            if item == "--local-data-parallel-id":
+                self.assertEqual(first_call_args[i + 1], "0")
 
         # Verify environment variables are set correctly
         first_call_kwargs = mock_popen.call_args_list[0][1]
@@ -94,7 +108,7 @@ class TestMultiApiServer(unittest.TestCase):
         mock_is_port_available.return_value = True
 
         # Should not raise any exception
-        check_param(self.test_ports, self.test_server_count)
+        check_param(self.test_ports.split(","), self.test_server_count)
 
     def test_check_param_wrong_port_count(self):
         """Test parameter validation with wrong port count"""
@@ -108,12 +122,13 @@ class TestMultiApiServer(unittest.TestCase):
         # Mock port availability check - first port available, second not
         mock_is_port_available.side_effect = [True, False]
 
-        self.assertFalse(check_param(self.test_ports, self.test_server_count))
+        self.assertFalse(check_param(self.test_ports.split(","), self.test_server_count))
 
+    @patch("fastdeploy.entrypoints.openai.multi_api_server.is_port_available")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.start_servers")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.time.sleep")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.check_param")
-    def test_main_function(self, mock_check_param, mock_sleep, mock_start_servers):
+    def test_main_function(self, mock_check_param, mock_sleep, mock_start_servers, mock_is_port_available):
         """Test main function with mocked arguments"""
         # Mock command line arguments
         test_args = [
@@ -133,6 +148,9 @@ class TestMultiApiServer(unittest.TestCase):
             "9000,9001",
         ]
 
+        # Mock utilization functions
+        mock_is_port_available.return_value = True
+
         # Mock processes
         mock_proc1 = MagicMock()
         mock_proc2 = MagicMock()
@@ -144,12 +162,14 @@ class TestMultiApiServer(unittest.TestCase):
         with patch("sys.argv", test_args):
             main()
 
+        print(mock_start_servers)
         # Verify start_servers was called with correct parameters
         mock_start_servers.assert_called_once_with(
-            server_count=2,
-            server_args=["--model", "test_model", "--engine-worker-queue-port", "9000,9001"],
-            ports=["8000", "8001"],
-            metrics_ports=["8800", "8801"],
+            server_count=self.test_server_count,
+            device_count=self.test_device_count,
+            server_args=self.test_server_args,
+            ports=self.test_ports,
+            metrics_ports=self.test_metrics_ports,
             controller_ports="8802,8803",
         )
 

@@ -34,7 +34,22 @@ def start_servers(
     metrics_ports=None,
     controller_ports=None,
 ):
-    processes = []
+    ports = ports.split(",")
+    if not check_param(ports, server_count):
+        return
+
+    if metrics_ports != "-1":
+        metrics_ports = metrics_ports.split(",")
+        if not check_param(metrics_ports, server_count):
+            return
+
+    if controller_ports != "-1":
+        controller_ports = controller_ports.split(",")
+        if not check_param(controller_ports, server_count):
+            return
+    else:
+        controller_ports = [-1] * server_count
+
     logger.info(f"Starting servers on ports: {ports} with args: {server_args} and metrics ports: {metrics_ports}")
     port_idx = {}
     for i in range(len(server_args)):
@@ -83,22 +98,8 @@ def start_servers(
     if not check_param(rdma_comm_port, device_count):
         return
 
-    if not check_param(ports, server_count):
-        return
-
-    if metrics_ports != "-1":
-        metrics_ports = metrics_ports.split(",")
-        if not check_param(metrics_ports, server_count):
-            return
-
-    if controller_ports != "-1":
-        controller_ports = controller_ports.split(",")
-        if not check_param(controller_ports, server_count):
-            return
-    else:
-        controller_ports = [-1] * server_count
-
     logger.info(f"Modified server_args: {server_args}")
+    processes = []
     for i in range(server_count):
         port = int(ports[i])
         controller_port = int(controller_ports[i])
@@ -118,7 +119,7 @@ def start_servers(
             str(i),
         ]
         if metrics_ports != "-1":
-            cmd += [metrics_ports[i], "--controller-port"]
+            cmd += ["--metrics-port", metrics_ports[i]]
 
         # 启动子进程
         proc = subprocess.Popen(cmd, env=env)
@@ -159,7 +160,7 @@ def main():
         server_count=args.num_servers,
         device_count=device_count,
         server_args=args.args,
-        ports=args.ports.split(","),
+        ports=args.ports,
         metrics_ports=args.metrics_ports,
         controller_ports=args.controller_ports,
     )
