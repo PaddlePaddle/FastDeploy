@@ -130,7 +130,6 @@ class GraphOptBackend:
         )
 
     def __call__(self, **kwargs):
-        self._debug_count_total_step += 1
         if not self.fd_config.graph_opt_config.use_cudagraph:
             return self.runnable(**kwargs)
         if self.cudagraph_piecewise_backend is None:
@@ -140,6 +139,9 @@ class GraphOptBackend:
 
         assert kwargs["forward_meta"].ids_remove_padding is not None
         real_shape = kwargs["forward_meta"].ids_remove_padding.shape[0]
+        if real_shape > 0:
+            # only count the actual load.
+            self._debug_count_total_step += 1
 
         if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.cudagraph_switch_threshold):
             return self.dy_runnable(**kwargs)
