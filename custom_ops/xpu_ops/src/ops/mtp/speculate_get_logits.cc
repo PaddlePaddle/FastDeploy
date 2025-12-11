@@ -56,6 +56,9 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
       seq_lens_encoder.data<int>(),
       real_bsz,
       vocab_size);
+  if (draft_logits.is_cpu()) {
+    delete ctx;
+  }
 }
 
 PD_BUILD_STATIC_OP(speculate_get_logits)
