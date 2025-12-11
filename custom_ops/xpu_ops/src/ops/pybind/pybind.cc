@@ -85,8 +85,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string& pos_emb_type = "NORMAL",
-    bool rope_3d = false);
+    const bool use_neox_rotary_style,
+    const bool rope_3d = false);
 
 std::vector<paddle::Tensor> MoeLayer(
     const paddle::Tensor& x,
@@ -616,7 +616,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("smooth"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
-        py::arg("pos_emb_type") = "NORMAL",
+        py::arg("use_neox_rotary_style"),
         py::arg("rope_3d") = false,
         "block attention in XPU");
 

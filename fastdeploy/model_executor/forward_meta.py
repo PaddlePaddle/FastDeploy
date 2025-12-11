@@ -253,8 +253,6 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
-    # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
-    pos_emb_type: Optional[str] = "NORMAL"
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
 
