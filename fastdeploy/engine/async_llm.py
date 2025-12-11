@@ -415,6 +415,7 @@ class AsyncLLM(EngineServiceClient):
                 "prompt_token_ids": request.prompt_token_ids,
                 "prompt_tokens": request.prompt_tokens,
             }
+            request.need_prefill_tokens = request.prompt_token_ids_len
 
             if not is_preprocessed:
                 request.metrics.preprocess_start_time = arrival_time
@@ -439,7 +440,6 @@ class AsyncLLM(EngineServiceClient):
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
-
             self.request_client.send_pyobj(request)
 
         except EngineError:

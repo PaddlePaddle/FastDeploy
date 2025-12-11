@@ -22,11 +22,11 @@ import weakref
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import EngineError
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
-MODEL_NAME = "/root/paddlejob/models/ERNIE-4.5-0.3B-Paddle"
 
 
 class TestAsyncLLMEngine(unittest.TestCase):
@@ -320,13 +320,14 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
+            response = RequestOutput.from_dict(response_dict)
 
             # Process the output
-            result = processor._process_output(response_dict)
+            result = processor._process_output(response)
 
             # Verify text was set to empty string on error
-            self.assertIn("outputs", result)
-            self.assertEqual(result["outputs"].get("text", ""), "")
+            self.assertTrue(hasattr(result, "outputs"))
+            self.assertEqual(result.outputs.text, None)
 
             return True
 
@@ -357,13 +358,14 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
+            response = RequestOutput.from_dict(response_dict)
 
             # Process the output
-            result = processor._process_output(response_dict)
+            result = processor._process_output(response)
 
             # Verify text was set to empty string when processor returns None
-            self.assertIn("outputs", result)
-            self.assertEqual(result["outputs"].get("text", ""), "")
+            self.assertTrue(hasattr(result, "outputs"))
+            self.assertEqual(result.outputs.text, None)
 
             return True
 
