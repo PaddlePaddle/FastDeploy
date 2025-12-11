@@ -533,7 +533,6 @@ class TokenProcessor:
         req_id = result.request_id
         accept_num_list = self.accept_token_num_per_head_per_request[req_id]
         req_total_step = self.total_step_per_request[req_id]
-        llm_logger.info(f"[Debug] req_total_step: {req_total_step}")
         req_total_draft_tokens = req_total_step * (self.cfg.speculative_config.num_speculative_tokens + 1)
         req_accepted_tokens = sum(accept_num_list)
         req_rejected_tokens = req_total_draft_tokens - req_accepted_tokens
