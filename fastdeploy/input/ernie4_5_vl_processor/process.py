@@ -603,7 +603,7 @@ class DataProcessor:
 
     def _load_and_process_video(self, url: str, item: Dict) -> List[Image.Image]:
         reader, meta, path = read_video_decord(url, save_to_disk=False)
-
+        
         video_frame_args = dict()
         video_frame_args["fps"] = item.get("fps", self.fps)
         video_frame_args["min_frames"] = item.get("min_frames", self.min_frames)

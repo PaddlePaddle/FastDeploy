@@ -21,12 +21,14 @@ import os
 import threading
 import time
 import traceback
+import uuid
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import paddle
+import paddle.distributed as dist
 import requests
 import zmq
 from opentelemetry import trace
@@ -149,6 +151,8 @@ class EngineService:
             )
             init_eplb_signals(cfg, current_suffix)
 
+        self._init_parallel_env()
+
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
     def start(self):
@@ -267,6 +271,17 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
+
+    def _init_parallel_env(self):
+        data_parallel_id = os.getenv("DATA_PARALLEL_ID", "0")
+        os.environ["PADDLE_TRAINER_ID"] = data_parallel_id
+        os.environ["PADDLE_TRAINERS_NUM"] = "2"
+        os.environ["PADDLE_TRAINER_ENDPOINTS"] = "0.0.0.0:6070,0.0.0.0:6071"
+        os.environ["PADDLE_DISTRI_BACKEND"] = "gloo"
+
+        dist.init_parallel_env()
+
+        paddle.set_device("cpu")
 
     def start_worker_queue_service(self, start_queue):
         """
@@ -676,6 +691,8 @@ class EngineService:
         """
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
+        buffered_req_info = {}
+        req_info_lock = threading.Lock()
 
         def _fetch_request():
             try:
@@ -790,11 +807,50 @@ class EngineService:
                     else:
                         for task in tasks:
                             self.resource_manager.add_request(task)
+                    
+                    with req_info_lock:
+                        for task in tasks:
+                            print(f"sched batch info: {task.ic_req_data['sched_batch_info']}")
+                            buffered_req_info[task.request_id] = task.ic_req_data["sched_batch_info"]
                 is_fetching = False
             except Exception as e:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
                 is_fetching = False
 
+        def _check_recv_full_batch():
+            with req_info_lock:
+                all_buffered_req_info = []
+                dist.all_gather_object(all_buffered_req_info, buffered_req_info)
+
+                latest_sched_batch_id, latest_sched_batch_cnt = -1, None
+                # find the latest scheduled batch
+                for local_info in all_buffered_req_info:
+                    for _, sched_info in local_info.items():
+                        if sched_info.sched_batch_id > latest_sched_batch_id:
+                            latest_sched_batch_id = sched_info.sched_batch_id
+                            latest_sched_batch_cnt = sched_info.sched_batch_cnt
+                
+                # currently no new reqs
+                if latest_sched_batch_id == -1:
+                    return False
+                
+                # count req num of each DP instance
+                dp_size = len(latest_sched_batch_cnt)
+                req_num_count = [0] * dp_size
+                for local_info in all_buffered_req_info:
+                    for _, sched_info in local_info.items():
+                        if sched_info.sched_batch_id == latest_sched_batch_id:
+                            req_num_count[sched_info.sched_batch_local_id] += 1
+                
+                flag = True
+                for i in range(dp_size):
+                    if req_num_count[i] < latest_sched_batch_cnt[i]:
+                        flag = False
+                        break
+                
+                return flag
+        
+        start_time = time.time()
         while self.running:
             try:
                 if self.engine_worker_queue.num_tasks() > 0:
@@ -821,9 +877,24 @@ class EngineService:
                                 break
                             else:
                                 raise
-
+                
+                if envs.FD_ENABLE_BATCH_SCHEDULER:
+                    # Some reqs of the scheduled batch still in flight
+                    if (time.time() - start_time) * 1000 < envs.FD_RECV_BATCH_TIMEOUT and not _check_recv_full_batch():
+                        time.sleep(0.1)
+                        continue
+                
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
+                # Clear buffered reqs
+                with req_info_lock:
+                    buffered_req_info.clear()
+                
+                if envs.FD_ENABLE_BATCH_SCHEDULER and not tasks:
+                    # Insert IDLE task for synchronization
+                    idle_task = Request.from_dict({"request_id": f"idle-{uuid.uuid4()}"})
+                    idle_task.task_type = RequestType.IDLE
+                    tasks = [idle_task]
 
                 # 3. Send to engine
                 if tasks:
@@ -867,6 +938,8 @@ class EngineService:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
 
+            start_time = time.time()
+    
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
             return

@@ -1323,7 +1323,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
-
+       
         # Remove padding
         (
             ids_remove_padding,
@@ -1340,7 +1340,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
-
+        
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
@@ -2142,7 +2142,7 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_done_idxs.append(idx)
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            if model_forward_batch is None:
+            if not model_forward_batch:
                 return prefill_done_idxs
 
             for task in model_forward_batch:
@@ -2282,7 +2282,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-
+            print(f"infer logits: {logits}")
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
                     self.share_inputs["pre_ids"],
