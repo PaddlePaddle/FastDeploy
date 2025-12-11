@@ -62,17 +62,18 @@ class DynamicWeightManager:
                 logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
                 self.state_dict[name] = param
 
-    def update_parameters(self, pid: int = 0) -> None:
+    def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""
         start_time = time.perf_counter()
         paddle.device.cuda.empty_cache()
 
         # step1 : restart paddle process group
-        # if not self.first_load:
-        #     paddle.distributed.restart_process_group()
-        #     paddle.distributed.restart_process_group(self.parallel_config.tp_group)
-        #     if self.parallel_config.enable_expert_parallel:
-        #         paddle.distributed.restart_process_group(self.parallel_config.ep_group)
+        if not self.first_load:
+            if restart_process_group:
+                paddle.distributed.restart_process_group()
+                paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+                if self.parallel_config.enable_expert_parallel:
+                    paddle.distributed.restart_process_group(self.parallel_config.ep_group)
 
         # step2 : recreat deepep buffer when enable expert parallel
         if self.parallel_config.enable_expert_parallel and not self.first_load:
@@ -123,7 +124,7 @@ class DynamicWeightManager:
         self._update_model_from_state(state_dict, "raw")
         logger.info(f"IPC update parameters completed from file: {self.ipc_path}")
 
-    def clear_parameters(self, pid: int = 0) -> None:
+    def clear_parameters(self, pid: int = 0, shutdown_process_group=False) -> None:
         """Clear all model parameters and free memory."""
 
         logger.info("start clear paramaters")
@@ -135,8 +136,9 @@ class DynamicWeightManager:
             DeepEPBufferManager.clear_buffer()
             # ep barrier
             paddle.distributed.barrier(self.parallel_config.ep_group)
-            # shutdown ep group
-            # paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+            if shutdown_process_group:
+                # shutdown ep group
+                paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
 
         paddle.device.cuda.empty_cache()
         # step2: release model weight
@@ -149,11 +151,14 @@ class DynamicWeightManager:
         if self.parallel_config.tensor_parallel_size > 1:
             # tp barrier
             paddle.distributed.barrier(self.parallel_config.tp_group)
-            # paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+            if shutdown_process_group:
+                paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
-            # paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
-        # paddle.distributed.shutdown_process_group()
+            if shutdown_process_group:
+                paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        if shutdown_process_group:
+            paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
