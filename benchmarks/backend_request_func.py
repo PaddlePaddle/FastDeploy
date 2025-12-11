@@ -51,6 +51,7 @@ class RequestFuncInput:
     ignore_eos: bool = False
     language: Optional[str] = None
     debug: bool = False
+    pd_metrics: bool = False
     response_format: Optional[dict] = None
     random_flag: bool = False
 
@@ -164,6 +165,7 @@ async def async_request_eb_openai_chat_completions(
                 "continuous_usage_stats": True,
             },
             "max_tokens": request_func_input.output_len,
+            "collect_metrics": request_func_input.pd_metrics,
         }
         if request_func_input.response_format:
             payload["response_format"] = request_func_input.response_format

@@ -45,6 +45,7 @@ python -m pip install -r requirements.txt
 --debug：开启debug模式，逐条打印payload和output内容，默认False
 --shuffle：是否打乱数据集，默认False不打乱
 --seed：打乱数据集时的随机种子，默认0
+--pd-metrics：开启PD分离metrics指标收集，会添加请求参数collect_metrics=True，默认False
 ```
 
 ##### /v1/chat/completions接口压测单条数据调试

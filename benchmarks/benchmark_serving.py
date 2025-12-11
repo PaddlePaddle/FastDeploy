@@ -318,6 +318,7 @@ async def benchmark(
     selected_percentiles: list[float],
     ignore_eos: bool,
     debug: bool,
+    pd_metrics: bool,
     goodput_config_dict: dict[str, float],
     max_concurrency: Optional[int],
     lora_modules: Optional[Iterable[str]],
@@ -352,6 +353,7 @@ async def benchmark(
         logprobs=logprobs,
         ignore_eos=ignore_eos,
         debug=debug,
+        pd_metrics=pd_metrics,
         extra_body=extra_body,
         response_format=response_format,
         random_flag=random_flag,
@@ -446,6 +448,7 @@ async def benchmark(
             output_len=output_len,
             logprobs=logprobs,
             debug=debug,
+            pd_metrics=pd_metrics,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
             response_format=response_format,
@@ -594,7 +597,7 @@ async def benchmark(
                 percentiles.append(float(p))
         for item in model_outputs:
             metrics = item.metrics
-            if metric_key in metrics:
+            if metrics.get(metric_key, None) is not None:
                 values.append(metrics[metric_key])
 
         if not values:
@@ -604,12 +607,6 @@ async def benchmark(
         arr = np.array(values) * 1000  # 秒 -> 毫秒
 
         print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Successful {metric_key}:",
-                len(arr),
-            )
-        )
         print(
             "{:<40} {:<10.2f}".format(
                 f"Mean {metric_key} (ms):",
@@ -624,7 +621,14 @@ async def benchmark(
         )
         for p in percentiles:
             v = np.percentile(arr, p)
-            print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
+            print("{:<40} {:<10.2f}".format(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms):", v))
+            # print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Successful {metric_key}:",
+                len(arr),
+            )
+        )
 
     def process_one_length(
         # E.g., "ttft"
@@ -997,6 +1001,7 @@ def main(args: argparse.Namespace):
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
             ignore_eos=args.ignore_eos,
             debug=args.debug,
+            pd_metrics=args.pd_metrics,
             goodput_config_dict=goodput_config_dict,
             max_concurrency=args.max_concurrency,
             lora_modules=args.lora_modules,
@@ -1184,6 +1189,11 @@ if __name__ == "__main__":
         "--shuffle",
         action="store_true",
         help="shuffle dataset",
+    )
+    parser.add_argument(
+        "--pd-metrics",
+        action="store_true",
+        help="请求时增加PD分离参数，metrics: True",
     )
     parser.add_argument(
         "--drop-ratio",
