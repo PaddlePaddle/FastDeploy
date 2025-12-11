@@ -149,6 +149,9 @@ class ForwardMeta:
     moe_num_chunk: int = 1
     max_moe_num_chunk: int = 1
 
+    # for zero size
+    is_zero_size: bool = False
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:
