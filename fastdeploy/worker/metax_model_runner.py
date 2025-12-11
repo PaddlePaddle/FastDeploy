@@ -104,11 +104,18 @@ class MetaxModelRunner(ModelRunnerBase):
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
-        self.max_logprobs = (
-            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
-        )
+        self.max_logprobs = None
+        if self.enable_logprob:
+            self.max_logprobs = (
+                self.ori_vocab_size
+                if fd_config.model_config.max_logprobs == -1
+                else fd_config.model_config.max_logprobs
+            )
+        self.temp_scaled_logprobs = True
+        self.top_p_normalized_logprobs = True
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
+        self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
         # VL model config:
         if self.enable_mm:
@@ -640,6 +647,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 # pooling model request.sampling_params is None
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
+                self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
 
                 # Routing Replay
@@ -672,6 +680,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
+                self.forward_batch_reqs_list[idx] = None
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -996,14 +1005,10 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        if batch_size == 0:
-            # Note(ZKK): divided by 0 is invalid, here we give a input_length = 1
-            input_length = 1
-        else:
-            input_length = min(
-                num_tokens // (1 if capture_prefill else batch_size),
-                self.model_config.max_model_len - max_dec_len,
-            )
+        input_length = min(
+            num_tokens // (1 if capture_prefill else batch_size),
+            self.model_config.max_model_len - max_dec_len,
+        )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -1321,6 +1326,24 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+            logprobs_reqs = [
+                req
+                for req in self.forward_batch_reqs_list
+                if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
+            ]
+            if len(logprobs_reqs):
+                self.max_logprobs = max(
+                    [
+                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                        for req in logprobs_reqs
+                    ]
+                )
+                self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
+                self.top_p_normalized_logprobs = any(
+                    req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
+                )
+            else:
+                self.max_logprobs = None
 
         # Remove padding
         (
@@ -1376,9 +1399,11 @@ class MetaxModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
+            max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
+            temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
+            top_p_normalized_logprobs_flag=self.top_p_normalized_logprobs,
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
@@ -1466,7 +1491,9 @@ class MetaxModelRunner(ModelRunnerBase):
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
+            only_prefill_use_cudagraph
+            if self.cudagraph_only_prefill
+            else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
@@ -2634,6 +2661,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # prompt_logprobs
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
+        self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
