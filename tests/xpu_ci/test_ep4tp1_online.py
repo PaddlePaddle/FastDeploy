@@ -63,6 +63,7 @@ def test_ep4tp1_online(xpu_env):
             "--tensor-parallel-size",
             "1",
             "--enable-expert-parallel",
+            "--enable-prefix-caching",
             "--data-parallel-size",
             "4",
             "--max-model-len",
