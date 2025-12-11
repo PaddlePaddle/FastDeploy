@@ -23,9 +23,8 @@ from paddle import nn
 from fastdeploy.model_executor.utils import (
     TensorTracker,
     default_weight_loader,
-    free_tensor,
+    process_weight_transpose,
     set_weight_attrs,
-    weight_fully_copied,
 )
 from fastdeploy.platforms import current_platform
 
@@ -312,25 +311,5 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
     def process_weights_after_loading(self, layer):
         if self.model_format != "torch":
             return
-        if not weight_fully_copied(layer.up_gate_proj_weight) or not weight_fully_copied(layer.down_proj_weight):
-            return
-        up_gate_proj_weight_transpose = layer.up_gate_proj_weight.transpose([0, 2, 1])
-        down_proj_weight_transpose = layer.down_proj_weight.transpose([0, 2, 1])
-        up_gate_proj = layer.create_parameter(
-            shape=up_gate_proj_weight_transpose.shape,
-            dtype=up_gate_proj_weight_transpose.dtype,
-            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
-            is_bias=False,
-        )
-        up_gate_proj.copy_(up_gate_proj_weight_transpose, False)
-        free_tensor(layer.up_gate_proj_weight)
-        layer.up_gate_proj_weight = up_gate_proj
-        down_proj = layer.create_parameter(
-            shape=down_proj_weight_transpose.shape,
-            dtype=down_proj_weight_transpose.dtype,
-            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
-            is_bias=False,
-        )
-        down_proj.copy_(down_proj_weight_transpose, False)
-        free_tensor(layer.down_proj_weight)
-        layer.down_proj_weight = down_proj
+        process_weight_transpose(layer, "up_gate_proj_weight")
+        process_weight_transpose(layer, "down_proj_weight")
