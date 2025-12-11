@@ -26,6 +26,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import EngineError
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
+MODEL_NAME = "/root/paddlejob/models/ERNIE-4.5-0.3B-Paddle"
 
 
 class TestAsyncLLMEngine(unittest.TestCase):
@@ -659,13 +660,12 @@ class TestAsyncLLMEngine(unittest.TestCase):
             metrics = RequestMetrics(arrival_time=0.0)
             completion = CompletionOutput(index=0, send_idx=0, token_ids=[], text="")
             ro = RequestOutput(request_id="cmpl-test_0", outputs=completion, finished=True, metrics=metrics)
-            ro_dict = ro.to_dict()
 
             engine = self.engine
 
             # Mock connection_manager and response queue
             mock_queue = AsyncMock()
-            mock_queue.get.return_value = [ro_dict]
+            mock_queue.get.return_value = [ro]
             mock_dealer = AsyncMock()
             mock_cm = AsyncMock()
             mock_cm.get_connection.return_value = (mock_dealer, mock_queue)

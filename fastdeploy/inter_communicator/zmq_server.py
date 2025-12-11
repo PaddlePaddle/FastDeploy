@@ -153,7 +153,7 @@ class ZmqServerBase(ABC):
         if len(data) > 1:
             for response in data[1:]:
                 result.add(response)
-        result = ForkingPickler.dumps([result.to_dict()])
+        result = ForkingPickler.dumps([result])
         return result
 
     def receive_json_once(self, block=False):
