@@ -674,9 +674,8 @@ class TokenProcessor:
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
-            self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
-
             if self.cfg.speculative_config.method:
+                self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
                 if accept_num[i] == -3:
                     recovery_stop = True
                     if recovery_stop:
