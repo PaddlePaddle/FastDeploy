@@ -228,7 +228,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
-                self.waiting.appendleft(request)
+                self.waiting.append(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _info_each_block(self):
@@ -261,6 +261,7 @@ class ResourceManagerV1(ResourceManager):
                     self.running.insert(0, preempted_req)
                     continue
                 preempted_req.status = RequestStatus.PREEMPTED
+                preempted_req.last_preempted_blocksize = len(preempted_req.block_tables)
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
                     self.tasks_list[preempted_req.idx] = None
@@ -691,6 +692,8 @@ class ResourceManagerV1(ResourceManager):
 
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        if num_new_block < request.last_preempted_blocksize:
+                            num_new_block = request.last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
