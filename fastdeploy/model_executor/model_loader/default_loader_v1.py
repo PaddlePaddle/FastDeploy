@@ -102,6 +102,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def load_rl_mock_model(self, fd_config: FDConfig) -> nn.Layer:
         """use for rl model load"""
         # (TODO:gaoziyuan) optimze
+        assert fd_config.load_config.load_strategy == "normal", fd_config.load_config.load_strategy
         original_architectures = fd_config.model_config.architectures[0]
 
         import fastdeploy.rl  # noqa
@@ -120,8 +121,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
         model.eval()
 
-        if fd_config.load_config.load_strategy == "normal":
-            # normal strategy need load weight and architectures need without "RL"
-            self.load_weights(model, fd_config, original_architectures)
+        # normal strategy need load weight and architectures need without "RL"
+        self.load_weights(model, fd_config, original_architectures)
         # RL model not need set_state_dict
         return model

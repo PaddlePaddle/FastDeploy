@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import gc
 import os
 import time
 from multiprocessing.shared_memory import SharedMemory
@@ -107,8 +108,12 @@ class DynamicWeightManager:
         from fastdeploy.model_executor.model_loader import get_model_loader
 
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
-        state_dict = model_loader.load_rl_mock_model(fd_config=self.fd_config).state_dict()
+        model = model_loader.load_rl_mock_model(fd_config=self.fd_config)
+        state_dict = model.state_dict()
         self._update_model_from_state(state_dict, "raw")
+        del model
+        del state_dict
+        gc.collect()
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
