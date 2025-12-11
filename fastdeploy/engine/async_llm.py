@@ -31,7 +31,7 @@ import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
-from fastdeploy.engine.request import RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.input.preprocess import InputPreprocessor
@@ -54,7 +54,7 @@ class AsyncOutputProcessor:
 
     def _process_output(
         self,
-        response_dict: Dict[str, Any],
+        response_item,
         stream: bool = True,
         enable_thinking: bool = False,
         include_stop_str_in_output: bool = False,
@@ -69,25 +69,25 @@ class AsyncOutputProcessor:
 
         try:
             processed = self.data_processor.process_response_obj(
-                response_dict,
+                response_item,
                 stream=stream,
                 enable_thinking=enable_thinking,
                 include_stop_str_in_output=include_stop_str_in_output,
             )
             # Some processors may return None when there is no valid text.
             if processed is None:
-                outputs = response_dict.get("outputs") or {}
-                if "text" not in outputs:
-                    outputs["text"] = ""
-                    response_dict["outputs"] = outputs
-                return response_dict
+                outputs = getattr(response_item, "outputs", {}) or {}
+                if not hasattr(outputs, "text"):
+                    setattr(outputs, "text", "")
+                    setattr(response_item, "outputs", outputs)
+                return response_item
             return processed
         except Exception:
-            outputs = response_dict.get("outputs") or {}
-            if "text" not in outputs:
-                outputs["text"] = ""
-                response_dict["outputs"] = outputs
-            return response_dict
+            outputs = getattr(response_item, "outputs", {}) or {}
+            if not hasattr(outputs, "text"):
+                setattr(outputs, "text", "")
+                setattr(response_item, "outputs", outputs)
+            return response_item
 
 
 class EngineServiceClient:
@@ -400,30 +400,31 @@ class AsyncLLM(EngineServiceClient):
         try:
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
+            prompt = Request.from_dict(prompt)
 
             if inspect.iscoroutinefunction(self.data_processor.process_request_obj):
                 request = await self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
             else:
                 request = self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
 
-            request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
+            request.prompt_token_ids_len = len(request.prompt_token_ids)
 
             # Cache prompt metadata for later enrichment of async responses
-            req_id = request.get("request_id")
+            req_id = request.request_id
             self._prompt_metadata[req_id] = {
-                "prompt_token_ids": request.get("prompt_token_ids"),
-                "prompt_tokens": request.get("prompt_tokens"),
+                "prompt_token_ids": request.prompt_token_ids,
+                "prompt_tokens": request.prompt_tokens,
             }
 
             if not is_preprocessed:
-                request["preprocess_start_time"] = arrival_time
-                input_ids_len = request["prompt_token_ids_len"]
+                request.metrics.preprocess_start_time = arrival_time
+                input_ids_len = request.prompt_token_ids_len
 
-                request["max_tokens"] = min(
-                    self.cfg.model_config.max_model_len - input_ids_len, request.get("max_tokens")
+                request.sampling_params.max_tokens = min(
+                    self.cfg.model_config.max_model_len - input_ids_len, request.sampling_params.max_tokens
                 )
 
-                min_tokens = request.get("min_tokens", 1)
+                min_tokens = request.sampling_params.min_tokens or 1
                 if input_ids_len + min_tokens >= self.cfg.model_config.max_model_len:
                     error_msg = (
                         f"Input text is too long, length of prompt token({input_ids_len}) "
@@ -432,17 +433,14 @@ class AsyncLLM(EngineServiceClient):
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-                request["preprocess_end_time"] = time.time()
-                preprocess_cost_time = request["preprocess_end_time"] - request["preprocess_start_time"]
+                request.metrics.preprocess_end_time = time.time()
+                preprocess_cost_time = request.metrics.preprocess_end_time - request.metrics.preprocess_start_time
                 llm_logger.info(
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
 
-            if not self.cfg.model_config.enable_mm:
-                self.request_client.send_json(request)
-            else:
-                self.request_client.send_pyobj(request)
+            self.request_client.send_pyobj(request)
 
         except EngineError:
             raise
@@ -522,35 +520,31 @@ class AsyncLLM(EngineServiceClient):
                 response_list = await response_queue.get()
 
                 for response_item in response_list:
-                    if isinstance(response_item, dict) and "request_id" in response_item:
-                        req_id = response_item.get("request_id")
+                    req_id = getattr(response_item, "request_id", "")
 
-                        # First, use output_processor to post-process the raw dict
-                        if hasattr(self, "output_processor"):
-                            processed_output = self.output_processor._process_output(
-                                response_item,
-                                stream=stream,
-                                enable_thinking=enable_thinking,
-                                include_stop_str_in_output=include_stop_str_in_output,
-                            )
-                        else:
-                            processed_output = response_item
+                    # First, use output_processor to post-process the raw dict
+                    if hasattr(self, "output_processor"):
+                        processed_output = self.output_processor._process_output(
+                            response_item,
+                            stream=stream,
+                            enable_thinking=enable_thinking,
+                            include_stop_str_in_output=include_stop_str_in_output,
+                        )
+                    else:
+                        processed_output = response_item
 
-                        # Then convert processed dict to RequestOutput
-                        request_output = RequestOutput.from_dict(processed_output)
+                    # Enrich outputs with prompt metadata on the first packet
+                    if req_id:
+                        prompt_meta = self._prompt_metadata.get(req_id)
+                        if prompt_meta is not None and processed_output.outputs.send_idx == 0:
+                            processed_output.prompt_token_ids = prompt_meta.get("prompt_token_ids")
+                            processed_output.prompt = prompt_meta.get("prompt_tokens")
+                            self._prompt_metadata.pop(req_id, None)
 
-                        # Enrich outputs with prompt metadata on the first packet
-                        if req_id:
-                            prompt_meta = self._prompt_metadata.get(req_id)
-                            if prompt_meta is not None and request_output.outputs.send_idx == 0:
-                                request_output.prompt_token_ids = prompt_meta.get("prompt_token_ids")
-                                request_output.prompt = prompt_meta.get("prompt_tokens")
-                                self._prompt_metadata.pop(req_id, None)
+                    if processed_output.finished:
+                        remaining -= 1
 
-                        if request_output.finished:
-                            remaining -= 1
-
-                        yield request_output
+                    yield processed_output
 
         except GeneratorExit:
             llm_logger.info(f"Request {conn_request_id} generator exit (outer)")
