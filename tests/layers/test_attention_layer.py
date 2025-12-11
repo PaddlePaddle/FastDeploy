@@ -66,8 +66,8 @@ class TestAttentionPerformance(unittest.TestCase):
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
 
-        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
-        os.environ["FLAGS_flash_attn_version"] = "3"
+        # os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        # os.environ["FLAGS_flash_attn_version"] = "3"
 
         self.model_dir = self.create_model_config_json()
         self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=1)
