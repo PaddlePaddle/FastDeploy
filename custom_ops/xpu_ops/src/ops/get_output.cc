@@ -22,8 +22,9 @@
 
 void GetOutputKVSignal(const paddle::Tensor &x,
                        int64_t rank_id,
+                       int64_t device_id,
                        bool wait_flag) {
-  int msg_queue_id = 1024 + rank_id;
+  int msg_queue_id = 1024 + 1000 * device_id + rank_id;
   static struct msgdatakv msg_rcv;
   static key_t key = ftok("/opt/", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);

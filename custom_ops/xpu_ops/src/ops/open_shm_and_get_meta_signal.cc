@@ -55,6 +55,7 @@ void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
                           const paddle::Tensor& seq_lens_this_time_tensor,
                           const paddle::Tensor& seq_lens_decoder_tensor,
                           const int rank,
+                          const int device_id,
                           const int num_layers) {
   if (FLAGS_fmt_write_cache_completed_signal) {
     int real_bsz = seq_lens_this_time_tensor.dims()[0];
@@ -67,6 +68,7 @@ void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
         seq_lens_encoder_cpu.data<int>(),
         seq_lens_decoder_cpu.data<int>(),
         rank,
+        device_id,
         num_layers,
         real_bsz);
   }

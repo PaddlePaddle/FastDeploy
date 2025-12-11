@@ -783,7 +783,7 @@ class CacheMessagerV1:
         kv_signal_data = paddle.full(shape=[512 * 3 + 2], fill_value=-1, dtype="int32")
         while True:
             try:
-                get_output_kv_signal(kv_signal_data, self.rank_id, 0)  # wait_flag
+                get_output_kv_signal(kv_signal_data, self.rank_id, self.gpu_id, 0)  # wait_flag
                 if not self.cache_info:
                     time.sleep(0.01)
                     continue
@@ -792,6 +792,9 @@ class CacheMessagerV1:
                     time.sleep(0.001)
                     continue
                 layer_id = kv_signal_data[1].numpy().tolist()
+                logger.debug(
+                    f"get_output_kv_signal, tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}"
+                )
                 if layer_id == self.num_layers - 1:
                     logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}")
                 batch_engine_signals = []

@@ -46,6 +46,7 @@ struct RemoteCacheKvIpc {
     void init(const int* seq_lens_encoder,
               const int* seq_lens_decoder,
               const int rank,
+              const int device_id,
               const int num_layers,
               const int real_bsz) {
       layer_id_ = 0;
@@ -64,7 +65,7 @@ struct RemoteCacheKvIpc {
 
       if (!inited) {
         // just init once
-        const int msg_id = 1024 + rank;
+        const int msg_id = 1024 + 1000 * device_id + rank;
         key_t key = ftok("/opt/", msg_id);
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;

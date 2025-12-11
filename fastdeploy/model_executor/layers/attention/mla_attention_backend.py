@@ -219,6 +219,7 @@ class MLAAttentionBackend(AttentionBackend):
                     forward_meta.seq_lens_this_time,
                     forward_meta.seq_lens_decoder,
                     self.rank,
+                    int(self.device_id),
                     self.num_layers + self.num_layers_draft_model,
                 )
         elif self.pd_disaggregation_mode == "per_query":

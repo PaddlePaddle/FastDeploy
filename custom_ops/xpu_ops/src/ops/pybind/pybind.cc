@@ -52,10 +52,12 @@ void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
                           const paddle::Tensor& seq_lens_this_time_tensor,
                           const paddle::Tensor& seq_lens_decoder_tensor,
                           const int rank,
+                          const int device,
                           const int num_layers);
 
 void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
+                       int64_t device_id,
                        bool wait_flag);
 
 std::vector<paddle::Tensor> BlockAttn(
@@ -848,6 +850,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &GetOutputKVSignal,
         py::arg("x"),
         py::arg("rank_id"),
+        py::arg("device_id"),
         py::arg("wait_flag"),
         "get_output_kv_signal function");
 
@@ -865,6 +868,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_this_time_tensor"),
         py::arg("seq_lens_decoder_tensor"),
         py::arg("rank"),
+        py::arg("device_id"),
         py::arg("num_layers"),
         "init_kv_signal_per_query function");
 

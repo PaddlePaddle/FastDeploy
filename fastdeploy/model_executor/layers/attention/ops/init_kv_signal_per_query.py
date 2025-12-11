@@ -24,6 +24,7 @@ def init_kv_signal_per_query(
     seq_lens_this_time: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     rank: int,
+    device_id: int,
     num_layers: int,
 ) -> paddle.Tensor:
     """
@@ -37,6 +38,7 @@ def init_kv_signal_per_query(
             seq_lens_this_time,
             seq_lens_decoder,
             rank,
+            device_id,
             num_layers,
         )
         return out
@@ -48,6 +50,7 @@ def init_kv_signal_per_query(
             seq_lens_this_time,
             seq_lens_decoder,
             rank,
+            device_id,
             num_layers,
         )
         return out
