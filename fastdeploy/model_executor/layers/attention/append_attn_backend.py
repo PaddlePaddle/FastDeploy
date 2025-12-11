@@ -152,6 +152,9 @@ class AppendAttentionBackend(AttentionBackend):
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
+        # split kv still has bug in speculative decoding
+        if self.speculative_method is not None:
+            self.max_partition_size = self.max_seq_len
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
@@ -230,8 +233,19 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
-
         sliding_window = layer.sliding_window
+
+        if self.rope_3d:
+            assert len(forward_meta.rotary_embs.shape) == 6
+        else:
+            assert len(forward_meta.rotary_embs.shape) == 5
+            if layer.use_neox_rotary_style:
+                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
+                # 128 is qwen3
+                # 32 is glm
+                assert forward_meta.rotary_embs.shape[4] in [128, 32]
+            else:
+                assert forward_meta.rotary_embs.shape == [2, 1, self.max_seq_len, 1, 64]
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
