@@ -388,6 +388,8 @@ class SplitwiseConnector:
             payload = [output.to_dict() for output in payload]
             need_delete_keys = ["video_features", "image_features", "audio_features"]
             for tmp_data in payload:
+                if "multimodal_inputs" not in tmp_data:
+                    continue
                 for tmp_key in need_delete_keys:
                     if tmp_key in tmp_data["multimodal_inputs"]:
                         del tmp_data["multimodal_inputs"][tmp_key]
