@@ -455,8 +455,6 @@ class LLMEngine:
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "OMP_NUM_THREADS": 3,
             "FD_ENABLE_PDL": envs.FD_ENABLE_PDL,
-            "DATA_PARALLEL_ID": os.getenv("DATA_PARALLEL_ID", "0"),
-            "CUDA_VISIBLE_DEVICES": "3,4"
         }
         # environment variables needed by Dy2St
         variables.update(

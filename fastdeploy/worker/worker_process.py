@@ -41,7 +41,6 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.engine.request import RequestType
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -105,7 +104,6 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
-
     ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
     if ranks > 0:
@@ -124,17 +122,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
         local_rank = fleet.worker_index()
     else:
         local_rank = 0
-    
-    data_parallel_id = os.getenv("DATA_PARALLEL_ID", "0")
-    os.environ["PADDLE_TRAINER_ID"] = data_parallel_id
-    os.environ["PADDLE_TRAINERS_NUM"] = "2"
-    os.environ["PADDLE_TRAINER_ENDPOINTS"] = "0.0.0.0:6072,0.0.0.0:6073"
-    os.environ["PADDLE_DISTRI_BACKEND"] = "nccl"
-    os.unsetenv("PADDLE_MASTER")
-    dist.init_parallel_env()
-
-    paddle.set_device("gpu")
-    return 1, 0
+    return ranks, local_rank
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
@@ -421,6 +409,8 @@ class PaddleDisWorkerProc:
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = int((tp_size + 7) // 8)
+        req_ids = []
+        num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
@@ -440,11 +430,12 @@ class PaddleDisWorkerProc:
                 )
 
             self.insert_step = False
+            req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if not envs.FD_ENABLE_BATCH_SCHEDULER and self.task_queue.num_tasks() > 0:
+                if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -482,77 +473,43 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
-            if not envs.FD_ENABLE_BATCH_SCHEDULER:
-                req_dicts, num_running_requests = self.get_tasks()
-            else:
-                req_dicts, num_running_requests = self.get_batch_sched_tasks()
-            if req_dicts:
+            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+                logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
+
+                tasks, read_finish = self.task_queue.get_tasks()
+                if read_finish:
+                    # Ensure that every worker get the task
+                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                    self.task_queue.read_finish_flag.set(0)
+
+                req_dicts = []
+                for req_dict, bsz in tasks:
+                    num_running_requests = int(bsz)
+                    req_dicts.extend(req_dict)
+
+                req_ids = [req.request_id for req in req_dicts]
+                logger.info(
+                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
+                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                )
+
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
-            
+
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     self._tp_barrier_wait()
 
                 time.sleep(0.001)
                 continue
-            
+
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-
-    def get_tasks(self):
-        req_dicts, num_running_requests = [], 0
-        if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
-            logger.info(f"Rank: {self.local_rank} Detected new requests.")
-
-            tasks, read_finish = self.task_queue.get_tasks()
-            if read_finish:
-                # Ensure that every worker get the task
-                self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                self.task_queue.read_finish_flag.set(0)
-
-            for req_dict, bsz in tasks:
-                num_running_requests = int(bsz)
-                req_dicts.extend(req_dict)
-
-            req_ids = [req.request_id for req in req_dicts]
-            logger.info(
-                f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
-            )
-
-        return req_dicts, num_running_requests
-
-    def get_batch_sched_tasks(self):
-        """
-        Fetch tasks under batch scheduling.
-        """
-        req_dicts, num_running_requests = [], 0
-        while True:
-            tasks, _ = self.task_queue.get_tasks()
-            if tasks:
-                logger.info(f"Rank: {self.local_rank} Detected new requests.")
-                dist.barrier()
-                break
-            
-        for req_dict, bsz in tasks:
-            if not req_dict[0].task_type.value == RequestType.IDLE.value:
-                # may be IDLE task only used for synchronization
-                num_running_requests = int(bsz)
-                req_dicts.extend(req_dict)
-
-        req_ids = [req.request_id for req in req_dicts]
-        logger.info(
-            f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-            f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
-        )
-
-        return req_dicts, num_running_requests
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many

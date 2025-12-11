@@ -153,10 +153,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
-    # Enable batch scheduler to increase batch size under DP+EP
-    "FD_ENABLE_BATCH_SCHEDULER": lambda: int(os.getenv("FD_ENABLE_BATCH_SCHEDULER", "0")),
-    # Timeout for batching reqs, 500ms in default
-    "FD_RECV_BATCH_TIMEOUT": lambda: int(os.getenv("FD_RECV_BATCH_TIMEOUT", "500")),
 }
 
 

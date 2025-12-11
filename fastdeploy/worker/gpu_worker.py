@@ -63,8 +63,6 @@ class GpuWorker(WorkerBase):
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
-            import os
-            self.device = f"gpu:{os.environ['DATA_PARALLEL_ID']}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.model_config.dtype)
 

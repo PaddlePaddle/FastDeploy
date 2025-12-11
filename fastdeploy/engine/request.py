@@ -46,22 +46,12 @@ class RequestType(Enum):
     DECODE = 1
     PREEMPTED = 2
     EXTEND = 3
-    IDLE = 4
 
 
 @dataclass
 class ImagePosition:
     offset: int = 0
     length: int = 0
-
-
-@dataclass
-class SchedBatchInfo:
-    sched_batch_id: int = 0    # id of scheduled batch
-    sched_batch_cnt: List[int] = None  # req num scheduled for each DP instance
-    sched_ts: int = 0  # timestamp
-    sched_interval: int = 10  # interval of scheduling
-    sched_batch_local_id: int = 0  
 
 
 @dataclass
@@ -213,19 +203,6 @@ class Request:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
-        
-        # temp code for debug, need to remove
-        sched_batch_info = SchedBatchInfo(
-            sched_batch_id=d.get("sched_batch_id", 0),
-            sched_batch_cnt=d.get("sched_batch_cnt", None),
-            sched_ts=d.get("sched_ts", 0),
-            sched_interval=d.get("sched_interval", 10),
-            sched_batch_local_id=d.get("sched_batch_local_id", 0),
-        )
-        d["ic_req_data"] = {
-            "sched_batch_info": sched_batch_info,
-        }
-
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
