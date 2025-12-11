@@ -1381,7 +1381,7 @@ class GPUModelRunner(ModelRunnerBase):
                     req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
                 )
             elif self.enable_logprob:
-                self.max_logprobs = None if not self.speculative_decoding else 20
+                self.max_logprobs = None if not self.speculative_decoding else 0
 
         # Remove padding
         (
