@@ -60,7 +60,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["token1", "token2", "token3", "token4", "token5", "token6"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             # Verify result structure (first element is None, then actual results)
             self.assertEqual(len(result), num_prompt_tokens + 1)
@@ -98,7 +98,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["hello", "world"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, -1)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, -1, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -125,7 +125,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.return_value = "single_token"
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -154,7 +154,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["t1", "t2", "t3", "t4", "t5", "t6"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -188,7 +188,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         prompt_logprobs_tensors = LogprobsTensors(token_ids, logprobs, ranks)
 
-        result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+        result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
         self.assertEqual(len(result), num_prompt_tokens + 1)
         self.assertIsNone(result[0])
