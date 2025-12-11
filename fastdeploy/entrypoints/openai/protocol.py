@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.worker.output import PromptLogprobs
+from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
 class InvalidParameterException(Exception):
@@ -230,6 +230,7 @@ class ChatCompletionResponseChoice(BaseModel):
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -295,6 +296,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionStreamResponse(BaseModel):
@@ -329,6 +331,7 @@ class CompletionResponseChoice(BaseModel):
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionResponse(BaseModel):
@@ -374,6 +377,7 @@ class CompletionResponseStreamChoice(BaseModel):
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionStreamResponse(BaseModel):
