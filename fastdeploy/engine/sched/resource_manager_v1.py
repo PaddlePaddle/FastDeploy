@@ -228,7 +228,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
-                self.waiting.append(request)
+                self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _info_each_block(self):
