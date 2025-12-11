@@ -241,6 +241,12 @@ class ModelConfig:
 
         self._post_init()
 
+    def disable_mm_prefill_batch(self):
+        """
+        check if the model architecture disable for mm prefill
+        """
+        return self._architecture in ["Ernie5ForCausalLM"]
+
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
@@ -1618,7 +1624,7 @@ class FDConfig:
                 and self.model_config is not None
                 and self.model_config.enable_mm
             ):
-                self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+                self.max_prefill_batch = 1  # TODO:当前V0多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
