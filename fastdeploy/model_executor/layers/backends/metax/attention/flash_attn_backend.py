@@ -64,6 +64,8 @@ class FlashAttentionMetadata(AttentionMetadata):
     encoder_block_shape_q: int = -1
     decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
+    seq_lens_dec: paddle.Tensor = None
+    block_table_dec: paddle.Tensor = None
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
@@ -134,6 +136,12 @@ class FlashAttentionBackend(AttentionBackend):
         self.attention_metadata.rotary_sin_decode = paddle.empty(
             shape=[max_num_seqs, 1, 1, self.head_dim],
             dtype=self.dtype,
+        )
+        self.attention_metadata.seq_lens_dec = paddle.empty(
+            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype="int32"
+        )
+        self.attention_metadata.block_table_dec = paddle.empty(
+            shape=[fd_config.scheduler_config.max_num_seqs, self.head_dim], dtype="int32"
         )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -229,8 +237,9 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.batch_ids_prefill = paddle.to_tensor(self.prefill_info_dict["batch_ids"])
         self.batch_ids_decode = paddle.to_tensor(self.decode_info_dict["batch_ids"])
-        self.seq_lens_dec = forward_meta.seq_lens_decoder[self.batch_ids_decode, 0]
-        self.block_table_dec = forward_meta.block_tables[self.batch_ids_decode, :]
+        self.attention_metadata.seq_lens_dec.copy_(forward_meta.seq_lens_decoder[self.batch_ids_decode, 0])
+        self.attention_metadata.block_table_dec.copy_(forward_meta.block_tables[self.batch_ids_decode, :])
+
         # update prefilling rope
         self.update_rotary_embs_prefill(forward_meta)
         # update decoding rope
@@ -296,13 +305,18 @@ class FlashAttentionBackend(AttentionBackend):
         bs = self.batch_ids_decode.shape[0]
         if self.enable_mm:
             index = paddle.concat(
-                [self.batch_ids_decode.view([-1, 1]), self.seq_lens_dec.to("int64").view([-1, 1])], axis=1
+                [self.batch_ids_decode.view([-1, 1]), self.attention_metadata.seq_lens_dec.to("int64").view([-1, 1])],
+                axis=1,
             )
             rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
             rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
         else:
-            rot_cos = paddle.gather(forward_meta.rotary_embs[0, 0, :, 0, :], self.seq_lens_dec).view([bs, 1, 1, -1])
-            rot_sin = paddle.gather(forward_meta.rotary_embs[1, 0, :, 0, :], self.seq_lens_dec).view([bs, 1, 1, -1])
+            rot_cos = paddle.gather(
+                forward_meta.rotary_embs[0, 0, :, 0, :], self.attention_metadata.seq_lens_dec
+            ).view([bs, 1, 1, -1])
+            rot_sin = paddle.gather(
+                forward_meta.rotary_embs[1, 0, :, 0, :], self.attention_metadata.seq_lens_dec
+            ).view([bs, 1, 1, -1])
         self.attention_metadata.rotary_cos_decode[:bs].copy_(
             paddle.repeat_interleave(rot_cos, repeats=2, axis=-1).astype(self.dtype)
         )
@@ -476,8 +490,8 @@ class FlashAttentionBackend(AttentionBackend):
             q,
             forward_meta.caches[k_cache_id],
             forward_meta.caches[v_cache_id],
-            self.seq_lens_dec,
-            self.block_table_dec,
+            self.attention_metadata.seq_lens_dec,
+            self.attention_metadata.block_table_dec,
             k,
             v,
             rotary_cos=None,
