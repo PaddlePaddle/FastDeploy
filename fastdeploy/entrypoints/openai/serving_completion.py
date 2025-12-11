@@ -452,7 +452,7 @@ class OpenAIServingCompletion:
                                 else self.engine_client.ori_vocab_size
                             )
                             prompt_logprobs_res = self._build_prompt_logprobs(
-                                prompt_logprobs_tensors, num_prompt_logprobs
+                                prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                             )
                         if request.return_token_ids:
                             chunk = CompletionStreamResponse(
@@ -483,11 +483,11 @@ class OpenAIServingCompletion:
                     self.engine_client.data_processor.process_response_dict(
                         res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
                     )
-                    if res["metrics"].get("first_token_time") is not None:
+                    if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
+                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
 
                     await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
@@ -544,6 +544,7 @@ class OpenAIServingCompletion:
                             output,
                             tool_called[idx],
                         )
+                        inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
@@ -561,6 +562,7 @@ class OpenAIServingCompletion:
                             created=created_time,
                             model=model_name,
                             choices=choices,
+                            metrics=res["metrics"] if request.collect_metrics else None,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
@@ -587,6 +589,7 @@ class OpenAIServingCompletion:
                                         image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
+                                metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
@@ -648,7 +651,9 @@ class OpenAIServingCompletion:
                 num_prompt_logprobs = (
                     request.prompt_logprobs if request.prompt_logprobs != -1 else self.engine_client.ori_vocab_size
                 )
-                prompt_logprobs_res = self._build_prompt_logprobs(prompt_logprobs_tensors, num_prompt_logprobs)
+                prompt_logprobs_res = self._build_prompt_logprobs(
+                    prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
+                )
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
@@ -814,6 +819,7 @@ class OpenAIServingCompletion:
         self,
         prompt_logprobs_tensors: LogprobsTensors,
         num_prompt_logprobs: int,
+        include_logprobs_decode_token: bool,
     ):
         """Update with prompt logprobs from worker.
         Args:
@@ -825,10 +831,13 @@ class OpenAIServingCompletion:
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
-        decoded_tokens = [
-            self.engine_client.data_processor.process_logprob_response(token_id)
-            for token_id in token_ids.flatten().tolist()
-        ]
+        if include_logprobs_decode_token:
+            decoded_tokens = [
+                self.engine_client.data_processor.process_logprob_response(token_id)
+                for token_id in token_ids.flatten().tolist()
+            ]
+        else:
+            decoded_tokens = None
 
         # Recover shapes.
         num_prompt_tokens, num_logprobs = logprobs.shape

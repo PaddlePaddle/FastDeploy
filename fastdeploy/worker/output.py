@@ -20,7 +20,8 @@ from typing import NamedTuple, Optional
 import paddle
 
 
-class Logprob(NamedTuple):
+@dataclass
+class Logprob:
     """
     A named tuple containing information about a token's log probability.
     """
@@ -277,6 +278,11 @@ class ModelOutputData:
         prompt_logprobs
     """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
+
+    """
+        the minimum tokens that will be generated
+    """
+    min_tokens: paddle.Tensor = None
 
 
 @dataclass
