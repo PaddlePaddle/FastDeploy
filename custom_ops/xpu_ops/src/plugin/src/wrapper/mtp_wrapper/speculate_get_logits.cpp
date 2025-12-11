@@ -139,7 +139,15 @@ int speculate_get_logits(Context* ctx,
                       real_bsz,
                       vocab_size);
   WRAPPER_DUMP(ctx);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, next_token_num);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, batch_token_num);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_next_token_offset);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_batch_token_offset);
+  WRAPPER_CHECK_PTR(ctx, float, real_bsz* vocab_size, first_token_logits);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_encoder);
   WRAPPER_ASSERT_LE(ctx, real_bsz, 256 * 1024 / sizeof(int) / 5);
+  WRAPPER_ASSERT_GT(ctx, vocab_size, 0);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(draft_logits,
                        next_token_num,
