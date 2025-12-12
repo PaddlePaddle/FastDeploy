@@ -42,17 +42,13 @@ constexpr int kMaxBlocks = 36;
 // well-defined behavior.
 using FlagType = uint32_t;
 struct Signal {
-  alignas(128) FlagType self_counter[kMaxBlocks][8];
-  // Two sets of peer counters are needed for two syncs. The reason is that
-  // it's possible for peer GPU block to arrive at the second sync point while
-  // the current GPU block haven't passed the first sync point. Thus, peer GPU
-  // may write counter+1 while current GPU is busy waiting for counter. We use
-  // alternating counter array to avoid this possibility.
-  alignas(128) FlagType peer_counter[2][kMaxBlocks][8];
+  alignas(128) FlagType start[kMaxBlocks][8];
+  alignas(128) FlagType end[kMaxBlocks][8];
+  alignas(128) FlagType _flag[kMaxBlocks];  // incremental flags for each rank
 };
 
 struct __align__(16) RankData {
-  const void* __restrict__ ptrs[8];
+  const void* ptrs[8];
 };
 
 struct __align__(16) RankSignals {
@@ -183,35 +179,53 @@ static DINLINE FlagType ld_flag_volatile(FlagType* flag_addr) {
   return flag;
 }
 
-// is_start: whether this is the very first synchronization barrier.
-// need_fence: whether a memory fence is needed. If true, a release-acquire
-// semantic is used to enforce memory access order before and after this
-// barrier.
-template <int ngpus, bool is_start, bool need_fence = false>
-DINLINE void multi_gpu_barrier(const RankSignals& sg, Signal* self_sg,
-                               int rank) {
-  if constexpr (!is_start) __syncthreads();
-  static_assert(
-      !(is_start && need_fence));  // Start barrier shouldn't need fence.
+// This function is meant to be used as the first synchronization in the all
+// reduce kernel. Thus, it doesn't need to make any visibility guarantees for
+// prior memory accesses. Note: volatile writes will not be reordered against
+// other volatile writes.
+template <int ngpus>
+DINLINE void barrier_at_start(const RankSignals& sg, Signal* self_sg,
+                              int rank) {
+  uint32_t flag = self_sg->_flag[blockIdx.x] + 1;
   if (threadIdx.x < ngpus) {
-    // Increment the counter. Technically we only need one counter, but we use
-    // multiple per block to eliminate the need to share the counter via smem.
-    auto val = self_sg->self_counter[blockIdx.x][threadIdx.x] += 1;
+    auto peer_counter_ptr = &sg.signals[threadIdx.x]->start[blockIdx.x][rank];
+    auto self_counter_ptr = &self_sg->start[blockIdx.x][threadIdx.x];
+    // Write the expected counter value to peer and wait for correct value
+    // from peer.
+    st_flag_volatile(peer_counter_ptr, flag);
+    while (ld_flag_volatile(self_counter_ptr) != flag);
+  }
+  __syncthreads();
+  // use one thread to update flag
+  if (threadIdx.x == 0) self_sg->_flag[blockIdx.x] = flag;
+}
+
+// This function is meant to be used as the second or the final
+// synchronization barrier in the all reduce kernel. If it's the final
+// synchronization barrier, we don't need to make any visibility guarantees
+// for prior memory accesses.
+template <int ngpus, bool final_sync = false>
+DINLINE void barrier_at_end(const RankSignals& sg, Signal* self_sg, int rank) {
+  __syncthreads();
+  uint32_t flag = self_sg->_flag[blockIdx.x] + 1;
+  if (threadIdx.x < ngpus) {
+    auto peer_counter_ptr = &sg.signals[threadIdx.x]->end[blockIdx.x][rank];
+    auto self_counter_ptr = &self_sg->end[blockIdx.x][threadIdx.x];
     // Write the expected counter value to peer and wait for correct value from
     // peer.
-    auto peer_counter_ptr =
-        &sg.signals[threadIdx.x]->peer_counter[val % 2][blockIdx.x][rank];
-    auto self_counter_ptr =
-        &self_sg->peer_counter[val % 2][blockIdx.x][threadIdx.x];
-    if constexpr (need_fence) {
-      st_flag_release(peer_counter_ptr, val);
-      while (ld_flag_acquire(self_counter_ptr) != val);
+    if constexpr (!final_sync) {
+      st_flag_release(peer_counter_ptr, flag);
+      while (ld_flag_acquire(self_counter_ptr) != flag);
     } else {
-      st_flag_volatile(peer_counter_ptr, val);
-      while (ld_flag_volatile(self_counter_ptr) != val);
+      st_flag_volatile(peer_counter_ptr, flag);
+      while (ld_flag_volatile(self_counter_ptr) != flag);
     }
   }
-  if constexpr (is_start || need_fence) __syncthreads();
+  if constexpr (!final_sync) __syncthreads();
+
+  // use one thread to update flag
+  if (threadIdx.x == 0) self_sg->_flag[blockIdx.x] = flag;
+  __syncthreads();
 }
 
 template <typename P, int ngpus, typename A>
@@ -233,13 +247,13 @@ __global__ void __launch_bounds__(512, 1)
   // note: we don't reorder the address so the accumulation order is the same
   // for all ranks, ensuring bitwise identical results
   auto dp = *_dp;
-  multi_gpu_barrier<ngpus, true>(sg, self_sg, rank);
+  barrier_at_start<ngpus>(sg, self_sg, rank);
   // do the actual reduction
   for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < size;
        idx += gridDim.x * blockDim.x) {
     ((P*)result)[idx] = packed_reduce<P, ngpus, A>((const P**)&dp.ptrs[0], idx);
   }
-  multi_gpu_barrier<ngpus, false>(sg, self_sg, rank);
+  barrier_at_end<ngpus, true>(sg, self_sg, rank);
 }
 
 template <typename P>
@@ -268,12 +282,12 @@ __global__ void __launch_bounds__(512, 1)
     tmps[i] = get_tmp_buf<P>(sg.signals[target]);
   }
   auto tmp_out = tmps[0];
-  multi_gpu_barrier<ngpus, true>(sg, self_sg, rank);
+  barrier_at_start<ngpus>(sg, self_sg, rank);
   // stage 1: reduce scatter
   for (int idx = start + tid; idx < end; idx += stride) {
     tmp_out[idx - start] = packed_reduce<P, ngpus, A>(ptrs, idx);
   }
-  multi_gpu_barrier<ngpus, false, true>(sg, self_sg, rank);
+  barrier_at_end<ngpus>(sg, self_sg, rank);
 
   // stage 2: allgather. Note: it's important to match the tid between
   // the two stages, because visibility across devices is only guaranteed
@@ -519,7 +533,9 @@ class CustomAllreduce {
 
   void clear_ipc_handles(){
     for (auto [_, ptr] : ipc_handles_) {
-      CUDACHECK(cudaIpcCloseMemHandle(ptr));
+      if (ptr != nullptr) {
+        CUDACHECK(cudaIpcCloseMemHandle(ptr));
+      }
     }
     ipc_handles_.clear();
   }
