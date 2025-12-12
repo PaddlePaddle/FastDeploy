@@ -109,6 +109,7 @@ class TestMTPProposer(unittest.TestCase):
             "encoder_block_lens": paddle.zeros([2, 1], dtype="int32"),
             "cu_batch_token_offset": paddle.zeros([3], dtype="int32"),
             "is_block_step": paddle.zeros([2], dtype="bool"),
+            "actual_draft_token_num": paddle.zeros([2], dtype="int32"),
         }
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
@@ -119,7 +120,9 @@ class TestMTPProposer(unittest.TestCase):
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
-        mock_attn_backend.return_value.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -148,7 +151,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -187,7 +190,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -207,7 +210,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -225,7 +228,6 @@ class TestMTPProposer(unittest.TestCase):
             tools=None,
             system=None,
             eos_token_ids=[2],
-            arrival_time=0.0,
         )
         request1.idx = 0
         request1.task_type = RequestType.PREFILL
@@ -245,7 +247,6 @@ class TestMTPProposer(unittest.TestCase):
             tools=None,
             system=None,
             eos_token_ids=[2],
-            arrival_time=0.0,
         )
         request2.idx = 1
         request2.task_type = RequestType.DECODE
@@ -262,7 +263,6 @@ class TestMTPProposer(unittest.TestCase):
             tools=None,
             system=None,
             eos_token_ids=[2],
-            arrival_time=0.0,
         )
         request3.idx = 0
         request3.task_type = RequestType.PREEMPTED
@@ -288,7 +288,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -305,7 +305,6 @@ class TestMTPProposer(unittest.TestCase):
             tools=None,
             system=None,
             eos_token_ids=[2],
-            arrival_time=0.0,
         )
         request.idx = 0
         request.block_tables = [0, 1]
@@ -337,7 +336,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
@@ -376,7 +375,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
         mock_eagle.return_value = paddle.zeros([2, 768], dtype="bfloat16")
         mock_preprocess.return_value = None
@@ -385,6 +384,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         full_hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
 
         # Test _prepare_inputs
         proposer._prepare_inputs(full_hidden_states)
@@ -406,12 +406,13 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
 
         task = Mock()
         task.idx = 0
@@ -443,7 +444,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
         mock_postprocess.return_value = None
         mock_mtp_step.return_value = None
@@ -451,6 +452,7 @@ class TestMTPProposer(unittest.TestCase):
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
 
         # Test with ENABLE_V1_KVCACHE_SCHEDULER=False
         with patch("fastdeploy.spec_decode.mtp.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
@@ -468,7 +470,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
         mock_ngram.return_value = None
 
@@ -502,7 +504,7 @@ class TestMTPProposer(unittest.TestCase):
         mock_model_loader.return_value.load_model.return_value = mock_model
         mock_attn = Mock()
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = mock_attn
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         proposer = MTPProposer(
