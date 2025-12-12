@@ -1321,6 +1321,7 @@ class XPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
         )
         if self.speculative_decoding:
             # base model post process
@@ -1522,12 +1523,6 @@ class XPUModelRunner(ModelRunnerBase):
         images = images / self.image_preprocess.image_std_tensor
         images = images.cast("bfloat16")
 
-        token_type_ids = inputs["token_type_ids"]
-        token_type_ids_w_video = token_type_ids
-        input_ids = inputs["input_ids"]
-        # convert to img patch id
-        image_mask = input_ids == self.model_config.im_patch_id
-        image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
@@ -1544,9 +1539,6 @@ class XPUModelRunner(ModelRunnerBase):
             # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
                 image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
                 grid_thw,
             )
         return image_features

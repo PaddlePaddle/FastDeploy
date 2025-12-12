@@ -32,6 +32,8 @@ from e2e.utils.serving_utils import (
     is_port_open,
 )
 
+from fastdeploy import envs
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_embedding_server():
@@ -49,6 +51,8 @@ def setup_and_run_embedding_server():
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model path not found: {model_path}")
+
+    envs.FD_ENABLE_MAX_PREFILL = 1
 
     log_path = "embedding_server.log"
     cmd = [

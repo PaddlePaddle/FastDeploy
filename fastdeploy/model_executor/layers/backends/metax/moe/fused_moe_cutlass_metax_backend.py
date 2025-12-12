@@ -209,7 +209,8 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
             None,
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-            "weight_only_int8",
+            expert_idx_per_token,  # expert_idx_per_token: only for w4a8
+            self.moe_quant_type,
         )
 
     def apply_ep_prefill(
@@ -262,15 +263,26 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 permute_indices_per_token,
                 topk_weights,
                 topk_idx,
+                expert_idx_per_token,  # only for w4a8
             ) = moe_expert_dispatch(
                 x,
                 gate_out,
+                None,  # Use layer.gate_correction_bias in get_moe_scores.
+                None,  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
+                self.moe_quant_type,
                 True,
             )
 
-            ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, None)
+            if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
+                # only w4a8 need expert_idx_per_token
+                # Other need not this tensor, so we make it None.
+                expert_idx_per_token = None
+            else:
+                expert_idx_per_token = expert_idx_per_token.cast("int64")
+
+            ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, expert_idx_per_token)
 
             fused_moe_out = moe_expert_reduce(
                 ffn_out,
@@ -291,7 +303,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 None,
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-                "weight_only_int8",
+                self.moe_quant_type,
                 layer.top_k,
                 True,
                 False,

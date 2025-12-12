@@ -627,11 +627,17 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/moe/moe_topk_select.cu",
+        "gpu_ops/get_img_boundaries.cc",
+        "gpu_ops/remote_cache_kv_ipc.cc",
+        "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
+        "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
+        "gpu_ops/sample_kernels/min_p_sampling_from_probs.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
-        "metax_ops/apply_rope.cu",
+        "metax_ops/apply_rope_qkv.cu",
+        "metax_ops/cache_kv_with_rope.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -657,11 +663,23 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
                 os.path.join(maca_path, "include/common"),
+                os.path.join(maca_path, "include/mcfft"),
+                os.path.join(maca_path, "include/mcrand"),
+                os.path.join(maca_path, "include/mcsparse"),
+                os.path.join(maca_path, "include/mcblas"),
+                os.path.join(maca_path, "include/mcsolver"),
             ],
         ),
     )
 elif paddle.is_compiled_with_custom_device("intel_hpu"):
-    pass
+    setup(
+        name="fastdeploy_ops",
+        ext_modules=CppExtension(
+            sources=[
+                "gpu_ops/get_output.cc",
+            ]
+        ),
+    )
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

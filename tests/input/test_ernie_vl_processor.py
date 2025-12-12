@@ -470,8 +470,11 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
         }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
         # Test thinking_mode = "open"
         self.processor.ernie4_5_processor.request2ids.reset_mock()
