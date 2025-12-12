@@ -20,6 +20,8 @@ from typing import Optional
 import paddle
 import paddle.nn as nn
 
+from fastdeploy.model_executor.utils import h2d_copy
+
 
 class GELUActivation(nn.Layer):
     """
@@ -97,6 +99,8 @@ class Projector(nn.Layer):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -106,4 +110,4 @@ class Projector(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)

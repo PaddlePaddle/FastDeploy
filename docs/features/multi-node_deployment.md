@@ -36,8 +36,13 @@ We recommend using mpirun for one-command startup without manually starting each
     --max-model-len 32768 \
     --max-num-seqs 32 \
     --tensor-parallel-size 16 \
+    --graph-optimization-config '{"use_cudagraph":false}' \
+    --no-enable-prefix-caching \
+    --disable-custom-all-reduce \
     --ips 192.168.1.101,192.168.1.102
     ```
+
+> :bulb: Multi-node tensor parallel deployment currently does not support CUDA Graphs, Prefix Caching, or Custom AllReduce, and these features must be explicitly disabled in the deployment command.
 
 * Offline startup example:
 
