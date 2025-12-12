@@ -586,10 +586,12 @@ class ResultReaderTest(SplitWiseSchedulerTestCase):
         reader.reqs.clear()
 
         original_sleep = self.module.time.sleep
-        self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
-        with self.assertRaises(SystemExit):
-            reader.run()
-        self.module.time.sleep = original_sleep
+        try:
+            self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
+            with self.assertRaises(SystemExit):
+                reader.run()
+        finally:
+            self.module.time.sleep = original_sleep
 
         # Now cover the exception logging path inside run()
         reader.reqs["rid"] = {"arrival_time": time.time()}
@@ -605,31 +607,7 @@ class ResultReaderTest(SplitWiseSchedulerTestCase):
         with self.assertRaises(SystemExit):
             reader.run()
 
-    def test_run_handles_empty_keys_and_exceptions(self) -> None:
-        client = sys.modules["redis"].Redis()
-        reader = self.module.ResultReader(client, idx=0, batch=5, ttl=10, group="")
-        reader.reqs.clear()
-
-        original_sleep = self.module.time.sleep
-        call_count = {"sleep": 0}
-        self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
-        with self.assertRaises(SystemExit):
-            reader.run()
-        self.module.time.sleep = original_sleep
-
-        # Now cover the exception logging path inside run()
-        reader.reqs["rid"] = {"arrival_time": time.time()}
-        calls = {"count": 0}
-
-        def _rpop(_key: str, _batch: int):
-            calls["count"] += 1
-            if calls["count"] == 1:
-                raise ValueError("boom")
-            raise SystemExit()
-
-        reader.client.rpop = _rpop  # type: ignore[assignment]
-        with self.assertRaises(SystemExit):
-            reader.run()
+        self.assertGreaterEqual(calls["count"], 2)
 
 
 class APISchedulerTest(SplitWiseSchedulerTestCase):
