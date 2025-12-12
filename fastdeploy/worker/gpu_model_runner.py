@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import os
 import queue
 import time
@@ -28,7 +29,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import Request, RequestType
+from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     GPUMemoryChecker,
     profile_run_guard,
@@ -44,6 +45,9 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 )
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
+)
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    RoutingReplayManager,
 )
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
@@ -95,7 +99,11 @@ from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
-from fastdeploy.worker.model_runner_base import ModelRunnerBase
+from fastdeploy.worker.model_runner_base import (
+    DistributedOut,
+    DistributedStatus,
+    ModelRunnerBase,
+)
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
 
@@ -119,11 +127,18 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
-        self.max_logprobs = (
-            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
-        )
+        self.max_logprobs = None
+        if self.enable_logprob:
+            self.max_logprobs = (
+                self.ori_vocab_size
+                if fd_config.model_config.max_logprobs == -1
+                else fd_config.model_config.max_logprobs
+            )
+        self.temp_scaled_logprobs = True
+        self.top_p_normalized_logprobs = True
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
+        self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
         # VL model config:
         if self.enable_mm:
@@ -198,6 +213,11 @@ class GPUModelRunner(ModelRunnerBase):
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
+        # Rollout routing replay config
+        self.routing_replay_manager = None
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
+
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -249,6 +269,56 @@ class GPUModelRunner(ModelRunnerBase):
         if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
 
         return if_only_prefill
+
+    def collect_distributed_status(self):
+        """
+        Collect distributed status
+        """
+        dist_status_list = []
+        dist_status_obj = DistributedStatus()
+        dist_out = DistributedOut()
+
+        prefill_exists = None
+        if_only_decode = True
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            prefill_exists = self.exist_prefill()
+            dist_status_obj.only_decode = not prefill_exists
+
+        # whether chunked moe
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            chunk_size = self.fd_config.parallel_config.chunked_moe_size
+            token_num = self.share_inputs["ids_remove_padding"].shape[0]
+
+            if token_num > chunk_size:
+                self.forward_meta.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+            else:
+                self.forward_meta.moe_num_chunk = 1
+
+            dist_status_obj.moe_num_chunk = self.forward_meta.moe_num_chunk
+
+        # only ep need to collect and sync distributed status
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            # call once to gather all status
+            paddle.distributed.all_gather_object(dist_status_list, dist_status_obj)
+
+            # Update Batch type for cuda graph for if_only_decode
+            if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
+
+        if_only_decode = if_only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
+
+        max_moe_num_chunk = None
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            max_moe_num_chunk = max(dist_status.moe_num_chunk for dist_status in dist_status_list)
+
+        dist_out = DistributedOut(
+            if_only_decode=if_only_decode,
+            max_moe_num_chunk=max_moe_num_chunk,
+        )
+
+        return dist_out
 
     def only_decode(self):
         """
@@ -313,182 +383,242 @@ class GPUModelRunner(ModelRunnerBase):
             schemata_key,
         )
 
-    def get_chunked_inputs(self, req: Request):
+    def _process_mm_features(self, request_list: List[Request]):
         """
-        Get inputs in current chunk
-        """
-        prefill_start_index = req.prefill_start_index
-        prefill_end_index = req.prefill_end_index
-        inputs = req.multimodal_inputs
-        input_ids = inputs["input_ids"][prefill_start_index:prefill_end_index]
-        token_type_ids = inputs["token_type_ids"][prefill_start_index:prefill_end_index]
-        image_type_ids = inputs["image_type_ids"][req.image_type_ids_start : req.image_type_ids_end]
-        images = inputs["images"][req.image_start : req.image_end]
-        grid_thw = inputs["grid_thw"][req.num_image_start : req.num_image_end]
-        mm_hashes = inputs["mm_hashes"][req.num_image_start : req.num_image_end]
-
-        return (
-            input_ids,
-            token_type_ids,
-            image_type_ids,
-            images,
-            grid_thw,
-            mm_hashes,
-        )
-
-    def batch_uncached_inputs(self, req: Request):
-        """
-        Batch uncached multimodal inputs
-        """
-        (input_ids, token_type_ids, image_type_ids, images, grid_thw, mm_hashes) = self.get_chunked_inputs(req)
-
-        image_type_ids_size = grid_thw[:, 0]
-        image_type_ids_split = np.cumsum(image_type_ids_size)[:-1]
-        image_type_ids_lst = np.array_split(image_type_ids, image_type_ids_split, axis=0)
-
-        images_size = np.prod(grid_thw, axis=1)
-        images_split = np.cumsum(images_size)[:-1]
-        images_lst = np.array_split(images, images_split, axis=0)
-
-        assert len(image_type_ids_lst) == len(
-            mm_hashes
-        ), f"image_type_ids_lst length {len(image_type_ids_lst)} != mm_hashes length {len(mm_hashes)}"
-        assert len(images_lst) == len(
-            mm_hashes
-        ), f"images_lst length {len(images_lst)} != mm_hashes length {len(mm_hashes)}"
-
-        uncached_image_type_ids = []
-        uncached_images = []
-        uncached_grid_thw = []
-        uncached_mm_hashes = []
-        for i, mm_hash in enumerate(mm_hashes):
-            if mm_hash in self.encoder_cache:
-                continue
-            uncached_image_type_ids.append(image_type_ids_lst[i])
-            uncached_images.append(images_lst[i])
-            uncached_grid_thw.append(grid_thw[i])
-            uncached_mm_hashes.append(mm_hash)
-
-        uncached_input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64)
-        uncached_token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
-        if len(uncached_mm_hashes) > 0:
-            uncached_image_type_ids = paddle.to_tensor(np.hstack(uncached_image_type_ids), dtype=paddle.int64)
-            uncached_images = paddle.to_tensor(
-                np.vstack(uncached_images), dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
-            )
-            uncached_grid_thw = paddle.to_tensor(uncached_grid_thw, dtype=paddle.int64)
-
-        return (
-            uncached_input_ids,
-            uncached_token_type_ids,
-            uncached_image_type_ids,
-            uncached_images,
-            uncached_grid_thw,
-            uncached_mm_hashes,
-        )
-
-    def scatter_and_cache_features(self, image_features, inputs):
-        """
-        Split batched image features and cache them
-        """
-        merge_size = 2
-        grid_thw = inputs["grid_thw"]
-        mm_hashes = inputs["mm_hashes"]
-        image_features_size = (paddle.prod(grid_thw[:, 1:], axis=1) // (merge_size**2)).tolist()
-        image_features_lst = paddle.split(image_features, image_features_size, axis=0)
-
-        assert len(image_features_lst) == len(
-            mm_hashes
-        ), f"image_features_lst length {len(image_features_lst)} != mm_hashes length {len(mm_hashes)}"
-        for i, mm_hash in enumerate(mm_hashes):
-            self.encoder_cache[mm_hash] = image_features_lst[i].cpu()
-
-    def _apply_mm_inputs(self, request: Request, multi_vision_inputs: dict, rope_3d_position_ids: dict):
-        """
-        Apply multimodal inputs to share_inputs
+        Process and cache vision features from model
             - add image_features, extract and cache vision features from model
             - add rope_emb, rotate position embeddings
         """
-        if self.encoder_cache:
-            evict_mm_hashes = request.get("evict_mm_hashes", None)
-            if evict_mm_hashes:
-                for mm_hash in evict_mm_hashes:
-                    self.encoder_cache.pop(mm_hash, None)
+        if not self.enable_mm:
+            return
 
-        inputs = request.multimodal_inputs
-        if request.with_image:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                multi_vision_inputs["images_lst"].append(
-                    inputs["images"][request.image_start : request.image_end].cuda()
-                )
-                multi_vision_inputs["grid_thw_lst"].extend(
-                    inputs["grid_thw"][request.num_image_start : request.num_image_end]
-                )
-                multi_vision_inputs["cu_seqlens"].extend(
-                    inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                )
-                multi_vision_inputs["vit_position_ids_lst"].extend(
-                    inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
-                )
+        self.share_inputs["image_features"] = None
+        multi_vision_inputs = {
+            "images_lst": [],
+            "grid_thw_lst": [],
+            "vit_position_ids_lst": [],
+            "cu_seqlens": [0],
+            "encoder_cache_info": [],
+            "feature_position_list": [],
+        }
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
+
+        for request in request_list:
+            if request.task_type.value != RequestType.PREFILL.value:
+                continue
+
+            if self.encoder_cache is not None:
+                evict_mm_hashes = request.get("evict_mm_hashes", None)
+                if evict_mm_hashes:
+                    for mm_hash in evict_mm_hashes:
+                        self.encoder_cache.pop(mm_hash, None)
+
+            position_ids = request.multimodal_inputs["position_ids"]
+            rope_3d_position_ids["position_ids_idx"].append(request.idx)
+            rope_3d_position_ids["position_ids_lst"].append(position_ids)
+            rope_3d_position_ids["position_ids_offset"].append(
+                position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
+            )
+
+            if self.is_pooling_model:
+                rope_3d_position_ids["max_tokens_lst"].append(0)
             else:
-                vision_inputs = inputs
-                if self.encoder_cache:
-                    (
-                        vision_inputs["input_ids"],
-                        vision_inputs["token_type_ids"],
-                        vision_inputs["image_type_ids"],
-                        vision_inputs["images"],
-                        vision_inputs["grid_thw"],
-                        vision_inputs["mm_hashes"],
-                    ) = self.batch_uncached_inputs(request)
-                    if len(vision_inputs["mm_hashes"]) > 0:
-                        # uncached multimodal inputs exist
-                        image_features = self.extract_vision_features(vision_inputs)
-                        self.scatter_and_cache_features(image_features, vision_inputs)
+                rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
-                    full_image_features_lst = []
-                    for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
-                        feature = self.encoder_cache[mm_hash].cuda()
-                        full_image_features_lst.append(feature)
-                    image_features = paddle.concat(full_image_features_lst, axis=0)
-                else:
-                    (
-                        input_ids,
-                        token_type_ids,
-                        image_type_ids,
-                        images,
-                        grid_thw,
-                        mm_hashes,
-                    ) = self.get_chunked_inputs(request)
-                    vision_inputs["input_ids"] = paddle.to_tensor(input_ids, dtype=paddle.int64)
-                    vision_inputs["token_type_ids"] = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
-                    vision_inputs["image_type_ids"] = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
-                    vision_inputs["images"] = paddle.to_tensor(
-                        images, dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+            if request.with_image:
+                inputs = request.multimodal_inputs
+                if self.encoder_cache is not None:
+                    if envs.FD_ENABLE_MAX_PREFILL:
+                        if "vit_seqlen" in inputs:
+                            vit_seqlen_list = inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                        if "vit_position_ids" in inputs:
+                            vit_position_ids_list = inputs["vit_position_ids"][
+                                request.num_image_start : request.num_image_end
+                            ]
+                    grid_thw_list = inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                    mm_hashes_list = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                    feature_positions = self._get_feature_positions(
+                        mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                        prefill_start_index=request.prefill_start_index,
+                        prefill_end_index=request.prefill_end_index,
                     )
-                    vision_inputs["grid_thw"] = paddle.to_tensor(grid_thw, dtype=paddle.int64)
-                    vision_inputs["mm_hashes"] = mm_hashes
+                    image_start_idx = request.num_image_start
 
-                    image_features = self.extract_vision_features(vision_inputs)
+                    logger.debug(
+                        f"request {request.request_id} start process encoder info, image_start_idx: {image_start_idx} "
+                        f"grid_thw_list: {grid_thw_list}, feature_positions: {feature_positions}, mm_hashes_list: {mm_hashes_list}"
+                    )
+                    for i, mm_hash in enumerate(mm_hashes_list):
+                        image_offset = np.prod(grid_thw_list[i])
+                        logger.debug(
+                            f"run idx {i} with mm_hash {mm_hash} image_offset: {image_offset} grid_thw: {grid_thw_list[i]}"
+                        )
+                        if mm_hash in self.encoder_cache:
+                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], True))
+                            continue
 
-                # part of the first image may be already cached
-                if "ernie" in self.model_config.model_type:
-                    actual_image_token_num = paddle.sum(vision_inputs["input_ids"] == self.model_config.im_patch_id)
-                elif "qwen" in self.model_config.model_type:
-                    actual_image_token_num = paddle.sum(
-                        vision_inputs["input_ids"] == vision_inputs["image_patch_id"]
-                    ) + paddle.sum(vision_inputs["input_ids"] == vision_inputs["video_patch_id"])
+                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
+                        if envs.FD_ENABLE_MAX_PREFILL:
+                            multi_vision_inputs["images_lst"].append(
+                                inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
+                            )
+                            multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
+                            multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
+                            multi_vision_inputs["vit_position_ids_lst"].append(vit_position_ids_list[i])
+                        else:
+                            multi_vision_inputs["images_lst"].append(
+                                paddle.to_tensor(
+                                    inputs["images"][image_start_idx : image_start_idx + image_offset],
+                                    dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                                )
+                            )
+                            multi_vision_inputs["grid_thw_lst"].append(
+                                paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64)
+                            )
+                        image_start_idx += image_offset
                 else:
-                    raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
-                self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
+                    if envs.FD_ENABLE_MAX_PREFILL:
+                        multi_vision_inputs["images_lst"].append(
+                            inputs["images"][request.image_start : request.image_end].cuda()
+                        )
+                        multi_vision_inputs["grid_thw_lst"].extend(
+                            paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
+                        )
+                        multi_vision_inputs["cu_seqlens"].extend(
+                            inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                        )
+                        multi_vision_inputs["vit_position_ids_lst"].extend(
+                            inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                        )
+                    else:
+                        multi_vision_inputs["images_lst"].append(
+                            paddle.to_tensor(
+                                inputs["images"][request.image_start : request.image_end],
+                                dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                            )
+                        )
+                        multi_vision_inputs["grid_thw_lst"].extend(
+                            paddle.to_tensor(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end],
+                                dtype=paddle.int64,
+                            )
+                        )
 
-        position_ids = request.multimodal_inputs["position_ids"]
-        rope_3d_position_ids["position_ids_idx"].append(request.idx)
-        rope_3d_position_ids["position_ids_lst"].append(position_ids)
-        rope_3d_position_ids["position_ids_offset"].append(
-            position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
+                    multi_vision_inputs["feature_position_list"].extend(
+                        self._get_feature_positions(
+                            mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                            prefill_start_index=request.prefill_start_index,
+                            prefill_end_index=request.prefill_end_index,
+                        )
+                    )
+
+        if self.encoder_cache is not None:
+            if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
+                image_features_output = None
+                if len(multi_vision_inputs["images_lst"]) > 0:
+                    image_features_output = self.extract_vision_features(multi_vision_inputs)
+
+                logger.debug(f"encoder_cache_info: {multi_vision_inputs['encoder_cache_info']}")
+                merge_image_features, feature_idx, thw_idx = [], 0, 0
+                for mm_hash, feature_position, use_cache in multi_vision_inputs["encoder_cache_info"]:
+                    if use_cache:
+                        assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
+                        mm_feature = self.encoder_cache[mm_hash].cuda()
+                    else:
+                        assert (
+                            image_features_output is not None
+                        ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
+                        mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+
+                        # add feature to encoder cache
+                        self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
+                        feature_idx += mm_token_lenght
+                        thw_idx += 1
+
+                    feature_start = feature_position.offset
+                    feature_end = feature_position.offset + feature_position.length
+                    merge_image_features.append(mm_feature[feature_start:feature_end])
+
+                self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
+                logger.debug(
+                    f"merge_image_features length: {len(merge_image_features)}, features shape: {self.share_inputs['image_features'].shape}"
+                )
+        elif len(multi_vision_inputs["images_lst"]) > 0:
+            assert len(multi_vision_inputs["feature_position_list"]) == len(
+                multi_vision_inputs["grid_thw_lst"]
+            ), f"{multi_vision_inputs['feature_position_list']} != {multi_vision_inputs['grid_thw_lst']}"
+
+            merge_image_features, feature_idx, thw_idx = [], 0, 0
+            image_features_output = self.extract_vision_features(multi_vision_inputs)
+            for feature_position in multi_vision_inputs["feature_position_list"]:
+                mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+
+                feature_start = feature_position.offset
+                feature_end = feature_position.offset + feature_position.length
+                merge_image_features.append(mm_feature[feature_start:feature_end])
+                feature_idx += mm_token_lenght
+                thw_idx += 1
+            self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
+
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
+
+    def _get_feature_positions(
+        self, mm_positions: List[ImagePosition], prefill_start_index: int, prefill_end_index: int
+    ):
+        """
+        Filter and adjust ImagePosition objects that fall within the specified prefill range.
+
+        Args:
+            mm_positions: List of ImagePosition objects to filter
+            prefill_start_index: Start index of the prefill range
+            prefill_end_index: End index of the prefill range
+
+        Returns:
+            List of ImagePosition objects that are within or intersect with the prefill range
+        """
+        feature_positions = []
+        for position in mm_positions:
+            position_start = position.offset
+            position_end = position.offset + position.length
+            if position_end <= prefill_start_index or position_start >= prefill_end_index:
+                continue
+            elif position_start >= prefill_start_index and position_end <= prefill_end_index:
+                new_position = copy.deepcopy(position)
+                new_position.offset = 0
+                feature_positions.append(new_position)
+            else:
+                new_position = copy.deepcopy(position)
+                # Adjust offset if it starts before prefill_start_index
+                if position_start < prefill_start_index:
+                    new_position.offset = prefill_start_index - position_start
+                    new_position.length = min(position_end, prefill_end_index) - prefill_start_index
+                # Adjust length if it extends beyond prefill_end_index
+                elif position_end > prefill_end_index:
+                    new_position.offset = 0
+                    new_position.length = prefill_end_index - position_start
+                feature_positions.append(new_position)
+
+        logger.debug(
+            f"get feature_positions, original positions: {mm_positions}, filtered positions: {feature_positions}"
         )
-        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+        return feature_positions
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -505,15 +635,6 @@ class GPUModelRunner(ModelRunnerBase):
         has_decode_task = False
 
         batch_pooling_params = []
-        self.share_inputs["image_features"] = None
-        multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
-        rope_3d_position_ids = {
-            "position_ids_idx": [],
-            "position_ids_lst": [],
-            "position_ids_offset": [0],
-            "max_tokens_lst": [],
-        }
-
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -521,13 +642,31 @@ class GPUModelRunner(ModelRunnerBase):
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
 
+            logits_info = None
+            prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                # guided decoding
+                if (
+                    request.guided_json is not None
+                    or request.guided_regex is not None
+                    or request.structural_tag is not None
+                    or request.guided_grammar is not None
+                ):
+                    logits_info, schemata_key = self._init_logits_processor(request)
+                    request.schemata_key = schemata_key
+
+                    if self.scheduler_config.splitwise_role == "decode":
+                        if (
+                            hasattr(request, "prefill_end_index")
+                            and hasattr(request, "prompt_token_ids")
+                            and request.prefill_end_index > len(request.prompt_token_ids)
+                        ):
+                            if hasattr(request, "output_token_ids"):
+                                prefill_tokens.extend(request.output_token_ids)
+
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
-                if self.enable_mm:
-                    self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
-
                 if not self.is_pooling_model:
                     if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
@@ -567,6 +706,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -574,7 +714,14 @@ class GPUModelRunner(ModelRunnerBase):
                 # pooling model request.sampling_params is None
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
+                self.forward_batch_reqs_list[idx] = request
                 has_prefill_task = True
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    if prefill_start_index == 0:
+                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
@@ -600,6 +747,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
+                self.forward_batch_reqs_list[idx] = None
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -625,7 +773,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -657,21 +804,9 @@ class GPUModelRunner(ModelRunnerBase):
             # For logits processors
             self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
-        if len(multi_vision_inputs["images_lst"]) > 0:
-            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+            self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
-        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
-            packed_position_ids = paddle.to_tensor(
-                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
-            )
-            rope_3d_lst = self.prepare_rope3d(
-                packed_position_ids,
-                rope_3d_position_ids["max_tokens_lst"],
-                rope_3d_position_ids["position_ids_offset"],
-            )
-            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
-                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
-
+        self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
@@ -729,6 +864,20 @@ class GPUModelRunner(ModelRunnerBase):
                         dtype="int64",
                     )
                     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
+                if self.enable_mm:
+                    # Fix for V0 mode: Add position encoding for decode nodes in multimodal models
+                    # to prevent garbled output. Position_ids are transmitted from prefill nodes.
+                    if (
+                        "position_ids" in request.multimodal_inputs
+                        and request.multimodal_inputs["position_ids"] is not None
+                    ):
+                        position_ids = paddle.to_tensor(
+                            request.multimodal_inputs["position_ids"],
+                            dtype="int64",
+                        )
+                        self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                            position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                        )[0]
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -841,7 +990,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -994,7 +1142,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
             self.share_inputs["temperature"][idx : idx + 1] = 1
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
@@ -1068,6 +1215,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
+        self.share_inputs["is_chunk_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32")
@@ -1078,7 +1226,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
-        self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
@@ -1229,7 +1376,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
@@ -1246,6 +1393,24 @@ class GPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+            logprobs_reqs = [
+                req
+                for req in self.forward_batch_reqs_list
+                if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
+            ]
+            if len(logprobs_reqs):
+                self.max_logprobs = max(
+                    [
+                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                        for req in logprobs_reqs
+                    ]
+                )
+                self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
+                self.top_p_normalized_logprobs = any(
+                    req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
+                )
+            elif self.enable_logprob:
+                self.max_logprobs = None if not self.speculative_decoding else 0
 
         # Remove padding
         (
@@ -1280,7 +1445,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
-        self.initialize_forward_meta()
+        self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1301,9 +1466,11 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
+            max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
+            temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
+            top_p_normalized_logprobs_flag=self.top_p_normalized_logprobs,
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
@@ -1334,11 +1501,14 @@ class GPUModelRunner(ModelRunnerBase):
         """Get current model"""
         return self.model
 
-    def initialize_forward_meta(self):
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
         """
-        Initialize forward meta and attention meta data
+        Initialize forward meta, attention meta data and update some config.
         """
         # Initialize forward meta
+        routing_replay_table = None
+        if self.routing_replay_manager is not None:
+            routing_replay_table = self.routing_replay_manager.get_routing_table()
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1365,10 +1535,15 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            routing_replay_table=routing_replay_table,
         )
 
-        # Update Batch type for cuda graph for only_decode_batch
-        if_only_decode = self.only_decode()
+        dist_status = self.collect_distributed_status()
+
+        if_only_decode = dist_status.if_only_decode
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
+
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
@@ -1383,12 +1558,20 @@ class GPUModelRunner(ModelRunnerBase):
 
         # When support capture both prefill-only and decode-only, this will use [only_prefill_use_cudagraph or only_decode_use_cudagraph]
         self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
+            only_prefill_use_cudagraph
+            if self.cudagraph_only_prefill
+            else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
+
+        # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
+        self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
+
+        # for zero size
+        self.forward_meta.is_zero_size = self.forward_meta.ids_remove_padding.shape[0] == 0
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
@@ -1447,8 +1630,10 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if create_cache_tensor:
                 logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
@@ -1474,12 +1659,25 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                if kv_cache_quant_type == "block_wise_fp8":
+                    key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_cache_scales = share_external_data(
+                        key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
+                    )
                 if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
                     val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
                     cache_kvs_list.extend([key_cache, val_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                        val_cache_scales = share_external_data(
+                            val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
+                        )
+                        cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        cache_kvs_list.extend([key_cache_scales])
 
         self.share_inputs["caches"] = cache_kvs_list
 
@@ -1613,6 +1811,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
         )
 
@@ -1713,6 +1912,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
         )
@@ -1731,7 +1931,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(
-                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                    full_hidden_states=model_output,
+                    step_use_cudagraph=self.forward_meta.step_use_cudagraph,
+                    is_dummy_run=True,
                 )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
@@ -1740,8 +1942,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _dummy_run(
         self,
-        num_tokens: paddle.Tensor,
-        batch_size: paddle.Tensor,
+        num_tokens: int,
+        batch_size: int,
         expected_decode_len: int = 1,
         in_capturing: bool = False,
         capture_prefill: bool = False,
@@ -1778,7 +1980,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         while True:
             # 1. Initialize forward meta and attention meta data
-            self._prepare_inputs()
+            self._prepare_inputs(is_dummy_or_profile_run=True)
 
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
@@ -1787,21 +1989,20 @@ class GPUModelRunner(ModelRunnerBase):
             # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
-                    self.share_inputs["ids_remove_padding"],
+                    self.forward_meta.ids_remove_padding,
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
             else:
                 model_output = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                    forward_meta=self.forward_meta,
+                    self.forward_meta.ids_remove_padding,
+                    self.forward_meta,
                 )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
             if self.is_pooling_model:
-                hidden_states = model_output
-                self._dummy_pooler_run(hidden_states, model_output)
+                self._dummy_pooler_run(model_output, model_output)
                 break
             else:
                 hidden_states = rebuild_padding(
@@ -1829,6 +2030,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
+
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.clear_routing_table()
 
     def _update_chunked_prefill(self, tasks):
         """
@@ -1926,7 +2130,12 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         assert batch_size % 2 == 0
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                * (self.speculative_config.num_speculative_tokens + 1)
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(batch_size / 2),
                             in_capturing=True,
                             expected_decode_len=1,
@@ -1943,7 +2152,11 @@ class GPUModelRunner(ModelRunnerBase):
                         else:
                             assert batch_size % 2 == 0
                             self._dummy_run(
-                                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                                num_tokens=(
+                                    self.scheduler_config.max_num_seqs
+                                    if self.scheduler_config.splitwise_role == "decode"
+                                    else self.scheduler_config.max_num_batched_tokens
+                                ),
                                 batch_size=int(batch_size / 2),
                                 in_capturing=True,
                                 expected_decode_len=3,
@@ -1955,7 +2168,11 @@ class GPUModelRunner(ModelRunnerBase):
                     # Capture Draft Model with bsz 1
                     if 1 in capture_sizes:
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(1),
                             in_capturing=True,
                             expected_decode_len=3,
@@ -1968,7 +2185,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        num_tokens=(
+                            self.scheduler_config.max_num_seqs
+                            if self.scheduler_config.splitwise_role == "decode"
+                            else self.scheduler_config.max_num_batched_tokens
+                        ),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -1996,12 +2217,40 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    def vision_encoder_compile(self):
+        if self.graph_opt_config.graph_opt_level == 0:
+            return
+        # Currently only PaddleOCR-VL model is supported for vision encoder layer
+        if self.model_config.model_type != "paddleocr_vl":
+            return
+
+        # Compile for paddleocr_vl vision encoder layer
+        def apply_compile(fn):
+            backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
+            return paddle.jit.to_static(
+                fn,
+                full_graph=False,
+                backend=backend,
+            )
+
+        from fastdeploy.model_executor.models.paddleocr_vl.siglip import SiglipEncoder
+
+        SiglipEncoder._run_encoder_layer = apply_compile(SiglipEncoder._run_encoder_layer)
+
+        # Warmup for paddleocr_vl vision encoder layer
+        logger.info(f"Warmup for {self.model_config.model_type} compile...")
+        self._dummy_run_extract_vision_features()
+
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                num_tokens=(
+                    self.scheduler_config.max_num_seqs
+                    if self.scheduler_config.splitwise_role == "decode"
+                    else self.scheduler_config.max_num_batched_tokens
+                ),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -2019,6 +2268,21 @@ class GPUModelRunner(ModelRunnerBase):
         for idx in range(0, num_running_requests):
             if self.share_inputs["step_idx"][idx] == 0:
                 prefill_done_idxs.append(idx)
+
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if model_forward_batch is None:
+                return prefill_done_idxs
+
+            for task in model_forward_batch:
+                if task.task_type.value != RequestType.PREFILL.value:
+                    continue
+                # in chunk prefill
+                if self.cache_config.enable_chunked_prefill:
+                    if hasattr(task, "prefill_end_index") and hasattr(task, "prompt_token_ids"):
+                        if len(task.prompt_token_ids) > task.prefill_end_index and task.idx in prefill_done_idxs:
+                            prefill_done_idxs.remove(task.idx)
+
+            return prefill_done_idxs
 
         if self.cache_config.enable_chunked_prefill:
             if model_forward_batch is not None:
@@ -2062,36 +2326,36 @@ class GPUModelRunner(ModelRunnerBase):
         for proc in self.sampling_metadata.logits_processors:
             proc.update_state(self.share_inputs)
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
-
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
-                self.share_inputs["ids_remove_padding"],
+                self.forward_meta.ids_remove_padding,
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
         else:
             model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta,
+                self.forward_meta.ids_remove_padding,
+                self.forward_meta,
             )
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # Then there is data on other runner, the current runner is required to execute part of the model.
+        # But not need to run the below code.
+        if not self.not_need_stop():
+            return None
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
-            hidden_states = model_output
-            pooler_output = self._pool(hidden_states, num_running_requests)
+            pooler_output = self._pool(model_output, num_running_requests)
 
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2119,6 +2383,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
             )
 
@@ -2163,6 +2428,19 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     p_done_idxs,
                 )
+
+                if (
+                    self.enable_logprob
+                    and not envs.FD_USE_GET_SAVE_OUTPUT_V1
+                    and sampler_output.logprobs_tensors is None
+                ):
+                    sampler_output.logprobs_tensors = LogprobsTensors(
+                        logprob_token_ids=sampler_output.sampled_token_ids,
+                        logprobs=paddle.empty_like(sampler_output.sampled_token_ids, device="cpu", dtype="float32"),
+                        selected_token_ranks=paddle.empty(
+                            [sampler_output.sampled_token_ids.shape[0]], device="cpu", dtype="int64"
+                        ),
+                    )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         sampler_output.sampled_token_ids,
@@ -2197,7 +2475,6 @@ class GPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
-
             # 5. Post Process
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2225,6 +2502,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,
@@ -2293,12 +2571,19 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
+        # Routing replay
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            if (
+                not self.exist_prefill()
+                and not self.exist_decode()
+                and self.share_inputs["is_block_step"].sum() == 0
+                and self.share_inputs["is_chunk_step"].sum() == 0
+            ):
+                self.routing_replay_manager.put_table_to_store()
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
-
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
-
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
@@ -2309,33 +2594,49 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_token_ids=prompt_token_ids,
             pooling_params=self.pooling_params,
         )
+
         num_scheduled_tokens_list = [
             int(self.share_inputs["seq_lens_this_time"][i]) for i in range(num_running_requests)
         ]
+
         device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
-        seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
+
+        seq_lens_decoder = self.share_inputs["seq_lens_decoder"][:num_running_requests]
+        seq_lens_encoder = self.share_inputs["seq_lens_encoder"][:num_running_requests]
+
         pooler_output: list[Optional[paddle.Tensor]] = []
-        for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
-            output = raw_output.data if int(seq_len) == int(prompt_len) else None
+        pooler_output_idx = 0
+
+        for i, prompt_len in enumerate(pooling_metadata.prompt_lens):
+            current_seq_len = num_scheduled_tokens_list[i]
+
+            if current_seq_len == 0:
+                pooler_output.append(None)
+                continue
+
+            total_processed = int(seq_lens_decoder[i]) + int(seq_lens_encoder[i])
+
+            if total_processed == int(prompt_len):
+                output = raw_pooler_output[pooler_output_idx]
+            else:
+                output = None
+
             pooler_output.append(output)
+            pooler_output_idx += 1
 
-        pooler_output = PoolerOutput(
-            outputs=pooler_output,
-        )
+        return PoolerOutput(outputs=pooler_output)
 
-        return pooler_output
-
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
@@ -2470,6 +2771,7 @@ class GPUModelRunner(ModelRunnerBase):
         # prompt_logprobs
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
+        self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2527,7 +2829,7 @@ class GPUModelRunner(ModelRunnerBase):
         token_type_ids = one["token_type_ids"][np.newaxis, :]
         token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
 
-        if one["images"] is not None:
+        if "images" in one and one["images"] is not None:
             image_type_ids = one["image_type_ids"][np.newaxis, :]
             images = one["images"]
             image_type_ids = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
@@ -2553,21 +2855,19 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return result
 
-    def extract_vision_features_ernie(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
+    def extract_vision_features_ernie(self, vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
+        """
+        vision feature extactor for ernie-vl
+        """
+        assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
+
+        grid_thw = paddle.to_tensor(vision_inputs["grid_thw_lst"], dtype=paddle.int64)
         # ernie-vl has images norm
-        images = inputs["images"].cast("float32")
+        images = paddle.concat(vision_inputs["images_lst"]).cast("float32")
         images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
         images = images / self.image_preprocess.image_std_tensor
         images = images.cast("bfloat16")
 
-        token_type_ids = inputs["token_type_ids"]
-        token_type_ids_w_video = token_type_ids
-        input_ids = inputs["input_ids"]
-        # convert to img patch id
-        image_mask = input_ids == self.model_config.im_patch_id
-        image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
@@ -2584,17 +2884,15 @@ class GPUModelRunner(ModelRunnerBase):
             # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
                 image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
                 grid_thw,
             )
         return image_features
 
-    def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
-        images = inputs["images"]
+    def extract_vision_features_qwen(self, vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
+        assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
+
+        grid_thw = paddle.to_tensor(vision_inputs["grid_thw_lst"], dtype=paddle.int64)
+        images = paddle.concat(vision_inputs["images_lst"]).cast("bfloat16")
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
@@ -2606,7 +2904,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         return image_features
 
-    def extract_vision_features_paddleocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+    def extract_vision_features_paddleocr(self, inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         if envs.FD_ENABLE_MAX_PREFILL:
             inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
             images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
@@ -2650,16 +2948,50 @@ class GPUModelRunner(ModelRunnerBase):
         return image_features
 
     @paddle.no_grad()
-    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+    def extract_vision_features(self, multi_vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         """extract_vision_features"""
         if "ernie" in self.model_config.model_type:
-            return self.extract_vision_features_ernie(inputs)
+            return self.extract_vision_features_ernie(multi_vision_inputs)
         elif "qwen" in self.model_config.model_type:
-            return self.extract_vision_features_qwen(inputs)
+            return self.extract_vision_features_qwen(multi_vision_inputs)
         elif "paddleocr" in self.model_config.model_type:
-            return self.extract_vision_features_paddleocr(inputs)
+            return self.extract_vision_features_paddleocr(multi_vision_inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
+
+    @paddle.no_grad()
+    def _dummy_run_extract_vision_features(self):
+        grid_thw_list = ([(1, 10, 88), (1, 10, 80)], [(1, 14, 62), (1, 20, 42), (1, 14, 60)])
+        for grid_thw in grid_thw_list:
+            images = []
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                images.append(paddle.uniform(shape=[numel, 3, 14, 14], dtype="float32", min=0.0, max=1.0))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
+
+            images = paddle.concat(images, axis=0)
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+
+            with paddle.amp.auto_cast(
+                True,
+                custom_black_list=self.amp_black,
+                custom_white_list=self.amp_white,
+                level="O2",
+                dtype=self.model_config.dtype,
+            ):
+                self.model.visual(
+                    pixel_values=images,
+                    image_grid_thw=grid_thw,
+                    position_ids=position_ids,
+                    interpolate_pos_encoding=True,
+                    cu_seqlens=cu_seqlens,
+                    use_rope=True,
+                    window_size=-1,
+                )
 
     @paddle.no_grad()
     def prepare_rope3d(

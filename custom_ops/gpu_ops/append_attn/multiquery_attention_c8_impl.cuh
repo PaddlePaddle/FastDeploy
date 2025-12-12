@@ -1218,10 +1218,7 @@ void MultiQueryAppendC8Attention(
     const int dev_id = 0;
     int sm_count;
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
-    uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (!is_decoder) {
-      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
-    }
+    uint32_t chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     const int num_chunks = div_up(max_dec_len, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
@@ -1271,8 +1268,12 @@ void MultiQueryAppendC8Attention(
                              cudaFuncAttributeMaxDynamicSharedMemorySize,
                              smem_size);
       }
-
-      nosplit_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      launchWithPdlWhenEnabled(
+          nosplit_kv_kernel,
+          grids,
+          blocks,
+          smem_size,
+          stream,
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           const_cast<uint8_t *>(cache_k.data<uint8_t>()),
           const_cast<uint8_t *>(cache_v.data<uint8_t>()),
@@ -1335,7 +1336,12 @@ void MultiQueryAppendC8Attention(
             static_cast<size_t>(speculate_max_draft_token_num * bsz *
                                 num_chunks * num_heads));
       }
-      split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      launchWithPdlWhenEnabled(
+          split_kv_kernel,
+          grids,
+          blocks,
+          smem_size,
+          stream,
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           const_cast<uint8_t *>(cache_k.data<uint8_t>()),
           const_cast<uint8_t *>(cache_v.data<uint8_t>()),
@@ -1379,78 +1385,86 @@ void MultiQueryAppendC8Attention(
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(bsz, num_heads);
         dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_decoder_kernel<NV_TYPE,
-                                          vec_size,
-                                          blocky,
-                                          HEAD_DIM,
-                                          OUT_NV_TYPE,
-                                          ENABLE_PREFILL>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                sinks ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(sinks.get().data<T>()))
-                      : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM);
+        launchWithPdlWhenEnabled(
+            merge_multi_chunks_decoder_kernel<NV_TYPE,
+                                              vec_size,
+                                              blocky,
+                                              HEAD_DIM,
+                                              OUT_NV_TYPE,
+                                              ENABLE_PREFILL>,
+            grids_merge,
+            blocks_merge,
+            0,
+            stream,
+            reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+            static_cast<float *>(tmp_m->ptr()),
+            static_cast<float *>(tmp_d->ptr()),
+            seq_lens_q.data<int>(),
+            seq_lens_kv.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cu_seqlens_q.data<int>(),
+            shift_bias ? reinterpret_cast<NV_TYPE *>(
+                             const_cast<T *>(shift_bias.get().data<T>()))
+                       : nullptr,
+            smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(smooth_weight.get().data<T>()))
+                          : nullptr,
+            sinks ? reinterpret_cast<NV_TYPE *>(
+                        const_cast<T *>(sinks.get().data<T>()))
+                  : nullptr,
+            reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+            quant_max_bound,
+            quant_min_bound,
+            in_scale,
+            max_seq_len,
+            num_chunks,
+            num_heads,
+            chunk_size,
+            HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
         dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_v2_kernel<NV_TYPE,
-                                     vec_size,
-                                     blocky,
-                                     HEAD_DIM,
-                                     OUT_NV_TYPE,
-                                     ENABLE_PREFILL>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                batch_id_per_token.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                sinks ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(sinks.get().data<T>()))
-                      : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM,
-                token_num,
-                speculate_max_draft_token_num);
+        launchWithPdlWhenEnabled(
+            merge_multi_chunks_v2_kernel<NV_TYPE,
+                                         vec_size,
+                                         blocky,
+                                         HEAD_DIM,
+                                         OUT_NV_TYPE,
+                                         ENABLE_PREFILL>,
+            grids_merge,
+            blocks_merge,
+            0,
+            stream,
+            reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+            static_cast<float *>(tmp_m->ptr()),
+            static_cast<float *>(tmp_d->ptr()),
+            seq_lens_q.data<int>(),
+            seq_lens_kv.data<int>(),
+            seq_lens_encoder.data<int>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            shift_bias ? reinterpret_cast<NV_TYPE *>(
+                             const_cast<T *>(shift_bias.get().data<T>()))
+                       : nullptr,
+            smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(smooth_weight.get().data<T>()))
+                          : nullptr,
+            sinks ? reinterpret_cast<NV_TYPE *>(
+                        const_cast<T *>(sinks.get().data<T>()))
+                  : nullptr,
+            reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+            quant_max_bound,
+            quant_min_bound,
+            in_scale,
+            max_seq_len,
+            num_chunks,
+            num_heads,
+            chunk_size,
+            HEAD_DIM,
+            token_num,
+            speculate_max_draft_token_num);
       }
     }
   } else {
@@ -1508,9 +1522,6 @@ void MultiQueryAppendC8Attention(
     int sm_count;
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (!is_decoder) {
-      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
-    }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
     uint32_t attn_mask_len;
@@ -1568,8 +1579,12 @@ void MultiQueryAppendC8Attention(
                              cudaFuncAttributeMaxDynamicSharedMemorySize,
                              smem_size);
       }
-
-      nosplit_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      launchWithPdlWhenEnabled(
+          nosplit_kv_kernel,
+          grids,
+          blocks,
+          smem_size,
+          stream,
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           const_cast<uint8_t *>(cache_k.data<uint8_t>()),
           const_cast<uint8_t *>(cache_v.data<uint8_t>()),
@@ -1648,7 +1663,12 @@ void MultiQueryAppendC8Attention(
                                   num_chunks * num_heads));
         }
       }
-      split_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      launchWithPdlWhenEnabled(
+          split_kv_kernel,
+          grids,
+          blocks,
+          smem_size,
+          stream,
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           const_cast<uint8_t *>(cache_k.data<uint8_t>()),
           const_cast<uint8_t *>(cache_v.data<uint8_t>()),
@@ -1695,73 +1715,87 @@ void MultiQueryAppendC8Attention(
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(bsz, num_heads);
         dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_decoder_kernel<NV_TYPE, vec_size, blocky, HEAD_DIM>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                sinks ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(sinks.get().data<T>()))
-                      : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM);
+        auto *kernelFn = merge_multi_chunks_decoder_kernel<NV_TYPE,
+                                                           vec_size,
+                                                           blocky,
+                                                           HEAD_DIM,
+                                                           OUT_NV_TYPE,
+                                                           ENABLE_PREFILL>;
+        launchWithPdlWhenEnabled(
+            kernelFn,
+            grids_merge,
+            blocks_merge,
+            0,
+            stream,
+            reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+            static_cast<float *>(tmp_m->ptr()),
+            static_cast<float *>(tmp_d->ptr()),
+            seq_lens_q.data<int>(),
+            seq_lens_kv.data<int>(),
+            seq_lens_encoder.data<int>(),
+            cu_seqlens_q.data<int>(),
+            shift_bias ? reinterpret_cast<NV_TYPE *>(
+                             const_cast<T *>(shift_bias.get().data<T>()))
+                       : nullptr,
+            smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(smooth_weight.get().data<T>()))
+                          : nullptr,
+            sinks ? reinterpret_cast<NV_TYPE *>(
+                        const_cast<T *>(sinks.get().data<T>()))
+                  : nullptr,
+            reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+            quant_max_bound,
+            quant_min_bound,
+            in_scale,
+            max_seq_len,
+            num_chunks,
+            num_heads,
+            chunk_size,
+            HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
         dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
         dim3 blocks_merge(blockx, blocky);
-        merge_multi_chunks_v2_kernel<NV_TYPE,
-                                     vec_size,
-                                     blocky,
-                                     HEAD_DIM,
-                                     OUT_NV_TYPE,
-                                     ENABLE_PREFILL>
-            <<<grids_merge, blocks_merge, 0, stream>>>(
-                reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
-                static_cast<float *>(tmp_m->ptr()),
-                static_cast<float *>(tmp_d->ptr()),
-                seq_lens_q.data<int>(),
-                seq_lens_kv.data<int>(),
-                seq_lens_encoder.data<int>(),
-                batch_id_per_token.data<int>(),
-                cu_seqlens_q.data<int>(),
-                shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                 const_cast<T *>(shift_bias.get().data<T>()))
-                           : nullptr,
-                smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
-                                    smooth_weight.get().data<T>()))
-                              : nullptr,
-                sinks ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(sinks.get().data<T>()))
-                      : nullptr,
-                reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-                quant_max_bound,
-                quant_min_bound,
-                in_scale,
-                max_seq_len,
-                num_chunks,
-                num_heads,
-                chunk_size,
-                HEAD_DIM,
-                token_num,
-                speculate_max_draft_token_num);
+        launchWithPdlWhenEnabled(
+            merge_multi_chunks_v2_kernel<NV_TYPE,
+                                         vec_size,
+                                         blocky,
+                                         HEAD_DIM,
+                                         OUT_NV_TYPE,
+                                         ENABLE_PREFILL>,
+            grids_merge,
+            blocks_merge,
+            0,
+            stream,
+            reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
+            static_cast<float *>(tmp_m->ptr()),
+            static_cast<float *>(tmp_d->ptr()),
+            seq_lens_q.data<int>(),
+            seq_lens_kv.data<int>(),
+            seq_lens_encoder.data<int>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            shift_bias ? reinterpret_cast<NV_TYPE *>(
+                             const_cast<T *>(shift_bias.get().data<T>()))
+                       : nullptr,
+            smooth_weight ? reinterpret_cast<NV_TYPE *>(
+                                const_cast<T *>(smooth_weight.get().data<T>()))
+                          : nullptr,
+            sinks ? reinterpret_cast<NV_TYPE *>(
+                        const_cast<T *>(sinks.get().data<T>()))
+                  : nullptr,
+            reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
+            quant_max_bound,
+            quant_min_bound,
+            in_scale,
+            max_seq_len,
+            num_chunks,
+            num_heads,
+            chunk_size,
+            HEAD_DIM,
+            token_num,
+            speculate_max_draft_token_num);
       }
     }
   }

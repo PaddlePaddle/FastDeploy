@@ -50,6 +50,15 @@ def get_guided_backend(
             fd_config=fd_config,
             **kwargs,
         )
+    elif fd_config.structured_outputs_config.guided_decoding_backend.lower() == "guidance":
+        from fastdeploy.model_executor.guided_decoding.guidance_backend import (
+            LLGuidanceBackend,
+        )
+
+        return LLGuidanceBackend(
+            fd_config=fd_config,
+            **kwargs,
+        )
     else:
         raise ValueError(
             f"Get unsupported backend {fd_config.structured_outputs_config.guided_decoding_backend},"
@@ -77,5 +86,11 @@ def schema_checker(backend_name: str, **kwargs):
         )
 
         return XGrammarChecker(**kwargs)
+    elif backend_name.lower() == "guidance":
+        from fastdeploy.model_executor.guided_decoding.guidance_backend import (
+            LLGuidanceChecker,
+        )
+
+        return LLGuidanceChecker(**kwargs)
     else:
         raise ValueError(f"Get unsupported backend {backend_name}, please check your configuration.")

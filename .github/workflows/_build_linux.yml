@@ -71,7 +71,7 @@ jobs:
             FULL_REPO="${{ github.repository }}"
             REPO_NAME="${FULL_REPO##*/}"
             BASE_BRANCH="${{ github.base_ref }}"
-
+            docker pull ${docker_image}
             # Clean the repository directory before starting
             docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
@@ -155,7 +155,7 @@ jobs:
             elif [[ "${PADDLEVERSION}" != "" ]];then
               python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
             else
-              python -m pip install paddlepaddle-gpu==3.3.0.dev20251112 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -164,7 +164,7 @@ jobs:
             python -m pip install -r requirements.txt
             python -m pip install wheel
             # 编译RDMA
-            export ENABLE_FD_RDMA=1
+            export FD_ENABLE_RDMA_COMPILE=1
             bash build.sh 1 python false [${COMPILE_ARCH}]
             ls ./dist/*.whl
             '

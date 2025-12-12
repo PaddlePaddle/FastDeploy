@@ -29,7 +29,6 @@ from fastdeploy.model_executor.guided_decoding import (
     BaseChecker,
     LogitsProcessorBase,
 )
-from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 try:
@@ -74,7 +73,6 @@ class XGrammarProcessor(LogitsProcessorBase):
         enable_thinking: bool = False,
     ):
         super().__init__(enable_reasoning=enable_thinking)
-        self.max_rollback_tokens = 200
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.compiled_grammar = compiled_grammar
@@ -83,7 +81,6 @@ class XGrammarProcessor(LogitsProcessorBase):
 
         self.matcher = GrammarMatcher(
             compiled_grammar=compiled_grammar,
-            max_rollback_tokens=self.max_rollback_tokens,
             terminate_without_stop_token=terminate_without_stop_token,
             override_stop_tokens=override_stop_tokens,
         )
@@ -451,6 +448,7 @@ def apply_token_mask(
     logits: paddle.Tensor,
     token_bitmask: torch.Tensor,
     indices: Optional[List[int]] = None,
+    is_cuda_platform: bool = True,
 ) -> paddle.Tensor:
     """
     Apply the token mask to the logits, modifying probabilities of invalid tokens.
@@ -463,17 +461,16 @@ def apply_token_mask(
     Returns:
         paddle.Tensor: The modified logits tensor
     """
-
-    if current_platform.is_cuda():
+    skip_out_indices = len(indices) == logits.shape[0]
+    if is_cuda_platform:
         dlpack = paddle.utils.dlpack.to_dlpack(logits)
         t_logits = torch.from_dlpack(dlpack)
         apply_token_bitmask_inplace(
             logits=t_logits,
             bitmask=token_bitmask.to(t_logits.device, non_blocking=True),
-            indices=indices,
+            indices=indices if not skip_out_indices else None,
         )
-        dlpack2 = torch.utils.dlpack.to_dlpack(t_logits)
-        return paddle.utils.dlpack.from_dlpack(dlpack2)
+        return logits
     else:
         origin_place = logits.place
         origin_dtype = logits.dtype
@@ -483,7 +480,7 @@ def apply_token_mask(
         apply_token_bitmask_inplace(
             logits=logits,
             bitmask=token_bitmask.to(logits.device, non_blocking=True),
-            indices=indices,
+            indices=indices if not skip_out_indices else None,
         )
 
         return paddle.to_tensor(

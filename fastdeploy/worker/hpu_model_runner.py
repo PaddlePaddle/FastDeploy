@@ -34,6 +34,7 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
@@ -209,6 +210,7 @@ def rebuild_padding_v3_1(
     return output_data
 
 
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 from fastdeploy.model_executor.ops.intel_hpu import fused_mlp
 
@@ -219,6 +221,8 @@ def fused_attention_forward(
     qkv_proj: QKVParallelLinear = None,
     o_proj: RowParallelLinear = None,
     forward_meta: HPUForwardMeta = None,
+    q_norm: RMSNorm = None,
+    k_norm: RMSNorm = None,
 ):
     """
     The forward function of attention layer.
@@ -233,6 +237,8 @@ def fused_attention_forward(
         o_proj,
         self,
         forward_meta,
+        q_norm,
+        k_norm,
     )
 
 
@@ -247,22 +253,41 @@ def fused_self_atten_forward(
         qkv_proj=self.qkv_proj,
         o_proj=self.o_proj,
         forward_meta=forward_meta,
+        q_norm=self.q_norm if hasattr(self, "q_norm") else None,
+        k_norm=self.k_norm if hasattr(self, "k_norm") else None,
     )
 
     return atten_out
 
 
-def fused_mlp_forward(self, x):
-    """ """
+def fused_mlp_forward(
+    self,
+    hidden_states: paddle.Tensor,
+    forward_meta: Optional[ForwardMeta] = None,
+):
+    """
+    The forward function for the MLP (Multi-Layer Perceptron) layer.
+    Args:
+        hidden_states (paddle.Tensor): The input tensor to the MLP layer.
+        forward_meta (Optional[ForwardMeta]): Optional metadata for the forward pass.
+    Returns:
+        paddle.Tensor: The output tensor after applying the MLP layer and (optionally) all-reduce.
+    """
     out = fused_mlp(
-        x,
+        hidden_states,
         self.up_gate_proj.weight,
         None,
         self.down_proj.weight,
+        getattr(self.up_gate_proj, "act_scale", None),
+        getattr(self.up_gate_proj, "weight_scale", None),
+        None,
+        getattr(self.down_proj, "act_scale", None),
+        getattr(self.down_proj, "weight_scale", None),
+        False,
     )
 
     # all_reduce
-    if self.nranks > 1:
+    if self.up_gate_proj.tp_size > 1:
         from fastdeploy.distributed.communication import (
             tensor_model_parallel_all_reduce_custom,
         )
@@ -328,7 +353,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -1107,10 +1132,11 @@ class HPUModelRunner(ModelRunnerBase):
 
         max_prefill_length = self.cache_config.block_size + warmup_max_model_len
         prefill_context_block_step = int(os.environ.get("CONTEXT_BLOCK_STEP_PREFILL", 1))
+        prefill_batchs.reverse()
+        prefill_length_with_contexts = list(range(self.cache_config.block_size, max_prefill_length, prefill_seq_step))
+        prefill_length_with_contexts.reverse()
         for prefill_batch in prefill_batchs:
-            for prefill_length_with_context in range(
-                self.cache_config.block_size, max_prefill_length, prefill_seq_step
-            ):
+            for prefill_length_with_context in prefill_length_with_contexts:
                 if prefill_length_with_context * prefill_batch > self.scheduler_config.max_num_batched_tokens:
                     continue
                 for context_len in range(
@@ -1158,6 +1184,8 @@ class HPUModelRunner(ModelRunnerBase):
             current_decode_block_num += decode_block_num_step
 
         logger.info(f"warmup decode_batchs: {decode_batchs}, decode_block_nums: {decode_block_nums} start")
+        decode_batchs.reverse()
+        decode_block_nums.reverse()
         for decode_batch in decode_batchs:
             for decode_block_num in decode_block_nums:
                 if decode_block_num < decode_batch:
@@ -1345,14 +1373,14 @@ class HPUModelRunner(ModelRunnerBase):
             self.prof.step()
         return None
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 

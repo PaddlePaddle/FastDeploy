@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import pickle
 import unittest
 from unittest.mock import ANY, MagicMock, patch
@@ -777,6 +793,8 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.processor.processor = MagicMock()
         self.processor.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = None
+        self.processor.model_status_dict = {}
 
         # 模拟 _apply_default_parameters
         def mock_apply_default_parameters(request_or_dict):
@@ -955,6 +973,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "prompt": "test prompt",
             "multimodal_data": {"image": ["image1"]},
             "metadata": {"generated_token_ids": []},
+            "request_id": "test-request",
         }
         request_obj.to_dict.return_value = request_dict
 
@@ -1140,6 +1159,27 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.assertTrue(np.array_equal(result["grid_thw"], grid_feature))
         self.assertTrue(np.array_equal(result["image_type_ids"], np.array([0])))
         self.assertTrue(np.array_equal(result["position_ids"], np.array([[0], [1], [2]], dtype=np.int64)))
+
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
 
 if __name__ == "__main__":
