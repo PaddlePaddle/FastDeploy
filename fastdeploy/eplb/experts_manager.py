@@ -443,6 +443,9 @@ class RedundantExpertManager:
             self.logger.info("redundant_expert: allreduce_load_weight_result waiting")
             return False
         # self.broadcast_load_weight_success()
+        self.logger.info(
+            f"redundant_expert_enable_schedule_cordon {self.eplb_config.redundant_expert_enable_schedule_cordon}"
+        )
         if not exist_fail and all_success:
             # prefill需要等待调度屏蔽
             if (
@@ -460,7 +463,7 @@ class RedundantExpertManager:
         """
         all_success, exist_fail = False, False
 
-        success_count, fail_count = 0, 0
+        success_count, fail_count, unfinish_count = 0, 0, 0
         for addr in self.dp_rank_address:
             try:
                 params = {
@@ -492,6 +495,11 @@ class RedundantExpertManager:
                             f"redundant_expert: allgather_load_weight_result fail. addr {addr}, result {result}"
                         )
                         exist_fail = True
+                    elif result == 0:
+                        unfinish_count += 1
+                        self.logger.debug(
+                            f"edundant_expert: allgather_load_weight_result unfinish. addr {addr}, result {result}"
+                        )
             except Exception as e:
                 self.logger.error(f"redundant_expert: allgather_load_weight_result error. addr {addr}, error {e}")
 
@@ -499,6 +507,11 @@ class RedundantExpertManager:
             self.logger.info(
                 "redundant_expert: allgather_load_weight_result not all ready, "
                 + f"succ {success_count} fail {fail_count} total {len(self.dp_rank_address)}"
+            )
+        elif unfinish_count > 0:
+            self.logger.info(
+                "redundant_expert: allgather_load_weight_result not all ready, "
+                + f"succ {success_count} fail {fail_count} unfinish_count {unfinish_count} total {len(self.dp_rank_address)}"
             )
         else:
             self.logger.info("redundant_expert: allgather_load_weight_result all success")
