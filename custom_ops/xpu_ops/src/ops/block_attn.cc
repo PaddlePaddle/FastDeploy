@@ -585,7 +585,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                                                      int,
                                                      E_Scale>(
             xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()),  // qkv
+            reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()) +
+                total_enc_len * qkv_shape[qkv_shape.size() - 1],  // qkv
             reinterpret_cast<const float*>(
                 rotary_embs.data<float>()),  // rotary_pos_emb
             reinterpret_cast<const int*>(
@@ -722,7 +723,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
               : quant_v_scale_inv,
           nullptr,          // o_maxptr
           param.head_dim);  // vo_head_dim
-      PD_CHECK(0, "speculative_attention unimplemented");
       PD_CHECK(ret == api::SUCCESS,
                "xfa::speculative_attention_decoder failed.");
       if (!Eq_len) {

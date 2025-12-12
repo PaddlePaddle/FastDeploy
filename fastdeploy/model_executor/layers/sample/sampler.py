@@ -14,8 +14,9 @@
 # limitations under the License.
 """
 
+import multiprocessing
 import time
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, List, Optional
 
 import paddle
@@ -24,6 +25,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.envs import FD_FILL_BITMASK_BATCH
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
@@ -69,11 +71,26 @@ class GuidedDecoding:
 
     def __init__(self, fd_config: FDConfig):
         self.token_bitmask = None
-        self.logits_processors: List[Any] = [None] * fd_config.scheduler_config.max_num_seqs
+        self.max_num_seqs: int = int(
+            fd_config.scheduler_config.max_num_seqs if fd_config.scheduler_config is not None else 1
+        )
+        self.logits_processors: List[Any] = [None] * self.max_num_seqs
         self.reasoning_parser = None
-        self._prefill_done_idxs: List[bool] = [False] * fd_config.scheduler_config.max_num_seqs
+        self._prefill_done_idxs: List[bool] = [False] * self.max_num_seqs
         # for pd
-        self._tokens_to_acc: List[None | List[int]] = [None] * fd_config.scheduler_config.max_num_seqs
+        self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
+
+        self.fill_bitmask_parallel_batch_size: int = FD_FILL_BITMASK_BATCH
+        max_workers = max(
+            1,
+            min(multiprocessing.cpu_count() // 2, int(self.max_num_seqs) / int(self.fill_bitmask_parallel_batch_size)),
+        )
+        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=int(max_workers))
+        self._fillmask_futures: List[Future] = [None] * self.max_num_seqs
+        self.is_cuda_platform = current_platform.is_cuda()
+        logger.info(
+            f"GuidedDecoding max_num_seqs={self.max_num_seqs} fill_bitmask_parallel_batch_size={self.fill_bitmask_parallel_batch_size} is_cuda_platform={self.is_cuda_platform} max_workers={max_workers}"
+        )
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         self.reasoning_parser = reasoning_parser
@@ -140,6 +157,7 @@ class GuidedDecoding:
             if isinstance(self.logits_processors[idx], Future):
                 continue
 
+        idxs = []
         for idx, processor in enumerate(self.logits_processors):
             if processor is None or not self._prefill_done_idxs[idx]:
                 continue
@@ -156,7 +174,47 @@ class GuidedDecoding:
                 self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
 
             if self.should_fill_bitmask(idx):
-                processor.fill_token_bitmask(self.token_bitmask, idx)
+                idxs.append(idx)
+        self._async_batch_fill_token_bitmask(idxs)
+
+    def batch_fill_token_bitmask(self, batch: List[int]):
+        """
+        Fills the token bitmask for a batch of logits processor indices.
+
+        This method is typically called asynchronously via a thread pool executor
+        to parallelize the bitmask filling operation. It is important that any
+        shared data structures accessed within this method (such as
+        `self.token_bitmask` and `self.logits_processors`) are thread-safe or
+        properly synchronized to avoid race conditions.
+
+        Args:
+            batch (List[int]): List of indices for which to fill the token bitmask.
+        """
+        for idx in batch:
+            self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
+
+    def _async_batch_fill_token_bitmask(self, idxs: List[int]):
+        """launch async fill"""
+        batch: List[int] = []
+        for idx in idxs:
+            batch.append(idx)
+            if len(batch) == self.fill_bitmask_parallel_batch_size:
+                promise = self.executor_for_fillmask.submit(self.batch_fill_token_bitmask, batch[:])
+                self._fillmask_futures[idx] = promise
+                batch = []
+        if batch:
+            promise = self.executor_for_fillmask.submit(self.batch_fill_token_bitmask, batch[:])
+            self._fillmask_futures[batch[-1]] = promise
+
+    def join_async_fillmask(self):
+        """join all async fill futures"""
+        for idx, furture in enumerate(self._fillmask_futures):
+            if furture is not None:
+                try:
+                    furture.result()
+                except Exception as e:
+                    logger.error(f"Exception in async fillmask future at idx {idx}: {e}", exc_info=True)
+                self._fillmask_futures[idx] = None
 
     def accept_tokens_from_prefill_node(self, idx: int):
         """accept prefill token, not future"""
@@ -204,15 +262,17 @@ class GuidedDecoding:
             if self.token_bitmask is None:
                 self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
 
-            self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
+            # launch async fill
+            self._async_batch_fill_token_bitmask([idx])
 
         if len(indices) == 0:
             return logits
+        self.join_async_fillmask()
         from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
             apply_token_mask,
         )
 
-        return apply_token_mask(logits, self.token_bitmask, indices=indices)
+        return apply_token_mask(logits, self.token_bitmask, indices=indices, is_cuda_platform=self.is_cuda_platform)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
@@ -315,7 +375,7 @@ class Sampler(nn.Layer):
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         share_inputs = sampling_metadata.share_inputs
-        if temp_scaled_logprobs is not None:
+        if temp_scaled_logprobs is not None and sampling_metadata.temp_scaled_logprobs_flag:
             real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
             temperature = sampling_metadata.temperature[:real_bsz]
             temp_temperature = paddle.where(real_bsz_temp_scaled, temperature, paddle.ones_like(temperature))
@@ -325,7 +385,11 @@ class Sampler(nn.Layer):
         top_p_logprob = None
         top_p_req_mask = None
 
-        if top_p_normalized_logprobs is not None and share_inputs is not None:
+        if (
+            top_p_normalized_logprobs is not None
+            and share_inputs is not None
+            and sampling_metadata.top_p_normalized_logprobs_flag
+        ):
             seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])[:real_bsz]
             seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])[:real_bsz]
             seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])[:real_bsz]
@@ -512,6 +576,8 @@ class SpeculativeSampler(nn.Layer):
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
+        elif current_platform.is_xpu():
+            self.forward = self.forward_xpu
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
@@ -754,6 +820,80 @@ class SpeculativeSampler(nn.Layer):
 
         return sampler_output
 
+    def forward_xpu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        max_model_len: int,
+        share_inputs: List[paddle.Tensor],
+        accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
+    ) -> paddle.Tensor:
+        from fastdeploy.model_executor.ops.xpu import speculate_verify, top_p_candidates
+
+        logits = apply_speculative_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
+            max_model_len,
+        )
+
+        probs = F.softmax(logits)
+
+        verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
+            probs,
+            sampling_metadata.top_p,
+            share_inputs["output_padding_offset"],
+            self.speculative_max_candidate_len,
+            max_model_len,
+        )
+
+        speculate_verify(
+            share_inputs["accept_tokens"],
+            share_inputs["accept_num"],
+            share_inputs["step_idx"],
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs[
+                "draft_tokens"
+            ],  # Both input and output, need to write the last 1 token accepted to position 0.
+            share_inputs["seq_lens_this_time"],
+            verify_tokens,
+            verify_scores,
+            share_inputs["max_dec_len"],
+            sampling_metadata.eos_token_ids,
+            share_inputs["is_block_step"],
+            share_inputs["output_cum_offsets"],
+            actual_candidate_len,
+            share_inputs["actual_draft_token_num"],
+            sampling_metadata.top_p,
+            max_model_len,
+            self.speculative_verify_window,
+            True,  # enable_topp
+            (self.speculative_benchmark_mode or reject_all_drafts),
+            accept_all_drafts,
+        )
+        # TODO(chenhuan09): support return logprobs
+        token_ids = share_inputs["accept_tokens"]
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=None,
+            token_num_per_batch=share_inputs["accept_num"],
+            cu_batch_token_offset=None,
+        )
+        return sampler_output
+
 
 class MTPSampler(nn.Layer):
     """ """
@@ -763,6 +903,8 @@ class MTPSampler(nn.Layer):
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
+        elif current_platform.is_xpu():
+            self.forward = self.forward_xpu
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
@@ -951,5 +1093,46 @@ class MTPSampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+        )
+        return next_tokens, sampler_output
+
+    def forward_xpu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        max_model_len: int,
+        share_inputs: List[paddle.Tensor],
+    ) -> paddle.Tensor:
+
+        logits = apply_speculative_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
+            max_model_len,
+        )
+        probs = F.softmax(logits)
+
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+        )
+        # TODO(chenhuan09): add support for logprobs
+        token_ids = None
+        logprobs_tensors = None
+
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=logprobs_tensors,
+            token_num_per_batch=None,
+            cu_batch_token_offset=None,
         )
         return next_tokens, sampler_output

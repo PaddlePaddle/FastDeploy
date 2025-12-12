@@ -1,4 +1,20 @@
 """
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+"""
 Unit tests for metrics routes on the main API port (no --metrics-port set).
 Mimics the patching pattern used by other tests under tests/entrypoints/openai.
 """
@@ -182,29 +198,6 @@ def test_config_info_process_object_branches():
         # The object with __dict__ becomes its dict; the one without becomes null
         assert data.get("with_dict") == {"a": 1}
         assert "without_dict" in data and data["without_dict"] is None
-
-
-def test_setup_metrics_environment_sets_env_var(tmp_path):
-    # Cover calling setup_metrics_environment()
-    with (
-        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
-        patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
-        patch("fastdeploy.entrypoints.chat_utils.load_chat_template") as mock_load_template,
-    ):
-        mock_parse_args.return_value = _build_mock_args()
-        mock_retrive_model.return_value = "test-model"
-        mock_load_template.return_value = None
-
-        from fastdeploy.entrypoints.openai import api_server as api_server_mod
-
-        api_server = importlib.reload(api_server_mod)
-
-        desired_dir = str(tmp_path / "prom_multiproc")
-
-        # Patch the name imported into api_server so we don't touch real FS
-        with patch("fastdeploy.entrypoints.openai.api_server.cleanup_prometheus_files", return_value=desired_dir):
-            api_server.setup_metrics_environment()
-            assert os.environ.get("PROMETHEUS_MULTIPROC_DIR") == desired_dir
 
 
 def test_metrics_app_routes_when_metrics_port_diff():

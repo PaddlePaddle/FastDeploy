@@ -27,10 +27,10 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
-import paddle
 
 from fastdeploy import envs
-from fastdeploy.utils import llm_logger
+from fastdeploy.inter_communicator.ipc_signal import IPCSignal
+from fastdeploy.utils import llm_logger, to_tensor
 
 
 class EngineWorkerQueue:
@@ -66,6 +66,8 @@ class EngineWorkerQueue:
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
         self.local_data_parallel_id = local_data_parallel_id
+        # Store whether this is a single-node deployment for consistent checking
+        self.is_single_node: bool = address[0] == "0.0.0.0"
 
         class QueueManager(BaseManager):
             """
@@ -83,6 +85,9 @@ class EngineWorkerQueue:
 
             self.lock_init: List[threading.Lock] = [threading.Lock() for _ in range(self.local_data_parallel_size)]
             self.read_finish_flag_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
+            self.exist_tasks_inter_signal_init: List[Value] = [
+                Value("i", 0) for _ in range(self.local_data_parallel_size)
+            ]
             self.connected_client_counter_init: List[Value] = [
                 Value("i", 0) for _ in range(self.local_data_parallel_size)
             ]
@@ -201,6 +206,11 @@ class EngineWorkerQueue:
             QueueManager.register(
                 "get_read_finish_flag",
                 callable=lambda idx: self.read_finish_flag_init[idx],
+                proxytype=ValueProxy,
+            )
+            QueueManager.register(
+                "get_exist_tasks_inter_signal",
+                callable=lambda idx: self.exist_tasks_inter_signal_init[idx],
                 proxytype=ValueProxy,
             )
             QueueManager.register(
@@ -338,6 +348,7 @@ class EngineWorkerQueue:
             QueueManager.register("get_client_read_flag")
             QueueManager.register("get_lock")
             QueueManager.register("get_read_finish_flag")
+            QueueManager.register("get_exist_tasks_inter_signal")
             QueueManager.register("get_connected_client_counter")
             QueueManager.register("get_finish_request_queue")
             QueueManager.register("get_finish_add_cache_task_queue")
@@ -374,6 +385,9 @@ class EngineWorkerQueue:
             self.client_read_flag: ListProxy = self.manager.get_client_read_flag(self.local_data_parallel_id)
             self.lock: AcquirerProxy = self.manager.get_lock(self.local_data_parallel_id)
             self.read_finish_flag: ValueProxy = self.manager.get_read_finish_flag(self.local_data_parallel_id)
+            self.exist_tasks_inter_signal: ValueProxy = self.manager.get_exist_tasks_inter_signal(
+                self.local_data_parallel_id
+            )
             self.connected_client_counter: ValueProxy = self.manager.get_connected_client_counter(
                 self.local_data_parallel_id
             )
@@ -434,6 +448,19 @@ class EngineWorkerQueue:
 
             assert self.num_client == len(self.client_read_flag)
 
+        # Only initialize shared memory for single-node deployments
+        if self.is_single_node:
+            exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
+            self.exist_tasks_intra_signal = IPCSignal(
+                name="exist_tasks_intra_signal",
+                array=exist_tasks_intra_signal_data,
+                dtype=np.int32,
+                suffix=self.get_server_port() if is_server else address[1],
+                create=is_server,
+            )
+        else:
+            self.exist_tasks_intra_signal = None
+
         if is_server:
             llm_logger.info("EngineWorkerQueue server started.")
         else:
@@ -455,6 +482,41 @@ class EngineWorkerQueue:
             raise RuntimeError("Only the server instance can provide the port.")
         return self.address[1]
 
+    def exist_tasks(self) -> bool:
+        """
+        Check if there are tasks in the queue without acquiring lock.
+
+        For single-node deployments (address="0.0.0.0"), uses shared memory signal (faster).
+        For multi-node deployments, uses inter-process communication.
+
+        This method is more efficient than num_tasks() when you only need to know
+        whether tasks exist, as it doesn't require acquiring a lock.
+
+        Returns:
+            bool: True if tasks exist in the queue, False otherwise.
+        """
+        if self.is_single_node:
+            return self.exist_tasks_intra_signal.value[0] == 1
+        else:
+            return self.exist_tasks_inter_signal.get() == 1
+
+    def set_exist_tasks(self, flag: bool) -> None:
+        """
+        Set the task existence flag to indicate whether tasks are available in the queue.
+
+        This method updates a shared signal that is checked by workers to determine if
+        tasks are available for processing. It is called when tasks are added to the queue
+        (set to True) or when all clients have read the tasks (set to False).
+
+        Args:
+            flag: True to indicate tasks exist in the queue, False to indicate no tasks.
+        """
+        value = 1 if flag else 0
+        if self.is_single_node:
+            self.exist_tasks_intra_signal.value[0] = value
+        else:
+            self.exist_tasks_inter_signal.set(value)
+
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """
         Connect to the server with retry mechanism.
@@ -474,63 +536,6 @@ class EngineWorkerQueue:
                 time.sleep(interval)
         raise ConnectionError(f"TaskQueue cannot connect {self.address}")
 
-    @staticmethod
-    def to_tensor(tasks):
-        """
-        Convert NumPy arrays in multimodal inputs to Paddle tensors.
-
-        Args:
-            tasks (tuple): ([request], bsz)
-        """
-        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
-            return
-        try:
-            batch_tasks, _ = tasks
-            for task in batch_tasks:
-                multimodal_inputs = getattr(task, "multimodal_inputs", None)
-                if not multimodal_inputs:
-                    continue
-                # tensor keys
-                tensor_keys = [
-                    "images",
-                    "patch_idx",
-                    "token_type_ids",
-                    "position_ids",
-                    "attention_mask_offset",
-                ]
-
-                llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys}")
-
-                for key in tensor_keys:
-                    value = multimodal_inputs.get(key)
-                    if value is None:
-                        continue
-                    if not isinstance(value, paddle.Tensor):
-                        multimodal_inputs[key] = paddle.to_tensor(value)
-        except Exception as e:
-            llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
-
-    @staticmethod
-    def to_numpy(tasks):
-        """
-        Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
-
-        Args:
-            tasks: List of tasks containing multimodal inputs.
-        """
-        try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                for batch_tasks, _ in tasks:
-                    for task in batch_tasks:
-                        if not hasattr(task, "multimodal_inputs"):
-                            continue
-                        images = task.multimodal_inputs.get("images", None)
-                        if isinstance(images, paddle.Tensor):
-                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
-                            task.multimodal_inputs["images"] = images.numpy()
-        except Exception as e:
-            llm_logger.warning(f"Failed to convert to numpy: {e}")
-
     def put_tasks(self, tasks: List[Any]) -> None:
         """
         Add tasks to the shared queue in a thread-safe manner.
@@ -545,13 +550,17 @@ class EngineWorkerQueue:
             time.sleep(0.001)
             self.lock.acquire()
 
-        # 多模态输入转换为张量
-        EngineWorkerQueue.to_tensor(tasks)
+        if envs.FD_ENABLE_MAX_PREFILL or envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+            # multimodal input numpy -> tensor
+            to_tensor(tasks[0])
 
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
+        self.set_exist_tasks(True)
         self.lock.release()
+
+        llm_logger.debug(f"put_tasks: tasks={tasks}")
 
     def get_tasks(self) -> Tuple[List[Any], bool]:
         """
@@ -564,14 +573,13 @@ class EngineWorkerQueue:
         self.lock.acquire()
 
         tasks.extend(self.tasks)
-        # 多模态输入转换为numpy
-        # EngineWorkerQueue.to_numpy(tasks)
-
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
             self.tasks[:] = list()
+            self.set_exist_tasks(False)
         self.lock.release()
+        llm_logger.debug(f"get_tasks: tasks={tasks}")
         return tasks, all_client_read
 
     def num_tasks(self) -> int:
@@ -660,8 +668,7 @@ class EngineWorkerQueue:
 
         self.cache_infos.extend(cache_info)
         llm_logger.debug(
-            f"put cache_infos to engine worker queue: {self.cache_infos}, "
-            f"local_data_parallel_id:{self.local_data_parallel_id}"
+            f"put_cache_info: cache_info={cache_info}, local_data_parallel_id={self.local_data_parallel_id}"
         )
         self.lock_info.release()
 

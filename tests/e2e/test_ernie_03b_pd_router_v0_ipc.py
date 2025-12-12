@@ -30,7 +30,7 @@ from utils.serving_utils import (
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    clean_ports,
+    clean,
     get_registered_number,
 )
 
@@ -64,7 +64,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports(PORTS_TO_CLEAN)
+    clean(PORTS_TO_CLEAN)
 
     print("log dir clean ")
     if os.path.exists("log_router") and os.path.isdir("log_router"):
@@ -111,7 +111,7 @@ def setup_and_run_server():
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    prefill_log_path = "server.log"
+    prefill_log_path = "server_prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -161,7 +161,7 @@ def setup_and_run_server():
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    decode_log_path = "decode_server.log"
+    decode_log_path = "server_decode.log"
     decode_cmd = [
         sys.executable,
         "-m",
@@ -216,7 +216,7 @@ def setup_and_run_server():
         try:
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
-            clean_ports()
+            clean()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -228,7 +228,7 @@ def setup_and_run_server():
         os.killpg(process_router.pid, signal.SIGTERM)
         os.killpg(process_prefill.pid, signal.SIGTERM)
         os.killpg(process_decode.pid, signal.SIGTERM)
-        clean_ports(PORTS_TO_CLEAN)
+        clean(PORTS_TO_CLEAN)
         print(f"Prefill server (pid={process_prefill.pid}) terminated")
         print(f"Decode server (pid={process_decode.pid}) terminated")
     except Exception as e:
@@ -266,7 +266,7 @@ def test_metrics_config(metrics_url):
     assert res.status_code == 200
 
 
-def send_request(url, payload, timeout=600):
+def send_request(url, payload, timeout=60):
     """
     发送请求到指定的URL，并返回响应结果。
     """
