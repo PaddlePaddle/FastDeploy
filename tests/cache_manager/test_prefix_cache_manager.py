@@ -17,65 +17,13 @@ import threading
 import types
 import unittest
 from functools import partial
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-
-class _StubLogger:
-    def __init__(self):
-        self.logger = self
-
-    def setLevel(self, *_):
-        pass
-
-
-def _install_required_stubs():
-    def ensure_module(name):
-        return sys.modules.setdefault(name, types.ModuleType(name))
-
-    try:
-        import paddle  # noqa: F401
-    except Exception:
-        paddle_mod = ensure_module("paddle")
-        paddle_mod.distributed = ensure_module("paddle.distributed")
-        for attr in ["is_compiled_with_rocm", "is_compiled_with_cuda", "is_compiled_with_xpu"]:
-            setattr(paddle_mod, attr, lambda: False)
-        paddle_mod.is_compiled_with_custom_device = lambda *_: False
-        paddle_mod.Tensor = type("Tensor", (), {})
-
-    try:
-        import paddleformers  # noqa: F401
-    except Exception:
-        pf_mod = ensure_module("paddleformers")
-        pf_mod.utils = ensure_module("paddleformers.utils")
-        pf_mod.utils.log = ensure_module("paddleformers.utils.log")
-        pf_mod.utils.log.logger = _StubLogger()
-        pf_mod.transformers = ensure_module("paddleformers.transformers")
-        cfg_utils = ensure_module("paddleformers.transformers.configuration_utils")
-        cfg_utils.PretrainedConfig = type("PretrainedConfig", (), {})
-        pf_mod.transformers.configuration_utils = cfg_utils
-
-    if "fastdeploy.metrics.trace_util" not in sys.modules:
-        try:
-            import fastdeploy.metrics.trace_util as real_trace_util
-        except Exception:
-            real_trace_util = None
-
-        trace_util_mod = types.ModuleType("fastdeploy.metrics.trace_util")
-        for name in ["start_span", "start_span_request"]:
-            setattr(trace_util_mod, name, getattr(real_trace_util, name, lambda *_, **__: None))
-        sys.modules["fastdeploy.metrics.trace_util"] = trace_util_mod
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-_install_required_stubs()
+pytest.importorskip("paddle")
 
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
@@ -174,6 +122,24 @@ class _ImmediateFuture:
 
     def done(self):
         return True
+
+
+class _PendingFuture:
+    def done(self):
+        return False
+
+
+class _CompletedFuture:
+    def __init__(self, result=None):
+        self.result_called = False
+        self._result = result
+
+    def done(self):
+        return True
+
+    def result(self):
+        self.result_called = True
+        return self._result
 
 
 # Fake transfer queue returning preset payloads then raising SystemExit.
@@ -1108,6 +1074,24 @@ class PrefixCacheManagerTest(unittest.TestCase):
         child.shared_count = 0
         manager.free_nodes_directly(child)
         self.assertIn(parent.block_id, manager.gpu_free_block_list)
+
+    def test_free_block_ids_async_returns_for_pending_future(self):
+        manager = _create_manager()
+        manager.gpu_free_task_future = _PendingFuture()
+
+        manager.free_block_ids_async(need_block_num=1)
+
+        self.assertIsInstance(manager.gpu_free_task_future, _PendingFuture)
+
+    def test_free_block_ids_async_consumes_finished_future(self):
+        manager = _create_manager()
+        finished = _CompletedFuture(result="done")
+        manager.gpu_free_task_future = finished
+
+        manager.free_block_ids_async(need_block_num=1)
+
+        self.assertIsNone(manager.gpu_free_task_future)
+        self.assertTrue(finished.result_called)
 
     def test_mm_match_block_reverts_chunked_inputs(self):
         manager = _create_manager(num_gpu_blocks=4)
