@@ -911,8 +911,6 @@ void DecoderWriteCacheWithRoPEKernel(
                 cache_k_scale.get().data<T>())),
             const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
                 (cache_v_scale.get().data<T>()))),
-            nullptr,
-            nullptr,
             max_seq_len,
             max_blocks_per_seq,
             num_heads,

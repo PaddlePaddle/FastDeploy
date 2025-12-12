@@ -872,8 +872,6 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
     const float* __restrict__ sin_emb,
     T* __restrict__ cache_k_scale,
     T* __restrict__ cache_v_scale,
-    const float* q_norm_weight,
-    const float* k_norm_weight,
     const int max_seq_len,
     const int max_blocks_per_seq,
     const int num_heads,
@@ -912,7 +910,6 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
     // q
     using LoadT = AlignedVector<T, VecSize>;
     using LoadBiasT = AlignedVector<T, VecSize>;
-    using LoadOutScaleT = AlignedVector<float, VecSize>;
     constexpr int HalfVecSize = VecSize / 2;
     using LoadEmbT = AlignedVector<float, VecSize>;
 
@@ -949,19 +946,6 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
         out_vec[i] = static_cast<T>(tmp1);
         out_vec_right[i] = static_cast<T>(tmp2);
-      }
-      // qk norm
-      if (q_norm_weight) {
-        WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-        float row_variance = max(warp_m2 / HeadDim, 0.0f);
-        float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
-        LoadOutScaleT q_norm_vec;
-        Load<float, VecSize>(&q_norm_weight[lane_id * VecSize], &q_norm_vec);
-#pragma unroll
-        for (int i = 0; i < VecSize; i++) {
-          out_vec[i] = static_cast<T>(static_cast<float>(out_vec[i]) *
-                                      row_inv_var * q_norm_vec[i]);
-        }
       }
       Store<T, VecSize>(out_vec, &qkv_out_now[bias_idx]);
       Store<T, VecSize>(out_vec_right, &qkv_out_now[bias_idx + half_head_size]);
@@ -1008,7 +992,6 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
     using LoadKVT = AlignedVector<uint8_t, HALF_K_VEC_SIZE>;
     using LoadT = AlignedVector<T, HALF_K_VEC_SIZE>;
     using LoadBiasT = AlignedVector<T, HALF_K_VEC_SIZE>;
-    using LoadOutScaleT = AlignedVector<float, HALF_K_VEC_SIZE>;
     using LoadEmbT = AlignedVector<float, HALF_K_VEC_SIZE>;
     LoadKVResT cache_vec;
     LoadT src_vec1, src_vec1_right, src_vec2, src_vec2_right;
@@ -1095,25 +1078,6 @@ __global__ void append_decode_cache_T_int8_neox_rope_kernel(
     } else {
       out_vec2[0] = src_vec2[0];
       out_vec2[1] = src_vec2[1];
-    }
-    if (k_norm_weight) {
-      if (head_idx < num_heads + kv_num_heads) {
-        LoadOutScaleT k_norm_vec1, k_norm_vec2;
-        Load<float, HALF_K_VEC_SIZE>(&k_norm_weight[head_bias], &k_norm_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&k_norm_weight[head_bias + 8],
-                                     &k_norm_vec2);
-        // qk norm
-        WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-        float row_variance = max(warp_m2 / HeadDim, 0.0f);
-        float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
-
-        for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
-          out_vec1[i] = static_cast<T>(static_cast<float>(out_vec1[i]) *
-                                       row_inv_var * k_norm_vec1[i]);
-          out_vec2[i] = static_cast<T>(static_cast<float>(out_vec2[i]) *
-                                       row_inv_var * k_norm_vec2[i]);
-        }
-      }
     }
     if constexpr (IsDynamic) {
       // reduce max, 1 head per warp
