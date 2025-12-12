@@ -700,7 +700,7 @@ class EngineService:
                 if self.resource_manager.available_batch() == 0:
                     time.sleep(0.001)
                     continue
-                if self.engine_worker_queue.num_tasks() > 0:
+                if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
                 if hasattr(self, "exist_prefill_task_signal") and self.exist_prefill_task_signal.value[0] > 0:

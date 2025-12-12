@@ -218,6 +218,9 @@ top_p_normalized_logprobs: Optional[bool] = False
 include_draft_logprobs: Optional[bool] = False
 # 是否在预生成或中间步骤返回对数概率（log probabilities），用于调试或分析生成过程（默认 False 表示不返回）。
 
+include_logprobs_decode_token: Optional[bool] = True
+# 是否在logprobs/prompt_logprobs结果中返回解码后的token，（默认的True表示总是在结果中返回）
+
 logits_processors_args: Optional[Dict] = None
 # 传递给 logits 处理器（logits processors）的额外参数，用于自定义生成过程中的逻辑（如动态调整概率分布）。
 
@@ -468,6 +471,9 @@ top_p_normalized_logprobs: Optional[bool] = False
 
 include_draft_logprobs: Optional[bool] = False
 # 是否在预生成或中间步骤返回对数概率（log probabilities），用于调试或分析生成过程（默认 False 表示不返回）。
+
+include_logprobs_decode_token: Optional[bool] = True
+# 是否在prompt_logprobs结果中返回解码后的token，（默认的True表示总是在结果中返回）
 
 logits_processors_args: Optional[Dict] = None
 # 传递给 logits 处理器（logits processors）的额外参数，用于自定义生成过程中的逻辑（如动态调整概率分布）。
