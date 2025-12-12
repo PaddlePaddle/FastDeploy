@@ -143,9 +143,9 @@ class MetricsManager:
     request_success_total: "Counter"
     spec_decode_draft_acceptance_rate: "Gauge"
     spec_decode_efficiency: "Gauge"
-    spec_decode_num_accepted_tokens_total: "Counter"
+    spec_decode_num_accepted_tokens_total: "Gauge"
     spec_decode_num_draft_tokens_total: "Counter"
-    spec_decode_num_emitted_tokens_total: "Counter"
+    spec_decode_num_emitted_tokens_total: "Gauge"
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
     # for YIYAN Adapter
@@ -598,13 +598,13 @@ class MetricsManager:
                 "kwargs": {},
             },
             "spec_decode_num_accepted_tokens_total": {
-                "type": Counter,
+                "type": Gauge,
                 "name": "fastdeploy:spec_decode_num_accepted_tokens_total",
                 "description": "Total number of tokens accepted by the scoring model and verification program",
                 "kwargs": {},
             },
             "spec_decode_num_emitted_tokens_total": {
-                "type": Counter,
+                "type": Gauge,
                 "name": "fastdeploy:spec_decode_num_emitted_tokens_total",
                 "description": "Total number of tokens output by the entire system",
                 "kwargs": {},

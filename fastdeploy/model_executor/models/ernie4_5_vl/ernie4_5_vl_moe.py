@@ -524,8 +524,10 @@ class Ernie4_5_VLModel(nn.Layer):
             num_image_patch_id=num_image_patch_id,
         )
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -774,8 +776,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.ernie.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         if image_token_num > 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
@@ -791,6 +796,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             image_token_num=vl_moe_meta.num_image_patch_id.item(),
+            forward_meta=forward_meta,
         )
 
         if forward_meta.step_use_cudagraph:
