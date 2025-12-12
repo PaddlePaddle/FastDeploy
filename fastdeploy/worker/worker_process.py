@@ -38,6 +38,7 @@ from fastdeploy.config import (
     ModelConfig,
     ParallelConfig,
     PlasAttentionConfig,
+    RoutingReplayConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
@@ -69,8 +70,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
-    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
-        raise NotImplementedError("Only CUDA platform supports logprob.")
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda() and not current_platform.is_xpu():
+        raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
@@ -173,7 +174,11 @@ class PaddleDisWorkerProc:
             model_weights_status:
         """
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
+        if (
+            self.parallel_config.enable_expert_parallel
+            and self.parallel_config.data_parallel_size > 1
+            and not envs.FD_ENABLE_MULTI_API_SERVER
+        ):
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
@@ -413,6 +418,7 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             # run eplb
@@ -435,7 +441,7 @@ class PaddleDisWorkerProc:
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+                if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -472,6 +478,8 @@ class PaddleDisWorkerProc:
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                        time.sleep(0.01)
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -720,6 +728,17 @@ def parse_args():
         action="store_true",
         help="enable expert parallel",
     )
+    parser.add_argument(
+        "--enable_chunked_moe",
+        action="store_true",
+        help="enable chunked moe",
+    )
+    parser.add_argument(
+        "--chunked_moe_size",
+        type=int,
+        default=256,
+        help="chunk size of moe input",
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
@@ -870,6 +889,13 @@ def parse_args():
         help="EPLB Configuration.",
     )
 
+    parser.add_argument(
+        "--routing_replay_config",
+        type=json.loads,
+        default=None,
+        help="Configation of Rollout Routing Replay.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -894,6 +920,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
+    # config for DP
+    if parallel_config.data_parallel_size > 1:
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
     # config for EP
     if parallel_config.expert_parallel_size > 1:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
@@ -903,11 +935,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             num_experts = model_config.moe_num_experts
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
-            max_chips_per_node // parallel_config.tensor_parallel_size
-        )
-
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
@@ -928,6 +955,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     eplb_config = EPLBConfig(args.eplb_config)
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
+    routing_replay_config = RoutingReplayConfig(args.routing_replay_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -987,6 +1015,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
+        routing_replay_config=routing_replay_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
@@ -995,8 +1024,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
-        fd_config.cache_config.enable_prefix_caching = False
-        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 

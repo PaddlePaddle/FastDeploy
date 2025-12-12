@@ -142,6 +142,15 @@ class ForwardMeta:
     caches: Optional[list[paddle.Tensor]] = None
     # Flag of profile run
     is_dummy_or_profile_run: bool = False
+    # Routing Replay table buffer
+    routing_replay_table: Optional[paddle.Tensor] = None
+
+    # chunked MoE related
+    moe_num_chunk: int = 1
+    max_moe_num_chunk: int = 1
+
+    # for zero size
+    is_zero_size: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""

@@ -35,6 +35,7 @@ from fastdeploy.config import (
     PlasAttentionConfig,
     PoolerConfig,
     RouterConfig,
+    RoutingReplayConfig,
     RunnerOption,
     SpeculativeConfig,
     StructuredOutputsConfig,
@@ -237,6 +238,10 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+    enable_output_caching: bool = True
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
+    """
 
     disable_custom_all_reduce: bool = False
     """
@@ -284,6 +289,16 @@ class EngineArgs:
     enable_expert_parallel: bool = False
     """
     Enable expert parallelism.
+    """
+
+    enable_chunked_moe: bool = False
+    """
+    Whether use chunked moe.
+    """
+
+    chunked_moe_size: int = 256
+    """
+    Chunk size of moe input.
     """
 
     cache_transfer_protocol: str = "ipc"
@@ -477,6 +492,11 @@ class EngineArgs:
     Configuration for eplb.
     """
 
+    routing_replay_config: Optional[Dict[str, Any]] = None
+    """
+    Flag to rollout routing replay(r3)
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -486,15 +506,13 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if self.speculative_config is not None:
-            self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if not current_platform.is_cuda():
-                raise NotImplementedError("Only CUDA platform supports logprob.")
+            if not current_platform.is_cuda() and not current_platform.is_xpu():
+                raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
@@ -538,8 +556,6 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
-            self.enable_prefix_caching = False
-            self.max_encoder_cache = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -870,6 +886,24 @@ class EngineArgs:
             default=EngineArgs.eplb_config,
             help="Config of eplb.",
         )
+        parallel_group.add_argument(
+            "--routing-replay-config",
+            type=json.loads,
+            default=EngineArgs.routing_replay_config,
+            help="Flag of rollout routing replay(r3).",
+        )
+        parallel_group.add_argument(
+            "--enable-chunked-moe",
+            action="store_true",
+            default=EngineArgs.enable_chunked_moe,
+            help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--chunked-moe-size",
+            type=int,
+            default=EngineArgs.chunked_moe_size,
+            help="Chunked size of moe input.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -931,6 +965,13 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
+        )
+
+        perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
         )
 
         perf_group.add_argument(
@@ -1204,16 +1245,20 @@ class EngineArgs:
         eplb_args["enable_eplb"] = self.enable_eplb
         return EPLBConfig(eplb_args)
 
+    def create_routing_repaly_config(self) -> RoutingReplayConfig:
+        """ """
+        routing_replay_args = asdict(self)
+        if self.routing_replay_config is not None:
+            for k, v in self.routing_replay_config.items():
+                routing_replay_args[k] = v
+        return RoutingReplayConfig(routing_replay_args)
+
     def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-
-        # XPU currently disable prefix cache for VL model
-        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
-            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -1251,6 +1296,7 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
         eplb_cfg = self.create_eplb_config()
+        routing_replay_config = self.create_routing_repaly_config()
         router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()
@@ -1283,4 +1329,5 @@ class EngineArgs:
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
+            routing_replay_config=routing_replay_config,
         )

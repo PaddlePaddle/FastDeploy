@@ -308,3 +308,33 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_thinking_with_stop_token_ids(api_url, headers):
+    """
+    Test case to verify thinking behavior when stop token ids are provided.
+    """
+    messages = [{"role": "user", "content": "北京天安门在哪里"}]
+
+    payload = {
+        "messages": messages,
+        "max_tokens": 100,
+        "temperature": 0.8,
+        "seed": 1,
+        "stop_token_ids": [105930],
+    }
+
+    resp = requests.post(api_url, headers=headers, json=payload)
+    assert resp.status_code == 200, f"Unexpected status code: {resp.status_code}"
+
+    try:
+        response_json = resp.json()
+    except Exception as e:
+        assert False, f"Response is not valid JSON: {e}"
+
+    content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    expected_output = "<think>\n好的，用户问“北京天安门在哪里"
+    assert content == expected_output, (
+        f"Unexpected response content.\n" f"Expected: {expected_output!r}\n" f"Actual:   {content!r}"
+    )

@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import os
 import shutil
@@ -13,6 +29,7 @@ from fastdeploy.config import (
     LoadConfig,
     ModelConfig,
     ParallelConfig,
+    RoutingReplayConfig,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4a8 import W4A8Config
@@ -59,6 +76,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
             ips=",".join(["0"] * nnodes),
+            routing_replay_config=RoutingReplayConfig({}),
         )
         self.fd_config.parallel_config.tp_group = None
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
