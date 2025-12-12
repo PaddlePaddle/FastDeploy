@@ -55,7 +55,7 @@ class SplitwiseConnector:
         self.current_request_ids = dict()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
-        if self.cfg.cache_config.pd_comm_port is not None:
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.zmq_ctx = zmq.Context()
             self.push_sockets: Dict[str, zmq.Socket] = {}
             self.pull_socket = None
