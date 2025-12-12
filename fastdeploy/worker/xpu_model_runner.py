@@ -1393,6 +1393,9 @@ class XPUModelRunner(ModelRunnerBase):
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
 
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+
         # Reset free list
         free_list = list(
             range(
