@@ -123,14 +123,6 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
-    @staticmethod
-    def _format_visible_devices(visible_devices):
-        if isinstance(visible_devices, str):
-            return visible_devices
-        if isinstance(visible_devices, (list, tuple)):
-            return "CUDA_VISIBLE_DEVICES=" + ",".join(str(device) for device in visible_devices)
-        return str(visible_devices)
-
     def _get_kv_cache_shape(self, max_block_num):
         from fastdeploy.model_executor.layers.attention import get_attention_backend
 
@@ -252,7 +244,7 @@ class PrefixCacheManager:
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
-        visible_devices = self._format_visible_devices(get_all_visible_devices())
+        visible_devices = get_all_visible_devices()
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
@@ -339,7 +331,7 @@ class PrefixCacheManager:
         py_path = os.path.join(current_dir_path, filename)
         log_dir = envs.FD_LOG_DIR
         cache_messager_processes = []
-        visible_devices = self._format_visible_devices(get_all_visible_devices())
+        visible_devices = get_all_visible_devices()
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
