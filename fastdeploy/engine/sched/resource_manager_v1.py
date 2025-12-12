@@ -741,8 +741,9 @@ class ResourceManagerV1(ResourceManager):
                         # In the request rescheduling scenario, we currently only consider the number of tokens already generated,
                         # which might lead to allocating fewer blocks than the previous allocation, causing repeated rescheduling.
                         # This adjustment ensures we at least allocate as many blocks as before to avoid this issue.
-                        if num_new_block < request.last_preempted_blocksize:
-                            num_new_block = request.last_preempted_blocksize
+                        last_preempted_blocksize = getattr(request, "last_preempted_blocksize", 0)
+                        if num_new_block < last_preempted_blocksize:
+                            num_new_block = last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
