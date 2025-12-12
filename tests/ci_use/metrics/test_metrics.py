@@ -14,6 +14,7 @@
 
 import asyncio
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -47,7 +48,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
+    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8633))
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
@@ -174,10 +175,9 @@ def parse_prometheus_to_dict(metrics_text: str):
             value = float(line.split("}")[1].strip())
 
             # 解析 labels
-            labels = {}
-            for kv in labels_str.split(","):
-                k, v = kv.split("=")
-                labels[k] = v.strip('"')
+            # 用正则取出所有 key 和 value（去掉外层引号）
+            pairs = re.findall(r'(\w+)="([^"]*)"', labels_str)
+            labels = {k: v for k, v in pairs}
 
             # 存储
             if metric_name not in result:
@@ -214,7 +214,7 @@ def test_metrics_with_clear_and_reset():
     """
     Test the metrics monitoring endpoint.
     """
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
+    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8633))
     metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
     async_concurrency(n=10)
