@@ -1,3 +1,16 @@
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Tests for the global scheduler.
 
 To generate a focused coverage report for this module, run::
@@ -6,60 +19,12 @@ To generate a focused coverage report for this module, run::
         && python -m coverage report -m --include='fastdeploy/scheduler/global_scheduler.py'
 """
 
-from __future__ import annotations
-
-import importlib
-import importlib.machinery
-import sys
-import time
-import types
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-if "fastdeploy" not in sys.modules:
-    fastdeploy_stub = types.ModuleType("fastdeploy")
-    fastdeploy_stub.__path__ = [str(PROJECT_ROOT / "fastdeploy")]
-    fastdeploy_stub.__spec__ = importlib.machinery.ModuleSpec("fastdeploy", loader=None, is_package=True)
-    sys.modules["fastdeploy"] = fastdeploy_stub
-
-if "paddle" not in sys.modules:
-    paddle_stub = types.ModuleType("paddle")
-    paddle_dist = types.ModuleType("paddle.distributed")
-    paddle_stub.distributed = paddle_dist
-    paddle_stub.Tensor = type("Tensor", (), {})
-    sys.modules["paddle"] = paddle_stub
-    sys.modules["paddle.distributed"] = paddle_dist
-
-if "fastdeploy.utils" not in sys.modules:
-    envs_module = importlib.import_module("fastdeploy.envs")
-
-    class _Logger:
-        def info(self, *args, **kwargs):
-            return None
-
-        def warning(self, *args, **kwargs):
-            return None
-
-        def debug(self, *args, **kwargs):
-            return None
-
-        def error(self, *args, **kwargs):
-            return None
-
-    utils_stub = types.ModuleType("fastdeploy.utils")
-    utils_stub.envs = envs_module
-    utils_stub.scheduler_logger = _Logger()
-    utils_stub.data_processor_logger = _Logger()
-    utils_stub.get_logger = lambda *args, **kwargs: _Logger()
-    utils_stub.llm_logger = _Logger()
-    sys.modules["fastdeploy.utils"] = utils_stub
+pytest.importorskip("paddle")
 
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
@@ -230,7 +195,6 @@ def _make_request(request_id: str, token_count: int = 4) -> Request:
         tools=None,
         system=None,
         eos_token_ids=[0],
-        arrival_time=time.time(),
         sampling_params=_SamplingParamsStub(),
     )
 
@@ -331,6 +295,23 @@ def test_get_requests_requeues_when_chunked_limits_hit(scheduler_fixture):
     assert fake_redis.lists[queue][0] == long_request.serialize()
 
 
+def test_get_requests_returns_empty_when_resources_insufficient(scheduler_fixture):
+    scheduler, fake_redis = scheduler_fixture
+
+    envs.FD_ENABLE_MAX_PREFILL = 0
+
+    result = scheduler.get_requests(
+        available_blocks=0,
+        block_size=1,
+        reserved_output_blocks=1,
+        max_num_batched_tokens=1,
+        batch=1,
+    )
+
+    assert result == []
+    assert fake_redis.lists == {}
+
+
 def test_get_requests_blocking_pop_returns_when_idle(scheduler_fixture):
     scheduler, fake_redis = scheduler_fixture
     envs.FD_ENABLE_MAX_PREFILL = 0
@@ -372,6 +353,26 @@ def test_put_results_worker_routes_local_and_stolen_responses(scheduler_fixture)
     peer_queue = scheduler._response_queue_name("peer")
     assert len(fake_redis.lists[peer_queue]) == 1
     assert "stolen" not in scheduler.stolen_requests
+
+
+def test_put_results_worker_keeps_unfinished_stolen_request(monkeypatch, scheduler_fixture):
+    scheduler, fake_redis = scheduler_fixture
+
+    with scheduler.mutex:
+        scheduler.stolen_requests = {
+            "stolen": ScheduledRequest(
+                _make_request("stolen"),
+                scheduler._request_queue_name("peer"),
+                scheduler._response_queue_name("peer"),
+            )
+        }
+
+    unfinished = Task("stolen", _make_output("stolen", finished=False))
+    scheduler._put_results_worker([unfinished])
+
+    peer_queue = scheduler._response_queue_name("peer")
+    assert len(fake_redis.lists[peer_queue]) == 1
+    assert "stolen" in scheduler.stolen_requests
 
 
 def test_get_results_returns_batches_and_cleans_up(scheduler_fixture):
