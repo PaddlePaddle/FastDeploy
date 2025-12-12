@@ -230,7 +230,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         # Always enable chunked prefill in tests to avoid another strict check
         args.enable_chunked_prefill = True
 
-        return args.create_engine_config(port_availability_check=False)
+        return args.create_engine_config()
 
     def _stub_processor(self):
         class _Tok:

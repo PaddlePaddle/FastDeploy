@@ -351,8 +351,8 @@ def create_model_paths(args: Namespace) -> List[ModelPath]:
 
 async def initialize_engine_client(args: Namespace, pid: int) -> EngineClient:
     """Initialize and configure the engine client."""
-    engine_args = EngineArgs.from_cli_args(args)
-    fd_config = engine_args.create_engine_config(port_availability_check=False)
+    engine_args = EngineArgs.from_cli_args(args, skip_port_check=True)
+    fd_config = engine_args.create_engine_config()
     engine_client = EngineClient(
         pid=pid,
         port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
@@ -485,7 +485,7 @@ async def main(args: argparse.Namespace):
     try:
         if args.workers is None:
             args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
-
+        console_logger.info(f"Workers: {args.workers}")
         args.model = retrive_model_from_server(args.model, args.revision)
 
         if args.tool_parser_plugin:

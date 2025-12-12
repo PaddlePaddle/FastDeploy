@@ -499,6 +499,11 @@ class EngineArgs:
     Flag to rollout routing replay(r3)
     """
 
+    skip_port_check: bool = False
+    """
+    Whether to skip port availability check. Default is False (not skip).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -549,13 +554,22 @@ class EngineArgs:
                 num_cur_dp_ports //= self.data_parallel_size
             if ports is None:
                 ports = find_free_ports(num_ports=num_cur_dp_ports)
-                console_logger.info(f"Parameter `{name}` is not specified, found available ports for use: {ports}")
+                console_logger.info(
+                    f"Parameter `{name}` is not specified, found available ports for possible use: {ports}"
+                )
             else:
-                assert (
-                    len(ports) == num_total_ports
-                ), f"Parameter `{name}` expects {num_total_ports} ports, got {len(ports)}."
-            for port in ports:
-                assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+                num_input_ports = len(ports)
+                if num_input_ports != num_total_ports:
+                    ports = find_free_ports(num_ports=num_cur_dp_ports)
+                    console_logger.warn(
+                        f"Parameter `{name}` expects {num_total_ports} ports, but got {num_input_ports}. Ignore them and assign new ones: {ports}"
+                    )
+                else:
+                    console_logger.info(f"Using `{name}`: {ports}")
+
+            if not self.skip_port_check:
+                for port in ports:
+                    assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             console_logger.debug(f"post init {name}: {ports}")
             return ports
@@ -1195,7 +1209,7 @@ class EngineArgs:
         return parser
 
     @classmethod
-    def from_cli_args(cls, args: FlexibleArgumentParser) -> "EngineArgs":
+    def from_cli_args(cls, args: FlexibleArgumentParser, skip_port_check=False) -> "EngineArgs":
         """
         Create an instance of EngineArgs from command line arguments.
         """
@@ -1203,7 +1217,7 @@ class EngineArgs:
         for field in dataclass_fields(cls):
             if hasattr(args, field.name):
                 args_dict[field.name] = getattr(args, field.name)
-        return cls(**args_dict)
+        return cls(**args_dict, skip_port_check=skip_port_check)
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
@@ -1282,7 +1296,7 @@ class EngineArgs:
                 routing_replay_args[k] = v
         return RoutingReplayConfig(routing_replay_args)
 
-    def create_engine_config(self, port_availability_check=True) -> FDConfig:
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
