@@ -21,11 +21,12 @@ MTP模式测试 - ERNIE-4.5-21B-A3B-Paddle 模型
 - Tensor Parallel: 4
 """
 
+import json
 
 import openai
 import pytest
 from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
-import json
+
 
 def test_mtp_mode(xpu_env):
     """mtp模式测试"""
@@ -35,11 +36,7 @@ def test_mtp_mode(xpu_env):
     # 获取配置
     port_num = get_port_num()
     model_path = get_model_path()
-    spec_config = {
-        "method": "mtp",
-        "num_speculative_tokens": 1,
-        "model": f"{model_path}/ERNIE-4.5-21B-A3B-Paddle/mtp"
-    }
+    spec_config = {"method": "mtp", "num_speculative_tokens": 1, "model": f"{model_path}/ERNIE-4.5-21B-A3B-Paddle/mtp"}
     # 构建服务器启动参数
     server_args = [
         "--model",
