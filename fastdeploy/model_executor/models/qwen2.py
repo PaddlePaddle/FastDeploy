@@ -276,7 +276,7 @@ class Qwen2Model(nn.Layer):
     ):
         """ """
 
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
