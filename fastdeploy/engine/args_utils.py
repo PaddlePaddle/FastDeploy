@@ -43,11 +43,12 @@ from fastdeploy.config import (
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
-from fastdeploy.utils import (  # is_port_available,
+from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
     find_free_ports,
+    is_port_available,
     parse_ports,
     parse_quantization,
 )
@@ -552,9 +553,9 @@ class EngineArgs:
             else:
                 assert (
                     len(ports) == num_total_ports
-                ), f"Parameter `{name}` should have {num_total_ports} ports, got {len(ports)}."
-            # for port in ports:
-            #     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+                ), f"Parameter `{name}` expects {num_total_ports} ports, got {len(ports)}."
+            for port in ports:
+                assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             console_logger.debug(f"post init {name}: {ports}")
             return ports

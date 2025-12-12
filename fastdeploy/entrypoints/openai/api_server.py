@@ -84,6 +84,7 @@ chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
+engine_args = None
 
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
@@ -108,7 +109,7 @@ def load_engine():
     """
     load engine
     """
-    global llm_engine
+    global engine_args, llm_engine
     if llm_engine is not None:
         return llm_engine
 
@@ -127,7 +128,7 @@ def load_data_service():
     """
     load data service
     """
-    global llm_engine
+    global engine_args, llm_engine
     if llm_engine is not None:
         return llm_engine
     api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
@@ -147,6 +148,7 @@ async def lifespan(app: FastAPI):
     """
     async context manager for FastAPI lifespan
     """
+    global engine_args
     import logging
 
     uvicorn_access = logging.getLogger("uvicorn.access")
@@ -173,7 +175,6 @@ async def lifespan(app: FastAPI):
         verification = False
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
-    engine_args = EngineArgs.from_cli_args(args)
     fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
         pid=pid,
