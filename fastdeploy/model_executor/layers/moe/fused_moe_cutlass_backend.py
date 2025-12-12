@@ -147,8 +147,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             recv_topk_weights,
             recv_num_tokens_per_expert_list,
             handle,
-            _,
+            event,
         ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 3. Compute ffn
@@ -206,7 +208,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             tmp_ffn_out = recv_x
 
         # 4. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
