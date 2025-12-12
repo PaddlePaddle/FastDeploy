@@ -244,8 +244,6 @@ class AppendAttentionBackend(AttentionBackend):
                 # 128 is qwen3
                 # 32 is glm
                 assert forward_meta.rotary_embs.shape[4] in [128, 32]
-            else:
-                assert forward_meta.rotary_embs.shape == [2, 1, self.max_seq_len, 1, 64]
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
