@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 
 import paddle
 
-from fastdeploy.config import QuantizationConfig, SpeculativeConfig
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.spec_decode.mtp import MTPProposer
 from tests.utils import FakeModelConfig, get_default_test_fd_config
@@ -166,7 +166,7 @@ class TestMTPProposer(unittest.TestCase):
         self.assertIn("caches", proposer.model_inputs)
 
         # Test initialize_kv_cache with block_wise_fp8
-        self.fd_config.quant_config = QuantizationConfig({})
+        self.fd_config.quant_config = Mock()
         self.fd_config.quant_config.kv_cache_quant_type = "block_wise_fp8"
         proposer.initialize_kv_cache(main_model_num_blocks=10, profile=False)
 
