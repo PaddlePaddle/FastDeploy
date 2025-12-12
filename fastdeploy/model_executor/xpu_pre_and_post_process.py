@@ -15,7 +15,7 @@
 """
 
 import queue
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import numpy as np
 import paddle
@@ -23,8 +23,9 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import XPUForwardMeta
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
+from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.output import ModelOutputData
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
@@ -49,10 +50,70 @@ if current_platform.is_xpu():
         update_inputs,
         update_inputs_v1,
     )
-from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
-from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
-DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+
+def _build_stream_transfer_data(
+    output_tokens: paddle.Tensor,
+    pooler_outputs: List = None,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list: Optional[List[Optional[LogprobsTensors]]] = None,
+):
+    """Split output_tokens and output"""
+    stream_transfer_datas = []
+    if output_tokens is not None:
+        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
+
+        for bid, output_token_per_sample in enumerate(output_tokens_lists):
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
+            )
+            if logprobs:
+                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
+            if prompt_logprobs_list:
+                # Handle both list and single LogprobsTensors (for compatibility)
+                if isinstance(prompt_logprobs_list, list):
+                    if bid < len(prompt_logprobs_list):
+                        prompt_logprobs_item = prompt_logprobs_list[bid]
+                    else:
+                        prompt_logprobs_item = None
+                else:
+                    # Single LogprobsTensors (legacy format)
+                    prompt_logprobs_item = prompt_logprobs_list if bid == 0 else None
+                
+                if prompt_logprobs_item is not None:
+                    # Sanitize prompt_logprobs to ensure JSON compliance
+                    prompt_logprobs_tensor = prompt_logprobs_item.logprobs
+                    # Replace inf, -inf, and nan with safe values using paddle operations
+                    prompt_logprobs_tensor = paddle.where(paddle.isnan(prompt_logprobs_tensor), paddle.full_like(prompt_logprobs_tensor, -1e10), prompt_logprobs_tensor)
+                    prompt_logprobs_tensor = paddle.where(
+                        paddle.isinf(prompt_logprobs_tensor),
+                        paddle.where(prompt_logprobs_tensor > 0, paddle.full_like(prompt_logprobs_tensor, 1e10), paddle.full_like(prompt_logprobs_tensor, -1e10)),
+                        prompt_logprobs_tensor
+                    )
+                    # Clip to valid range
+                    prompt_logprobs_tensor = paddle.clip(prompt_logprobs_tensor, min=-1e10, max=1e10)
+                    prompt_logprobs_item = LogprobsTensors(
+                        prompt_logprobs_item.logprob_token_ids,
+                        prompt_logprobs_tensor,
+                        prompt_logprobs_item.selected_token_ranks
+                    )
+                    stream_transfer_data.prompt_logprobs = prompt_logprobs_item
+            stream_transfer_datas.append(stream_transfer_data)
+    elif pooler_outputs is not None:
+        for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output is None:
+                continue
+            if pooler_output.dtype == paddle.bfloat16:
+                pooler_output = pooler_output.astype("float32")
+
+            pooler_output = pooler_output.numpy()
+
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
+            )
+            stream_transfer_datas.append(stream_transfer_data)
+    return stream_transfer_datas
 
 
 def xpu_pre_process(
@@ -216,43 +277,6 @@ def xpu_process_output(
     )
     return hiddden_states
 
-def _build_stream_transfer_data(
-    output_tokens: paddle.Tensor,
-    pooler_outputs: List[PoolingSequenceGroupOutput] = None,
-    logprobs: Optional[LogprobsTensors] = None,
-    prompt_logprobs_list: Optional[LogprobsTensors] = None,
-):
-    """Split output_tokens and output"""
-
-    stream_transfer_datas = []
-    if output_tokens is not None:
-
-        output_tokens = output_tokens.reshape([-1]).numpy()
-        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
-
-        for bid, output_token_per_sample in enumerate(output_tokens_lists):
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
-            )
-            if logprobs:
-                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
-            if prompt_logprobs_list:
-                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
-            stream_transfer_datas.append(stream_transfer_data)
-    elif pooler_outputs is not None:
-        for bid, pooler_output in enumerate(pooler_outputs):
-            if pooler_output is None:
-                continue
-            if pooler_output.dtype == paddle.bfloat16:
-                pooler_output = pooler_output.astype("float32")
-
-            pooler_output = pooler_output.numpy()
-
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
-            )
-            stream_transfer_datas.append(stream_transfer_data)
-    return stream_transfer_datas
 
 def xpu_post_process_normal(
     sampler_output: Sampler,
@@ -260,6 +284,7 @@ def xpu_post_process_normal(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
     skip_save_output: bool = False,
+    save_each_rank: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = None,
     line_break_id: int = None,
@@ -359,13 +384,14 @@ def xpu_post_process_normal(
     #    In the future, we will abandon this approach.
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            if model_output.mp_rank == 0 and async_output_queue is not None:
+            if save_each_rank or model_output.mp_rank == 0:
                 output = _build_stream_transfer_data(
                     sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
                     prompt_logprobs_list=model_output.prompt_logprobs_list,
                 )
-                async_output_queue.put(output)
+                if async_output_queue is not None:
+                    async_output_queue.put(output)
         else:
             if sampler_output.logprobs_tensors is None:
                 save_output(
