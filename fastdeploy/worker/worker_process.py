@@ -409,6 +409,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+        first_run_after_unfrozen = False
         # init eplb signal
         self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
@@ -479,6 +480,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
                     while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                        first_run_after_unfrozen = True
                         time.sleep(0.01)
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
@@ -512,12 +514,13 @@ class PaddleDisWorkerProc:
                 time.sleep(0.001)
                 continue
 
-            # Execute model to generate token. The generated token will be written to the buffer.
-            # These generated tokens can be obtained through get_output op.
-            start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, num_running_requests)
-            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
-            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            if not first_run_after_unfrozen:
+                # Execute model to generate token. The generated token will be written to the buffer.
+                # These generated tokens can be obtained through get_output op.
+                start_execute_time = time.time()
+                self.worker.execute_model(req_dicts, num_running_requests)
+                self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+                logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
