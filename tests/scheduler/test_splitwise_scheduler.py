@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import json
 import pickle
 import random
 import sys
@@ -292,10 +291,8 @@ def _install_stub_modules() -> None:
     def _log(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    logger_mod.info = _log  # type: ignore[attr-defined]
-    logger_mod.error = _log  # type: ignore[attr-defined]
-    logger_mod.debug = _log  # type: ignore[attr-defined]
-    logger_mod.warning = _log  # type: ignore[attr-defined]
+    for level in ("info", "error", "debug", "warning"):
+        setattr(logger_mod, level, _log)  # type: ignore[attr-defined]
     sys.modules["fastdeploy.utils.scheduler_logger"] = logger_mod
 
     utils_mod = types.ModuleType("fastdeploy.utils")
@@ -581,6 +578,32 @@ class ResultReaderTest(SplitWiseSchedulerTestCase):
 
         self.assertNotIn("old", reader.reqs)
         self.assertTrue(reader.data)
+        self.assertGreaterEqual(call_count["rpop"], 1)
+
+    def test_run_handles_empty_keys_and_exceptions(self) -> None:
+        client = sys.modules["redis"].Redis()
+        reader = self.module.ResultReader(client, idx=0, batch=5, ttl=10, group="")
+        reader.reqs.clear()
+
+        original_sleep = self.module.time.sleep
+        self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
+        with self.assertRaises(SystemExit):
+            reader.run()
+        self.module.time.sleep = original_sleep
+
+        # Now cover the exception logging path inside run()
+        reader.reqs["rid"] = {"arrival_time": time.time()}
+        calls = {"count": 0}
+
+        def _rpop(_key: str, _batch: int):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise ValueError("boom")
+            raise SystemExit()
+
+        reader.client.rpop = _rpop  # type: ignore[assignment]
+        with self.assertRaises(SystemExit):
+            reader.run()
 
     def test_run_handles_empty_keys_and_exceptions(self) -> None:
         client = sys.modules["redis"].Redis()
@@ -733,12 +756,16 @@ class APISchedulerTest(SplitWiseSchedulerTestCase):
         config = self._make_config()
         scheduler = self.module.APIScheduler(config)
         req = self.module.Request("req-sel", prompt_token_ids_len=50)
-        nodes = [self.module.NodeInfo(str(i), "prefill", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(3)]
+        nodes = [
+            self.module.NodeInfo(str(i), "prefill", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(3)
+        ]
         random.seed(0)
         chosen = scheduler.select_pd(req, nodes, "prefill")
         self.assertIn(chosen, nodes)
 
-        decode_nodes = [self.module.NodeInfo(str(i), "decode", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(2)]
+        decode_nodes = [
+            self.module.NodeInfo(str(i), "decode", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(2)
+        ]
         chosen_decode = scheduler.select_pd(req, decode_nodes, "decode")
         self.assertIn(chosen_decode, decode_nodes)
 
@@ -751,14 +778,28 @@ class APISchedulerTest(SplitWiseSchedulerTestCase):
             "prefill",
             "prefill",
             "host-a",
-            {"transfer_protocol": ["ipc"], "host_ip": "1.1.1.1", "connector_port": 10, "device_ids": [0], "rdma_ports": [1], "tp_size": 1},
+            {
+                "transfer_protocol": ["ipc"],
+                "host_ip": "1.1.1.1",
+                "connector_port": 10,
+                "device_ids": [0],
+                "rdma_ports": [1],
+                "tp_size": 1,
+            },
             load=1,
         )
         decode = self.module.NodeInfo(
             "decode",
             "decode",
             "host-b",
-            {"transfer_protocol": ["ipc", "rdma"], "host_ip": "2.2.2.2", "connector_port": 11, "device_ids": [1], "rdma_ports": [2], "tp_size": 1},
+            {
+                "transfer_protocol": ["ipc", "rdma"],
+                "host_ip": "2.2.2.2",
+                "connector_port": 11,
+                "device_ids": [1],
+                "rdma_ports": [2],
+                "tp_size": 1,
+            },
             load=1,
         )
 
@@ -1261,7 +1302,9 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
         self.assertEqual(picked, [])
 
         infer.reqs_queue.clear()
-        infer.reqs_queue.append(self.module.Request("long", prompt_token_ids_len=config.long_prefill_token_threshold + 10))
+        infer.reqs_queue.append(
+            self.module.Request("long", prompt_token_ids_len=config.long_prefill_token_threshold + 10)
+        )
         infer.reqs_queue.append(self.module.Request("short", prompt_token_ids_len=2))
         selected = infer.get_requests(
             available_blocks=100,
