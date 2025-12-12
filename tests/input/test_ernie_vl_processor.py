@@ -130,62 +130,6 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
-    def test_process_request_dict_with_options(self):
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": True},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": False},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "123"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
     def test_init(self):
         """Test __init__ method"""
         with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
@@ -372,15 +316,16 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
     def test_process_request_dict_comprehensive(self):
         """Test process_request_dict with various scenarios"""
         # Test with stop sequences
-        self.processor.update_stop_seq = MagicMock(return_value=([100, 101], [1, 1]))
+        self.processor.update_stop_seq = MagicMock(return_value=([[100], [101]], [1, 1]))
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "stop": ["stop1", "stop2"],
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.update_stop_seq.assert_called_once_with(["stop1", "stop2"])
-        self.assertEqual(request_dict["stop_token_ids"], [100, 101])
+        self.assertEqual(request_dict["stop_token_ids"], [[100], [101]])
         self.assertEqual(request_dict["stop_seqs_len"], [1, 1])
 
         # Test with bad words
@@ -389,6 +334,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "bad_words": ["bad1", "bad2"],
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.update_bad_words.assert_called_once()
@@ -409,6 +355,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "prompt": "Hello world",
             "multimodal_data": {"image": [], "video": []},
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
@@ -418,6 +365,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.ernie4_5_processor.text2ids.reset_mock()
         request_dict = {
             "prompt": "Hello world",
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.ernie4_5_processor.text2ids.assert_called_once()
@@ -437,6 +385,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         )
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.ernie4_5_processor.request2ids.assert_called_once()
@@ -450,6 +399,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
                 "custom_key": "custom_value",
                 "enable_thinking": False,
             },
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["custom_key"], "custom_value")
@@ -460,6 +410,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], False)
@@ -469,18 +420,75 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
+            "request_id": "test_1",
         }
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
-        self.processor.process_request_dict(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        self.processor.process_request_dict(request_dict, max_model_len=512)
+        self.assertEqual(request_dict["enable_thinking"], False)
 
         # Test thinking_mode = "open"
         self.processor.ernie4_5_processor.request2ids.reset_mock()
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        # Test thinking_mode with prompt_token_ids (different code path)
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"enable_thinking": True},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"enable_thinking": False},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
+            "request_id": "test_1",
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+            "chat_template_kwargs": {"options": {"thinking_mode": "123"}},
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
@@ -489,6 +497,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "chat_template_kwargs": "not_a_dict",
+            "request_id": "test_1",
         }
         with self.assertRaises(ValueError) as context:
             self.processor.process_request_dict(request_dict, 100)
@@ -506,6 +515,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "completion_token_ids": [10, 11, 12],
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.processor.append_completion_tokens.assert_called_once()
@@ -527,6 +537,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1] * 150,
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(len(request_dict["prompt_token_ids"]), 99)
@@ -536,6 +547,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "max_tokens": 200,
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertLessEqual(request_dict["max_tokens"], 100 - 3)
@@ -545,6 +557,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             "messages": [{"role": "user", "content": "Hello"}],
             "prompt_token_ids": [1, 1, 1],
             "top_p": 1e-10,
+            "request_id": "test_1",
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertGreaterEqual(request_dict["top_p"], 1e-5)
