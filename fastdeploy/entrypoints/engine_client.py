@@ -82,13 +82,6 @@ class EngineClient:
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
-        if self.enable_mm and self.enable_prefix_caching:
-            from fastdeploy.cache_manager.cache_data import (
-                is_mm_model_disable_prefix_cache,
-            )
-
-            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.fd_config.model_config)
-
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
         else:
@@ -265,16 +258,6 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    def _check_mm_disable_prefix_cache(self, task):
-        is_multimodal_data = False
-        if self.disable_prefix_mm:
-            multimodal_inputs = task.get("multimodal_inputs", [])
-            if multimodal_inputs:
-                token_type_ids = multimodal_inputs.get("token_type_ids", [])
-                if token_type_ids:
-                    is_multimodal_data = np.sum(token_type_ids) > 0
-        return is_multimodal_data
-
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -297,16 +280,6 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
-
-            if self.enable_mm and self.enable_prefix_caching:
-                if self._check_mm_disable_prefix_cache(task):
-                    api_server_logger.error(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
-                    )
-                    raise EngineError(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
-                        error_code=400,
-                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]

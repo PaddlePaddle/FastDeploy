@@ -581,7 +581,7 @@ class DeepSeekV3Model(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):

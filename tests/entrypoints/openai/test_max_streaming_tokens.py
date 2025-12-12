@@ -321,6 +321,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
             {
                 "request_id": "test_request_id_1",
@@ -334,6 +335,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
         ]
 
@@ -493,6 +495,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 prompt_logprobs_res_list=prompt_logprobs_res_list,
                 response_processor=mock_response_processor,
                 max_tokens=max_tokens_list[idx],
+                speculate_metrics=None,
             )
 
             expected = case["expected"]
