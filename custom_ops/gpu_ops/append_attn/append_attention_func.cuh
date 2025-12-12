@@ -52,12 +52,19 @@ struct prefill_softmax_state_t {
       for (int i = 0; i < vec_size / 2; ++i) {
         *((nv_bfloat162*)(&o) + i) = make_bfloat162(0, 0);
       }
+    } else if constexpr (std::is_same<T, float>::value) {
+#pragma unroll
+      for (int i = 0; i < vec_size; ++i) {
+        o[i] = 0.0f;
+      }
     }
     d = 1.f;
     if constexpr (std::is_same<T, half>::value) {
       m = -5e4f;
     } else if constexpr (std::is_same<T, nv_bfloat16>::value) {
-      m = -3.38953e38f;
+      m = -3.0e30f;
+    } else if constexpr (std::is_same<T, float>::value) {
+      m = -3.0e30f;
     }
   }
 
@@ -2441,7 +2448,7 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int speculate_max_draft_token_num = 5) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int hid = blockIdx.y;
-  __shared__ T smem[bdy * HEAD_DIM];
+  __shared__ float smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
@@ -2475,25 +2482,31 @@ __global__ void merge_multi_chunks_v2_kernel(
     }
 
     using LoadT = AlignedVector<T, vec_size>;
+    using LoadFP32 = AlignedVector<float, vec_size>;
     LoadT load_vec;
-    LoadT res_vec;
-    if constexpr (std::is_same<T, half>::value) {
+    LoadFP32 res_vec;
+    LoadFP32 float_load_vec;
+//     if constexpr (std::is_same<T, half>::value) {
+// #pragma unroll
+//       for (int i = 0; i < vec_size / 2; ++i) {
+//         *((half2*)(&res_vec) + i) = make_half2(0, 0);
+//       }
+//     } else {
+// #pragma unroll
+//       for (int i = 0; i < vec_size / 2; ++i) {
+//         *((nv_bfloat162*)(&res_vec) + i) = make_bfloat162(0, 0);
+//       }
+//     }
 #pragma unroll
-      for (int i = 0; i < vec_size / 2; ++i) {
-        *((half2*)(&res_vec) + i) = make_half2(0, 0);
-      }
-    } else {
-#pragma unroll
-      for (int i = 0; i < vec_size / 2; ++i) {
-        *((nv_bfloat162*)(&res_vec) + i) = make_bfloat162(0, 0);
-      }
+    for (int i = 0; i < vec_size; ++i) {
+      res_vec[i] = 0.0f;
     }
     float m;
     float d = 1.f;
     if constexpr (std::is_same<T, half>::value) {
       m = -5e4f;
     } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-      m = -3.0e+30f;
+      m = -3.0e30f;
     }
 #pragma unroll 2
     for (int i = ty; i < num_chunks_this_seq; i += bdy) {
@@ -2525,28 +2538,28 @@ __global__ void merge_multi_chunks_v2_kernel(
       }
       Load<T, vec_size>(&multi_out[offset], &load_vec);
       const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
-      const T scale1_T = static_cast<T>(scale1),
-              scale2_T = static_cast<T>(scale2);
       d = d * scale1 + d_now * scale2;
 #pragma unroll
       for (int j = 0; j < vec_size; j++) {
-        res_vec[j] = res_vec[j] * scale1_T + load_vec[j] * scale2_T;
+        res_vec[j] =
+            res_vec[j] * scale1 + static_cast<float>(load_vec[j]) * scale2;
       }
     }
     // store ty res
-    Store<T, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
+    Store<float, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
     md_smem[2 * ty] = m;
     md_smem[2 * ty + 1] = d;
     __syncthreads();
     if (ty == 0) {
       // merge bdy
-      prefill_softmax_state_t<vec_size, T> st;
+      prefill_softmax_state_t<vec_size, float> st;
       st.init();
 #pragma unroll
       for (int i = 0; i < bdy; i++) {
-        Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
+        Load<float, vec_size>(&smem[i * head_dim + vid * vec_size],
+                              &float_load_vec);
         const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
-        st.merge(load_vec, m_tmp, d_tmp);
+        st.merge(float_load_vec, m_tmp, d_tmp);
       }
 
       if (sinks) {
@@ -2556,26 +2569,10 @@ __global__ void merge_multi_chunks_v2_kernel(
         st.normalize();
       }
 
-      const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
-      AlignedVector<T, vec_size> shift_bias_vec;
-      AlignedVector<T, vec_size> smooth_weight_vec;
       AlignedVector<OutT, vec_size> out_vec;
-      if (shift_bias) {
-        Load<T, vec_size>(shift_bias + shift_smooth_offset, &shift_bias_vec);
-        Load<T, vec_size>(smooth_weight + shift_smooth_offset,
-                          &smooth_weight_vec);
-      }
-
 #pragma unroll
       for (int i = 0; i < vec_size; ++i) {
-        StoreFunc<T, vec_size, OutT>()(st.o,
-                                       shift_bias_vec,
-                                       smooth_weight_vec,
-                                       out_vec,
-                                       quant_max_bound,
-                                       quant_min_bound,
-                                       in_scale,
-                                       i);
+        out_vec[i] = static_cast<OutT>(st.o[i]);
       }
       Store<OutT, vec_size>(
           out_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
