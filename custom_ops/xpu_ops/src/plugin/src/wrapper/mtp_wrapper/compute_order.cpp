@@ -49,6 +49,17 @@ static int cpu_wrapper(Context* ctx,
                        const int input_token_num) {
   int in_offset = 0;   // input_offset(long)
   int out_offset = 0;  // output_offset(short)
+
+  // for support mix, encoder need set first
+  for (int i = 0; i < bsz; ++i) {
+    int cur_seq_lens_encoder = seq_lens_encoder[i];
+    if (cur_seq_lens_encoder > 0) {
+      for (int j = 0; j < cur_seq_lens_encoder; j++) {
+        position_map[in_offset++] = out_offset++;
+      }
+    }
+  }
+
   for (int i = 0; i < bsz; ++i) {
     int cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i];
     int cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i];
@@ -58,9 +69,7 @@ static int cpu_wrapper(Context* ctx,
 
     // 1. eagle encoder. Base step=1
     if (cur_seq_lens_encoder > 0) {
-      for (int j = 0; j < cur_seq_lens_encoder; j++) {
-        position_map[in_offset++] = out_offset++;
-      }
+      continue;
       // 2. base model encoder. Base step=0
     } else if (cur_base_model_seq_lens_encoder != 0) {
       // nothing happens
