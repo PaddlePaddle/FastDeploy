@@ -25,7 +25,6 @@ import numpy as np
 import pytest
 
 
-# Minimal stub logger used by paddleformers logging utilities.
 class _StubLogger:
     def __init__(self):
         self.logger = self
@@ -35,70 +34,40 @@ class _StubLogger:
 
 
 def _install_required_stubs():
-    if "paddle" not in sys.modules:
-        try:
-            import paddle  # noqa: F401
-        except Exception:
-            paddle_mod = types.ModuleType("paddle")
-            sys.modules["paddle"] = paddle_mod
-            dist_mod = types.ModuleType("paddle.distributed")
-            sys.modules["paddle.distributed"] = dist_mod
-            paddle_mod.distributed = dist_mod
-            paddle_mod.is_compiled_with_rocm = lambda: False
-            paddle_mod.is_compiled_with_cuda = lambda: False
-            paddle_mod.is_compiled_with_xpu = lambda: False
-            paddle_mod.is_compiled_with_custom_device = lambda *_: False
-            paddle_mod.Tensor = type("Tensor", (), {})
+    def ensure_module(name):
+        return sys.modules.setdefault(name, types.ModuleType(name))
 
-    if "paddleformers" not in sys.modules:
-        try:
-            import paddleformers  # noqa: F401
-        except Exception:
-            paddleformers_mod = types.ModuleType("paddleformers")
-            sys.modules["paddleformers"] = paddleformers_mod
+    try:
+        import paddle  # noqa: F401
+    except Exception:
+        paddle_mod = ensure_module("paddle")
+        paddle_mod.distributed = ensure_module("paddle.distributed")
+        for attr in ["is_compiled_with_rocm", "is_compiled_with_cuda", "is_compiled_with_xpu"]:
+            setattr(paddle_mod, attr, lambda: False)
+        paddle_mod.is_compiled_with_custom_device = lambda *_: False
+        paddle_mod.Tensor = type("Tensor", (), {})
 
-            utils_mod = types.ModuleType("paddleformers.utils")
-            sys.modules["paddleformers.utils"] = utils_mod
-            paddleformers_mod.utils = utils_mod
-
-            log_mod = types.ModuleType("paddleformers.utils.log")
-            log_mod.logger = _StubLogger()
-            sys.modules["paddleformers.utils.log"] = log_mod
-            utils_mod.log = log_mod
-
-            transformers_mod = types.ModuleType("paddleformers.transformers")
-            sys.modules["paddleformers.transformers"] = transformers_mod
-
-            config_utils_mod = types.ModuleType("paddleformers.transformers.configuration_utils")
-
-            class _PretrainedConfig:
-                pass
-
-            config_utils_mod.PretrainedConfig = _PretrainedConfig
-            sys.modules["paddleformers.transformers.configuration_utils"] = config_utils_mod
-            transformers_mod.configuration_utils = config_utils_mod
+    try:
+        import paddleformers  # noqa: F401
+    except Exception:
+        pf_mod = ensure_module("paddleformers")
+        pf_mod.utils = ensure_module("paddleformers.utils")
+        pf_mod.utils.log = ensure_module("paddleformers.utils.log")
+        pf_mod.utils.log.logger = _StubLogger()
+        pf_mod.transformers = ensure_module("paddleformers.transformers")
+        cfg_utils = ensure_module("paddleformers.transformers.configuration_utils")
+        cfg_utils.PretrainedConfig = type("PretrainedConfig", (), {})
+        pf_mod.transformers.configuration_utils = cfg_utils
 
     if "fastdeploy.metrics.trace_util" not in sys.modules:
-        real_trace_util = None
         try:
-            import fastdeploy.metrics.trace_util as _real_trace_util
-
-            real_trace_util = _real_trace_util
+            import fastdeploy.metrics.trace_util as real_trace_util
         except Exception:
             real_trace_util = None
 
         trace_util_mod = types.ModuleType("fastdeploy.metrics.trace_util")
-
-        def _noop(*_, **__):
-            return None
-
-        needed_names = ["start_span", "start_span_request"]
-        for name in needed_names:
-            if real_trace_util and hasattr(real_trace_util, name):
-                setattr(trace_util_mod, name, getattr(real_trace_util, name))
-            else:
-                setattr(trace_util_mod, name, _noop)
-
+        for name in ["start_span", "start_span_request"]:
+            setattr(trace_util_mod, name, getattr(real_trace_util, name, lambda *_, **__: None))
         sys.modules["fastdeploy.metrics.trace_util"] = trace_util_mod
 
 
@@ -165,35 +134,17 @@ class _DummyEngineCacheQueue:
 
 # Test double for process objects spawned by PrefixCacheManager.
 class _DummyProcess:
-    def __init__(self, *args, **kwargs):
-        self.args = args
-
-    def poll(self):
-        return None
-
-
-# Process double that allows configuring poll return values.
-class _PollingProcess(_DummyProcess):
     def __init__(self, *args, poll_value=None, **kwargs):
-        super().__init__(*args, **kwargs)
+        self.args = args
         self._poll_value = poll_value
 
     def poll(self):
         return self._poll_value
 
 
-# Thread double that records whether start was called.
-class _DummyThread:
-    def __init__(self, target=None, **kwargs):
-        self.target = target
-        self.started = False
-
-    def start(self):
-        self.started = True
-
-
-# Tracking thread used to assert expected background tasks are launched.
 class _TrackingThread:
+    """Thread double that records whether start was called."""
+
     instances = []
 
     def __init__(self, target=None, **kwargs):
@@ -276,6 +227,25 @@ def _create_manager(
         quant_config=quant_config,
     )
     return PrefixCacheManager(config, tensor_parallel_size=1, splitwise_role=splitwise_role)
+
+
+def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, cache_status=CacheStatus.GPU):
+    parent = parent or manager.radix_tree_root
+    block_hash = manager.cal_block_hash(input_ids)
+    node = BlockNode(
+        node_id,
+        input_ids,
+        block_hash,
+        parent.depth + 1,
+        len(parent.children),
+        block_size,
+        block_hash,
+        0,
+        parent=parent,
+        cache_status=cache_status,
+    )
+    parent.children[block_hash] = node
+    return node
 
 
 class PrefixCacheManagerTest(unittest.TestCase):
@@ -399,6 +369,42 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(hit_info["cpu_cache_blocks"], 1)
         self.assertEqual(manager.metrics.hit_req_count, 1)
 
+    def test_request_match_blocks_raises_when_gpu_unavailable(self):
+        manager = _create_manager()
+        task = SimpleNamespace(prompt_token_ids=[1, 2], output_token_ids=[], request_id="fail")
+        with (
+            patch.object(
+                manager,
+                "mm_match_block",
+                return_value=([], [9], [10], manager.radix_tree_root, 0, 2),
+            ),
+            patch.object(manager, "can_allocate_gpu_blocks", return_value=False),
+        ):
+            with self.assertRaises(Exception):
+                manager.request_match_blocks(task, block_size=2)
+
+    def test_request_match_blocks_with_numpy_prompt_and_metric_reset(self):
+        manager = _create_manager()
+        manager.metrics.reset_metrics = MagicMock()
+        manager.metrics.req_count = 9999
+
+        task = SimpleNamespace(
+            prompt_token_ids=np.array([1, 2, 3]),
+            output_token_ids=[4],
+            request_id="np",
+        )
+        with patch.object(
+            manager,
+            "mm_match_block",
+            return_value=([], [], [], manager.radix_tree_root, 0, 0),
+        ):
+            common, matched_tokens, hit_info = manager.request_match_blocks(task, block_size=2)
+
+        self.assertEqual(common, [])
+        self.assertEqual(matched_tokens, 0)
+        self.assertEqual(hit_info["gpu_cache_blocks"], 0)
+        manager.metrics.reset_metrics.assert_called_once()
+
     def test_get_kv_cache_shape_uses_backend(self):
         quant = SimpleNamespace(kv_cache_quant_type="int8")
         manager = _create_manager(quant_config=quant)
@@ -428,16 +434,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(backend.max_num_blocks, 5)
         self.assertEqual(backend.quant_type, "int8")
 
-    def test_format_visible_devices_supports_common_inputs(self):
-        self.assertEqual(
-            PrefixCacheManager._format_visible_devices([0, 1]),
-            "CUDA_VISIBLE_DEVICES=0,1",
-        )
-        self.assertEqual(
-            PrefixCacheManager._format_visible_devices((3,)),
-            "CUDA_VISIBLE_DEVICES=3",
-        )
-        self.assertEqual(PrefixCacheManager._format_visible_devices(5), "5")
+    def test_get_required_block_num_rounds_up(self):
+        manager = _create_manager()
+        self.assertEqual(manager.get_required_block_num(0, 4), 0)
+        self.assertEqual(manager.get_required_block_num(7, 4), 2)
+        self.assertEqual(manager.get_required_block_num(8, 4), 2)
 
     def test_launch_cache_manager_initializes_processes(self):
         manager = _create_manager()
@@ -463,7 +464,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _DummyThread,
+                _TrackingThread,
             ),
             patch.object(
                 manager,
@@ -506,7 +507,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _DummyThread,
+                _TrackingThread,
             ),
             patch.object(
                 manager,
@@ -549,7 +550,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _DummyThread,
+                _TrackingThread,
             ),
             patch.object(manager, "_get_kv_cache_shape", return_value=([1], [1])),
             patch.object(manager, "launch_cache_messager", return_value=None),
@@ -602,7 +603,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                partial(_PollingProcess, poll_value=1),
+                partial(_DummyProcess, poll_value=1),
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
@@ -674,7 +675,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                partial(_PollingProcess, poll_value=2),
+                partial(_DummyProcess, poll_value=2),
             ),
         ):
             processes = manager.launch_cache_messager(
@@ -689,6 +690,173 @@ class PrefixCacheManagerTest(unittest.TestCase):
             )
 
         self.assertIsNone(processes)
+
+    def test_launch_cache_manager_formats_value_cache_shape(self):
+        manager = _create_manager()
+        manager.cache_config.enable_hierarchical_cache = False
+
+        captured = {}
+
+        class _CmdProcess:
+            def __init__(self, cmd):
+                captured["cmd"] = cmd
+
+            def poll(self):
+                return None
+
+        with (
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
+                side_effect=_DummyIPCSignal,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
+                _DummyEngineCacheQueue,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value="CUDA_VISIBLE_DEVICES=0",
+                create=True,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
+                side_effect=lambda cmd, **_: _CmdProcess(cmd),
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
+                _TrackingThread,
+            ),
+            patch.object(
+                manager,
+                "_get_kv_cache_shape",
+                return_value=([1], [2, 3]),
+            ),
+        ):
+            manager.launch_cache_manager(
+                cache_config=manager.cache_config,
+                tensor_parallel_size=1,
+                device_ids=[0],
+                pod_ip="127.0.0.1",
+                engine_worker_queue_port=8000,
+                pid_suffix="pid",
+                create_cache_tensor=True,
+            )
+
+        self.assertIn("--value_cache_shape 2,3", captured["cmd"])
+
+    def test_update_cache_config_adjusts_gpu_pool_based_on_scheduler_flag(self):
+        manager = _create_manager()
+        cache_config = SimpleNamespace(
+            total_block_num=5,
+            prefill_kvcache_block_num=3,
+            model_cfg=SimpleNamespace(num_hidden_layers=1),
+        )
+
+        with patch(
+            "fastdeploy.cache_manager.prefix_cache_manager.envs.ENABLE_V1_KVCACHE_SCHEDULER",
+            1,
+        ):
+            manager.update_cache_config(cache_config)
+            self.assertEqual(manager.num_gpu_blocks, cache_config.total_block_num)
+            self.assertEqual(len(manager.gpu_free_block_list), cache_config.total_block_num)
+
+        with patch(
+            "fastdeploy.cache_manager.prefix_cache_manager.envs.ENABLE_V1_KVCACHE_SCHEDULER",
+            0,
+        ):
+            manager.update_cache_config(cache_config)
+            self.assertEqual(manager.num_gpu_blocks, cache_config.prefill_kvcache_block_num)
+            self.assertEqual(len(manager.gpu_free_block_list), cache_config.prefill_kvcache_block_num)
+
+    def test_allocate_and_recycle_cpu_blocks(self):
+        manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=3)
+        allocated = manager.allocate_cpu_blocks(2)
+        self.assertEqual(allocated, [0, 1])
+        self.assertEqual(len(manager.cpu_free_block_list), 1)
+
+        manager.recycle_cpu_blocks(allocated)
+        self.assertEqual(len(manager.cpu_free_block_list), 3)
+
+    def test_issue_swap_task_sync_path(self):
+        manager = _create_manager()
+        manager.cache_task_queue = _DummyEngineCacheQueue()
+
+        class _NoWaitEvent:
+            instances = []
+
+            def __init__(self, *_, **__):
+                self.wait_called = False
+                _NoWaitEvent.instances.append(self)
+
+            def wait(self):
+                self.wait_called = True
+
+        with patch("fastdeploy.cache_manager.prefix_cache_manager.Event", _NoWaitEvent):
+            manager.issue_swap_task(
+                transfer_task_id="sync-task",
+                swap_node_ids=[1],
+                gpu_block_ids=[2],
+                cpu_block_ids=[3],
+                event_type=CacheStatus.SWAP2GPU,
+                is_sync=True,
+            )
+
+        self.assertEqual(len(_NoWaitEvent.instances), 1)
+        self.assertTrue(_NoWaitEvent.instances[0].wait_called)
+        self.assertNotIn("sync-task", manager.task_swapping_event)
+        self.assertEqual(len(manager.cache_task_queue.tasks), 1)
+
+    def test_prepare_cpu_cache_dispatches_swap(self):
+        manager = _create_manager()
+        issued = {}
+
+        def _capture_issue(task_id, swap_node_ids, gpu_ids, cpu_ids, event_type, is_sync):
+            issued["args"] = (task_id, swap_node_ids, gpu_ids, cpu_ids, event_type, is_sync)
+
+        manager.issue_swap_task = _capture_issue
+        manager._prepare_cpu_cache(
+            req_id="req-id",
+            swap_node_ids=[10],
+            gpu_recv_block_ids=[1, 2],
+            cpu_recv_block_ids=[3, 4],
+            match_cpu_block_ids=[3, 4],
+        )
+
+        self.assertIn("args", issued)
+        task_id, swap_nodes, gpu_ids, cpu_ids, event_type, is_sync = issued["args"]
+        self.assertEqual(task_id, "req-id")
+        self.assertEqual(swap_nodes, [10])
+        self.assertEqual(gpu_ids, [1, 2])
+        self.assertEqual(cpu_ids, [3, 4])
+        self.assertEqual(event_type, CacheStatus.SWAP2GPU)
+        self.assertTrue(is_sync)
+
+    def test_update_cache_blocks_refreshes_mappings(self):
+        manager = _create_manager(num_gpu_blocks=2)
+        req_id = "update-req"
+        last_node = BlockNode(1, [], 0, 1, 0, 2, 0, 0, parent=manager.radix_tree_root)
+        manager.cache_info[req_id] = (last_node, 0)
+        manager.leaf_req_map[last_node].add(req_id)
+
+        new_leaf = BlockNode(2, [], 0, 1, 0, 2, 1, 0, parent=last_node)
+        with patch.object(manager, "mm_build_path", return_value=new_leaf):
+            task = SimpleNamespace(request_id=req_id, output_token_ids=[1, 2], block_tables=[0])
+            manager.update_cache_blocks(task, block_size=2, num_computed_tokens=4)
+
+        self.assertIs(manager.req_leaf_map[req_id], new_leaf)
+        self.assertIn(req_id, manager.leaf_req_map[new_leaf])
+        self.assertEqual(task.cached_block_num, 2)
+
+    def test_is_chunked_mm_input_detects_overlap(self):
+        manager = _create_manager()
+        mm_inputs = {
+            "mm_positions": [SimpleNamespace(offset=2, length=3)],
+            "mm_hashes": ["img"],
+        }
+
+        chunked, idx = manager.is_chunked_mm_input(mm_inputs, matched_token_num=3)
+        self.assertTrue(chunked)
+        self.assertEqual(idx, 0)
 
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
@@ -706,6 +874,35 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager.task_swapping_event["sync-task"] = threading.Event()
         manager.task_swapping_event["sync-task"].set()
         manager.sync_swap_task("sync-task")
+
+    def test_release_block_ids_recycles_unfilled_blocks_for_root(self):
+        manager = _create_manager()
+        req_id = "root-release"
+        manager.req_leaf_map[req_id] = manager.radix_tree_root
+        manager.unfilled_req_block_map[req_id] = [5]
+
+        manager.release_block_ids(SimpleNamespace(request_id=req_id))
+        self.assertNotIn(req_id, manager.unfilled_req_block_map)
+
+    def test_free_nodes_directly_handles_gpu_leafs(self):
+        manager = _create_manager()
+        node = _make_block_node(manager, node_id=200, input_ids=[7, 8])
+        node.shared_count = 0
+        node.reverved_dec_block_ids = [9]
+        manager.node_map[node.node_id] = node
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        recycled = []
+
+        def _record(block_ids):
+            recycled.append(block_ids)
+
+        manager.recycle_gpu_blocks = _record
+
+        manager.free_nodes_directly(node)
+
+        self.assertTrue(any(9 in entry if isinstance(entry, list) else entry == 9 for entry in recycled))
 
     def test_match_block_moves_cpu_nodes_to_swap(self):
         manager = _create_manager(num_gpu_blocks=4)
