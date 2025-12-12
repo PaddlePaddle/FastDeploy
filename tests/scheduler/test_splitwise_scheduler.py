@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import json
+import pickle
+import random
 import sys
 import time
 import types
@@ -30,45 +31,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-_MODULE_CACHE = {}
-
-
 def _install_stub_modules() -> None:
     """Install lightweight stand-ins for the external dependencies."""
 
     if getattr(_install_stub_modules, "_installed", False):
         return
-
-    # ------------------------------------------------------------------ orjson
-    orjson_mod = types.ModuleType("orjson")
-
-    def _dumps(obj: Any) -> bytes:
-        return json.dumps(obj).encode("utf-8")
-
-    def _loads(data: Any) -> Any:
-        if isinstance(data, (bytes, bytearray)):
-            data = data.decode("utf-8")
-        return json.loads(data)
-
-    orjson_mod.dumps = _dumps  # type: ignore[attr-defined]
-    orjson_mod.loads = _loads  # type: ignore[attr-defined]
-    sys.modules.setdefault("orjson", orjson_mod)
-
-    # ----------------------------------------------------- scheduler logger stub
-    logger_mod = types.ModuleType("fastdeploy.utils.scheduler_logger")
-
-    def _log(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    logger_mod.info = _log  # type: ignore[attr-defined]
-    logger_mod.error = _log  # type: ignore[attr-defined]
-    logger_mod.debug = _log  # type: ignore[attr-defined]
-    logger_mod.warning = _log  # type: ignore[attr-defined]
-    sys.modules["fastdeploy.utils.scheduler_logger"] = logger_mod
-
-    utils_mod = types.ModuleType("fastdeploy.utils")
-    utils_mod.scheduler_logger = logger_mod  # type: ignore[attr-defined]
-    sys.modules["fastdeploy.utils"] = utils_mod
 
     # --------------------------------------------------------------- Redis stubs
     class _FakePipeline:
@@ -225,6 +192,7 @@ def _install_stub_modules() -> None:
             self.prompt_token_ids = prompt_token_ids or []
             self.prompt_token_ids_len = prompt_token_ids_len
             self.arrival_time = arrival_time if arrival_time is not None else time.time()
+            self.metrics = RequestMetrics(arrival_time=self.arrival_time)
             self.disaggregate_info = disaggregate_info
 
         def to_dict(self) -> Dict[str, Any]:
@@ -234,12 +202,13 @@ def _install_stub_modules() -> None:
                 "prompt_token_ids": list(self.prompt_token_ids),
                 "prompt_token_ids_len": self.prompt_token_ids_len,
                 "arrival_time": self.arrival_time,
+                "metrics": self.metrics.to_dict(),
                 "disaggregate_info": self.disaggregate_info,
             }
 
         @classmethod
         def from_dict(cls, data: Dict[str, Any]) -> "Request":
-            return cls(
+            req = cls(
                 request_id=data["request_id"],
                 prompt=data.get("prompt"),
                 prompt_token_ids=data.get("prompt_token_ids"),
@@ -247,6 +216,15 @@ def _install_stub_modules() -> None:
                 arrival_time=data.get("arrival_time", time.time()),
                 disaggregate_info=data.get("disaggregate_info"),
             )
+            metrics_dict = data.get("metrics")
+            if metrics_dict:
+                req.metrics = RequestMetrics.from_dict(metrics_dict)
+            else:
+                req.refresh_metrics()
+            return req
+
+        def refresh_metrics(self) -> None:
+            self.metrics = RequestMetrics.from_dict({"arrival_time": self.arrival_time})
 
     class RequestOutput:
         def __init__(
@@ -300,14 +278,26 @@ def _install_stub_modules() -> None:
     request_mod.RequestOutput = RequestOutput  # type: ignore[attr-defined]
     sys.modules["fastdeploy.engine.request"] = request_mod
 
-    # --------------------------------------------------------------- package stubs
     fd_pkg = types.ModuleType("fastdeploy")
     fd_pkg.__path__ = [str(PROJECT_ROOT / "fastdeploy")]
-    sys.modules.setdefault("fastdeploy", fd_pkg)
+    sys.modules["fastdeploy"] = fd_pkg
 
     scheduler_pkg = types.ModuleType("fastdeploy.scheduler")
     scheduler_pkg.__path__ = [str(PROJECT_ROOT / "fastdeploy" / "scheduler")]
-    sys.modules.setdefault("fastdeploy.scheduler", scheduler_pkg)
+    sys.modules["fastdeploy.scheduler"] = scheduler_pkg
+
+    logger_mod = types.ModuleType("fastdeploy.utils.scheduler_logger")
+
+    def _log(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    for level in ("info", "error", "debug", "warning"):
+        setattr(logger_mod, level, _log)  # type: ignore[attr-defined]
+    sys.modules["fastdeploy.utils.scheduler_logger"] = logger_mod
+
+    utils_mod = types.ModuleType("fastdeploy.utils")
+    utils_mod.scheduler_logger = logger_mod  # type: ignore[attr-defined]
+    sys.modules["fastdeploy.utils"] = utils_mod
 
     _install_stub_modules._installed = True
 
@@ -315,13 +305,8 @@ def _install_stub_modules() -> None:
 def _import_splitwise_scheduler():
     """Import the scheduler module with the stub environment."""
 
-    if "module" in _MODULE_CACHE:
-        return _MODULE_CACHE["module"]
-
     _install_stub_modules()
-    module = importlib.import_module("fastdeploy.scheduler.splitwise_scheduler")
-    _MODULE_CACHE["module"] = module
-    return module
+    return importlib.import_module("fastdeploy.scheduler.splitwise_scheduler")
 
 
 class _PatchedThread:
@@ -412,6 +397,61 @@ class NodeInfoTest(SplitWiseSchedulerTestCase):
 
 
 class ResultReaderTest(SplitWiseSchedulerTestCase):
+    def test_read_handles_group_tokens_with_buffer_and_outputs(self) -> None:
+        client = sys.modules["redis"].Redis()
+        reader = self.module.ResultReader(client, idx=0, batch=10, ttl=30, group="grp")
+
+        req = self.module.Request("req-buffer", prompt_token_ids_len=2)
+        reader.add_req(req)
+
+        metrics = self.module.RequestMetrics(arrival_time=time.time())
+        head = self.module.RequestOutput(
+            request_id=req.request_id,
+            prompt="",
+            prompt_token_ids=[],
+            outputs=self.module.CompletionOutput(index=0, send_idx=0, token_ids=[1]),
+            metrics=metrics,
+            finished=False,
+        )
+        buffered = self.module.RequestOutput(
+            request_id=req.request_id,
+            prompt="",
+            prompt_token_ids=[],
+            outputs=self.module.CompletionOutput(index=0, send_idx=3, token_ids=[5]),
+            metrics=metrics,
+            finished=False,
+        )
+        trailing = self.module.RequestOutput(
+            request_id=req.request_id,
+            prompt="",
+            prompt_token_ids=[],
+            outputs=self.module.CompletionOutput(index=0, send_idx=4, token_ids=[6]),
+            metrics=metrics,
+            finished=True,
+        )
+
+        with reader.lock:
+            reader.out_buffer[req.request_id] = [buffered]
+
+        reader.data.appendleft(head)
+        reader.data.appendleft(trailing)
+        outputs = reader.read()
+        self.assertIn(req.request_id, outputs)
+
+        # Triggers the path where group_tokens has no pre-existing output bucket
+        # so the branch at lines 353-354 is exercised.
+        another = self.module.RequestOutput(
+            request_id="req-new",
+            prompt="",
+            prompt_token_ids=[],
+            outputs=self.module.CompletionOutput(index=0, send_idx=1, token_ids=[9]),
+            metrics=metrics,
+            finished=True,
+        )
+        reader.data.appendleft(another)
+        outputs = reader.read()
+        self.assertEqual(outputs["req-new"][0].outputs.token_ids, [9])
+
     def test_read_groups_partial_outputs(self) -> None:
         client = sys.modules["redis"].Redis()
         reader = self.module.ResultReader(client, idx=0, batch=10, ttl=30, group="group-a")
@@ -538,6 +578,36 @@ class ResultReaderTest(SplitWiseSchedulerTestCase):
 
         self.assertNotIn("old", reader.reqs)
         self.assertTrue(reader.data)
+        self.assertGreaterEqual(call_count["rpop"], 1)
+
+    def test_run_handles_empty_keys_and_exceptions(self) -> None:
+        client = sys.modules["redis"].Redis()
+        reader = self.module.ResultReader(client, idx=0, batch=5, ttl=10, group="")
+        reader.reqs.clear()
+
+        original_sleep = self.module.time.sleep
+        try:
+            self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
+            with self.assertRaises(SystemExit):
+                reader.run()
+        finally:
+            self.module.time.sleep = original_sleep
+
+        # Now cover the exception logging path inside run()
+        reader.reqs["rid"] = {"arrival_time": time.time()}
+        calls = {"count": 0}
+
+        def _rpop(_key: str, _batch: int):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise ValueError("boom")
+            raise SystemExit()
+
+        reader.client.rpop = _rpop  # type: ignore[assignment]
+        with self.assertRaises(SystemExit):
+            reader.run()
+
+        self.assertGreaterEqual(calls["count"], 2)
 
 
 class APISchedulerTest(SplitWiseSchedulerTestCase):
@@ -561,21 +631,153 @@ class APISchedulerTest(SplitWiseSchedulerTestCase):
         key = f"ReqQ_{mixed.nodeid}"
         self.assertIn(key, scheduler.client.storage)
         stored = scheduler.client.storage[key][0]
-        decoded = self.module.orjson.loads(stored)
+        decoded = pickle.loads(stored)
         self.assertEqual(decoded["group"], "g0")
         self.assertIsNone(decoded["disaggregate_info"])
+
+    def test_schedule_disaggregated_nodes_fill_metadata(self) -> None:
+        config = self._make_config()
+        scheduler = self.module.APIScheduler(config)
+
+        req = self.module.Request("req-meta", prompt_token_ids_len=10)
+        disagg = {
+            "host_ip": "1.1.1.1",
+            "transfer_protocol": ["ipc"],
+            "connector_port": 10,
+            "device_ids": [0],
+            "rdma_ports": [100],
+            "tp_size": 2,
+        }
+        pre = self.module.NodeInfo("p", "prefill", "host-a", disagg, load=1)
+        dec = self.module.NodeInfo(
+            "d",
+            "decode",
+            "host-b",
+            {
+                "host_ip": "1.1.1.1",
+                "transfer_protocol": ["ipc"],
+                "connector_port": 11,
+                "device_ids": [1],
+                "rdma_ports": [101],
+                "tp_size": 2,
+            },
+            load=2,
+        )
+
+        scheduler.schedule(req, [pre], [dec], [], group="g1")
+        self.assertIsNotNone(req.disaggregate_info)
+        self.assertEqual(req.disaggregate_info["transfer_protocol"], "ipc")
+        self.assertIn(f"ReqQ_{pre.nodeid}", scheduler.client.storage)
+        self.assertIn(f"ReqQ_{dec.nodeid}", scheduler.client.storage)
+
+    def test_loop_schedule_consumes_queue_and_uses_reader(self) -> None:
+        config = self._make_config()
+        scheduler = self.module.APIScheduler(config)
+        scheduler.reqs_queue.append(self.module.Request("req-loop", prompt_token_ids_len=1))
+        scheduler.readers = [types.SimpleNamespace(add_req=lambda _req: None, group="grp")]
+        scheduler.sync_cluster = lambda: ([types.SimpleNamespace(load=0, role="prefill", disaggregated={})], [types.SimpleNamespace(load=0, role="decode", disaggregated={})], [])  # type: ignore[assignment]
+        scheduler.schedule = lambda *_args, **_kwargs: (_ for _ in ()).throw(SystemExit())  # type: ignore[assignment]
+
+        with self.assertRaises(SystemExit):
+            scheduler.loop_schedule()
+
+    def test_sync_cluster_partitions_and_filters_nodes(self) -> None:
+        config = self._make_config()
+        scheduler = self.module.APIScheduler(config)
+        now = time.time()
+        cluster_key = scheduler.cluster_key
+
+        expired_payload = self.module.orjson.dumps(
+            {"ts": now - 10, "role": "prefill", "load": 1, "host": "h", "disaggregated": {}}
+        )
+        scheduler.client.hset(cluster_key, b"expired", expired_payload)
+
+        valid_prefill = self.module.NodeInfo("p1", "prefill", "h1", {"transfer_protocol": ["ipc"]}, load=1)
+        scheduler.client.hset(cluster_key, b"p1", valid_prefill.serialize())
+
+        valid_decode = self.module.NodeInfo("d1", "decode", "h2", {"transfer_protocol": ["ipc"]}, load=2)
+        scheduler.client.hset(cluster_key, b"d1", valid_decode.serialize())
+
+        invalid_payload = self.module.orjson.dumps(
+            {"ts": now, "role": "unknown", "load": 0, "host": "h3", "disaggregated": {}}
+        )
+        scheduler.client.hset(cluster_key, b"bad", invalid_payload)
+
+        pnodes, dnodes, mnodes = scheduler.sync_cluster()
+        self.assertEqual(len(pnodes), 1)
+        self.assertEqual(len(dnodes), 1)
+        self.assertEqual(len(mnodes), 0)
+
+    def test_loop_clear_expired_nodes_removes_entries(self) -> None:
+        config = self._make_config()
+        scheduler = self.module.APIScheduler(config)
+        cluster_key = scheduler.cluster_key
+        stale_payload = self.module.orjson.dumps(
+            {
+                "ts": time.time() - (scheduler.clear_expired_nodes_period + 5),
+                "role": "prefill",
+                "load": 0,
+                "host": "h",
+                "disaggregated": {"transfer_protocol": ["ipc"]},
+            }
+        )
+        scheduler.client.hset(cluster_key, b"old", stale_payload)
+
+        original_sleep = self.module.time.sleep
+        self.module.time.sleep = lambda _t: (_ for _ in ()).throw(SystemExit())
+        with self.assertRaises(SystemExit):
+            scheduler.loop_clear_expired_nodes()
+        self.module.time.sleep = original_sleep
+        self.assertNotIn(b"old", scheduler.client.hgetall(cluster_key))
+
+    def test_select_pd_paths(self) -> None:
+        config = self._make_config()
+        scheduler = self.module.APIScheduler(config)
+        req = self.module.Request("req-sel", prompt_token_ids_len=50)
+        nodes = [
+            self.module.NodeInfo(str(i), "prefill", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(3)
+        ]
+        random.seed(0)
+        chosen = scheduler.select_pd(req, nodes, "prefill")
+        self.assertIn(chosen, nodes)
+
+        decode_nodes = [
+            self.module.NodeInfo(str(i), "decode", "h", {"transfer_protocol": ["ipc"]}, load=i) for i in range(2)
+        ]
+        chosen_decode = scheduler.select_pd(req, decode_nodes, "decode")
+        self.assertIn(chosen_decode, decode_nodes)
 
     def test_schedule_disaggregated_updates_protocol(self) -> None:
         config = self._make_config()
         scheduler = self.module.APIScheduler(config)
 
         req = self.module.Request("req-2", prompt_token_ids_len=10)
-        prefill = self.module.NodeInfo("prefill", "prefill", "host-a", {"transfer_protocol": ["ipc"]}, load=1)
+        prefill = self.module.NodeInfo(
+            "prefill",
+            "prefill",
+            "host-a",
+            {
+                "transfer_protocol": ["ipc"],
+                "host_ip": "1.1.1.1",
+                "connector_port": 10,
+                "device_ids": [0],
+                "rdma_ports": [1],
+                "tp_size": 1,
+            },
+            load=1,
+        )
         decode = self.module.NodeInfo(
             "decode",
             "decode",
             "host-b",
-            {"transfer_protocol": ["ipc", "rdma"]},
+            {
+                "transfer_protocol": ["ipc", "rdma"],
+                "host_ip": "2.2.2.2",
+                "connector_port": 11,
+                "device_ids": [1],
+                "rdma_ports": [2],
+                "tp_size": 1,
+            },
             load=1,
         )
 
@@ -588,7 +790,7 @@ class APISchedulerTest(SplitWiseSchedulerTestCase):
         self.assertIn("ReqQ_prefill", scheduler.client.storage)
         self.assertIn("ReqQ_decode", scheduler.client.storage)
 
-        decoded = self.module.orjson.loads(scheduler.client.storage["ReqQ_prefill"][0])
+        decoded = pickle.loads(scheduler.client.storage["ReqQ_prefill"][0])
         self.assertEqual(decoded["disaggregate_info"]["transfer_protocol"], "rdma")
 
     def test_sync_cluster_filters_expired_nodes(self) -> None:
@@ -907,6 +1109,12 @@ class SplitWiseSchedulerFacadeTest(SplitWiseSchedulerTestCase):
 
 
 class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
+    def test_result_writer_start_flags_thread(self) -> None:
+        client = sys.modules["redis"].Redis()
+        writer = self.module.ResultWriter(client, idx=0, batch=2, ttl=5)
+        writer.start()
+        self.assertTrue(writer.thread.started)
+
     def test_result_writer_run_single_iteration(self) -> None:
         client = sys.modules["redis"].Redis()
         writer = self.module.ResultWriter(client, idx=0, batch=5, ttl=10)
@@ -941,6 +1149,42 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
         with self.assertRaises(SystemExit):
             writer.run()
 
+    def test_result_writer_run_groups_batches(self) -> None:
+        client = sys.modules["redis"].Redis()
+        writer = self.module.ResultWriter(client, idx=0, batch=10, ttl=5)
+
+        with writer.cond:
+            writer.data.appendleft(("k1", b"a"))
+            writer.data.appendleft(("k1", b"b"))
+            writer.data.appendleft(("k2", b"c"))
+
+        def _pipeline():
+            class _P:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return None
+
+                def multi(self):
+                    return self
+
+                def lpush(self, key, *items):
+                    client.lpush(key, *items)
+                    return self
+
+                def expire(self, key, ttl):
+                    raise SystemExit()
+
+                def execute(self):
+                    return None
+
+            return _P()
+
+        client.pipeline = _pipeline  # type: ignore[assignment]
+        with self.assertRaises(SystemExit):
+            writer.run()
+
     def test_infer_scheduler_routine_report(self) -> None:
         config = self.module.SplitWiseSchedulerConfig(
             enable_chunked_prefill=True,
@@ -952,12 +1196,17 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
         infer.node = self.module.NodeInfo("nid", "prefill", "host", {"transfer_protocol": ["ipc"]}, load=0)
 
         def _fake_hset(*_args, **_kwargs):
-            raise SystemExit()
+            raise ValueError("fail")
 
         infer.client.hset = _fake_hset  # type: ignore[assignment]
+        original_logger = self.module.logger.error
+        self.module.logger.error = lambda *_args, **_kwargs: (_ for _ in ()).throw(SystemExit())
 
-        with self.assertRaises(SystemExit):
-            infer.routine_report()
+        try:
+            with self.assertRaises(SystemExit):
+                infer.routine_report()
+        finally:
+            self.module.logger.error = original_logger
 
     def test_infer_scheduler_loop_expire_reqs(self) -> None:
         config = self.module.SplitWiseSchedulerConfig(
@@ -990,7 +1239,7 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
         infer.writers = [types.SimpleNamespace(put=lambda key, items: None)]
 
         req = self.module.Request("rq", prompt_token_ids_len=3)
-        payload = self.module.orjson.dumps(dict(req.to_dict(), group=""))
+        payload = pickle.dumps(dict(req.to_dict(), group=""), protocol=5)
         key = f"ReqQ_{infer.nodeid}"
         infer.client.storage[key] = [payload]
 
@@ -1007,6 +1256,42 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
 
         with self.assertRaises(SystemExit):
             infer.loop_get_reqs()
+
+    def test_infer_scheduler_get_requests_limits(self) -> None:
+        config = self.module.SplitWiseSchedulerConfig(
+            enable_chunked_prefill=True,
+            max_num_partial_prefills=1,
+            max_long_partial_prefills=1,
+            max_model_len=50,
+        )
+        infer = self.module.InferScheduler(config)
+        infer.role = "prefill"
+        infer.node = self.module.NodeInfo("nid", "prefill", "host", {"transfer_protocol": ["ipc"]}, load=0)
+
+        heavy = self.module.Request("heavy", prompt_token_ids_len=10)
+        infer.reqs_queue.append(heavy)
+        picked = infer.get_requests(
+            available_blocks=1,
+            block_size=4,
+            reserved_output_blocks=1,
+            max_num_batched_tokens=100,
+            batch=1,
+        )
+        self.assertEqual(picked, [])
+
+        infer.reqs_queue.clear()
+        infer.reqs_queue.append(
+            self.module.Request("long", prompt_token_ids_len=config.long_prefill_token_threshold + 10)
+        )
+        infer.reqs_queue.append(self.module.Request("short", prompt_token_ids_len=2))
+        selected = infer.get_requests(
+            available_blocks=100,
+            block_size=4,
+            reserved_output_blocks=1,
+            max_num_batched_tokens=100,
+            batch=2,
+        )
+        self.assertEqual(len(selected), 1)
 
 
 if __name__ == "__main__":
