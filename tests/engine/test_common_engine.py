@@ -885,6 +885,12 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
     def test_init_guided_decoding_and_eplb(self):
         """Cover lines 148, 155-158: guided_decoding_checker and eplb initialization."""
+        import sys
+
+        # Mock xgrammar module
+        mock_xgrammar = MagicMock()
+        sys.modules["xgrammar"] = mock_xgrammar
+
         cfg = self._make_cfg(guided_decoding_backend="xgrammar", enable_eplb=True)
 
         class DummyQ:
@@ -898,6 +904,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             eng = EngineService(cfg, start_queue=False, use_async_llm=False)
             self.assertIsNotNone(eng.guided_decoding_checker)
             mock_eplb.assert_called_once()
+
+        # Clean up
+        if "xgrammar" in sys.modules:
+            del sys.modules["xgrammar"]
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
