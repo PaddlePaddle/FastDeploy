@@ -508,17 +508,6 @@ class EngineService:
             del self.resource_manager.req_dict[req_out.request_id]
             cur_req = self.resource_manager.tasks_list[solt_idx]
 
-            # Handle error cases or empty token_ids
-            if req_out.error_code is not None or not req_out.outputs.token_ids:
-                if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                    self.resource_manager.stop_flags[solt_idx] = True
-                    self.resource_manager.tasks_list[solt_idx] = None
-                    self.resource_manager._recycle_block_tables(cur_req)
-                    if req_out.request_id in self.token_processor.tokens_counter:
-                        del self.token_processor.tokens_counter[req_out.request_id]
-                    self.llm_logger.warning(f"{req_out.request_id} need not decode after first token")
-                continue
-
             if envs.FD_ENABLE_INTERNAL_ADAPTER:
                 if not req_out.outputs.token_ids:  # first token is eos in Prefill, just recycle resource and continue
                     self.resource_manager.stop_flags[solt_idx] = True
@@ -595,14 +584,12 @@ class EngineService:
         chunk_request_num = len(current_request_size)
         while chunk_request_num >= 1:
             remain_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
-            # Ensure chunk_request_num is within bounds
-            safe_chunk_num = min(chunk_request_num, len(self.partial_chunked_tokens) - 1)
             for idx in range(len(current_request_size)):
                 if current_request_size[idx] <= 0:
                     continue
                 chunk_size = min(
                     current_request_size[idx],
-                    self.partial_chunked_tokens[safe_chunk_num],
+                    self.partial_chunked_tokens[chunk_request_num],
                 )
                 update_tokens(idx, chunk_size)
 
@@ -616,11 +603,9 @@ class EngineService:
                     remain_batched_tokens // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
                 )
                 append_idx = current_request_size.index(min(waiting_requests))
-                # Ensure chunk_request_num is within bounds
-                safe_chunk_num = min(chunk_request_num, len(self.partial_chunked_tokens) - 1)
                 chunk_size = min(
                     current_request_size[append_idx],
-                    self.partial_chunked_tokens[safe_chunk_num],
+                    self.partial_chunked_tokens[chunk_request_num],
                     available_tokens,
                 )
                 update_tokens(append_idx, chunk_size, update_chunk=True)

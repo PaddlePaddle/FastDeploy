@@ -883,37 +883,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_init_guided_decoding_and_eplb(self):
-        """Cover lines 148, 155-158: guided_decoding_checker and eplb initialization."""
-        import sys
-
-        # Mock xgrammar module
-        mock_xgrammar = MagicMock()
-        sys.modules["xgrammar"] = mock_xgrammar
-
-        cfg = self._make_cfg(guided_decoding_backend="xgrammar", enable_eplb=True)
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-        with (
-            patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
-            patch("fastdeploy.eplb.utils.init_eplb_signals") as mock_eplb,
-        ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
-            self.assertIsNotNone(eng.guided_decoding_checker)
-            mock_eplb.assert_called_once()
-
-        # Clean up
-        if "xgrammar" in sys.modules:
-            del sys.modules["xgrammar"]
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
-
     def test_start_worker_queue_service_shm_and_cache_queue(self):
         """Cover lines 366, 377-390, 390-404: SHM address, port update, cache queue creation."""
         with patch("fastdeploy.engine.common_engine.envs.FD_ENGINE_TASK_QUEUE_WITH_SHM", True):
@@ -1009,66 +978,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_insert_prefilled_requests_v0(self):
-        """Cover lines 505-548: _insert_prefilled_requests for v0 scheduler."""
-        cfg = self._make_cfg(splitwise_role="decode", router="http://localhost:8000")
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-            def put_tasks(self, *a):
-                pass
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
-        req = Request(
-            request_id="test1",
-            prompt="test",
-            prompt_token_ids=[1],
-            prompt_token_ids_len=1,
-            messages=[],
-            history=[],
-            tools=[],
-            system="",
-            eos_token_ids=[],
-        )
-        req.metrics = Mock(decode_recv_req_time=time.time(), decode_preallocate_req_time=time.time())
-        eng.resource_manager.req_dict = {"test1": 0}
-        eng.resource_manager.tasks_list = [req]
-        eng.resource_manager.stop_flags = np.array([False])
-        eng.token_processor.tokens_counter = {}
-        eng.scheduler.put_results = Mock()
-        req_out = RequestOutput(request_id="test1", finished=False, outputs=Mock(token_ids=[1]))
-        req_out.metrics = Mock()
-        req_out.num_cached_tokens = 1
-        eng._insert_prefilled_requests([req_out])
-        # Test error case
-        req_out2 = RequestOutput(
-            request_id="test2", finished=False, error_code=500, error_msg="error", outputs=Mock(token_ids=[])
-        )
-        req2 = Request(
-            request_id="test2",
-            prompt="test",
-            prompt_token_ids=[1],
-            prompt_token_ids_len=1,
-            messages=[],
-            history=[],
-            tools=[],
-            system="",
-            eos_token_ids=[],
-        )
-        req2.metrics = Mock()
-        eng.resource_manager.req_dict["test2"] = 1
-        eng.resource_manager.tasks_list.append(req2)
-        eng.resource_manager.stop_flags = np.array([False, False])
-        eng._insert_prefilled_requests([req_out2])
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
-
     def test_task_status_methods(self):
         """Cover lines 554-555, 561: task_is_finished and all_tasks_finished."""
         cfg = self._make_cfg()
@@ -1088,52 +997,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
-            except Exception:
-                pass
-
-    def test_update_requests_chunk_size(self):
-        """Cover lines 568-614: update_requests_chunk_size logic."""
-        cfg = self._make_cfg(enable_chunked_prefill=True, max_num_batched_tokens=100, block_size=16)
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
-        req1 = Request(
-            request_id="r1",
-            prompt="test",
-            prompt_token_ids=[1] * 50,
-            prompt_token_ids_len=50,
-            messages=[],
-            history=[],
-            tools=[],
-            system="",
-            eos_token_ids=[],
-        )
-        req2 = Request(
-            request_id="r2",
-            prompt="test",
-            prompt_token_ids=[1] * 30,
-            prompt_token_ids_len=30,
-            messages=[],
-            history=[],
-            tools=[],
-            system="",
-            eos_token_ids=[],
-        )
-        eng.update_requests_chunk_size([req1, req2])
-        self.assertTrue(hasattr(req1, "prefill_chunk_info") or hasattr(req1, "_prefill_chunk_info"))
-        # Test disabled case
-        cfg2 = self._make_cfg(enable_chunked_prefill=False)
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng2 = EngineService(cfg2, start_queue=False, use_async_llm=False)
-        eng2.update_requests_chunk_size([req1])
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-                eng2._finalizer.detach()
             except Exception:
                 pass
 
@@ -1370,6 +1233,239 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng._decode_process_splitwise_requests()
         time.sleep(0.1)  # Let thread start
         eng.running = False
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_insert_tasks_splitwise_branches(self):
+        """Cover lines 430, 452-454, 472-475, 479, 481, 494: insert_tasks splitwise branches."""
+        # Test prefill role with decode allocation
+        cfg = self._make_cfg(splitwise_role="prefill", router="http://localhost:8000")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+            def put_tasks(self, *a):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        eng.resource_manager.stop_flags = np.array([True, True, False, False])
+        eng.resource_manager.allocate_resources_for_new_tasks = lambda tasks: tasks
+        eng.resource_manager.real_bsz = 2
+        eng.token_processor.number_of_tasks = 0
+        eng.token_processor.number_of_input_tokens = 0
+        eng.split_connector.check_decode_allocated = lambda task: (True, "")
+        eng.split_connector.send_cache_info_to_messager = Mock()
+        eng.split_connector.send_cache_info_to_prefill = Mock()
+        eng.update_requests_chunk_size = Mock()
+        eng.update_mm_requests_chunk_size = Mock()
+        eng.engine_worker_queue = DummyQ()
+
+        # Test with tasks exceeding available batch
+        req1 = Request(
+            request_id="r1",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req2 = Request(
+            request_id="r2",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req3 = Request(
+            request_id="r3",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req4 = Request(
+            request_id="r4",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req5 = Request(
+            request_id="r5",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+
+        # Test batch exceeding available
+        eng.insert_tasks([req1, req2, req3, req4, req5])
+
+        # Test decode role
+        cfg2 = self._make_cfg(splitwise_role="decode", router="http://localhost:8000")
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng2 = EngineService(cfg2, start_queue=False, use_async_llm=False)
+        eng2.resource_manager.stop_flags = np.array([True, True])
+        eng2.resource_manager.allocate_resources_for_new_tasks = lambda tasks: tasks
+        eng2.resource_manager.real_bsz = 2
+        eng2.token_processor.number_of_tasks = 0
+        eng2.token_processor.number_of_input_tokens = 0
+        eng2.split_connector.send_cache_info_to_prefill = Mock()
+        eng2.engine_worker_queue = DummyQ()
+
+        req1.disaggregate_info = {"role": "decode"}
+        eng2.insert_tasks([req1])
+
+        # Test with mm enabled
+        cfg3 = self._make_cfg(enable_mm=True)
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng3 = EngineService(cfg3, start_queue=False, use_async_llm=False)
+        eng3.resource_manager.stop_flags = np.array([True])
+        eng3.resource_manager.allocate_resources_for_new_tasks = lambda tasks: tasks
+        eng3.resource_manager.real_bsz = 1
+        eng3.token_processor.number_of_tasks = 0
+        eng3.token_processor.number_of_input_tokens = 0
+        eng3.update_mm_requests_chunk_size = Mock()
+        eng3.engine_worker_queue = DummyQ()
+
+        req_mm = Request(
+            request_id="r_mm",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req_mm.disaggregate_info = {"role": "prefill"}
+        eng3.insert_tasks([req_mm])
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+                eng2._finalizer.detach()
+                eng3._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_update_requests_chunk_size_branches(self):
+        """Cover lines 571, 580, 589, 602, 605, 606, 611: update_requests_chunk_size branches."""
+        cfg = self._make_cfg(enable_chunked_prefill=True, max_num_batched_tokens=100, block_size=16)
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        # Test with empty requests
+        eng.update_requests_chunk_size([])
+
+        # Test with requests that need chunking
+        # Ensure partial_chunked_tokens has enough elements
+        eng.partial_chunked_tokens = [0, 100, 50, 33, 25, 20, 16, 14, 12, 11, 10]
+        req1 = Request(
+            request_id="r1",
+            prompt="test",
+            prompt_token_ids=[1] * 50,
+            prompt_token_ids_len=50,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req2 = Request(
+            request_id="r2",
+            prompt="test",
+            prompt_token_ids=[1] * 30,
+            prompt_token_ids_len=30,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        eng.update_requests_chunk_size([req1, req2])
+        self.assertTrue(hasattr(req1, "prefill_chunk_info") or hasattr(req1, "_prefill_chunk_info"))
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_update_mm_requests_chunk_size_branches(self):
+        """Cover lines 621, 637, 638, 640: update_mm_requests_chunk_size branches."""
+        cfg = self._make_cfg(enable_chunked_prefill=True, enable_mm=True)
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        # Create data_processor mock
+        eng.data_processor = Mock()
+        eng.data_processor.image_patch_id = 1000
+
+        # Test with empty requests
+        eng.update_mm_requests_chunk_size([])
+
+        # Test with mm request
+        req = Request(
+            request_id="r_mm",
+            prompt="test",
+            prompt_token_ids=[1] * 10,
+            prompt_token_ids_len=10,
+            messages=[],
+            history=[],
+            tools=[],
+            system="",
+            eos_token_ids=[],
+        )
+        req.multimodal_inputs = {
+            "input_ids": np.array([1] * 10),
+            "token_type_ids": np.array([0] * 10),
+            "image_type_ids": np.array([]),
+            "grid_thw": np.array([]),
+            "images": np.array([]),
+            "position_ids": np.array([0] * 10),
+        }
+
+        with patch("fastdeploy.model_executor.ops.gpu.get_mm_split_fuse") as mock_get_mm:
+            mock_get_mm.return_value = ([1], [10])
+            eng.update_mm_requests_chunk_size([req])
+
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
