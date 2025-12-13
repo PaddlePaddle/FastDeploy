@@ -269,6 +269,7 @@ class TestMTPProposer(unittest.TestCase):
 
         # Test splitwise_role == "decode"
         self.fd_config.scheduler_config.splitwise_role = "decode"
+        proposer.initialize_kv_cache(main_model_num_blocks=10)
         proposer.insert_tasks_v1([request1], 1)
 
         # Test with multimodal
@@ -343,6 +344,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.initialize_kv_cache(main_model_num_blocks=10)
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
 
         # Test _initialize_forward_meta
         proposer._initialize_forward_meta(step_use_cudagraph=False)
@@ -511,6 +513,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.initialize_kv_cache(main_model_num_blocks=10)
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
         proposer._initialize_forward_meta()
 
         # Test padding_cudagraph_inputs with step_use_cudagraph=True
