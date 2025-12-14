@@ -66,6 +66,13 @@ def parse_args():
         choices=["uint8", "bfloat16", "block_wise_fp8"],
         help="cache dtype",
     )
+    parser.add_argument(
+        "--default_dtype",
+        type=str,
+        default="bfloat16",
+        choices=["float16", "bfloat16", "uint8"],
+        help="paddle default dtype, swap_cache_batch only support float16、bfloat16 and uint8 now",
+    )
     parser.add_argument("--key_cache_shape", type=str, default="", help="key cache shape")
     parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--cache_queue_port", type=int, default=9923, help="cache queue port")
@@ -124,6 +131,7 @@ class CacheTransferManager:
         self.num_gpu_blocks = self.key_cache_shape[0]
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
+        paddle.set_default_dtype(args.default_dtype)
 
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
