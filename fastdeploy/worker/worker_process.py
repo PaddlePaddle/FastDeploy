@@ -483,7 +483,7 @@ class PaddleDisWorkerProc:
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
-                    # Ensure that every worker get the task
+                    # Reset the two signal.
                     if self.nnode > 1:
                         self.task_queue.read_finish_flag.set(0)
                     else:
