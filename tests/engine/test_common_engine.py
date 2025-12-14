@@ -2026,6 +2026,281 @@ class TestCommonEngineUncoveredLines(unittest.TestCase):
             except Exception:
                 pass
 
+    def test_insert_prefilled_requests(self):
+        """Cover lines 498-548: _insert_prefilled_requests with various branches."""
+        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
+            cfg = self._make_cfg(splitwise_role="decode", router="http://localhost:8000")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+            def put_tasks(self, *a):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        from fastdeploy.engine.request import CompletionOutput, RequestOutput
+
+        eng.resource_manager.req_dict = {"req1": 0}
+        eng.resource_manager.tasks_list = [
+            Request(
+                request_id="req1",
+                prompt="test",
+                prompt_token_ids=[1, 2],
+                prompt_token_ids_len=2,
+                messages=[],
+                history=[],
+                tools=[],
+                system="",
+                eos_token_ids=[],
+            )
+        ]
+        eng.resource_manager.stop_flags = np.array([False])
+        eng.resource_manager.real_bsz = 1
+        eng.resource_manager._recycle_block_tables = Mock()
+        eng.scheduler.put_results = Mock()
+        eng.token_processor.tokens_counter = {}
+        eng.engine_worker_queue = DummyQ()
+
+        # Test with FD_ENABLE_INTERNAL_ADAPTER and empty token_ids
+        req_out1 = RequestOutput(
+            request_id="req1",
+            finished=False,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[]),
+        )
+        req_out1.metrics = Mock()
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._insert_prefilled_requests([req_out1])
+
+        # Test with error_code != 200
+        eng.resource_manager.req_dict = {"req2": 0}
+        eng.resource_manager.tasks_list = [
+            Request(
+                request_id="req2",
+                prompt="test",
+                prompt_token_ids=[1, 2],
+                prompt_token_ids_len=2,
+                messages=[],
+                history=[],
+                tools=[],
+                system="",
+                eos_token_ids=[],
+            )
+        ]
+        eng.resource_manager.stop_flags = np.array([False])
+        req_out2 = RequestOutput(
+            request_id="req2",
+            finished=False,
+            error_code=500,
+            error_msg="test error",
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[10]),
+        )
+        req_out2.metrics = Mock()
+        eng._insert_prefilled_requests([req_out2])
+
+        # Test with mtp speculative config
+        eng.resource_manager.req_dict = {"req3": 0}
+        eng.resource_manager.tasks_list = [
+            Request(
+                request_id="req3",
+                prompt="test",
+                prompt_token_ids=[1, 2],
+                prompt_token_ids_len=2,
+                messages=[],
+                history=[],
+                tools=[],
+                system="",
+                eos_token_ids=[],
+            )
+        ]
+        eng.resource_manager.stop_flags = np.array([False])
+        eng.cfg.speculative_config.method = "mtp"
+        req_out3 = RequestOutput(
+            request_id="req3",
+            finished=False,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[10], draft_token_ids=[11, 12]),
+        )
+        req_out3.metrics = Mock()
+        eng._insert_prefilled_requests([req_out3])
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_send_error_response_branches(self):
+        """Cover lines 1115-1130: _send_error_response with both branches."""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        eng.send_response_server = Mock(send_response=Mock())
+
+        # Test with FD_ENABLE_INTERNAL_ADAPTER=True
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._send_error_response("req1", "error msg", 500)
+            eng.send_response_server.send_response.assert_called_with(None, [[Mock()]])
+
+        # Test with FD_ENABLE_INTERNAL_ADAPTER=False
+        eng.send_response_server.reset_mock()
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._send_error_response("req2", "error msg", 400)
+            eng.send_response_server.send_response.assert_called_with("req2", [Mock()])
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_decode_token_branches(self):
+        """Cover lines 1132-1144: _decode_token with all branches."""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        eng.data_processor = Mock()
+        eng.data_processor.decode_status = {"req1": [0, 2]}
+
+        # Test with FD_ENABLE_RETURN_TEXT=False
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", False):
+            text, tokens = eng._decode_token([1, 2], "req1", False)
+            self.assertEqual(text, "")
+            self.assertEqual(tokens, [1, 2])
+
+        # Test with FD_ENABLE_RETURN_TEXT=True and delta_text != ""
+        eng.data_processor.decode_status = {"req2": [0, 2]}
+        eng.data_processor.ids2tokens = lambda ids, req_id: ("text", [1, 2, 3], None)
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            text, tokens = eng._decode_token([1, 2], "req2", False)
+            self.assertEqual(text, "text")
+            self.assertEqual(tokens, [1, 2, 3])
+
+        # Test with delta_text == ""
+        eng.data_processor.decode_status = {"req3": [0, 2]}
+        eng.data_processor.ids2tokens = lambda ids, req_id: ("", [1, 2], None)
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            text, tokens = eng._decode_token([1, 2], "req3", False)
+            self.assertEqual(text, "")
+            self.assertEqual(tokens, [])
+
+        # Test with is_end=True (should delete decode_status)
+        eng.data_processor.decode_status = {"req4": [0, 2]}
+        eng.data_processor.ids2tokens = lambda ids, req_id: ("text", [1, 2, 3], None)
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            text, tokens = eng._decode_token([1, 2], "req4", True)
+            self.assertNotIn("req4", eng.data_processor.decode_status)
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
+    def test_zmq_send_generated_tokens_branches(self):
+        """Cover lines 1146-1218: _zmq_send_generated_tokens with more branches."""
+        cfg = self._make_cfg()
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        class DummyZmq:
+            def __init__(self, *a, **k):
+                pass
+
+            def close(self):
+                pass
+
+        with (
+            patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
+            patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyZmq),
+            patch("fastdeploy.engine.common_engine.ZmqTcpServer", DummyZmq),
+        ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+
+        eng.running = True
+        eng.data_processor = Mock()
+        eng.data_processor.decode_status = {}
+        eng.data_processor.ids2tokens = lambda ids, req_id: ("text", [1, 2, 3], None)
+        eng.send_response_server = Mock(send_response=Mock())
+
+        from fastdeploy.engine.request import CompletionOutput, RequestOutput
+
+        # Test with FD_ENABLE_INTERNAL_ADAPTER=True
+        result1 = RequestOutput(
+            request_id="req1",
+            finished=False,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
+        )
+        eng.scheduler.get_results = lambda: [[result1]]
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._zmq_send_generated_tokens()
+            time.sleep(0.01)
+            eng.running = False
+            eng._zmq_send_generated_tokens()
+
+        # Test with FD_ENABLE_INTERNAL_ADAPTER=False
+        eng.running = True
+        result2 = RequestOutput(
+            request_id="req2",
+            finished=False,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
+        )
+        eng.scheduler.get_results = lambda: {"req2": [result2]}
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._zmq_send_generated_tokens()
+            time.sleep(0.01)
+            eng.running = False
+            eng._zmq_send_generated_tokens()
+
+        # Test with decode_type != 0
+        eng.running = True
+        result3 = RequestOutput(
+            request_id="req3",
+            finished=False,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=1),
+        )
+        eng.scheduler.get_results = lambda: {"req3": [result3]}
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._zmq_send_generated_tokens()
+            time.sleep(0.01)
+            eng.running = False
+            eng._zmq_send_generated_tokens()
+
+        # Test with finished=True and empty token_ids
+        eng.running = True
+        result4 = RequestOutput(
+            request_id="req4",
+            finished=True,
+            outputs=CompletionOutput(index=0, send_idx=0, token_ids=[], decode_type=0),
+        )
+        eng.scheduler.get_results = lambda: {"req4": [result4]}
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._zmq_send_generated_tokens()
+            time.sleep(0.01)
+            eng.running = False
+            eng._zmq_send_generated_tokens()
+
+        if hasattr(eng, "_finalizer"):
+            try:
+                eng._finalizer.detach()
+            except Exception:
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()
