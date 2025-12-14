@@ -64,6 +64,7 @@ class PrefixCacheManager:
             self.enable_splitwise = 0
         self.splitwise_role = splitwise_role
 
+        self.config = config
         self.cache_config = config.cache_config
         self.speculative_config = config.speculative_config
         self.local_data_parallel_id = local_data_parallel_id
@@ -203,6 +204,7 @@ class PrefixCacheManager:
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + f" >{log_dir}/launch_cache_manager_{int(device_ids[i])}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
