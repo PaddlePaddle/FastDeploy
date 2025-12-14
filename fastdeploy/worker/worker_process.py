@@ -271,6 +271,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        if envs.FD_ENABLE_BATCH_SCHEDULER:
+            infer_finished_signal_data = np.zeros([1], dtype=np.int32)
+            self.infer_finished_signal = IPCSignal(
+                name="infer_finished_signal",
+                array=infer_finished_signal_data,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_worker_queue_port,
+                create=False,
+            )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -494,7 +504,8 @@ class PaddleDisWorkerProc:
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     self._tp_barrier_wait()
-
+                if tp_rank == 0:
+                    self.infer_finished_signal.value[0] = 1
                 time.sleep(0.001)
                 continue
             
@@ -502,6 +513,13 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
+            if envs.FD_ENABLE_BATCH_SCHEDULER:
+                if tp_size > 1:
+                    self._tp_barrier_wait()
+                if tp_rank == 0:
+                    # Notify the engine that forward has finished
+                    self.infer_finished_signal.value[0] = 1
+            
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 

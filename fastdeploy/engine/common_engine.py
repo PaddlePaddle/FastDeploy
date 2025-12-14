@@ -272,6 +272,16 @@ class EngineService:
             create=True,
         )
 
+        if envs.FD_ENABLE_BATCH_SCHEDULER:
+            infer_finished_signal_data = np.zeros([1], dtype=np.int32)
+            self.infer_finished_signal = IPCSignal(
+                name="infer_finished_signal",
+                array=infer_finished_signal_data,
+                dtype=np.int32,
+                suffix=current_suffix,
+                create=True,
+            )
+
     def _init_parallel_env(self):
         data_parallel_id = os.getenv("DATA_PARALLEL_ID", "0")
         os.environ["PADDLE_TRAINER_ID"] = data_parallel_id
@@ -844,12 +854,26 @@ class EngineService:
                 
                 flag = True
                 for i in range(dp_size):
+                    
                     if req_num_count[i] < latest_sched_batch_cnt[i]:
                         flag = False
                         break
                 
                 return flag
         
+        def _check_timeout():
+            # All DP instances should use a same timer
+            # Otherwise, say that we have two instances, instance 0 reaches timeout, while instance 1 not, this
+            # will cause:
+            # instance 0: worker stuck at dist.barrier -> engine stuck at waiting infer_finished_signal
+            # instance 1: engine stuck at all_gather_object
+            # Now we have a deadlock!
+            nonlocal start_time
+            time_list = [time.time() - start_time]
+            dist.broadcast_object_list(time_list, src=0)
+
+            return time_list[0] * 1000 >= envs.FD_RECV_BATCH_TIMEOUT
+
         start_time = time.time()
         while self.running:
             try:
@@ -880,10 +904,10 @@ class EngineService:
                 
                 if envs.FD_ENABLE_BATCH_SCHEDULER:
                     # Some reqs of the scheduled batch still in flight
-                    if (time.time() - start_time) * 1000 < envs.FD_RECV_BATCH_TIMEOUT and not _check_recv_full_batch():
+                    if not _check_timeout() and not _check_recv_full_batch():
                         time.sleep(0.1)
                         continue
-                
+    
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
                 # Clear buffered reqs
@@ -928,8 +952,18 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if not tasks and not error_tasks:
-                    time.sleep(0.005)
+                if envs.FD_ENABLE_BATCH_SCHEDULER:
+                    start_execute_time = time.time()
+                    while self.infer_finished_signal.value[0] == 0:
+                        # Wait for current forward to finish
+                        time.sleep(0.01)
+                    print(f"execute time: {time.time() - start_execute_time}")
+
+                    # TODO: Report to IM
+                    self.infer_finished_signal.value[0] = 0
+                else:
+                    if not tasks and not error_tasks:
+                        time.sleep(0.005)
 
             except RuntimeError as e:
                 if "cannot schedule new futures after shutdown" in str(e):
