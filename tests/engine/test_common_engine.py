@@ -15,7 +15,6 @@
 """
 
 import os
-import threading
 import time
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -1616,7 +1615,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 @unittest.skip("Temporarily disabled due to CI hanging issue - thread cleanup problems")
 class TestCommonEngineUncoveredLines(unittest.TestCase):
     """Test cases to cover previously uncovered lines - ALL TESTS DISABLED"""
-    
+
     # All test methods are disabled to prevent CI hanging
     pass
 
@@ -2241,99 +2240,99 @@ class TestCommonEngineUncoveredLines(unittest.TestCase):
 #             except Exception:
 #                 pass
 
-    # Temporarily disabled due to CI hanging issue - thread cleanup problem
-    # def test_zmq_send_generated_tokens_branches(self):
-    #     """Cover lines 1146-1218: _zmq_send_generated_tokens with more branches."""
-    #     cfg = self._make_cfg()
-    #
-    #     class DummyQ:
-    #         def __init__(self, *a, **k):
-    #             pass
-    #
-    #     class DummyZmq:
-    #         def __init__(self, *a, **k):
-    #             pass
-    #
-    #         def close(self):
-    #             pass
-    #
-    #     with (
-    #         patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
-    #         patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyZmq),
-    #         patch("fastdeploy.engine.common_engine.ZmqTcpServer", DummyZmq),
-    #     ):
-    #         eng = EngineService(cfg, start_queue=False, use_async_llm=False)
-    #
-    #     eng.running = True
-    #     eng.data_processor = Mock()
-    #     eng.data_processor.decode_status = {}
-    #     eng.data_processor.ids2tokens = lambda ids, req_id: ("text", [1, 2, 3], None)
-    #     eng.send_response_server = Mock(send_response=Mock())
-    #
-    #     from fastdeploy.engine.request import CompletionOutput, RequestOutput
-    #
-    #     # Test with FD_ENABLE_INTERNAL_ADAPTER=True
-    #     result1 = RequestOutput(
-    #         request_id="req1",
-    #         finished=False,
-    #         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
-    #     )
-    #     eng.scheduler.get_results = lambda: [[result1]]
-    #     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
-    #         eng._zmq_send_generated_tokens()
-    #         time.sleep(0.01)
-    #         eng.running = False
-    #         eng._zmq_send_generated_tokens()
-    #
-    #     # Test with FD_ENABLE_INTERNAL_ADAPTER=False
-    #     eng.running = True
-    #     result2 = RequestOutput(
-    #         request_id="req2",
-    #         finished=False,
-    #         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
-    #     )
-    #     eng.scheduler.get_results = lambda: {"req2": [result2]}
-    #     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
-    #         eng._zmq_send_generated_tokens()
-    #         time.sleep(0.01)
-    #         eng.running = False
-    #         eng._zmq_send_generated_tokens()
-    #
-    #     # Test with decode_type != 0
-    #     eng.running = True
-    #     result3 = RequestOutput(
-    #         request_id="req3",
-    #         finished=False,
-    #         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=1),
-    #     )
-    #     eng.scheduler.get_results = lambda: {"req3": [result3]}
-    #     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
-    #         eng._zmq_send_generated_tokens()
-    #         time.sleep(0.01)
-    #         eng.running = False
-    #         eng._zmq_send_generated_tokens()
-    #
-    #     # Test with finished=True and empty token_ids
-    #     eng.running = True
-    #     result4 = RequestOutput(
-    #         request_id="req4",
-    #         finished=True,
-    #         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[], decode_type=0),
-    #     )
-    #     eng.scheduler.get_results = lambda: {"req4": [result4]}
-    #     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
-    #         eng._zmq_send_generated_tokens()
-    #         time.sleep(0.01)
-    #         eng.running = False
-    #         eng._zmq_send_generated_tokens()
-    #
-    #     # Wait for any daemon threads to exit (with timeout to avoid hanging)
-    #     time.sleep(0.2)
-    #     if hasattr(eng, "_finalizer"):
-    #         try:
-    #             eng._finalizer.detach()
-    #         except Exception:
-    #             pass
+# Temporarily disabled due to CI hanging issue - thread cleanup problem
+# def test_zmq_send_generated_tokens_branches(self):
+#     """Cover lines 1146-1218: _zmq_send_generated_tokens with more branches."""
+#     cfg = self._make_cfg()
+#
+#     class DummyQ:
+#         def __init__(self, *a, **k):
+#             pass
+#
+#     class DummyZmq:
+#         def __init__(self, *a, **k):
+#             pass
+#
+#         def close(self):
+#             pass
+#
+#     with (
+#         patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ),
+#         patch("fastdeploy.engine.common_engine.ZmqIpcServer", DummyZmq),
+#         patch("fastdeploy.engine.common_engine.ZmqTcpServer", DummyZmq),
+#     ):
+#         eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+#
+#     eng.running = True
+#     eng.data_processor = Mock()
+#     eng.data_processor.decode_status = {}
+#     eng.data_processor.ids2tokens = lambda ids, req_id: ("text", [1, 2, 3], None)
+#     eng.send_response_server = Mock(send_response=Mock())
+#
+#     from fastdeploy.engine.request import CompletionOutput, RequestOutput
+#
+#     # Test with FD_ENABLE_INTERNAL_ADAPTER=True
+#     result1 = RequestOutput(
+#         request_id="req1",
+#         finished=False,
+#         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
+#     )
+#     eng.scheduler.get_results = lambda: [[result1]]
+#     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+#         eng._zmq_send_generated_tokens()
+#         time.sleep(0.01)
+#         eng.running = False
+#         eng._zmq_send_generated_tokens()
+#
+#     # Test with FD_ENABLE_INTERNAL_ADAPTER=False
+#     eng.running = True
+#     result2 = RequestOutput(
+#         request_id="req2",
+#         finished=False,
+#         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=0),
+#     )
+#     eng.scheduler.get_results = lambda: {"req2": [result2]}
+#     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+#         eng._zmq_send_generated_tokens()
+#         time.sleep(0.01)
+#         eng.running = False
+#         eng._zmq_send_generated_tokens()
+#
+#     # Test with decode_type != 0
+#     eng.running = True
+#     result3 = RequestOutput(
+#         request_id="req3",
+#         finished=False,
+#         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[1, 2], decode_type=1),
+#     )
+#     eng.scheduler.get_results = lambda: {"req3": [result3]}
+#     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+#         eng._zmq_send_generated_tokens()
+#         time.sleep(0.01)
+#         eng.running = False
+#         eng._zmq_send_generated_tokens()
+#
+#     # Test with finished=True and empty token_ids
+#     eng.running = True
+#     result4 = RequestOutput(
+#         request_id="req4",
+#         finished=True,
+#         outputs=CompletionOutput(index=0, send_idx=0, token_ids=[], decode_type=0),
+#     )
+#     eng.scheduler.get_results = lambda: {"req4": [result4]}
+#     with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+#         eng._zmq_send_generated_tokens()
+#         time.sleep(0.01)
+#         eng.running = False
+#         eng._zmq_send_generated_tokens()
+#
+#     # Wait for any daemon threads to exit (with timeout to avoid hanging)
+#     time.sleep(0.2)
+#     if hasattr(eng, "_finalizer"):
+#         try:
+#             eng._finalizer.detach()
+#         except Exception:
+#             pass
 
 
 if __name__ == "__main__":
