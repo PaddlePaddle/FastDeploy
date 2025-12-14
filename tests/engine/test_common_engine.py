@@ -333,6 +333,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
             # Avoid starting token processor loop
             eng.token_processor.run = lambda: None
+            # Mock _register_to_router to avoid starting registration thread
+            eng._register_to_router = lambda: None
             ok = eng.start(async_llm_pid=12345)
 
         # start() returns False on failure
@@ -341,6 +343,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertTrue(started_cache.get("called", False))
         # launched_cache_manager_signal set (line 221)
         self.assertEqual(int(eng.launched_cache_manager_signal.value[0]), 1)
+        # Wait for any daemon threads to exit
+        time.sleep(0.1)
         # avoid atexit finalizer
         if hasattr(eng, "_finalizer"):
             try:
@@ -412,10 +416,14 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
             eng.token_processor.run = lambda: None
+            # Mock _register_to_router to avoid starting registration thread
+            eng._register_to_router = lambda: None
             eng.start(async_llm_pid=8888)
 
         self.assertTrue(started_cache.get("called", False))  # lines 215-217
         self.assertEqual(zmq_called.get("pid"), 8888)  # line 231
+        # Wait for any daemon threads to exit
+        time.sleep(0.1)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
@@ -1185,6 +1193,14 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.send_response_server = Mock(send_response=Mock())
         eng.running = False
         eng._zmq_send_generated_tokens()
+        # Wait for daemon threads to exit (with timeout to avoid hanging)
+        time.sleep(0.2)
+        # Clean up threads if they exist
+        for thread_name in ["receive_output_thread", "insert_task_to_scheduler_thread", "recv_result_handle_thread"]:
+            if hasattr(eng, thread_name):
+                thread = getattr(eng, thread_name)
+                if thread and thread.is_alive():
+                    time.sleep(0.1)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
@@ -1255,6 +1271,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng._decode_process_splitwise_requests()
         time.sleep(0.1)  # Let thread start
         eng.running = False
+        # Wait for daemon thread to exit (with timeout to avoid hanging)
+        time.sleep(0.2)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
@@ -1579,7 +1597,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             mock_resp = Mock(ok=True)
             mock_post.return_value = mock_resp
             eng._register_to_router()
-            time.sleep(0.1)
+            # Wait for registration thread to complete (it should break after successful registration)
+            time.sleep(0.2)
+        # Ensure any daemon threads have time to exit
+        time.sleep(0.1)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
@@ -2295,6 +2316,8 @@ class TestCommonEngineUncoveredLines(unittest.TestCase):
             eng.running = False
             eng._zmq_send_generated_tokens()
 
+        # Wait for any daemon threads to exit (with timeout to avoid hanging)
+        time.sleep(0.2)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
