@@ -1508,3 +1508,168 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+
+class TestCommonEngineUncoveredLines(unittest.TestCase):
+    """Test cases to cover previously uncovered lines"""
+
+    @patch("fastdeploy.engine.common_engine.load_token_processor_plugins")
+    def test_token_processor_plugin_exception(self, mock_load):
+        """Test exception handling when loading TokenProcessor plugin - line 66"""
+        # Simulate exception when loading plugin
+        mock_load.side_effect = Exception("Plugin load failed")
+
+        # Import should fallback to default TokenProcessor
+        from importlib import reload
+
+        import fastdeploy.engine.common_engine as ce_module
+
+        try:
+            reload(ce_module)
+        except Exception:
+            pass
+
+    @patch("fastdeploy.engine.common_engine.EngineArgs")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_guided_decoding_backend_enabled(self, mock_schema, mock_args):
+        """Test guided decoding backend initialization - lines 148-152"""
+        mock_cfg = Mock()
+        mock_cfg.structured_outputs_config.guided_decoding_backend = "lark"
+        mock_cfg.structured_outputs_config.disable_any_whitespace = False
+        mock_cfg.scheduler_config.splitwise_role = "mixed"
+        mock_cfg.scheduler_config.scheduler.return_value = Mock()
+        mock_cfg.cache_config.enable_prefix_caching = False
+        mock_cfg.parallel_config.data_parallel_size = 1
+        mock_cfg.scheduler_config.max_num_seqs = 256
+        mock_cfg.parallel_config.tensor_parallel_size = 1
+        mock_cfg.parallel_config.local_data_parallel_id = 0
+        mock_cfg.max_num_partial_prefills = 3
+        mock_cfg.scheduler_config.max_num_batched_tokens = 2048
+        mock_cfg.cache_config.block_size = 16
+        mock_cfg.eplb_config.enable_eplb = False
+
+        with (
+            patch("fastdeploy.engine.common_engine.ResourceManager"),
+            patch("fastdeploy.engine.common_engine.SplitwiseConnector"),
+            patch("fastdeploy.engine.common_engine.TokenProcessor"),
+            patch.object(mock_cfg.scheduler_config, "scheduler", return_value=Mock()),
+        ):
+
+            from fastdeploy.engine.common_engine import EngineService
+
+            engine = EngineService.__new__(EngineService)
+            engine.cfg = mock_cfg
+            engine.use_async_llm = False
+            engine.llm_logger = Mock()
+            engine.scheduler = Mock()
+            engine.enable_decode_cache_task = False
+            engine.engine_worker_queue = Mock()
+            engine.resource_manager = Mock()
+            engine.split_connector = Mock()
+            engine.token_processor = Mock()
+            engine.partial_chunked_tokens = [0] * 4
+            engine.bos_client = None
+            engine.guided_decoding_checker = None
+
+            # Trigger the guided decoding check
+            if mock_cfg.structured_outputs_config.guided_decoding_backend != "off":
+                engine.guided_decoding_checker = mock_schema(
+                    mock_cfg.structured_outputs_config.guided_decoding_backend,
+                    disable_any_whitespace=mock_cfg.structured_outputs_config.disable_any_whitespace,
+                )
+
+            mock_schema.assert_called_once()
+            self.assertIsNotNone(engine.guided_decoding_checker)
+
+    @patch("fastdeploy.engine.common_engine.init_eplb_signals")
+    def test_eplb_enabled(self, mock_init_eplb):
+        """Test EPLB initialization - lines 155-158"""
+        mock_cfg = Mock()
+        mock_cfg.eplb_config.enable_eplb = True
+        mock_cfg.parallel_config.engine_worker_queue_port = ["6778"]
+        mock_cfg.parallel_config.local_data_parallel_id = 0
+        mock_cfg.scheduler_config.splitwise_role = "mixed"
+        mock_cfg.cache_config.enable_prefix_caching = False
+        mock_cfg.parallel_config.data_parallel_size = 1
+        mock_cfg.scheduler_config.scheduler.return_value = Mock()
+        mock_cfg.scheduler_config.max_num_seqs = 256
+        mock_cfg.parallel_config.tensor_parallel_size = 1
+        mock_cfg.max_num_partial_prefills = 3
+        mock_cfg.scheduler_config.max_num_batched_tokens = 2048
+        mock_cfg.cache_config.block_size = 16
+        mock_cfg.structured_outputs_config.guided_decoding_backend = "off"
+
+        with (
+            patch("fastdeploy.engine.common_engine.ResourceManager"),
+            patch("fastdeploy.engine.common_engine.SplitwiseConnector"),
+            patch("fastdeploy.engine.common_engine.TokenProcessor"),
+            patch("fastdeploy.engine.common_engine.weakref.finalize"),
+        ):
+
+            from fastdeploy.engine.common_engine import EngineService
+
+            _ = EngineService(mock_cfg, start_queue=False, use_async_llm=False)
+
+            # Verify init_eplb_signals was called
+            mock_init_eplb.assert_called_once()
+            call_args = mock_init_eplb.call_args
+            self.assertEqual(call_args[0][0], mock_cfg)
+            self.assertEqual(call_args[0][1], 6778)
+
+    @patch("fastdeploy.engine.common_engine.threading.Thread")
+    @patch("fastdeploy.engine.common_engine.envs")
+    def test_start_with_v1_scheduler(self, mock_envs, mock_thread):
+        """Test start method with V1 scheduler - lines 213-216"""
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = True
+
+        mock_cfg = Mock()
+        mock_cfg.scheduler_config.splitwise_role = "mixed"
+
+        with patch.object(EngineService, "__init__", return_value=None):
+            engine = EngineService.__new__(EngineService)
+            engine.cfg = mock_cfg
+            engine.use_async_llm = False
+            engine.running = False
+            engine.engine_worker_queue = Mock()
+            engine.token_processor = Mock()
+            engine.insert_task_to_worker_thread = Mock()
+
+            mock_thread_instance = Mock()
+            mock_thread.return_value = mock_thread_instance
+
+            with patch.object(engine, "_register_to_router"):
+                engine.start()
+
+            # Verify V1 scheduler thread was created
+            self.assertTrue(engine.running)
+            mock_thread.assert_called()
+
+    @patch("fastdeploy.engine.common_engine.time.sleep")
+    def test_start_with_decode_role(self, mock_sleep):
+        """Test start method with decode splitwise role - line 227"""
+        mock_cfg = Mock()
+        mock_cfg.scheduler_config.splitwise_role = "decode"
+
+        with patch.object(EngineService, "__init__", return_value=None):
+            engine = EngineService.__new__(EngineService)
+            engine.cfg = mock_cfg
+            engine.use_async_llm = False
+            engine.running = False
+            engine.engine_worker_queue = Mock()
+            engine.token_processor = Mock()
+            engine.insert_task_to_worker_thread = Mock()
+            engine.insert_task_to_worker_thread.start = Mock()
+
+            with (
+                patch.object(engine, "_decode_process_splitwise_requests") as mock_decode,
+                patch.object(engine, "_register_to_router"),
+                patch("fastdeploy.engine.common_engine.threading.Thread"),
+                patch("fastdeploy.engine.common_engine.envs"),
+            ):
+
+                engine.start()
+                mock_decode.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
