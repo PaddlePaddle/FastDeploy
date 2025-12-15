@@ -1,0 +1,162 @@
+name: CI_METAX
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-metax-ci
+  cancel-in-progress: true
+
+permissions: read-all
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  CI_METAX:
+    runs-on: pde-ai2-squad3-fastdeploy-runner-set
+    env:
+      PR_ID: ${{ github.event.pull_request.number }}
+      COMMIT_ID: ${{ github.event.pull_request.head.sha }}
+      BRANCH: develop
+    steps:
+      - name: Checkout repository
+        id: run-metax
+        if: steps.check-bypass.outputs.can-skip != 'true'
+        run: |
+          export DATE_NUMBER=$(date +%Y%m%d)
+          export PREV_DATE_NUMBER=$(date -d "yesterday" +%Y%m%d)
+
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          git clone https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+          # git reset --hard 21f138f68be16c815f60496c1bc5ea69b511f8cc
+          # git revert --no-edit 2e1680838f5e99e4ea5c5bc4251365d9add0f62f
+
+          MODIFIED_FILES=""
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            git fetch origin pull/${{ github.event.pull_request.number }}/head:pull/${{ github.event.pull_request.number }}/head
+            # git rebase pull/${{ github.event.pull_request.number }}/head
+            git cherry-pick FETCH_HEAD
+
+            echo -e "\n=========== Git log info ==========="
+            git --no-pager log --pretty=oneline -5
+            MODIFIED_FILES=$(git --no-pager diff --name-only HEAD^ HEAD | grep -v '^$' || true)
+          fi
+
+          if [ -z "$MODIFIED_FILES" ]; then
+            echo "No file change, skip metax ci."
+            exit 0
+          fi
+
+          echo -e "\n=========== PR change file list ==========="
+          echo "$MODIFIED_FILES"
+
+          echo -e "\n=========== Start Metax CI Trigger Check ==========="
+          echo -e "\nTarget comparison branch: remotes/origin/${BRANCH}"
+          FOLLOW_PATH=(
+            "custom_ops/cpu_ops/"
+            "custom_ops/gpu_ops/"
+            "custom_ops/metax_ops/"
+            "custom_ops/*.py"
+            "fastdeploy/"
+            ".github/"
+            "setup.py"
+            "build.sh"
+            "tests/ci_use/Metax_UT/"
+          )
+          echo -e "\nFollow path needs to be checked: ${FOLLOW_PATH[*]}"
+
+          trigger_ci=false
+          while IFS= read -r file; do
+            for target_path in "${FOLLOW_PATH[@]}"; do
+              if [[ $file == $target_path || $file == $target_path* ]]; then
+                trigger_ci=true
+                break
+              fi
+            done
+            if [ "$trigger_ci" = true ]; then
+              break
+            fi
+          done <<< "$MODIFIED_FILES"
+
+          if [ "$trigger_ci" = true ]; then
+            echo -e "\nExist file change found in follow path, continue metax ci."
+          else
+            echo -e "\nNo file change found in follow path, skip metax ci."
+            exit 0
+          fi
+
+          METAX_PADDLE_CUSTOM_DEVICE_WHL_SOURCE=oss://opensource-ci/paddle
+          METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME=paddle_metax_gpu-3.3.0.dev${DATE_NUMBER}+maca0.0.0-cp310-cp310-linux_x86_64.whl
+          # METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME=paddle_metax_gpu-3.3.0.dev20251210+maca0.0.0-cp310-cp310-linux_x86_64.whl
+          PADDLE_PADDLE_WHL_SOURCE=https://paddle-whl.bj.bcebos.com/nightly/cpu/paddlepaddle
+          PADDLE_PADDLE_WHL_NAME=paddlepaddle-3.3.0.dev${PREV_DATE_NUMBER}-cp310-cp310-linux_x86_64.whl
+          # PADDLE_PADDLE_WHL_NAME=paddlepaddle-3.3.0.dev20251209-cp310-cp310-linux_x86_64.whl
+
+          echo -e "\n=========== Pull [ ${METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME} ] from [ ${METAX_PADDLE_CUSTOM_DEVICE_WHL_SOURCE} ] ==========="
+          ossutil cp ${METAX_PADDLE_CUSTOM_DEVICE_WHL_SOURCE}/${METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME} .
+
+          echo -e "\n=========== Pip install [ ${PADDLE_PADDLE_WHL_NAME} ] from [ ${PADDLE_PADDLE_WHL_SOURCE} ] ==========="
+          python -m pip install ${PADDLE_PADDLE_WHL_SOURCE}/${PADDLE_PADDLE_WHL_NAME}
+
+          echo -e "\n=========== Pip install [ ${METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME} ] ==========="
+          python -m pip install ${METAX_PADDLE_CUSTOM_DEVICE_WHL_NAME}
+
+          echo -e "\n=========== Pip install [ use_triton_in_paddle ] ==========="
+          python -m pip install /data/maca3.0-release-2.3/use_triton_in_paddle-0.0.0-py3-none-any.whl
+
+      - name: Compile
+        run: |
+          export MACA_PATH=/opt/maca
+
+          if [ ! -d ${HOME}/cu-bridge ]; then
+                      `${MACA_PATH}/tools/cu-bridge/tools/pre_make`
+          fi
+
+          export CUDA_PATH=${HOME}/cu-bridge/CUDA_DIR
+          export LD_LIBRARY_PATH=${CUDA_PATH}/lib64:${MACA_PATH}/lib:${MACA_PATH}/mxgpu_llvm/lib:$LD_LIBRARY_PATH
+
+          PACKAGES_LINK=~/.local/lib/python3.10/site-packages
+          REPLACE_FILES_PATH=/data/maca3.0-release-2.3
+          cp ${REPLACE_FILES_PATH}/all_reduce.py ${PACKAGES_LINK}/paddle/distributed/communication/
+          cp ${REPLACE_FILES_PATH}/all_gather.py ${PACKAGES_LINK}/paddle/distributed/communication/
+          cp ${REPLACE_FILES_PATH}/broadcast.py ${PACKAGES_LINK}/paddle/distributed/communication/
+
+          cp ${REPLACE_FILES_PATH}/cublasLt.h ${PACKAGES_LINK}/paddle/include/paddle/phi/backends/dynload/
+
+          cp ${REPLACE_FILES_PATH}/all_things.py ${PACKAGES_LINK}/use_triton_in_paddle/cuda/
+
+          sudo chmod 777 -R ${REPLACE_FILES_PATH}/mctlass
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx.h /opt/maca/include/mctlassEx/
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/libmctlassEx.so /opt/maca/lib/
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx_xcore1000.mcfb /opt/maca/lib/
+
+          bash build.sh
+
+          echo -e "\n=========== Pip install [ triton-3.0.0+metax3.0.0.3 ] ==========="
+          python -m pip install /data/maca3.0-release-2.3/triton-3.0.0+metax3.0.0.3-cp310-cp310-linux_x86_64.whl
+
+      - name: Run test
+        run: |
+          exit_code=0
+          ignore_error() {
+            local cmd="$*"
+            echo "Execute command - [ $cmd ]"
+            eval "$cmd" || {
+              exit_code=$?
+              echo -e "\n=========== ⚠️ Instruction execution failed (exit code $exit_code), ignore and continue. ==========="
+            }
+          }
+
+          ignore_error "timeout -s 9 600s python tests/ci_use/Metax_UT/run_ernie_vl_28B.py"
+
+          echo -e "\n=========== Fastdeploy workerlog.0 ==========="
+          cat log/workerlog.0
+
+          exit ${exit_code}

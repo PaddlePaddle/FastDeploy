@@ -32,6 +32,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         stop_seqs,
         stop_seqs_len,
         end_ids,
+        min_tokens,
     ):
         accept_tokens_out = accept_tokens.clone()
         stop_flags_out = stop_flags.clone()
@@ -45,6 +46,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs,
             stop_seqs_len,
             end_ids,
+            min_tokens,
         )
 
         return {
@@ -88,6 +90,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         )
         stop_seqs_len = paddle.to_tensor([3, 0], dtype="int32")
         end_ids = paddle.to_tensor([-1], dtype="int64")
+        min_tokens = paddle.to_tensor([0, 0], dtype="int64")
         gpu_results = self.run_op(
             accept_tokens,
             accept_num,
@@ -98,6 +101,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs,
             stop_seqs_len,
             end_ids,
+            min_tokens,
         )
 
         expected_accept_tokens = np.array([[4, 5, -1, 0, 0], [1, 2, 3, 0, 0]])
@@ -121,6 +125,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         stop_seqs = paddle.to_tensor([[11, 12, 13], [14, 15, 16]], dtype="int64")
         stop_seqs_len = paddle.to_tensor([3, 3], dtype="int32")
         end_ids = paddle.to_tensor([-1], dtype="int64")
+        min_tokens = paddle.to_tensor([0, 0], dtype="int64")
 
         gpu_results = self.run_op(
             accept_tokens,
@@ -132,6 +137,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs,
             stop_seqs_len,
             end_ids,
+            min_tokens,
         )
 
         np.testing.assert_array_equal(gpu_results["output_accept_tokens"], accept_tokens.numpy())
@@ -152,6 +158,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         )
         stop_seqs_len = paddle.to_tensor([3], dtype="int32")
         end_ids = paddle.to_tensor([-1], dtype="int64")
+        min_tokens = paddle.to_tensor([0], dtype="int64")
 
         gpu_results = self.run_op(
             accept_tokens,
@@ -163,6 +170,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs,
             stop_seqs_len,
             end_ids,
+            min_tokens,
         )
 
         np.testing.assert_array_equal(gpu_results["output_accept_tokens"], accept_tokens.numpy())
@@ -180,6 +188,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         stop_seqs = paddle.to_tensor([[5, 4, 3]], dtype="int64")
         stop_seqs_len = paddle.to_tensor([3], dtype="int32")
         end_ids = paddle.to_tensor([-1], dtype="int64")
+        min_tokens = paddle.to_tensor([0], dtype="int64")
 
         gpu_results = self.run_op(
             accept_tokens,
@@ -191,10 +200,51 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs,
             stop_seqs_len,
             end_ids,
+            min_tokens,
         )
 
         np.testing.assert_array_equal(gpu_results["output_accept_tokens"], accept_tokens.numpy())
         np.testing.assert_array_equal(gpu_results["output_stop_flags"], stop_flags.numpy())
+
+    def test_min_tokens_allows_stop(self):
+        """Test that stopping is allowed when step_idx >= min_tokens"""
+        accept_tokens = paddle.to_tensor(
+            [[4, 5, 0, 0, 0]],
+            dtype="int64",
+        )
+        accept_num = paddle.to_tensor([3], dtype="int32")
+        pre_ids = paddle.to_tensor(
+            [[7, 8, 9, 3, 4, 5]],
+            dtype="int64",
+        )
+        step_idx = paddle.to_tensor([6], dtype="int64")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        seq_lens = paddle.to_tensor([6], dtype="int32")
+        stop_seqs = paddle.to_tensor(
+            [[[3, 4, 5]]],
+            dtype="int64",
+        )
+        stop_seqs_len = paddle.to_tensor([[3]], dtype="int32")
+        end_ids = paddle.to_tensor([-1], dtype="int64")
+        min_tokens = paddle.to_tensor([5], dtype="int64")  # min_tokens=5, step_idx=6 >= 5
+
+        gpu_results = self.run_op(
+            accept_tokens,
+            accept_num,
+            pre_ids,
+            step_idx,
+            stop_flags,
+            seq_lens,
+            stop_seqs,
+            stop_seqs_len,
+            end_ids,
+            min_tokens,
+        )
+
+        expected_accept_tokens = np.array([[4, 5, -1, 0, 0]])
+        expected_stop_flags = np.array([True])
+        np.testing.assert_array_equal(gpu_results["output_accept_tokens"], expected_accept_tokens)
+        np.testing.assert_array_equal(gpu_results["output_stop_flags"], expected_stop_flags)
 
 
 if __name__ == "__main__":

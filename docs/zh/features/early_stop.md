@@ -2,7 +2,7 @@
 
 # 早停功能
 
-早停功能用于提前结束模型生成token的过程，具体来说早停功能会采取不同的策略，判断当前生成的token序列是否满足早停条件，如果满足则提前结束token生成。FastDeploy目前支持`Repetition`策略和`Stop Sequence`策略。
+早停功能用于提前结束模型生成token的过程，具体来说早停功能会采取不同的策略，判断当前生成的token序列是否满足早停条件，如果满足则提前结束token生成。FastDeploy目前支持`Repetition`策略和`Stop Sequence`策略 和`Stop_token_ids`策略。
 
 ## 1.Repetition策略
 * Repetition策略通过检查生成高概率token的次数决定是否需要触发早停功能。
@@ -116,3 +116,43 @@ output = llm.chat(messages=[{"role": "user", "content": "今天天气真好"}], 
 print(output)
 
 ```
+
+## 3.Stop_token_ids策略
+* Stop token ids策略通过检查生成的token序列是否包含用户指定的停止token id决定是否需要触发早停功能。
+* 具体来说，当某个batch生成的token序列中包含用户指定的停止token_id时，将提前结束该batch的token生成过程。
+### 使用说明
+
+在请求服务时，在请求中包含`stop_token_ids`字段，是`List[int]`。
+* 在线推理请求示例，请求时添加stop_token_ids参数
+```
+# create a chat request with "stop_token_ids" parameter
+
+curl -X POST "http://0.0.0.0:13312/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+    "model": "default",
+    "messages": [
+        {
+            "role": "user",
+            "content": "北京天安门在哪里?"
+        }
+    ],
+    "temperature": 0.7,
+    "stream": false,
+    "seed": 1,
+    "stop_token_ids":[104208]
+}'
+```
+* 离线推理请求，在`SamplingParams`中增加`stop_token_ids`参数
+```
+from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.entrypoints.llm import LLM
+
+model_name_or_path = "/root/paddlejob/workspace/env_run/output/models/paddle/Qwen/Qwen3-0.6B"
+
+# 超参设置
+sampling_params = SamplingParams(temperature=1, seed=1,stop_token_ids=[104208])
+llm = LLM(model=model_name_or_path, tensor_parallel_size=1)
+output = llm.chat(messages=[{"role": "user", "content": "北京天安门在哪里?"}], use_tqdm=True, sampling_params=sampling_params)
+
+print(output)

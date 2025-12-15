@@ -15,6 +15,7 @@ ps -efww | grep -E $FD_API_PORT | grep -v grep | awk '{print $2}' | xargs kill -
 lsof -t -i :$FD_API_PORT | xargs kill -9 || true
 
 echo "pip requirements"
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 python -m pip install -r requirements.txt
 
 echo "uninstall org"
@@ -22,12 +23,11 @@ echo "uninstall org"
 python -m pip uninstall paddle-intel-hpu -y
 #to uninstall fastdeploy
 python -m pip uninstall fastdeploy_intel_hpu -y
-python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 #to install paddlepaddle
 pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 #to install paddlecustomdevice? (paddle-intel-hpu)
-pip install https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/paddle_intel_hpu-0.0.1-cp310-cp310-linux_x86_64.whl
-pip install https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/paddlenlp_ops-0.0.0-cp310-cp310-linux_x86_64.whl
+pip install https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/paddle_intel_hpu-0.0.2-cp310-cp310-linux_x86_64.whl
+pip install https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/paddlenlp_ops-0.0.2-cp310-cp310-linux_x86_64.whl
 
 #to build and install fastdeploy
 echo "build whl"
@@ -36,7 +36,7 @@ wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/cutlass.tar.gz
 wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/json.tar.gz && tar -xzf json.tar.gz -C custom_ops/third_party/ && mv custom_ops/third_party/json custom_ops/third_party/nlohmann_json
 chmod +x build.sh
 bash build.sh || exit 1
-pip install dist/fastdeploy_intel_hpu-2.3.0.dev0-py3-none-any.whl --force-reinstall
+pip install dist/fastdeploy_intel_hpu-*.whl --force-reinstall
 
 #to install dependencies
 echo "pip others"

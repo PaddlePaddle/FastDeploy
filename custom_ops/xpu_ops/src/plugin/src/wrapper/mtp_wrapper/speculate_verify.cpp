@@ -48,7 +48,8 @@ __attribute__((global)) void speculate_verify(
     const int max_seq_len,
     const int max_candidate_len,
     const int verify_window,
-    const bool prefill_one_step_stop);
+    const bool prefill_one_step_stop,
+    const bool benchmark_mode);
 }  // namespace plugin
 }  // namespace xpu3
 
@@ -136,14 +137,15 @@ static int cpu_wrapper(Context *ctx,
                        const int max_seq_len,
                        const int max_candidate_len,
                        const int verify_window,
-                       const bool prefill_one_step_stop) {
+                       const bool prefill_one_step_stop,
+                       const bool benchmark_mode) {
   for (int bid = 0; bid < real_bsz; ++bid) {
-    const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
     // verify and set stop flags
     int accept_num_now = 1;
     int stop_flag_now_int = 0;
 
     if (!(is_block_step[bid] || bid >= real_bsz)) {
+      const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
       // printf("debug cpu bid:%d,start_token_id:%d\n",bid, start_token_id);
       // printf("bid %d\n", bid);
 
@@ -160,6 +162,9 @@ static int cpu_wrapper(Context *ctx,
         // printf("seq_lens_this_time[%d]-1: %d \n",bid,
         // seq_lens_this_time[bid]-1);
         for (; i < seq_lens_this_time[bid] - 1; i++) {
+          if (benchmark_mode) {
+            break;
+          }
           if (seq_lens_encoder[bid] != 0) {
             break;
           }
@@ -326,7 +331,8 @@ static int xpu3_wrapper(Context *ctx,
                         const int max_seq_len,
                         const int max_candidate_len,
                         const int verify_window,
-                        const bool prefill_one_step_stop) {
+                        const bool prefill_one_step_stop,
+                        const bool benchmark_mode) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   xpu3::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>
       <<<1, 64, ctx->xpu_stream>>>(
@@ -354,7 +360,8 @@ static int xpu3_wrapper(Context *ctx,
           max_seq_len,
           max_candidate_len,
           verify_window,
-          prefill_one_step_stop);
+          prefill_one_step_stop,
+          benchmark_mode);
   return api::SUCCESS;
 }
 template <bool ENABLE_TOPP, bool USE_TOPK>
@@ -383,7 +390,8 @@ int speculate_verify(Context *ctx,
                      const int max_seq_len,
                      const int max_candidate_len,
                      const int verify_window,
-                     const bool prefill_one_step_stop) {
+                     const bool prefill_one_step_stop,
+                     const bool benchmark_mode) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_verify", int64_t);
   WRAPPER_DUMP_PARAM3(ctx, accept_tokens, accept_num, step_idx);
@@ -406,12 +414,13 @@ int speculate_verify(Context *ctx,
                       actual_candidate_len,
                       real_bsz,
                       max_draft_tokens);
-  WRAPPER_DUMP_PARAM5(ctx,
+  WRAPPER_DUMP_PARAM6(ctx,
                       end_length,
                       max_seq_len,
                       max_candidate_len,
                       verify_window,
-                      prefill_one_step_stop);
+                      prefill_one_step_stop,
+                      benchmark_mode);
   WRAPPER_DUMP(ctx);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz * max_draft_tokens, accept_tokens);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, accept_num);
@@ -469,7 +478,8 @@ int speculate_verify(Context *ctx,
                                               max_seq_len,
                                               max_candidate_len,
                                               verify_window,
-                                              prefill_one_step_stop);
+                                              prefill_one_step_stop,
+                                              benchmark_mode);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper<ENABLE_TOPP, USE_TOPK>(ctx,
@@ -497,7 +507,8 @@ int speculate_verify(Context *ctx,
                                                max_seq_len,
                                                max_candidate_len,
                                                verify_window,
-                                               prefill_one_step_stop);
+                                               prefill_one_step_stop,
+                                               benchmark_mode);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
@@ -530,7 +541,8 @@ int speculate_verify(Context *ctx,
       int,                        /* max_seq_len */                 \
       int,                        /* max_candidate_len */           \
       int,                        /* verify_window */               \
-      bool);                      /* prefill_one_step_stop */
+      bool,                                                         \
+      bool); /* prefill_one_step_stop */
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)
 INSTANTIATE_SPECULATE_VERIFY(false, true)
