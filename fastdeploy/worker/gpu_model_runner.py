@@ -2008,6 +2008,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
+            if self.speculative_decoding:
+                if self.speculative_method == "mtp":
+                    self.proposer.reorder_inputs()
 
         self._prepare_inputs()
         self.sampler.pre_process(p_done_idxs)
@@ -2247,7 +2250,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
-
         # Routing replay
         if self.fd_config.routing_replay_config.enable_routing_replay:
             if (

@@ -62,6 +62,21 @@ class InputBatch:
         else:
             raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
 
+    def __delitem__(self, key):
+        """
+        Delete an attribute using del operator
+
+        Args:
+            key: Name of the attribute to delete
+
+        Raises:
+            KeyError: If attribute does not exist
+        """
+        if hasattr(self, key):
+            delattr(self, key)
+        else:
+            raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
+
     def __init__(self, fd_config: FDConfig) -> None:
         """
         Initialize all share buffers for model inputs.
@@ -70,6 +85,7 @@ class InputBatch:
         self.running_requests_ids = []
         self.model_config: ModelConfig = fd_config.model_config
         self.cache_config: CacheConfig = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.speculative_decoding = self.speculative_config.method is not None
         self.enable_mm = self.model_config.enable_mm
@@ -214,7 +230,7 @@ class InputBatch:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.input_ids_cpu = paddle.full(
                 shape=[max_num_seqs, self.model_config.max_model_len],
-                fill_value=1,
+                fill_value=-1,
                 dtype="int64",
             ).cpu()
             self.accept_tokens = paddle.full(
@@ -225,7 +241,7 @@ class InputBatch:
             self.accept_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
+                fill_value=-1,
                 dtype="int64",
             )
 
@@ -254,6 +270,28 @@ class InputBatch:
                 dtype="float32",
             )
             self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
+            self.is_block_step = paddle.full([max_num_seqs, 1], False, dtype="bool")
+            self.batch_drop = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
+            self.input_ids_len = paddle.zeros(shape=[max_num_seqs, 1], dtype="int64").cpu()
+            self.first_token_hidden_states = paddle.full([max_num_seqs, self.model_config.hidden_size], -1)
+            self.batch_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
+            self.next_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
+            self.cu_next_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
+
+            # attn_mask
+            if self.enable_mm:
+                self.attn_mask_offsets = paddle.full(
+                    shape=[max_num_seqs * self.model_config.max_model_len], fill_value=-1, dtype="int32"
+                )
+                self.attn_mask_offsets_full = paddle.full(
+                    [max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
+                )
+                self.attn_mask_offsets_decoder = paddle.full([max_num_seqs, 1], -1, dtype="int32")
+                self.decode_states = paddle.full(
+                    [max_num_seqs, max_draft_token_num + 1],
+                    -1,
+                    dtype="int32",
+                )
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
@@ -360,6 +398,22 @@ class InputBatch:
             swap_data(self.output_cum_offsets, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
+            swap_data(self.draft_logits, i1, i2)
+            swap_data(self.cu_batch_token_offset, i1, i2)
+            swap_data(self.is_block_step, i1, i2)
+            swap_data(self.batch_drop, i1, i2)
+            swap_data(self.input_ids_len, i1, i2)
+            swap_data(self.first_token_hidden_states, i1, i2)
+            swap_data(self.batch_token_num, i1, i2)
+            swap_data(self.next_token_num, i1, i2)
+            swap_data(self.cu_next_token_offset, i1, i2)
+            swap_data(self.stop_flags, i1, i2)
+            # attn_mask
+            if self.enable_mm:
+                swap_data(self.attn_mask_offsets, i1, i2)
+                swap_data(self.attn_mask_offsets_full, i1, i2)
+                swap_data(self.attn_mask_offsets_decoder, i1, i2)
+                swap_data(self.decode_states, i1, i2)
 
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
@@ -441,7 +495,7 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
-def recover_batch_index_for_tokens(sampler_output, index_to_batch_id):
+def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
     """
     Reorder sampled_token_ids according to index_to_batch_id mapping.
 
@@ -468,3 +522,46 @@ def recover_batch_index_for_tokens(sampler_output, index_to_batch_id):
 
     # Update sampled_token_ids in sampler_output
     sampler_output.sampled_token_ids = reordered_token_ids
+
+
+def recover_batch_index_for_model_output(model_output, index_to_batch_id):
+    """
+    Reorder model_output according to index_to_batch_id mapping.
+
+    Args:
+        model_output: Model output object containing sampled_token_ids and other attributes
+        index_to_batch_id: Dict mapping indices to original batch IDs
+
+    Returns:
+        Updated model_output object with reordered attributes
+    """
+
+    accept_tokens = model_output.accept_tokens
+    accept_num = model_output.accept_num
+    seq_lens_decoder = model_output.seq_lens_decoder
+    prompt_lens = model_output.prompt_lens
+
+    if all(i == v for i, v in index_to_batch_id.items()):
+        return accept_tokens, accept_num, seq_lens_decoder, prompt_lens
+
+    # Create a new tensor to store the reordered results
+    sorted_keys = sorted(index_to_batch_id.keys())
+    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+
+    # Use scatter_nd to place values at specified positions
+    reordered_accept_tokens = paddle.scatter_nd(
+        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), accept_tokens, accept_tokens.shape
+    )
+    reordered_accept_num = paddle.scatter_nd(
+        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), accept_num, accept_num.shape
+    )
+
+    reordered_seq_lens_decoder = paddle.scatter_nd(
+        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), seq_lens_decoder, seq_lens_decoder.shape
+    )
+    reordered_prompt_lens = paddle.scatter_nd(
+        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), prompt_lens, prompt_lens.shape
+    )
+
+    return reordered_accept_tokens, reordered_accept_num, reordered_seq_lens_decoder, reordered_prompt_lens
