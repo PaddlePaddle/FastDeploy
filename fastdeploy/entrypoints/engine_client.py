@@ -284,6 +284,7 @@ class EngineClient:
 
             task.prompt_token_ids_len = len(task.prompt_token_ids)
             input_ids_len = task.prompt_token_ids_len
+            task.need_prefill_tokens = task.prompt_token_ids_len
 
             task.sampling_params.max_tokens = min(self.max_model_len - input_ids_len, task.sampling_params.max_tokens)
             min_tokens = task.sampling_params.min_tokens if task.sampling_params.min_tokens else 1
@@ -421,7 +422,7 @@ class EngineClient:
             api_server_logger.error(err_msg)
             raise ValueError("max_logprobs", err_msg)
 
-        prompt_logprobs = data.get("prompt_logprobs", None)
+        prompt_logprobs = getattr(data, "prompt_logprobs", None)
 
         if prompt_logprobs is not None:
             if not self.enable_logprob:

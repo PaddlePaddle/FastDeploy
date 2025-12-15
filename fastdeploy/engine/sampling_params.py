@@ -124,7 +124,7 @@ class SamplingParams:
     def from_generic_request(cls, req: T) -> SamplingParams:
         logprobs_val = (
             getattr(req, "top_logprobs", cls.logprobs)
-            if hasattr(req, "top_logprobs") and not getattr(req, "logprobs", None)
+            if hasattr(req, "top_logprobs") and getattr(req, "logprobs", None)
             else getattr(req, "logprobs", cls.logprobs)
         )
         max_tokens_val = (
