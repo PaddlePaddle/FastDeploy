@@ -98,3 +98,30 @@ class DefaultModelLoaderV1(BaseModelLoader):
             return model
         self.load_weights(model, fd_config, enable_cache)
         return model
+
+    def load_rl_mock_model(self, fd_config: FDConfig) -> nn.Layer:
+        """use for rl model load"""
+        # (TODO:gaoziyuan) optimze
+        original_architectures = fd_config.model_config.architectures[0]
+
+        import fastdeploy.rl  # noqa
+
+        if fd_config.speculative_config.model_type != "mtp":
+            model_architectures = original_architectures.replace("Ernie5ForCausalLM", "Ernie5MoeForCausalLM")
+        else:
+            model_architectures = original_architectures.replace("Ernie5ForCausalLM", "Ernie5MTPForCausalLM")
+
+        model_architectures += "RL"
+        context = paddle.LazyGuard()
+
+        with context:
+            model_cls = ModelRegistry.get_class(model_architectures)
+            model = model_cls(fd_config)
+
+        model.eval()
+
+        if fd_config.load_config.load_strategy == "normal":
+            # normal strategy need load weight and architectures need without "RL"
+            self.load_weights(model, fd_config, original_architectures)
+        # RL model not need set_state_dict
+        return model
