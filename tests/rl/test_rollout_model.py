@@ -1,8 +1,24 @@
+import os
+import sys
 import types
 
 import pytest  # type: ignore
 
-from fastdeploy.rl.rollout_model import (
+
+# 保守处理：本地缺�?paddle 时直接跳过整模块，CI 上有完整环境会正常运�?try:  # pragma: no cover - 环境探测
+    import paddle  # noqa: F401
+except Exception as e:  # pragma: no cover - 环境探测
+    pytest.skip(f"Skip RL rollout tests, paddle import failed: {e}", allow_module_level=True)
+
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+os.environ["PROMETHEUS_MULTIPROC_MODE"] = "all"
+os.environ["FD_SKIP_MODEL_AUTO_REGISTRY"] = "1"
+
+from fastdeploy.rl.rollout_model import (  # noqa: E402
     BaseRLModel,
     Ernie4_5_MoeForCausalLMRL,
     Ernie4_5_VLMoeForConditionalGenerationRL,
@@ -34,19 +50,29 @@ def _dummy_instance(
     return inst
 
 
-def test_rollout_model_quantization_fallback_and_forward():
+def test_rollout_model_quantization_and_state_dict_fallback():
+    """RolloutModel wrapper should safely delegate to underlying rollout_model."""
+    # �?get_quantization_infer_keys / state_dict，走默认分支
     fallback = RolloutModel.__new__(RolloutModel)
     fallback.rollout_model = types.SimpleNamespace()
     assert fallback.get_quantization_infer_keys() == {}
 
+    # 带有 get_quantization_infer_keys / state_dict，走真实实现
     forwarded = RolloutModel.__new__(RolloutModel)
-    forwarded.rollout_model = types.SimpleNamespace(get_quantization_infer_keys=lambda: {"k": "v"})
+    forwarded.rollout_model = types.SimpleNamespace(
+        get_quantization_infer_keys=lambda: {"k": "v"},
+        state_dict=lambda: {"p": 1},
+    )
     assert forwarded.get_quantization_infer_keys() == {"k": "v"}
+    assert forwarded.state_dict() == {"p": 1}
 
 
-def test_base_rl_quantization_keys_and_error():
+def test_base_rl_name_and_quantization_keys_and_error():
     model = BaseRLModel.__new__(BaseRLModel)
     BaseRLModel.__init__(model)
+
+    # 覆盖 BaseRLModel.name / wint8 分支
+    assert BaseRLModel.name() == "BaseRLModel"
     model.fd_config = types.SimpleNamespace(quant_config=types.SimpleNamespace(name=lambda: "wint8"))
     model.state_dict = lambda: {
         "a.weight_scale": 1,
@@ -55,6 +81,7 @@ def test_base_rl_quantization_keys_and_error():
     }
     assert model.get_quantization_infer_keys() == ["a.weight", "b.weight"]
 
+    # �?wint8 分支抛错
     model.fd_config = types.SimpleNamespace(quant_config=types.SimpleNamespace(name=lambda: "fp16"))
     with pytest.raises(ValueError):
         model.get_quantization_infer_keys()
@@ -89,9 +116,11 @@ def test_ernie45_moe_mapping_and_cache():
         ],
     )
     first = dummy.get_name_mappings_to_training()
+    # 覆盖 gate / gate_correction_bias 映射�?MoE experts 聚合逻辑
     assert "ernie.layers.1.mlp.experts.gate_correction_bias" in first
     assert first["some.weight"] == "some.weight"
     assert "scale.weight_scale" not in first
+    # 覆盖缓存分支
     assert dummy.get_name_mappings_to_training() is first
 
 
@@ -112,6 +141,7 @@ def test_ernie45_vl_moe_text_and_image_mappings():
         parallel_config=types.SimpleNamespace(tensor_parallel_size=4),
     )
     mappings = dummy.get_name_mappings_to_training()
+    # 覆盖 text / image 两种 fused moe 专家映射
     assert "ernie.layers.0.mlp.text_fused_moe.experts.up_gate_proj_weight" in mappings
     assert "ernie.layers.1.mlp.image_fused_moe.experts.down_proj_weight" in mappings
 
@@ -123,7 +153,7 @@ def test_qwen2_mapping_builds_and_completes():
         ["qwen2.layers.0.mlp.gate_up_fused_proj.weight"],
     )
     mappings = dummy.get_name_mappings_to_training()
-    assert "qwen2.layers.0.mlp.up_gate_proj.weight" in mappings
+    # 覆盖 up_gate_proj -> gate_up_fused_proj 的映�?    assert "qwen2.layers.0.mlp.up_gate_proj.weight" in mappings
     assert mappings["qwen2.layers.0.mlp.up_gate_proj.weight"] == "qwen2.layers.0.mlp.gate_up_fused_proj.weight"
 
 
@@ -137,11 +167,8 @@ def test_qwen3moe_mapping_aux_free():
         ],
     )
     mappings = dummy.get_name_mappings_to_training()
+    # 覆盖 gate / gate_correction_bias 以及 experts 合并
     assert "model.layers.0.mlp.gate.weight" in mappings
-    assert (
-        "model.layers.0.mlp.experts.gate_correction_bias" in mappings
-        or "model.layers.0.mlp.experts.gate_correction_bias" not in mappings
-    )
 
 
 def test_qwen3_mapping_basic():
@@ -179,5 +206,6 @@ def test_glm4moe_mapping_removes_gate_correction():
         ],
     )
     mappings = dummy.get_name_mappings_to_training()
+    # 覆盖 gate / experts 聚合及最终删�?gate_correction_bias 的逻辑
     assert "model.layers.0.mlp.experts.up_gate_proj_weight" in mappings
     assert "model.layers.0.mlp.experts.gate_correction_bias" not in mappings
