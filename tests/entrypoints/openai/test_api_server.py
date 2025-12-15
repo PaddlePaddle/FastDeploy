@@ -73,11 +73,16 @@ def _build_args(**overrides):
 
 
 def _reload_api_server(args):
-    """Import/reload api_server with patched parse_args/model loader/template."""
+    """Import/reload api_server with patched parse_args/model loader/template.
+
+    We also patch environment_variables so FD_API_KEY lookup never depends on
+    the real environment (which can be different between local and CI).
+    """
     with (
         patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
         patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
         patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
+        patch("fastdeploy.envs.environment_variables", {}),
     ):
         from fastdeploy.entrypoints.openai import api_server as api_server_mod
 
@@ -252,6 +257,20 @@ async def test_lifespan_context_initializes_and_closes():
 
 
 @pytest.mark.asyncio
+async def test_lifespan_tokenizer_and_served_model_name_branches():
+    """Cover branches where tokenizer and served_model_name are pre-set."""
+    args = _build_args(tokenizer="tok", served_model_name="served-name")
+    with _patch_common_imports(args, engine_client_cls=_dummy_engine_client()):
+        api_server = _reload_api_server(args)
+
+    async with api_server.lifespan(api_server.app):
+        # tokenizer should remain as explicitly provided
+        assert api_server.args.tokenizer == "tok"
+        # model_handler should be initialized using served_model_name path
+        assert hasattr(api_server.app.state, "model_handler")
+
+
+@pytest.mark.asyncio
 async def test_connection_manager_timeout_branch():
     args = _build_args()
     api_server = _reload_api_server(args)
@@ -288,6 +307,18 @@ def test_health_ping_and_route_listing():
     assert isinstance(routes, dict) and routes["routes"]  # lines 309-317
 
 
+def test_health_all_healthy():
+    args = _build_args()
+    api_server = _reload_api_server(args)
+    engine_client = MagicMock()
+    engine_client.check_health.return_value = (True, "ok")
+    engine_client.is_workers_alive.return_value = (True, "ok")
+    api_server.app.state.engine_client = engine_client
+
+    resp = api_server.health(MagicMock())
+    assert resp.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_wrap_streaming_generator_error_span_branch():
     args = _build_args()
@@ -321,7 +352,7 @@ async def test_chat_completion_branches_and_completion_branches():
     api_server.app.state.engine_client.is_workers_alive.return_value = (False, "down")
 
     # dynamic_load_weight unhealthy path
-    resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp.status_code == 304  # lines 374-398
 
     # Healthy path with ErrorResponse -> ChatCompletionResponse -> streaming
@@ -337,33 +368,33 @@ async def test_chat_completion_branches_and_completion_branches():
 
     error_resp = ErrorResponse(error=ErrorInfo(message="err"))
     api_server.app.state.chat_handler = MagicMock(create_chat_completion=AsyncMock(return_value=error_resp))
-    resp2 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp2 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp2.status_code == 500
 
     success_resp = ChatCompletionResponse(id="1", model="m", choices=[], usage=UsageInfo())
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=success_resp)
-    resp3 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp3 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp3.status_code == 200
 
     async def stream_gen():
         yield "data"
 
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=stream_gen())
-    stream_resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    stream_resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert isinstance(stream_resp, api_server.StreamingResponse)
 
     # completion handler mirrors chat path
     api_server.app.state.completion_handler = MagicMock(create_completion=AsyncMock(return_value=error_resp))
-    resp4 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp4 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp4.status_code == 500
     api_server.app.state.completion_handler.create_completion = AsyncMock(return_value=success_resp)
-    resp5 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp5 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp5.status_code == 200
 
     # completion dynamic_load_weight unhealthy branch
     api_server.app.state.dynamic_load_weight = True
     api_server.app.state.engine_client.is_workers_alive.return_value = (False, "down")
-    resp6 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+    resp6 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp6.status_code == 304
 
     # HTTPException handling for chat/completion
@@ -377,9 +408,9 @@ async def test_chat_completion_branches_and_completion_branches():
             return False
 
     with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=RaiseHTTP()):
-        resp_err = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+        resp_err = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
         assert resp_err.status_code == 418
-        resp_err2 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}"))
+        resp_err2 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
         assert resp_err2.status_code == 418
 
 
@@ -387,6 +418,7 @@ async def test_chat_completion_branches_and_completion_branches():
 async def test_other_routes_reward_embedding_and_weights():
     args = _build_args(dynamic_load_weight=True)
     api_server = _reload_api_server(args)
+    api_server.app.state.dynamic_load_weight = True
     api_server.app.state.engine_client = MagicMock()
     api_server.app.state.engine_client.is_workers_alive.return_value = (False, "down")
 
@@ -511,14 +543,30 @@ def test_controller_routes_and_models_listing():
     resp3 = api_server.control_scheduler(ctrl_req)
     assert resp3.status_code == 500
 
-    # control_scheduler reset and update_config branches
+    # control_scheduler reset and update_config branches, while
+    # avoiding Pydantic validation by stubbing ErrorInfo/ErrorResponse.
+    class DummyErrorInfo:
+        def __init__(self, message: str, code=None, **_):
+            self.message = message
+            self.code = code
+
+    class DummyErrorResponse:
+        def __init__(self, error):
+            self.error = error
+
+        def model_dump(self):
+            return {"error": {"message": self.error.message, "code": self.error.code}}
+
     sched = MagicMock()
     sched.update_config = MagicMock()
     mock_engine2 = SimpleNamespace(engine=SimpleNamespace(clear_data=MagicMock(), scheduler=sched))
     api_server.llm_engine = mock_engine2
-    with patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", lambda **kwargs: SimpleNamespace(**kwargs)):
+    with (
+        patch.object(api_server, "ErrorInfo", DummyErrorInfo),
+        patch.object(api_server, "ErrorResponse", DummyErrorResponse),
+    ):
         ctrl_req = ControlSchedulerRequest(reset=True, load_shards_num=2, reallocate_shard=True)
-    resp4 = api_server.control_scheduler(ctrl_req)
+        resp4 = api_server.control_scheduler(ctrl_req)
     assert resp4.status_code == 200
     sched.update_config.assert_called_once()
 
@@ -686,6 +734,7 @@ def test_list_models_error_response_branch():
     args = _build_args()
     with _patch_common_imports(args):
         api_server = _reload_api_server(args)
+        api_server.app.state.dynamic_load_weight = False
         class FakeErrorResponse:
             def model_dump(self):
                 return {"err": True}
@@ -703,8 +752,25 @@ def test_control_scheduler_without_update_config():
         api_server = _reload_api_server(args)
         sched = SimpleNamespace()
         api_server.llm_engine = SimpleNamespace(engine=SimpleNamespace(clear_data=MagicMock(), scheduler=sched))
-    req = SimpleNamespace(reset=False, load_shards_num=1, reallocate_shard=True)
-    resp = api_server.control_scheduler(req)
+
+        class DummyErrorInfo:
+            def __init__(self, message: str, code=None, **_):
+                self.message = message
+                self.code = code
+
+        class DummyErrorResponse:
+            def __init__(self, error):
+                self.error = error
+
+            def model_dump(self):
+                return {"error": {"message": self.error.message, "code": self.error.code}}
+
+        with (
+            patch.object(api_server, "ErrorInfo", DummyErrorInfo),
+            patch.object(api_server, "ErrorResponse", DummyErrorResponse),
+        ):
+            req = SimpleNamespace(reset=False, load_shards_num=1, reallocate_shard=True)
+            resp = api_server.control_scheduler(req)
     assert resp.status_code == 400
 
 
