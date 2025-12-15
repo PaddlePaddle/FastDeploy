@@ -324,7 +324,6 @@ class OpenAIServingCompletion:
                         setattr(data.outputs, "draft_top_logprobs", aggregated_draft_top_logprobs[rid])
                         setattr(data.outputs, "token_ids", aggregated_token_ids[rid])
                         setattr(data, "prompt_logprobs_tensors", aggregated_prompt_logprobs_tensors[rid])
-                        setattr(data, "speculate_metrics", aggregated_speculate_metrics[rid])
                         valid_results[rid] = data
                         num_choices -= 1
                         break
