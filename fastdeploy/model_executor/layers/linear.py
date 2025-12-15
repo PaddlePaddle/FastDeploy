@@ -935,17 +935,12 @@ class RowParallelLinear(LinearBase):
             shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
 
             # when use_sequence_parallel_moe, we don't split.
-            if layer_in_white_list:
-                pass
-            else:
+            if not layer_in_white_list:
                 loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
         tp_row_bias = getattr(param, "tp_row_bias", None)
-        if layer_in_white_list:
-            pass
-        else:
-            if tp_row_bias:
-                loaded_weight = loaded_weight / self.fd_config.parallel_config.tensor_parallel_size
+        if not layer_in_white_list and tp_row_bias:
+            loaded_weight = loaded_weight / self.fd_config.parallel_config.tensor_parallel_size
 
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
