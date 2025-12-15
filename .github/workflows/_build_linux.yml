@@ -54,7 +54,7 @@ on:
         value: ${{ jobs.fd-build.outputs.wheel_path }}
 jobs:
   fd-build:
-    runs-on: [self-hosted, GPU-Build]
+    runs-on: [self-hosted, h20-1567419-build-0]
     timeout-minutes: 360
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
