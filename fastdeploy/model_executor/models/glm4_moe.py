@@ -361,7 +361,7 @@ class Glm4MoeModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 

@@ -129,6 +129,38 @@ PromptLogprobs = LogprobsTensors | list[dict[int, Logprob] | None]
 
 
 @dataclass
+class SpeculateMetrics:
+    """
+    Speculative decoding metrics
+    """
+
+    """
+    The number of accepted tokens in the current request
+    """
+    accepted_tokens: int
+
+    """
+    The number of rejected tokens in the current request
+    """
+    rejected_tokens: int
+
+    """
+    The acceptance rate of the current request
+    """
+    accept_ratio: float
+
+    """
+    Average number of accepted tokens per step for the current request
+    """
+    average_accept_length: float
+
+    """
+    Average acceptance rate of each head in the current request
+    """
+    accept_ratio_per_head: list[float]
+
+
+@dataclass
 class SamplerOutput:
     """ """
 
