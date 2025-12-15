@@ -11,13 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for the global scheduler.
-
-To generate a focused coverage report for this module, run::
-
-    python -m coverage run -m pytest tests/scheduler/test_global_scheduler.py \
-        && python -m coverage report -m --include='fastdeploy/scheduler/global_scheduler.py'
-"""
 
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
