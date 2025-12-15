@@ -218,6 +218,7 @@ def test_mtp_accept_ratio(api_url):
     print("fastdeploy answer is :")
 
     try:
+        # TODO: 第一次和第二次存在diff，后面正常，暂时多请求一次
         response = send_request(url=api_url, payload=payload)
         chunks = get_stream_chunks(response)
         response = send_request(url=api_url, payload=payload)
