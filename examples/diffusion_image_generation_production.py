@@ -424,8 +424,12 @@ class DiffusionImageGenerator:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             
             # 保存为PNG
-            pil_image = PILImage.fromarray(image, mode='RGB' if image.shape[2] == 3 else 'RGBA')
-            pil_image.save(path, format='PNG')
+            mode = 'RGB' if image.shape[2] == 3 else 'RGBA'
+            pil_image = PILImage.fromarray(image)
+            # 转换为合適的模式
+            if mode != 'RGB':
+                pil_image = pil_image.convert(mode)
+            pil_image.save(path)
             logger.info(f"✅ 图像已保存: {path} (shape: {image.shape})")
             
         except ImportError:

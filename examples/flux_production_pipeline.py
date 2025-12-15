@@ -549,8 +549,11 @@ class FluxOptimizedPipeline:
             
             # 保存为PNG
             mode = 'RGB' if image.shape[2] == 3 else 'RGBA'
-            pil_image = PILImage.fromarray(image, mode=mode)
-            pil_image.save(path, format='PNG')
+            pil_image = PILImage.fromarray(image)
+            # 转换为合適的模式
+            if mode != 'RGB':
+                pil_image = pil_image.convert(mode)
+            pil_image.save(path)
             logger.info(f"✅ 图像已保存: {path} (形状: {image.shape})")
             
         except ImportError:
