@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import subprocess
+import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastdeploy.cache_manager.transfer_factory.rdma_cache_transfer import (
     RDMACommManager,
@@ -23,26 +23,7 @@ from fastdeploy.cache_manager.transfer_factory.rdma_cache_transfer import (
 
 class TestRDMACommManager(unittest.TestCase):
     def setUp(self):
-        # Mock environment variables
-        self.patcher1 = patch.dict("os.environ", {}, clear=True)
-        self.mock_env = self.patcher1.start()
-
-        # Mock subprocess run
-        self.patcher2 = patch("subprocess.run", wraps=subprocess.run)
-        self.mock_run = self.patcher2.start()
-
-        # Mock current_platform
-        self.patcher3 = patch("fastdeploy.platforms.current_platform")
-        self.mock_platform = self.patcher3.start()
-        self.mock_platform.is_cuda.return_value = True
-        self.mock_platform.device_name = "gpu"
-
-        # Mock RDMA library
-        self.patcher4 = patch("rdma_comm.RDMACommunicator")
-        self.mock_rdma_comm = self.patcher4.start()
-
-        # Test parameters
-        self.test_params = {
+        self.args = {
             "splitwise_role": "prefill",
             "rank": 0,
             "gpu_id": 0,
@@ -55,25 +36,83 @@ class TestRDMACommManager(unittest.TestCase):
             "prefill_tp_idx": 0,
         }
 
-    def tearDown(self):
-        self.patcher1.stop()
-        self.patcher2.stop()
-        self.patcher3.stop()
-        self.patcher4.stop()
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "", "KVCACHE_RDMA_NICS": ""})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_init_rdma_comm_manager_on_gpu_init_all(self, mock_run, mock_rdma_comm, mock_platform):
+        # Case: Automatically set all environment variables
+        mock_platform.is_cuda.return_value = True
+        mock_platform.device_name = "gpu"
+        mock_run.side_effect = [
+            Mock(returncode=0, stdout="8.0\n"),
+            Mock(returncode=0, stdout="KVCACHE_RDMA_NICS=mlx5_2\n"),
+        ]
 
-    def test_init_rdma_comm_manager(self):
-        """Test RDMACommManager initialization"""
-        self.assertIsNone(self.mock_env.get("KVCACHE_RDMA_NICS"), None)
-        manager = RDMACommManager(**self.test_params)
-        self.assertIsNotNone(manager)
+        manager = RDMACommManager(**self.args)
         self.assertEqual(manager.splitwise_role, "prefill")
-        self.mock_rdma_comm.assert_called_once()
-        self.mock_run.assert_called()
-        self.assertIsNotNone(self.mock_env.get("KVCACHE_RDMA_NICS"))
+        self.assertEqual(mock_run.call_count, 2)
+        mock_rdma_comm.assert_called_once()
+        self.assertEqual(os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE"), "1")
+        self.assertEqual(os.getenv("KVCACHE_RDMA_NICS"), "mlx5_2")
 
-    def test_connect_success(self):
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "", "KVCACHE_RDMA_NICS": "mlx5_1"})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_init_rdma_comm_manager_on_gpu_init_gdrcopy(self, mock_run, mock_rdma_comm, mock_platform):
+        # Case: Only set KVCACHE_GDRCOPY_FLUSH_ENABLE
+        mock_platform.is_cuda.return_value = True
+        mock_platform.device_name = "gpu"
+        mock_run.side_effect = [Mock(returncode=0, stdout="8.0\n")]
+
+        manager = RDMACommManager(**self.args)
+        self.assertEqual(manager.splitwise_role, "prefill")
+        self.assertEqual(mock_run.call_count, 1)
+        mock_rdma_comm.assert_called_once()
+        self.assertEqual(os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE"), "1")
+        self.assertEqual(os.getenv("KVCACHE_RDMA_NICS"), "mlx5_1")
+
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "0", "KVCACHE_RDMA_NICS": ""})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_init_rdma_comm_manager_on_gpu_init_nics(self, mock_run, mock_rdma_comm, mock_platform):
+        # Case: Only set KVCACHE_RDMA_NICS
+        mock_platform.is_cuda.return_value = True
+        mock_platform.device_name = "gpu"
+        mock_run.side_effect = [Mock(returncode=0, stdout="KVCACHE_RDMA_NICS=mlx5_2\n")]
+
+        manager = RDMACommManager(**self.args)
+        self.assertEqual(manager.splitwise_role, "prefill")
+        self.assertEqual(mock_run.call_count, 1)
+        mock_rdma_comm.assert_called_once()
+        self.assertEqual(os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE"), "0")
+        self.assertEqual(os.getenv("KVCACHE_RDMA_NICS"), "mlx5_2")
+
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "0", "KVCACHE_RDMA_NICS": "mlx5_1"})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_init_rdma_comm_manager_on_gpu_init_nothing(self, mock_run, mock_rdma_comm, mock_platform):
+        # Case: Do not set any environment variables
+        mock_platform.is_cuda.return_value = True
+        mock_platform.device_name = "gpu"
+
+        manager = RDMACommManager(**self.args)
+        self.assertEqual(manager.splitwise_role, "prefill")
+        self.assertEqual(mock_run.call_count, 0)
+        mock_rdma_comm.assert_called_once()
+        self.assertEqual(os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE"), "0")
+        self.assertEqual(os.getenv("KVCACHE_RDMA_NICS"), "mlx5_1")
+
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "0", "KVCACHE_RDMA_NICS": "mlx5_1"})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_connect_success(self, mock_run, mock_rdma_comm, mock_platform):
         """Test successful connection"""
-        manager = RDMACommManager(**self.test_params)
+        manager = RDMACommManager(**self.args)
         manager.messager.is_connected.return_value = False
         manager.messager.connect.return_value = 0
 
@@ -81,9 +120,13 @@ class TestRDMACommManager(unittest.TestCase):
         self.assertTrue(result)
         manager.messager.connect.assert_called_once_with("127.0.0.1", "12345", 0)
 
-    def test_write_cache(self):
+    @patch.dict("os.environ", {"KVCACHE_GDRCOPY_FLUSH_ENABLE": "0", "KVCACHE_RDMA_NICS": "mlx5_1"})
+    @patch("fastdeploy.platforms.current_platform")
+    @patch("rdma_comm.RDMACommunicator")
+    @patch("subprocess.run")
+    def test_write_cache(self, mock_run, mock_rdma_comm, mock_platform):
         """Test write_cache method"""
-        manager = RDMACommManager(**self.test_params)
+        manager = RDMACommManager(**self.args)
         manager.messager.write_cache.return_value = True
 
         result = manager.write_cache("127.0.0.1", 12345, [1, 2], [3, 4], 0)

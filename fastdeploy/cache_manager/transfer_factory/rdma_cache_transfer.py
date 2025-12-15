@@ -40,6 +40,7 @@ class RDMACommManager:
         prefill_tp_idx,
     ):
         try:
+            import importlib
             import os
             import subprocess
 
@@ -64,8 +65,11 @@ class RDMACommManager:
                     os.environ["KVCACHE_GDRCOPY_FLUSH_ENABLE"] = "1"
                     logger.info("Setting environment variable: export KVCACHE_GDRCOPY_FLUSH_ENABLE=1")
 
-            if os.getenv("KVCACHE_RDMA_NICS", "") == "":
-                get_rdma_nics = os.path.join(os.path.dirname(__file__), "get_rdma_nics.sh")
+            if os.getenv("KVCACHE_RDMA_NICS", "") == "" and current_platform.is_cuda():
+                res = importlib.resources.files("fastdeploy.cache_manager.transfer_factory") / "get_rdma_nics.sh"
+                get_rdma_nics = None
+                with importlib.resources.as_file(res) as path:
+                    get_rdma_nics = str(path)
                 nic_type = current_platform.device_name
                 command = ["bash", get_rdma_nics, nic_type]
                 result = subprocess.run(
