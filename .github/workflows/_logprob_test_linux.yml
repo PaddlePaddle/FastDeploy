@@ -31,7 +31,7 @@ on:
 
 jobs:
   run_tests_logprob:
-    runs-on: [self-hosted, GPU-h20-1Cards]
+    runs-on: [self-hosted, h20-1567421-01]
     timeout-minutes: 60
     steps:
       - name: Code Prepare
