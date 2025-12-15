@@ -557,12 +557,9 @@ class TestMTPProposer(unittest.TestCase):
         )
         self.assertEqual(proposer._get_cache_type(), "int8")
 
-        # Unsupported branch
+        # Unsupported branch: reuse existing proposer to avoid RuntimeError in __init__
         mock_platform.is_cuda.return_value = False
         mock_platform.is_xpu.return_value = False
-        proposer = MTPProposer(
-            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-        )
         with self.assertRaises(NotImplementedError):
             proposer._get_cache_type()
 
