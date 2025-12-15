@@ -124,17 +124,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
         local_rank = fleet.worker_index()
     else:
         local_rank = 0
-    
-    data_parallel_id = os.getenv("DATA_PARALLEL_ID", "0")
-    os.environ["PADDLE_TRAINER_ID"] = data_parallel_id
-    os.environ["PADDLE_TRAINERS_NUM"] = "2"
-    os.environ["PADDLE_TRAINER_ENDPOINTS"] = "0.0.0.0:6072,0.0.0.0:6073"
-    os.environ["PADDLE_DISTRI_BACKEND"] = "nccl"
-    os.unsetenv("PADDLE_MASTER")
-    dist.init_parallel_env()
-
-    paddle.set_device("gpu")
-    return 1, 0
+    return ranks, local_rank
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
@@ -504,8 +494,7 @@ class PaddleDisWorkerProc:
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     self._tp_barrier_wait()
-                if tp_rank == 0:
-                    self.infer_finished_signal.value[0] = 1
+                
                 time.sleep(0.001)
                 continue
             

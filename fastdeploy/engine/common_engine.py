@@ -150,8 +150,9 @@ class EngineService:
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             )
             init_eplb_signals(cfg, current_suffix)
-
-        self._init_parallel_env()
+        
+        if envs.FD_ENABLE_BATCH_SCHEDULER:
+            self._init_parallel_env()
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -282,14 +283,21 @@ class EngineService:
                 create=True,
             )
 
-    def _init_parallel_env(self):
-        data_parallel_id = os.getenv("DATA_PARALLEL_ID", "0")
-        os.environ["PADDLE_TRAINER_ID"] = data_parallel_id
-        os.environ["PADDLE_TRAINERS_NUM"] = "2"
-        os.environ["PADDLE_TRAINER_ENDPOINTS"] = "0.0.0.0:6070,0.0.0.0:6071"
+    def _init_parallel_env(self, start_port=6070):
+        local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
+        global_data_parallel_id = self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
+        os.environ["PADDLE_TRAINER_ID"] = str(global_data_parallel_id)
+        os.environ["PADDLE_TRAINERS_NUM"] = str(self.cfg.parallel_config.data_parallel_size)
+        if self.cfg.ips is None:
+            os.environ["PADDLE_TRAINER_ENDPOINTS"] = ','.join([f"0.0.0.0:{int(start_port + i)}" for i in range(local_data_parallel_size)])
+        else:
+            os.environ["PADDLE_TRAINER_ENDPOINTS"] = ','.join(
+                [f"{ip}:{int(start_port + i)}" for i in range(local_data_parallel_size) for ip in self.cfg.ips]
+            )
         os.environ["PADDLE_DISTRI_BACKEND"] = "gloo"
 
         dist.init_parallel_env()
+        os.unsetenv("PADDLE_DISTRI_BACKEND")
 
         paddle.set_device("cpu")
 
