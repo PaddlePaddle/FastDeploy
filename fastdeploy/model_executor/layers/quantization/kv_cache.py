@@ -263,10 +263,11 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         use for loader v1
         """
-        if layer.cache_k_scale._is_initialized():
-            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
-        if layer.cache_v_scale._is_initialized():
-            layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
+        if "block_wise" not in layer.cache_quant_type_str:
+            if layer.cache_k_scale._is_initialized():
+                layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
+            if layer.cache_v_scale._is_initialized():
+                layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
 
     def apply(self, layer):
         """
