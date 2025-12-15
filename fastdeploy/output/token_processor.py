@@ -799,7 +799,9 @@ class TokenProcessor:
                         and self.cfg.cache_config.enable_prefix_caching
                         and self.cfg.cache_config.enable_output_caching
                     ):
-                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0:
+                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0 and (
+                            task_id not in self.resource_manager.to_be_rescheduled_request_id_set
+                        ):
                             self.resource_manager.cache_output_tokens(
                                 task
                             )  # when enable prefix caching, cache kv cache for output tokens
