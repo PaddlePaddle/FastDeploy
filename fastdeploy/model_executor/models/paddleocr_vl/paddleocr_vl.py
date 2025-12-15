@@ -90,8 +90,10 @@ class PaddleOCRVLModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -222,8 +224,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.model.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         image_mask = ids_remove_padding == self.model.config.image_token_id
         image_token_num = image_mask.sum()
 
@@ -238,7 +243,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )
 
         if forward_meta.step_use_cudagraph:
