@@ -85,8 +85,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string& pos_emb_type = "NORMAL",
-    bool rope_3d = false);
+    const bool use_neox_rotary_style,
+    const bool rope_3d = false);
 
 std::vector<paddle::Tensor> MoeLayer(
     const paddle::Tensor& x,
@@ -470,6 +470,16 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
+void SpeculateGetLogits(const paddle::Tensor& draft_logits,
+                        const paddle::Tensor& next_token_num,
+                        const paddle::Tensor& batch_token_num,
+                        const paddle::Tensor& cu_next_token_offset,
+                        const paddle::Tensor& cu_batch_token_offset,
+                        const paddle::Tensor& logits,
+                        const paddle::Tensor& first_token_logits,
+                        const paddle::Tensor& seq_lens_this_time,
+                        const paddle::Tensor& seq_lens_encoder);
+
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
                        int64_t rank_id,
@@ -616,7 +626,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("smooth"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
-        py::arg("pos_emb_type") = "NORMAL",
+        py::arg("use_neox_rotary_style"),
         py::arg("rope_3d") = false,
         "block attention in XPU");
 
@@ -1173,6 +1183,19 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("encoder_decoder_block_num"),
         py::arg("max_draft_tokens"),
         "Step paddle function");
+
+  m.def("speculate_get_logits",
+        &SpeculateGetLogits,
+        py::arg("draft_logits"),
+        py::arg("next_token_num"),
+        py::arg("batch_token_num"),
+        py::arg("cu_next_token_offset"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("logits"),
+        py::arg("first_token_logits"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        "speculate get logits function");
 
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,
