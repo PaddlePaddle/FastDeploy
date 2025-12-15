@@ -614,3 +614,39 @@ template <>
 __inline__ __device__ double Rsqrt<double>(double x) {
   return rsqrt(x);
 }
+
+__device__ __forceinline__ float2 expfp2(float2 a) {
+  return make_float2(__expf(a.x), __expf(a.y));
+}
+
+__device__ __forceinline__ float2 fast_float2_mul(const float2& a, const float2& b) {
+    float2 res;
+    
+    // 使用向量化PTX指令同时处理x/y分量
+    asm volatile (
+        "{\n"
+        "  fma.rn.f32 %0, %1, %2, 0.0;\n"   // res.x = a.x * b.x
+        "  fma.rn.f32 %3, %4, %5, 0.0;\n"   // res.y = a.y * b.y
+        "}"
+        : "=f"(res.x), "=f"(res.y)          // 输出操作数
+        : "f"(a.x), "f"(b.x), "f"(a.y), "f"(b.y) // 输入操作数
+    );
+    
+    return res;
+}
+
+__device__ __forceinline__ float2 fast_float2_sub(const float2& a, const float2& b) {
+    float2 res;
+    
+    // 使用向量化减法指令（PTX sub.rn.f32）
+    asm volatile (
+        "{\n"
+        "  sub.f32 %0, %1, %2;\n"   // res.x = a.x - b.x
+        "  sub.f32 %3, %4, %5;\n"   // res.y = a.y - b.y
+        "}"
+        : "=f"(res.x), "=f"(res.y)      // 输出操作数
+        : "f"(a.x), "f"(b.x), "f"(a.y), "f"(b.y) // 输入操作数
+    );
+    
+    return res;
+}

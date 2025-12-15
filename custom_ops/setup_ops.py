@@ -428,7 +428,7 @@ elif paddle.is_compiled_with_cuda():
                     # "-gencode",
                     # "arch=compute_90a,code=compute_90a",
                     "-O3",
-                    "--ptxas-options=-v",
+                    # "--ptxas-options=-v",
                     "-DNDEBUG",  # NDEBUG is common, consider moving if not specific to 90a
                 ]
                 print("SM90: Running SM90-specific FP8 kernel auto-generation.")

@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 #include "multiquery_attention_c8_kernel.h"
+#include "cu_tensor_map.cuh"
 
 template <typename T, typename CacheT>
 struct Append_params {
@@ -93,7 +94,9 @@ template <typename T,
           bool IsFP8 = false,
           bool IsDynamicC8 = false>
 __global__ void multi_query_append_attention_c8_warp1_4_kernel(
-    __grid_constant__ Append_params<T, CacheT> const params
+    const __grid_constant__ Append_params<T, CacheT> params,
+    const __grid_constant__ CUtensorMap key_tensor_map,
+    const __grid_constant__ CUtensorMap value_tensor_map
   ) {
   // constexpr uint32_t num_x = 1;
   const uint32_t tid = threadIdx.x, wid = threadIdx.y;
@@ -102,6 +105,27 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   //   printf("kernel start!");
   // }
   // __syncthreads();
+  // 内存分配
+  extern __shared__ __align__(128) uint8_t smem[];
+  smem_t qo_smem(smem);
+  smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
+  v_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+            NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
+  smem_t k_scale_smem;
+  smem_t v_scale_smem;
+  T *k_smem_scale_ptr = nullptr;
+  T *v_smem_scale_ptr = nullptr;
+
+  // TMA
+  #pragma nv_diag_suppress static_var_with_dynamic_init
+  __shared__ barrier bar[4];
+  if(tid == 0 && wid == 0) {
+    for (int i = 0; i < 4; ++i) {
+      init(&(bar[i]), blockDim.x * blockDim.y);
+      cde::fence_proxy_async_shared_cta();
+    }
+  }
+  __syncthreads();
 
   // 循环参数
   // block:[batch, kv_num_head, max_num_chunks, max_tile_q]
@@ -111,7 +135,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   const int num_block = gridDim.x;
   // __syncthreads();
   // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
-  //   printf("num_frags_x: %d, num_rows_per_block: %d\n", num_frags_x, num_rows_per_block);
+  //   printf("num_frags_x: %d\n", num_frags_x);
   // }
   // __syncthreads();
   for (int lane_idx = blockIdx.x; lane_idx < total_block; lane_idx += num_block) {
@@ -184,6 +208,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     }
 
     // 相关const变量
+    barrier::arrival_token tokens[4];
     constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
     constexpr uint32_t num_vecs_per_head_k =
         HEAD_DIM / num_elems_per_128b<CacheT>();
@@ -198,17 +223,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     const uint32_t kv_h_stride = BLOCK_SIZE * HEAD_DIM;
     const uint32_t kv_b_stride = HEAD_DIM;
     const uint32_t kv_d_stride = BLOCK_SIZE;
-
-    // 内存分配
-    extern __shared__ uint8_t smem[];
-    smem_t qo_smem(smem);
-    smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
-    v_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-              NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
-    T *k_smem_scale_ptr = nullptr;
-    T *v_smem_scale_ptr = nullptr;
-    smem_t k_scale_smem;
-    smem_t v_scale_smem;
 
     float s_frag[num_frags_x][num_frags_z][8];
     float o_frag[num_frags_x][num_frags_y][8];
@@ -315,20 +329,20 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
             (wid / 2) * num_frags_y * 16 + 8 * (tid / 16) + tid % 8,
             (wid % 2) * num_frags_z + (tid % 16) / 8);
 
-    uint32_t k_smem_offset_w =
-        smem_t::get_permuted_offset<num_vecs_per_head_k, inv_k_stride>(
-            wid * 4 + tid / 8, tid % 8);
-    uint32_t v_smem_offset_w =
-        smem_t::get_permuted_offset<num_vecs_per_blocksize, inv_v_stride>(
-            wid * 8 + tid / 4, tid % 4);
+    // uint32_t k_smem_offset_w =
+    //     smem_t::get_permuted_offset<num_vecs_per_head_k, inv_k_stride>(
+    //         wid * 4 + tid / 8, tid % 8);
+    // uint32_t v_smem_offset_w =
+    //     smem_t::get_permuted_offset<num_vecs_per_blocksize, inv_v_stride>(
+    //         wid * 8 + tid / 4, tid % 4);
 
     uint32_t kv_idx_base = chunk_start;
-    const uint32_t const_k_offset = kv_head_idx * kv_h_stride +
-                                    (wid * 4 + tid / 8) * kv_b_stride +
-                                    tid % 8 * num_elems_per_128b<CacheT>();
-    const uint32_t const_v_offset = kv_head_idx * kv_h_stride +
-                                    (wid * 8 + tid / 4) * kv_d_stride +
-                                    tid % 4 * num_elems_per_128b<CacheT>();
+    // const uint32_t const_k_offset = kv_head_idx * kv_h_stride +
+    //                                 (wid * 4 + tid / 8) * kv_b_stride +
+    //                                 tid % 8 * num_elems_per_128b<CacheT>();
+    // const uint32_t const_v_offset = kv_head_idx * kv_h_stride +
+    //                                 (wid * 8 + tid / 4) * kv_d_stride +
+    //                                 tid % 4 * num_elems_per_128b<CacheT>();
 
     // __syncthreads();
     // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
@@ -336,22 +350,60 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     // }
     // __syncthreads();
     // load BLOCK_SIZE * HEAD_DIM each time
-    produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
-                          NUM_WARPS,
-                          BLOCK_SIZE,
-                          num_frags_y,
-                          num_frags_z,
-                          NUM_WARP_Q>(k_smem,
-                                      &k_smem_offset_w,
-                                      params.cache_k,
-                                      block_table_now,
-                                      kv_head_idx,
-                                      kv_n_stride,
-                                      kv_h_stride,
-                                      kv_b_stride,
-                                      kv_idx_base,
-                                      chunk_end,
-                                      const_k_offset);
+
+    // produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
+    //                       NUM_WARPS,
+    //                       BLOCK_SIZE,
+    //                       num_frags_y,
+    //                       num_frags_z,
+    //                       NUM_WARP_Q>(k_smem,
+    //                                   &k_smem_offset_w,
+    //                                   params.cache_k,
+    //                                   block_table_now,
+    //                                   kv_head_idx,
+    //                                   kv_n_stride,
+    //                                   kv_h_stride,
+    //                                   kv_b_stride,
+    //                                   kv_idx_base,
+    //                                   chunk_end,
+    //                                   const_k_offset);
+#pragma unroll 1
+    for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load k kv_i:%d, block_table_id!\n", kv_i, (kv_idx_base + kv_i * 64) / BLOCK_SIZE);
+      // }
+      // __syncthreads();
+      int block_id = __ldg(&block_table_now[(kv_idx_base + kv_i * 64) / BLOCK_SIZE]);
+      if (block_id < 0) block_id = 0;
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load k kv_i:%d, block_id:%d!\n", kv_i, block_id);
+      // }
+      // __syncthreads();
+      if (tid == 0 && wid == 0) {
+        // 发起 TMA 四维异步拷贝操作
+        cde::cp_async_bulk_tensor_4d_global_to_shared((void*)(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT))), &key_tensor_map, 0, 0, kv_head_idx, block_id, bar[kv_i]);
+        // 设置同步等待点，指定需要等待的拷贝完成的字节数。
+        tokens[kv_i] = cuda::device::barrier_arrive_tx(bar[kv_i], 1, NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT));
+        // printf("t0 barrier_arrive_tx end\n");
+      } else {
+        // Other threads just arrive.
+        tokens[kv_i] = bar[kv_i].arrive();
+        // printf("t1 arrive end token:%d\n", token);
+      }
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load k launch end!\n");
+      // }
+      // __syncthreads();
+    }
+    // __syncthreads();
+    // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+    //   printf("load k0  end!\n");
+    // }
+    // __syncthreads();
+
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                               BLOCK_SIZE,
@@ -363,24 +415,67 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                           params.kv_num_heads,
                                                           kv_head_idx,
                                                           chunk_end);
+      commit_group();
     }
-    commit_group();
-    produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
-                          NUM_WARPS,
-                          BLOCK_SIZE,
-                          num_frags_y,
-                          num_frags_z,
-                          NUM_WARP_Q>(v_smem,
-                                      &v_smem_offset_w,
-                                      params.cache_v,
-                                      block_table_now,
-                                      kv_head_idx,
-                                      kv_n_stride,
-                                      kv_h_stride,
-                                      kv_d_stride,
-                                      kv_idx_base,
-                                      chunk_end,
-                                      const_v_offset);
+    
+    
+    // produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
+    //                       NUM_WARPS,
+    //                       BLOCK_SIZE,
+    //                       num_frags_y,
+    //                       num_frags_z,
+    //                       NUM_WARP_Q>(v_smem,
+    //                                   &v_smem_offset_w,
+    //                                   params.cache_v,
+    //                                   block_table_now,
+    //                                   kv_head_idx,
+    //                                   kv_n_stride,
+    //                                   kv_h_stride,
+    //                                   kv_d_stride,
+    //                                   kv_idx_base,
+    //                                   chunk_end,
+    //                                   const_v_offset);
+#pragma unroll 1
+    for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load v kv_i:%d, block_table_id!\n", kv_i, (kv_idx_base + kv_i * 64) / BLOCK_SIZE);
+      // }
+      // __syncthreads();
+      int block_id = __ldg(&block_table_now[(kv_idx_base + kv_i * 64) / BLOCK_SIZE]);
+      if (block_id < 0) block_id = 0;
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load v kv_i:%d, block_id:%d!\n", kv_i, block_id);
+      // }
+      // __syncthreads();
+      if (tid == 0 && wid == 0) {
+        // 发起 TMA 四维异步拷贝操作
+        // printf("kv_i:%d, block_id:%d, kv_head_idx:%d, smem:%d\n", kv_i, block_id, kv_head_idx, static_cast<int32_t>(num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+        //     NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT))));
+        // printf("smem_ptr:%p\n", smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+        //     NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT)));
+        cde::cp_async_bulk_tensor_4d_global_to_shared(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+            NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT)), &value_tensor_map, 0, 0, kv_head_idx, block_id, bar[2 + kv_i]);
+        // 设置同步等待点，指定需要等待的拷贝完成的字节数。
+        // printf("bit:%d", NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT));
+        tokens[2 + kv_i] = cuda::device::barrier_arrive_tx(bar[2 + kv_i], 1, NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT));
+      } else {
+        // Other threads just arrive.
+        tokens[2 + kv_i] = bar[2 + kv_i].arrive();
+      }
+      // __syncthreads();
+      // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+      //   printf("load v launch end!\n");
+      // }
+      // __syncthreads();
+    }
+    // __syncthreads();
+    // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+    //   printf("load v0  end!\n");
+    // }
+    // __syncthreads();
+
     if constexpr (IsDynamicC8) {
       produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                               BLOCK_SIZE,
@@ -392,13 +487,16 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                           params.kv_num_heads,
                                                           kv_head_idx,
                                                           chunk_end);
+      commit_group();
     }
-    commit_group();
+    
 #pragma unroll 1
     for (uint32_t iter = 0; iter < num_iterations; ++iter) {
-      wait_group<1>();
-      __syncthreads();
+      // wait_group<1>();
+      
       if constexpr (IsDynamicC8) {
+        wait_group<1>();
+        __syncthreads();
         produce_k_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
             k_smem_scale_ptr, cache_k_scale_reg);
       }
@@ -409,6 +507,10 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
       // }
       // __syncthreads();
       // s = qk
+#pragma unroll 1
+      for(uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+        bar[kv_i].wait(std::move(tokens[kv_i]));
+      }
       compute_qk_c8<num_frags_x,
                     num_frags_y,
                     num_frags_z,
@@ -455,24 +557,39 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           s_frag, o_frag, m_frag, d_frag);
       __syncthreads();
 
-      const uint32_t ori_kv_idx_base = kv_idx_base;
+      // const uint32_t ori_kv_idx_base = kv_idx_base;
       kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
-      produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
-                            NUM_WARPS,
-                            BLOCK_SIZE,
-                            num_frags_y,
-                            num_frags_z,
-                            NUM_WARP_Q>(k_smem,
-                                        &k_smem_offset_w,
-                                        params.cache_k,
-                                        block_table_now,
-                                        kv_head_idx,
-                                        kv_n_stride,
-                                        kv_h_stride,
-                                        kv_b_stride,
-                                        kv_idx_base,
-                                        chunk_end,
-                                        const_k_offset);
+      // produce_k_blockwise_c8<SharedMemFillMode::kNoFill,
+      //                       NUM_WARPS,
+      //                       BLOCK_SIZE,
+      //                       num_frags_y,
+      //                       num_frags_z,
+      //                       NUM_WARP_Q>(k_smem,
+      //                                   &k_smem_offset_w,
+      //                                   params.cache_k,
+      //                                   block_table_now,
+      //                                   kv_head_idx,
+      //                                   kv_n_stride,
+      //                                   kv_h_stride,
+      //                                   kv_b_stride,
+      //                                   kv_idx_base,
+      //                                   chunk_end,
+      //                                   const_k_offset);
+#pragma unroll 1
+      for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+        int block_id = __ldg(&block_table_now[(kv_idx_base + kv_i * 64) / BLOCK_SIZE]);
+        if (block_id < 0) block_id = 0;
+        if (tid == 0 && wid == 0) {
+          // 发起 TMA 四维异步拷贝操作
+          cde::cp_async_bulk_tensor_4d_global_to_shared(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT)), &key_tensor_map, 0, 0, kv_head_idx, block_id, bar[kv_i]);
+          // 设置同步等待点，指定需要等待的拷贝完成的字节数。
+          tokens[kv_i] = cuda::device::barrier_arrive_tx(bar[kv_i], 1, NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT));
+        } else {
+          // Other threads just arrive.
+          tokens[kv_i] = bar[kv_i].arrive();
+        }
+      }
+
       if constexpr (IsDynamicC8) {
         produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                 BLOCK_SIZE,
@@ -484,11 +601,14 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                             params.kv_num_heads,
                                                             kv_head_idx,
                                                             chunk_end);
+        commit_group();
       }
-      commit_group();
-      wait_group<1>();
-      __syncthreads();
+      // commit_group();
+      // wait_group<1>();
+      
       if constexpr (IsDynamicC8) {
+        wait_group<1>();
+        __syncthreads();
         produce_v_dynamic_scale_smem2reg<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
             v_smem_scale_ptr, cache_v_scale_reg);
       }
@@ -498,6 +618,10 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
       //   printf("compute sv start!\n");
       // }
       // __syncthreads();
+#pragma unroll 1
+      for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+        bar[2 + kv_i].wait(std::move(tokens[2 + kv_i]));
+      }
       // compute sfm * v
       compute_sfm_v_c8_iter_sq_bvec<num_frags_x,
                                     num_frags_y,
@@ -511,22 +635,37 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag, cache_v_scale_reg);
       __syncthreads();
 
-      produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
-                            NUM_WARPS,
-                            BLOCK_SIZE,
-                            num_frags_y,
-                            num_frags_z,
-                            NUM_WARP_Q>(v_smem,
-                                        &v_smem_offset_w,
-                                        params.cache_v,
-                                        block_table_now,
-                                        kv_head_idx,
-                                        kv_n_stride,
-                                        kv_h_stride,
-                                        kv_d_stride,
-                                        kv_idx_base,
-                                        chunk_end,
-                                        const_v_offset);
+      // produce_v_blockwise_c8<SharedMemFillMode::kNoFill,
+      //                       NUM_WARPS,
+      //                       BLOCK_SIZE,
+      //                       num_frags_y,
+      //                       num_frags_z,
+      //                       NUM_WARP_Q>(v_smem,
+      //                                   &v_smem_offset_w,
+      //                                   params.cache_v,
+      //                                   block_table_now,
+      //                                   kv_head_idx,
+      //                                   kv_n_stride,
+      //                                   kv_h_stride,
+      //                                   kv_d_stride,
+      //                                   kv_idx_base,
+      //                                   chunk_end,
+      //                                   const_v_offset);
+#pragma unroll 1
+      for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
+        int block_id = __ldg(&block_table_now[(kv_idx_base + kv_i * 64) / BLOCK_SIZE]);
+        if (block_id < 0) block_id = 0;
+        if (tid == 0 && wid == 0) {
+          // 发起 TMA 四维异步拷贝操作
+          cde::cp_async_bulk_tensor_4d_global_to_shared(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+            NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) + kv_i * (NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT)), &value_tensor_map, 0, 0, kv_head_idx, block_id, bar[2 + kv_i]);
+          // 设置同步等待点，指定需要等待的拷贝完成的字节数。
+          tokens[2 + kv_i] = cuda::device::barrier_arrive_tx(bar[2 + kv_i], 1, NUM_WARP_KV * 16 * HEAD_DIM * sizeof(CacheT));
+        } else {
+          // Other threads just arrive.
+          tokens[2 + kv_i] = bar[2 + kv_i].arrive();
+        }
+      }
       if constexpr (IsDynamicC8) {
         produce_kv_dynamic_scale_gmem2smem_async<SharedMemFillMode::kFillZero,
                                                 BLOCK_SIZE,
@@ -538,12 +677,23 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
                                                             params.kv_num_heads,
                                                             kv_head_idx,
                                                             chunk_end);
+        commit_group();
       }
-      commit_group();
+      // commit_group();
     }
-    wait_group<0>();
-    __syncthreads();
-
+#pragma unroll 1
+    for (uint32_t i = 0; i < NUM_WARP_KV; ++i) {
+      bar[i].wait(std::move(tokens[i]));
+    }
+    if constexpr (IsDynamicC8) {
+      wait_group<0>();
+      __syncthreads();
+    }
+    // __syncthreads();
+    // if(blockIdx.x == 0 && tid == 0 && wid == 0) {
+    //   printf("merge start!");
+    // }
+    // __syncthreads();
     merge_block_res_v2<num_frags_x, num_frags_y, T>(
         o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
@@ -554,20 +704,15 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     // __syncthreads();
     // write o
     // [num_frags_x, 16, num_frags_y, 16]
-    write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
-                                                    num_frags_x,
-                                                    num_frags_y,
-                                                    partition_kv>(
+    write_o_reg_gmem_multi_warps<GROUP_SIZE,
+                                 num_frags_x,
+                                 num_frags_y,
+                                 T>(
         o_frag,
         &qo_smem,
         o_base_ptr_T,
-        (T*)nullptr,
-        (T*)nullptr,
         q_base_seq_id_this_block,
         q_head_idx,
-        params.quant_max_bound,
-        params.quant_min_bound,
-        -1,
         q_len,
         q_n_stride * params.max_num_chunks,
         HEAD_DIM);
@@ -824,6 +969,17 @@ void MultiQueryAppendC8Attention(
   printf("NUM_WARP_Q: %d, NUM_WARP_KV: %d\n", NUM_WARP_Q, NUM_WARP_KV);
   cudaDeviceSynchronize();
   cudaCheckError();
+  auto cache_k_dim = cache_k.dims();
+  printf("cache_k_dims: [%d, %d, %d, %d]\n", cache_k_dim[0], cache_k_dim[1], cache_k_dim[2], cache_k_dim[3]);
+  CUtensorMap key_tensor_map = makeTensorMapForKVCache<uint8_t>(cache_k.data<uint8_t>(), cache_k.dims()[0], params.kv_num_heads, BLOCK_SIZE, HEAD_DIM);
+  
+  printf("cache_k_map success\n");
+
+  CUtensorMap value_tensor_map = makeTensorMapForKVCache<uint8_t>(cache_v.data<uint8_t>(), cache_v.dims()[0], params.kv_num_heads, HEAD_DIM, BLOCK_SIZE);
+  printf("cache_v_map success\n");
+  cudaDeviceSynchronize();
+  cudaCheckError();
+  
   
   launchWithPdlWhenEnabled(
       split_kv_kernel,
@@ -831,7 +987,9 @@ void MultiQueryAppendC8Attention(
       blocks,
       smem_size,
       stream,
-      params);
+      params,
+      key_tensor_map,
+      value_tensor_map);
   cudaDeviceSynchronize();
   cudaCheckError();
   // merge
@@ -923,6 +1081,6 @@ void MultiQueryAppendC8Attention(
         token_num,
         speculate_max_draft_token_num);
   }
-  cudaDeviceSynchronize();
-  cudaCheckError();
+  // cudaDeviceSynchronize();
+  // cudaCheckError();
 }

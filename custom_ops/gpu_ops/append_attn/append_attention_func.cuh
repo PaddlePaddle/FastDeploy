@@ -1087,6 +1087,21 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
   }
 }
 
+
+
+// __device__ float2 fast_float2_exp_sub(const float2& a, const float2& b) {
+//     float2 res;
+//     const float log2e = 1.442695f; // log2(e) ≈ 1.442695
+//     // 向量化减法 + 指数运算
+//     asm volatile (
+//       "sub.f32x2 %0, %1, %2;"
+//       : "=f"(res)
+//       : "f"(a), "f"(b)
+//     );
+    
+//     return res;
+// }
+
 template <uint32_t num_frags_x, uint32_t num_frags_y, uint32_t num_frags_z>
 __device__ __forceinline__ void update_mdo_states(
     float (*s_frag)[num_frags_z][8],
@@ -1109,23 +1124,34 @@ __device__ __forceinline__ void update_mdo_states(
       m[fx][j] = max(m[fx][j], __shfl_xor_sync(-1, m[fx][j], 0x1, 32));
       float o_scale = __expf(m_prev - m[fx][j]);
       d[fx][j] *= o_scale;
+      float2 fp2_scale = make_float2(o_scale, o_scale);
 #pragma unroll
       for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
-        o_frag[fx][fy][j * 2 + 0] *= o_scale;
-        o_frag[fx][fy][j * 2 + 1] *= o_scale;
-        o_frag[fx][fy][j * 2 + 4] *= o_scale;
-        o_frag[fx][fy][j * 2 + 5] *= o_scale;
+        // o_frag[fx][fy][j * 2 + 0] *= o_scale;
+        // o_frag[fx][fy][j * 2 + 1] *= o_scale;
+        // o_frag[fx][fy][j * 2 + 4] *= o_scale;
+        // o_frag[fx][fy][j * 2 + 5] *= o_scale;
+
+        float2 *o_frag_ptr = reinterpret_cast<float2*>(o_frag[fx][fy] + j * 2);
+        // printf("fp2_len:%d, %d", sizeof(o_frag_ptr[0]), sizeof(fp2_scale));
+        o_frag_ptr[0] = fast_float2_mul(o_frag_ptr[0], fp2_scale);
+        o_frag_ptr[2] = fast_float2_mul(o_frag_ptr[2], fp2_scale);
       }
+      float2 fp2_m = make_float2(m[fx][j], m[fx][j]);
 #pragma unroll
       for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
-        s_frag[fx][fz][j * 2 + 0] =
-            __expf(s_frag[fx][fz][j * 2 + 0] - m[fx][j]);
-        s_frag[fx][fz][j * 2 + 1] =
-            __expf(s_frag[fx][fz][j * 2 + 1] - m[fx][j]);
-        s_frag[fx][fz][j * 2 + 4] =
-            __expf(s_frag[fx][fz][j * 2 + 4] - m[fx][j]);
-        s_frag[fx][fz][j * 2 + 5] =
-            __expf(s_frag[fx][fz][j * 2 + 5] - m[fx][j]);
+        // s_frag[fx][fz][j * 2 + 0] =
+        //     __expf(s_frag[fx][fz][j * 2 + 0] - m[fx][j]);
+        // s_frag[fx][fz][j * 2 + 1] =
+        //     __expf(s_frag[fx][fz][j * 2 + 1] - m[fx][j]);
+        // s_frag[fx][fz][j * 2 + 4] =
+        //     __expf(s_frag[fx][fz][j * 2 + 4] - m[fx][j]);
+        // s_frag[fx][fz][j * 2 + 5] =
+        //     __expf(s_frag[fx][fz][j * 2 + 5] - m[fx][j]);
+        float2 *s_frag_ptr = reinterpret_cast<float2*>(s_frag[fx][fz] + j * 2);
+        s_frag_ptr[0] = expfp2(fast_float2_sub(s_frag_ptr[0], fp2_m));
+        s_frag_ptr[2] = expfp2(fast_float2_sub(s_frag_ptr[2], fp2_m));
+
       }
     }
   }
@@ -1809,6 +1835,81 @@ __device__ __forceinline__ void write_o_reg_gmem_multi_warps_shift_smooth_quant(
         } else {
           o_smem->store_128b(o_smem_offset_w, o_ptr);
         }
+      }
+      o_ptr += 8 * num_elems_per_128b<T>();
+      shift_smooth_offset += 8 * num_elems_per_128b<T>();
+      o_smem_offset_w =
+          o_smem->advance_offset_by_column<8>(o_smem_offset_w, fyo);
+    }
+    o_smem_offset_w =
+        o_smem->advance_offset_by_row<16, num_vecs_per_head>(o_smem_offset_w) -
+        2 * num_frags_y;
+  }
+}
+
+template <uint32_t group_size,
+          uint32_t num_frags_x,
+          uint32_t num_frags_y,
+          typename T,
+          typename OutT>
+__device__ __forceinline__ void write_o_reg_gmem_multi_warps(
+    float (*o_frag)[num_frags_y][8],
+    smem_t* o_smem,
+    OutT* o_ptr_base,
+    uint32_t o_idx_base,
+    const uint32_t q_head_idx_base,
+    const uint32_t qo_upper_bound,
+    const uint32_t qo_n_stride,
+    const uint32_t qo_h_stride) {
+  constexpr uint32_t head_dim = num_frags_y * 16;
+  constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
+  const uint32_t tx = threadIdx.x, ty = threadIdx.y;
+  constexpr int VEC_SIZE = 16 / sizeof(T);
+  // [num_warps * num_frags_x * 16, num_frags_y * 16]
+  if (ty == 0) {
+    // [num_frags_x * 16, num_frags_y * 16]
+#pragma unroll
+    for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+#pragma unroll
+      for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
+        uint32_t o_frag_f16[4];
+        vec_cast<T, float, 8>((T*)o_frag_f16, o_frag[fx][fy]);
+        uint32_t o_smem_offset_w =
+            smem_t::get_permuted_offset<num_vecs_per_head>(fx * 16 + tx / 4,
+                                                           fy * 2);
+        ((uint32_t*)(o_smem->base + o_smem_offset_w))[tx % 4] = o_frag_f16[0];
+        ((uint32_t*)(o_smem->base + o_smem_offset_w +
+                     8 * num_vecs_per_head))[tx % 4] = o_frag_f16[1];
+        ((uint32_t*)(o_smem->base + (o_smem_offset_w ^ 0x1)))[tx % 4] =
+            o_frag_f16[2];
+        ((uint32_t*)(o_smem->base + (o_smem_offset_w ^ 0x1) +
+                     8 * num_vecs_per_head))[tx % 4] = o_frag_f16[3];
+      }
+    }
+  }
+  __syncthreads();
+
+  uint32_t o_smem_offset_w =
+      smem_t::get_permuted_offset<num_vecs_per_head>(ty * 4 + tx / 8, tx % 8);
+
+  const uint32_t tx_offset = tx / 8;
+#pragma unroll
+  for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+    const uint32_t base_offset = o_idx_base + fx * 16 + tx_offset;
+#pragma unroll
+    const int j = ty;
+    const uint32_t offset_now = base_offset + j * 4;
+    const uint32_t n_offset = offset_now / group_size;
+    const uint32_t h_offset = offset_now % group_size;
+
+    OutT* o_ptr = o_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
+
+    uint32_t shift_smooth_offset = (q_head_idx_base + h_offset) * head_dim +
+                                   tx % 8 * num_elems_per_128b<T>();
+#pragma unroll
+    for (uint32_t fyo = 0; fyo < num_frags_y / 4; ++fyo) {
+      if (n_offset < qo_upper_bound) {
+        o_smem->store_128b(o_smem_offset_w, o_ptr);
       }
       o_ptr += 8 * num_elems_per_128b<T>();
       shift_smooth_offset += 8 * num_elems_per_128b<T>();
