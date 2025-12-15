@@ -40,6 +40,7 @@ class MockConfig:
 
     class SchedulerConfig:
         name = "default"
+        splitwise_role = "mixed"
 
     parallel_config = ParallelConfig()
     speculative_config = SpeculativeConfig()
