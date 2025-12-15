@@ -255,6 +255,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 splitwise_role="prefill",
                 num_gpu_blocks_override=4,
                 router="0.0.0.0:30000",
+                kv_cache_ratio=1,
             )
 
         # Patch EngineWorkerQueue before EngineService ctor to avoid real IPC

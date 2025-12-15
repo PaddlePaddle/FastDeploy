@@ -1356,7 +1356,7 @@ class CacheConfig:
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
             assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
-                f"num_gpu_blocks_override: {self.num_gpu_blocks_override} should be larger "
+                f"prefill_kvcache_block_num: {self.prefill_kvcache_block_num} should be larger "
                 f"than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
                 "the max_model_len or increase num_gpu_blocks_override"
             )
