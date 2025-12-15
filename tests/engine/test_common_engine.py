@@ -1567,6 +1567,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+        
+        # Ensure engine is stopped and all threads are cleaned up
+        if hasattr(eng, "running"):
+            eng.running = False
+        if hasattr(eng, "_exit_sub_services"):
+            try:
+                eng._exit_sub_services()
+            except Exception:
+                pass
+        # Wait a bit for any daemon threads to exit
+        time.sleep(0.1)
 
     # Temporarily disabled due to CI hanging issue - thread cleanup problem
     # def test_utility_methods(self):
