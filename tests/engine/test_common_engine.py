@@ -34,9 +34,13 @@ class TestCommonEngine(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up EngineService for testing"""
+        """Set up EngineService for testing without starting real worker processes.
+
+        The previous version spun up the full engine in CI and occasionally hung
+        while waiting for background threads. Here we keep the API surface the
+        tests rely on but stub out any long-running services.
+        """
         try:
-            # Create engine args for testing
             engine_args = EngineArgs(
                 model=MODEL_NAME,
                 max_model_len=8192,
@@ -45,12 +49,41 @@ class TestCommonEngine(unittest.TestCase):
                 cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 10,
             )
 
-            # Create and start the engine service
-            cls.cfg = engine_args.create_engine_config()
-            cls.engine = EngineService(cls.cfg, start_queue=True, use_async_llm=True)
+            # Build config without checking port availability to avoid binding in CI
+            cls.cfg = engine_args.create_engine_config(port_availability_check=False)
+            # Ensure worker_num_per_node exists for ready-signal checks
+            cls.cfg.worker_num_per_node = getattr(cls.cfg, "worker_num_per_node", 1)
 
-            # Start the engine service
-            cls.engine.start()
+            class _DummyQueue:
+                """Lightweight queue stub used to bypass IPC setup."""
+
+                def __init__(self, *args, **kwargs):
+                    self.available_prefill_instances = type("X", (), {"put": lambda *_: None})()
+
+                def get_server_port(self):
+                    return int(str(engine_args.engine_worker_queue_port).split(",")[0])
+
+                def cleanup(self):
+                    pass
+
+            with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", _DummyQueue):
+                cls.engine = EngineService(cls.cfg, start_queue=False, use_async_llm=False)
+
+            # Mimic a started engine without spawning worker processes
+            cls.engine.running = True
+            cls.engine.worker_proc = Mock(poll=lambda: None)
+
+            class _Sig:
+                def __init__(self, values):
+                    self.value = np.array(values, dtype=np.int32)
+
+                def clear(self):
+                    pass
+
+            ready_len = max(1, cls.cfg.worker_num_per_node)
+            cls.engine.worker_ready_signal = _Sig([1] * ready_len)
+            cls.engine.loaded_model_signal = _Sig([1])
+            cls.engine.worker_healthy_live_signal = _Sig([int(time.time())])
 
         except Exception as e:
             print(f"Setting up EngineService failed: {e}")

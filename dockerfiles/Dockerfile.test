@@ -1,0 +1,39 @@
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310-cibase
+
+ARG PADDLE_VERSION=3.2.1
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Fix protobuf version issue - use pure Python implementation
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+
+WORKDIR /workspace
+
+# Install system dependencies
+RUN apt update && apt install -y jq psmisc build-essential && rm -rf /var/lib/apt/lists/*
+
+# Fix protobuf version compatibility issue
+# Install compatible protobuf version (< 4.0.0)
+RUN python -m pip install --no-cache-dir "protobuf>=3.20.0,<4.0.0" -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+# Install project requirements
+COPY requirements.txt ./requirements.txt
+RUN python -m pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple || true
+
+# Install test requirements
+COPY scripts/unittest_requirement.txt ./unittest_requirement.txt
+RUN python -m pip install --no-cache-dir -r unittest_requirement.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+# Install paddlepaddle (required for tests)
+RUN python -m pip uninstall paddlepaddle-gpu -y || true
+RUN python -m pip install --no-cache-dir paddlepaddle-gpu==${PADDLE_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+
+# Verify installations
+RUN python -c "import google.protobuf; print(f'protobuf version: {google.protobuf.__version__}')" && \
+    python -c "import paddle; print(f'paddle version: {paddle.__version__}')"
+
+# Set working directory to project root (will be mounted)
+WORKDIR /workspace/FastDeploy
+
+# Default command
+CMD ["/bin/bash"]
+
