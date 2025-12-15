@@ -16,28 +16,31 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from fastdeploy.cache_manager.transfer_factory.rdma_cache_transfer import RDMACommManager
+from fastdeploy.cache_manager.transfer_factory.rdma_cache_transfer import (
+    RDMACommManager,
+)
+
 
 class TestRDMACommManager(unittest.TestCase):
     def setUp(self):
         # Mock environment variables
-        self.patcher1 = patch.dict('os.environ', {}, clear=True)
+        self.patcher1 = patch.dict("os.environ", {}, clear=True)
         self.mock_env = self.patcher1.start()
-        
+
         # Mock subprocess run
-        self.patcher2 = patch('subprocess.run', wraps=subprocess.run)
+        self.patcher2 = patch("subprocess.run", wraps=subprocess.run)
         self.mock_run = self.patcher2.start()
 
         # Mock current_platform
-        self.patcher3 = patch('fastdeploy.platforms.current_platform')
+        self.patcher3 = patch("fastdeploy.platforms.current_platform")
         self.mock_platform = self.patcher3.start()
         self.mock_platform.is_cuda.return_value = True
         self.mock_platform.device_name = "gpu"
-        
+
         # Mock RDMA library
-        self.patcher4 = patch('rdma_comm.RDMACommunicator')
+        self.patcher4 = patch("rdma_comm.RDMACommunicator")
         self.mock_rdma_comm = self.patcher4.start()
-        
+
         # Test parameters
         self.test_params = {
             "splitwise_role": "prefill",
@@ -49,7 +52,7 @@ class TestRDMACommManager(unittest.TestCase):
             "block_bytes": 1024,
             "rdma_port": 12345,
             "prefill_tp_size": 1,
-            "prefill_tp_idx": 0
+            "prefill_tp_idx": 0,
         }
 
     def tearDown(self):
@@ -73,7 +76,7 @@ class TestRDMACommManager(unittest.TestCase):
         manager = RDMACommManager(**self.test_params)
         manager.messager.is_connected.return_value = False
         manager.messager.connect.return_value = 0
-        
+
         result = manager.connect("127.0.0.1", 12345)
         self.assertTrue(result)
         manager.messager.connect.assert_called_once_with("127.0.0.1", "12345", 0)
@@ -82,12 +85,11 @@ class TestRDMACommManager(unittest.TestCase):
         """Test write_cache method"""
         manager = RDMACommManager(**self.test_params)
         manager.messager.write_cache.return_value = True
-        
+
         result = manager.write_cache("127.0.0.1", 12345, [1, 2], [3, 4], 0)
         self.assertTrue(result)
-        manager.messager.write_cache.assert_called_once_with(
-            "127.0.0.1", "12345", [1, 2], [3, 4], 0
-        )
+        manager.messager.write_cache.assert_called_once_with("127.0.0.1", "12345", [1, 2], [3, 4], 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
