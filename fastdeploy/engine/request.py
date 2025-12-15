@@ -241,8 +241,8 @@ class Request:
         if request_id is not None:
             setattr(req, "request_id", request_id)
 
-        if prompt is not None and hasattr(req, "prompt"):
-            setattr(req, "prompt", prompt)
+        # if prompt is not None and hasattr(req, "prompt"):
+        #     setattr(req, "prompt", prompt)
 
         # if (
         #     hasattr(req, "disable_chat_template")
@@ -275,7 +275,7 @@ class Request:
         request = cls(
             request_id=getattr(req, "request_id", None),
             prompt_token_ids=getattr(req, "prompt_token_ids", None),
-            prompt=getattr(req, "prompt", None),
+            prompt=prompt,
             sampling_params=sampling_params,
             pooling_params=pooling_params,
             metrics=metrics,
