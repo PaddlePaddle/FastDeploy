@@ -73,7 +73,12 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             caches=forward_meta.caches,
         )
 
-        res[i].rotary_embs = forward_meta.rotary_embs[start_bs:end_bs]
+        if len(forward_meta.rotary_embs.shape) == 6:
+            max_bs = forward_meta.rotary_embs.shape[0]
+            assert max_bs == forward_meta.block_tables.shape[0]
+            assert forward_meta.rotary_embs.shape[1:3] == [2, 1]
+            assert forward_meta.rotary_embs.shape[4] == 1
+            res[i].rotary_embs = forward_meta.rotary_embs[start_bs:end_bs]
 
         res[i].ids_remove_padding = forward_meta.ids_remove_padding[start_token_id:end_token_id]
         res[i].batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
@@ -100,9 +105,10 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             else:
                 assert False, "Invalid attn_mask_offsets shape"
 
-        # This is to  adapt 5
+        # This is adapt 5.0
         if hasattr(forward_meta, "hidden_states"):
             res[i].hidden_states = forward_meta.hidden_states[start_token_id:end_token_id]
             res[i].decode_states = forward_meta.decode_states[start_bs:end_bs]
 
+        res[i].attn_backend.init_attention_metadata(res[i])
     return res

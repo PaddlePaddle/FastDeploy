@@ -266,7 +266,7 @@ class DataProcessorTestCase(unittest.TestCase):
             def __init__(self, tokenizer):
                 self.tokenizer = tokenizer
 
-            def extract_reasoning_content(self, full_text, response_dict):
+            def extract_reasoning_content(self, full_text, response_dict, model_status):
                 return reasoning_content, f"{full_text}!"
 
         return DummyReasoning(tokenizer)
@@ -409,6 +409,7 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_response_with_reasoning_and_tools(self):
         processor = self.processor
+        processor.model_status_dict = {"resp": "normal"}
 
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer)
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-only")
@@ -435,7 +436,7 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_response_dict_normal_with_reasoning(self):
         processor = self.processor
-
+        processor.model_status_dict = {"normal": "normal"}
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-text")
 
@@ -471,10 +472,10 @@ class DataProcessorTestCase(unittest.TestCase):
         self.addCleanup(lambda: setattr(processor, "process_response_dict_normal", original_normal))
 
         response = {"outputs": {}, "finished": False, "request_id": "req"}
-        self.assertEqual(processor.process_response_dict(response), "stream")
+        self.assertEqual(processor.process_response_dict(response, stream=True, enable_thinking=True), "stream")
         self.assertTrue(calls["stream"]["enable_thinking"])
         self.assertEqual(
-            processor.process_response_dict(response, stream=False, enable_thinking=None),
+            processor.process_response_dict(response, stream=False, enable_thinking=True),
             "normal",
         )
         self.assertTrue(calls["normal"]["enable_thinking"])

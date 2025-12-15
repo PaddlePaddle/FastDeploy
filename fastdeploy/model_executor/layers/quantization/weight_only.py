@@ -361,7 +361,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         linear_out = weight_only_linear(
             x,
             weight=layer.weight,
-            bias=layer.bias if layer.add_bias else None,
+            bias=layer.bias if layer.with_bias else None,
             weight_scale=layer.weight_scale,
             weight_dtype=("int8" if self.quant_config.name() == "wint8" else "int4"),
             arch=self.quant_config.weight_only_linear_arch,

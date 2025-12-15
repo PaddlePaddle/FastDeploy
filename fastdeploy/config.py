@@ -241,6 +241,12 @@ class ModelConfig:
 
         self._post_init()
 
+    def disable_mm_prefill_batch(self):
+        """
+        check if the model architecture disable for mm prefill
+        """
+        return self._architecture in ["Ernie5ForCausalLM"]
+
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
@@ -1577,9 +1583,6 @@ class FDConfig:
             self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
         self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
-        if self.parallel_config.use_ep:
-            self.graph_opt_config.cudagraph_capture_sizes = [0] + self.graph_opt_config.cudagraph_capture_sizes
-
         self.tokenizer = tokenizer
         self.ips = ips
         self.tool_parser = tool_parser
@@ -1621,7 +1624,7 @@ class FDConfig:
                 and self.model_config is not None
                 and self.model_config.enable_mm
             ):
-                self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+                self.max_prefill_batch = 1  # TODO:当前V0多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
@@ -1727,6 +1730,8 @@ class FDConfig:
                         f"set to max_num_batched_tokens."
                     )
                     self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+            # TODO: mm encoder_cache close for now
+            self.cache_config.max_encoder_cache = 0
         else:
             self.cache_config.max_encoder_cache = 0
 
@@ -1738,7 +1743,7 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -1750,9 +1755,6 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
-        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
-            self.cache_config.enable_prefix_caching = False
-            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -1925,42 +1927,23 @@ class FDConfig:
             else None
         )
 
-        self.disaggregate_info = {}
-        if self.scheduler_config.splitwise_role != "mixed":
-            self.disaggregate_info["role"] = self.scheduler_config.splitwise_role
-            self.disaggregate_info["cache_info"] = dict()
-            current_protocol = self.cache_config.cache_transfer_protocol.split(",")
-            self.disaggregate_info["transfer_protocol"] = current_protocol
-
-            for protocol in current_protocol:
-                if protocol == "ipc":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": engine_worker_queue_port,
-                        "device_ids": self.local_device_ids,
-                    }
-                elif protocol == "rdma":
-                    self.disaggregate_info["cache_info"][protocol] = {
-                        "ip": self.host_ip,
-                        "port": connector_port,
-                        "rdma_port": self.cache_config.rdma_comm_ports,
-                    }
-            logger.info(f"disaggregate_info: {self.disaggregate_info}")
-
-        if self.router_config:
-            # the information for registering this server to router
-            self.register_info = {
-                "role": self.scheduler_config.splitwise_role,
-                "host_ip": self.host_ip,
-                "port": self.router_config.api_server_port,
-                "connector_port": connector_port,
-                "rdma_ports": self.cache_config.rdma_comm_ports,
-                "engine_worker_queue_port": engine_worker_queue_port,
-                "device_ids": self.local_device_ids,
-                "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
-                "tp_size": self.parallel_config.tensor_parallel_size,
-            }
-            logger.info(f"register_info: {self.register_info}")
+        # the information for registering this server to router or splitwise_scheduler
+        port = self.router_config.api_server_port if self.router_config else None
+        transfer_protocol = (
+            self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
+        )
+        self.register_info = {
+            "role": self.scheduler_config.splitwise_role,
+            "host_ip": self.host_ip,
+            "port": port,
+            "connector_port": connector_port,
+            "rdma_ports": self.cache_config.rdma_comm_ports,
+            "engine_worker_queue_port": engine_worker_queue_port,
+            "device_ids": self.local_device_ids,
+            "transfer_protocol": transfer_protocol,
+            "tp_size": self.parallel_config.tensor_parallel_size,
+        }
+        logger.info(f"register_info: {self.register_info}")
 
     def read_from_config(self):
         """

@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 from typing import Any, Dict, List
 from unittest import IsolatedAsyncioTestCase
@@ -43,6 +59,8 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             self.multi_modal_processor._check_mm_limits = Mock()
             self.multi_modal_processor.append_completion_tokens = Mock()
             self.multi_modal_processor.pack_outputs = lambda x: x
+            self.multi_modal_processor.reasoning_parser = None
+            self.multi_modal_processor.model_status_dict = {}
 
         self.engine_client = Mock()
         self.engine_client.connection_initialized = False
@@ -242,7 +260,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = True
 
-        async def mock_process_response_chat_async(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_async
@@ -423,7 +441,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = False
 
-        async def mock_process_response_chat_async(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output):
             if isinstance(response, list):
                 for res in response:
                     yield res
