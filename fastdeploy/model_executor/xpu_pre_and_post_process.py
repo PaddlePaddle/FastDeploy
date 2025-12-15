@@ -78,20 +78,28 @@ def _build_stream_transfer_data(
                     else:
                         prompt_logprobs_item = None
                 else:
-                    prompt_logprobs_item = prompt_logprobs_list if bid == 0 else None   
+                    prompt_logprobs_item = prompt_logprobs_list if bid == 0 else None
                 if prompt_logprobs_item is not None:
                     prompt_logprobs_tensor = prompt_logprobs_item.logprobs
-                    prompt_logprobs_tensor = paddle.where(paddle.isnan(prompt_logprobs_tensor), paddle.full_like(prompt_logprobs_tensor, -1e10), prompt_logprobs_tensor)
+                    prompt_logprobs_tensor = paddle.where(
+                        paddle.isnan(prompt_logprobs_tensor),
+                        paddle.full_like(prompt_logprobs_tensor, -1e10),
+                        prompt_logprobs_tensor,
+                    )
                     prompt_logprobs_tensor = paddle.where(
                         paddle.isinf(prompt_logprobs_tensor),
-                        paddle.where(prompt_logprobs_tensor > 0, paddle.full_like(prompt_logprobs_tensor, 1e10), paddle.full_like(prompt_logprobs_tensor, -1e10)),
-                        prompt_logprobs_tensor
+                        paddle.where(
+                            prompt_logprobs_tensor > 0,
+                            paddle.full_like(prompt_logprobs_tensor, 1e10),
+                            paddle.full_like(prompt_logprobs_tensor, -1e10),
+                        ),
+                        prompt_logprobs_tensor,
                     )
                     prompt_logprobs_tensor = paddle.clip(prompt_logprobs_tensor, min=-1e10, max=1e10)
                     prompt_logprobs_item = LogprobsTensors(
                         prompt_logprobs_item.logprob_token_ids,
                         prompt_logprobs_tensor,
-                        prompt_logprobs_item.selected_token_ranks
+                        prompt_logprobs_item.selected_token_ranks,
                     )
                     stream_transfer_data.prompt_logprobs = prompt_logprobs_item
             stream_transfer_datas.append(stream_transfer_data)

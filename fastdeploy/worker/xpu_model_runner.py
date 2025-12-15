@@ -23,9 +23,8 @@ from typing import List, Optional
 
 import numpy as np
 import paddle
-from paddle import nn
-
 import zmq
+from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -187,7 +186,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.zmq_client.send_pyobj(output)
             except Exception as e:
                 logger.exception("Exception in async output loop: %s", e)
-    
+
     def _get_prompt_logprobs_list(self, hidden_states: paddle.Tensor) -> list[Optional[LogprobsTensors]]:
         """
         Build prompt_logprobs for requests that asked for it.
@@ -200,7 +199,7 @@ class XPUModelRunner(ModelRunnerBase):
         completed_prefill_reqs: list[Request] = []
 
         for req_id, request in self.prompt_logprobs_reqs.items():
-            if not hasattr(request, 'sampling_params') or request.sampling_params is None:
+            if not hasattr(request, "sampling_params") or request.sampling_params is None:
                 continue
             num_prompt_logprobs = request.sampling_params.prompt_logprobs
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
@@ -501,7 +500,11 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
-            if hasattr(request, 'sampling_params') and request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
+            if (
+                hasattr(request, "sampling_params")
+                and request.sampling_params is not None
+                and request.sampling_params.prompt_logprobs is not None
+            ):
                 self.prompt_logprobs_reqs[request.request_id] = request
 
                 if len(request.output_token_ids) == 0:
