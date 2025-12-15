@@ -297,6 +297,7 @@ class EngineService:
         os.environ["PADDLE_DISTRI_BACKEND"] = "gloo"
 
         dist.init_parallel_env()
+        # Avoid bringing this env variable to workers
         os.unsetenv("PADDLE_DISTRI_BACKEND")
 
         paddle.set_device("cpu")
