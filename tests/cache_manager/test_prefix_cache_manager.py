@@ -214,6 +214,8 @@ def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, 
     return node
 
 
+# Core behavior validation tests. These cases focus on black-box behavior
+# instead of binding to internal implementation details.
 class PrefixCacheManagerTest(unittest.TestCase):
     def setUp(self):
         self.metrics = _DummyMainMetrics()
@@ -371,35 +373,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(hit_info["gpu_cache_blocks"], 0)
         manager.metrics.reset_metrics.assert_called_once()
 
-    def test_get_kv_cache_shape_uses_backend(self):
-        quant = SimpleNamespace(kv_cache_quant_type="int8")
-        manager = _create_manager(quant_config=quant)
-
-        class _Backend:
-            def __call__(self, *args, **kwargs):
-                self.called_kwargs = kwargs
-                return self
-
-            def get_kv_cache_shape(self, max_num_blocks, kv_cache_quant_type=None):
-                self.max_num_blocks = max_num_blocks
-                self.quant_type = kv_cache_quant_type
-                return ([1, 2], [3, 4])
-
-        backend = _Backend()
-        attention_module = types.ModuleType("fastdeploy.model_executor.layers.attention")
-        attention_module.get_attention_backend = lambda: backend
-
-        with patch.dict(
-            sys.modules,
-            {"fastdeploy.model_executor.layers.attention": attention_module},
-        ):
-            key_shape, value_shape = manager._get_kv_cache_shape(5)
-
-        self.assertEqual(key_shape, [1, 2])
-        self.assertEqual(value_shape, [3, 4])
-        self.assertEqual(backend.max_num_blocks, 5)
-        self.assertEqual(backend.quant_type, "int8")
-
     def test_get_required_block_num_rounds_up(self):
         manager = _create_manager()
         self.assertEqual(manager.get_required_block_num(0, 4), 0)
@@ -451,7 +424,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(len(processes), 1)
 
     def test_launch_cache_manager_invokes_splitwise_messager(self):
-        manager = _create_manager(splitwise_role="worker")
+        manager = _create_manager(splitwise_role="decode")
         manager.cache_config.enable_hierarchical_cache = False
         with (
             patch(
@@ -499,7 +472,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         mock_launch.assert_called_once()
 
     def test_launch_cache_manager_errors_when_messager_fails(self):
-        manager = _create_manager(splitwise_role="worker")
+        manager = _create_manager(splitwise_role="decode")
         manager.cache_config.enable_hierarchical_cache = False
         with (
             patch(
@@ -598,10 +571,24 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_launch_cache_messager_waits_for_ready_signal(self):
         manager = _create_manager()
+        ready_snapshots = {}
+
+        def _signal_factory(name=None, array=None, **kwargs):
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True))
+            if name == "cache_ready_signal":
+                ready_snapshots["initial"] = signal.value.copy()
+            return signal
+
+        def _fake_sleep(_):
+            signal = manager.cache_ready_signal
+            # Simulate messager process marking readiness.
+            signal.value[:] = 1
+            ready_snapshots["after_ready"] = signal.value.copy()
+
         with (
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_DummyIPCSignal,
+                side_effect=_signal_factory,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
@@ -611,6 +598,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
                 _DummyProcess,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.time.sleep",
+                side_effect=_fake_sleep,
             ),
         ):
             processes = manager.launch_cache_messager(
@@ -625,6 +616,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
             )
 
         self.assertEqual(len(processes), 1)
+        self.assertTrue(np.all(ready_snapshots["initial"] == 0))
+        self.assertTrue(np.all(ready_snapshots["after_ready"] == 1))
+        self.assertTrue(np.all(manager.cache_ready_signal.value == 1))
 
     def test_launch_cache_messager_returns_none_when_process_fails(self):
         manager = _create_manager()
@@ -1212,6 +1206,38 @@ class PrefixCacheManagerTest(unittest.TestCase):
         )
         self.assertEqual(gpu_tokens, 2)
         self.assertEqual(current, manager.radix_tree_root)
+
+
+# Coverage-oriented tests. These are used to lightly exercise specific
+# implementation details without constraining core behavior.
+class TestPrefixCacheManagerCoverage(unittest.TestCase):
+    def test_get_kv_cache_shape_returns_shape_from_backend(self):
+        quant = SimpleNamespace(kv_cache_quant_type="int8")
+        manager = _create_manager(quant_config=quant)
+
+        class _Backend:
+            def __call__(self, *args, **kwargs):
+                return self
+
+            def get_kv_cache_shape(self, max_num_blocks, kv_cache_quant_type=None):
+                return ([max_num_blocks, 2], [3, kv_cache_quant_type])
+
+        backend = _Backend()
+        attention_module = types.ModuleType("fastdeploy.model_executor.layers.attention")
+        attention_module.get_attention_backend = lambda: backend
+
+        with patch.dict(
+            sys.modules,
+            {"fastdeploy.model_executor.layers.attention": attention_module},
+        ):
+            key_shape, value_shape = manager._get_kv_cache_shape(5)
+
+        self.assertIsInstance(key_shape, list)
+        self.assertIsInstance(value_shape, list)
+        self.assertEqual(key_shape, [5, 2])
+        self.assertEqual(value_shape, [3, "int8"])
+        self.assertTrue(all(dim >= 0 for dim in key_shape))
+        self.assertTrue(all(dim is not None for dim in value_shape))
 
 
 if __name__ == "__main__":
