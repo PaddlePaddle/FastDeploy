@@ -192,6 +192,63 @@ def get_stream_chunks(response):
     return chunks
 
 
+def test_mtp_accept_ratio(api_url):
+    """测试mtp接受率"""
+    payload = {
+        "model": "default",
+        "messages": [
+            {
+                "role": "user",
+                "content": "国外项目风险管理研究起步较早，理论体系成熟。早期研究集中于保险与金融领域，后逐步扩展至工程项目、"
+                "公共管理等多领域。在理论层面，COSO《企业风险管理——整合框架》和ISO31000标准为风险管理提供了系统性"
+                "指导，强调风险识别、评估、应对与监控的全流程管理。风险识别方法包括故障树分析、事件树分析等；风险评估"
+                "则广泛应用VaR模型、蒙特卡洛模拟等量化工具。应对策略涵盖规避、转移、减轻和接受等，并衍生出风险共享、"
+                "升级等复杂策略。此外，组织文化、管理层支持等因素对风险管理有效性影响显著。近年来，随着科技发展，"
+                "人工智能、大数据等技术被引入风险管理，推动其向智能化、自动化方向发展。请介绍一下国外关于项目风险管理"
+                "的文献研究综述，300字以内",
+            },
+        ],
+        "stream": True,
+        "stream_options": {"include_usage": True, "continuous_usage_stats": True},
+        "temperature": 0,
+        "seed": 23,
+        "top_p": 0,
+    }
+
+    print("fastdeploy answer is :")
+
+    try:
+        response = send_request(url=api_url, payload=payload)
+        chunks = get_stream_chunks(response)
+        response = send_request(url=api_url, payload=payload)
+        chunks = get_stream_chunks(response)
+        for idx, chunk in enumerate(chunks):
+            print(f"\nchunk[{idx}]:\n{json.dumps(chunk, ensure_ascii=False)}")
+        result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
+        speculate_metrics = chunks[-2]["choices"][0]["speculate_metrics"]
+    except Exception as e:
+        print(f"解析失败: {e}")
+    print("\nresult:\n", result)
+
+    response = send_request(url=api_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    result_2 = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
+    speculate_metrics_2 = chunks[-2]["choices"][0]["speculate_metrics"]
+    print("chunks:", chunks[-2])
+    print("speculate_metrics", speculate_metrics)
+    print("speculate_metrics_2", speculate_metrics_2)
+    assert result_2 == result, f"与baseline存在diff，result: {result}\n result_2: {result_2}"
+    assert speculate_metrics == speculate_metrics_2, (
+        f"speculate_metrics存在diff，"
+        f"speculate_metrics: {speculate_metrics}\n "
+        f"speculate_metrics_2: {speculate_metrics_2}"
+    )
+    assert speculate_metrics["accept_ratio"] > 0, "accept_ratio异常"
+    prompt_tokens = chunks[-1]["usage"]["prompt_tokens"]
+    cached_tokens = chunks[-1]["usage"]["prompt_tokens_details"]["cached_tokens"]
+    assert cached_tokens == prompt_tokens // 64 * 64, "cached_tokens数量有问题"
+
+
 def test_chat_usage_stream(api_url):
     """测试流式chat usage"""
     payload = {
