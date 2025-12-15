@@ -260,6 +260,7 @@ class OpenAIServingCompletion:
             aggregated_token_ids = [[] for _ in range(num_choices)]
             aggregated_prompt_logprobs_tensors = [None] * num_choices
             completion_batched_token_ids = [[] for _ in range(num_choices)]
+            aggregated_speculate_metrics = [None] * num_choices
             current_waiting_time = 0
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -314,12 +315,16 @@ class OpenAIServingCompletion:
                     )
                     output_tokens[rid] += len(getattr(output, "token_ids", []))
                     completion_batched_token_ids[rid].extend(getattr(output, "token_ids", []))
+                    output_speculate_metrics = getattr(data.metrics, "speculate_metrics", None)
+                    if output_speculate_metrics is not None:
+                        aggregated_speculate_metrics[rid] = output_speculate_metrics
                     if getattr(data, "finished", False):
                         setattr(data, "output_token_ids", output_tokens[rid])
                         setattr(data.outputs, "top_logprobs", aggregated_top_logprobs[rid])
                         setattr(data.outputs, "draft_top_logprobs", aggregated_draft_top_logprobs[rid])
                         setattr(data.outputs, "token_ids", aggregated_token_ids[rid])
                         setattr(data, "prompt_logprobs_tensors", aggregated_prompt_logprobs_tensors[rid])
+                        setattr(data, "speculate_metrics", aggregated_speculate_metrics[rid])
                         valid_results[rid] = data
                         num_choices -= 1
                         break
@@ -515,6 +520,7 @@ class OpenAIServingCompletion:
                         output_tokens[idx] += output.num_image_tokens
                         num_image_tokens[idx] += output.num_image_tokens
                     reasoning_tokens[idx] += getattr(output, "reasoning_token_num", 0) or 0
+                    output_speculate_metrics = getattr(res.metrics, "speculate_metrics", None)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=getattr(output, "text", ""),
@@ -529,6 +535,7 @@ class OpenAIServingCompletion:
                         logprobs=logprobs_res,
                         prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
                         draft_logprobs=draft_logprobs_res,
+                        speculate_metrics=output_speculate_metrics,
                     )
                     if not getattr(res, "finished", None) and getattr(output, "delta_message", None):
                         delta_message_output = output.delta_message
@@ -691,6 +698,7 @@ class OpenAIServingCompletion:
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
                 finish_reason=finish_reason,
+                speculate_metrics=getattr(final_res.metrics, "speculate_metrics", None),
             )
             choices.append(choice_data)
 

@@ -129,6 +129,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "reasoning_token_num": 10,
                 },
                 "output_token_ids": 3,
+                "metrics": {},
             },
             {
                 "outputs": {
@@ -141,6 +142,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "reasoning_token_num": 20,
                 },
                 "output_token_ids": 3,
+                "metrics": {},
             },
         ]
 

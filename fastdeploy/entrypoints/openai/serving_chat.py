@@ -58,6 +58,7 @@ from fastdeploy.worker.output import (
     LogprobsLists,
     LogprobsTensors,
     PromptLogprobs,
+    SpeculateMetrics,
 )
 
 NONES = itertools.repeat(None)
@@ -390,6 +391,8 @@ class OpenAIServingChat:
                                 request.include_logprobs_decode_token,
                             )
 
+                    output_speculate_metrics = getattr(res.metrics, "speculate_metrics", None)
+
                     delta_message = DeltaMessage(
                         reasoning_content="",
                         prompt_token_ids=None,
@@ -421,6 +424,7 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
+                        speculate_metrics=output_speculate_metrics,
                     )
                     if getattr(res, "finished"):
                         num_choices -= 1
@@ -545,6 +549,7 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
+            speculate_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -621,6 +626,7 @@ class OpenAIServingChat:
                         )
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
+                    speculate_metrics[idx] = getattr(data.metrics, "speculate_metrics", None)
                     if getattr(data, "finished", None):
                         num_choices -= 1
                         reasoning_num_tokens[idx] = getattr(data.outputs, "reasoning_token_num") or 0
@@ -643,6 +649,7 @@ class OpenAIServingChat:
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
                             max_tokens=max_tokens,
+                            speculate_metrics=speculate_metrics[idx],
                         )
                         choices.append(choice)
         finally:
@@ -696,6 +703,7 @@ class OpenAIServingChat:
         prompt_logprobs_res_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
+        speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
         idx = int(getattr(data, "request_id", "").split("_")[-1])
         output = data.outputs
@@ -757,6 +765,7 @@ class OpenAIServingChat:
             draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
             finish_reason=finish_reason,
+            speculate_metrics=speculate_metrics,
         )
 
     def _create_chat_logprobs(

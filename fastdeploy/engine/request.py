@@ -38,7 +38,12 @@ from fastdeploy.entrypoints.openai.protocol import (
     ToolCall,
 )
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    PromptLogprobs,
+    SampleLogprobs,
+    SpeculateMetrics,
+)
 
 
 class RequestStatus(Enum):
@@ -564,6 +569,7 @@ class CompletionOutput:
     reasoning_content: Optional[str] = None
     reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
     completion_tokens: Optional[str] = None
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
@@ -687,6 +693,8 @@ class RequestMetrics:
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
+
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
     def __post_init__(self):
         if self.arrival_time is None:
@@ -838,6 +846,8 @@ class RequestOutput:
             self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
                 next_output.outputs.draft_top_logprobs.sampled_token_ranks
             )
+        if next_output.metrics.speculate_metrics is not None:
+            self.outputs.speculate_metrics = next_output.metrics.speculate_metrics
 
     def __repr__(self) -> str:
         return (
