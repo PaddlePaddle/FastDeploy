@@ -6,6 +6,8 @@ that were previously uncovered.
 
 import asyncio
 import importlib
+import types
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -154,16 +156,35 @@ def _fake_handlers():
 def _patch_common_imports(args, engine_client_cls=None, handler_cls=None):
     engine_client_cls = engine_client_cls or _dummy_engine_client()
     handler_cls = handler_cls or _fake_handlers()
-    return (
-        patch("fastdeploy.entrypoints.openai.api_server.EngineArgs.from_cli_args", return_value=_dummy_engine_args()),
-        patch("fastdeploy.entrypoints.openai.api_server.EngineClient", engine_client_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingModels", handler_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingChat", handler_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingCompletion", handler_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingEmbedding", handler_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingReward", handler_cls),
-        patch("fastdeploy.entrypoints.openai.api_server.ToolParserManager.import_tool_parser"),
+
+    # Stub heavy dependencies to avoid real imports during module reload.
+    fake_paddle = types.ModuleType("paddle")
+    fake_prom = types.ModuleType("prometheus_client")
+    fake_prom.multiprocess = SimpleNamespace(mark_process_dead=lambda *_: None)
+    fake_metrics = types.ModuleType("fastdeploy.metrics.metrics")
+    fake_metrics.get_filtered_metrics = lambda: ""
+    fake_metrics_pkg = types.ModuleType("fastdeploy.metrics")
+    fake_metrics_pkg.metrics = fake_metrics
+    fake_zmq = types.ModuleType("zmq")
+    fake_zmq.PUSH = "PUSH"
+
+    stack = ExitStack()
+    stack.enter_context(patch.dict("sys.modules", {"paddle": fake_paddle}))
+    stack.enter_context(patch.dict("sys.modules", {"prometheus_client": fake_prom}))
+    stack.enter_context(patch.dict("sys.modules", {"fastdeploy.metrics": fake_metrics_pkg}))
+    stack.enter_context(patch.dict("sys.modules", {"fastdeploy.metrics.metrics": fake_metrics}))
+    stack.enter_context(patch.dict("sys.modules", {"zmq": fake_zmq}))
+    stack.enter_context(
+        patch("fastdeploy.entrypoints.openai.api_server.EngineArgs.from_cli_args", return_value=_dummy_engine_args())
     )
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.EngineClient", engine_client_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingModels", handler_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingChat", handler_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingCompletion", handler_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingEmbedding", handler_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.OpenAIServingReward", handler_cls))
+    stack.enter_context(patch("fastdeploy.entrypoints.openai.api_server.ToolParserManager.import_tool_parser"))
+    return stack
 
 
 def test_tool_parser_and_load_engine_branches():
@@ -263,7 +284,7 @@ def test_health_ping_and_route_listing():
     ping_resp = api_server.ping(MagicMock())
     assert ping_resp.status_code == 304  # line 323
 
-    routes = api_server.list_all_routes()
+    routes = asyncio.run(api_server.list_all_routes())
     assert isinstance(routes, dict) and routes["routes"]  # lines 309-317
 
 
@@ -305,8 +326,7 @@ async def test_chat_completion_branches_and_completion_branches():
 
     # Healthy path with ErrorResponse -> ChatCompletionResponse -> streaming
     api_server.app.state.dynamic_load_weight = False
-    api_server.connection_semaphore = MagicMock()
-    api_server.connection_semaphore.release = MagicMock()
+    api_server.connection_semaphore = SimpleNamespace(acquire=AsyncMock(), release=MagicMock())
 
     from fastdeploy.entrypoints.openai.protocol import (
         ChatCompletionResponse,
@@ -496,7 +516,8 @@ def test_controller_routes_and_models_listing():
     sched.update_config = MagicMock()
     mock_engine2 = SimpleNamespace(engine=SimpleNamespace(clear_data=MagicMock(), scheduler=sched))
     api_server.llm_engine = mock_engine2
-    ctrl_req = ControlSchedulerRequest(reset=True, load_shards_num=2, reallocate_shard=True)
+    with patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", lambda **kwargs: SimpleNamespace(**kwargs)):
+        ctrl_req = ControlSchedulerRequest(reset=True, load_shards_num=2, reallocate_shard=True)
     resp4 = api_server.control_scheduler(ctrl_req)
     assert resp4.status_code == 200
     sched.update_config.assert_called_once()
@@ -544,3 +565,153 @@ def test_worker_monitor_and_main_paths():
         patch("fastdeploy.entrypoints.openai.api_server.launch_api_server"),
     ):
         api_server.main()  # lines ~729 etc.
+
+
+@pytest.mark.asyncio
+async def test_lifespan_covers_setup_and_cleanup_paths():
+    args = _build_args()
+
+    class GoodConn:
+        def __init__(self):
+            self.closed = False
+
+        async def initialize(self):
+            return None
+
+        async def close(self):
+            self.closed = True
+
+    class GoodEngineClient:
+        def __init__(self, *_, **__):
+            self.connection_manager = GoodConn()
+            self.data_processor = "dp"
+            self.zmq_client = SimpleNamespace(close=lambda: None)
+
+        def create_zmq_client(self, *_, **__):
+            self.zmq_client = SimpleNamespace(close=lambda: None)
+
+    with _patch_common_imports(args, engine_client_cls=GoodEngineClient):
+        api_server = _reload_api_server(args)
+
+    async with api_server.lifespan(api_server.app):
+        assert api_server.app.state.engine_client.connection_manager.closed is False
+    assert api_server.app.state.engine_client.connection_manager.closed is True
+
+    class BadConn(GoodConn):
+        async def close(self):
+            self.closed = True
+            raise RuntimeError("fail-close")
+
+    class BadEngineClient(GoodEngineClient):
+        def __init__(self, *_, **__):
+            super().__init__(*_, **__)
+            self.connection_manager = BadConn()
+
+    with _patch_common_imports(args, engine_client_cls=BadEngineClient):
+        api_server = _reload_api_server(args)
+
+    # close raises -> handled inside lifespan without bubbling
+    ctx = api_server.lifespan(api_server.app)
+    await ctx.__aenter__()
+    await ctx.__aexit__(None, None, None)
+
+
+def test_health_unhealthy_and_routes_listing():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        engine_client = MagicMock()
+        engine_client.check_health.return_value = (False, "bad")
+        api_server.app.state.engine_client = engine_client
+
+    resp = api_server.health(MagicMock())
+    assert resp.status_code == 404
+
+    # keep existing list routes coverage
+    routes = asyncio.run(api_server.list_all_routes())
+    assert isinstance(routes, dict)
+
+
+@pytest.mark.asyncio
+async def test_wrap_streaming_generator_without_span():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+
+    api_server.connection_semaphore = SimpleNamespace(status=lambda: "ok", release=MagicMock())
+    with patch("fastdeploy.entrypoints.openai.api_server.trace.get_current_span", return_value=None):
+
+        async def gen():
+            yield "a"
+            yield "b"
+
+        wrapped = api_server.wrap_streaming_generator(gen())
+        out = []
+        async for item in wrapped():
+            out.append(item)
+    assert out == ["a", "b"]
+    api_server.connection_semaphore.release.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reward_and_embedding_dynamic_weight_healthy():
+    args = _build_args(dynamic_load_weight=True)
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        api_server.app.state.dynamic_load_weight = True
+        api_server.app.state.engine_client = MagicMock(is_workers_alive=MagicMock(return_value=(True, "ok")))
+        api_server.app.state.reward_handler = MagicMock(
+            create_reward=AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"ok": 1}))
+        )
+        api_server.app.state.embedding_handler = MagicMock(
+            create_embedding=AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"ok": 2}))
+        )
+
+    reward_resp = await api_server.create_reward(SimpleNamespace())
+    embed_resp = await api_server.create_embedding(SimpleNamespace())
+    assert reward_resp.status_code == 200
+    assert embed_resp.status_code == 200
+
+
+def test_update_and_clear_weight_disabled_branch():
+    args = _build_args(dynamic_load_weight=False)
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        api_server.app.state.dynamic_load_weight = False
+    assert api_server.update_model_weight(MagicMock()).status_code == 404
+    assert api_server.clear_load_weight(MagicMock()).status_code == 404
+
+
+def test_list_models_error_response_branch():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        class FakeErrorResponse:
+            def model_dump(self):
+                return {"err": True}
+
+        api_server.ErrorResponse = FakeErrorResponse
+        api_server.app.state.model_handler = MagicMock(list_models=AsyncMock(return_value=FakeErrorResponse()))
+    resp = asyncio.run(api_server.list_models())
+    assert resp.status_code == 200
+    assert resp.body
+
+
+def test_control_scheduler_without_update_config():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        sched = SimpleNamespace()
+        api_server.llm_engine = SimpleNamespace(engine=SimpleNamespace(clear_data=MagicMock(), scheduler=sched))
+    req = SimpleNamespace(reset=False, load_shards_num=1, reallocate_shard=True)
+    resp = api_server.control_scheduler(req)
+    assert resp.status_code == 400
+
+
+def test_config_info_engine_not_loaded():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        api_server.llm_engine = None
+    resp = api_server.config_info()
+    assert resp.status_code == 500
