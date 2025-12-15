@@ -903,10 +903,16 @@ class RowParallelLinear(LinearBase):
                 set_weight_attrs(self.bias, {"tp_row_bias": True})
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # In some senerio such as tsp, weight and bias of this layer will not be split in specific module.
+        # In tp_size > 1 and ep_size > 1, weight and bias of this layer will not be split in specific module.
         # For example, weight and bias of this layer in shared_experts will not split, but will be split in o_proj.
         # So, we add a white list to avoid split weight and bias in these layers.
-        layer_white_list = ["shared_experts"]
+        if (
+            self.fd_config.parallel_config.tensor_parallel_size > 1
+            and self.fd_config.parallel_config.expert_parallel_size > 1
+        ):
+            layer_white_list = ["shared_experts"]
+        else:
+            layer_white_list = []
         layer_in_white_list = any(key in self.prefix for key in layer_white_list)
 
         output_dim = getattr(param, "output_dim", None)
