@@ -23,6 +23,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
 from fastdeploy.platforms import current_platform
 
@@ -288,7 +289,7 @@ class VocabParallelEmbedding(nn.Layer):
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             param[:, shard_weight.shape[1] :].fill_(0)
 
-    def forward(self, ids_remove_padding, forward_meta=None) -> paddle.Tensor:
+    def forward(self, ids_remove_padding: paddle.Tensor = None, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 

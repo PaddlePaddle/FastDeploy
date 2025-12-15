@@ -726,7 +726,6 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_batch_ids = (self.model_inputs["kv_batch_ids"],)
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
-        self.forward_meta.pos_emb_type = "NORMAL"
         self.forward_meta.attn_backend = self.attn_backends[0]
 
         # Initialzie attention meta data
