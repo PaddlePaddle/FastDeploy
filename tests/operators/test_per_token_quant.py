@@ -24,7 +24,6 @@ from fastdeploy.model_executor.ops.gpu import per_token_quant, per_token_quant_p
 
 paddle.seed(2024)
 
-
 def per_token_quant_paddle(input_tensor, block_size):
     MAX_VALUE = 448.0
     epsilon = 1e-10
