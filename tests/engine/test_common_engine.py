@@ -1567,7 +1567,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
-        
+
         # Ensure engine is stopped and all threads are cleaned up
         if hasattr(eng, "running"):
             eng.running = False
@@ -1623,12 +1623,13 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
 # Temporarily disabled entire class due to CI hanging issue - thread cleanup problems
 # All tests in TestCommonEngineUncoveredLines class are disabled
-@unittest.skip("Temporarily disabled due to CI hanging issue - thread cleanup problems")
-class TestCommonEngineUncoveredLines(unittest.TestCase):
-    """Test cases to cover previously uncovered lines - ALL TESTS DISABLED"""
-
-    # All test methods are disabled to prevent CI hanging
-    pass
+# Completely commented out to prevent test discovery from hanging
+# @unittest.skip("Temporarily disabled due to CI hanging issue - thread cleanup problems")
+# class TestCommonEngineUncoveredLines(unittest.TestCase):
+#     """Test cases to cover previously uncovered lines - ALL TESTS DISABLED"""
+#
+#     # All test methods are disabled to prevent CI hanging
+#     pass
 
 # All original test methods in TestCommonEngineUncoveredLines are commented out below:
 #     @patch("fastdeploy.engine.common_engine.load_token_processor_plugins")
