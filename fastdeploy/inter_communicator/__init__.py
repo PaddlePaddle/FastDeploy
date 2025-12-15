@@ -22,6 +22,7 @@ from .ipc_signal_const import (
     KVCacheStatus,
     ModelWeightsStatus,
     PrefixTreeStatus,
+    RearrangeExpertStatus,
 )
 from .zmq_client import ZmqIpcClient
 from .zmq_server import ZmqIpcServer, ZmqTcpServer
@@ -38,4 +39,5 @@ __all__ = [
     "PrefixTreeStatus",
     "ModelWeightsStatus",
     "KVCacheStatus",
+    "RearrangeExpertStatus",
 ]

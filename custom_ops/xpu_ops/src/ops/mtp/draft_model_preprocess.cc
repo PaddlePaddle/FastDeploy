@@ -29,21 +29,23 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& seq_lens_encoder,
                           const paddle::Tensor& seq_lens_decoder,
                           const paddle::Tensor& step_idx,
-                          const paddle::Tensor& seq_lens_encoder_record,
-                          const paddle::Tensor& seq_lens_decoder_record,
                           const paddle::Tensor& not_need_stop,
+                          const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
+                          const paddle::Tensor& base_model_seq_lens_this_time,
                           const paddle::Tensor& base_model_seq_lens_encoder,
                           const paddle::Tensor& base_model_seq_lens_decoder,
                           const paddle::Tensor& base_model_step_idx,
                           const paddle::Tensor& base_model_stop_flags,
                           const paddle::Tensor& base_model_is_block_step,
                           const paddle::Tensor& base_model_draft_tokens,
-                          const int max_draft_token,
+                          const int num_model_step,
                           const bool truncate_first_token,
-                          const bool splitwise_prefill) {
+                          const bool splitwise_prefill,
+                          const bool kvcache_scheduler_v1) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   api::Context* ctx = static_cast<const phi::XPUContext*>(dev_ctx)->x_context();
@@ -54,6 +56,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   int accept_tokens_len = accept_tokens.shape()[1];
   int input_ids_len = input_ids.shape()[1];
   int draft_tokens_len = draft_tokens.shape()[1];
+  int pre_ids_len = pre_ids.shape()[1];
+  constexpr int BlockSize = 512;
   int base_model_draft_tokens_len = base_model_draft_tokens.shape()[1];
   auto not_need_stop_gpu =
       not_need_stop.copy_to(seq_lens_this_time.place(), false);
@@ -67,12 +71,13 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
       const_cast<int*>(seq_lens_encoder.data<int>()),
       const_cast<int*>(seq_lens_decoder.data<int>()),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
-      const_cast<int*>(seq_lens_encoder_record.data<int>()),
-      const_cast<int*>(seq_lens_decoder_record.data<int>()),
       const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+      const_cast<bool*>(is_block_step.data<bool>()),
       const_cast<bool*>(batch_drop.data<bool>()),
+      const_cast<int64_t*>(pre_ids.data<int64_t>()),
       accept_tokens.data<int64_t>(),
       accept_num.data<int>(),
+      base_model_seq_lens_this_time.data<int>(),
       base_model_seq_lens_encoder.data<int>(),
       base_model_seq_lens_decoder.data<int>(),
       base_model_step_idx.data<int64_t>(),
@@ -80,13 +85,16 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
       base_model_is_block_step.data<bool>(),
       const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
       real_bsz,
-      max_draft_token,
+      num_model_step,
       accept_tokens_len,
       draft_tokens_len,
       input_ids_len,
       base_model_draft_tokens_len,
+      pre_ids_len,
       truncate_first_token,
-      splitwise_prefill);
+      splitwise_prefill,
+      kvcache_scheduler_v1);
+
   PD_CHECK(r == 0, "xpu::plugin::draft_model_preprocess failed.");
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
@@ -102,12 +110,13 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "step_idx",
-             "seq_lens_encoder_record",
-             "seq_lens_decoder_record",
              "not_need_stop",
+             "is_block_step",
              "batch_drop",
+             "pre_ids",
              "accept_tokens",
              "accept_num",
+             "base_model_seq_lens_this_time",
              "base_model_seq_lens_encoder",
              "base_model_seq_lens_decoder",
              "base_model_step_idx",
@@ -123,11 +132,11 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
               "step_idx_out",
               "not_need_stop_out",
               "batch_drop_out",
-              "seq_lens_encoder_record_out",
-              "seq_lens_decoder_record_out"})
-    .Attrs({"max_draft_token: int",
+              "pre_ids_out"})
+    .Attrs({"num_model_step: int",
             "truncate_first_token: bool",
-            "splitwise_prefill: bool"})
+            "splitwise_prefill: bool",
+            "kvcache_scheduler_v1: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
                     {"stop_flags", "stop_flags_out"},
@@ -137,6 +146,5 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
                     {"step_idx", "step_idx_out"},
                     {"not_need_stop", "not_need_stop_out"},
                     {"batch_drop", "batch_drop_out"},
-                    {"seq_lens_encoder_record", "seq_lens_encoder_record_out"},
-                    {"seq_lens_decoder_record", "seq_lens_decoder_record_out"}})
+                    {"pre_ids", "pre_ids_out"}})
     .SetKernelFn(PD_KERNEL(DraftModelPreprocess));

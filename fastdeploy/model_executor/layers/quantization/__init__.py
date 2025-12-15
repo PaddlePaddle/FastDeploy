@@ -51,8 +51,14 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             if quantization_config is not None:
                 if "is_quantized" in quantization_config:
                     model_config.is_quantized = quantization_config["is_quantized"]
+                elif "is_moe_quantized" in quantization_config:
+                    model_config.is_moe_quantized = quantization_config["is_moe_quantized"]
                 elif "kv_cache_quant_type" not in quantization_config:
                     model_config.is_quantized = True
+                    if "is_moe_quantized" not in quantization_config:
+                        model_config.is_quantized = True
+                    else:
+                        model_config.is_moe_quantized = True
             if quantization_config is not None and quantization_config.get("quantization", None) is None:
                 raise ValueError(
                     "quantization_config should have a key named 'quantization' for specify quant config."
@@ -76,6 +82,13 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
+            quantization_config["quantization"] = "mix_quant"
+            quant_config_name = "mix_quant"
+        # Special handling for moe w4afp8 dynamic quant
+        elif quant_config_name == "w4afp8":
+            quantization_config["dense_quant_type"] = "block_wise_fp8"
+            quantization_config["moe_quant_type"] = "w4afp8"
+            quantization_config["hadamard_block_size"] = 512
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:

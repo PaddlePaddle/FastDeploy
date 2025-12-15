@@ -136,6 +136,7 @@ kernel_meta*
 fastdeploy_ops.py
 version.txt
 EGG-INFO/
+**/fastdeploy_ops/__init__.py
 
 # fp8 generated codes
 autogen/

@@ -36,8 +36,13 @@
     --max-model-len 32768 \
     --max-num-seqs 32 \
     --tensor-parallel-size 16 \
+    --graph-optimization-config '{"use_cudagraph":false}' \
+    --no-enable-prefix-caching \
+    --disable-custom-all-reduce \
     --ips 192.168.1.101,192.168.1.102
     ```
+
+> :bulb: 多机张量并行部署暂不支持CUDAGraphs、PrefixCaching与CustomAllReduce，需在部署命令中显示关闭。
 
 * 离线启动示例：
 

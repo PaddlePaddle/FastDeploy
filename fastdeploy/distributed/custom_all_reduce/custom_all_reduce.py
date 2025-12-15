@@ -207,6 +207,10 @@ class CustomAllreduce:
 
     def custom_all_reduce(self, input: paddle.Tensor) -> Optional[paddle.Tensor]:
         """The main allreduce API that provides support for cuda graph."""
+
+        if input.shape[0] == 0:
+            return input
+
         if self.capturing:
             lib = cuda_wrapper.CudaRTLibrary()
             stream = paddle.device.current_stream()

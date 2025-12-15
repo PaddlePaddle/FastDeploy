@@ -14,10 +14,12 @@
 # limitations under the License.
 """
 
+import glob
 import os
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import paddle
@@ -180,6 +182,68 @@ def get_device_type():
         return "cpu"
 
 
+def check_header(header_path):
+    return os.path.exists(header_path)
+
+
+def check_library(lib_name):
+    # search /usr/lib /usr/lib64 /lib /lib64 .etc
+    paths = [
+        "/usr/lib",
+        "/usr/lib32",
+        "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu",
+        "/lib",
+        "/lib32",
+        "/lib64",
+        "/usr/local/lib",
+        "/usr/local/lib64",
+    ]
+    for p in paths:
+        if glob.glob(os.path.join(p, lib_name)):
+            return True
+    return False
+
+
+def check_rdma_packages():
+    results = {}
+
+    # libibverbs-dev
+    results["libibverbs header"] = check_header("/usr/include/infiniband/verbs.h")
+    results["libibverbs library"] = check_library("libibverbs.so*") or check_library("libibverbs.so")
+
+    # librdmacm-dev
+    results["librdmacm header"] = check_header("/usr/include/rdma/rdma_cma.h")
+    results["librdmacm library"] = check_library("librdmacm.so*") or check_library("librdmacm.so")
+
+    print("===== RDMA Library Check Results =====")
+    for k, v in results.items():
+        status = "FOUND" if v else "NOT FOUND"
+        print(f"{k:25}: {status}")
+
+    print("\n== Summary ==")
+    if all(results.values()):
+        print("All required RDMA libraries are installed.")
+        return True
+    else:
+        print("Some RDMA libraries are missing. Suggested commands:")
+        print("\nUbuntu/Debian:")
+        print("    sudo apt-get install -y libibverbs-dev librdmacm-dev")
+        print("\nCentOS/RHEL:")
+        print("    sudo yum install -y libibverbs-devel librdmacm-devel")
+        return False
+
+
+@lru_cache(maxsize=1)
+def rdma_comm_supported():
+    supported = (
+        get_device_type() in ["gpu", "xpu"]
+        and check_rdma_packages()
+        and os.getenv("FD_ENABLE_RDMA_COMPILE", "1") == "1"
+    )
+    return supported
+
+
 def get_name():
     """get package name"""
     return "fastdeploy-" + get_device_type()
@@ -187,7 +251,7 @@ def get_name():
 
 cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
 cmdclass_dict["build_ext"] = CMakeBuild
-FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.3.0-dev")
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.4.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
 
@@ -211,20 +275,31 @@ setup(
     url="https://github.com/PaddlePaddle/FastDeploy",
     packages=find_packages(),
     package_dir={"fastdeploy": "fastdeploy/"},
+    # For deprecated method (egg-based installation), `.so` files are placed in the `model_executor/ops/XXX` directory.
+    # For modern method (PEP 517/518-based installation), `.so` files are placed in the `model_executor/ops/XXX/fastdeploy_ops` directory.
+    # Therefore, the `fastdeploy_ops` directory should be included for modern Python packaging.
     package_data={
         "fastdeploy": [
             "model_executor/ops/gpu/*",
+            "model_executor/ops/gpu/fastdeploy_ops/*",
             "model_executor/ops/gpu/deep_gemm/include/**/*",
             "model_executor/ops/cpu/*",
+            "model_executor/ops/cpu/fastdeploy_cpu_ops/*",
             "model_executor/ops/xpu/*",
+            "model_executor/ops/xpu/fastdeploy_ops/*",
             "model_executor/ops/xpu/libs/*",
+            "model_executor/ops/xpu/fastdeploy_ops/libs/*",
             "model_executor/ops/npu/*",
+            "model_executor/ops/npu/fastdeploy_ops/*",
             "model_executor/ops/base/*",
+            "model_executor/ops/base/fastdeploy_ops/*",
             "model_executor/ops/iluvatar/*",
+            "model_executor/ops/iluvatar/fastdeploy_ops/*",
             "model_executor/models/*",
             "model_executor/layers/*",
             "input/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
+            "model_executor/ops/gcu/fastdeploy_ops/*",
             "version.txt",
         ]
     },
@@ -237,10 +312,10 @@ setup(
                 version=None,
             )
         ]
-        if os.getenv("ENABLE_FD_RDMA", "0") == "1"
+        if rdma_comm_supported()
         else []
     ),
-    cmdclass=cmdclass_dict if os.getenv("ENABLE_FD_RDMA", "0") == "1" else {},
+    cmdclass=cmdclass_dict if rdma_comm_supported() else {},
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",

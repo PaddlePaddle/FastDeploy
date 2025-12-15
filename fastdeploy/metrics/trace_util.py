@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
@@ -116,6 +117,10 @@ def instrument(app: FastAPI):
         if traces_enable:
             llm_logger.info("Applying instrumentors...")
             FastAPIInstrumentor.instrument_app(app)
+            try:
+                LoggingInstrumentor().instrument(set_logging_format=True)
+            except Exception:
+                pass
     except:
         llm_logger.info("instrument failed")
         pass

@@ -43,6 +43,8 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
       {token_num_data}, paddle::DataType::INT64, input_ids.place());
   auto padding_offset = paddle::empty(
       {token_num_data}, paddle::DataType::INT32, input_ids.place());
+  auto batch_id_per_token = paddle::empty(
+      {token_num_data}, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_q =
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_k =
@@ -57,7 +59,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
 
   int r = baidu::xpu::api::plugin::speculate_get_padding_offset(
       xpu_ctx->x_context(),
-      padding_offset.data<int>(),
+      batch_id_per_token.data<int>(),
       cum_offsets_out.data<int>(),
       cu_seqlens_q.data<int>(),
       cu_seqlens_k.data<int>(),
@@ -83,7 +85,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
 
   return {x_remove_padding,
           cum_offsets_out,
-          padding_offset,
+          batch_id_per_token,
           cu_seqlens_q,
           cu_seqlens_k};  // , enc_token_num, dec_token_num};
 }
@@ -123,7 +125,7 @@ PD_BUILD_STATIC_OP(speculate_get_padding_offset)
              "seq_lens_encoder"})
     .Outputs({"x_remove_padding",
               "cum_offsets_out",
-              "padding_offset",
+              "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})
     .SetKernelFn(PD_KERNEL(SpeculateGetPaddingOffset))

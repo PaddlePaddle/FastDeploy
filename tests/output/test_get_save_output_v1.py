@@ -46,10 +46,16 @@ class MockConfig:
     class SchedulerConfig:
         name = "default"
 
+    class CacheConfig:
+        enable_prefix_caching = False
+        enable_output_caching = False
+        block_size = 64
+
     parallel_config = ParallelConfig()
     speculative_config = SpeculativeConfig()
     model_config = ModelConfig()
     scheduler_config = SchedulerConfig()
+    cache_config = CacheConfig()
 
 
 class MockTask:
@@ -69,6 +75,8 @@ class MockTask:
         self.prefill_chunk_num = 0
         self.pooling_params = None
         self.llm_engine_recv_req_timestamp = time.time()
+        self.ic_req_data = {}
+        self.prompt_token_ids_len = 0
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):

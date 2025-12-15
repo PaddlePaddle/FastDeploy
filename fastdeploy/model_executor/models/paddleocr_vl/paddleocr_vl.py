@@ -90,8 +90,10 @@ class PaddleOCRVLModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -132,10 +134,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
         # Persistent buffers for CUDA graphs.
-        self._decoder_input_embeddings = paddle.zeros(
-            [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
@@ -221,8 +224,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.model.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         image_mask = ids_remove_padding == self.model.config.image_token_id
         image_token_num = image_mask.sum()
 
@@ -237,20 +243,16 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )
 
         if forward_meta.step_use_cudagraph:
             self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
-            hidden_states = self.model(
-                input_embeddings=self._decoder_input_embeddings,
-                forward_meta=forward_meta,
-            )
-        else:
-            hidden_states = self.model(
-                input_embeddings=input_embeddings,
-                forward_meta=forward_meta,
-            )
+        hidden_states = self.model(
+            input_embeddings=input_embeddings,
+            forward_meta=forward_meta,
+        )
 
         return hidden_states

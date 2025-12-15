@@ -2,8 +2,9 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
-#安装lsof工具
+#安装ci必要工具
 apt install -y lsof
+apt-get install -y iproute2
 
 #先kill一遍
 function stop_processes() {
@@ -14,6 +15,8 @@ function stop_processes() {
     for port in $(seq $((8188 + XPU_ID * 100 + 10)) $((8188 + XPU_ID * 100 + 40))); do
         lsof -t -i :${port} | xargs kill -9 || true
     done
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $NF}' | awk -F'/' '{print $1}' | xargs -r kill -9
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $(NF-1)}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs -r kill -9
 }
 
 stop_processes >kill.log 2>&1
@@ -34,7 +37,7 @@ export PATH=/workspace/deps/xre/bin:$PATH
 
 xpu-smi -r -i $XPU_VISIBLE_DEVICES
 xpu-smi
-
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 echo "pip requirements"
 python -m pip install -r requirements.txt
 
@@ -43,8 +46,8 @@ python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
 # python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251112-cp310-cp310-linux_x86_64.whl
-
+# 由于ep并行报错暂时锁死paddle版本
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251123-cp310-cp310-linux_x86_64.whl
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
@@ -86,7 +89,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4 > server.log 2>&1 &
+    --quantization wint4 \
+    --enable-prefix-caching \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -229,19 +234,19 @@ else
 fi
 export port_num=$((8188 + XPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Thinking \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
-    --max-num-seqs 10 \
+    --max-num-seqs 32 \
     --quantization wint8 \
-    --enable-mm \
-    --mm-processor-kwargs '{"video_max_frames": 30}' \
-    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl-thinking \
+    --tool-call-parser ernie-45-vl-thinking \
+    --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -293,6 +298,132 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
     exit 1
 fi
 
+echo "============================开始PD分离测试!============================"
+
+export port_num=$((8188 + XPU_ID * 100))
+# 起router
+export FD_LOG_DIR="log_router"
+mkdir -p ${FD_LOG_DIR}
+
+nohup python -m fastdeploy.router.launch \
+    --port ${port_num} \
+    --splitwise \
+    2>&1 >${FD_LOG_DIR}/nohup &
+sleep 1
+
+# pd相关环境变量设置
+export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
+export $(bash $DIR/get_rdma_nics.sh xpu)
+echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
+export CUDA_ENABLE_P2P_NO_UVA=1 # 开启peer mem
+
+if [ -z "${KVCACHE_RDMA_NICS}" ]; then
+  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
+  exit 1
+fi
+
+# 起P节点
+export FD_LOG_DIR="log_prefill"
+mkdir -p ${FD_LOG_DIR}
+if [[ "$XPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0"
+else
+    export XPU_VISIBLE_DEVICES="4"
+fi
+
+nohup python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_PATH}/ERNIE-4.5-0.3B-Paddle \
+       --port $((port_num+11)) \
+       --metrics-port $((port_num+12)) \
+       --engine-worker-queue-port $((port_num+13)) \
+       --cache-queue-port $((port_num+14)) \
+       --tensor-parallel-size 1 \
+       --max-model-len 32768 \
+       --splitwise-role "prefill" \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports $((port_num+15)) \
+       --pd-comm-port $((port_num+16)) \
+       --router "0.0.0.0:$((port_num))" \
+       2>&1 >${FD_LOG_DIR}/nohup &
+# 起D节点
+export FD_LOG_DIR="log_decode"
+mkdir -p ${FD_LOG_DIR}
+if [[ "$XPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="1"
+else
+    export XPU_VISIBLE_DEVICES="5"
+fi
+nohup python -m fastdeploy.entrypoints.openai.api_server \
+       --model ${MODEL_PATH}/ERNIE-4.5-0.3B-Paddle \
+       --port $((port_num+21)) \
+       --metrics-port $((port_num+22)) \
+       --engine-worker-queue-port $((port_num+23)) \
+       --cache-queue-port $((port_num+24)) \
+       --tensor-parallel-size 1 \
+       --max-model-len 32768 \
+       --splitwise-role "decode" \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports $((port_num+25)) \
+       --pd-comm-port $((port_num+26)) \
+       --router "0.0.0.0:${port_num}" \
+       2>&1 >${FD_LOG_DIR}/nohup &
+
+sleep 60
+# 探活
+TIMEOUT=$((10 * 60))
+INTERVAL=10            # 检查间隔（秒）
+ENDPOINT_P="http://0.0.0.0:$((port_num+11))/health"
+ENDPOINT_D="http://0.0.0.0:$((port_num+21))/health"
+START_TIME=$(date +%s) # 记录开始时间戳
+echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
+while true; do
+    # 计算已耗时
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    # 超时判断
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "log_prefill/nohup"
+        cat log_prefill/nohup
+        echo "log_decode/nohup"
+        cat log_decode/nohup
+        exit 1
+    fi
+
+    HTTP_CODE_P=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT_P" || true)
+    HTTP_CODE_D=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT_D" || true)
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：P节点:${HTTP_CODE_P}，D节点:${HTTP_CODE_D}"
+    if [ "$HTTP_CODE_P" = "200" ] && [ "$HTTP_CODE_D" = "200" ]; then
+        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
+        break
+    else
+        sleep $INTERVAL
+    fi
+done
+
+
+# 执行服务化推理
+python  tests/ci_use/XPU_45T/run_pd.py
+pd_test_exit_code=$?
+echo pd_test_exit_code is ${pd_test_exit_code}
+
+stop_processes >kill.log 2>&1
+
+if [ ${pd_test_exit_code} -ne 0 ]; then
+    echo "log_prefill/nohup"
+    cat log_prefill/nohup
+    echo "log_decode/nohup"
+    cat log_decode/nohup
+    echo " pd分离模型 测试失败，请检查pr代码"
+    exit 1
+fi
+
+# pd相关环境变量重置
+unset KVCACHE_GDRCOPY_FLUSH_ENABLE
+unset KVCACHE_RDMA_NICS
+unset CUDA_ENABLE_P2P_NO_UVA
 
 echo "============================开始 EP4TP4 在线服务测试!============================"
 sleep 5
@@ -314,6 +445,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz
 tar -xzf xDeepEP.tar.gz
@@ -380,6 +512,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
@@ -409,6 +542,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
@@ -466,6 +600,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
@@ -496,6 +631,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
@@ -555,6 +691,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then

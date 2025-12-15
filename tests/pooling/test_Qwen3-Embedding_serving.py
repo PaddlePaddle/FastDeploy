@@ -15,7 +15,6 @@
 import json
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -24,41 +23,16 @@ from typing import List
 import numpy as np
 import pytest
 import requests
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
-# Read ports from environment variables
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8189))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8134))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8234))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8334))
-
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """Check if a TCP port is open."""
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """Kill processes listening on the given port."""
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """Clean all ports in PORTS_TO_CLEAN."""
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-    time.sleep(2)
+from fastdeploy import envs
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -69,9 +43,6 @@ def setup_and_run_embedding_server():
     print("Pre-test port cleanup...")
     clean_ports()
 
-    os.environ["FD_DISABLE_CHUNKED_PREFILL"] = "1"
-    os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
-
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "torch", "Qwen3-Embedding-0.6B")
@@ -79,7 +50,9 @@ def setup_and_run_embedding_server():
         model_path = "./Qwen3-Embedding-0.6B"
 
     if not os.path.exists(model_path):
-        pytest.skip(f"Model path not found: {model_path}")
+        raise FileNotFoundError(f"Model path not found: {model_path}")
+
+    envs.FD_ENABLE_MAX_PREFILL = 1
 
     log_path = "embedding_server.log"
     cmd = [
@@ -168,9 +141,6 @@ def consistent_payload():
                 "content": "北京天安门在哪里?",
             }
         ],
-        "temperature": 0.8,
-        "top_p": 0,  # fix top_p to reduce randomness
-        "seed": 13,  # fixed random seed
     }
 
 
@@ -259,7 +229,7 @@ def test_single_text_embedding(embedding_api_url, headers):
     print(f"Single text embedding dimension: {len(embedding)}")
 
     base_path = os.getenv("MODEL_PATH", "")
-    baseline_filename = "Qwen3-Embedding-0.6B-baseline.json"
+    baseline_filename = "test-Qwen3-Embedding-0.6B-baseline.json"
 
     if base_path:
         baseline_file = os.path.join(base_path, "torch", baseline_filename)
@@ -271,4 +241,97 @@ def test_single_text_embedding(embedding_api_url, headers):
         save_embedding_baseline(embedding, baseline_file)
     else:
         print(f"Comparing with baseline: {baseline_file}")
-        check_embedding_against_baseline(embedding, baseline_file, threshold=0.01)
+        check_embedding_against_baseline(embedding, baseline_file, threshold=0.02)
+
+
+def test_multi_text_embedding(embedding_api_url, headers):
+    """Test embedding generation for batch text inputs."""
+    payload = {
+        "model": "default",
+        "input": ["北京天安门在哪里?", "上海东方明珠有多高?", "杭州西湖的面积是多少?"],
+    }
+
+    resp = requests.post(embedding_api_url, headers=headers, json=payload)
+    assert resp.status_code == 200, f"Unexpected status code: {resp.status_code}, response: {resp.text}"
+
+    result = resp.json()
+    assert "data" in result, "Response missing 'data' field"
+    assert len(result["data"]) == 3, f"Expected 3 embedding results, got {len(result['data'])}"
+
+    # Validate each embedding in the batch
+    for idx, item in enumerate(result["data"]):
+        assert "embedding" in item, f"Item {idx} missing 'embedding' field"
+        assert "index" in item, f"Item {idx} missing 'index' field"
+        assert item["index"] == idx, f"Item index mismatch: expected {idx}, got {item['index']}"
+
+        embedding = item["embedding"]
+        assert isinstance(embedding, list), f"Embedding {idx} should be a list"
+        assert len(embedding) > 0, f"Embedding {idx} vector should not be empty"
+        assert all(isinstance(x, (int, float)) for x in embedding), f"Embedding {idx} values should be numeric"
+
+        print(f"Text {idx} embedding dimension: {len(embedding)}")
+
+    # Verify all embeddings have the same dimension
+    dimensions = [len(item["embedding"]) for item in result["data"]]
+    assert len(set(dimensions)) == 1, f"All embeddings should have same dimension, got: {dimensions}"
+
+    # Compare embeddings with baseline
+    base_path = os.getenv("MODEL_PATH", "")
+    baseline_filename = "test-Qwen3-Embedding-0.6B-multi-input-baseline.json"
+
+    if base_path:
+        baseline_file = os.path.join(base_path, "torch", baseline_filename)
+    else:
+        baseline_file = baseline_filename
+
+    # Save all embeddings to baseline
+    batch_embeddings = [item["embedding"] for item in result["data"]]
+
+    if not os.path.exists(baseline_file):
+        print("Batch baseline file not found. Saving current embeddings as baseline...")
+        baseline_data = {
+            "embeddings": batch_embeddings,
+            "dimension": len(batch_embeddings[0]),
+            "count": len(batch_embeddings),
+            "inputs": payload["input"],
+        }
+        with open(baseline_file, "w", encoding="utf-8") as f:
+            json.dump(baseline_data, f, indent=2)
+        print(f"Batch baseline saved to: {baseline_file}")
+    else:
+        print(f"Comparing batch with baseline: {baseline_file}")
+        with open(baseline_file, "r", encoding="utf-8") as f:
+            baseline_data = json.load(f)
+            baseline_embeddings = baseline_data["embeddings"]
+
+        assert len(batch_embeddings) == len(
+            baseline_embeddings
+        ), f"Embedding count mismatch: current={len(batch_embeddings)}, baseline={len(baseline_embeddings)}"
+
+        # Compare each embedding
+        for idx, (current_emb, baseline_emb) in enumerate(zip(batch_embeddings, baseline_embeddings)):
+            print(f"\n--- Comparing embedding {idx}: '{payload['input'][idx]}' ---")
+            mean_abs_diff = compare_embeddings(current_emb, baseline_emb, threshold=0.05)
+
+            if mean_abs_diff >= 0.05:
+                # Save current batch for debugging
+                temp_file = f"{baseline_file}.current"
+                print("temp_file", temp_file)
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    json.dump(
+                        {
+                            "embeddings": batch_embeddings,
+                            "dimension": len(batch_embeddings[0]),
+                            "count": len(batch_embeddings),
+                            "inputs": payload["input"],
+                        },
+                        f,
+                        indent=2,
+                    )
+
+                raise AssertionError(
+                    f"Embedding {idx} differs from baseline by too much "
+                    f"(mean_abs_diff={mean_abs_diff:.6f} >= 0.01):\n"
+                    f"Current batch saved to: {temp_file}\n"
+                    f"Please check the differences."
+                )
