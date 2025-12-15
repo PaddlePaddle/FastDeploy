@@ -46,13 +46,16 @@ class RDMACommManager:
             from fastdeploy.platforms import current_platform
 
             if os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE", "") == "" and current_platform.is_cuda():
+                command = ["nvidia-smi", "-i", "0", "--query-gpu=compute_cap", "--format=csv,noheader"]
                 result = subprocess.run(
-                    ["nvidia-smi", "-i", "0", "--query-gpu=compute_cap", "--format=csv,noheader"],
+                    command,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     check=False,
                 )
+                logger.info(f"nvidia-smi command: {command}")
+                logger.info(f"nvidia-smi output: {result.stdout}")
                 if result.returncode != 0:
                     raise RuntimeError(f"Failed to get compute capability via nvidia-smi: {result.stderr.strip()}")
 
@@ -64,13 +67,16 @@ class RDMACommManager:
             if os.getenv("KVCACHE_RDMA_NICS", "") == "":
                 get_rdma_nics = os.path.join(os.path.dirname(__file__), "get_rdma_nics.sh")
                 nic_type = current_platform.device_name
+                command = ["bash", get_rdma_nics, nic_type]
                 result = subprocess.run(
-                    ["bash", get_rdma_nics, nic_type],
+                    command,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     check=False,
                 )
+                logger.info(f"get_rdma_nics command: {command}")
+                logger.info(f"get_rdma_nics output: {result.stdout}")
                 if result.returncode != 0:
                     raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
 
