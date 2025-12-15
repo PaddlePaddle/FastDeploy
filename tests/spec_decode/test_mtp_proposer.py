@@ -527,6 +527,102 @@ class TestMTPProposer(unittest.TestCase):
             proposer._empty_cache()
             mock_empty.assert_called()
 
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    def test_cache_type_branches(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
+        """Cover _get_cache_type CUDA/XPU/unsupported branches"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # CUDA branch
+        mock_platform.is_cuda.return_value = True
+        mock_platform.is_xpu.return_value = False
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        self.assertEqual(proposer._get_cache_type(), "uint8")
+
+        # XPU branch
+        mock_platform.is_cuda.return_value = False
+        mock_platform.is_xpu.return_value = True
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        self.assertEqual(proposer._get_cache_type(), "int8")
+
+        # Unsupported branch
+        mock_platform.is_cuda.return_value = False
+        mock_platform.is_xpu.return_value = False
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        with self.assertRaises(NotImplementedError):
+            proposer._get_cache_type()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    def test_init_model_inputs_with_mm(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Init model inputs with enable_mm=True to cover attn_mask buffers"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        self.fd_config.model_config.enable_mm = True
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        self.assertIn("attn_mask_offsets", proposer.model_inputs)
+        self.assertIn("attn_mask_offsets_full", proposer.model_inputs)
+        self.assertIn("attn_mask_offsets_decoder", proposer.model_inputs)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    def test_insert_tasks_v1_preempted(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Cover RequestType.PREEMPTED branch in insert_tasks_v1"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        proposer.model_inputs["caches"] = []  # avoid re-init
+
+        request = Request(
+            request_id="preempt",
+            prompt="t",
+            prompt_token_ids=[1],
+            prompt_token_ids_len=1,
+            messages=None,
+            history=None,
+            tools=None,
+            system=None,
+            eos_token_ids=[2],
+        )
+        request.idx = 0
+        request.task_type = RequestType.PREEMPTED
+        proposer.insert_tasks_v1([request], 1)
+
+        self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
+        self.assertEqual(proposer.seq_lens_this_time_buffer[0].item(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
