@@ -418,6 +418,7 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             # run eplb
@@ -440,7 +441,7 @@ class PaddleDisWorkerProc:
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+                if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -477,6 +478,8 @@ class PaddleDisWorkerProc:
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                        time.sleep(0.01)
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -1021,8 +1024,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
-        fd_config.cache_config.enable_prefix_caching = False
-        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 

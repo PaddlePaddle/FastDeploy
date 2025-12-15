@@ -261,6 +261,7 @@ class ResourceManagerV1(ResourceManager):
                     self.running.insert(0, preempted_req)
                     continue
                 preempted_req.status = RequestStatus.PREEMPTED
+                preempted_req.last_preempted_blocksize = len(preempted_req.block_tables)
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
                     self.tasks_list[preempted_req.idx] = None
@@ -484,9 +485,9 @@ class ResourceManagerV1(ResourceManager):
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
-                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
+                    cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                    cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
@@ -655,7 +656,7 @@ class ResourceManagerV1(ResourceManager):
 
                     request = self.waiting[0]
                     if (
-                        not envs.FD_ENABLE_MAX_PREFILL
+                        self.config.model_config.disable_mm_prefill_batch()
                         and self._is_mm_request(request)
                         and self.exist_mm_prefill(scheduled_reqs)
                     ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
@@ -735,6 +736,14 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        # If num_new_block is less than the last preempted block size, use the last preempted block size instead.
+                        # For normal requests, when allocating blocks, we reserve two extra blocks for decoding.
+                        # In the request rescheduling scenario, we currently only consider the number of tokens already generated,
+                        # which might lead to allocating fewer blocks than the previous allocation, causing repeated rescheduling.
+                        # This adjustment ensures we at least allocate as many blocks as before to avoid this issue.
+                        last_preempted_blocksize = getattr(request, "last_preempted_blocksize", 0)
+                        if num_new_block < last_preempted_blocksize:
+                            num_new_block = last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):

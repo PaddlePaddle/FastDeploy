@@ -207,8 +207,9 @@ DLL_EXPORT int speculate_recover_block(Context* ctx,
                                        bool* stop_flags,
                                        int* seq_lens_this_time,
                                        const int* ori_seq_lens_encoder,
+                                       const int* ori_seq_lens_decoder,
                                        int* seq_lens_encoder,
-                                       const int* seq_lens_decoder,
+                                       int* seq_lens_decoder,
                                        int* block_tables,
                                        int* free_list,
                                        int* free_list_len,
@@ -599,6 +600,19 @@ DLL_EXPORT int rebuild_self_hidden_states(api::Context* ctx,
                                           T* output,
                                           int dim_embed,
                                           int elem_cnt);
+
+DLL_EXPORT int speculate_get_logits(Context* ctx,
+                                    float* draft_logits,
+                                    int* next_token_num,
+                                    int* batch_token_num,
+                                    int* cu_next_token_offset,
+                                    int* cu_batch_token_offset,
+                                    const float* logits,
+                                    const float* first_token_logits,
+                                    const int* seq_lens_this_time,
+                                    const int* seq_lens_encoder,
+                                    const int real_bsz,
+                                    const int vocab_size);
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 

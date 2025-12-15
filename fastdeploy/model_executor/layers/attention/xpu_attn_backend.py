@@ -213,7 +213,7 @@ class XPUAttentionBackend(AttentionBackend):
             None,  # smooth
             metadata.kv_signal_data_list[layer.layer_id],  # kv_signal_data
             forward_meta.kv_signal_sender,  # kv_signal_sender
-            forward_meta.pos_emb_type,
+            layer.use_neox_rotary_style,
             self.rope_3d,
         )
 
