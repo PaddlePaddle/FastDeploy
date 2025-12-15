@@ -464,6 +464,7 @@ class LLMEngine:
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
                 "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "SOT_ENABLE_COMPILE_TIME_LIMIT": os.getenv("SOT_ENABLE_COMPILE_TIME_LIMIT", default="0"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
@@ -483,9 +484,6 @@ class LLMEngine:
             # TODO dynamic load environment variable
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
-
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
         for k, v in variables.items():
@@ -714,11 +712,10 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
         result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
-            self.engine.scheduler.start(role, host_ip, disaggregate)
+            self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
             result_queues_for_dp_ipc = []

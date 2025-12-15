@@ -113,8 +113,7 @@ class ExpertService:
             self.cfg.init_cache_info()
             role = self.cfg.scheduler_config.splitwise_role
             host_ip = self.cfg.host_ip
-            disaggregate = self.cfg.disaggregate_info
-            self.engine.scheduler.start(role, host_ip, disaggregate)
+            self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
 
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.splitwise_receive_thread = threading.Thread(

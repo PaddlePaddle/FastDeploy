@@ -61,7 +61,7 @@ class RDMACommManager:
             f"init rdma messager {gpu_id} {rdma_port}, prefill_tp_size: {prefill_tp_size}, prefill_tp_idx: {prefill_tp_idx}"
         )
 
-    def connect(self, ip, port, tp_size):
+    def connect(self, ip, port, tp_size=0):
         """
         Connect to remote gpu and write cache.
         """

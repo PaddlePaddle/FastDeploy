@@ -130,7 +130,7 @@ class TestConfig(unittest.TestCase):
             test_mode=True,
         )
         fd_config.init_cache_info()
-        assert fd_config.disaggregate_info["role"] == "prefill"
+        assert fd_config.register_info is not None
 
 
 if __name__ == "__main__":
