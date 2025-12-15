@@ -160,7 +160,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
-        # Initialize ZMQ client for async output (similar to GPU)
+        # Initialize ZMQ client for async output
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -183,11 +183,8 @@ class XPUModelRunner(ModelRunnerBase):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
             try:
-                if self.async_output_queue is None or self.zmq_client is None:
-                    break
                 output = self.async_output_queue.get()
-                if self.zmq_client is not None:
-                    self.zmq_client.send_pyobj(output)
+                self.zmq_client.send_pyobj(output)
             except Exception as e:
                 logger.exception("Exception in async output loop: %s", e)
     
@@ -1428,7 +1425,7 @@ class XPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             min_tokens=self.share_inputs["min_dec_len"],
-            prompt_logprobs_list=prompt_logprobs_list,  # TODO: Add prompt_logprobs support for XPU if needed
+            prompt_logprobs_list=prompt_logprobs_list,
         )
         if self.speculative_decoding:
             # base model post process

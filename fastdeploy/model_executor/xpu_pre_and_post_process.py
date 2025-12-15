@@ -71,27 +71,22 @@ def _build_stream_transfer_data(
             if logprobs:
                 stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
-                # Handle both list and single LogprobsTensors (for compatibility)
+                # NaN / ±Inf
                 if isinstance(prompt_logprobs_list, list):
                     if bid < len(prompt_logprobs_list):
                         prompt_logprobs_item = prompt_logprobs_list[bid]
                     else:
                         prompt_logprobs_item = None
                 else:
-                    # Single LogprobsTensors (legacy format)
-                    prompt_logprobs_item = prompt_logprobs_list if bid == 0 else None
-                
+                    prompt_logprobs_item = prompt_logprobs_list if bid == 0 else None   
                 if prompt_logprobs_item is not None:
-                    # Sanitize prompt_logprobs to ensure JSON compliance
                     prompt_logprobs_tensor = prompt_logprobs_item.logprobs
-                    # Replace inf, -inf, and nan with safe values using paddle operations
                     prompt_logprobs_tensor = paddle.where(paddle.isnan(prompt_logprobs_tensor), paddle.full_like(prompt_logprobs_tensor, -1e10), prompt_logprobs_tensor)
                     prompt_logprobs_tensor = paddle.where(
                         paddle.isinf(prompt_logprobs_tensor),
                         paddle.where(prompt_logprobs_tensor > 0, paddle.full_like(prompt_logprobs_tensor, 1e10), paddle.full_like(prompt_logprobs_tensor, -1e10)),
                         prompt_logprobs_tensor
                     )
-                    # Clip to valid range
                     prompt_logprobs_tensor = paddle.clip(prompt_logprobs_tensor, min=-1e10, max=1e10)
                     prompt_logprobs_item = LogprobsTensors(
                         prompt_logprobs_item.logprob_token_ids,
