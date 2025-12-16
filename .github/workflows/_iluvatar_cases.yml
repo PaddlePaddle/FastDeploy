@@ -27,6 +27,11 @@ jobs:
   run_iluvatar_cases:
     runs-on: iluvatar-gpu-2
     timeout-minutes: 60
+    container:
+      image: ${{ inputs.DOCKER_IMAGE }}
+      env:
+        LD_LIBRARY_PATH: /usr/local/corex/lib
+        LIBRARY_PATH: /usr/local/corex/lib
     steps:
       - name: Print current runner name
         run: |
