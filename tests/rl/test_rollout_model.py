@@ -4,7 +4,6 @@ import types
 
 import pytest  # type: ignore
 
-
 # 保守处理：本地缺少 paddle 时直接跳过整模块，CI 上有完整环境会正常运行
 try:  # pragma: no cover - 环境探测
     import paddle  # noqa: F401
