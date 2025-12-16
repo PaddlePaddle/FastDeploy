@@ -289,10 +289,7 @@ class PaddleDisWorkerProc:
         return model_weights_signal_tensor.item()
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
-            self.task_queue.worker_process_tp_barrier.wait()
-        else:
-            paddle.distributed.barrier(self.parallel_config.tp_group)
+        self.task_queue.worker_process_tp_barrier.wait()
 
     def _init_eplb_signal(self):
         if not self.eplb_config.enable_eplb:
@@ -477,7 +474,9 @@ class PaddleDisWorkerProc:
                     while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
                         time.sleep(0.01)
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or (
+                self.nnode > 1 and self.task_queue.read_finish_flag.get() == 1
+            ):
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
 
                 tasks, read_finish = self.task_queue.get_tasks()
