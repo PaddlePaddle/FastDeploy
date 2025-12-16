@@ -11,12 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Integration tests for the real pooler implementation.
 
-These tests intentionally rely on the actual Paddle/FastDeploy modules to ensure
-behavior matches production usage and that no fake modules are injected into
-``sys.modules``.
-"""
 from __future__ import annotations
 
 import sys
@@ -301,4 +296,3 @@ class TestDispatchPooler:
 
 
 if __name__ == "__main__":
-    sys.exit(pytest.main([__file__]))
