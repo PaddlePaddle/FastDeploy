@@ -36,7 +36,7 @@ wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/cutlass.tar.gz
 wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/json.tar.gz && tar -xzf json.tar.gz -C custom_ops/third_party/ && mv custom_ops/third_party/json custom_ops/third_party/nlohmann_json
 chmod +x build.sh
 bash build.sh || exit 1
-pip install dist/fastdeploy_intel_hpu-2.3.0.dev0-py3-none-any.whl --force-reinstall
+pip install dist/fastdeploy_intel_hpu-*.whl --force-reinstall
 
 #to install dependencies
 echo "pip others"
