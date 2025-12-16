@@ -75,11 +75,3 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-
-  iluvatar_test:
-    name: Run iluvatar Tests
-    needs: [clone]
-    uses: ./.github/workflows/_iluvatar_test.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}

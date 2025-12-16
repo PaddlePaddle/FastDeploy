@@ -1,0 +1,23 @@
+name: PR Build and Test
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+permissions: read-all
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  clone:
+    name: FD-Clone-Linux
+    uses: ./.github/workflows/_clone_linux.yml
+
+  iluvatar_test:
+    name: Run iluvatar Tests
+    needs: [clone]
+    uses: ./.github/workflows/_iluvatar_cases.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
