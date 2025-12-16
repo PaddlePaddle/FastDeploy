@@ -370,8 +370,8 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     """
 
     state_dict = {}
-    _, safetensor_files, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
-    weights_iterator = safetensors_weights_iterator(safetensor_files)
+    key_name_list, safetensor_files, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
+    weights_iterator = safetensors_weights_iterator(key_name_list, safetensor_files)
     for name, weight in weights_iterator:
         state_dict[name] = weight.clone()
     return state_dict
