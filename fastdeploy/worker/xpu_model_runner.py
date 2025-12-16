@@ -86,6 +86,8 @@ class XPUModelRunner(ModelRunnerBase):
         self.max_logprobs = (
             self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
         )
+        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
 
         # VL model config:
         if self.enable_mm:
@@ -1168,7 +1170,7 @@ class XPUModelRunner(ModelRunnerBase):
             )
 
         while True:
-            self.execute_model(is_dummy_run=True)
+            self.execute_model(is_dummy_run=True, in_capturing=in_capturing)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
@@ -1216,9 +1218,43 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Trigger CUDA Graph capture for all shapes in 'CudaGraphConfig.cudagraph_capture_sizes'
         """
-        logger.warn("XPU not support cuda graph currently")
-        pass
+        # if not self.use_cudagraph:
+        #     logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
+        #     return
+        time_before_capture = time.perf_counter()
+        expected_decode_len = 1
+        capture_sizes = self.cudagraph_capture_sizes.copy()
+        print(f"capture_sizes : {capture_sizes}")
+        try:
+            for batch_size in sorted(capture_sizes, reverse=True):
+                self._dummy_run(
+                    num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+                    batch_size=min(self.scheduler_config.max_num_seqs, 1),
+                    in_capturing=True,
+                    # expected_decode_len=expected_decode_len,
+                )
+                logger.info(
+                    f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+                )
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                raise RuntimeError(
+                    "CUDA out of memory occurred when warming up CUDAGraph "
+                    f"with the capture sizes {capture_sizes}. Please try "
+                    "lowering `max_num_seqs` or `gpu_memory_utilization` when "
+                    "initializing the engine."
+                ) from e
+            if "CUDA error(700)" in str(e):
+                raise RuntimeError(
+                    "CUDA error(700), an illegal memory access was encountered, "
+                    "when warming up CUDAGraph. Please try to set the startup parameter: "
+                    "--graph-optimization-config '{\"use_cudagraph\": false}' to close CUDAGraph"
+                ) from e
+            else:
+                raise e
 
+        time_after_capture = time.perf_counter()
+        logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
         start_time = time.perf_counter()
@@ -1235,6 +1271,7 @@ class XPUModelRunner(ModelRunnerBase):
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
         is_dummy_run: bool = False,
+        in_capturing: bool = False,
     ) -> Optional[ModelRunnerOutput]:
         """
         The Entrance of model execute.
@@ -1251,6 +1288,10 @@ class XPUModelRunner(ModelRunnerBase):
             self.kv_signal_sender = create_kv_signal_sender()
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
+
+        self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
+        self.padding_cudagraph_inputs()
+
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
@@ -1451,6 +1492,20 @@ class XPUModelRunner(ModelRunnerBase):
         """Stop decoding if the tensor meets the termination condition"""
         return self.share_inputs["not_need_stop"][0]
 
+
+    def padding_cudagraph_inputs(self) -> None:
+        """
+        Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
+        In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
+        """
+        # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+        return
+    
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
         self.share_inputs.pop("caches", None)
