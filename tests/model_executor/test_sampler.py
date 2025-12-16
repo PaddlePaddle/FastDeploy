@@ -1,7 +1,21 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Unit tests for the sampler helpers covering guided decoding and speculative flows."""
 
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 from concurrent.futures import Future
@@ -122,16 +136,20 @@ def _build_sampling_metadata(**overrides) -> SamplingMetadata:
         max_num_logprobs=2,
         enable_early_stop=True,
         stop_flags=_tensor([[0], [0]], dtype="int64"),
-        prompt_ids=_tensor([[0], [1]], dtype="int64"),
-        prompt_lens=_tensor([[1], [1]], dtype="int64"),
-        temp_scaled_logprobs=None,
-        top_p_normalized_logprobs=None,
-        share_inputs={
-            "seq_lens_this_time": _tensor([[1], [2]], dtype="int64"),
-            "seq_lens_encoder": _tensor([[0], [1]], dtype="int64"),
-            "seq_lens_decoder": _tensor([[0], [0]], dtype="int64"),
-        },
-        logits_processors=[_AddOffsetProcessor()],
+        share_inputs=dict(
+            seq_lens_this_time=_tensor([[1], [1]], dtype="int64"),
+            seq_lens_encoder=_tensor([[0], [0]], dtype="int64"),
+            seq_lens_decoder=_tensor([[0], [0]], dtype="int64"),
+            output_padding_offset=_tensor([[0], [0]], dtype="int64"),
+            output_cum_offsets=_tensor([[0], [0]], dtype="int64"),
+            accept_tokens=_tensor([[0, 0]], dtype="int64"),
+            accept_num=_tensor([1], dtype="int64"),
+            step_idx=_tensor([[0], [0]], dtype="int64"),
+            stop_flags=_tensor([[0], [0]], dtype="int64"),
+            draft_tokens=_tensor([[0, 0]], dtype="int64"),
+            max_dec_len=_tensor([[8], [8]], dtype="int64"),
+            is_block_step=_tensor([[0], [0]], dtype="int64"),
+        ),
     )
     base.update(overrides)
     return SamplingMetadata(**base)
@@ -174,8 +192,25 @@ def sampler_op_stubs(monkeypatch):
     monkeypatch.setattr(sampler_module, "speculate_insert_first_token", _speculate_insert_first_token)
     monkeypatch.setattr(sampler_module, "speculate_get_target_logits", _speculate_get_target_logits)
 
-    prev_gpu_mod = sys.modules.get("fastdeploy.model_executor.ops.gpu")
-    gpu_mod = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+    def _ensure_module(mod_path: str):
+        try:
+            module = importlib.import_module(mod_path)
+            created = False
+        except ImportError:
+            module = types.ModuleType(mod_path)
+            sys.modules[mod_path] = module
+            created = True
+        return module, created
+
+    _MISSING = object()
+    gpu_mod, created_gpu = _ensure_module("fastdeploy.model_executor.ops.gpu")
+    hpu_mod, created_hpu = _ensure_module("fastdeploy.model_executor.ops.intel_hpu")
+    original_gpu_attrs = {}
+    original_hpu_attrs = {}
+
+    def _set_attr(module, name, value, store):
+        store[name] = getattr(module, name, _MISSING)
+        setattr(module, name, value)
 
     def _speculate_verify(*_args, **_kwargs):
         records["speculate_verify"] = True
@@ -187,32 +222,37 @@ def sampler_op_stubs(monkeypatch):
         actual_len = paddle.to_tensor([1], dtype="int32")
         return verify_scores, verify_tokens, actual_len
 
-    gpu_mod.speculate_verify = _speculate_verify
-    gpu_mod.top_p_candidates = _top_p_candidates
-    sys.modules["fastdeploy.model_executor.ops.gpu"] = gpu_mod
-
-    prev_hpu_mod = sys.modules.get("fastdeploy.model_executor.ops.intel_hpu")
-    hpu_mod = types.ModuleType("fastdeploy.model_executor.ops.intel_hpu")
+    if not hasattr(gpu_mod, "speculate_verify"):
+        _set_attr(gpu_mod, "speculate_verify", _speculate_verify, original_gpu_attrs)
+    if not hasattr(gpu_mod, "top_p_candidates"):
+        _set_attr(gpu_mod, "top_p_candidates", _top_p_candidates, original_gpu_attrs)
 
     def _fused_sampler(*args):
         pre_token_ids = args[0]
         tokens = paddle.arange(pre_token_ids.shape[0], dtype="int64").reshape([-1, 1])
         return None, tokens
 
-    hpu_mod.fused_sampler = _fused_sampler
-    hpu_mod.get_token_penalty_multi_scores = lambda *a, **k: a[3]
-    sys.modules["fastdeploy.model_executor.ops.intel_hpu"] = hpu_mod
+    if not hasattr(hpu_mod, "fused_sampler"):
+        _set_attr(hpu_mod, "fused_sampler", _fused_sampler, original_hpu_attrs)
+    if not hasattr(hpu_mod, "get_token_penalty_multi_scores"):
+        _set_attr(hpu_mod, "get_token_penalty_multi_scores", lambda *a, **k: a[3], original_hpu_attrs)
 
     yield records
 
-    if prev_gpu_mod is not None:
-        sys.modules["fastdeploy.model_executor.ops.gpu"] = prev_gpu_mod
-    else:
-        sys.modules.pop("fastdeploy.model_executor.ops.gpu", None)
+    for name, previous in original_gpu_attrs.items():
+        if previous is _MISSING:
+            delattr(gpu_mod, name)
+        else:
+            setattr(gpu_mod, name, previous)
+    for name, previous in original_hpu_attrs.items():
+        if previous is _MISSING:
+            delattr(hpu_mod, name)
+        else:
+            setattr(hpu_mod, name, previous)
 
-    if prev_hpu_mod is not None:
-        sys.modules["fastdeploy.model_executor.ops.intel_hpu"] = prev_hpu_mod
-    else:
+    if created_gpu:
+        sys.modules.pop("fastdeploy.model_executor.ops.gpu", None)
+    if created_hpu:
         sys.modules.pop("fastdeploy.model_executor.ops.intel_hpu", None)
 
 
@@ -294,6 +334,44 @@ def test_guided_decoding_tracks_processors_and_reasoning(fd_config_factory):
         guided._accept_token(99, 0)
 
 
+def test_guided_decoding_prefill_and_bitmask(monkeypatch, fd_config_factory):
+    guided = sampler_module.GuidedDecoding(fd_config_factory())
+
+    class _Reasoning:
+        def is_reasoning_end(self, tokens):
+            return tokens == [2]
+
+    guided.apply_reasoning_parser(_Reasoning())
+    async_future = Future()
+    guided.add_logits_processor(0, async_future, prefill_tokens=[1, 2])
+
+    ready_future = Future()
+    ready_future.set_result(_RecordingProcessor(enable_reasoning=True))
+    guided.add_logits_processor(1, ready_future)
+    guided.pre_process(prefill_done_idxs=[1])
+
+    async_processor = _RecordingProcessor(enable_reasoning=True)
+    async_future.set_result(async_processor)
+    guided._tokens_to_acc[0] = None
+
+    backend_mod = types.ModuleType("fastdeploy.model_executor.guided_decoding.xgrammar_backend")
+
+    def _apply_token_mask(logits, token_bitmask, indices=None, is_cuda_platform=None):
+        for idx in indices or []:
+            token_bitmask[idx] += 1
+        return logits
+
+    backend_mod.apply_token_mask = _apply_token_mask
+    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.guided_decoding.xgrammar_backend", backend_mod)
+
+    logits = paddle.ones([2, 3], dtype="float32")
+    masked = guided.apply_token_mask(logits)
+
+    assert guided.token_bitmask is not None
+    assert async_processor.accepted_tokens == []
+    assert paddle.allclose(masked, logits)
+
+
 def test_sampler_compute_logprobs_handles_metadata(set_platform, fd_config_factory):
     set_platform("cuda")
     sampler = sampler_module.Sampler(fd_config=fd_config_factory())
@@ -306,6 +384,28 @@ def test_sampler_compute_logprobs_handles_metadata(set_platform, fd_config_facto
     )
     result = sampler.compute_logprobs(logits, sampling_metadata=metadata)
     assert list(result.shape) == [2, 3]
+
+
+def test_sampler_compute_logprobs_with_scaling(set_platform, fd_config_factory):
+    set_platform("cuda")
+    sampler = sampler_module.Sampler(fd_config=fd_config_factory())
+    logits = paddle.ones([2, 3], dtype="float32")
+    share_inputs = dict(
+        seq_lens_this_time=_tensor([[1], [0]], dtype="int64"),
+        seq_lens_encoder=_tensor([[1], [0]], dtype="int64"),
+        seq_lens_decoder=_tensor([[1], [0]], dtype="int64"),
+    )
+    metadata = _build_sampling_metadata(
+        temperature=_tensor([[2.0], [1.0]]),
+        temp_scaled_logprobs=_tensor([[1], [0]], dtype="bool"),
+        temp_scaled_logprobs_flag=True,
+        top_p_normalized_logprobs=_tensor([[1], [0]], dtype="bool"),
+        top_p_normalized_logprobs_flag=True,
+        share_inputs=share_inputs,
+        top_p=_tensor([[0.5], [1.0]]),
+    )
+    logprobs = sampler.compute_logprobs(logits, sampling_metadata=metadata)
+    assert logprobs.shape == logits.shape
 
 
 def test_sampler_gather_logprobs_variants(set_platform, fd_config_factory):
@@ -356,6 +456,12 @@ def test_sampler_forward_intel_hpu_path(set_platform, fd_config_factory):
     logits = paddle.randn([2, 3])
     tokens = sampler.forward_intel_hpu(logits, metadata, batch_ids, max_batch=2, rank=0, local_rank=0)
     assert tokens.shape[0] == 2
+
+
+def test_sampler_raises_for_unsupported_platform(set_platform, fd_config_factory):
+    set_platform("unknown")
+    with pytest.raises(NotImplementedError):
+        sampler_module.Sampler(fd_config=fd_config_factory())
 
 
 def test_speculative_sampler_compute_and_forward(set_platform, fd_config_factory):
@@ -432,4 +538,38 @@ def test_mtp_sampler_noop_hooks(set_platform, fd_config_factory):
     mtp.pre_process()
     mtp.apply_logits_processor(0)
     mtp.set_reasoning_parser(None)
+    mtp.post_process(paddle.zeros([1, 1]))
+
+
+def test_mtp_sampler_prefill_and_reasoning(set_platform, fd_config_factory):
+    set_platform("cuda")
+    cfg = fd_config_factory()
+    mtp = sampler_module.MTPSampler(cfg)
+    mtp.set_reasoning_parser(lambda *_: None)
+    processor = _AddOffsetProcessor(0.5)
+    mtp.apply_logits_processor(0, processor)
+    logits = paddle.zeros([1, 3], dtype="float32")
+    share_inputs = {
+        "seq_lens_this_time": _tensor([[1]], dtype="int64"),
+        "seq_lens_encoder": _tensor([[0]], dtype="int64"),
+        "seq_lens_decoder": _tensor([[0]], dtype="int64"),
+        "batch_token_num": _tensor([1], dtype="int64"),
+        "draft_logits": paddle.randn([1, 3], dtype="float32"),
+        "substep": 0,
+        "accept_tokens": _tensor([[0, 0]], dtype="int64"),
+        "cu_next_token_offset": _tensor([0], dtype="int64"),
+        "cu_batch_token_offset": _tensor([0, 1], dtype="int32"),
+        "output_padding_offset": _tensor([[0]], dtype="int64"),
+        "output_cum_offsets": _tensor([[0]], dtype="int64"),
+    }
+    metadata = _build_sampling_metadata(
+        share_inputs=share_inputs,
+        top_p_normalized_logprobs=_tensor([[1]], dtype="int64"),
+        top_p=_tensor([[0.5]], dtype="float32"),
+        top_k=_tensor([[2]], dtype="int64"),
+        top_k_list=[2],
+        temperature=_tensor([[1.0]], dtype="float32"),
+    )
+    logprobs = mtp.compute_logprobs(logits, metadata)
+    assert logprobs.shape == logits.shape
     mtp.post_process(paddle.zeros([1, 1]))
