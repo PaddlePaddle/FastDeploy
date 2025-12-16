@@ -52,6 +52,7 @@ jobs:
               echo "Directory ${REPO_NAME} exists, removing it..."
               rm -rf ${REPO_NAME}*
             fi
+            git config --global --add safe.directory '*'
             wget -q --no-proxy ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
