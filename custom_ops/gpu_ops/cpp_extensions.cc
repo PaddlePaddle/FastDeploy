@@ -1233,14 +1233,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
@@ -1248,7 +1248,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("recv_expert_count"),
         py::arg("block_size"),
-        py::arg("use_ue8m0"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
 #ifdef ENABLE_MACHETE
