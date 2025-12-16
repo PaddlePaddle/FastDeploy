@@ -21,7 +21,7 @@ RUN cd MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64  \
     && ./mlnxofedinstall --user-space-only --skip-distro-check --without-fw-update --force --without-ucx-cuda
 
 RUN apt install -y build-essential tcl \
-    && wget http://download.redis.io/releases/redis-7.2.0.tar.gz \
+    && wget -q --no-proxy https://paddle-qa.bj.bcebos.com/FastDeploy/redis-7.2.0.tar.gz \
     && tar xzf redis-7.2.0.tar.gz && cd redis-7.2.0 \
     && make && make PREFIX=/usr/local/redis install
 

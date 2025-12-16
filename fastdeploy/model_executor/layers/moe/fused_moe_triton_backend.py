@@ -14,11 +14,12 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -283,6 +284,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -315,6 +317,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 True,  # apply_norm_weight,
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
+
         up_gate_proj_out = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
             dtype=x.dtype,
@@ -433,8 +439,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
-        if layer.reduce_results and layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -667,6 +671,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -726,6 +731,9 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             ceil_div(max_possible_num_post_padded, config["BLOCK_SIZE_M"])
             * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
         )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         up_gate_proj_out = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
@@ -808,7 +816,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             N=hidden_size,
             K=moe_intermediate_size,
             stride_am=x_q.strides[0],
-            stride_ak=x_scale.strides[1],
+            stride_ak=x_q.strides[1],
             stride_be=layer.down_proj_weight.strides[0],
             stride_bk=layer.down_proj_weight.strides[2],
             stride_bn=layer.down_proj_weight.strides[1],
@@ -837,9 +845,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
-
-        if layer.reduce_results and layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -959,6 +964,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -979,6 +985,9 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
             True,  # apply_norm_weight,
             False,
         )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         up_gate_proj_out = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
@@ -1128,9 +1137,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
-
-        if layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -1422,13 +1428,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 down_proj_weight_name = self.added_weight_attrs[1]
                 up_gate_proj_scale_name = self.added_scale_attrs[0]
                 down_proj_scale_name = self.added_scale_attrs[1]
-                if (
-                    not weight_fully_copied(getattr(layer, up_gate_proj_weight_name))
-                    or not weight_fully_copied(getattr(layer, down_proj_weight_name))
-                    or not weight_fully_copied(getattr(layer, up_gate_proj_scale_name))
-                    or not weight_fully_copied(getattr(layer, down_proj_scale_name))
-                ):
-                    return
                 process_weight_transpose(layer, up_gate_proj_weight_name)
                 process_weight_transpose(layer, down_proj_weight_name)
                 process_weight_transpose(layer, up_gate_proj_scale_name)
@@ -1482,6 +1481,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1504,6 +1504,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             True,  # apply_norm_weight
             False,
         )
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         config = {
             "BLOCK_SIZE_M": 64,
@@ -1631,8 +1633,5 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         intermediate_cache3.reshape_([token_num, top_k, hidden_size])
         out = intermediate_cache3.sum(axis=1)
-
-        if layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
 
         return out

@@ -22,7 +22,7 @@ import traceback
 import zmq
 
 from fastdeploy.inter_communicator import ZmqTcpServer
-from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
+from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("internal_adapter_utils", "internal_adapter_utils.log")
@@ -88,16 +88,19 @@ class InternalAdapter:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
                 elif task["cmd"] == "get_metrics":
-                    metrics_text = get_filtered_metrics(
-                        [],
-                        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
-                    )
+                    metrics_text = get_filtered_metrics()
                     result = {"task_id": task_id_str, "result": metrics_text}
                     logger.debug(f"Response for task: {task_id_str}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
                     self.engine.engine_worker_queue.put_connect_rdma_task(task)
+                elif task["cmd"] == "check_health":
+                    is_health = self.engine.token_processor.healthy()
+                    result = {"task_id": task_id_str, "result": is_health}
+                    logger.debug(f"Response for task: {task_id_str}: is_health {is_health}")
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
             except Exception as e:
                 logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")

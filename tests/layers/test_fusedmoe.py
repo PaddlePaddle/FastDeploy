@@ -31,6 +31,7 @@ from fastdeploy.config import (
     LoadConfig,
     ModelConfig,
     ParallelConfig,
+    RoutingReplayConfig,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
@@ -432,6 +433,13 @@ gate_correction_bias_real_data = paddle.to_tensor(
 )
 
 
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
+
+
 class FuseMoEWrapper(paddle.nn.Layer):
     def __init__(
         self,
@@ -469,6 +477,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
             ips=",".join(["0"] * nnodes),
+            routing_replay_config=RoutingReplayConfig({}),
         )
         self.fd_config.parallel_config.tp_group = None
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
@@ -535,12 +544,12 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 7168
-        self.moe_intermediate_size = 3584
-        self.moe_num_experts = 64
+        self.hidden_size = 4096
+        self.moe_intermediate_size = 2048
+        self.moe_num_experts = 160
         self.moe_k = 8
-        self.hidden_act = "silu"
-        self.num_attention_heads = 64
+        self.num_layers = 2
+        self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
@@ -559,7 +568,6 @@ class TestFusedMoE(unittest.TestCase):
             "moe_intermediate_size": self.moe_intermediate_size,
             "moe_num_experts": self.moe_num_experts,
             "moe_k": self.moe_k,
-            "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
             "dtype": "bfloat16",
         }
@@ -590,32 +598,38 @@ class TestFusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
-        num_layers = 80
-        real_weight_layers = 20
+        num_layers = self.num_layers
+        real_weight_layers = num_layers // 2
         fused_moe = [None] * real_weight_layers
         for i in range(real_weight_layers):
             fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
-        # test_token_nums = [1024 * i for i in [1,2,4,8,16,32]]
+        is_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
+        test_token_nums = [4096 * i for i in [1, 2, 4, 8]]
+        if is_decoder:
+            test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
             def fake_model_run():
                 for j in range(num_layers):
-                    out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
+                    out = fused_moe[j % real_weight_layers].fused_moe(
+                        cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                    )
 
                 return out
 
-            moe_cuda_graphs[idx] = graphs.CUDAGraph()
-            moe_cuda_graphs[idx].capture_begin()
+            if is_decoder:
+                moe_cuda_graphs[idx] = graphs.CUDAGraph()
+                moe_cuda_graphs[idx].capture_begin()
 
             fake_model_run()
 
-            moe_cuda_graphs[idx].capture_end()
+            if is_decoder:
+                moe_cuda_graphs[idx].capture_end()
 
             num_tests = 20
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
@@ -623,7 +637,10 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                moe_cuda_graphs[idx].replay()
+                if is_decoder:
+                    moe_cuda_graphs[idx].replay()
+                else:
+                    fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()

@@ -205,9 +205,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev-1215")
     else:
-        base_file = "ernie-4_5-vl-base-tp2-dev"
+        base_file = "ernie-4_5-vl-base-tp2-dev-1215"
     with open(base_file, "r") as f:
         content2 = f.read()
 
@@ -482,7 +482,7 @@ def test_chat_with_thinking(openai_client, capsys):
         max_tokens=10,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
-    assert response.choices[0].message.reasoning_content is None
+    assert response.choices[0].message.reasoning_content == ""
     assert "</think>" not in response.choices[0].message.content
 
     # test logic
@@ -957,4 +957,4 @@ def test_thinking_logic_flag(openai_client, capsys):
             "chat_template_kwargs": {"enable_thinking": False},
         },
     )
-    assert response_case_3.choices[0].message.reasoning_content is None
+    assert response_case_3.choices[0].message.reasoning_content == ""

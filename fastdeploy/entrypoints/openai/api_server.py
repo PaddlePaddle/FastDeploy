@@ -30,8 +30,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
-from prometheus_client import CONTENT_TYPE_LATEST
+from opentelemetry.propagate import extract
 
+import fastdeploy.metrics.trace as tracing
+from fastdeploy import envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
@@ -58,18 +60,7 @@ from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
-from fastdeploy.metrics.metrics import (
-    EXCLUDE_LABELS,
-    cleanup_prometheus_files,
-    get_filtered_metrics,
-    main_process_metrics,
-)
-from fastdeploy.metrics.trace_util import (
-    fd_start_span,
-    inject_to_metadata,
-    instrument,
-    lable_span,
-)
+from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -79,6 +70,8 @@ from fastdeploy.utils import (
     is_port_available,
     retrive_model_from_server,
 )
+
+tracing.process_tracing_init()
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
@@ -179,23 +172,14 @@ async def lifespan(app: FastAPI):
         verification = False
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
+    engine_args = EngineArgs.from_cli_args(args)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
-        model_name_or_path=args.model,
-        tokenizer=args.tokenizer,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
-        limit_mm_per_prompt=args.limit_mm_per_prompt,
-        mm_processor_kwargs=args.mm_processor_kwargs,
-        reasoning_parser=args.reasoning_parser,
-        data_parallel_size=args.data_parallel_size,
-        enable_logprob=args.enable_logprob,
+        fd_config=fd_config,
         workers=args.workers,
-        tool_parser=args.tool_call_parser,
-        enable_prefix_caching=args.enable_prefix_caching,
-        splitwise_role=args.splitwise_role,
-        max_processor_cache=args.max_processor_cache,
+        max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -223,19 +207,17 @@ async def lifespan(app: FastAPI):
         args.max_waiting_time,
     )
 
-    engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
-        config,
+        fd_config,
         pid,
         args.ips,
         args.max_waiting_time,
         chat_template,
     )
     reward_handler = OpenAIServingReward(
-        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
@@ -263,7 +245,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
 app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
-instrument(app)
 
 
 env_api_key_func = environment_variables.get("FD_API_KEY")
@@ -384,19 +365,23 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
 
 
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: ChatCompletionRequest):
+async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
     api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    if envs.TRACES_ENABLE:
+        if req.headers:
+            headers = dict(req.headers)
+            trace_context = extract(headers)
+            request.trace_context = trace_context
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            inject_to_metadata(request)
-            lable_span(request)
+            tracing.label_span(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
@@ -416,18 +401,23 @@ async def create_chat_completion(request: ChatCompletionRequest):
 
 
 @app.post("/v1/completions")
-async def create_completion(request: CompletionRequest):
+async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
     api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    if envs.TRACES_ENABLE:
+        if req.headers:
+            headers = dict(req.headers)
+            trace_context = extract(headers)
+            request.trace_context = trace_context
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            lable_span(request)
+            tracing.label_span(request)
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
@@ -488,6 +478,7 @@ async def create_embedding(request: EmbeddingRequest):
 
 
 @app.get("/update_model_weight")
+@tracing.trace_span("update_model_weight")
 def update_model_weight(request: Request) -> Response:
     """
     update model weight
@@ -502,6 +493,7 @@ def update_model_weight(request: Request) -> Response:
 
 
 @app.get("/clear_load_weight")
+@tracing.trace_span("clear_load_weight")
 def clear_load_weight(request: Request) -> Response:
     """
     clear model weight
@@ -515,6 +507,39 @@ def clear_load_weight(request: Request) -> Response:
         return Response(content="Dynamic Load Weight Disabled.", status_code=404)
 
 
+@app.post("/rearrange_experts")
+@tracing.trace_span("rearrange_experts")
+async def rearrange_experts(request: Request):
+    """
+    rearrange experts
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.rearrange_experts(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/get_per_expert_tokens_stats")
+@tracing.trace_span("get_per_expert_tokens_stats")
+async def get_per_expert_tokens_stats(request: Request):
+    """
+    get per expert tokens stats
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.get_per_expert_tokens_stats(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/check_redundant")
+@tracing.trace_span("check_redundant")
+async def check_redundant(request: Request):
+    """
+    check redundant
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.check_redundant(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
 def launch_api_server() -> None:
     """
     启动http服务
@@ -524,7 +549,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
-    fd_start_span("FD_START")
+    # fd_start_span("FD_START")
 
     options = {
         "bind": f"{args.host}:{args.port}",
@@ -543,20 +568,26 @@ def launch_api_server() -> None:
 
 metrics_app = FastAPI()
 
+# Be tolerant to tests that monkeypatch/partially mock args.
+_metrics_port = getattr(args, "metrics_port", None)
+_main_port = getattr(args, "port", None)
+
+if _metrics_port is None or (_main_port is not None and _metrics_port == _main_port):
+    metrics_app = app
+
 
 @metrics_app.get("/metrics")
+@tracing.trace_span("metrics")
 async def metrics():
     """
     metrics
     """
-    metrics_text = get_filtered_metrics(
-        EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-    )
-    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+    metrics_text = get_filtered_metrics()
+    return Response(metrics_text, media_type="text/plain")
 
 
 @metrics_app.get("/config-info")
+@tracing.trace_span("config-info")
 def config_info() -> Response:
     """
     Get the current configuration of the API server.
@@ -592,8 +623,6 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    prom_dir = cleanup_prometheus_files(True)
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
@@ -707,13 +736,16 @@ def main():
         if not load_data_service():
             return
     api_server_logger.info("FastDeploy LLM engine initialized!\n")
-    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    if args.metrics_port is not None and args.metrics_port != args.port:
+        launch_metrics_server()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    else:
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
     launch_worker_monitor()
     launch_controller_server()
-    launch_metrics_server()
     launch_api_server()
 
 

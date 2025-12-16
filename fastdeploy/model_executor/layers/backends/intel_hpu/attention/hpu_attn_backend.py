@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import HPUForwardMeta
 
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+from fastdeploy.model_executor.layers.normalization import RMSNorm
 
 
 def get_attention_mask(seq_lens_encoder, seq_lens_decoder, batch_size, query_len):
@@ -80,6 +81,8 @@ class AttentionBackend_HPU(AttentionBackend):
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
         forward_meta: HPUForwardMeta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """
         Run a forward.
@@ -96,6 +99,8 @@ class AttentionBackend_HPU(AttentionBackend):
                 o_proj,
                 layer,
                 forward_meta,
+                q_norm,
+                k_norm,
             )
         elif forward_meta.forward_mode.is_decode():
             return self.forward_decode(
@@ -104,6 +109,8 @@ class AttentionBackend_HPU(AttentionBackend):
                 o_proj,
                 layer,
                 forward_meta,
+                q_norm,
+                k_norm,
             )
         else:
             return self.forward_extend(
@@ -112,6 +119,8 @@ class AttentionBackend_HPU(AttentionBackend):
                 o_proj,
                 layer,
                 forward_meta,
+                q_norm,
+                k_norm,
             )
 
     def forward_mixed(
@@ -121,6 +130,8 @@ class AttentionBackend_HPU(AttentionBackend):
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
         forward_meta: HPUForwardMeta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """Run a forward for mix."""
         raise NotImplementedError()
@@ -132,6 +143,8 @@ class AttentionBackend_HPU(AttentionBackend):
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
         forward_meta: HPUForwardMeta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """Run a forward for decode."""
         raise NotImplementedError()
@@ -143,6 +156,8 @@ class AttentionBackend_HPU(AttentionBackend):
         o_proj: RowParallelLinear,
         layer: paddle.nn.Layer,
         forward_meta: HPUForwardMeta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """Run a forward for extend."""
         raise NotImplementedError()
@@ -186,7 +201,15 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     HPUAttentionBackend backend implementation.
     """
 
-    def __init__(self, llm_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        llm_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ):
         """
         HPUAttentionBackend __init__
         """
@@ -203,7 +226,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         self.speculate_max_draft_token_num: int = llm_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = llm_config.speculative_config.model_type == "mtp"
         self.rank: int = llm_config.parallel_config.tensor_parallel_rank
-        self.nranks = llm_config.parallel_config.tensor_parallel_size
+        self.tp_size = llm_config.parallel_config.tensor_parallel_size
 
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
@@ -239,14 +262,23 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: Optional[str] = None,
     ):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim)
+        key_cache_shape = value_cache_shape = [max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim]
+        return key_cache_shape, value_cache_shape
 
     def forward_extend(
-        self, src, qkv_proj: QKVParallelLinear, o_proj: RowParallelLinear, layer: Attention, forward_meta
+        self,
+        src,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: Attention,
+        forward_meta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """
         forward_extend
@@ -264,11 +296,19 @@ class HPUAttentionBackend(AttentionBackend_HPU):
             qkv_proj.weight,
             qkv_proj.bias,
             forward_meta.rotary_embs,
+            getattr(qkv_proj, "act_scale", None),
+            getattr(qkv_proj, "weight_scale", None),
+            getattr(layer, "q_scale", None),
+            getattr(layer, "cache_k_scale", None),
+            getattr(layer, "cache_v_scale", None),
+            q_norm.weight if q_norm is not None else None,
+            k_norm.weight if k_norm is not None else None,
             self.head_dim,
             self.num_heads,
             forward_meta.total_batch,
             transpose=False,
             use_neox_style=layer.use_neox_rotary_style,
+            epsilon=1e-6,
         )
 
         kv, B, BP_BS, M, H = key_value_states.shape
@@ -315,7 +355,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 softmax_mode=0,
             )
 
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )
@@ -325,7 +365,14 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         return out_linear_out
 
     def forward_decode(
-        self, src, qkv_proj: QKVParallelLinear, o_proj: RowParallelLinear, layer: Attention, forward_meta
+        self,
+        src,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: Attention,
+        forward_meta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
     ):
         """
         forward_decode
@@ -347,8 +394,16 @@ class HPUAttentionBackend(AttentionBackend_HPU):
             qkv_proj.weight,
             qkv_proj.bias,
             o_proj.weight,
-            None,  # past_key: not used in decode mode
-            None,  # past_value: not used in decode mode
+            q_norm.weight if q_norm is not None else None,
+            k_norm.weight if k_norm is not None else None,
+            getattr(qkv_proj, "act_scale", None),
+            getattr(qkv_proj, "weight_scale", None),
+            getattr(layer, "q_scaling_scale", None),
+            getattr(layer, "cache_k_scale", None),
+            getattr(layer, "s_scale", None),
+            getattr(layer, "cache_v_scale", None),
+            getattr(o_proj, "act_scale", None),
+            getattr(o_proj, "weight_scale", None),
             self.head_dim,
             self.num_heads,
             scaling_factor=self.head_dim**-0.5,
@@ -358,7 +413,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         )
 
         # all_reduce
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )

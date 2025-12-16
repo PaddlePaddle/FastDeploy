@@ -254,7 +254,6 @@ class TestTreeMask(unittest.TestCase):
             decoder_block_shape_q,
             self.num_q_head // self.num_kv_head,
             self.block_size,
-            decoder_step_token_num,
         )
         s_time = 0
         for i in range(self.run_time + self.warm_up):

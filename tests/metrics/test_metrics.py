@@ -31,8 +31,6 @@ class TestGetFilteredMetrics(unittest.TestCase):
         3. Ensure metrics registered by extra_register_func are effective
         """
 
-        exclude_names = {"metric_to_exclude"}
-
         # Simulated metrics in base_registry (Gauge instances)
         g_keep = Gauge("metric_to_keep", "Kept metric")
         g_keep.set(1.23)
@@ -45,27 +43,17 @@ class TestGetFilteredMetrics(unittest.TestCase):
             registry.register(g_keep)
             registry.register(g_exclude)
 
-        # Custom metric via extra_register_func
-        def extra_func(registry):
-            g_custom = Gauge("custom_metric_total", "Custom metric")
-            g_custom.set(42)
-            registry.register(g_custom)
-
         with patch(
             "fastdeploy.metrics.metrics.multiprocess.MultiProcessCollector", side_effect=fake_multiprocess_collector
         ):
-            result = get_filtered_metrics(exclude_names=exclude_names, extra_register_func=extra_func)
+            result = get_filtered_metrics()
 
         print("==== result ====\n", result)
-
-        # 1. Excluded metric should not appear
-        self.assertNotIn("metric_to_exclude", result)
 
         # 2. Kept metric should appear
         self.assertIn("metric_to_keep", result)
 
-        # 3. Custom metric should appear
-        self.assertIn("custom_metric_total", result)
+        self.assertIn("metric_to_exclude", result)
 
 
 if __name__ == "__main__":

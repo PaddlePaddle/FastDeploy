@@ -33,6 +33,7 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
+from fastdeploy.cache_manager.ops import get_all_visible_devices
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -243,9 +244,20 @@ class PrefixCacheManager:
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
+        visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if val_cache_shape:
+            if isinstance(val_cache_shape, list):
+                val_shape_str = ",".join(map(str, val_cache_shape))
+            else:
+                val_shape_str = str(val_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+                "FLAGS_allocator_strategy=auto_growth "
+                + visible_devices
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                 + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
                 + f" {sys.executable} {py_path}"
@@ -256,7 +268,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {val_cache_shape}"
+                + val_cache_arg_str
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --enable_splitwise {int(self.enable_splitwise)}"
                 + f" --pod_ip {pod_ip}"
@@ -267,8 +279,9 @@ class PrefixCacheManager:
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
             cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -328,9 +341,20 @@ class PrefixCacheManager:
         py_path = os.path.join(current_dir_path, filename)
         log_dir = envs.FD_LOG_DIR
         cache_messager_processes = []
+        visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if value_cache_shape:
+            if isinstance(value_cache_shape, list):
+                val_shape_str = ",".join(map(str, value_cache_shape))
+            else:
+                val_shape_str = str(value_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+                "FLAGS_allocator_strategy=auto_growth "
+                + visible_devices
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                 + f" {sys.executable} {py_path}"
                 + f" --device_id {int(device_ids[i])}"
@@ -340,7 +364,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {value_cache_shape}"
+                + val_cache_arg_str
                 + f" --pod_ip {pod_ip}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
@@ -349,7 +373,7 @@ class PrefixCacheManager:
                 + f" --engine_pid {pid_suffix}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_{int(device_ids[i])}.log 2>&1"
+                + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -1815,6 +1839,7 @@ class PrefixCacheManager:
         # reset metrics
         self.metrics.reset_metrics()
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def clear_prefix_cache(self):

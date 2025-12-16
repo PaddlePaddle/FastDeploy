@@ -178,6 +178,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& cache_batch_ids,
     const paddle::Tensor& cache_tile_ids,
     const paddle::Tensor& cache_num_blocks,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
     const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
     const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
@@ -187,10 +189,13 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const int kv_token_num,
     const int max_seq_len,
+    const float rms_norm_eps,
+    const bool use_neox_rotary_style,
     const std::string& cache_quant_type,
     const bool rope_3d);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
+    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const int max_dec_len,
@@ -279,13 +284,16 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size);
+                                          const int block_size,
+                                          const bool use_ue8m0);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size);
+                                                 const int block_size,
+                                                 const bool use_ue8m0);
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor& input,
     paddle::Tensor& recv_expert_count,
-    const int block_size);
+    const int block_size,
+    const bool use_ue8m0);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
@@ -381,12 +389,11 @@ void GetBlockShapeAndSplitKVBlock(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num);
+    const int block_size);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& token_num,
-                                             const paddle::Tensor& seq_len);
+                                             const paddle::Tensor& seq_len,
+                                             const int64_t token_num_cpu);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                            const paddle::Tensor& input_ids,
@@ -416,6 +423,7 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& step_idx,
                        const paddle::Tensor& stop_seqs,
                        const paddle::Tensor& stop_seqs_len,
+                       const paddle::Tensor& min_tokens,
                        const bool beam_search);
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
@@ -525,6 +533,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& cache_quant_type_str,
     const int max_seq_len);
 
@@ -648,6 +657,19 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     bool renormalize,
                                     float routed_scaling_factor);
 
+std::vector<paddle::Tensor> NoauxTcRedundant(
+    paddle::Tensor& scores,
+    paddle::Tensor& scores_with_bias,
+    paddle::Tensor& expert_id_to_ep_rank_array,
+    paddle::Tensor& expert_in_rank_num_list,
+    paddle::Tensor& tokens_per_expert_stats_list,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor,
+    int redundant_ep_rank_num_plus_one);
+
 #ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     const paddle::Tensor& x,
@@ -708,9 +730,9 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& input_ids,
     const paddle::Tensor& draft_tokens,
     const paddle::Tensor& cum_offsets,
-    const paddle::Tensor& token_num,
     const paddle::Tensor& seq_len,
-    const paddle::Tensor& seq_lens_encoder);
+    const paddle::Tensor& seq_lens_encoder,
+    const int64_t token_num_cpu);
 
 std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_this_time,
@@ -746,7 +768,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& seq_lens,
                                const paddle::Tensor& stop_seqs,
                                const paddle::Tensor& stop_seqs_len,
-                               const paddle::Tensor& end_ids);
+                               const paddle::Tensor& end_ids,
+                               const paddle::Tensor& min_tokens);
 
 void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& accept_tokens,
@@ -1006,7 +1029,6 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id);
@@ -1017,7 +1039,6 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);
@@ -1214,12 +1235,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
@@ -1227,6 +1250,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("recv_expert_count"),
         py::arg("block_size"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
 #ifdef ENABLE_MACHETE
@@ -1485,6 +1509,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "multi_head_latent_attention function");
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+  m.def("noaux_tc_redundant",
+        &NoauxTcRedundant,
+        "noaux_tc_redundant for MoE compute");
 
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused",

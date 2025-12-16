@@ -23,6 +23,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
 from fastdeploy.platforms import current_platform
 
@@ -106,6 +107,8 @@ class VocabParallelEmbedding(nn.Layer):
         params_dtype: str = "bfloat16",
         prefix="",
         padding_size: int = DEFAULT_VOCAB_PADDING_SIZE,
+        org_num_embeddings: int | None = None,
+        general=False,
     ) -> None:
         """
         Initialize the VocabParallelEmbedding layer for the model.
@@ -132,17 +135,25 @@ class VocabParallelEmbedding(nn.Layer):
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
-        self.padding_size = padding_size
 
-        self.org_vocab_size = num_embeddings
+        self.embedding_dim = embedding_dim
+
+        self.general = general  # used for general Embedding
         self.num_embeddings = num_embeddings
-        num_added_embeddings = num_embeddings - self.org_vocab_size
+        self.padding_size = padding_size
+        if self.general:
+            self.org_vocab_size = num_embeddings
+            self.num_embeddings_padded = num_embeddings
+            self.org_vocab_size_padded = num_embeddings
+        else:
+            self.org_vocab_size = org_num_embeddings or num_embeddings
+            num_added_embeddings = num_embeddings - self.org_vocab_size
 
-        self.org_vocab_size_padded = pad_vocab_size(self.org_vocab_size, self.padding_size)
-        self.num_embeddings_padded = pad_vocab_size(
-            self.org_vocab_size_padded + num_added_embeddings, self.padding_size
-        )
-        assert self.org_vocab_size_padded <= self.num_embeddings_padded
+            self.org_vocab_size_padded = pad_vocab_size(self.org_vocab_size, self.padding_size)
+            self.num_embeddings_padded = pad_vocab_size(
+                self.org_vocab_size_padded + num_added_embeddings, self.padding_size
+            )
+            assert self.org_vocab_size_padded <= self.num_embeddings_padded
         self.shard_indices = self._get_indices(
             self.num_embeddings_padded,
             self.org_vocab_size_padded,
@@ -151,9 +162,6 @@ class VocabParallelEmbedding(nn.Layer):
             self.tensor_parallel_rank,
             self.world_size,
         )
-
-        if num_embeddings % self.world_size != 0:
-            self.num_embeddings_padded = pad_vocab_size(num_embeddings, self.padding_size)
 
         if not self.column_cut:
             self.embeddings = fleet.meta_parallel.VocabParallelEmbedding(
@@ -188,7 +196,7 @@ class VocabParallelEmbedding(nn.Layer):
         Args:
             state_dict (dict): A dictionary containing the checkpoint weights and biases.
         """
-        if self.tie_word_embeddings:
+        if self.tie_word_embeddings and not self.general:
             weight_tensor = get_tensor(state_dict[self.prefix + ".weight"]).astype(paddle.get_default_dtype())
         else:
             weight_tensor = get_tensor(state_dict.pop(self.prefix + ".weight")).astype(paddle.get_default_dtype())
@@ -281,7 +289,7 @@ class VocabParallelEmbedding(nn.Layer):
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             param[:, shard_weight.shape[1] :].fill_(0)
 
-    def forward(self, ids_remove_padding=None) -> paddle.Tensor:
+    def forward(self, ids_remove_padding: paddle.Tensor = None, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -292,6 +300,8 @@ class VocabParallelEmbedding(nn.Layer):
         Returns:
             Tensor: Embedded tensor representation of the input IDs.
         """
+        if forward_meta is not None and forward_meta.is_zero_size:
+            return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
         if self.column_cut:
             input_embedings = self.embeddings(ids_remove_padding)
             inputs_embeds_temp = []

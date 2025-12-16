@@ -67,7 +67,6 @@ class GptOssAttention(nn.Layer):
             input_size=self.num_attention_heads * self.head_dim,
             output_size=self.hidden_size,
             with_bias=True,
-            add_bias=True,
         )
 
         self.attn = Attention(
@@ -124,8 +123,8 @@ class GptOssMoe(nn.Layer):
             model_format="",
         )
 
-    def forward(self, hidden_states: paddle.Tensor):
-        expert_output = self.experts(hidden_states, self.router)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        expert_output = self.experts(hidden_states, self.router, forward_meta)
         return expert_output
 
 
@@ -173,7 +172,7 @@ class GptOssDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
@@ -208,7 +207,7 @@ class GptOssModel(nn.Layer):
         )
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):

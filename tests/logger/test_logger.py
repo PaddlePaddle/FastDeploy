@@ -14,16 +14,18 @@
 
 
 import logging
+import os
 import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
 
+from fastdeploy.logger.handlers import LazyFileHandler
 from fastdeploy.logger.logger import FastDeployLogger
 
 
 class LoggerTests(unittest.TestCase):
-    """修改后的测试类，通过实例测试内部方法"""
+    """Modified test class, testing internal methods through instances"""
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="fd_unittest_")
@@ -35,7 +37,7 @@ class LoggerTests(unittest.TestCase):
         for p in self.env_patchers:
             p.start()
 
-        # 创建测试用实例
+        # Create test instance
         self.logger = FastDeployLogger()
 
     def tearDown(self):
@@ -44,7 +46,7 @@ class LoggerTests(unittest.TestCase):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def test_unified_logger(self):
-        """通过实例测试_get_unified_logger"""
+        """Test _get_unified_logger through instance"""
         test_cases = [(None, "fastdeploy"), ("module", "fastdeploy.module"), ("fastdeploy.utils", "fastdeploy.utils")]
 
         for name, expected in test_cases:
@@ -53,28 +55,117 @@ class LoggerTests(unittest.TestCase):
                 self.assertEqual(result.name, expected)
 
     def test_main_module_handling(self):
-        """测试__main__特殊处理"""
+        """Test __main__ special handling"""
         with patch("__main__.__file__", "/path/to/test_script.py"):
             result = self.logger._get_unified_logger("__main__")
             self.assertEqual(result.name, "fastdeploy.main.test_script")
 
     def test_legacy_logger_creation(self):
-        """通过实例测试_get_legacy_logger"""
+        """Test _get_legacy_logger through instance"""
         legacy_logger = self.logger._get_legacy_logger(
             "test", "test.log", without_formater=False, print_to_console=True
         )
 
-        # 验证基础属性
+        # Verify basic properties
         self.assertTrue(legacy_logger.name.startswith("legacy."))
         self.assertEqual(legacy_logger.level, logging.INFO)
 
-        # 验证handler
-        self.assertEqual(len(legacy_logger.handlers), 3)  # 文件+错误+控制台
+        # Verify handlers
+        self.assertEqual(len(legacy_logger.handlers), 3)  # file + error + console
 
     def test_logger_propagate(self):
-        """测试日志传播设置"""
+        """Test log propagation settings"""
         legacy_logger = self.logger._get_legacy_logger("test", "test.log")
         self.assertTrue(legacy_logger.propagate)
+
+    def test_get_trace_logger_basic(self):
+        """Test basic functionality of get_trace_logger"""
+        logger = self.logger.get_trace_logger("test_trace", "trace_test.log")
+
+        # Verify basic properties
+        self.assertTrue(logger.name.startswith("legacy."))
+        self.assertEqual(logger.level, logging.INFO)
+
+        # Verify handler count
+        self.assertEqual(len(logger.handlers), 2)  # main log and error log
+
+    def test_get_trace_logger_with_console(self):
+        """Test trace logger with console output"""
+        logger = self.logger.get_trace_logger("test_trace_console", "trace_console_test.log", print_to_console=True)
+
+        # Verify handler count
+        self.assertEqual(len(logger.handlers), 3)  # main log + error log + console
+
+    def test_get_trace_logger_without_formatter(self):
+        """Test trace logger without formatting"""
+        logger = self.logger.get_trace_logger("test_trace_no_fmt", "trace_no_fmt_test.log", without_formater=True)
+
+        # Verify handlers have no formatter
+        for handler in logger.handlers:
+            self.assertIsNone(handler.formatter)
+
+    def test_get_trace_logger_debug_mode(self):
+        """Test trace logger in debug mode"""
+        with patch("fastdeploy.envs.FD_DEBUG", "1"):
+            logger = self.logger.get_trace_logger("test_trace_debug", "trace_debug_test.log")
+            self.assertEqual(logger.level, logging.DEBUG)
+
+    def test_get_trace_logger_directory_creation(self):
+        """Test line 105: log directory creation functionality"""
+        import os
+        from unittest.mock import patch
+
+        # Test creation of non-existent directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            test_log_dir = os.path.join(temp_dir, "test_logs")
+            with patch("fastdeploy.envs.FD_LOG_DIR", test_log_dir):
+                # Ensure directory does not exist
+                self.assertFalse(os.path.exists(test_log_dir))
+
+                # Call get_trace_logger, should create directory
+                self.logger.get_trace_logger("test_dir_creation", "test.log")
+
+                # Verify directory is created
+                self.assertTrue(os.path.exists(test_log_dir))
+                self.assertTrue(os.path.isdir(test_log_dir))
+
+    def test_get_trace_logger_handler_cleanup(self):
+        """Test line 126: handler cleanup functionality"""
+        # First create a logger and add some handlers
+        test_logger = logging.getLogger("legacy.test_cleanup")
+        initial_handler_count = len(test_logger.handlers)
+
+        # Add some test handlers
+        test_handler1 = logging.StreamHandler()
+        test_handler2 = logging.StreamHandler()
+        test_logger.addHandler(test_handler1)
+        test_logger.addHandler(test_handler2)
+
+        # Verify handlers are added
+        self.assertEqual(len(test_logger.handlers), initial_handler_count + 2)
+
+        # Call get_trace_logger, should clean up existing handlers
+        logger = self.logger.get_trace_logger("test_cleanup", "cleanup_test.log")
+
+        # Verify new logger's handler count (should be 2: main log and error log)
+        self.assertEqual(len(logger.handlers), 2)
+
+    def test_log_file_name_handling_error(self):
+        """Test log file name handling logic"""
+        test_cases = [
+            ("test", "test_error.log"),
+        ]
+
+        for input_name, expected_name in test_cases:
+            with self.subTest(input_name=input_name):
+                # Create logger and get actual processed file name
+                logger = self.logger.get_trace_logger("test_file_name", input_name)
+
+                # Get file name from handler
+                for handler in logger.handlers:
+                    if isinstance(handler, LazyFileHandler):
+                        actual_name = os.path.basename(handler.filename)
+                        self.assertTrue(actual_name.endswith(expected_name))
 
 
 class LoggerExtraTests(unittest.TestCase):

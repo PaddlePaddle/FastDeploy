@@ -39,7 +39,7 @@ from backend_request_func import (
     RequestFuncInput,
     RequestFuncOutput,
 )
-from benchmark_dataset import EBChatDataset, EBDataset, SampleRequest
+from benchmark_dataset import EBChatDataset, EBDataset, RandomTextDataset, SampleRequest
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 from tqdm.asyncio import tqdm
 
@@ -318,6 +318,7 @@ async def benchmark(
     selected_percentiles: list[float],
     ignore_eos: bool,
     debug: bool,
+    pd_metrics: bool,
     goodput_config_dict: dict[str, float],
     max_concurrency: Optional[int],
     lora_modules: Optional[Iterable[str]],
@@ -337,6 +338,7 @@ async def benchmark(
     )
     test_history_QA = input_requests[0].history_QA
     response_format = input_requests[0].response_format
+    random_flag = input_requests[0].random_flag
 
     test_input = RequestFuncInput(
         model=model_id,
@@ -351,8 +353,10 @@ async def benchmark(
         logprobs=logprobs,
         ignore_eos=ignore_eos,
         debug=debug,
+        pd_metrics=pd_metrics,
         extra_body=extra_body,
         response_format=response_format,
+        random_flag=random_flag,
     )
 
     print("test_input:", test_input)
@@ -385,6 +389,7 @@ async def benchmark(
             ignore_eos=ignore_eos,
             extra_body=extra_body,
             response_format=response_format,
+            random_flag=random_flag,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -424,6 +429,7 @@ async def benchmark(
         )
         history_QA = request.history_QA
         response_format = request.response_format
+        random_flag = request.random_flag
 
         req_model_id, req_model_name = model_id, model_name
         if lora_modules:
@@ -442,9 +448,11 @@ async def benchmark(
             output_len=output_len,
             logprobs=logprobs,
             debug=debug,
+            pd_metrics=pd_metrics,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
             response_format=response_format,
+            random_flag=random_flag,
         )
         tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
     outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
@@ -461,6 +469,7 @@ async def benchmark(
             output_len=test_output_len,
             logprobs=logprobs,
             response_format=response_format,
+            random_flag=random_flag,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -497,6 +506,12 @@ async def benchmark(
     else:
         benchmark_duration = time.perf_counter() - benchmark_start_time
         print(f"benchmark_duration: {benchmark_duration} 秒")
+
+    if random_flag:
+        print("指定随机输入输出长度测试")
+        print(f"random_input_len: {args.random_input_len}")
+        print(f"random_output_len: {args.random_output_len}")
+        print(f"random_range_ratio: {args.random_range_ratio}")
 
     metrics, actual_output_lens = calculate_metrics(
         # input_requests=input_requests,
@@ -536,6 +551,7 @@ async def benchmark(
         "generated_texts": [output.generated_text for output in outputs],
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
+        "metrics": [output.metrics for output in outputs],
     }
 
     def process_one_metric(
@@ -570,6 +586,49 @@ async def benchmark(
             p_word = str(int(p)) if int(p) == p else str(p)
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
             result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+
+    def process_pd_metrics(model_outputs, metric_key):
+        # 收集所有该 metric 的数值
+        values = []
+        percentiles = []
+        for p in args.metric_percentiles.split(","):
+            p = p.strip()
+            if p:
+                percentiles.append(float(p))
+        for item in model_outputs:
+            metrics = item.metrics
+            if metrics.get(metric_key, None) is not None:
+                values.append(metrics[metric_key])
+
+        if not values:
+            print(f"[WARN] metric_key '{metric_key}' not found in outputs.")
+            return
+
+        arr = np.array(values) * 1000  # 秒 -> 毫秒
+
+        print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Mean {metric_key} (ms):",
+                np.mean(arr),
+            )
+        )
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Median {metric_key} (ms):",
+                np.median(arr),
+            )
+        )
+        for p in percentiles:
+            v = np.percentile(arr, p)
+            print("{:<40} {:<10.2f}".format(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms):", v))
+            # print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Successful {metric_key}:",
+                len(arr),
+            )
+        )
 
     def process_one_length(
         # E.g., "ttft"
@@ -612,6 +671,19 @@ async def benchmark(
     process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
     process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
+    if any(item.metrics for item in outputs):
+        process_pd_metrics(outputs, "prefill_cost_time")
+        process_pd_metrics(outputs, "prefill_prepare_cost_time")
+        process_pd_metrics(outputs, "preprocess_cost_time")
+        process_pd_metrics(outputs, "cache_in_scheduler_cost_time")
+        process_pd_metrics(outputs, "ask_decode_resource_cost_time")
+        process_pd_metrics(outputs, "prefill_first_token_infer_cost_time")
+        process_pd_metrics(outputs, "wait_sending_cache_cost_time")
+        process_pd_metrics(outputs, "decode_preallocate_cost_time")
+        process_pd_metrics(outputs, "decode_prepare_cost_time")
+        process_pd_metrics(outputs, "decode_second_token_infer_cost_time")
+        process_pd_metrics(outputs, "first_token_transmission_cost_time")
+        process_pd_metrics(outputs, "second_token_transmission_cost_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("output_len", "Output Length", "Output Length")
@@ -866,6 +938,12 @@ def main(args: argparse.Namespace):
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
+        "random": lambda: RandomTextDataset().sample(
+            num_requests=args.num_prompts,
+            random_input_len=args.random_input_len,
+            random_output_len=args.random_output_len,
+            random_range_ratio=args.random_range_ratio,
+        ),
     }
 
     try:
@@ -923,6 +1001,7 @@ def main(args: argparse.Namespace):
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
             ignore_eos=args.ignore_eos,
             debug=args.debug,
+            pd_metrics=args.pd_metrics,
             goodput_config_dict=goodput_config_dict,
             max_concurrency=args.max_concurrency,
             lora_modules=args.lora_modules,
@@ -1021,15 +1100,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset-name",
         type=str,
-        default="sharegpt",
+        default="EBChat",
         choices=[
-            "sharegpt",
-            "burstgpt",
-            "sonnet",
-            "random",
-            "hf",
-            "EB",
             "EBChat",
+            "random",
         ],
         help="Name of the dataset to benchmark on.",
     )
@@ -1115,6 +1189,11 @@ if __name__ == "__main__":
         "--shuffle",
         action="store_true",
         help="shuffle dataset",
+    )
+    parser.add_argument(
+        "--pd-metrics",
+        action="store_true",
+        help="请求时增加PD分离参数，metrics: True",
     )
     parser.add_argument(
         "--drop-ratio",
@@ -1247,36 +1326,23 @@ if __name__ == "__main__":
     random_group.add_argument(
         "--random-input-len",
         type=int,
-        default=1024,
-        help="Number of input tokens per request, used only for random sampling.",
+        default=200,
+        help="Number of input English words per request, used only for random-text dataset.",
     )
     random_group.add_argument(
         "--random-output-len",
         type=int,
-        default=128,
-        help="Number of output tokens per request, used only for random sampling.",
+        default=1024,
+        help="Number of output tokens per request, used both for random and random-text datasets.",
     )
     random_group.add_argument(
         "--random-range-ratio",
         type=float,
-        default=0.0,
+        default=0.1,
         help="Range ratio for sampling input/output length, "
         "used only for random sampling. Must be in the range [0, 1) to define "
         "a symmetric sampling range"
         "[length * (1 - range_ratio), length * (1 + range_ratio)].",
-    )
-    random_group.add_argument(
-        "--random-prefix-len",
-        type=int,
-        default=0,
-        help=(
-            "Number of fixed prefix tokens before the random context "
-            "in a request. "
-            "The total input length is the sum of `random-prefix-len` and "
-            "a random "
-            "context length sampled from [input_len * (1 - range_ratio), "
-            "input_len * (1 + range_ratio)]."
-        ),
     )
 
     hf_group = parser.add_argument_group("hf dataset options")

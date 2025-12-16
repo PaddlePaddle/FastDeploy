@@ -83,7 +83,7 @@ The built packages will be in the ```FastDeploy/dist``` directory.
 ## 5. Precompiled Operator Wheel Packages
 
 FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code.
-This method currently supports **SM90 architecture (e.g., H20/H100)** and **CUDA 12.6** environments only.
+This method currently supports **SM80/90 architecture (e.g., A100/H100)** and **CUDA 12.6** environments only.
 
 > By default, `build.sh` compiles all custom operators from source.To use the precompiled package, enable it with the `FD_USE_PRECOMPILED` parameter.
 > If the precompiled package cannot be downloaded or does not match the current environment, the system will automatically fall back to `4. Build Wheel from Source`.
@@ -104,7 +104,7 @@ cd FastDeploy
 # Argument 1: Whether to build wheel package (1 for yes)
 # Argument 2: Python interpreter path
 # Argument 3: Whether to compile CPU inference operators (false for GPU only)
-# Argument 4: Target GPU architectures (currently supports [90])
+# Argument 4: Target GPU architectures (currently supports 80/90)
 # Argument 5: Whether to use precompiled operators (1 for enable)
 # Argument 6 (optional): Specific commitID for precompiled operators(The default is the current commit ID.)
 
@@ -121,7 +121,7 @@ After the build completes, the operator binaries can be found in `FastDeploy/fas
 > **Notes:**
 >
 > - This mode prioritizes downloading precompiled GPU operator wheels to reduce build time.
-> - Currently supports **GPU + SM90 + CUDA 12.6** only.
+> - Currently supports **GPU, SM80/90, CUDA 12.6** only.
 > - For custom architectures or modified operator logic, please use **source compilation (Section 4)**.
 > - You can check whether the precompiled wheel for a specific commit has been successfully built on the [FastDeploy CI Build Status Page](https://github.com/PaddlePaddle/FastDeploy/actions/workflows/ci_image_update.yml).
 

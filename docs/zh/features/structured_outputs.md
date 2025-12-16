@@ -7,6 +7,7 @@
 Structured Outputs 是指通过预定义格式约束，使大模型生成内容严格遵循指定结构。该功能可显著提升生成结果的可控性，适用于需要精确格式输出的场景（如API调用、数据解析、代码生成等），同时支持动态语法扩展，平衡灵活性与规范性。
 
 FastDeploy 支持使用 [XGrammar](https://xgrammar.mlc.ai/docs/) 后端生成结构化输出。
+FastDeploy 支持使用 [LLguidance](https://github.com/guidance-ai/llguidance) 后端生成结构化输出。
 
 支持输出格式
 
