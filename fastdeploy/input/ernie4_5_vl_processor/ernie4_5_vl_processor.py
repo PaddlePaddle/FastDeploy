@@ -268,6 +268,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             )
         if request.sampling_params.reasoning_max_tokens is None:
             request.sampling_params.reasoning_max_tokens = max(int(request.sampling_params.max_tokens * 0.8), 1)
+            request.reasoning_max_tokens = request.sampling_params.reasoning_max_tokens
         data_processor_logger.info(f"Processed request {request}")
 
         if self.reasoning_parser:
