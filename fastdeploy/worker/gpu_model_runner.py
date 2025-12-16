@@ -531,7 +531,8 @@ class GPUModelRunner(ModelRunnerBase):
                         assert (
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                        grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                        mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
@@ -555,7 +556,8 @@ class GPUModelRunner(ModelRunnerBase):
             merge_image_features, feature_idx, thw_idx = [], 0, 0
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
-                mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                 mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                 feature_start = feature_position.offset
