@@ -70,19 +70,30 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
 
     MAX_INFER_SEED = 9223372036854775806
 
-    idx = 0
-    for i in range(real_bsz):
-        if seq_lens_encoder[i] == 0:
-            seq_len_this_time = seq_lens_this_time[i]
+    token_lens = paddle.where(
+        seq_lens_encoder[:real_bsz] == 0,
+        seq_lens_this_time,
+        paddle.ones_like(seq_lens_this_time),
+    )
 
-            offsets = 4 * paddle.arange(seq_len_this_time, dtype=topp_seed.dtype)
-            topp_seed[idx : idx + seq_len_this_time, 0] = (
-                topp_seed[idx : idx + seq_len_this_time, 0] + offsets
-            ) % MAX_INFER_SEED
+    batch_start = (paddle.cumsum(token_lens, axis=0) - token_lens.astype("int64")).reshape(-1)  # [B]
+    token_batch_ids = paddle.repeat_interleave(
+        paddle.arange(token_lens.shape[0], dtype="int64"),
+        token_lens,
+    )
+    token_pos = paddle.arange(topp_seed.shape[0], dtype="int64")
+    local_pos = token_pos - paddle.gather(batch_start, token_batch_ids)
 
-            idx += seq_len_this_time
-        else:
-            idx += 1
+    is_decoder = paddle.gather(seq_lens_encoder[:real_bsz] == 0, token_batch_ids).reshape(-1)
+
+    offsets = paddle.where(
+        is_decoder,
+        local_pos * 4,
+        paddle.zeros_like(local_pos),
+    )
+
+    topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
+
     return top_p_padding, top_k_padding, topp_seed
 
 
