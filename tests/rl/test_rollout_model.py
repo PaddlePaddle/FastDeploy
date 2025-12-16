@@ -1,7 +1,7 @@
+import importlib
 import os
 import sys
 import types
-import importlib
 
 import pytest  # type: ignore
 
