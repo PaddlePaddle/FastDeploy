@@ -637,7 +637,7 @@ class GPUModelRunner(ModelRunnerBase):
         batch_pooling_params = []
         for i in range(req_len):
             request = req_dicts[i]
-            # assert isinstance(request, Request)
+            assert isinstance(request, Request)
             idx = request.idx
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
