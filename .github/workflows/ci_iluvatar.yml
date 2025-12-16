@@ -1,8 +1,6 @@
 name: CI_ILUVATAR
 
 on:
-  pull_request:
-    branches: [ develop ]
   workflow_dispatch:
 
 concurrency:

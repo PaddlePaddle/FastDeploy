@@ -15,8 +15,8 @@ ln -sf /usr/local/bin/python3 /usr/local/bin/python
 echo "pip requirements"
 python -m pip install -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
-python -m pip install paddlepaddle==3.3.0.dev20251028 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install paddle-iluvatar-gpu==3.0.0.dev20251029 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 echo "build whl"
 bash build.sh || exit 1
 
