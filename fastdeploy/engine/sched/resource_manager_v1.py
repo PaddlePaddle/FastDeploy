@@ -507,6 +507,8 @@ class ResourceManagerV1(ResourceManager):
     def cache_output_tokens(self, request):
         if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
             with self.lock:
+                if request.request_id in self.to_be_rescheduled_request_id_set:  # has been preempted
+                    return
                 self.cache_manager.update_cache_blocks(
                     request, self.config.cache_config.block_size, request.num_total_tokens - 1
                 )
