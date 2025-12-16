@@ -47,7 +47,7 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 )
 from fastdeploy.model_executor.layers.quantization.mix_quant import MixQuantConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
-from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
+from fastdeploy.model_executor.models.qwen3 import Qwen3Attention as Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
@@ -117,7 +117,7 @@ class TestAttentionPerformance(unittest.TestCase):
         Creates a temporary directory and writes the model configuration to a 'config.json' file.
         """
         config_dict = {
-            "architectures": ["Ernie4_5_MoeForCausalLM"],
+            "architectures": ["Qwen3MoeForCausalLM"],
             "dtype": "bfloat16",
             "max_position_embeddings": 131072,
             "max_model_len": 131072,
@@ -157,7 +157,7 @@ class TestAttentionPerformance(unittest.TestCase):
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
                 kv_cache_quant_type="float8_e4m3fn",
-                # kv_cache_quant_type=None,
+                #kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -302,51 +302,46 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        # prefill_batch_size = 1
-        # prefill_seq_len = 4096
+        prefill_batch_size = 1
+        prefill_seq_len = 2048
 
-        # prefill_hidden_states = paddle.randn(
-        #     [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
-        #     dtype=act_tensor_dtype,
-        # )
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=self.fd_config,
+            attn_backend=self.attn_backend,
+            cache_quant_type_str=self.cache_quant_type_str,
+        )
 
-        # forward_meta = self.create_forward_meta(
-        #     batch_size=prefill_batch_size,
-        #     seq_len=prefill_seq_len,
-        #     mode=ForwardMode.EXTEND,
-        #     fd_config=self.fd_config,
-        #     attn_backend=self.attn_backend,
-        #     cache_quant_type_str=self.cache_quant_type_str,
-        # )
+        self.attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(forward_meta, prefill_hidden_states)
 
-        # self.attn_backend.init_attention_metadata(forward_meta)
-        # self.attn_forward(forward_meta, prefill_hidden_states)
+        paddle.device.synchronize()
 
-        # paddle.device.synchronize()
+        import paddle.profiler as profiler
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
+        p.start()
+        p.step()
 
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
-        # p.start()
-        # p.step()
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
 
-        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # for i in range(test_steps):
-        #     start_events[i].record()
+            self.attn_forward(forward_meta, prefill_hidden_states)
 
-        #     self.attn_forward(forward_meta, prefill_hidden_states)
+            end_events[i].record()
+        paddle.device.synchronize()
 
-        #     end_events[i].record()
-        # paddle.device.synchronize()
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+        p.stop()
 
-        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        # print(times[-5:])
-        # return
-
-        # p.stop()
+        return
 
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],

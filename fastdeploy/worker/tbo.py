@@ -40,6 +40,11 @@ def let_another_thread_run():
         GLOBAL_THREAD_INFO[thread_name][0].clear()
 
 
+def is_last_thread():
+    thread_name = threading.current_thread().name
+
+    return thread_name == "thread1"
+
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
     real_bs = forward_meta.seq_lens_this_time.shape[0]
@@ -110,5 +115,7 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             res[i].hidden_states = forward_meta.hidden_states[start_token_id:end_token_id]
             res[i].decode_states = forward_meta.decode_states[start_bs:end_bs]
 
-        res[i].attn_backend.init_attention_metadata(res[i])
+        # res[i].attn_backend.init_attention_metadata(res[i])
+
+        res[i].microbatch_id = i
     return res

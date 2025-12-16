@@ -514,7 +514,7 @@ class PaddleDisWorkerProc:
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
-            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            logger.info(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -569,6 +569,9 @@ class PaddleDisWorkerProc:
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
             num_blocks_local = self.fd_config.cache_config.total_block_num
+        
+        # num_blocks_local = 2048
+
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
 
         # 4. init kv_cache with accurate num_blocks
@@ -1065,4 +1068,5 @@ def run_worker_proc() -> None:
 
 
 if __name__ == "__main__":
+    print(1111111)
     run_worker_proc()
