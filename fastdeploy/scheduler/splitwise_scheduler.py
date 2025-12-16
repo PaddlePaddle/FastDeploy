@@ -523,9 +523,8 @@ class APIScheduler:
         pnode = self.select_pd(req, pnodes, "prefill")
         if pnode.role == "mixed":
             req.disaggregate_info = None
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = pickle.dumps(req_dict, protocol=5)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             pkey = f"ReqQ_{pnode.nodeid}"
             # logger.info(f"Schedule Req {req_str} to Mixed")
             self.client.lpush(pkey, req_str)
@@ -553,9 +552,8 @@ class APIScheduler:
 
             req.disaggregate_info = disaggregate_info
             pkey, dkey = f"ReqQ_{pnode.nodeid}", f"ReqQ_{dnode.nodeid}"
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = pickle.dumps(req_dict, protocol=5)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             # logger.info(f"Schedule Req {req_str}")
             self.client.lpush(dkey, req_str)
             self.client.lpush(pkey, req_str)
@@ -807,7 +805,6 @@ class InferScheduler:
                 for req_str in reqs:
                     req = pickle.loads(req_str)
                     group = req.get("group", "")
-                    req = Request.from_dict(req)
                     writer_idx = select_writer(req)
                     logger.info(f"Infer Scheduler Get Req: {req.request_id} writer idx {writer_idx}")
                     req.request_id = f"{req.request_id}#{writer_idx}#{group}"
