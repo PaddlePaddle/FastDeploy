@@ -35,9 +35,9 @@ import numpy as np
 import paddle
 import requests
 import zmq
-from opentelemetry import trace
 from tqdm import tqdm
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
@@ -51,7 +51,6 @@ from fastdeploy.inter_communicator import (
     ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
@@ -417,13 +416,16 @@ class EngineService:
         """
         if not isinstance(tasks, list):
             tasks = [tasks]
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
 
         self.resource_manager.check_and_free_block_tables()
 
         need_delete_tasks = []
         for task in tasks:
+            rid = task.request_id.split("_")[0]
+            trace_carrier = task.trace_carrier
+            if trace_carrier:
+                tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+                task.trace_carrier = tracing.trace_get_proc_propagate_context(rid)
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 status, msg = self.split_connector.check_decode_allocated(task)
                 if status:
@@ -447,6 +449,7 @@ class EngineService:
 
         for item in tasks:
             trace_print(LoggingEventName.RESOURCE_ALLOCATE_START, item.request_id, getattr(item, "user", ""))
+
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -484,6 +487,13 @@ class EngineService:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
                 task.metrics.inference_start_time = time.time()
+                tracing.trace_report_span(
+                    tracing.TraceSpanName.SCHEDULE,
+                    task.request_id.split("_")[0],
+                    int(task.metrics.scheduler_recv_req_time * 1e9),
+                    int(task.metrics.inference_start_time * 1e9),
+                    thread_finish_flag=True,
+                )
                 trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
                 trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
                 trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
@@ -694,6 +704,7 @@ class EngineService:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         current_id = 0
         while getattr(self, "running", True):
             try:
@@ -764,6 +775,7 @@ class EngineService:
         """
         Insert tasks to worker with scheduler v1 (ENABLE_V1_KVCACHE_SCHEDULER=1).
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
 
@@ -981,6 +993,18 @@ class EngineService:
                     self.resource_manager.get_real_bsz()
                     for task in tasks:
                         if task.task_type == RequestType.PREFILL:
+                            rid = task.request_id.split("_")[0]
+                            trace_carrier = task.trace_carrier
+                            tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+                            trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                            task.trace_carrier = trace_carrier
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.SCHEDULE,
+                                rid,
+                                int(task.metrics.scheduler_recv_req_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
                             trace_print(
                                 LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
                             )
@@ -1038,6 +1062,7 @@ class EngineService:
         self.receive_output_thread.start()
 
     def _insert_zmq_task_to_scheduler(self):
+        tracing.trace_set_thread_info("Insert Task to Scheduler")
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -1067,7 +1092,6 @@ class EngineService:
                     try:
                         request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
-                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
