@@ -151,6 +151,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    # Whether to collect user information
+    "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+    # Usage stats server url
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv("FD_USAGE_STATS_SERVER", "http://127.0.0.1:5000/"),
+    # Usage stats source
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+    # Usage stats config root
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
 }
 
 
