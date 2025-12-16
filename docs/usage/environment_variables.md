@@ -88,5 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+
+    # Whether to force the inference engine to synchronize token_ids sampled by TP groups.
+    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "0"))),
 }
 ```

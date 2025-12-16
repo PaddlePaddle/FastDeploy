@@ -2447,7 +2447,10 @@ class GPUModelRunner(ModelRunnerBase):
                             [sampler_output.sampled_token_ids.shape[0]], device="cpu", dtype="int64"
                         ),
                     )
-                if self.parallel_config.tensor_parallel_size > 1:
+                if (
+                    envs.FD_SYNC_TOKEN_IDS_ACROSS_TP
+                    or self.fd_config.structured_outputs_config.guided_decoding_backend != "off"
+                ) and self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         sampler_output.sampled_token_ids,
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,

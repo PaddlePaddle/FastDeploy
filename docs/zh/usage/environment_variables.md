@@ -87,5 +87,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
 
     # cache_transfer_manager 进程残留时连续错误阈值
-    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),}
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+
+    # 是否强制推理引擎同步TP组采样到的 token_ids, 默认不同步
+    "FD_SYNC_TOKEN_IDS_ACROSS_TP": lambda: bool(int(os.getenv("FD_SYNC_TOKEN_IDS_ACROSS_TP", "0"))),
+}
 ```
