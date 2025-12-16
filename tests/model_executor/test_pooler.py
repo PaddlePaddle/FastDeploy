@@ -1,711 +1,304 @@
-import argparse
-import importlib
-import importlib.util
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Integration tests for the real pooler implementation.
+
+These tests intentionally rely on the actual Paddle/FastDeploy modules to ensure
+behavior matches production usage and that no fake modules are injected into
+``sys.modules``.
+"""
+from __future__ import annotations
+
 import sys
-import types
-import unittest
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
 
 import numpy as np
+import paddle
+import pytest
+from paddleformers.transformers.configuration_utils import PretrainedConfig
 
+# Ensure repository root is importable when running the file directly.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-
-class _FakePlace:
-    def __init__(self, is_gpu: bool = False) -> None:
-        self._is_gpu = is_gpu
-
-    def is_gpu_place(self) -> bool:
-        return self._is_gpu
-
-
-class _FakeTensor:
-    __array_priority__ = 1000
-
-    def __init__(self, array: Any, dtype: Optional[str] = None, place: Optional[_FakePlace] = None) -> None:
-        if isinstance(array, _FakeTensor):
-            array = array.array
-        if dtype is not None:
-            self.array = np.array(array, dtype=dtype)
-        else:
-            self.array = np.array(array)
-        self.place = place or _FakePlace(False)
-
-    def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f"_FakeTensor({self.array!r})"
-
-    def __len__(self) -> int:
-        return len(self.array)
-
-    @property
-    def dtype(self):  # pragma: no cover - compatibility helper
-        return self.array.dtype
-
-    @property
-    def shape(self):
-        return self.array.shape
-
-    def numpy(self):
-        return self.array
-
-    def tolist(self):
-        return self.array.tolist()
-
-    def item(self):
-        return self.array.item()
-
-    def astype(self, dtype: str) -> "_FakeTensor":
-        return _FakeTensor(self.array.astype(dtype), place=self.place)
-
-    def unsqueeze(self, axis: int) -> "_FakeTensor":
-        return _FakeTensor(np.expand_dims(self.array, axis=axis), place=self.place)
-
-    def split(self, lengths: List[int]):
-        outputs = []
-        start = 0
-        for length in lengths:
-            outputs.append(_FakeTensor(self.array[start : start + length], place=self.place))
-            start += length
-        return outputs
-
-    def cuda(self) -> "_FakeTensor":
-        return _FakeTensor(self.array.copy(), place=_FakePlace(True))
-
-    def __getitem__(self, item):
-        if isinstance(item, _FakeTensor):
-            item = item.array
-        result = self.array.__getitem__(item)
-        if isinstance(result, np.ndarray):
-            return _FakeTensor(result, place=self.place)
-        return result
-
-    def __setitem__(self, key, value):
-        if isinstance(value, _FakeTensor):
-            value = value.array
-        self.array.__setitem__(key, value)
-
-    def __iter__(self):
-        if self.array.ndim == 1:
-            for value in self.array:
-                yield value.item() if hasattr(value, "item") else value
-        else:
-            for row in self.array:
-                yield _FakeTensor(row, place=self.place)
-
-    def _binary_op(self, other: Any, op):
-        other_array = other.array if isinstance(other, _FakeTensor) else other
-        return _FakeTensor(op(self.array, other_array), place=self.place)
-
-    def __add__(self, other):
-        return self._binary_op(other, np.add)
-
-    def __radd__(self, other):
-        return self._binary_op(other, np.add)
-
-    def __sub__(self, other):
-        return self._binary_op(other, np.subtract)
-
-    def __rsub__(self, other):
-        return _FakeTensor(other, place=self.place)._binary_op(self, np.subtract)
-
-    def __truediv__(self, other):
-        return self._binary_op(other, np.divide)
-
-    def __mul__(self, other):  # pragma: no cover - completeness helper
-        return self._binary_op(other, np.multiply)
-
-    def __eq__(self, other):
-        other_array = other.array if isinstance(other, _FakeTensor) else other
-        return self.array == other_array
+from fastdeploy.config import ModelConfig, PoolerConfig
+from fastdeploy.engine.pooling_params import PoolingParams
+from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
+from fastdeploy.model_executor.layers.pooler import (
+    AllPool,
+    CLSPool,
+    DispatchPooler,
+    EmbeddingPoolerHead,
+    LastPool,
+    MeanPool,
+    Pooler,
+    PoolerActivation,
+    PoolerClassify,
+    PoolerIdentity,
+    PoolingType,
+    ResolvedPoolingConfig,
+    RewardPoolerHead,
+    SimplePooler,
+    StepPooler,
+)
 
 
-class _FakeLayer:
-    def __call__(self, *args, **kwargs):
-        return self.forward(*args, **kwargs)
+@pytest.fixture(autouse=True)
+def _stub_pretrained_config(monkeypatch):
+    """Avoid remote downloads when constructing :class:`ModelConfig`."""
 
-    def forward(self, *args, **kwargs):  # pragma: no cover - interface requirement
-        raise NotImplementedError
+    dummy_config = {
+        "hidden_size": 8,
+        "num_attention_heads": 2,
+        "vocab_size": 10,
+        "architectures": ["TestModel"],
+    }
 
+    def _fake_get_config_dict(cls, _name, **_kwargs):
+        return dummy_config.copy(), None
 
-class _Identity(_FakeLayer):
-    def forward(self, x):
-        return x
+    monkeypatch.setattr(PretrainedConfig, "get_config_dict", classmethod(_fake_get_config_dict))
+    monkeypatch.setattr("fastdeploy.config.get_pooling_config", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("fastdeploy.config.ModelConfig._post_init", lambda self: None)
 
+    original_cumsum = paddle.cumsum
 
-class _Sigmoid(_FakeLayer):
-    def forward(self, x):  # pragma: no cover - unused
-        arr = x.array if isinstance(x, _FakeTensor) else np.array(x)
-        return _FakeTensor(1 / (1 + np.exp(-arr)))
-
-
-class _Softmax(_FakeLayer):
-    def __init__(self, axis: int = -1):
-        self.axis = axis
-
-    def forward(self, x):  # pragma: no cover - unused helper
-        arr = x.array if isinstance(x, _FakeTensor) else np.array(x)
-        shifted = arr - arr.max(axis=self.axis, keepdims=True)
-        exp = np.exp(shifted)
-        probs = exp / exp.sum(axis=self.axis, keepdims=True)
-        return _FakeTensor(probs)
-
-
-class _LambdaLayer(_FakeLayer):
-    def __init__(self, fn):
-        self.fn = fn
-
-    def forward(self, x):
-        return self.fn(x)
-
-
-def _build_paddle_module() -> types.ModuleType:
-    paddle = types.ModuleType("paddle")
-    paddle.Tensor = _FakeTensor
-
-    def to_tensor(data, dtype=None):
-        return _FakeTensor(data, dtype=dtype)
-
-    def zeros(shape, dtype="float32"):
-        return _FakeTensor(np.zeros(shape, dtype=dtype))
-
-    def cumsum(tensor, axis=0, out=None):
-        result = _FakeTensor(np.cumsum(tensor.array, axis=axis), place=tensor.place)
+    def _compatible_cumsum(x, axis=0, out=None):
+        result = original_cumsum(x, axis=axis)
         if out is not None:
             out[:] = result
             return out
         return result
 
-    def stack(tensors):
-        arrays = [tensor.array if isinstance(tensor, _FakeTensor) else tensor for tensor in tensors]
-        return _FakeTensor(np.stack(arrays))
+    monkeypatch.setattr(paddle, "cumsum", _compatible_cumsum)
 
-    def all(tensor):
-        if isinstance(tensor, _FakeTensor):
-            value = tensor.array
-        else:
-            value = np.array(tensor)
-        return _FakeTensor(np.array(value.all(), dtype=bool))
+    def _fake_fdconfig_init(self, model_config=None, cache_config=None, **kwargs):
+        self.model_config = model_config or SimpleNamespace(num_labels=0)
+        self.cache_config = cache_config
+        self.scheduler_config = SimpleNamespace(max_num_seqs=0)
+        self.parallel_config = kwargs.get("parallel_config")
+        self.speculative_config = kwargs.get("speculative_config")
+        self.eplb_config = kwargs.get("eplb_config")
+        self.device_config = kwargs.get("device_config")
+        self.load_config = kwargs.get("load_config")
+        self.quant_config = kwargs.get("quant_config")
+        self.graph_opt_config = kwargs.get("graph_opt_config")
+        self.early_stop_config = kwargs.get("early_stop_config")
+        self.plas_attention_config = kwargs.get("plas_attention_config")
+        self.structured_outputs_config = kwargs.get("structured_outputs_config")
+        self.router_config = kwargs.get("router_config")
+        self.routing_replay_config = kwargs.get("routing_replay_config")
 
-    paddle.to_tensor = to_tensor
-    paddle.zeros = zeros
-    paddle.cumsum = cumsum
-    paddle.stack = stack
-    paddle.all = all
-
-    nn_module = types.ModuleType("paddle.nn")
-
-    class Layer(_FakeLayer):
-        pass
-
-    nn_module.Layer = Layer
-    nn_module.Identity = _Identity
-    nn_module.Sigmoid = _Sigmoid
-    nn_module.Softmax = _Softmax
-
-    functional = types.ModuleType("paddle.nn.functional")
-
-    def _ensure_array(x):
-        return x.array if isinstance(x, _FakeTensor) else np.array(x)
-
-    def sigmoid(x):
-        arr = _ensure_array(x)
-        return _FakeTensor(1 / (1 + np.exp(-arr)))
-
-    def softmax(x, axis=-1):
-        arr = _ensure_array(x)
-        shifted = arr - arr.max(axis=axis, keepdims=True)
-        exp = np.exp(shifted)
-        return _FakeTensor(exp / exp.sum(axis=axis, keepdims=True))
-
-    def normalize(x, p=2, axis=-1):
-        arr = _ensure_array(x).astype(np.float32)
-        norm = np.linalg.norm(arr, ord=p, axis=axis, keepdims=True)
-        norm[norm == 0] = 1
-        return _FakeTensor(arr / norm)
-
-    functional.sigmoid = sigmoid
-    functional.softmax = softmax
-    functional.normalize = normalize
-
-    paddle.nn = nn_module
-    paddle.nn.functional = functional
-    paddle._FakeTensor = _FakeTensor
-    paddle._FakePlace = _FakePlace
-    paddle.F = functional
-    return paddle
+    monkeypatch.setattr("fastdeploy.config.FDConfig.__init__", _fake_fdconfig_init)
+    yield
 
 
-def _build_config_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.config")
-
-    class PoolerConfig:
-        def __init__(self, pooling_type: Optional[str] = None):
-            self.pooling_type = pooling_type
-
-    class ModelConfig:
-        def __init__(self, pooler_config: Optional[PoolerConfig] = None, num_labels: int = 0):
-            self.pooler_config = pooler_config
-            self.num_labels = num_labels
-
-    class FDConfig:
-        def __init__(self):
-            self.model_config = ModelConfig(num_labels=1)
-
-    module.FDConfig = FDConfig
-    module.ModelConfig = ModelConfig
-    module.PoolerConfig = PoolerConfig
-    return module
-
-
-def _build_pooling_params_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.engine.pooling_params")
-
-    class PoolingParams:
-        def __init__(
-            self,
-            task: Optional[str] = None,
-            dimensions: Optional[int] = None,
-            normalize: Optional[bool] = None,
-            softmax: Optional[bool] = None,
-            step_tag_id: Optional[int] = None,
-            returned_token_ids: Optional[List[int]] = None,
-            requires_token_ids: bool = False,
-        ) -> None:
-            self.task = task
-            self.dimensions = dimensions
-            self.normalize = normalize
-            self.softmax = softmax
-            self.step_tag_id = step_tag_id
-            self.returned_token_ids = returned_token_ids
-            self.requires_token_ids = requires_token_ids
-            self.pooling_params = [self]
-
-    module.PoolingParams = PoolingParams
-    return module
-
-
-def _build_metadata_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.model_executor.layers.pool.metadata")
-
-    class PoolingCursor:
-        def __init__(
-            self,
-            index: List[int],
-            first_token_indices_gpu: _FakeTensor,
-            last_token_indices_gpu: _FakeTensor,
-            prompt_lens_cpu: _FakeTensor,
-            num_scheduled_tokens_cpu: _FakeTensor,
-        ) -> None:
-            self.index = index
-            self.first_token_indices_gpu = first_token_indices_gpu
-            self.last_token_indices_gpu = last_token_indices_gpu
-            self.prompt_lens_cpu = prompt_lens_cpu
-            self.num_scheduled_tokens_cpu = num_scheduled_tokens_cpu
-
-        def __getitem__(self, indices: slice):
-            return PoolingCursor(
-                index=self.index[indices],
-                first_token_indices_gpu=self.first_token_indices_gpu[indices],
-                last_token_indices_gpu=self.last_token_indices_gpu[indices],
-                prompt_lens_cpu=self.prompt_lens_cpu[indices],
-                num_scheduled_tokens_cpu=self.num_scheduled_tokens_cpu[indices],
-            )
-
-        def is_partial_prefill(self):
-            prompt = self.prompt_lens_cpu.array
-            scheduled = self.num_scheduled_tokens_cpu.array
-            return not np.array_equal(prompt, scheduled)
-
-    class PoolingMetadata:
-        def __init__(
-            self,
-            prompt_lens: _FakeTensor,
-            prompt_token_ids: Optional[_FakeTensor],
-            pooling_params: List[Any],
-            pooling_cursor: Optional[PoolingCursor] = None,
-        ) -> None:
-            self.prompt_lens = prompt_lens
-            self.prompt_token_ids = prompt_token_ids
-            self.pooling_params = pooling_params
-            self.pooling_cursor = pooling_cursor
-
-        def __getitem__(self, indices: slice):
-            return PoolingMetadata(
-                prompt_lens=self.prompt_lens[indices],
-                prompt_token_ids=None if self.prompt_token_ids is None else self.prompt_token_ids[indices],
-                pooling_params=self.pooling_params[indices],
-                pooling_cursor=None if self.pooling_cursor is None else self.pooling_cursor[indices],
-            )
-
-        def __len__(self):
-            return len(self.pooling_params)
-
-    module.PoolingCursor = PoolingCursor
-    module.PoolingMetadata = PoolingMetadata
-    return module
-
-
-def _build_output_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.output.pooler")
-
-    class PoolingSequenceGroupOutput(list):
-        pass
-
-    class PoolerOutput(list):
-        pass
-
-    module.PoolingSequenceGroupOutput = PoolingSequenceGroupOutput
-    module.PoolerOutput = PoolerOutput
-    return module
-
-
-def _build_utils_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.utils")
-
-    class _Logger:
-        def __init__(self):
-            self.messages: List[tuple[str, str]] = []
-
-        def warning(self, msg):
-            self.messages.append(("warning", msg))
-
-    def get_logger(_name, _filename):
-        return _Logger()
-
-    module.get_logger = get_logger
-    return module
-
-
-def _build_tasks_module() -> types.ModuleType:
-    module = types.ModuleType("fastdeploy.engine.tasks")
-    PoolingTask = str
-    module.PoolingTask = PoolingTask
-    return module
-
-
-def _import_pooler_module():
-    pooler_path = PROJECT_ROOT / "fastdeploy" / "model_executor" / "layers" / "pooler.py"
-    spec = importlib.util.spec_from_file_location(
-        "fastdeploy.model_executor.layers.pooler",
-        pooler_path,
-    )
-    assert spec and spec.loader is not None
-
-    try:
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module, (lambda: None)
-    except Exception:
-        sys.modules.pop(spec.name, None)
-
-    saved: Dict[str, Optional[types.ModuleType]] = {}
-    installed: List[str] = []
-
-    def _looks_real(module: types.ModuleType) -> bool:
-        return hasattr(module, "__file__") and module.__file__ is not None
-
-    def _install(name: str, module: types.ModuleType):
-        if name in sys.modules:
-            saved[name] = sys.modules[name]
-            if _looks_real(sys.modules[name]):
-                return
-        else:
-            saved[name] = None
-        sys.modules[name] = module
-        installed.append(name)
-
-    for name, builder in [
-        ("paddle", _build_paddle_module),
-        ("fastdeploy.config", _build_config_module),
-        ("fastdeploy.engine.pooling_params", _build_pooling_params_module),
-        ("fastdeploy.model_executor.layers.pool.metadata", _build_metadata_module),
-        ("fastdeploy.output.pooler", _build_output_module),
-        ("fastdeploy.utils", _build_utils_module),
-        ("fastdeploy.engine.tasks", _build_tasks_module),
-    ]:
-        module = builder()
-        _install(name, module)
-        if name == "paddle" and name in installed:
-            _install("paddle.nn", module.nn)
-            _install("paddle.nn.functional", module.nn.functional)
-
-    if "fastdeploy" not in sys.modules or not _looks_real(
-        sys.modules.get("fastdeploy", types.ModuleType("fastdeploy"))
-    ):
-        fastdeploy_pkg = types.ModuleType("fastdeploy")
-        fastdeploy_pkg.__path__ = []
-        _install("fastdeploy", fastdeploy_pkg)
-    for pkg_name in ("fastdeploy.model_executor", "fastdeploy.model_executor.layers"):
-        if pkg_name not in sys.modules:
-            pkg = types.ModuleType(pkg_name)
-            pkg.__path__ = []
-            _install(pkg_name, pkg)
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-
-    def _cleanup():
-        for name, original in saved.items():
-            if original is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = original
-        sys.modules.pop("fastdeploy.model_executor.layers.pooler", None)
-
-    return module, _cleanup
-
-
-_POOLER_MODULE, _CLEANUP = _import_pooler_module()
-unittest.addModuleCleanup(_CLEANUP)
-
-
-def _make_cursor(prompt_lens: List[int], device: str = "cpu", num_tokens: Optional[List[int]] = None):
-    paddle = sys.modules["paddle"]
-    metadata = sys.modules["fastdeploy.model_executor.layers.pool.metadata"]
-    if num_tokens is None:
-        num_tokens = prompt_lens
-    starts = [0]
-    for length in num_tokens[:-1]:
-        starts.append(starts[-1] + length)
-    first_indices = paddle.to_tensor(starts)
-    last_indices = paddle.to_tensor([s + l - 1 for s, l in zip(starts, num_tokens)])
-    if device == "gpu":
-        first_indices = first_indices.cuda()
-        last_indices = last_indices.cuda()
-    return metadata.PoolingCursor(
-        index=list(range(len(prompt_lens))),
-        first_token_indices_gpu=first_indices,
-        last_token_indices_gpu=last_indices,
-        prompt_lens_cpu=paddle.to_tensor(prompt_lens),
-        num_scheduled_tokens_cpu=paddle.to_tensor(num_tokens),
-    )
-
-
-def _make_metadata(
-    prompt_lens: List[int],
-    pooling_params: List[Any],
-    token_ids: Optional[np.ndarray] = None,
-    device: str = "cpu",
-    num_tokens: Optional[List[int]] = None,
+def build_metadata(
+    prompt_lens: list[int],
+    pooling_params: list[PoolingParams],
+    *,
+    token_ids: paddle.Tensor | None = None,
+    num_tokens: list[int] | None = None,
 ):
-    paddle = sys.modules["paddle"]
-    metadata_mod = sys.modules["fastdeploy.model_executor.layers.pool.metadata"]
-    prompt_tensor = paddle.to_tensor(prompt_lens)
-    token_tensor = None if token_ids is None else paddle.to_tensor(token_ids)
-    cursor = _make_cursor(prompt_lens, device=device, num_tokens=num_tokens)
-    return metadata_mod.PoolingMetadata(
+    prompt_tensor = paddle.to_tensor(prompt_lens, dtype="int64")
+    metadata = PoolingMetadata(
         prompt_lens=prompt_tensor,
-        prompt_token_ids=token_tensor,
+        prompt_token_ids=token_ids,
         pooling_params=pooling_params,
-        pooling_cursor=cursor,
     )
+    metadata.build_pooling_cursor(num_tokens or prompt_lens, paddle.CPUPlace())
+    return metadata
 
 
-class PoolerHelpersTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        self.paddle = sys.modules["paddle"]
-        params_mod = sys.modules["fastdeploy.engine.pooling_params"]
-        self.PoolingParams = params_mod.PoolingParams
-        config_mod = sys.modules["fastdeploy.config"]
-        self.PoolerConfig = config_mod.PoolerConfig
-
-    def test_resolved_pooling_config(self):
-        cfg = self.PoolerConfig(pooling_type="MEAN")
-        pooler = self.pooler_module.Pooler.for_embed(cfg)
-        self.assertIsInstance(pooler.head, self.pooler_module.EmbeddingPoolerHead)
-        encode_pooler = self.pooler_module.Pooler.for_encode(self.PoolerConfig(pooling_type="STEP"))
-        self.assertIsInstance(encode_pooler, self.pooler_module.StepPooler)
-
-    def test_get_tasks_and_prompt_token_ids(self):
-        params = [self.PoolingParams(task="encode"), self.PoolingParams(task="embed")]
-        metadata = _make_metadata([2, 2], params, token_ids=np.array([[1, 2], [3, 4]]))
-        self.assertEqual(self.pooler_module.get_tasks(metadata), ["encode", "embed"])
-        tokens = self.pooler_module.get_prompt_token_ids(metadata)
-        self.assertEqual([t.tolist() for t in tokens], [[1, 2], [3, 4]])
-
-    def test_pooling_params_update(self):
-        params = self.PoolingParams()
-        update = self.pooler_module.PoolingParamsUpdate(requires_token_ids=True)
-        update.apply(params)
-        self.assertTrue(params.requires_token_ids)
+def make_model_config() -> ModelConfig:
+    return ModelConfig({"model": str(PROJECT_ROOT)})
 
 
-class PoolerActivationTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        self.paddle = sys.modules["paddle"]
+class TestResolvedConfigAndFactories:
+    def test_resolved_config_and_pooler_factories(self):
+        pooler_cfg = PoolerConfig()
+        pooler_cfg.pooling_type = "MEAN"
+        resolved = ResolvedPoolingConfig.from_config("embed", pooler_cfg)
+        assert resolved.pooling_type is PoolingType.MEAN
 
-    def test_activation_wraps_identity_and_lambda(self):
-        nn = sys.modules["paddle"].nn
-        identity = self.pooler_module.PoolerActivation.wraps(nn.Identity())
-        self.assertIsInstance(identity, self.pooler_module.PoolerIdentity)
-        sigmoid = self.pooler_module.PoolerActivation.wraps(nn.Sigmoid())
-        self.assertIsInstance(sigmoid, self.pooler_module.PoolerClassify)
-        layer = self.pooler_module.PoolerActivation.wraps(_LambdaLayer(lambda tensor: tensor.astype("float32")))
-        result = layer.forward(self.paddle.to_tensor([[1, 2], [3, 4]]))
-        self.assertEqual(result.dtype, np.float32)
+        embed_pooler = Pooler.for_embed(pooler_cfg, make_model_config())
+        assert isinstance(embed_pooler.head, EmbeddingPoolerHead)
 
-    def test_pooler_classify_branches(self):
-        sigmoid_head = self.pooler_module.PoolerClassify(static_num_labels=True)
-        logits = self.paddle.to_tensor([[0.0]])
-        self.assertLess(sigmoid_head.forward(logits).array[0][0], 1)
+        encode_cfg = PoolerConfig()
+        encode_cfg.pooling_type = "STEP"
+        encode_pooler = Pooler.for_encode(encode_cfg, make_model_config())
+        assert isinstance(encode_pooler, StepPooler)
 
-        softmax_head = self.pooler_module.PoolerClassify(static_num_labels=False)
-        logits = self.paddle.to_tensor([[0.0, 1.0]])
-        probs = softmax_head.forward(logits)
-        self.assertAlmostEqual(float(probs.array.sum()), 1.0)
+        reward_cfg = PoolerConfig()
+        reward_cfg.pooling_type = "LAST"
+        reward_pooler = Pooler.for_reward(reward_cfg, make_model_config())
+        assert isinstance(reward_pooler.head, RewardPoolerHead)
+
+    def test_pooler_activation_wrappers_and_classify_paths(self):
+        assert isinstance(PoolerActivation.wraps(paddle.nn.Identity()), PoolerIdentity)
+        assert isinstance(PoolerActivation.wraps(paddle.nn.Sigmoid()), PoolerClassify)
+
+        custom = PoolerActivation.wraps(paddle.nn.Layer())
+        assert custom.__class__.__name__ == "LambdaPoolerActivation"
+
+        classify = PoolerClassify(static_num_labels=False)
+        sigmoid_out = classify.forward_chunk(paddle.to_tensor([0.0], dtype="float32"))
+        np.testing.assert_allclose(sigmoid_out.numpy(), 0.5, rtol=1e-3)
+
+        softmax_out = classify.forward_chunk(paddle.to_tensor([0.0, 1.0, 2.0], dtype="float32"))
+        np.testing.assert_allclose(softmax_out.numpy().sum(), 1.0, rtol=1e-6)
+        assert softmax_out.shape[0] == 3
 
 
-class PoolerHeadTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        params_mod = sys.modules["fastdeploy.engine.pooling_params"]
-        self.PoolingParams = params_mod.PoolingParams
-
-    def test_embedding_head_with_projection_and_matryoshka(self):
-        head = self.pooler_module.EmbeddingPoolerHead()
-
-        class Doubler(sys.modules["paddle"].nn.Layer):
-            def forward(self, x):
-                return x + x
-
-        head.projector = Doubler()
+class TestPoolerHeads:
+    def test_embedding_head_dimensions_and_normalization(self):
         pooling_params = [
-            self.PoolingParams(dimensions=2, normalize=True),
-            self.PoolingParams(dimensions=None, normalize=False),
+            PoolingParams(task="embed", dimensions=2, normalize=True),
+            PoolingParams(task="embed", dimensions=None, normalize=False),
         ]
-        metadata = _make_metadata([2, 2], pooling_params)
-        pooled = [
-            sys.modules["paddle"].to_tensor([[1.0, 2.0, 3.0]]),
-            sys.modules["paddle"].to_tensor([[4.0, 5.0, 6.0]]),
+        metadata = build_metadata([1, 1], pooling_params)
+        pooled_data = [
+            paddle.to_tensor([1.0, 2.0, 3.0], dtype="float32"),
+            paddle.to_tensor([3.0, 4.0, 0.0], dtype="float32"),
         ]
-        output = head.forward(pooled, metadata)
-        self.assertIsInstance(output, list)
-        self.assertEqual(output[0].shape[-1], 2)
-        self.assertTrue(np.allclose(np.linalg.norm(output[0].array, axis=-1), 1))
+        head = EmbeddingPoolerHead()
+        output = head.forward(pooled_data, metadata)
+
+        assert isinstance(output, list)
+        assert output[0].shape[0] == 2
+        np.testing.assert_allclose(np.linalg.norm(output[0].numpy()), 1.0, rtol=1e-5)
+        assert output[1].shape[0] == 3
+        np.testing.assert_allclose(output[1].numpy(), pooled_data[1].numpy())
 
     def test_reward_head_softmax_flags(self):
-        head = self.pooler_module.RewardPoolerHead()
-        pooling_params = [self.PoolingParams(softmax=True), self.PoolingParams(softmax=False)]
-        metadata = _make_metadata([1, 1], pooling_params)
-        logits = [sys.modules["paddle"].to_tensor([[0.0, 1.0]]), sys.modules["paddle"].to_tensor([[0.5, 0.5]])]
+        pooling_params = [PoolingParams(task="encode", softmax=True), PoolingParams(task="encode", softmax=False)]
+        metadata = build_metadata([1, 1], pooling_params)
+        logits = [
+            paddle.to_tensor([[0.0, 1.0]], dtype="float32"),
+            paddle.to_tensor([[0.5, 0.5]], dtype="float32"),
+        ]
+        head = RewardPoolerHead()
         outputs = head.forward(logits, metadata)
-        self.assertTrue(np.allclose(outputs[0].array.sum(), 1.0))
-        self.assertTrue(np.allclose(outputs[1].array, logits[1].array))
+
+        assert isinstance(outputs, list)
+        np.testing.assert_allclose(outputs[0].numpy().sum(axis=-1), 1.0, rtol=1e-6)
+        np.testing.assert_allclose(outputs[1].numpy(), logits[1].numpy())
 
 
-class PoolingMethodTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        params_mod = sys.modules["fastdeploy.engine.pooling_params"]
-        self.params = [params_mod.PoolingParams(task="encode"), params_mod.PoolingParams(task="encode")]
-        self.metadata = _make_metadata([2, 2], self.params)
-        self.hidden_states = sys.modules["paddle"].to_tensor(
-            [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]],
-            dtype="float32",
+class TestPoolingMethods:
+    def setup_method(self):
+        self.pooling_params = [PoolingParams(task="encode"), PoolingParams(task="encode")]
+        self.metadata = build_metadata([2, 2], self.pooling_params)
+        self.hidden_states = paddle.to_tensor([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]], dtype="float32")
+
+    def test_last_cls_all_and_mean_pool(self):
+        cursor = self.metadata.pooling_cursor
+        last_pool = LastPool()
+        last_out = last_pool.forward(self.hidden_states, self.metadata)
+        np.testing.assert_array_equal(
+            last_out.numpy(), self.hidden_states.numpy()[cursor.last_token_indices_gpu.numpy()]
         )
 
-    def test_last_and_cls_pool(self):
-        pooling_cursor = self.metadata.pooling_cursor
-        last_pool = self.pooler_module.LastPool()
-        output = last_pool.forward(self.hidden_states, self.metadata)
-        self.assertEqual(len(output.array), len(pooling_cursor.index))
+        cls_pool = CLSPool()
+        cls_out = cls_pool.forward(self.hidden_states, self.metadata)
+        np.testing.assert_array_equal(
+            cls_out.numpy(), self.hidden_states.numpy()[cursor.first_token_indices_gpu.numpy()]
+        )
 
-        cls_pool = self.pooler_module.CLSPool()
-        cls_output = cls_pool.forward(self.hidden_states, self.metadata)
-        self.assertEqual(cls_output.array.shape[0], len(pooling_cursor.index))
+        all_pool = AllPool()
+        all_out = all_pool.forward(self.hidden_states, self.metadata)
+        assert len(all_out) == len(self.pooling_params)
+        assert all(list(t.shape) == [2, 2] for t in all_out)
 
-    def test_all_pool_requires_full_prefill(self):
-        all_pool = self.pooler_module.AllPool()
-        # full prefill works
-        output = all_pool.forward(self.hidden_states, self.metadata)
-        self.assertEqual(len(output), len(self.params))
-        # partial prefill raises
-        partial_cursor = _make_cursor([2, 2], num_tokens=[1, 2])
-        partial_metadata = _make_metadata([2, 2], self.params)
-        partial_metadata.pooling_cursor = partial_cursor
-        with self.assertRaises(AssertionError):
-            all_pool.forward(self.hidden_states, partial_metadata)
+        mean_pool = MeanPool()
+        self.metadata.pooling_cursor.prompt_lens_cpu = self.metadata.pooling_cursor.prompt_lens_cpu.astype("float32")
+        self.metadata.pooling_cursor.num_scheduled_tokens_cpu = (
+            self.metadata.pooling_cursor.num_scheduled_tokens_cpu.astype("float32")
+        )
+        mean_out = mean_pool.forward(self.hidden_states, self.metadata)
+        expected = np.array([[0.5, 0.5], [2.5, 2.5]], dtype="float32")
+        np.testing.assert_allclose(mean_out.numpy(), expected, rtol=1e-6)
 
-    def test_mean_pool_gpu_branch(self):
-        mean_pool = self.pooler_module.MeanPool()
-        gpu_states = _FakeTensor(self.hidden_states.array, place=_FakePlace(True))
-        metadata = _make_metadata([2, 2], self.params, device="gpu")
-        output = mean_pool.forward(gpu_states, metadata)
-        self.assertTrue(np.allclose(output.array, np.array([[0.5, 0.5], [2.5, 2.5]])))
+    def test_partial_prefill_rejections(self):
+        partial_metadata = build_metadata([2, 2], self.pooling_params, num_tokens=[1, 2])
+        hidden_states = self.hidden_states
+
+        with pytest.raises(AssertionError):
+            AllPool().forward(hidden_states, partial_metadata)
+        with pytest.raises(AssertionError):
+            CLSPool().forward(hidden_states, partial_metadata)
+        with pytest.raises(AssertionError):
+            MeanPool().forward(hidden_states, partial_metadata)
 
 
-class StepAndSimplePoolerTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        params_mod = sys.modules["fastdeploy.engine.pooling_params"]
-        self.PoolingParams = params_mod.PoolingParams
-
-    def test_step_pooler_filters_returned_ids_and_steps(self):
+class TestStepAndSimplePooler:
+    def test_step_pooler_filters_tokens_and_ids(self):
         pooling_params = [
-            self.PoolingParams(task="encode", step_tag_id=3, returned_token_ids=[0, 2]),
-            self.PoolingParams(task="encode", returned_token_ids=[]),
+            PoolingParams(task="encode", step_tag_id=2, returned_token_ids=[0, 1]),
+            PoolingParams(task="encode", step_tag_id=2, returned_token_ids=None),
         ]
-        token_ids = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
-        metadata = _make_metadata([4, 4], pooling_params, token_ids=token_ids)
-        pooler = self.pooler_module.StepPooler()
-        states = sys.modules["paddle"].to_tensor(np.arange(32).reshape(8, 4))
-        output = pooler.forward(states, metadata)
-        self.assertEqual(len(output), 2)
-        self.assertTrue(all(isinstance(vec, _FakeTensor) for vec in output))
-        updates = pooler.get_pooling_updates("encode")
-        self.assertTrue(updates.requires_token_ids)
+        token_ids = paddle.to_tensor([[0, 1, 2], [2, 2, 1]], dtype="int64")
+        metadata = build_metadata([3, 3], pooling_params, token_ids=token_ids)
+        hidden_states = paddle.to_tensor(
+            [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0], [4.0, 4.0], [5.0, 5.0], [6.0, 6.0]], dtype="float32"
+        )
+
+        pooler = StepPooler(make_model_config())
+        output = pooler.forward(hidden_states, metadata)
+
+        assert isinstance(output, list)
+        assert list(output[0].shape) == [1, 2]
+        np.testing.assert_allclose(output[0].numpy(), [[3.0, 3.0]], rtol=1e-6)
+        assert output[1].shape[1] == 2
+        assert output[1].shape[0] == 2
 
     def test_simple_pooler_embed_and_encode(self):
-        config_mod = sys.modules["fastdeploy.config"]
-        resolved = self.pooler_module.ResolvedPoolingConfig(
-            task="embed", pooling_type=self.pooler_module.PoolingType.ALL
-        )
-        simple = self.pooler_module.SimplePooler.from_config(resolved, config_mod.ModelConfig())
-        self.assertIsInstance(simple.head, self.pooler_module.EmbeddingPoolerHead)
-        metadata = _make_metadata([2], [self.PoolingParams(task="embed")])
-        hidden = sys.modules["paddle"].to_tensor([[1.0, 2.0]])
+        resolved = ResolvedPoolingConfig(task="embed", pooling_type=PoolingType.ALL)
+        simple = SimplePooler.from_config(resolved, make_model_config())
+        assert isinstance(simple.head, EmbeddingPoolerHead)
+
+        pooling_params = [PoolingParams(task="embed", normalize=True)]
+        metadata = build_metadata([2], pooling_params)
+        hidden = paddle.to_tensor([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
         result = simple.forward(hidden, metadata)
-        self.assertEqual(len(result.array), 1)
+        np.testing.assert_allclose(np.linalg.norm(result.numpy(), axis=-1), 1.0, rtol=1e-6)
+
+        encode_pooling = SimplePooler(LastPool(), RewardPoolerHead())
+        encode_metadata = build_metadata([1], [PoolingParams(task="encode", softmax=True)])
+        hidden_states = paddle.to_tensor([[0.1, 0.9]], dtype="float32")
+        encode_result = encode_pooling.forward(hidden_states, encode_metadata)
+        np.testing.assert_allclose(encode_result.numpy().sum(axis=-1), 1.0, rtol=1e-6)
 
 
-class DispatchPoolerTest(unittest.TestCase):
-    def setUp(self):
-        self.pooler_module = _POOLER_MODULE
-        params_mod = sys.modules["fastdeploy.engine.pooling_params"]
-        self.PoolingParams = params_mod.PoolingParams
-        self.metadata = _make_metadata([1, 1], [self.PoolingParams(task="encode"), self.PoolingParams(task="encode")])
+class TestDispatchPooler:
+    def test_dispatch_forward_and_error_path(self):
+        pooling_params = [PoolingParams(task="encode"), PoolingParams(task="encode")]
+        metadata = build_metadata([1, 1], pooling_params)
+        hidden = paddle.to_tensor([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
 
-    def test_dispatch_forward_routes_tasks(self):
-        pooling = self.pooler_module.LastPool()
-        head = self.pooler_module.RewardPoolerHead()
-        pooler = self.pooler_module.SimplePooler(pooling, head)
-        dispatch = self.pooler_module.DispatchPooler({"encode": pooler})
-        hidden = sys.modules["paddle"].to_tensor([[1.0, 2.0], [3.0, 4.0]])
-        output = dispatch.forward(hidden, self.metadata)
-        self.assertIsInstance(output, list)
+        pooler = SimplePooler(LastPool(), RewardPoolerHead())
+        dispatch = DispatchPooler({"encode": pooler})
+        output = dispatch.forward(hidden, metadata)
 
-    def test_dispatch_rejects_unknown_task(self):
-        pooling = self.pooler_module.LastPool()
-        head = self.pooler_module.RewardPoolerHead()
-        pooler = self.pooler_module.SimplePooler(pooling, head)
-        dispatch = self.pooler_module.DispatchPooler({"encode": pooler})
-        bad_metadata = _make_metadata([1], [self.PoolingParams(task="score")])
-        with self.assertRaises(ValueError):
-            dispatch.forward(sys.modules["paddle"].to_tensor([[0.0]]), bad_metadata)
+        assert len(output) == 2
+        assert all(isinstance(vec, paddle.Tensor) for vec in output)
+
+        bad_metadata = build_metadata([1], [PoolingParams(task="score")])
+        with pytest.raises(ValueError):
+            dispatch.forward(hidden[:1], bad_metadata)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--print-coverage-command", action="store_true")
-    known, remaining = parser.parse_known_args()
-    if known.print_coverage_command:
-        print("python -m coverage run -m unittest tests.model_executor.test_pooler")
-        print("python -m coverage report -m --include='fastdeploy/model_executor/layers/pooler.py'")
-    unittest.main(argv=[sys.argv[0]] + remaining)
+    sys.exit(pytest.main([__file__]))
