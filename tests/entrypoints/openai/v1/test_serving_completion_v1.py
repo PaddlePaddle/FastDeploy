@@ -10,9 +10,6 @@ from fastdeploy.config import FDConfig
 
 # Import the classes we need to test
 from fastdeploy.engine.async_llm import AsyncLLM
-from fastdeploy.entrypoints.openai.async_llm_serving_completion import (
-    AsyncLLMOpenAIServingCompletion,
-)
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -23,6 +20,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
+from fastdeploy.entrypoints.openai.v1.serving_completion import OpenAIServingCompletion
 from fastdeploy.utils import ErrorType
 from fastdeploy.worker.output import LogprobsLists
 
@@ -37,8 +35,8 @@ class ServingResponseContext:
         self.inference_start_time_dict = {}
 
 
-class TestAsyncLLMOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
-    """Test cases for AsyncLLMOpenAIServingCompletion"""
+class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
+    """Test cases for OpenAIServingCompletion"""
 
     def setUp(self):
         """Set up test fixtures before each test method."""
@@ -50,7 +48,7 @@ class TestAsyncLLMOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.max_waiting_time = 60
 
         # Create the serving completion instance
-        self.serving_completion = AsyncLLMOpenAIServingCompletion(
+        self.serving_completion = OpenAIServingCompletion(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -511,7 +509,7 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         mock_ips = ["127.0.0.1"]
         max_waiting_time = 60
 
-        self.serving_completion = AsyncLLMOpenAIServingCompletion(
+        self.serving_completion = OpenAIServingCompletion(
             engine_client=mock_engine_client,
             config=mock_config,
             models=mock_models,
@@ -752,7 +750,7 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
                     expected_id = f"{request_id}_{i}" if request_id else f"_{i}"
                     self.assertEqual(ctx.preprocess_requests[i]["request_id"], expected_id)
 
-    @patch("fastdeploy.entrypoints.openai.async_llm_serving_completion.api_server_logger")
+    @patch("fastdeploy.entrypoints.openai.v1.serving_completion.api_server_logger")
     async def test_preprocess_exception_logging(self, mock_logger):
         """Test _preprocess logs exceptions properly"""
         # Setup - create a request that will cause an exception

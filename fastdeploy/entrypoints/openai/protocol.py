@@ -77,13 +77,13 @@ class CompletionTokenUsageInfo(BaseModel):
     image_tokens: Optional[int] = None
 
     def add(self, other: CompletionTokenUsageInfo):
-        if self.reasoning_tokens and other.reasoning_tokens:
+        if self.reasoning_tokens is not None and other.reasoning_tokens is not None:
             self.reasoning_tokens += other.reasoning_tokens
-        elif other.reasoning_tokens:
+        elif other.reasoning_tokens is not None:
             self.reasoning_tokens = other.reasoning_tokens
-        if self.image_tokens and other.image_tokens:
+        if self.image_tokens is not None and other.image_tokens is not None:
             self.image_tokens += other.image_tokens
-        elif other.image_tokens:
+        elif other.image_tokens is not None:
             self.image_tokens = other.image_tokens
 
 

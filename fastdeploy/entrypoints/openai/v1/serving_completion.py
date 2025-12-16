@@ -22,11 +22,6 @@ from typing_extensions import override
 
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.request import RequestOutput
-from fastdeploy.entrypoints.openai.async_llm_serving_base import (
-    AsyncLLMOpenAiServingBase,
-    ServeContext,
-    ServingResponseContext,
-)
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -38,11 +33,16 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
 )
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
+from fastdeploy.entrypoints.openai.v1.serving_base import (
+    OpenAiServingBase,
+    ServeContext,
+    ServingResponseContext,
+)
 from fastdeploy.utils import ErrorType, api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
-class AsyncLLMOpenAIServingCompletion(AsyncLLMOpenAiServingBase):
+class OpenAIServingCompletion(OpenAiServingBase):
     def __init__(
         self,
         engine_client: AsyncLLM,
@@ -219,11 +219,6 @@ class AsyncLLMOpenAIServingCompletion(AsyncLLMOpenAiServingBase):
         try:
             if request_output.error_code != 200:
                 raise ValueError("{}".format(request_output.error_msg))
-            max_streaming_response_tokens = (
-                request.max_streaming_response_tokens
-                if request.max_streaming_response_tokens is not None
-                else (request.suffix or {}).get("max_streaming_response_tokens", 1)
-            )
             metrics = request_output.metrics
             arrival_time = None
             if metrics and metrics.first_token_time:
@@ -234,7 +229,6 @@ class AsyncLLMOpenAIServingCompletion(AsyncLLMOpenAiServingBase):
 
             send_idx = output.send_idx
 
-            max_streaming_response_tokens = max(1, max_streaming_response_tokens)
             choice = CompletionResponseStreamChoice(
                 index=output.index,
                 text="",

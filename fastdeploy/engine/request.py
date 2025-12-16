@@ -655,9 +655,9 @@ class RequestOutput:
 
     def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
-        if next_output.prompt:
+        if next_output.prompt is not None:
             self.prompt = next_output.prompt
-        if next_output.prompt_token_ids:
+        if next_output.prompt_token_ids is not None:
             self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
         self.outputs.index = next_output.outputs.index

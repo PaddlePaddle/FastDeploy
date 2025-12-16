@@ -46,7 +46,7 @@ class ServingResponseContext:
         self.remain_choices: Optional[int] = None
 
 
-class AsyncLLMOpenAiServingBase(OpenAIServing):
+class OpenAiServingBase(OpenAIServing):
     """
     OpenAI-style chat completions serving
     """
@@ -126,11 +126,11 @@ class AsyncLLMOpenAiServingBase(OpenAIServing):
 
     async def handle(self, ctx: ServeContext[Any]) -> Union[AsyncGenerator, ErrorResponse]:
         if ctx.request.stream:
-            return self.handleStream(ctx)
+            return self.handle_stream(ctx)
         else:
-            return await self.handleNonStream(ctx)
+            return await self.handle_non_stream(ctx)
 
-    async def handleStream(self, ctx: ServeContext) -> Union[AsyncGenerator, ErrorResponse]:
+    async def handle_stream(self, ctx: ServeContext) -> Union[AsyncGenerator, ErrorResponse]:
         """Handle incoming requests"""
         response_ctx: ServingResponseContext = ServingResponseContext()
         # 获取生成器 (假定 _pipeline 调用后返回的是一个 AsyncGenerator)
@@ -154,7 +154,8 @@ class AsyncLLMOpenAiServingBase(OpenAIServing):
                     if acc_output is None:
                         choice_accumulate_buffer[outputs.index] = request_output
                         acc_output = request_output
-                    acc_output.accumulate(request_output)
+                    else:
+                        acc_output.accumulate(request_output)
                     continue
                 elif (
                     self.eoi_token_id
@@ -180,7 +181,7 @@ class AsyncLLMOpenAiServingBase(OpenAIServing):
     ) -> AsyncGenerator:
         pass
 
-    async def handleNonStream(self, ctx: ServeContext[ChatCompletionRequest | CompletionRequest]) -> Any:
+    async def handle_non_stream(self, ctx: ServeContext[ChatCompletionRequest | CompletionRequest]) -> Any:
         """Handle non-streaming requests"""
         accumula_output_map: dict[int, list[RequestOutput]] = {}
         response_ctx: ServingResponseContext = ServingResponseContext()

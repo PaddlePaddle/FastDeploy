@@ -291,7 +291,7 @@ class ZmqOpenAIServing(OpenAIServing):
         except Exception as e:
             raise ValueError(f"Error processing response: {str(e)}")
         finally:
-            self.engine_client.connection_manager.cleanup_request(request_id)
+            await self.engine_client.connection_manager.cleanup_request(request_id)
 
     @override
     def _get_semaphore(self):

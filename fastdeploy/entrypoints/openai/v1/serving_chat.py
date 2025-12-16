@@ -23,10 +23,6 @@ from typing_extensions import override
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.request import RequestOutput
-from fastdeploy.entrypoints.openai.async_llm_serving_base import (
-    AsyncLLMOpenAiServingBase,
-    ServingResponseContext,
-)
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -44,13 +40,17 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
+from fastdeploy.entrypoints.openai.v1.serving_base import (
+    OpenAiServingBase,
+    ServingResponseContext,
+)
 from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
-class AsyncLLMOpenAIServingChat(AsyncLLMOpenAiServingBase):
+class OpenAIServingChat(OpenAiServingBase):
     """
     OpenAI-style chat completions serving
     """

@@ -1,5 +1,5 @@
 """
-Unit tests for AsyncLLMOpenAIServingChat class
+Unit tests for serving_chat class
 """
 
 import time
@@ -10,9 +10,6 @@ from fastdeploy.config import FDConfig
 
 # Import the classes we need to test
 from fastdeploy.engine.async_llm import AsyncLLM
-from fastdeploy.entrypoints.openai.async_llm_serving_chat import (
-    AsyncLLMOpenAIServingChat,
-)
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -23,6 +20,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
+from fastdeploy.entrypoints.openai.v1.serving_chat import OpenAIServingChat
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -36,8 +34,8 @@ class ServingResponseContext:
         self.remain_choices = 0
 
 
-class TestAsyncLLMOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
-    """Test cases for AsyncLLMOpenAIServingChat"""
+class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
+    """Test cases for OpenAIServingChat"""
 
     def setUp(self):
         """Set up test fixtures before each test method."""
@@ -52,7 +50,7 @@ class TestAsyncLLMOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         self.tokenizer_base_url = None
 
         # Create the serving chat instance
-        self.serving_chat = AsyncLLMOpenAIServingChat(
+        self.serving_chat = OpenAIServingChat(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -79,7 +77,7 @@ class TestAsyncLLMOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
 
     def test_init_with_mm_output(self):
         """Test initialization with multimodal output enabled."""
-        serving_chat = AsyncLLMOpenAIServingChat(
+        serving_chat = OpenAIServingChat(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -339,7 +337,7 @@ class TestAsyncLLMOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
 
     async def test_build_stream_response_with_mm_output(self):
         """Test _build_stream_response with multimodal output enabled."""
-        serving_chat = AsyncLLMOpenAIServingChat(
+        serving_chat = OpenAIServingChat(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -514,7 +512,7 @@ class TestAsyncLLMOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_chat_completion_choice_with_mm_output(self):
         """Test _create_chat_completion_choice with multimodal output enabled."""
-        serving_chat = AsyncLLMOpenAIServingChat(
+        serving_chat = OpenAIServingChat(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,

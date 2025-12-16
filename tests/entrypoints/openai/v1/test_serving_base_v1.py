@@ -12,10 +12,6 @@ from fastdeploy.config import FDConfig
 # Import classes we need to test
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.request import RequestOutput
-from fastdeploy.entrypoints.openai.async_llm_serving_base import (
-    AsyncLLMOpenAiServingBase,
-    ServingResponseContext,
-)
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     CompletionRequest,
@@ -23,11 +19,15 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
+from fastdeploy.entrypoints.openai.v1.serving_base import (
+    OpenAiServingBase,
+    ServingResponseContext,
+)
 
 
 # Create a concrete subclass for testing the abstract base class
-class TestAsyncLLMOpenAiServingBase(AsyncLLMOpenAiServingBase):
-    """Concrete implementation of AsyncLLMOpenAiServingBase for testing"""
+class TestOpenAiServingBase(OpenAiServingBase):
+    """Concrete implementation of OpenAiServingBase for testing"""
 
     async def _build_stream_response(
         self,
@@ -48,7 +48,7 @@ class TestAsyncLLMOpenAiServingBase(AsyncLLMOpenAiServingBase):
         return {"response": "full_response", "outputs": accumula_output_map}
 
 
-class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
+class TestOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
     """Test cases for AsyncLLMOpenAiServingBase"""
 
     def setUp(self):
@@ -61,7 +61,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
         self.max_waiting_time = 60
 
         # Create a serving base instance
-        self.serving_base = TestAsyncLLMOpenAiServingBase(
+        self.serving_base = TestOpenAiServingBase(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -72,7 +72,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
     def test_init_with_list_ips(self):
         """Test initialization with list of IPs."""
-        serving_base = TestAsyncLLMOpenAiServingBase(
+        serving_base = TestOpenAiServingBase(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -90,7 +90,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
     def test_init_with_string_ips(self):
         """Test initialization with comma-separated string IPs."""
         ip_string = "127.0.0.1,192.168.1.100"
-        serving_base = TestAsyncLLMOpenAiServingBase(
+        serving_base = TestOpenAiServingBase(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -103,7 +103,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
     def test_init_with_none_ips(self):
         """Test initialization with None IPs."""
-        serving_base = TestAsyncLLMOpenAiServingBase(
+        serving_base = TestOpenAiServingBase(
             engine_client=self.mock_engine_client,
             config=self.mock_config,
             models=self.mock_models,
@@ -117,8 +117,8 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
     def test_check_master_true(self):
         """Test _check_master when is_master_ip is True."""
-        with patch("fastdeploy.entrypoints.openai.async_llm_serving_base.get_host_ip", return_value="127.0.0.1"):
-            serving_base = TestAsyncLLMOpenAiServingBase(
+        with patch("fastdeploy.entrypoints.openai.v1.serving_base.get_host_ip", return_value="127.0.0.1"):
+            serving_base = TestOpenAiServingBase(
                 engine_client=self.mock_engine_client,
                 config=self.mock_config,
                 models=self.mock_models,
@@ -130,8 +130,8 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
     def test_check_master_false(self):
         """Test _check_master when is_master_ip is False."""
-        with patch("fastdeploy.entrypoints.openai.async_llm_serving_base.get_host_ip", return_value="192.168.1.200"):
-            serving_base = TestAsyncLLMOpenAiServingBase(
+        with patch("fastdeploy.entrypoints.openai.v1.serving_base.get_host_ip", return_value="192.168.1.200"):
+            serving_base = TestOpenAiServingBase(
                 engine_client=self.mock_engine_client,
                 config=self.mock_config,
                 models=self.mock_models,
@@ -258,7 +258,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
         async def mock_handle_stream(ctx):
             yield "data: test_response"
 
-        self.serving_base.handleStream = mock_handle_stream
+        self.serving_base.handle_stream = mock_handle_stream
 
         # Test the handle method
         result = await self.serving_base.handle(ctx)
@@ -285,7 +285,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
         )
 
         # Mock the handleNonStream method
-        with patch.object(self.serving_base, "handleNonStream", new_callable=AsyncMock) as mock_handle:
+        with patch.object(self.serving_base, "handle_non_stream", new_callable=AsyncMock) as mock_handle:
             mock_response = {"response": "test"}
             mock_handle.return_value = mock_response
 
@@ -426,7 +426,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
         self.serving_base._build_stream_response = mock_build_stream_response
 
         # Test handleStream
-        result = self.serving_base.handleStream(ctx)
+        result = self.serving_base.handle_stream(ctx)
 
         # Verify it returns an async generator
         self.assertTrue(hasattr(result, "__aiter__"))
@@ -472,7 +472,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
         self.serving_base._build_full_response = mock_build_full_response
 
         # Test handleNonStream
-        result = await self.serving_base.handleNonStream(ctx)
+        result = await self.serving_base.handle_non_stream(ctx)
 
         self.assertIsInstance(result, dict)
         self.assertEqual(result["error"], "Test error response")
@@ -510,7 +510,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
         self.serving_base._build_stream_response = mock_build_stream_response
 
-        result = self.serving_base.handleStream(ctx)
+        result = self.serving_base.handle_stream(ctx)
 
         results = []
         async for item in result:
@@ -567,7 +567,7 @@ class TestAsyncLLMOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
         self.serving_base._build_full_response = mock_build_full_response
 
-        result = await self.serving_base.handleNonStream(ctx)
+        result = await self.serving_base.handle_non_stream(ctx)
         self.assertEqual(result["status"], "success")
 
 

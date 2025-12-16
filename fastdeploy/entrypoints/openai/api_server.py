@@ -14,7 +14,6 @@
 """
 
 import asyncio
-import inspect
 import json
 import os
 import signal
@@ -41,12 +40,6 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
-from fastdeploy.entrypoints.openai.async_llm_serving_chat import (
-    AsyncLLMOpenAIServingChat,
-)
-from fastdeploy.entrypoints.openai.async_llm_serving_completion import (
-    AsyncLLMOpenAIServingCompletion,
-)
 from fastdeploy.entrypoints.openai.middleware import AuthenticationMiddleware
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -67,6 +60,12 @@ from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServin
 from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.entrypoints.openai.v1.serving_chat import (
+    OpenAIServingChat as OpenAIServingChatV1,
+)
+from fastdeploy.entrypoints.openai.v1.serving_completion import (
+    OpenAIServingCompletion as OpenAIServingCompletionV1,
+)
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
@@ -95,8 +94,6 @@ llm_engine = None
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
-enable_async_llm = environment_variables.get("FD_ENABLE_ASYNC_LLM")()
-
 
 class StandaloneApplication(BaseApplication):
     def __init__(self, app, options=None):
@@ -123,12 +120,12 @@ def load_engine():
 
     api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
-    if enable_async_llm:
+    if envs.FD_ENABLE_ASYNC_LLM:
         engine = AsyncLLM.from_engine_args(engine_args, pid=args.port)
     else:
         engine = LLMEngine.from_engine_args(engine_args)
     started = False
-    if inspect.iscoroutinefunction(engine.start):
+    if isinstance(engine, AsyncLLM):
         started = asyncio.run(engine.start())
     else:
         started = engine.start(api_server_pid=args.port)
@@ -138,13 +135,6 @@ def load_engine():
             "Please check the log file for more details."
         )
         return None
-    llm_engine = engine
-    return engine
-
-    if not asyncio.run(engine.start()):
-        api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
-        return None
-
     llm_engine = engine
     return engine
 
@@ -201,7 +191,7 @@ async def lifespan(app: FastAPI):
 
     engine_args = EngineArgs.from_cli_args(args)
     fd_config = engine_args.create_engine_config(port_availability_check=False)
-    if enable_async_llm:
+    if envs.FD_ENABLE_ASYNC_LLM:
         os.environ["INFERENCE_MSG_QUEUE_ID"] = engine_args.engine_worker_queue_port[engine_args.local_data_parallel_id]
 
     engine_client = EngineClient(
@@ -220,9 +210,9 @@ async def lifespan(app: FastAPI):
     )
     app.state.model_handler = model_handler
     global llm_engine
-    if enable_async_llm:
+    if envs.FD_ENABLE_ASYNC_LLM:
         await llm_engine.init_connections()
-        chat_handler = AsyncLLMOpenAIServingChat(
+        chat_handler = OpenAIServingChatV1(
             llm_engine,
             fd_config,
             app.state.model_handler,
@@ -233,7 +223,7 @@ async def lifespan(app: FastAPI):
             args.enable_mm_output,
             args.tokenizer_base_url,
         )
-        completion_handler = AsyncLLMOpenAIServingCompletion(
+        completion_handler = OpenAIServingCompletionV1(
             llm_engine,
             fd_config,
             app.state.model_handler,
@@ -285,8 +275,8 @@ async def lifespan(app: FastAPI):
     yield
     # close zmq
     try:
-        if enable_async_llm:
-            llm_engine.shutdown()
+        if envs.FD_ENABLE_ASYNC_LLM:
+            await llm_engine.shutdown()
         await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
