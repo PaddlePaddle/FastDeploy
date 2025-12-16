@@ -476,6 +476,7 @@ class PaddleDisWorkerProc:
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
                     while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
                         time.sleep(0.01)
+                    continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")

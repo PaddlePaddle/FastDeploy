@@ -505,6 +505,7 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+    trace_context: Optional[str] = None
 
     collect_metrics: Optional[bool] = False
 
@@ -681,6 +682,7 @@ class ChatCompletionRequest(BaseModel):
     mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
+    trace_context: Optional[str] = None
 
     collect_metrics: Optional[bool] = False
 
