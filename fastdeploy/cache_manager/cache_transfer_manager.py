@@ -165,7 +165,7 @@ class CacheTransferManager:
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.read_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self.write_to_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.write_back_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.timeout_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
         self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
@@ -532,6 +532,8 @@ class CacheTransferManager:
             if self.rank == 0:
                 self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
                 self.cache_task_queue.put_transfer_done_signal(result)
+                logger.debug(f"read_storage_task: put_transfer_done_signal {result}")
+                logger.info(f"read_storage_task: put_transfer_done_signal for transfer_task_id {task_id}")
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in read_storage_task: "
@@ -638,8 +640,8 @@ class CacheTransferManager:
             if self.rank == 0:  # 只有当rank为0时执行同步操作
                 self.cache_task_queue.swap_to_storage_barrier.reset()
                 self.cache_task_queue.put_transfer_done_signal(result)  # 发送传输完成信号
-                logger.debug(f"_do_swap_to_storage: put_transfer_done_signal {result}")
-                logger.info(f"_do_swap_to_storage: put_transfer_done_signal for transfer_task_id {task_id}")
+                logger.debug(f"write_back_storage_task: put_transfer_done_signal {result}")
+                logger.info(f"write_back_storage_task: put_transfer_done_signal for transfer_task_id {task_id}")
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in write_back_storage_task: "
@@ -770,7 +772,7 @@ class CacheTransferManager:
                         )
                     elif event_type.value == CacheStatus.GPU2STORAGE.value:
                         hash_keys, gpu_block_ids, timeout = data[2:]
-                        self.write_to_storage_thread_pool.submit(
+                        self.write_back_storage_thread_pool.submit(
                             self.write_back_storage_task,
                             transfer_task_id,
                             hash_keys,

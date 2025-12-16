@@ -740,7 +740,6 @@ class ResourceManagerV1(ResourceManager):
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                        # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
@@ -748,6 +747,7 @@ class ResourceManagerV1(ResourceManager):
                                 if (
                                     self.config.cache_config.enable_prefix_caching
                                     and num_new_tokens >= self.config.cache_config.block_size
+                                    and self.config.cache_config.kvcache_storage_backend
                                 ):
                                     matched_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                                     num_new_tokens -= len(matched_block_ids) * self.config.cache_config.block_size
@@ -954,7 +954,7 @@ class ResourceManagerV1(ResourceManager):
             return matched_block_ids
         except Exception as e:
             llm_logger.error(
-                f"get_storage_cached_blocks error: {e}, {str(traceback.format_exc())} waiting reschedule..."
+                f"get_storage_cached_blocks process req {req_id}, error: {e}, {str(traceback.format_exc())} "
             )
             return []
 

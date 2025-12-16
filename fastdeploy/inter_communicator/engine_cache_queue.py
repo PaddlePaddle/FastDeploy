@@ -258,7 +258,7 @@ class EngineCacheQueue:
             self.task_lock.acquire()
         self.task_sync_value.set(0)
         self.transfer_task_queue.append(item)
-        logger.info(f"put_transfer_task: put swap task {item[-1]} to queue successful")
+        logger.info(f"put_transfer_task: put swap task {item} to queue successful")
         self.task_lock.release()
 
     def get_transfer_task(self):

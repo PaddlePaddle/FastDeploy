@@ -89,7 +89,7 @@ class PrefixCacheManager:
         self.radix_tree_root = BlockNode(-1, [], 0, 0, -1, 0, None, None, None)
 
         # prams for cache storage
-        self.storage_backend = self.cache_config.kvcache_storage_backend
+        self.kvcache_storage_backend = self.cache_config.kvcache_storage_backend
         self.write_policy = self.cache_config.write_policy
         self.task_write_back_event = {}
         self.task_prefetch_event = {}
@@ -602,7 +602,7 @@ class PrefixCacheManager:
 
         storage_block_ids = []
         prefetch_from_storage = False
-        if self.storage_backend is not None:
+        if self.kvcache_storage_backend is not None:
             keys = []
             prefix_block_key = []
             num_cached_tokens = 0
@@ -802,7 +802,7 @@ class PrefixCacheManager:
         returns:
             matched_block_ids: A list of block IDs that prefetched cache from storage
         """
-        if self.storage_backend is None:
+        if self.kvcache_storage_backend is None:
             return []
 
         req_id = request.request_id
@@ -969,12 +969,11 @@ class PrefixCacheManager:
                     keys.append(node.hash_value)
                     node = node.parent
 
-                if self.storage_backend and self.write_policy == "write_through" and keys:
+                # TODO: support async write back to storage
+                if self.kvcache_storage_backend is not None and self.write_policy == "write_through" and keys:
                     keys = list(reversed(keys))
                     gpu_block_ids = task.block_tables[: len(keys)]
-                    self._write_back_storage(
-                        task_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=False, recode_event=False
-                    )
+                    self._write_back_storage(task_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
 
                 if req_id in self.cache_info:
                     del self.cache_info[req_id]
@@ -1000,8 +999,8 @@ class PrefixCacheManager:
                 logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
-    def _write_back_storage(self, task_id, hash_keys, gpu_block_ids, is_sync=True, recode_event=True, timeout=0.5):
-        if self.storage_backend is None:
+    def _write_back_storage(self, task_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+        if self.kvcache_storage_backend is None:
             return
 
         logger.debug(f"start write cache back to storage, task_id: {task_id}, hash_keys: {hash_keys}")
@@ -1010,12 +1009,13 @@ class PrefixCacheManager:
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        if recode_event:
-            self.task_write_back_event[task_id] = Event()
+        self.task_write_back_event[task_id] = Event()
+        tic = time.time()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task_id, hash_keys, gpu_block_ids, timeout))
         if is_sync:
             self.sync_write_back_task(task_id)
-        logger.debug(f"finish write cache back to storage, task_id: {task_id}")
+        cost_time = time.time() - tic
+        logger.debug(f"finish write cache back to storage, task_id: {task_id}, cost_time: {cost_time:.6f}s")
 
     def sync_write_back_task(self, task_id):
         """
