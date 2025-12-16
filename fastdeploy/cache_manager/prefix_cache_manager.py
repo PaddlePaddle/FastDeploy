@@ -370,6 +370,7 @@ class PrefixCacheManager:
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --engine_pid {pid_suffix}"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
