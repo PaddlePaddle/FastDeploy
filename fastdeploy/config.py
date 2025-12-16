@@ -245,7 +245,7 @@ class ModelConfig:
         """
         check if the model architecture disable for mm prefill
         """
-        return self._architecture in ["Ernie5ForCausalLM"]
+        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
