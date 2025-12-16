@@ -26,6 +26,7 @@ prometheus-client
 decord
 moviepy
 triton
+use-triton-in-paddle
 crcmod
 msgpack
 gunicorn
