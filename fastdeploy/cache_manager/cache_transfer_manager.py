@@ -91,6 +91,13 @@ def parse_args():
         default="{}",
         help="speculative config",
     )
+    parser.add_argument(
+        "--default_dtype",
+        type=str,
+        default="bfloat16",
+        choices=["float16", "bfloat16", "uint8"],
+        help="paddle default dtype, swap_cache_batch only support float16、bfloat16 and uint8 now",
+    )
     parser.add_argument("--local_data_parallel_id", type=int, default=0)
 
     args = parser.parse_args()
@@ -119,6 +126,7 @@ class CacheTransferManager:
         self.speculative_config = SpeculativeConfig(args.speculative_config)
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(args.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
+        paddle.set_default_dtype(args.default_dtype)
 
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
