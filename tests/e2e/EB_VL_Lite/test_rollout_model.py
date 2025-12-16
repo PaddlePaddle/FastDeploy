@@ -65,4 +65,4 @@ def test_rollout_model_with_distributed_launch():
     print("\n" + "=" * 50 + " STDERR " + "=" * 50)
     print(stderr)
 
-    assert return_code != 1, f"Process exited with code {return_code}"
+    assert return_code in (0, 250), f"Process exited with code {return_code}"

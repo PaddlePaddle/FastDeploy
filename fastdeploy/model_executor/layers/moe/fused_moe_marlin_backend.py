@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
@@ -239,6 +241,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Marlin compute Fused MoE.
@@ -272,6 +275,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 True,  # apply_norm_weight,
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         block_size_m = 64
 

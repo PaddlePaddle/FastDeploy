@@ -203,9 +203,7 @@ class MTPProposer(Proposer):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        if not profile and (
-            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
-        ):
+        if not profile and self.scheduler_config.splitwise_role != "mixed":
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -219,6 +217,18 @@ class MTPProposer(Proposer):
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
                 value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
                 cache_kvs_list.append(value_cache)
+
+                if kv_cache_quant_type == "block_wise_fp8":
+                    scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_scale_cache = share_external_data(key_scale_cache, scale_key_cache_name, kv_cache_scale_shape)
+                    cache_kvs_list.append(key_scale_cache)
+                    value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    value_scale_cache = share_external_data(
+                        value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
+                    )
+                    cache_kvs_list.append(value_scale_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
@@ -716,7 +726,6 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_batch_ids = (self.model_inputs["kv_batch_ids"],)
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
-        self.forward_meta.pos_emb_type = "NORMAL"
         self.forward_meta.attn_backend = self.attn_backends[0]
 
         # Initialzie attention meta data
@@ -988,7 +997,7 @@ class MTPProposer(Proposer):
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward"):
-                    self.model.empty_input_forward()
+                    self.model.empty_input_forward(forward_meta=self.forward_meta)
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
@@ -1078,7 +1087,7 @@ class MTPProposer(Proposer):
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward"):
-                    self.model.empty_input_forward()
+                    self.model.empty_input_forward(self.forward_meta)
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(

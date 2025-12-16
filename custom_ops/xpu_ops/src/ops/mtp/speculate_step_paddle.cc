@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <paddle/phi/backends/xpu/xpu_context.h>
-#include "paddle/extension.h"
-#include "paddle/phi/core/enforce.h"
-#include "xpu/plugin.h"
+#include "speculate_step_helper.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -48,77 +45,33 @@ void SpeculateStepPaddle(
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens) {
-  namespace api = baidu::xpu::api;
-  phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
-  auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
-  auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
-  api::Context *ctx = xpu_ctx->x_context();
-  if (seq_lens_this_time.is_cpu()) {
-    ctx = new api::Context(api::kCPU);
-  }
-  const int bsz = seq_lens_this_time.shape()[0];
-  PADDLE_ENFORCE_LE(
-      bsz,
-      640,
-      phi::errors::InvalidArgument(
-          "Only support bsz <= 640, but received bsz is %d", bsz));
-  const int block_num_per_seq = block_tables.shape()[1];
-  const int length = input_ids.shape()[1];
-  const int pre_id_length = pre_ids.shape()[1];
-  const int max_decoder_block_num = pre_id_length / block_size;
-  int r = baidu::xpu::api::plugin::speculate_free_and_dispatch_block(
-      ctx,
-      const_cast<bool *>(stop_flags.data<bool>()),
-      const_cast<int *>(seq_lens_this_time.data<int>()),
-      const_cast<int *>(seq_lens_decoder.data<int>()),
-      const_cast<int *>(block_tables.data<int>()),
-      const_cast<int *>(encoder_block_lens.data<int>()),
-      const_cast<bool *>(is_block_step.data<bool>()),
-      const_cast<int *>(step_block_list.data<int>()),
-      const_cast<int *>(step_lens.data<int>()),
-      const_cast<int *>(recover_block_list.data<int>()),
-      const_cast<int *>(recover_lens.data<int>()),
-      const_cast<int *>(need_block_list.data<int>()),
-      const_cast<int *>(need_block_len.data<int>()),
-      const_cast<int *>(used_list_len.data<int>()),
-      const_cast<int *>(free_list.data<int>()),
-      const_cast<int *>(free_list_len.data<int>()),
-      const_cast<int64_t *>(first_token_ids.data<int64_t>()),
-      const_cast<int *>(accept_num.data<int>()),
-      bsz,
-      block_size,
-      block_num_per_seq,
-      max_decoder_block_num,
-      max_draft_tokens);
-  PD_CHECK(r == 0, "speculate_free_and_dispatch_block failed.");
-  auto recover_lens_cpu = recover_lens.copy_to(paddle::CPUPlace(), false);
-  int recover_lens_cpu_data = recover_lens_cpu.data<int>()[0];
-  if (recover_lens_cpu_data > 0) {
-    r = baidu::xpu::api::plugin::speculate_recover_block(
-        ctx,
-        const_cast<int *>(recover_block_list.data<int>()),
-        const_cast<int *>(recover_lens.data<int>()),
-        const_cast<bool *>(stop_flags.data<bool>()),
-        const_cast<int *>(seq_lens_this_time.data<int>()),
-        ori_seq_lens_encoder.data<int>(),
-        const_cast<int *>(seq_lens_encoder.data<int>()),
-        seq_lens_decoder.data<int>(),
-        const_cast<int *>(block_tables.data<int>()),
-        const_cast<int *>(free_list.data<int>()),
-        const_cast<int *>(free_list_len.data<int>()),
-        const_cast<int64_t *>(input_ids.data<int64_t>()),
-        pre_ids.data<int64_t>(),
-        step_idx.data<int64_t>(),
-        encoder_block_lens.data<int>(),
-        used_list_len.data<int>(),
-        next_tokens.data<int64_t>(),
-        first_token_ids.data<int64_t>(),
-        bsz,
-        block_num_per_seq,
-        length,
-        pre_id_length);
-    PD_CHECK(r == 0, "speculate_recover_block failed.");
-  }
+  SpeculateStepPaddleBase(stop_flags,
+                          seq_lens_this_time,
+                          ori_seq_lens_encoder,
+                          paddle::optional<paddle::Tensor>(),
+                          seq_lens_encoder,
+                          seq_lens_decoder,
+                          block_tables,
+                          encoder_block_lens,
+                          is_block_step,
+                          step_block_list,
+                          step_lens,
+                          recover_block_list,
+                          recover_lens,
+                          need_block_list,
+                          need_block_len,
+                          used_list_len,
+                          free_list,
+                          free_list_len,
+                          input_ids,
+                          pre_ids,
+                          step_idx,
+                          next_tokens,
+                          first_token_ids,
+                          accept_num,
+                          block_size,
+                          encoder_decoder_block_num,
+                          max_draft_tokens);
 }
 
 PD_BUILD_STATIC_OP(speculate_step_paddle)

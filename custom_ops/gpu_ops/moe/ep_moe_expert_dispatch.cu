@@ -430,7 +430,9 @@ __global__ void permute_x_kernel(
         }
         abs_max = phi::BlockAllReduce<MaxOp, float, Kthread>(abs_max);
         float scale = 440.f / abs_max;  // use 440 so we do not have to clip
-        dequant_scale[dst_token_idx] = abs_max;
+        if (tid == 0) {
+          dequant_scale[dst_token_idx] = abs_max;
+        }
         for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
           Load<T, vec_size>(&data_smem[v_id * vec_size], &src_vec);
 #pragma unroll
@@ -661,7 +663,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
 
   int dequant_scale_size = 1;
   if (moe_quant_type == "w4afp8" && !up_gate_proj_in_scale) {
-    dequant_scale_size = moe_topk * num_rows;
+    dequant_scale_size = token_nums_this_rank;
   }
 
   auto dequant_scale =
@@ -847,8 +849,11 @@ __global__ void permute_x_fp8_kernel(
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
       if (s_token_idx >= start_idx && s_token_idx < end_idx) {
-        if ((s_token_idx - start_idx) < token_nums_per_expert[i])
+        if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
           m_indices[s_token_idx] = i;
+        } else {
+          m_indices[s_token_idx] = -1;
+        }
         break;
       }
     }
@@ -984,8 +989,20 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                      paddle::DataType::FLOAT32,
                      place);
 
-  auto m_indices = paddle::full(
-      {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  paddle::Tensor m_indices;
+  if (use_in_ep) {
+    m_indices = GetEmptyTensor(
+        {token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
+  } else {
+    // Note(ZKK)
+    // In TP, we must init m_indices with -1,
+    // because we allocate too much space.
+    // token_rows * moe_topk + num_experts_per_rank * (128 - 1)
+    // Later will optimize this.
+    m_indices = paddle::full(
+        {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  }
+
   auto token_nums_per_expert_cumsum =
       GetEmptyTensor({num_experts_per_rank}, paddle::DataType::INT64, place);
   auto token_nums_per_expert_padded_cumsum =

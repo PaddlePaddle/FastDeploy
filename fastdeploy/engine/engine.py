@@ -256,13 +256,13 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
-        request.llm_engine_recv_req_timestamp = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
-        request.preprocess_start_time = time.time()
+        request.metrics.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
@@ -324,7 +324,8 @@ class LLMEngine:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
 
-        request.preprocess_end_time = time.time()
+        request.metrics.preprocess_end_time = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")
@@ -463,6 +464,7 @@ class LLMEngine:
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
                 "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "SOT_ENABLE_COMPILE_TIME_LIMIT": os.getenv("SOT_ENABLE_COMPILE_TIME_LIMIT", default="0"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
@@ -482,9 +484,6 @@ class LLMEngine:
             # TODO dynamic load environment variable
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
-
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
         for k, v in variables.items():
@@ -568,6 +567,7 @@ class LLMEngine:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -712,11 +712,10 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
         result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
-            self.engine.scheduler.start(role, host_ip, disaggregate)
+            self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
             result_queues_for_dp_ipc = []
@@ -787,7 +786,7 @@ class LLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

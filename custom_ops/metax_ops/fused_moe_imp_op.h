@@ -20,6 +20,8 @@
 #include <string>
 #include "cub/cub.cuh"
 
+namespace phi {
+
 static const float HALF_FLT_MAX = 65504.F;
 static const float HALF_FLT_MIN = -65504.F;
 static inline size_t AlignTo16(const size_t& input) {
@@ -121,3 +123,5 @@ class CubKeyValueSorter {
   int num_experts_;
   int num_bits_;
 };
+
+}  // namespace phi

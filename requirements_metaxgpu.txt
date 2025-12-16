@@ -28,8 +28,7 @@ moviepy
 triton
 use-triton-in-paddle
 crcmod
-fastsafetensors==0.1.14
-safetensors==0.7.0rc0
+safetensors>=0.7.0
 msgpack
 gunicorn
 modelscope

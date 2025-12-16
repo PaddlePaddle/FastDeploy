@@ -48,6 +48,7 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    to_tensor,
 )
 
 
@@ -80,13 +81,6 @@ class EngineClient:
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-
-        if self.enable_mm and self.enable_prefix_caching:
-            from fastdeploy.cache_manager.cache_data import (
-                is_mm_model_disable_prefix_cache,
-            )
-
-            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.fd_config.model_config)
 
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
@@ -264,16 +258,6 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    def _check_mm_disable_prefix_cache(self, task):
-        is_multimodal_data = False
-        if self.disable_prefix_mm:
-            multimodal_inputs = task.get("multimodal_inputs", [])
-            if multimodal_inputs:
-                token_type_ids = multimodal_inputs.get("token_type_ids", [])
-                if token_type_ids:
-                    is_multimodal_data = np.sum(token_type_ids) > 0
-        return is_multimodal_data
-
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -296,16 +280,6 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
-
-            if self.enable_mm and self.enable_prefix_caching:
-                if self._check_mm_disable_prefix_cache(task):
-                    api_server_logger.error(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
-                    )
-                    raise EngineError(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
-                        error_code=400,
-                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
@@ -387,6 +361,8 @@ class EngineClient:
         if not self.enable_mm:
             self.zmq_client.send_json(task)
         else:
+            if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+                to_tensor([task])
             self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
@@ -418,13 +394,16 @@ class EngineClient:
         # logprobs
         logprobs = data.get("logprobs")
         top_logprobs = None
+        is_chat = False
 
-        if isinstance(logprobs, bool) and logprobs:
-            if not self.enable_logprob:
-                err_msg = "Logprobs is disabled, please enable it in startup config."
-                api_server_logger.error(err_msg)
-                raise ParameterError("logprobs", err_msg)
-            top_logprobs = data.get("top_logprobs")
+        if isinstance(logprobs, bool):
+            if logprobs:
+                is_chat = True
+                if not self.enable_logprob:
+                    err_msg = "Logprobs is disabled, please enable it in startup config."
+                    api_server_logger.error(err_msg)
+                    raise ParameterError("logprobs", err_msg)
+                top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:
@@ -478,38 +457,40 @@ class EngineClient:
                 raise ValueError("prompt_logprobs", err_msg)
 
         # enable_logprob
-        if top_logprobs:
+        if top_logprobs is not None:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ParameterError("logprobs", err_msg)
+                raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not isinstance(top_logprobs, int):
                 err_type = type(top_logprobs).__name__
-                err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
+                err_msg = (
+                    f"Invalid type for {'top_logprobs' if is_chat else 'logprobs'}: expected int but got {err_type}."
+                )
                 api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+                raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
+
+            if top_logprobs > max_logprobs:
+                err_msg = f"Number of {'top_logprobs' if is_chat else 'logprobs'} requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                api_server_logger.error(err_msg)
+                raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                if top_logprobs < 0 or top_logprobs > 20:
-                    err_msg = f"top_logprobs must be between 0 and 20; the current value is {top_logprobs}."
+                if top_logprobs < 0 or top_logprobs > max_logprobs:
+                    err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be between 0 and {max_logprobs}; the current value is {top_logprobs}."
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
             else:
                 if top_logprobs == -1 and self.ori_vocab_size > max_logprobs:
-                    err_msg = f"The requested value of ({self.ori_vocab_size}) for top_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                    err_msg = f"The requested value of ({self.ori_vocab_size}) for {'top_logprobs' if is_chat else 'logprobs'} (-1) exceeds the maximum allowed value of ({max_logprobs})"
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
                 if top_logprobs < -1:
-                    err_msg = f"top_logprobs must be a non-negative value or -1; the current value is {top_logprobs}."
+                    err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be a non-negative value or -1; the current value is {top_logprobs}."
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
-
-                if top_logprobs > max_logprobs:
-                    err_msg = f"Number of logprobs requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
-                    api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

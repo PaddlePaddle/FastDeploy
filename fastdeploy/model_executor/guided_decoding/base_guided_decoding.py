@@ -294,7 +294,12 @@ class BackendBase:
         """
         try:
             architectures = self.fd_config.model_config.architectures
-            if not ErnieArchitectures.contains_ernie_arch(architectures):
+            is_guidance_backend = (
+                self.fd_config.structured_outputs_config is not None
+                and self.fd_config.structured_outputs_config.guided_decoding_backend is not None
+                and self.fd_config.structured_outputs_config.guided_decoding_backend == "guidance"
+            )
+            if not ErnieArchitectures.contains_ernie_arch(architectures) or is_guidance_backend:
                 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
                 tokenizer = AutoTokenizer.from_pretrained(

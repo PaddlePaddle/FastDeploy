@@ -53,7 +53,7 @@ def make_request(**kwargs) -> Request:
         pooling_params={},
     )
     base.update(kwargs)
-    return Request(**base)
+    return Request.from_dict(base)
 
 
 class TestXGrammarChecker(unittest.TestCase):

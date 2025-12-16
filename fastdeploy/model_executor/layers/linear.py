@@ -97,7 +97,6 @@ class LinearBase(nn.Layer):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         skip_quant: bool = False,
         weight_dtype: str = "",
         weight_key: str = "",
@@ -112,7 +111,6 @@ class LinearBase(nn.Layer):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
 
         Raises:
@@ -137,7 +135,6 @@ class LinearBase(nn.Layer):
         self.input_size = input_size
         self.output_size = output_size
         self.with_bias = with_bias
-        self.add_bias = add_bias
         self.prefix = prefix
         self.is_quantized = fd_config.model_config.is_quantized and not (
             fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.dense_quant_type is None
@@ -270,7 +267,6 @@ class ReplicatedLinear(LinearBase):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         skip_quant: bool = False,
         weight_dtype: str = "",
         weight_key: str = "",
@@ -286,7 +282,6 @@ class ReplicatedLinear(LinearBase):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         super().__init__(
@@ -295,7 +290,6 @@ class ReplicatedLinear(LinearBase):
             input_size=input_size,
             output_size=output_size,
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
             weight_key=weight_key,
@@ -325,7 +319,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
         input_size: int = None,
         output_sizes: list[int] = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         skip_quant: bool = False,
         weight_dtype: str = "",
         weight_key: str = "",
@@ -339,7 +332,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
             input_size (int): Number of input features. Defaults to None.
             output_sizes (list[int]): Number of output features list. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         super().__init__(
@@ -348,7 +340,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
             input_size=input_size,
             output_size=sum(output_sizes),
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
             weight_key=weight_key,
@@ -367,10 +358,14 @@ class MergedReplicatedLinear(ReplicatedLinear):
             # loaded_shard_id == "kv_a"
             param_shard_offset = self.output_sizes[0]
             param_shard_size = self.output_sizes[1]
-
         if hasattr(param, "tensor_track"):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        param = slice_fn(param, True, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        param = slice_fn(
+            param,
+            (self.fd_config.model_config.model_format == "torch") ^ True,
+            start=param_shard_offset,
+            end=param_shard_offset + param_shard_size,
+        )
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -399,7 +394,6 @@ class ColumnParallelLinear(LinearBase):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         skip_quant: bool = False,
         weight_dtype: str = "",
     ):
@@ -413,7 +407,6 @@ class ColumnParallelLinear(LinearBase):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         self.fd_config = fd_config
@@ -428,7 +421,6 @@ class ColumnParallelLinear(LinearBase):
             input_size=self.input_size,
             output_size=self.output_size,
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
@@ -476,7 +468,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         activation: str = "gelu",
         skip_quant: bool = False,
     ):
@@ -490,7 +481,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             activation (str): Activation function to use. Defaults to "gelu".
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
@@ -506,7 +496,6 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             input_size=input_size,
             output_size=output_size,
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
         )
 
@@ -613,7 +602,6 @@ class QKVParallelLinear(ColumnParallelLinear):
         fd_config,
         prefix,
         with_bias=False,
-        add_bias=True,
         num_heads: Optional[int] = None,
         kv_num_heads: Optional[int] = None,
         hidden_size: Optional[int] = None,
@@ -629,7 +617,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             prefix (str): Unique name of the layer, used to name internal attributes.
                 Can be arbitrarily named.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to True.
             num_heads (Optional[int]): Number of attention heads in the model.
             kv_num_heads (Optional[int]): Number of key/value heads, used for multi-query or grouped-query attention.
             hidden_size (Optional[int]): Total hidden layer dimension, typically the embedding size.
@@ -657,7 +644,6 @@ class QKVParallelLinear(ColumnParallelLinear):
             input_size=input_size,
             output_size=output_size,
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
@@ -827,7 +813,6 @@ class RowParallelLinear(LinearBase):
         input_size: int = None,
         output_size: int = None,
         with_bias: bool = False,
-        add_bias: bool = False,
         reduce_results: bool = True,
         skip_quant: bool = False,
         weight_dtype: str = "",
@@ -843,7 +828,6 @@ class RowParallelLinear(LinearBase):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            add_bias (bool): Whether to add bias in the current layer or in the pre/post layer. Defaults to False.
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         self.fd_config = fd_config
@@ -871,7 +855,6 @@ class RowParallelLinear(LinearBase):
             input_size=self.input_size,
             output_size=self.output_size,
             with_bias=with_bias,
-            add_bias=add_bias,
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
@@ -892,10 +875,8 @@ class RowParallelLinear(LinearBase):
 
         self.reduce_results = reduce_results and not self.split_token
 
-        if add_bias:
-            assert with_bias, "with_bias must be True when add_bias is True."
-            if self.tp_size > 1 and self.reduce_results:
-                set_weight_attrs(self.bias, {"tp_row_bias": True})
+        if self.with_bias and self.tp_size > 1 and self.reduce_results:
+            set_weight_attrs(self.bias, {"tp_row_bias": True})
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]
@@ -973,7 +954,12 @@ class KVBatchLinear(nn.Layer):
     def process_weights_after_loading(self):
         if self.fd_config.load_config.dynamic_load_weight:
             return
-        w = self.kv_b_proj.weight.reshape(
+        w = (
+            self.kv_b_proj.weight.transpose([1, 0])
+            if self.fd_config.model_config.model_format == "torch"
+            else self.kv_b_proj.weight
+        )
+        w = w.reshape(
             [
                 self.kv_lora_rank,
                 self.num_heads_per_partition,

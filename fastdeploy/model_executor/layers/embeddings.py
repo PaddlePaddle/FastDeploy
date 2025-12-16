@@ -23,6 +23,7 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
 from fastdeploy.platforms import current_platform
 
@@ -134,6 +135,8 @@ class VocabParallelEmbedding(nn.Layer):
         self.max_position_embeddings: int = fd_config.model_config.max_position_embeddings
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
+
+        self.embedding_dim = embedding_dim
 
         self.general = general  # used for general Embedding
         self.num_embeddings = num_embeddings
@@ -286,7 +289,7 @@ class VocabParallelEmbedding(nn.Layer):
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             param[:, shard_weight.shape[1] :].fill_(0)
 
-    def forward(self, ids_remove_padding=None) -> paddle.Tensor:
+    def forward(self, ids_remove_padding: paddle.Tensor = None, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -297,6 +300,8 @@ class VocabParallelEmbedding(nn.Layer):
         Returns:
             Tensor: Embedded tensor representation of the input IDs.
         """
+        if forward_meta is not None and forward_meta.is_zero_size:
+            return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
         if self.column_cut:
             input_embedings = self.embeddings(ids_remove_padding)
             inputs_embeds_temp = []
