@@ -312,6 +312,11 @@ class ModelOutputData:
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
     """
+        index -> request_id
+    """
+    index_to_batch_id: list = None
+
+    """
         the minimum tokens that will be generated
     """
     min_tokens: paddle.Tensor = None

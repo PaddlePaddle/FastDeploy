@@ -23,6 +23,10 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.input_batch import (
+    recover_batch_index_for_model_output,
+    recover_batch_index_for_sampler_output,
+)
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -404,8 +408,10 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
+    recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
@@ -484,12 +490,15 @@ def post_process_specualate(
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
+            accept_tokens, accept_num, seq_lens_decoder, prompt_lens = recover_batch_index_for_model_output(
+                model_output, model_output.index_to_batch_id
+            )
             speculate_save_output(
-                model_output.accept_tokens,
-                model_output.accept_num,
+                accept_tokens,
+                accept_num,
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
+                seq_lens_decoder,
+                prompt_lens,
                 model_output.mp_rank,
                 save_each_rank,
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
