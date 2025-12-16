@@ -27,10 +27,13 @@ class TestPaddingSamplingParams(unittest.TestCase):
     def test_all_decode(self):
         top_p = paddle.to_tensor([0.8, 0.9, 0.95], dtype="float32")
         top_k = paddle.to_tensor([10, 20, 30], dtype="int64")
+        seed = paddle.to_tensor([1, 2, 3], dtype="int64")
         seq_lens_this_time = paddle.to_tensor([2, 3, 1], dtype="int64")
         seq_lens_encoder = paddle.to_tensor([0, 0, 0], dtype="int64")
 
-        top_p_padding, top_k_padding = padding_sampling_params(top_p, top_k, seq_lens_this_time, seq_lens_encoder)
+        top_p_padding, top_k_padding, topp_seed = padding_sampling_params(
+            top_p, top_k, seed, seq_lens_this_time, seq_lens_encoder
+        )
 
         expected_len = sum(seq_lens_this_time.numpy())
         self.assertEqual(top_p_padding.shape[0], expected_len)
@@ -39,28 +42,39 @@ class TestPaddingSamplingParams(unittest.TestCase):
         expected_top_p = np.repeat([0.8, 0.9, 0.95], [2, 3, 1]).reshape(-1, 1)
         np.testing.assert_allclose(top_p_padding.numpy(), expected_top_p, rtol=1e-6)
 
+        expected_topp_seed = np.array([1, 5, 2, 6, 10, 3]).reshape(-1, 1)
+        np.testing.assert_allclose(topp_seed.numpy(), expected_topp_seed)
+
     def test_partial_decode(self):
         top_p = paddle.to_tensor([0.7, 0.6, 0.5], dtype="float32")
         top_k = paddle.to_tensor([15, 25, 35], dtype="int64")
+        seed = paddle.to_tensor([1, 2, 3], dtype="int64")
         seq_lens_this_time = paddle.to_tensor([3, 2, 4], dtype="int64")
         seq_lens_encoder = paddle.to_tensor([0, 1, 0], dtype="int64")
 
-        top_p_padding, top_k_padding = padding_sampling_params(top_p, top_k, seq_lens_this_time, seq_lens_encoder)
+        top_p_padding, top_k_padding, topp_seed = padding_sampling_params(
+            top_p, top_k, seed, seq_lens_this_time, seq_lens_encoder
+        )
 
         expected_repeats = [3, 1, 4]
         expected_top_p = np.repeat([0.7, 0.6, 0.5], expected_repeats).reshape(-1, 1)
         expected_top_k = np.repeat([15, 25, 35], expected_repeats).reshape(-1, 1)
+        expected_topp_seed = np.array([1, 5, 9, 2, 3, 7, 11, 15]).reshape(-1, 1)
 
         np.testing.assert_allclose(top_p_padding.numpy(), expected_top_p, rtol=1e-6)
         np.testing.assert_array_equal(top_k_padding.numpy(), expected_top_k)
+        np.testing.assert_array_equal(topp_seed.numpy(), expected_topp_seed)
 
     def test_all_prefill(self):
         top_p = paddle.to_tensor([0.5, 0.6], dtype="float32")
         top_k = paddle.to_tensor([5, 6], dtype="int64")
+        seed = paddle.to_tensor([1, 1], dtype="int64")
         seq_lens_this_time = paddle.to_tensor([4, 3], dtype="int64")
         seq_lens_encoder = paddle.to_tensor([1, 2], dtype="int64")
 
-        top_p_padding, top_k_padding = padding_sampling_params(top_p, top_k, seq_lens_this_time, seq_lens_encoder)
+        top_p_padding, top_k_padding, topp_seed = padding_sampling_params(
+            top_p, top_k, seed, seq_lens_this_time, seq_lens_encoder
+        )
 
         expected_top_p = np.array([[0.5], [0.6]])
         expected_top_k = np.array([[5], [6]])
