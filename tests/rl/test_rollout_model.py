@@ -1,6 +1,7 @@
 import os
 import sys
 import types
+import importlib
 
 import pytest  # type: ignore
 
@@ -17,6 +18,12 @@ if ROOT not in sys.path:
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ["PROMETHEUS_MULTIPROC_MODE"] = "all"
 os.environ["FD_SKIP_MODEL_AUTO_REGISTRY"] = "1"
+
+# Patch model auto registry to no-op to avoid heavy imports during collection
+_models_mod = importlib.import_module("fastdeploy.model_executor.models")
+_models_mod.auto_models_registry = lambda *a, **k: None
+if hasattr(_models_mod, "load_model_register_plugins"):
+    _models_mod.load_model_register_plugins = lambda *a, **k: None
 
 from fastdeploy.rl.rollout_model import (  # noqa: E402
     BaseRLModel,
