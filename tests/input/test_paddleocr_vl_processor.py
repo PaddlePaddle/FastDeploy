@@ -793,6 +793,8 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.processor.processor = MagicMock()
         self.processor.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = None
+        self.processor.model_status_dict = {}
 
         # 模拟 _apply_default_parameters
         def mock_apply_default_parameters(request_or_dict):
@@ -971,6 +973,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "prompt": "test prompt",
             "multimodal_data": {"image": ["image1"]},
             "metadata": {"generated_token_ids": []},
+            "request_id": "test-request",
         }
         request_obj.to_dict.return_value = request_dict
 
@@ -1156,6 +1159,27 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.assertTrue(np.array_equal(result["grid_thw"], grid_feature))
         self.assertTrue(np.array_equal(result["image_type_ids"], np.array([0])))
         self.assertTrue(np.array_equal(result["position_ids"], np.array([[0], [1], [2]], dtype=np.int64)))
+
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
 
 if __name__ == "__main__":
