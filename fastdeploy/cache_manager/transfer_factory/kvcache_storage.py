@@ -1,0 +1,116 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+import hashlib
+import pickle
+from abc import ABC, abstractmethod
+from typing import Any, List, Optional
+
+import paddle
+
+from fastdeploy.utils import get_logger
+
+logger = get_logger("cache_storage", "cache_storage.log")
+
+
+def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = None) -> str:
+    """
+    calculate hash value of a block with additional keys
+
+    Args:
+        token_ids: Input token IDs
+        extra_keys: Additional keys for block identification
+    """
+    if extra_keys is None:
+        value = token_ids
+    else:
+        value = (token_ids, extra_keys)
+    return hashlib.sha256(pickle.dumps(value)).hexdigest()
+
+
+class KVCacheStorage(ABC):
+    """
+    KVCacheStorage is a class that provides a generic key-value interface for storing and retrieving KV cache.
+    """
+
+    @abstractmethod
+    def get(
+        self,
+        key: str,
+        target_location: Optional[Any] = None,
+        target_sizes: Optional[Any] = None,
+    ) -> paddle.Tensor | None:
+        """
+        Retrieve the value associated with the given key.
+        Returns None if the key does not exist.
+        """
+        pass
+
+    @abstractmethod
+    def batch_get(
+        self,
+        keys: List[str],
+        target_locations: Optional[Any] = None,
+        target_sizes: Optional[Any] = None,
+    ) -> List[paddle.Tensor | None]:
+        """
+        Retrieve values for multiple keys.
+        Returns a list of tensors or None for each key.
+        """
+        pass
+
+    @abstractmethod
+    def set(
+        self,
+        key: str,
+        value: Optional[Any] = None,
+        target_location: Optional[Any] = None,
+        target_sizes: Optional[Any] = None,
+    ) -> bool:
+        """
+        Store the value associated with the given key.
+        Returns True if the operation was successful, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def batch_set(
+        self,
+        keys: List[str],
+        values: Optional[Any] = None,
+        target_locations: Optional[Any] = None,
+        target_sizes: Optional[Any] = None,
+    ) -> bool:
+        """
+        Store multiple key-value pairs.
+        Returns True if all operations were successful, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def exists(self, key: str) -> bool:
+        """
+        Check if the key exists in the storage.
+        Returns True if the key exists, False otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def clear(self) -> bool:
+        """
+        Clear all keys in storage
+        """
+        pass
