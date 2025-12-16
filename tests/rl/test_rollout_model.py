@@ -15,15 +15,29 @@ except Exception as e:  # pragma: no cover - env probe
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
-os.environ["PROMETHEUS_MULTIPROC_MODE"] = "all"
-os.environ["FD_SKIP_MODEL_AUTO_REGISTRY"] = "1"
 
-# Patch model auto registry to no-op to avoid heavy imports during collection
-_models_mod = importlib.import_module("fastdeploy.model_executor.models")
-_models_mod.auto_models_registry = lambda *a, **k: None
-if hasattr(_models_mod, "load_model_register_plugins"):
-    _models_mod.load_model_register_plugins = lambda *a, **k: None
+
+@pytest.fixture(scope="module", autouse=True)
+def _isolate_env_and_model_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Configure env and patch model auto registry in a reversible way.
+
+    Using a module-scoped autouse fixture ensures:
+    - Other test modules do NOT see FD_SKIP_MODEL_AUTO_REGISTRY permanently set.
+    - Patches to fastdeploy.model_executor.models are reverted after this file finishes.
+    """
+
+    # These env vars are required for RL rollout tests, but should not leak globally.
+    monkeypatch.setenv("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+    monkeypatch.setenv("PROMETHEUS_MULTIPROC_MODE", "all")
+    monkeypatch.setenv("FD_SKIP_MODEL_AUTO_REGISTRY", "1")
+
+    # Patch model auto registry to no-op to avoid heavy imports during collection.
+    models_mod = importlib.import_module("fastdeploy.model_executor.models")
+    if hasattr(models_mod, "auto_models_registry"):
+        monkeypatch.setattr(models_mod, "auto_models_registry", lambda *a, **k: None, raising=False)
+    if hasattr(models_mod, "load_model_register_plugins"):
+        monkeypatch.setattr(models_mod, "load_model_register_plugins", lambda *a, **k: None, raising=False)
 
 from fastdeploy.rl.rollout_model import (  # noqa: E402
     BaseRLModel,
