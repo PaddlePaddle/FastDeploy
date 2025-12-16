@@ -187,7 +187,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
-        self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
