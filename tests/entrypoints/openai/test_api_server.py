@@ -78,11 +78,14 @@ def _reload_api_server(args):
     We also patch environment_variables so FD_API_KEY lookup never depends on
     the real environment (which can be different between local and CI).
     """
+    # Mock environment_variables.get("FD_API_KEY") to return a function that returns []
+    mock_env_vars = MagicMock()
+    mock_env_vars.get.return_value = lambda: []  # Returns empty list, not None
     with (
         patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
         patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
         patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
-        patch("fastdeploy.envs.environment_variables", {}),
+        patch("fastdeploy.envs.environment_variables", mock_env_vars),
     ):
         from fastdeploy.entrypoints.openai import api_server as api_server_mod
 
@@ -357,7 +360,9 @@ async def test_chat_completion_branches_and_completion_branches():
 
     # Healthy path with ErrorResponse -> ChatCompletionResponse -> streaming
     api_server.app.state.dynamic_load_weight = False
-    api_server.connection_semaphore = SimpleNamespace(acquire=AsyncMock(), release=MagicMock())
+    api_server.connection_semaphore = SimpleNamespace(
+        acquire=AsyncMock(), release=MagicMock(), status=lambda: "ok"
+    )
 
     from fastdeploy.entrypoints.openai.protocol import (
         ChatCompletionResponse,
@@ -545,10 +550,14 @@ def test_controller_routes_and_models_listing():
 
     # control_scheduler reset and update_config branches, while
     # avoiding Pydantic validation by stubbing ErrorInfo/ErrorResponse.
+    # The issue is that api_server.py creates ErrorResponse(error=ErrorInfo(code=0))
+    # but ErrorInfo.code must be a string per Pydantic validation.
+    # We patch the ErrorInfo class to accept int code and convert to string.
     class DummyErrorInfo:
         def __init__(self, message: str, code=None, **_):
             self.message = message
-            self.code = code
+            # Convert code to string if it's an int (as api_server.py passes code=0)
+            self.code = str(code) if code is not None else code
 
     class DummyErrorResponse:
         def __init__(self, error):
@@ -561,9 +570,10 @@ def test_controller_routes_and_models_listing():
     sched.update_config = MagicMock()
     mock_engine2 = SimpleNamespace(engine=SimpleNamespace(clear_data=MagicMock(), scheduler=sched))
     api_server.llm_engine = mock_engine2
+    # Patch at module level before control_scheduler is called
     with (
-        patch.object(api_server, "ErrorInfo", DummyErrorInfo),
-        patch.object(api_server, "ErrorResponse", DummyErrorResponse),
+        patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", DummyErrorInfo),
+        patch("fastdeploy.entrypoints.openai.api_server.ErrorResponse", DummyErrorResponse),
     ):
         ctrl_req = ControlSchedulerRequest(reset=True, load_shards_num=2, reallocate_shard=True)
         resp4 = api_server.control_scheduler(ctrl_req)
@@ -756,7 +766,8 @@ def test_control_scheduler_without_update_config():
         class DummyErrorInfo:
             def __init__(self, message: str, code=None, **_):
                 self.message = message
-                self.code = code
+                # Convert code to string if it's an int (as api_server.py passes code=0 or code=400)
+                self.code = str(code) if code is not None else code
 
         class DummyErrorResponse:
             def __init__(self, error):
@@ -765,13 +776,14 @@ def test_control_scheduler_without_update_config():
             def model_dump(self):
                 return {"error": {"message": self.error.message, "code": self.error.code}}
 
+        # Patch at module level before control_scheduler is called
         with (
-            patch.object(api_server, "ErrorInfo", DummyErrorInfo),
-            patch.object(api_server, "ErrorResponse", DummyErrorResponse),
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", DummyErrorInfo),
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorResponse", DummyErrorResponse),
         ):
             req = SimpleNamespace(reset=False, load_shards_num=1, reallocate_shard=True)
             resp = api_server.control_scheduler(req)
-    assert resp.status_code == 400
+        assert resp.status_code == 400
 
 
 def test_config_info_engine_not_loaded():
