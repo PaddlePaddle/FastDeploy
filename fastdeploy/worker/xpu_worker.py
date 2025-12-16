@@ -171,12 +171,12 @@ class XpuWorker(WorkerBase):
         else:
             self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
-    def graph_optimize_and_warm_up_model(self) -> None:
-        """
-        Perform the warm-up and the graph optimization
-        """
-        if self.model_runner.graph_opt_level >= 1:
-            self.model_runner.sot_warmup()
+    # def graph_optimize_and_warm_up_model(self) -> None:
+    #     """
+    #     Perform the warm-up and the graph optimization
+    #     """
+    #     if self.model_runner.graph_opt_level >= 1:
+    #         self.model_runner.sot_warmup()
 
     def check_health(self) -> bool:
         """ """
@@ -185,3 +185,15 @@ class XpuWorker(WorkerBase):
     def cal_theortical_kvcache(self) -> int:
         """Calculate the block memory required"""
         return self.model_runner.cal_theortical_kvcache()
+
+
+    def graph_optimize_and_warm_up_model(self) -> None:
+        """
+        Perform the warm-up and the graph optimization
+        """
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
+            self.model_runner.sot_warmup()
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1:
+            self.model_runner.vision_encoder_compile()
+        # Trigger cuda graph capture
+        self.model_runner.capture_model()
