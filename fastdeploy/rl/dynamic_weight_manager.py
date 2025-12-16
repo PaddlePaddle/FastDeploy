@@ -109,7 +109,7 @@ class DynamicWeightManager:
         )
 
         try:
-            ipc_state_dict = paddle.load(model_path)
+            ipc_state_dict = paddle.load(model_path, safetensors=True)
         except FileNotFoundError:
             fallback_path = f"/shared_ipc_meta/model_state.tp0{self.meta_src_id}.pdparams"
             ipc_state_dict = paddle.load(fallback_path)
