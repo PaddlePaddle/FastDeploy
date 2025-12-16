@@ -51,6 +51,7 @@ class RequestFuncInput:
     ignore_eos: bool = False
     language: Optional[str] = None
     debug: bool = False
+    pd_metrics: bool = False
     response_format: Optional[dict] = None
     random_flag: bool = False
 
@@ -74,6 +75,73 @@ class RequestFuncOutput:
     prompt_len: int = 0
     prompt_tokens: int = 0  # 推理侧返回输入token数
     error: str = ""
+    metrics: dict = field(default_factory=dict)
+
+
+def safe_cost(a, b):
+    """时间差计算"""
+    if a is None or b is None:
+        return None
+    return a - b
+
+
+def metrics_summary(metrics, token_timestamps):
+    """Summarize metrics"""
+    if not metrics or len(token_timestamps) < 2:
+        return {}
+
+    m0 = metrics[0]
+    m_last = metrics[-1]
+
+    summary = {}
+
+    arrival_time = m0.get("arrival_time")
+    inference_start_time = m0.get("inference_start_time")
+
+    # prefill 总耗时
+    summary["prefill_cost_time"] = safe_cost(m0.get("send_request_output_to_decode_time"), arrival_time)
+    # prefill准备耗时
+    summary["prefill_prepare_cost_time"] = safe_cost(inference_start_time, arrival_time)
+    # 预处理耗时
+    summary["preprocess_cost_time"] = safe_cost(m0.get("scheduler_recv_req_time"), arrival_time)
+    # 请求缓存耗时
+    summary["cache_in_scheduler_cost_time"] = safe_cost(
+        m0.get("engine_get_req_time"), m0.get("scheduler_recv_req_time")
+    )
+    # 申请 decode资源耗时
+    summary["ask_decode_resource_cost_time"] = safe_cost(
+        m0.get("ask_decode_resource_finish_time"), m0.get("ask_decode_resource_start_time")
+    )
+    # prefill 的首 token 推理耗时
+    summary["prefill_first_token_infer_cost_time"] = safe_cost(
+        m0.get("engine_recv_first_token_time"), inference_start_time
+    )
+    # prefill 等待 cache 传输耗时
+    summary["wait_sending_cache_cost_time"] = safe_cost(
+        m0.get("send_request_output_to_decode_time"), m0.get("wait_for_sending_cache_time")
+    )
+    # decode分配资源耗时
+    summary["decode_preallocate_cost_time"] = safe_cost(
+        m_last.get("decode_preallocate_req_time"), m_last.get("decode_recv_req_time")
+    )
+    # decode准备推理耗时
+    summary["decode_prepare_cost_time"] = safe_cost(
+        m_last.get("decode_inference_start_time"), m_last.get("decode_recv_first_token_time")
+    )
+    # decode次token推理耗时
+    summary["decode_second_token_infer_cost_time"] = safe_cost(
+        m_last.get("decode_recv_second_token_time"), m_last.get("decode_inference_start_time")
+    )
+    # 返回首 token 链路耗时
+    summary["first_token_transmission_cost_time"] = safe_cost(
+        token_timestamps[0], m_last.get("decode_recv_first_token_time")
+    )
+    # 返回次 token 链路耗时
+    summary["second_token_transmission_cost_time"] = safe_cost(
+        token_timestamps[1], m_last.get("decode_recv_second_token_time")
+    )
+
+    return summary
 
 
 async def async_request_eb_openai_chat_completions(
@@ -97,6 +165,7 @@ async def async_request_eb_openai_chat_completions(
                 "continuous_usage_stats": True,
             },
             "max_tokens": request_func_input.output_len,
+            "collect_metrics": request_func_input.pd_metrics,
         }
         if request_func_input.response_format:
             payload["response_format"] = request_func_input.response_format
@@ -125,11 +194,13 @@ async def async_request_eb_openai_chat_completions(
         output = RequestFuncOutput()
         output.prompt_len = 0
         output.no = request_func_input.no
+        metrics_list = []
         request_id = "None"
 
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
+        token_timestamps = []
         try:
             async with session.post(url=api_url, json=payload, headers=headers) as response:
                 data = {}
@@ -144,6 +215,10 @@ async def async_request_eb_openai_chat_completions(
                             # print("####chunk:", chunk, type(chunk))
                             timestamp = time.perf_counter()
                             data = json.loads(chunk)
+                            # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+
+                            if "metrics" in data:
+                                metrics_list.append(data["metrics"])
 
                             if request_id == "None" and "id" in data:
                                 request_id = data["id"]
@@ -169,16 +244,22 @@ async def async_request_eb_openai_chat_completions(
 
                                 output.generated_text += content or ""
                                 output.reasoning_content += reason_content or ""
+                                # print(f"####content:{data}")
                                 output.arrival_time.append(choices[0].get("arrival_time", timestamp))
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
 
                             most_recent_timestamp = timestamp
+                            token_timestamps.append(time.time())
 
                     # output.generated_text = generated_text
                     # 在流式结束时，记录最后一个 chunk 收到的时间戳
                     output.end_timestamp = most_recent_timestamp
+
+                    # 新增metrics统计，计算首token过滤空包
+                    output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
+
                     if output.generated_text.strip() == "":
                         output.success = False
                         output.error = "No generated text found!"

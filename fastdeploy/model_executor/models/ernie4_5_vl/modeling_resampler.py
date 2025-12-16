@@ -218,15 +218,11 @@ class VariableResolutionResamplerModel(nn.Layer):
         x = x.reshape([-1, C * (spatial_conv_size**2)])
         return x
 
-    def forward(self, x, image_mask, token_type_ids, image_type_ids, grid_thw):
+    def forward(self, x, grid_thw):
         """
         x: image_features
-        image_mask: [B]
-        token_types_ids: [B]
-        image_type_ids:  [B_image]
         grid_thw: [B_image, 3]
         """
-        assert image_type_ids is not None
 
         def fwd_spatial(x):
             """

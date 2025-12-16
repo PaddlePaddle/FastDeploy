@@ -36,6 +36,7 @@ def test_set_stop_value_multi_ends_with_stop_seq():
 
     stop_seqs_len = paddle.full([2, 5], 10, dtype="int32")
     stop_seqs_len[0, 0] = 2
+    min_tokens = paddle.to_tensor([[0], [0]], dtype="int64")
 
     set_stop_value_multi_ends(
         sampled_token_ids,
@@ -47,6 +48,7 @@ def test_set_stop_value_multi_ends_with_stop_seq():
         step_idx,
         stop_token_ids,
         stop_seqs_len,
+        min_tokens,
         False,
     )
 
@@ -54,5 +56,40 @@ def test_set_stop_value_multi_ends_with_stop_seq():
     assert sampled_token_ids[0, 0] == 2  # eos token id
 
 
+def test_min_tokens():
+    """Test min_tokens  functionality"""
+    sampled_token_ids = paddle.to_tensor([[2], [100], [200]], dtype="int64")
+    stop_flags = paddle.to_tensor([[False], [False], [False]], dtype="bool")
+    seq_lens_this_time = paddle.to_tensor([[1], [1], [1]], dtype="int32")
+    eos_token_id = paddle.to_tensor([2], dtype="int64")
+    next_tokens = paddle.to_tensor([[2], [100], [200]], dtype="int64")
+
+    pre_ids = paddle.full([3, 100], -1, dtype="int64")
+    step_idx = paddle.to_tensor([[5], [50], [10]], dtype="int64")
+
+    stop_seqs = paddle.full([3, 5, 8], -1, dtype="int64")
+    stop_seqs_len = paddle.zeros([3, 5], dtype="int32")
+
+    min_tokens = paddle.to_tensor([[10], [0], [5]], dtype="int64")
+
+    set_stop_value_multi_ends(
+        sampled_token_ids,
+        stop_flags,
+        seq_lens_this_time,
+        eos_token_id,
+        next_tokens,
+        pre_ids,
+        step_idx,
+        stop_seqs,
+        stop_seqs_len,
+        min_tokens,
+        False,
+    )
+
+    # Sample 0: step < min_tokens, should not stop even with EOS
+    assert bool(stop_flags[0, 0]) is False
+
+
 if __name__ == "__main__":
     test_set_stop_value_multi_ends_with_stop_seq()
+    test_min_tokens()

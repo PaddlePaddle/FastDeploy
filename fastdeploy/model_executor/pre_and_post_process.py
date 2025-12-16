@@ -344,7 +344,12 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
+    if (
+        current_platform.is_cuda()
+        or current_platform.is_iluvatar()
+        or current_platform.is_dcu()
+        or current_platform.is_maca()
+    ):
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
@@ -355,19 +360,7 @@ def post_process_normal(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
-            False,
-        )  # multi ends
-    elif current_platform.is_maca():
-        set_stop_value_multi_ends(
-            sampler_output.sampled_token_ids,
-            model_output.stop_flags,
-            model_output.seq_lens_this_time,
-            model_output.eos_token_id,
-            model_output.next_tokens,
-            model_output.pre_ids,
-            model_output.step_idx,
-            model_output.stop_token_ids,
-            model_output.stop_seqs_len,
+            model_output.min_tokens,
             False,
         )  # multi ends
     else:
@@ -472,6 +465,7 @@ def post_process_specualate(
         model_output.stop_token_ids,
         model_output.stop_seqs_len,
         model_output.eos_token_id,
+        model_output.min_tokens,
     )
     speculate_update(
         model_output.seq_lens_encoder,

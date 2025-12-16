@@ -190,6 +190,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const int kv_token_num,
     const int max_seq_len,
     const float rms_norm_eps,
+    const bool use_neox_rotary_style,
     const std::string& cache_quant_type,
     const bool rope_3d);
 
@@ -419,6 +420,7 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& step_idx,
                        const paddle::Tensor& stop_seqs,
                        const paddle::Tensor& stop_seqs_len,
+                       const paddle::Tensor& min_tokens,
                        const bool beam_search);
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
@@ -763,7 +765,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& seq_lens,
                                const paddle::Tensor& stop_seqs,
                                const paddle::Tensor& stop_seqs_len,
-                               const paddle::Tensor& end_ids);
+                               const paddle::Tensor& end_ids,
+                               const paddle::Tensor& min_tokens);
 
 void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& accept_tokens,
