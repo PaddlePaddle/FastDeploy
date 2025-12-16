@@ -1315,6 +1315,10 @@ class XPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+            
+        if self.use_cudagraph:
+            model_output = model_output[: self.real_token_num]
+
 
         hidden_states = xpu_process_output(
             model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
