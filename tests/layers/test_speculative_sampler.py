@@ -146,13 +146,13 @@ def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab
 
 def _create_padding_inputs():
     # batch_size = 3
-    top_p = paddle.to_tensor([[0.9], [0.8], [0.7]], dtype="float32")
-    top_k = paddle.to_tensor([[10], [20], [30]], dtype="int32")
-    infer_seed = paddle.to_tensor([[100], [200], [300]], dtype="int64")
+    top_p = paddle.to_tensor([[0.9], [0.8], [0.7], [1.0]], dtype="float32")
+    top_k = paddle.to_tensor([[10], [20], [30], [40]], dtype="int32")
+    infer_seed = paddle.to_tensor([[100], [200], [300], [400]], dtype="int64")
 
     # decoder, encoder, decoder
-    seq_lens_encoder = paddle.to_tensor([[0], [5], [0]], dtype="int32")
-    seq_lens_this_time = paddle.to_tensor([[3], [2], [2]], dtype="int32")
+    seq_lens_encoder = paddle.to_tensor([[0], [5], [0], [0]], dtype="int32")
+    seq_lens_this_time = paddle.to_tensor([[3], [2], [0], [2]], dtype="int32")
 
     return top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder
 
@@ -247,11 +247,11 @@ def test_padding_sampling_params_basic():
     assert seed_pad.shape == [6, 1]
 
     # top_p padding check
-    expected_top_p = [0.9, 0.9, 0.9, 0.8, 0.7, 0.7]
+    expected_top_p = [0.9, 0.9, 0.9, 0.8, 1.0, 1.0]
     assert paddle.allclose(top_p_pad.squeeze(), paddle.to_tensor(expected_top_p, dtype="float32"))
 
     # top_k padding check
-    expected_top_k = [10, 10, 10, 20, 30, 30]
+    expected_top_k = [10, 10, 10, 20, 40, 40]
     assert paddle.equal_all(top_k_pad.squeeze(), paddle.to_tensor(expected_top_k, dtype="int32"))
 
 
@@ -262,14 +262,15 @@ def test_padding_sampling_params_seed_offset():
 
     # decoder(0): 100 + 4*k
     # encoder(1): 200 (no offset)
-    # decoder(2): 300 + 4*k
+    # null
+    # decoder(3): 400 + 4*k
     expected_seed = [
         100,
         104,
         108,  # first decoder seq (len=3)
         200,  # encoder
-        300,
-        304,  # second decoder seq (len=2)
+        400,
+        404,  # second decoder seq (len=2)
     ]
 
     assert paddle.equal_all(seed_pad.squeeze(), paddle.to_tensor(expected_seed, dtype="int64"))
@@ -280,3 +281,5 @@ if __name__ == "__main__":
     test_speculative_sampler_logprobs()
     test_mtp_sampler()
     test_mtp_sampler_logprobs()
+    test_padding_sampling_params_basic()
+    test_padding_sampling_params_seed_offset()
