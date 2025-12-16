@@ -483,6 +483,7 @@ class RequestMetrics:
     preprocess_end_time: Optional[float] = None  # preprocess end time in api server
 
     scheduler_recv_req_time: Optional[float] = None  # scheduler receives request and add to scheduler
+    rescheduler_recv_req_time: Optional[float] = None  # rescheduler receives request and add to scheduler
     engine_get_req_time: Optional[float] = None  # engine gets request from scheduler
     ask_decode_resource_start_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
     ask_decode_resource_finish_time: Optional[float] = None  # engine has got decode resource (only valid for prefill)
