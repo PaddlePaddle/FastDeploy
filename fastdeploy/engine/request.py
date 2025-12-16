@@ -21,7 +21,7 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Generic, Optional, Union
+from typing import Any, Dict, List, Generic, Optional, Union
 
 import numpy as np
 from typing_extensions import TypeVar

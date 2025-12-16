@@ -712,6 +712,7 @@ class EngineService:
         is_fetching = False
         buffered_req_info = {}
         req_info_lock = threading.Lock()
+        last_sched_batch_id, last_received_request_ids = -1, []
 
         def _fetch_request():
             try:
@@ -841,33 +842,36 @@ class EngineService:
                 all_buffered_req_info = []
                 dist.all_gather_object(all_buffered_req_info, buffered_req_info)
 
-                latest_sched_batch_id, latest_sched_batch_cnt = -1, None
-                # find the latest scheduled batch
+                nonlocal last_sched_batch_id, last_received_request_ids
+                last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids = -1, [], []
+                # Find the latest scheduled batch
                 for local_info in all_buffered_req_info:
                     for _, sched_info in local_info.items():
-                        if sched_info.sched_batch_id > latest_sched_batch_id:
-                            latest_sched_batch_id = sched_info.sched_batch_id
-                            latest_sched_batch_cnt = sched_info.sched_batch_cnt
+                        if sched_info.sched_batch_id > last_sched_batch_id:
+                            last_sched_batch_id = sched_info.sched_batch_id
+                            last_sched_batch_cnt = sched_info.sched_batch_cnt
                 
-                # currently no new reqs
-                if latest_sched_batch_id == -1:
+                # Currently no new reqs
+                if last_sched_batch_id == -1:
                     return False
                 
-                # count req num of each DP instance
-                dp_size = len(latest_sched_batch_cnt)
+                # Count req num of each DP instance
+                dp_size = len(last_sched_batch_cnt)
                 req_num_count = [0] * dp_size
                 for local_info in all_buffered_req_info:
-                    for _, sched_info in local_info.items():
-                        if sched_info.sched_batch_id == latest_sched_batch_id:
+                    for req_id, sched_info in local_info.items():
+                        if sched_info.sched_batch_id == last_sched_batch_id:
                             req_num_count[sched_info.sched_batch_local_id] += 1
+                            last_received_request_ids.append(req_id)
                 
                 flag = True
                 for i in range(dp_size):
-                    
-                    if req_num_count[i] < latest_sched_batch_cnt[i]:
+                    if req_num_count[i] < last_sched_batch_cnt[i]:
                         flag = False
                         break
-                
+                if flag:
+                    # All reqs in latest batch are received
+                    last_received_request_ids = []
                 return flag
         
         def _check_timeout():
@@ -913,7 +917,7 @@ class EngineService:
                 
                 if envs.FD_ENABLE_BATCH_SCHEDULER:
                     # Some reqs of the scheduled batch still in flight
-                    if not _check_timeout() and not _check_recv_full_batch():
+                    if not _check_recv_full_batch() and not _check_timeout():
                         time.sleep(0.1)
                         continue
     
@@ -966,9 +970,16 @@ class EngineService:
                     while self.infer_finished_signal.value[0] == 0:
                         # Wait for current forward to finish
                         time.sleep(0.01)
-                    print(f"execute time: {time.time() - start_execute_time}")
+                    execute_time = int((time.time() - start_execute_time) * 1000)
 
-                    # TODO: Report to IM
+                    # Report to IM
+                    if last_sched_batch_id != -1:
+                        self.report_infer_monitor(
+                            last_sched_batch_id,
+                            last_received_request_ids,
+                            execute_time,
+                            self.resource_manager.get_remain_token_num(),
+                        )
                     self.infer_finished_signal.value[0] = 0
                 else:
                     if not tasks and not error_tasks:
@@ -1366,6 +1377,33 @@ class EngineService:
         if self.cfg.router_config.router is not None:
             register_thread = threading.Thread(target=_register, daemon=True)
             register_thread.start()
+
+    def report_infer_monitor(
+        self,
+        last_sched_batch_id,
+        last_received_request_ids,
+        last_run_batch_duration,
+        remain_token_num,
+    ):
+        """
+        Report info of latest batch to infer monitor
+        """
+        report_info_list = []
+        dist.communication.stream.gather(
+            paddle.to_tensor([last_run_batch_duration, remain_token_num]),
+            report_info_list, 
+            dst=0,
+        )
+        if self.cfg.node_rank == 0 and self.cfg.parallel_config.local_data_parallel_id == 0:
+            # Report by DP0
+            report_info = paddle.to_tensor(report_info_list)
+            payload = {
+                "last_sched_batch_id": last_sched_batch_id,
+                "last_received_request_ids": last_received_request_ids,
+                "last_run_batch_duration": report_info[:, 0].max().item(),
+                "remain_token_num_per_dp": report_info[:, 1].tolist(),
+            }
+            llm_logger.info(f"report info: {payload}")
 
     def _exit_sub_services(self):
         """
