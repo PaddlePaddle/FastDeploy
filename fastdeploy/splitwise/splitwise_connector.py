@@ -386,6 +386,13 @@ class SplitwiseConnector:
 
         if msg_type == "decode" or msg_type == "prefill":
             payload = [output.to_dict() for output in payload]
+            need_delete_keys = ["video_features", "image_features", "audio_features"]
+            for tmp_data in payload:
+                if "multimodal_inputs" not in tmp_data:
+                    continue
+                for tmp_key in need_delete_keys:
+                    if tmp_key in tmp_data["multimodal_inputs"]:
+                        del tmp_data["multimodal_inputs"][tmp_key]
 
         json_data = json.dumps({"type": msg_type, "payload": payload}).encode("utf-8")
         return json_data

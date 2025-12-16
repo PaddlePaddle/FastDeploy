@@ -36,7 +36,7 @@ export PATH=/workspace/deps/xre/bin:$PATH
 
 xpu-smi -r -i $XPU_VISIBLE_DEVICES
 xpu-smi
-
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 echo "pip requirements"
 python -m pip install -r requirements.txt
 

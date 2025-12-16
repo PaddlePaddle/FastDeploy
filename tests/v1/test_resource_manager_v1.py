@@ -54,7 +54,7 @@ class TestResourceManagerV1(unittest.TestCase):
 
     def test_waiting_async_process_no_futures(self):
         """Test when there are no async process futures"""
-        result = self.manager._waiting_async_process(self.request)
+        result = self.manager.waiting_async_process(self.request)
         self.assertFalse(result)
 
     def test_waiting_async_process_future_done_no_error(self):
@@ -63,7 +63,7 @@ class TestResourceManagerV1(unittest.TestCase):
         future.set_result(True)
         self.request.async_process_futures = [future]
 
-        result = self.manager._waiting_async_process(self.request)
+        result = self.manager.waiting_async_process(self.request)
         self.assertFalse(result)
         self.assertEqual(len(self.request.async_process_futures), 0)
 
@@ -74,7 +74,7 @@ class TestResourceManagerV1(unittest.TestCase):
         self.request.async_process_futures = [future]
         self.request.error_message = "Download failed"
 
-        result = self.manager._waiting_async_process(self.request)
+        result = self.manager.waiting_async_process(self.request)
         self.assertIsNone(result)
 
     def test_waiting_async_process_future_not_done(self):
@@ -82,7 +82,7 @@ class TestResourceManagerV1(unittest.TestCase):
         future = concurrent.futures.Future()
         self.request.async_process_futures = [future]
 
-        result = self.manager._waiting_async_process(self.request)
+        result = self.manager.waiting_async_process(self.request)
         self.assertTrue(result)
         self.assertEqual(len(self.request.async_process_futures), 1)
 
@@ -90,7 +90,7 @@ class TestResourceManagerV1(unittest.TestCase):
         """Test applying async preprocess"""
         with patch.object(self.manager.async_preprocess_pool, "submit") as mock_submit:
             mock_submit.return_value = "mock_future"
-            self.manager._apply_async_preprocess(self.request)
+            self.manager.apply_async_preprocess(self.request)
 
             mock_submit.assert_called_once_with(self.manager._download_features, self.request)
             self.assertEqual(len(self.request.async_process_futures), 1)

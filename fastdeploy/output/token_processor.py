@@ -127,6 +127,49 @@ class TokenProcessor:
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
         self._batch_result_buffer = None
 
+        # health monitor
+        self.timestamp_for_alive_before_handle_batch = None
+        self.timestamp_for_alive_after_handle_batch = None
+        self.health_lock = threading.Lock()
+        self.engine_output_token_hang = False
+
+    def healthy(self):
+        """
+        whether token processor is healthy
+        """
+        with self.health_lock:
+            if self.timestamp_for_alive_after_handle_batch is None:  # has entered handle batch
+                if (
+                    self.timestamp_for_alive_before_handle_batch is not None
+                    and time.time() - self.timestamp_for_alive_before_handle_batch
+                    > envs.FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT
+                ):
+                    return False
+                else:
+                    return True
+            if self.engine_output_token_hang:
+                return False
+            return True
+
+    def enable_monitor_hang(self):
+        self.monitor_thread = threading.Thread(target=self._monitor_output_token_hang)
+        self.monitor_thread.start()
+
+    def _monitor_output_token_hang(self):
+        while True:
+            for i in range(self.resource_manager.max_num_seqs):
+                if self.resource_manager.stop_flags[i]:
+                    continue
+                task = self.resource_manager.tasks_list[i]
+
+                if (
+                    task.last_recv_token_time
+                    and time.time() - task.last_recv_token_time > envs.FD_OUTPUT_TOKEN_HANG_TIMEOUT
+                ):
+                    llm_logger.error(f"Task {task.request_id} hangs")
+                    self.engine_output_token_hang = True
+            time.sleep(1)
+
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
         if hasattr(self, "prefill_time_signal"):
@@ -190,6 +233,7 @@ class TokenProcessor:
                 if self.resource_manager.requests[request_id].idx >= (
                     batch_size - 1
                 ):  # No more token generated for preempted request
+                    self.resource_manager.requests[request_id].last_recv_token_time = None
                     self.resource_manager.reschedule_preempt_task(request_id)
 
     def _process_per_token(self, task, batch_id: int, token_ids: np.ndarray, result: RequestOutput, is_prefill: bool):
@@ -220,12 +264,12 @@ class TokenProcessor:
                 llm_logger.info(
                     f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                 )
-                llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
                 if not is_prefill:
                     self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
+                llm_logger.info(f"{self.resource_manager.info()}")
                 break
         return result
 
@@ -417,7 +461,14 @@ class TokenProcessor:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
                 self._process_prefill_metrics()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = time.time()
+                    self.timestamp_for_alive_after_handle_batch = None
                 self._process_batch_output()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = None
+                    self.timestamp_for_alive_after_handle_batch = time.time()
+
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
 
@@ -557,6 +608,60 @@ class TokenProcessor:
                 self.total_step = 0
         self.speculative_stats_step += 1
 
+    def _process_batch_draft_tokens(self, mtype, batch, accept_num, tokens, scores, ranks):
+        """
+        Process batch draft tokens and generate corresponding request outputs
+
+        Args:
+            mtype (int): Message type (3=target token, 4=draft token)
+            batch (int): Batch size
+            accept_num (list): List of accepted token counts per request
+            tokens (paddle.Tensor): Generated draft token IDs tensor
+            scores (paddle.Tensor): Token scores tensor
+            ranks (paddle.Tensor): Token sampling ranks tensor
+
+        Returns:
+            list[RequestOutput]: List containing processed results for all requests
+        """
+        batch_result = list()
+        for i in range(batch):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            task_id = task.request_id
+            result = RequestOutput(
+                request_id=task_id,
+                output_type=mtype,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=None,
+                    token_ids=[],
+                    draft_token_ids=[],
+                ),
+                finished=False,
+                metrics=None,
+            )
+
+            token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+            for batch_token_index in range(len(token_ids)):
+                result.outputs.logprob = float(scores[i, batch_token_index, 0])
+                topk_token_ids = tokens[i, batch_token_index, :].tolist()
+                topk_logprobs = scores[i, batch_token_index, :].tolist()
+                sampled_rank = ranks[i, batch_token_index].item()
+
+                if result.outputs.draft_top_logprobs is None:
+                    result.outputs.draft_top_logprobs = LogprobsLists(
+                        logprob_token_ids=[topk_token_ids],
+                        logprobs=[topk_logprobs],
+                        sampled_token_ranks=[sampled_rank],
+                    )
+                else:
+                    result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
+                    result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
+                    result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
+            batch_result.append(result)
+        return batch_result
+
     def _process_batch_output(self):
         """
         batch post-processing function
@@ -581,6 +686,12 @@ class TokenProcessor:
                     .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
                 )
                 ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
+
+                # split draft_tokens into standalone post-processing path for MTP + logprobs
+                if mtype == 4:
+                    batch_result = self._process_batch_draft_tokens(mtype, batch, accept_num, tokens, scores, ranks)
+                    self.postprocess(batch_result, mtype)
+                    return
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
@@ -622,10 +733,12 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
+
                     continue
             else:
                 token_id = int(tokens[i, 0])
@@ -636,8 +749,15 @@ class TokenProcessor:
                 if not recovery_stop and token_id < 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            task.last_recv_token_time = None
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
+
+            if self.cfg.scheduler_config.splitwise_role == "decode":
+                # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        continue
 
             if task.get("prefill_chunk_info", None) is not None:
                 prefill_chunk_num = task.get("prefill_chunk_num", 0)
@@ -708,8 +828,10 @@ class TokenProcessor:
                     if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
 
-                    if mtype == 3:
-                        task.output_token_ids.append(token_id)
+                    task.output_token_ids.append(token_id)
+                    task.last_recv_token_time = time.time()
+                    if token_id == 0:
+                        llm_logger.error(f"Request: {task_id} generates token_id 0, maybe wrong inference.")
 
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
@@ -723,29 +845,18 @@ class TokenProcessor:
                             topk_logprobs = scores[i, :].tolist()
                             sampled_rank = ranks[i].item()
 
-                        if mtype == 3:  # top_logprobs
-                            if result.outputs.top_logprobs is None:
-                                result.outputs.top_logprobs = LogprobsLists(
-                                    logprob_token_ids=[topk_token_ids],
-                                    logprobs=[topk_logprobs],
-                                    sampled_token_ranks=[sampled_rank],
-                                )
-                            else:
-                                result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                                result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
-                                result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                        elif mtype == 4:  # draft_top_logprobs
-                            if result.outputs.draft_top_logprobs is None:
-                                result.outputs.draft_top_logprobs = LogprobsLists(
-                                    logprob_token_ids=[topk_token_ids],
-                                    logprobs=[topk_logprobs],
-                                    sampled_token_ranks=[sampled_rank],
-                                )
-                            else:
-                                result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                                result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
-                                result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                if mtype == 3 and (token_id in task.eos_token_ids or is_prefill or recovery_stop):
+                        if result.outputs.top_logprobs is None:
+                            result.outputs.top_logprobs = LogprobsLists(
+                                logprob_token_ids=[topk_token_ids],
+                                logprobs=[topk_logprobs],
+                                sampled_token_ranks=[sampled_rank],
+                            )
+                        else:
+                            result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
+                            result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
+                            result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
+
+                if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
@@ -756,12 +867,12 @@ class TokenProcessor:
                     llm_logger.info(
                         f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                     )
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status()
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
+                    llm_logger.info(f"{self.resource_manager.info()}")
                     break
 
             llm_logger.debug(f"get response from infer: {result}")

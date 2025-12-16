@@ -483,9 +483,6 @@ class LLMEngine:
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
-
         command_prefix = ""
         for k, v in variables.items():
             command_prefix += f"{k}={v} "

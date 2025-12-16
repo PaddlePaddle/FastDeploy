@@ -46,12 +46,11 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
                                 const int kv_head_num,
                                 const int head_dim,
                                 const int max_seq_len,
-                                const int max_enc_len_this_time,
-                                const int max_dec_len_this_time) {
+                                const int q_token_num,
+                                const int k_token_num) {
   constexpr int kBlockM = 128;
   constexpr int kBlockN = 128;
-  const int batch_size = seq_len_encoder.dims()[0];
-
+  const int batch_size = cu_seq_k.dims()[0] - 1;
   Flash_mask_params params;
   memset(&params, 0, sizeof(Flash_mask_params));
 
@@ -63,8 +62,8 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
   params.seq_len_encoder = const_cast<int*>(seq_len_encoder.data<int>());
   params.head_num = head_num;
   params.kv_head_num = kv_head_num;
-  params.max_seq_len_q = max_enc_len_this_time;
-  params.max_seq_len_k = max_enc_len_this_time + max_dec_len_this_time;
+  params.q_token_num = q_token_num;
+  params.k_token_num = k_token_num;
   params.batch_size = batch_size;
   params.gqa_group_size = head_num / kv_head_num;
   constexpr float kLog2e = 1.4426950408889634074;
@@ -132,8 +131,8 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int kv_head_num,
                         const int head_dim,
                         const int max_seq_len,
-                        const int max_enc_len_this_time,
-                        const int max_dec_len_this_time) {
+                        const int q_token_num,
+                        const int k_token_num) {
   if (q_input.dtype() == paddle::DataType::FLOAT16) {
     using T = phi::dtype::float16;
     DispatchFlashAttentionMask<T>(q_input,
@@ -148,8 +147,8 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   kv_head_num,
                                   head_dim,
                                   max_seq_len,
-                                  max_enc_len_this_time,
-                                  max_dec_len_this_time);
+                                  q_token_num,
+                                  k_token_num);
   } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
     using T = phi::dtype::bfloat16;
     DispatchFlashAttentionMask<T>(q_input,
@@ -164,12 +163,12 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   kv_head_num,
                                   head_dim,
                                   max_seq_len,
-                                  max_enc_len_this_time,
-                                  max_dec_len_this_time);
+                                  q_token_num,
+                                  k_token_num);
   }
 }
 
-PD_BUILD_STATIC_OP(flash_attention_mask)
+PD_BUILD_STATIC_OP(flash_mask_attention)
     .Inputs({"q_input",
              "k_input",
              "v_input",
@@ -182,8 +181,8 @@ PD_BUILD_STATIC_OP(flash_attention_mask)
             "kv_head_num: int",
             "head_dim: int",
             "max_seq_len: int",
-            "max_enc_len_this_time: int",
-            "max_dec_len_this_time: int"})
+            "q_token_num: int",
+            "k_token_num: int"})
     .Outputs({"out"})
     .SetInplaceMap({{"attn_out", "out"}})
     .SetKernelFn(PD_KERNEL(FlashAttentionMask));

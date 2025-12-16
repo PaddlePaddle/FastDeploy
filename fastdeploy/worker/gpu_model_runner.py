@@ -490,6 +490,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
         rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
+    def get_num_running_request(self):
+        return self.scheduler_config.max_num_seqs - paddle.sum(self.share_inputs["stop_flags"]).item()
+
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1

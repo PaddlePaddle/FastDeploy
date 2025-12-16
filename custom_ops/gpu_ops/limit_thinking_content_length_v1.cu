@@ -33,7 +33,7 @@ __global__ void limit_thinking_content_length_kernel_v1(
   if (max_think_len < 0) return;
   int current_limit_think_status = limit_think_status[bid];
   // 如果在回复阶段, 且已经触发停止标志, 则直接返回, 无需多余执行
-  if (current_limit_think_status == 2 && stop_flags[bid]) {
+  if (current_limit_think_status == 2 || stop_flags[bid]) {
     return;
   }
 

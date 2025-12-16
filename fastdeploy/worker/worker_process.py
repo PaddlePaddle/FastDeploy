@@ -410,7 +410,7 @@ class PaddleDisWorkerProc:
         # Currently, only support single node
         self.nnode = int((tp_size + 7) // 8)
         req_ids = []
-        num_running_requests = 0
+        cur_max_bsz_index = 0
         tp_rank = self.local_rank % tp_size
 
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
@@ -485,17 +485,18 @@ class PaddleDisWorkerProc:
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
+                    cur_max_bsz_index = int(bsz)
                     req_dicts.extend(req_dict)
 
                 req_ids = [req.request_id for req in req_dicts]
+
                 logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
+                    f"Rank: {self.local_rank}, cur_max_bsz_index: {cur_max_bsz_index}, num_running_requests: {self.worker.get_num_running_request()} "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                self.worker.preprocess_new_task(req_dicts, cur_max_bsz_index)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
@@ -507,7 +508,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, num_running_requests)
+            self.worker.execute_model(req_dicts, cur_max_bsz_index)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 

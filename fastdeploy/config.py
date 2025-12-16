@@ -1572,7 +1572,11 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if (
+                int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
+                and self.model_config is not None
+                and self.model_config.enable_mm
+            ):
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1600,6 +1604,14 @@ class FDConfig:
             return
         self.check()
         self.print()
+
+    def _disable_sequence_parallel_moe_if_needed(self, mode_name):
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            self.parallel_config.use_sequence_parallel_moe = False
+            logger.warning(
+                f"Sequence parallel MoE does not support {mode_name} mode with cudagraph. "
+                "Setting use_sequence_parallel_moe to False."
+            )
 
     def postprocess(self):
         """
@@ -1685,10 +1697,12 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
+            self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
+            self._disable_sequence_parallel_moe_if_needed("PD's decode node")
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
