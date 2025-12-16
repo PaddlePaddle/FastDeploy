@@ -228,6 +228,15 @@ class EngineArgs:
     """
     Port for cache queue.
     """
+    kvcache_storage_backend: str = None
+    """
+    The storage backend for kvcache storage.
+    """
+    write_policy: str = "write_through"
+    """
+    KVCache write policy
+    """
+    enable_hierarchical_kvcache: bool = False
 
     # System configuration parameters
     use_warmup: int = 0
@@ -947,6 +956,29 @@ class EngineArgs:
             type=int,
             default=EngineArgs.static_decode_blocks,
             help="Static decoding blocks num.",
+        )
+
+        cache_group.add_argument(
+            "--enable-hierarchical-kvcache",
+            action="store_true",
+            default=EngineArgs.enable_hierarchical_kvcache,
+            help="Enable hierarchical kvcache.",
+        )
+
+        cache_group.add_argument(
+            "--kvcache-storage-backend",
+            type=str,
+            choices=["mooncake"],
+            default=EngineArgs.kvcache_storage_backend,
+            help="The storage backend for kvcache storage.",
+        )
+
+        cache_group.add_argument(
+            "--write-policy",
+            type=str,
+            choices=["write_through"],
+            default=EngineArgs.write_policy,
+            help="KVCache write policy",
         )
 
         # Cluster system parameters group

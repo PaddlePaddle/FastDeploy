@@ -40,6 +40,8 @@ class Args:
     value_cache_shape = ""
     create_cache_tensor = False
     cache_dtype = "bfloat16"
+    kvcache_storage_backend = "None"
+    write_policy = "write_through"
 
 
 # ==========================
