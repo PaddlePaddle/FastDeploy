@@ -1,4 +1,4 @@
-name: Pre-CE-Test
+name: ILUVATAR-Test
 
 on:
   workflow_call:
