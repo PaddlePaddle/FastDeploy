@@ -39,6 +39,7 @@ def _isolate_env_and_model_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     if hasattr(models_mod, "load_model_register_plugins"):
         monkeypatch.setattr(models_mod, "load_model_register_plugins", lambda *a, **k: None, raising=False)
 
+
 from fastdeploy.rl.rollout_model import (  # noqa: E402
     BaseRLModel,
     Ernie4_5_MoeForCausalLMRL,
