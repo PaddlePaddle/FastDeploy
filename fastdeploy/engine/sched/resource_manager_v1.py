@@ -945,6 +945,8 @@ class ResourceManagerV1(ResourceManager):
             matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
             request.num_cached_tokens += matched_token_num
             request.num_computed_tokens += matched_token_num
+            if request.num_computed_tokens == request.need_prefill_tokens:
+                request.num_computed_tokens = request.num_computed_tokens - self.config.cache_config.block_size
             request.cache_prepare_time += time.time() - tic
             request.cache_info[0] += len(matched_block_ids)  # matched_block_num
             request.cache_info[1] -= len(matched_block_ids)  # no_cache_block_num
