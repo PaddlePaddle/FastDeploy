@@ -1498,14 +1498,17 @@ class RoutingReplayConfig:
     """Configuration for Routing Replay used in RL training"""
 
     def __init__(self, args) -> None:
+
         self.enable_routing_replay: bool = False
+
+        # Routing store type: local/rdma
         self.routing_store_type: str = "local"
 
         # Local routing store
         self.local_store_dir: str = "./routing_replay_output"
 
         # RDMA routing store
-        # TODO: Add RDMA routing store configuration attributes here when the feature is implemented.
+        self.rdma_store_server: str = ""
 
         if args is not None:
             for key, value in args.items():
@@ -1698,7 +1701,9 @@ class FDConfig:
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
-
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): R3 support prefix caching
+            self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
