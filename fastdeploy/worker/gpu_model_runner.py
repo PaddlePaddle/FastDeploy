@@ -31,7 +31,6 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
-    GPUMemoryChecker,
     profile_run_guard,
     sot_warmup_guard,
 )
