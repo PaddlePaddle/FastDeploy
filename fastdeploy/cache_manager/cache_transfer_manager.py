@@ -233,7 +233,7 @@ class CacheTransferManager:
         elif args.kvcache_storage_backend == "mooncake":
             logger.info("Start initialize mooncake store...")
             self.storage_backend = MooncakeStore()
-            self._init_storage_buffer()
+            self._init_storage_buffer(args)
             logger.info("Initialized mooncake store successfully")
         else:
             raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
@@ -244,7 +244,7 @@ class CacheTransferManager:
 
         threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
 
-    def _init_storage_buffer(self):
+    def _init_storage_buffer(self, args):
         """
         Initialize pinned memory buffer that can hold the cache for a longest request
         cache layout: layer_num * [block_num, head_num, block_size, head_dim]
@@ -260,7 +260,7 @@ class CacheTransferManager:
             f"[{block_num}, {layer_num}, {head_num}, {block_size}, {head_dim}]"
         )
 
-        self.cache_bytes = self._get_cache_bytes()
+        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
         self.storage_buffer_stride_bytes = layer_num * head_num * block_size * head_dim * self.cache_bytes
         total_bytes = block_num * self.storage_buffer_stride_bytes * 2  # key and value
 
@@ -398,7 +398,7 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        cache_bytes = self._get_cache_bytes()
+        cache_bytes = self._get_cache_bytes(self.cache_dtype)
         key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
         value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
@@ -441,13 +441,13 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 
-    def _get_cache_bytes(self):
-        if args.cache_dtype == "bfloat16":
+    def _get_cache_bytes(self, cache_dtype):
+        if cache_dtype == "bfloat16":
             cache_bytes = 2
-        elif args.cache_dtype in ["uint8", "block_wise_fp8"]:
+        elif cache_dtype in ["uint8", "block_wise_fp8"]:
             cache_bytes = 1
         else:
-            raise ValueError(f"Unsupported cache dtype: {args.cache_dtype}")
+            raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
         return cache_bytes
 
     def _storage_exist_block_num(self, k_keys: List[str], v_keys: List[str]):

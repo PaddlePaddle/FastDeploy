@@ -551,9 +551,11 @@ class EngineArgs:
 
         if self.kvcache_storage_backend is not None:
             if not self.enable_prefix_caching:
-                raise NotImplementedError("kvcache_storage_backend only support when enable_prefix_caching=True")
+                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
             if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
-                raise NotImplementedError("kvcache_storage_backend only support when ENABLE_V1_KVCACHE_SCHEDULER=1")
+                raise NotImplementedError(
+                    "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         self.post_init_all_ports()
 
@@ -1006,10 +1008,10 @@ class EngineArgs:
 
         cache_group.add_argument(
             "--kvcache-storage-backend",
-            type=str,
-            choices=["mooncake"],
+            type=nullable_str,
+            choices=["mooncake", None],
             default=EngineArgs.kvcache_storage_backend,
-            help="The storage backend for kvcache storage.",
+            help="The storage backend for kvcache storage. Leave empty to disable.",
         )
 
         cache_group.add_argument(
