@@ -22,6 +22,8 @@ from .init_kv_signal_per_query import init_kv_signal_per_query
 from .init_signal_layerwise import init_signal_layerwise
 from .open_shm_and_get_meta_signal import open_shm_and_get_meta_signal
 from .pre_cache_len_concat import pre_cache_len_concat
+from .gqa_decoder_rope_norm_with_write_cache import gqa_decoder_rope_norm_with_write_cache
+from .gqa_decoder_flash_rewrite_cache import flash_attn_rewrite_cachekv_cuda
 
 __all__ = [
     "get_block_shape_and_split_kv_block",
@@ -33,4 +35,6 @@ __all__ = [
     "pre_cache_len_concat",
     "init_kv_signal_per_query",
     "flash_mask_attention",
+    "gqa_decoder_rope_norm_with_write_cache",
+    "flash_attn_rewrite_cachekv_cuda",
 ]

@@ -282,117 +282,121 @@ void AppendAttentionKernel(
     } else {
       exec_stream = main_stream;
     }
-    if (speculate_decoder) {
-      if (qkv_out_scales) {
-        SpeculateWriteCacheWithRoPEKernel<data_t, int>(
-            meta_data,
-            qkv,  // [token_num, num_heads, head_dim]
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token,
-            cu_seqlens_q,
-            block_tables,
-            rotary_embs,
-            qkv_out_scales,
-            qkv_bias,
-            cache_k_quant_scales,
-            cache_v_quant_scales,
-            cache_k_zp,
-            cache_v_zp,
-            cache_quant_type_str,
-            use_neox_rotary_style,
-            rope_3d,
-            max_input_length,
-            exec_stream,
-            &qkv_out,
-            const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache),
-            q_norm_weight,
-            k_norm_weight,
-            rms_norm_eps);
+    if (q_norm_weight && k_norm_weight && rotary_embs){
+      if (speculate_decoder) {
+        if (qkv_out_scales) {
+          SpeculateWriteCacheWithRoPEKernel<data_t, int>(
+              meta_data,
+              qkv,  // [token_num, num_heads, head_dim]
+              seq_lens_decoder,
+              seq_lens_encoder,
+              batch_id_per_token,
+              cu_seqlens_q,
+              block_tables,
+              rotary_embs,
+              qkv_out_scales,
+              qkv_bias,
+              cache_k_quant_scales,
+              cache_v_quant_scales,
+              cache_k_zp,
+              cache_v_zp,
+              cache_quant_type_str,
+              use_neox_rotary_style,
+              rope_3d,
+              max_input_length,
+              exec_stream,
+              &qkv_out,
+              const_cast<paddle::Tensor*>(&key_cache),
+              const_cast<paddle::Tensor*>(&value_cache),
+              q_norm_weight,
+              k_norm_weight,
+              rms_norm_eps);
+        } else {
+          SpeculateWriteCacheWithRoPEKernel<data_t, data_t>(
+              meta_data,
+              qkv_out,  // [token_num, num_heads, head_dim]
+              seq_lens_decoder,
+              seq_lens_encoder,
+              batch_id_per_token,
+              cu_seqlens_q,
+              block_tables,
+              rotary_embs,
+              qkv_out_scales,
+              qkv_bias,
+              cache_k_quant_scales,
+              cache_v_quant_scales,
+              cache_k_zp,
+              cache_v_zp,
+              cache_quant_type_str,
+              use_neox_rotary_style,
+              rope_3d,
+              max_input_length,
+              exec_stream,
+              &qkv_out,
+              const_cast<paddle::Tensor*>(&key_cache),
+              const_cast<paddle::Tensor*>(&value_cache),
+              q_norm_weight,
+              k_norm_weight,
+              rms_norm_eps);
+        }
       } else {
-        SpeculateWriteCacheWithRoPEKernel<data_t, data_t>(
-            meta_data,
-            qkv_out,  // [token_num, num_heads, head_dim]
-            seq_lens_decoder,
-            seq_lens_encoder,
-            batch_id_per_token,
-            cu_seqlens_q,
-            block_tables,
-            rotary_embs,
-            qkv_out_scales,
-            qkv_bias,
-            cache_k_quant_scales,
-            cache_v_quant_scales,
-            cache_k_zp,
-            cache_v_zp,
-            cache_quant_type_str,
-            use_neox_rotary_style,
-            rope_3d,
-            max_input_length,
-            exec_stream,
-            &qkv_out,
-            const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache),
-            q_norm_weight,
-            k_norm_weight,
-            rms_norm_eps);
+        if (qkv_out_scales) {
+          DecoderWriteCacheWithRoPEKernel<data_t, int>(
+              meta_data,
+              qkv,  // [token_num, num_heads, head_dim]
+              seq_lens_decoder,
+              seq_lens_encoder,
+              cu_seqlens_q,
+              block_tables,
+              rotary_embs,
+              qkv_out_scales,
+              qkv_bias,
+              cache_k_quant_scales,
+              cache_v_quant_scales,
+              cache_k_zp,
+              cache_v_zp,
+              cache_quant_type_str,
+              use_neox_rotary_style,
+              rope_3d,
+              max_input_length,
+              exec_stream,
+              &qkv_out,
+              const_cast<paddle::Tensor*>(&key_cache),
+              const_cast<paddle::Tensor*>(&value_cache),
+              q_norm_weight,
+              k_norm_weight,
+              rms_norm_eps);
+        } else {
+          DecoderWriteCacheWithRoPEKernel<data_t, data_t>(
+              meta_data,
+              qkv_out,  // [token_num, num_heads, head_dim]
+              seq_lens_decoder,
+              seq_lens_encoder,
+              cu_seqlens_q,
+              block_tables,
+              rotary_embs,
+              qkv_out_scales,
+              qkv_bias,
+              cache_k_quant_scales,
+              cache_v_quant_scales,
+              cache_k_zp,
+              cache_v_zp,
+              cache_quant_type_str,
+              use_neox_rotary_style,
+              rope_3d,
+              max_input_length,
+              exec_stream,
+              &qkv_out,
+              const_cast<paddle::Tensor*>(&key_cache),
+              const_cast<paddle::Tensor*>(&value_cache),
+              q_norm_weight,
+              k_norm_weight,
+              rms_norm_eps);
+        }
       }
-    } else {
-      if (qkv_out_scales) {
-        DecoderWriteCacheWithRoPEKernel<data_t, int>(
-            meta_data,
-            qkv,  // [token_num, num_heads, head_dim]
-            seq_lens_decoder,
-            seq_lens_encoder,
-            cu_seqlens_q,
-            block_tables,
-            rotary_embs,
-            qkv_out_scales,
-            qkv_bias,
-            cache_k_quant_scales,
-            cache_v_quant_scales,
-            cache_k_zp,
-            cache_v_zp,
-            cache_quant_type_str,
-            use_neox_rotary_style,
-            rope_3d,
-            max_input_length,
-            exec_stream,
-            &qkv_out,
-            const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache),
-            q_norm_weight,
-            k_norm_weight,
-            rms_norm_eps);
-      } else {
-        DecoderWriteCacheWithRoPEKernel<data_t, data_t>(
-            meta_data,
-            qkv_out,  // [token_num, num_heads, head_dim]
-            seq_lens_decoder,
-            seq_lens_encoder,
-            cu_seqlens_q,
-            block_tables,
-            rotary_embs,
-            qkv_out_scales,
-            qkv_bias,
-            cache_k_quant_scales,
-            cache_v_quant_scales,
-            cache_k_zp,
-            cache_v_zp,
-            cache_quant_type_str,
-            use_neox_rotary_style,
-            rope_3d,
-            max_input_length,
-            exec_stream,
-            &qkv_out,
-            const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache),
-            q_norm_weight,
-            k_norm_weight,
-            rms_norm_eps);
-      }
-    }
+    }else{
+      printf("append attention: no rope_norm cache \n");
+  }
 
     if (out_linear_in_scale > 0.0) {
       switch (fmha_out.dtype()) {

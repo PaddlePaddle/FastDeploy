@@ -484,7 +484,7 @@ class LLMEngine:
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
         if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
+            variables["FLAGS_max_partition_size"] = 65536
 
         command_prefix = ""
         for k, v in variables.items():

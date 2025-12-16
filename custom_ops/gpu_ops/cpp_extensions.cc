@@ -193,6 +193,115 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const std::string& cache_quant_type,
     const bool rope_3d);
 
+
+void GQADecoderRopeNormWriteCache(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string& compute_dtype,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_input_length,
+    const bool speculate_decoder);
+
+void GQAFlashRewriteCache(
+    const paddle::Tensor& cache_k,
+    const paddle::Tensor& cache_v,
+    paddle::Tensor& key_new,
+    paddle::Tensor& value_new,
+    const paddle::Tensor& token_sparse_index,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& cu_seqlens_q);
+
+
+void IndexerDecoderRopeNormWriteCache(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string& compute_dtype,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_input_length,
+    const bool speculate_decoder);
+
+void FastTopKTransformRaggedInterface(
+    const paddle::Tensor& score,
+    const paddle::Tensor& lengths,
+    paddle::Tensor& topk_indices_ragged,
+    const paddle::Tensor& topk_indices_offset,
+    paddle::Tensor& row_starts_opt);
+
+// std::vector<paddle::Tensor> IndexerGQARopeWriteCacheKernel(
+//     const paddle::Tensor &qkv,
+//     const paddle::Tensor &key_cache,
+//     const paddle::Tensor &value_cache,
+//     const paddle::Tensor &cu_seqlens_q,
+//     const paddle::Tensor &cu_seqlens_k,
+//     const paddle::Tensor &rotary_embs,
+//     const paddle::Tensor &seq_lens_this_time,
+//     const paddle::Tensor &seq_lens_encoder,
+//     const paddle::Tensor &seq_lens_decoder,
+//     const paddle::Tensor &batch_id_per_token,
+//     const paddle::Tensor &block_tables,
+//     const paddle::Tensor &kv_batch_ids,
+//     const paddle::Tensor &kv_tile_ids,
+//     const paddle::Tensor &kv_num_blocks,
+//     const paddle::Tensor &cache_batch_ids,
+//     const paddle::Tensor &cache_tile_ids,
+//     const paddle::Tensor &cache_num_blocks,
+//     const paddle::optional<paddle::Tensor> &q_norm_weight,
+//     const paddle::optional<paddle::Tensor> &k_norm_weight,
+//     const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+//     const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
+//     const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+//     const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
+//     const paddle::optional<paddle::Tensor> &cache_k_zp,
+//     const paddle::optional<paddle::Tensor> &cache_v_zp,
+//     const paddle::optional<paddle::Tensor> &kv_signal_data,
+//     const int kv_token_num,
+//     const int max_seq_len,
+//     const float rms_norm_eps,
+//     const std::string &cache_quant_type,
+//     const bool rope_3d);
+
+
 std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
@@ -1163,6 +1272,46 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("gqa_rope_write_cache",
         &GQARopeWriteCacheKernel,
         "gqa rope write cache function");
+  
+
+  /**
+   * gqa_decoder_rope_norm_with_write_cache.cu
+   * gqa_decoder_rope_norm_with_write_cache
+   */
+  m.def("gqa_decoder_rope_norm_with_write_cache", &GQADecoderRopeNormWriteCache,
+        "gqa decoder rope norm write cache function");
+
+  /**
+   * gqa_decoder_flash_rewrite_cache.cu
+   * gqa_decoder_flash_rewrite_cache
+   */
+  m.def("gqa_decoder_flash_rewrite_cache", &GQAFlashRewriteCache,
+        "gqa decoder flash rewrite cache function");
+
+  
+  /**
+   * gqa_decoder_flash_rewrite_cache.cu
+   * gqa_decoder_flash_rewrite_cache
+   */
+  m.def("indexer_decoder_rope_norm_write_cache", &IndexerDecoderRopeNormWriteCache,
+        "indexer decoder rope norm write cache function");
+  
+  /**
+   * indexer_encoder_top_k.cu
+   * fast_topk_transform_ragged_interface
+   */
+  m.def("fast_topk_transform_ragged_interface", &FastTopKTransformRaggedInterface,
+        "fast_topk_transform_ragged_interface function");
+
+
+//   /**
+//    * indexer_encoder_top_k.cu
+//    * fast_topk_transform_ragged_interface
+//    */
+//   m.def("indexer_gqa_rope_write_cache", &IndexerGQARopeWriteCacheKernel,
+//         "fast_topk_transform_ragged_interface function");
+
+
   /**
    * pre_cache_len_concat.cu
    * pre_cache_len_concat
