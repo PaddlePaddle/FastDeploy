@@ -87,6 +87,8 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
+import threading
+
 import zmq
 
 from fastdeploy import envs
@@ -105,6 +107,7 @@ from fastdeploy.worker.model_runner_base import (
     ModelRunnerBase,
 )
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS, GLOBAL_THREAD_INFO, split_batch_decoder_layers
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -1081,6 +1084,8 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
         if self.fd_config.parallel_config.enable_expert_parallel:
             input_length = min(input_length, 32)
+        
+        # input_length = 4096
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1715,6 +1720,19 @@ class GPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs.update(res_buffer)
 
+        # Note(ZKK) This is so strange, later will remove.
+        for j in range(2):
+            GLOBAL_ATTN_BUFFERS[j] = allocate_launch_related_buffer(
+                max_batch_size=self.scheduler_config.max_num_seqs,
+                max_model_len=self.model_config.max_model_len,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+                decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
+                num_heads=num_heads,
+                kv_num_heads=self.model_config.kv_num_heads,
+                block_size=self.fd_config.cache_config.block_size,
+            )
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
@@ -1998,6 +2016,70 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta.ids_remove_padding,
                     self.forward_meta,
                 )
+
+            model_output = {}
+
+            def haha(forward_meta):
+
+                thread_name = threading.current_thread().name
+                is_tbo_thread = thread_name in GLOBAL_THREAD_INFO.keys()
+
+                if is_tbo_thread:
+                    GLOBAL_THREAD_INFO[thread_name][0].wait()
+                    GLOBAL_THREAD_INFO[thread_name][0].clear()
+
+                # 3. Run model
+                tmp_output = self.model(
+                    forward_meta.ids_remove_padding,
+                    forward_meta,
+                )
+
+                model_output[thread_name] = tmp_output
+
+                return tmp_output
+            
+            real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+            split_res = split_batch_decoder_layers(self.forward_meta)
+
+
+            baseline_model_output = haha(self.forward_meta)
+            
+            # from fastdeploy.model_executor.ops.gpu import deep_gemm
+            # import os
+            # deep_gemm.set_num_sms(118)
+            # # os.environ["COMPUTE_NUM_SMS"] = "118"
+            # from fastdeploy.model_executor.layers.moe.ep import EPPrefillRunner
+            # EPPrefillRunner.set_allocate_on_comm_stream(True)
+
+            # t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
+            # t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
+
+            # GLOBAL_THREAD_INFO[t0.name][0].clear()
+            # GLOBAL_THREAD_INFO[t1.name][0].clear()
+
+            # t0.start()
+            # t1.start()
+
+            # # 主线程记得先让t0跑起来跑！
+            # GLOBAL_THREAD_INFO[t0.name][0].set()
+
+            # t0.join()
+            # # to先结束，他结束完了的话要记得让t1可以结束！
+            # GLOBAL_THREAD_INFO[t0.name][1].set()
+            # t1.join()
+            # model_output0 = model_output["thread0"]
+            # model_output1 = model_output["thread1"]
+            
+            model_output0 = haha(split_res[0])
+            model_output1 = haha(split_res[1])
+
+            model_output = paddle.concat([model_output0, model_output1], axis=0)
+            model_output = model_output[:real_token_num]
+            print(11111)
+            print(baseline_model_output)
+            print(22222)
+            print(model_output)
+
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
@@ -2342,6 +2424,70 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta,
             )
 
+
+        model_output = {}
+
+        def haha(forward_meta):
+
+            thread_name = threading.current_thread().name
+            is_tbo_thread = thread_name in GLOBAL_THREAD_INFO.keys()
+
+            if is_tbo_thread:
+                GLOBAL_THREAD_INFO[thread_name][0].wait()
+                GLOBAL_THREAD_INFO[thread_name][0].clear()
+
+            # 3. Run model
+            tmp_output = self.model(
+                forward_meta.ids_remove_padding,
+                forward_meta,
+            )
+
+            model_output[thread_name] = tmp_output
+
+            return tmp_output
+        
+        real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+        split_res = split_batch_decoder_layers(self.forward_meta)
+
+
+        # baseline_model_output = haha(self.forward_meta)
+        
+
+        # from fastdeploy.model_executor.ops.gpu import deep_gemm
+        # import os
+        # deep_gemm.set_num_sms(118)
+        # # os.environ["COMPUTE_NUM_SMS"] = "118"
+        # from fastdeploy.model_executor.layers.moe.ep import EPPrefillRunner
+        # EPPrefillRunner.set_allocate_on_comm_stream(True)
+
+        # t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
+        # t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
+
+        # GLOBAL_THREAD_INFO[t0.name][0].clear()
+        # GLOBAL_THREAD_INFO[t1.name][0].clear()
+
+        # t0.start()
+        # t1.start()
+
+        # # 主线程记得先让t0跑起来跑！
+        # GLOBAL_THREAD_INFO[t0.name][0].set()
+
+        # t0.join()
+        # # to先结束，他结束完了的话要记得让t1可以结束！
+        # GLOBAL_THREAD_INFO[t0.name][1].set()
+        # t1.join()
+        # model_output0 = model_output["thread0"]
+        # model_output1 = model_output["thread1"]
+        
+        model_output0 = haha(split_res[0])
+        model_output1 = haha(split_res[1])
+
+        # model_output = paddle.concat([model_output0, model_output1], axis=0)
+        # model_output = model_output[:real_token_num]
+        
+        # if baseline_model_output.shape[0] > 0:
+        #     assert (baseline_model_output - model_output).abs().max().item() == 0
+
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # Then there is data on other runner, the current runner is required to execute part of the model.
@@ -2661,6 +2807,55 @@ class GPUModelRunner(ModelRunnerBase):
             ),
             batch_size=self.scheduler_config.max_num_seqs,
         )
+
+        for i in range(5):
+            self._dummy_run(
+                num_tokens=(
+                    self.scheduler_config.max_num_seqs
+                    if self.scheduler_config.splitwise_role == "decode"
+                    else self.scheduler_config.max_num_batched_tokens
+                ),
+                batch_size=self.scheduler_config.max_num_seqs,
+            )
+
+
+        # import paddle.profiler as profiler
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+        # p.start()
+        # p.step()
+        
+
+        total_time = 0
+
+        for i in range(100):
+
+            import datetime
+            paddle.device.synchronize()
+            starttime = datetime.datetime.now()
+
+            self._dummy_run(
+                num_tokens=(
+                    self.scheduler_config.max_num_seqs
+                    if self.scheduler_config.splitwise_role == "decode"
+                    else self.scheduler_config.max_num_batched_tokens
+                ),
+                batch_size=self.scheduler_config.max_num_seqs,
+            )
+
+            paddle.device.synchronize()
+            endtime = datetime.datetime.now()
+            duringtime = endtime - starttime
+            time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+            total_time += (time_ms / 1000)
+            print(i, "time : ", time_ms, "ms")
+        
+        print("total_time", total_time)
+
+        p.stop()
+        exit(0)
 
         # 3. gc
         self.clear_cache()

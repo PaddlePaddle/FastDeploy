@@ -169,6 +169,8 @@ class AppendAttentionBackend(AttentionBackend):
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
         self.fd_config = fd_config
 
+        self.ii = -1
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = AppendAttentionMetadata()
@@ -235,6 +237,15 @@ class AppendAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
         sliding_window = layer.sliding_window
 
+        # from fastdeploy.worker.tbo import is_last_thread
+        
+        self.ii += 1
+        self.ii = self.ii % 2
+        if int(os.getenv("USE_TBO", "0")) == 1:
+            if self.ii == 0:
+                os.environ["FLAGS_fmt_write_cache_completed_signal"] = "0"
+            else:
+                os.environ["FLAGS_fmt_write_cache_completed_signal"] = "1"
         if self.rope_3d:
             assert len(forward_meta.rotary_embs.shape) == 6
         else:

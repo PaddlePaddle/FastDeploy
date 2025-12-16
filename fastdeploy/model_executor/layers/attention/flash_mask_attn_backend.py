@@ -258,7 +258,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.caches[2 * layer.layer_id + 1],
                 forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
-                metadata.rotary_embs,
+                forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
