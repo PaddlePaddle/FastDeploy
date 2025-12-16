@@ -745,7 +745,7 @@ class SpeculativeSampler(nn.Layer):
         top_p, top_k, topp_seed = padding_sampling_params(
             sampling_metadata.top_p,
             sampling_metadata.top_k,
-            share_inputs["infer_seed"],
+            sampling_metadata.seed,
             share_inputs["seq_lens_this_time"],
             share_inputs["seq_lens_encoder"],
         )
