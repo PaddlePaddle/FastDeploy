@@ -71,9 +71,9 @@ def load_weights_from_cache(model, weights_iterator):
 
 
 def get_weight_iterator(model_path: str):
-    _, files_list, use_safetensors = get_all_weights_file(model_path)
+    key_name_list, files_list, use_safetensors = get_all_weights_file(model_path)
     if use_safetensors:
-        weights_iterator = safetensors_weights_iterator(files_list)
+        weights_iterator = safetensors_weights_iterator(key_name_list, files_list)
     else:
         weights_iterator = pdparams_weight_iterator(files_list)
     return weights_iterator
@@ -319,18 +319,35 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
     return state_dict
 
 
-def safetensors_weights_iterator(safe_tensor_list: list[str]):
+class SafetensorFileCache:
+    def __init__(self):
+        self._files = {}
+
+    def get(self, filename):
+        if filename not in self._files:
+            self._files[filename] = safe_open(filename, framework="paddle", device="cpu")
+        return self._files[filename]
+
+    def close(self):
+        for f in self._files.values():
+            f.__exit__(None, None, None)
+        self._files.clear()
+
+
+def safetensors_weights_iterator(key_name_list: list[str], safe_tensor_list: list[str]):
     """
     safetensors_weights_iterator
     """
-    for st_file in tqdm(
-        safe_tensor_list,
-        desc="Loading safetensors checkpoint shards",
+
+    safe_tensor_cache = SafetensorFileCache()
+    for i, key_name in tqdm(
+        enumerate(key_name_list),
+        total=len(key_name_list),
+        desc="Loading weights",
     ):
-        with safe_open(st_file, framework="paddle", device="cpu") as f:
-            for name in f.keys():
-                param = f.get_tensor(name)
-                yield name, param
+        f = safe_tensor_cache.get(safe_tensor_list[i])
+        param = f.get_tensor(key_name)
+        yield key_name, param
 
 
 def fast_weights_iterator(safe_tensor_list: list[str]):
@@ -360,10 +377,18 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     return state_dict
 
 
+def natural_key(s: str):
+    import re
+
+    return [int(text) if text.isdigit() else text for text in re.split(r"(\d+)", s)]
+
+
 def get_all_weights_file(model_path: str):
     """
     get_all_safetensors
     """
+    from collections import OrderedDict
+
     model_path = Path(model_path)
     use_safetensors = True
     files_list = [str(file) for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
@@ -373,17 +398,19 @@ def get_all_weights_file(model_path: str):
     else:
         safe_model_path = model_path / "model.safetensors"
         if safe_model_path.exists():
-            files_list = [str(safe_model_path)]
             with safe_open(safe_model_path, framework="np", device="cpu") as f:
                 key_name_list = f.keys()
+
+            files_list = [str(safe_model_path)] * len(key_name_list)
             return key_name_list, files_list, use_safetensors
         else:
             index_file = model_path / "model.safetensors.index.json"
             with index_file.open("r") as f:
                 weight_map = json.load(f)["weight_map"]
-            weight_files_in_index = {str(model_path / weight_map[name]) for name in weight_map}
-            key_name_list = list(weight_map.keys())
-            files_list = sorted(weight_files_in_index)
+                sorted_weight_map = OrderedDict(sorted(weight_map.items(), key=lambda kv: natural_key(kv[0])))
+            files_list = [str(model_path / file_name) for (_, file_name) in sorted_weight_map.items()]
+            key_name_list = list(sorted_weight_map.keys())
+
     return key_name_list, files_list, use_safetensors
 
 

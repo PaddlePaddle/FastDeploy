@@ -263,7 +263,7 @@ class Ernie4_5_Attention(nn.Layer):
         hidden_states: paddle.Tensor,
     ):
 
-        qkv_out = self.qkv_proj(hidden_states, forward_meta.block_tables)
+        qkv_out = self.qkv_proj(hidden_states)
 
         attn_out = self.attn(
             qkv=qkv_out,

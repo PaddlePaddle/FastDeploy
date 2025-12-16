@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-BUILD_WHEEL=${1:-0}
+BUILD_WHEEL=${1:-1}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
 FD_CPU_USE_BF16=${3:-"false"}
