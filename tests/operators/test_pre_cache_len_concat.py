@@ -69,7 +69,10 @@ class TestPreCacheLenConcat(unittest.TestCase):
         seq_lens_decoder_t = paddle.to_tensor(seq_lens_decoder, dtype="int32")
         seq_lens_this_time_t = paddle.to_tensor(seq_lens_this_time, dtype="int32")
 
-        outputs = pre_cache_len_concat(seq_lens_decoder_t, seq_lens_this_time_t, max_dec_len, block_size)
+        seq_lens_encoder_t = seq_lens_this_time_t
+        outputs = pre_cache_len_concat(
+            seq_lens_encoder_t, seq_lens_decoder_t, seq_lens_this_time_t, max_dec_len, block_size
+        )
         cu_seqlens_k, batch_ids, tile_ids, num_blocks, kv_token_num = [out.numpy() for out in outputs]
 
         # Shape checks
@@ -91,8 +94,11 @@ class TestPreCacheLenConcat(unittest.TestCase):
 
         seq_lens_decoder_t = paddle.to_tensor(seq_lens_decoder, dtype="int32")
         seq_lens_this_time_t = paddle.to_tensor(seq_lens_this_time, dtype="int32")
+        seq_lens_encoder_t = seq_lens_this_time_t
 
-        outputs = pre_cache_len_concat(seq_lens_decoder_t, seq_lens_this_time_t, max_dec_len, block_size)
+        outputs = pre_cache_len_concat(
+            seq_lens_encoder_t, seq_lens_decoder_t, seq_lens_this_time_t, max_dec_len, block_size
+        )
         cu_seqlens_k, batch_ids, tile_ids, num_blocks, kv_token_num = [out.numpy() for out in outputs]
 
         # Reference implementation

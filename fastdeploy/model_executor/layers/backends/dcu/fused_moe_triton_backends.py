@@ -14,10 +14,11 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.utils import ceil_div
 
@@ -102,6 +103,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -118,6 +120,8 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         scores += layer.gate_correction_bias
         topk_weights, topk_ids = paddle.topk(scores, k=top_k, axis=-1, sorted=False)
         topk_weights = topk_weights / topk_weights.sum(axis=-1, keepdim=True)
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         intermediate_cache1 = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
@@ -241,7 +245,4 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         intermediate_cache3.reshape_([token_num, top_k, hidden_size])
         out = intermediate_cache3.sum(axis=1)
-
-        if layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
         return out

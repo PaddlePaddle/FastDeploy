@@ -72,7 +72,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+\
 For image inputs:
 
 ```shell
@@ -87,7 +87,15 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+Image can also be provided through base64-encoded string:
+```shell
+{"type":"image_url", "image_url": {"url":"data:image/jpg;base64,this/is/an/example"}
+```
+or absolute path to local file:
+```shell
+{"type":"image_url", "image_url": {"url":"file:///this/is/an/example"}
+```
+\
 For video inputs:
 
 ```shell
@@ -102,7 +110,15 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+Video can also be provided through base64-encoded string:
+```shell
+{"type":"video_url", "video_url": {"url":"data:video/mp4;base64,this/is/an/example"}
+```
+or absolute path to local file:
+```shell
+{"type":"video_url", "video_url": {"url":"file:///this/is/an/example"}
+```
+\
 ERNIE-4.5-VL supports reasoning mode (enabled by default). Disable it as follows:
 
 ```shell

@@ -24,7 +24,7 @@ __global__ void update_attn_mask_offsets_kernel(
     int* attn_mask_offsets_decoder,
     const bool* is_block_step,
     int* decode_states,
-    const int* mask_rollback,
+    int* mask_rollback,
     const int real_bsz,
     const int max_model_len,
     const int decode_states_len) {
@@ -58,7 +58,7 @@ __global__ void update_attn_mask_offsets_kernel(
         // Status: decoder -- normal or chunk_prefill
         // TODO: support speculative decoding.
         attn_mask_offsets_decoder[bid] -= mask_rollback[bid];
-
+        mask_rollback[bid] = 0;
         for (int i = 0; i < seq_len_this_time; i++) {
           attn_mask_offsets[(query_start_id + i) * 2 + 1] =
               attn_mask_offsets_decoder[bid] + 1 + i;
@@ -117,7 +117,7 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
       const_cast<int*>(attn_mask_offsets_decoder.data<int>()),
       is_block_step.data<bool>(),
       const_cast<int*>(decode_states.data<int>()),
-      mask_rollback.data<int>(),
+      const_cast<int*>(mask_rollback.data<int>()),
       real_bsz,
       max_model_len,
       decode_states_len);
@@ -136,6 +136,7 @@ PD_BUILD_STATIC_OP(update_attn_mask_offsets)
              "is_block_step",
              "decode_states",
              "mask_rollback"})
-    .Outputs({"attn_mask_offsets", "decode_states_out"})
-    .SetInplaceMap({{"decode_states", "decode_states_out"}})
+    .Outputs({"attn_mask_offsets", "decode_states_out", "mask_rollback_out"})
+    .SetInplaceMap({{"decode_states", "decode_states_out"},
+                    {"mask_rollback", "mask_rollback_out"}})
     .SetKernelFn(PD_KERNEL(UpdateAttnMaskOffsets));

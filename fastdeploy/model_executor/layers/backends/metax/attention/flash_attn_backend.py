@@ -31,6 +31,7 @@ from fastdeploy.model_executor.layers.backends.metax.attention.flash_attention_i
     flash_attn_kvcache_func,
     flash_attn_unpadded_func,
 )
+from fastdeploy.model_executor.ops.gpu import apply_rope_qkv, cache_kv_with_rope
 
 
 @dataclass
@@ -50,16 +51,21 @@ class FlashAttentionMetadata(AttentionMetadata):
     decoder_batch_ids: paddle.Tensor = None
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
+    rotary_cos_prefill: paddle.Tensor = None
+    rotary_sin_prefill: paddle.Tensor = None
+    rotary_cos_decode: paddle.Tensor = None
+    rotary_sin_decode: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
     block_tables: Optional[paddle.Tensor] = None
-    rotary_embs: Optional[paddle.Tensor] = None
     attn_mask: Optional[paddle.Tensor] = None
     encoder_block_shape_q: int = -1
     decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
+    seq_lens_dec: paddle.Tensor = None
+    block_table_dec: paddle.Tensor = None
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
@@ -87,7 +93,7 @@ class FlashAttentionBackend(AttentionBackend):
         FlashAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: FlashAttentionMetadata = None
+        self.attention_metadata: FlashAttentionMetadata = FlashAttentionMetadata()
         self.record_block_table_metadata = {}
         self.block_size: int = fd_config.cache_config.block_size
         self.max_seq_len: int = fd_config.model_config.max_model_len
@@ -122,6 +128,21 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.enable_mm = fd_config.model_config.enable_mm
+        max_num_seqs = fd_config.scheduler_config.max_num_seqs
+        self.attention_metadata.rotary_cos_decode = paddle.empty(
+            shape=[max_num_seqs, 1, 1, self.head_dim],
+            dtype=self.dtype,
+        )
+        self.attention_metadata.rotary_sin_decode = paddle.empty(
+            shape=[max_num_seqs, 1, 1, self.head_dim],
+            dtype=self.dtype,
+        )
+        self.attention_metadata.seq_lens_dec = paddle.empty(
+            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype="int32"
+        )
+        self.attention_metadata.block_table_dec = paddle.empty(
+            shape=[fd_config.scheduler_config.max_num_seqs, self.head_dim], dtype="int32"
+        )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -216,8 +237,92 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.batch_ids_prefill = paddle.to_tensor(self.prefill_info_dict["batch_ids"])
         self.batch_ids_decode = paddle.to_tensor(self.decode_info_dict["batch_ids"])
-        self.seq_lens_dec = forward_meta.seq_lens_decoder[self.batch_ids_decode, 0]
-        self.block_table_dec = forward_meta.block_tables[self.batch_ids_decode, :]
+        self.attention_metadata.seq_lens_dec.copy_(forward_meta.seq_lens_decoder[self.batch_ids_decode, 0])
+        self.attention_metadata.block_table_dec.copy_(forward_meta.block_tables[self.batch_ids_decode, :])
+
+        # update prefilling rope
+        self.update_rotary_embs_prefill(forward_meta)
+        # update decoding rope
+        self.update_rotary_embs_decoder(forward_meta)
+
+    def update_rotary_embs_prefill(self, forward_meta: ForwardMeta):
+        if self.batch_ids_prefill.shape[0] == 0 or forward_meta.rotary_embs is None:
+            return
+
+        batch_ids = self.batch_ids_prefill
+        seq_lens_this_time = forward_meta.seq_lens_this_time[batch_ids]
+        cached_kv_lens = forward_meta.seq_lens_decoder[batch_ids, 0]
+
+        self.block_table_prefill = forward_meta.block_tables[batch_ids, :]
+        # mapping token idx to batch idx
+        self.batch_ids_q = paddle.repeat_interleave(
+            paddle.arange(0, batch_ids.shape[0], dtype="int32"), repeats=seq_lens_this_time, axis=0
+        )
+
+        all_indices = []
+        for i in range(len(batch_ids)):
+            start_pos = cached_kv_lens[i]
+            seq_len_i = seq_lens_this_time[i]
+            if seq_len_i > 0:
+                indices_i = paddle.arange(start_pos, start_pos + seq_len_i, dtype="int64")
+                all_indices.append(indices_i)
+        if not all_indices:
+            return
+
+        all_indices = paddle.concat(all_indices)  # [token_num]
+        if self.enable_mm:
+            gather_nd_indices = paddle.stack(
+                [  # [token_num, 2]
+                    paddle.repeat_interleave(batch_ids, repeats=seq_lens_this_time, axis=0),
+                    all_indices,
+                ],
+                axis=1,
+            )
+            gathered_embs = paddle.gather_nd(
+                forward_meta.rotary_embs.squeeze([2]).transpose(
+                    [0, 2, 1, 3, 4]
+                ),  # [B, 2, 1, S, 1, D // 2] -> [B, S, 2, 1, D // 2]
+                gather_nd_indices,
+            )  # [token_num, 2, 1, D // 2]
+            rot_cos = gathered_embs[:, 0, :, :]  # [token_num, 1, D // 2]
+            rot_sin = gathered_embs[:, 1, :, :]
+        else:
+            gathered_embs = paddle.gather(
+                forward_meta.rotary_embs.squeeze([1]), all_indices, axis=1  # [2, 1, S, 1, D // 2] -> [2, S, 1, D // 2]
+            )  # [2, token_num, 1, D // 2]
+            rot_cos = gathered_embs[0, :, :, :]  # [token_num, 1, D // 2]
+            rot_sin = gathered_embs[1, :, :, :]
+
+        self.attention_metadata.rotary_cos_prefill = paddle.repeat_interleave(
+            rot_cos, repeats=2, axis=-1
+        )  # [token_num, 1, D]
+        self.attention_metadata.rotary_sin_prefill = paddle.repeat_interleave(rot_sin, repeats=2, axis=-1)
+
+    def update_rotary_embs_decoder(self, forward_meta: ForwardMeta):
+        if self.batch_ids_decode.shape[0] == 0:
+            return
+
+        bs = self.batch_ids_decode.shape[0]
+        if self.enable_mm:
+            index = paddle.concat(
+                [self.batch_ids_decode.view([-1, 1]), self.attention_metadata.seq_lens_dec.to("int64").view([-1, 1])],
+                axis=1,
+            )
+            rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
+            rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
+        else:
+            rot_cos = paddle.gather(
+                forward_meta.rotary_embs[0, 0, :, 0, :], self.attention_metadata.seq_lens_dec
+            ).view([bs, 1, 1, -1])
+            rot_sin = paddle.gather(
+                forward_meta.rotary_embs[1, 0, :, 0, :], self.attention_metadata.seq_lens_dec
+            ).view([bs, 1, 1, -1])
+        self.attention_metadata.rotary_cos_decode[:bs].copy_(
+            paddle.repeat_interleave(rot_cos, repeats=2, axis=-1).astype(self.dtype)
+        )
+        self.attention_metadata.rotary_sin_decode[:bs].copy_(
+            paddle.repeat_interleave(rot_sin, repeats=2, axis=-1).astype(self.dtype)
+        )
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -231,88 +336,25 @@ class FlashAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        key_cache_shape = value_cache_shape = [max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim]
+
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            return (
+            key_cache_shape = value_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
                 self.head_dim // 2,
-            )
-        else:
-            return (
-                max_num_blocks,
-                self.block_size,
-                self.kv_num_heads,
-                self.head_dim,
-            )
+            ]
 
-    def apply_rope(self, qk, cos, sin):
+        return key_cache_shape, value_cache_shape
+
+    def apply_rope_native(self, qk, cos, sin):
         rotate_half = paddle.reshape(
             paddle.stack([-qk[..., 1::2], qk[..., 0::2]], axis=-1),
             paddle.shape(qk),
         )
         out = paddle.add(paddle.multiply(qk, cos), paddle.multiply(rotate_half, sin))
         return paddle.cast(out, qk.dtype)
-
-    def apply_rope_dec(self, q, k, forward_meta: ForwardMeta):
-        batch_ids = self.batch_ids_decode
-        bs = batch_ids.shape[0]
-        index = paddle.concat([batch_ids.view([-1, 1]), self.seq_lens_dec.to("int64").view([-1, 1])], axis=1)
-        rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
-        rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
-        rot_cos = paddle.repeat_interleave(rot_cos, repeats=2, axis=-1)
-        rot_sin = paddle.repeat_interleave(rot_sin, repeats=2, axis=-1)
-        q = self.apply_rope(q, rot_cos, rot_sin)
-        k = self.apply_rope(k, rot_cos, rot_sin)
-
-        return q, k
-
-    def get_splited_qkv(
-        self,
-        qkv: paddle.Tensor,
-        forward_meta: ForwardMeta,
-        cu_seqlens_q: paddle.Tensor,
-        batch_ids=None,
-    ):
-        qkv = qkv.view([-1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
-        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-
-        for idx in range(len(cu_seqlens_q) - 1):
-            batch_idx = batch_ids[idx]
-            seq_len_i = forward_meta.seq_lens_this_time[batch_idx]
-            if seq_len_i == 0:
-                continue
-            cached_kv_len = forward_meta.seq_lens_decoder[batch_idx][0]
-            cu_seq_start_q = cu_seqlens_q[idx]
-            cu_seq_end_q = cu_seqlens_q[idx + 1]
-
-            if forward_meta.rotary_embs is not None:
-                if self.enable_mm:  # vl: forward_meta.rotary_embs is [2, 1, S, 1, D // 2]
-                    cos = paddle.repeat_interleave(
-                        forward_meta.rotary_embs[batch_idx, 0, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
-                        repeats=2,
-                        axis=-1,
-                    )  # [Si, D]
-                    sin = paddle.repeat_interleave(
-                        forward_meta.rotary_embs[batch_idx, 1, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
-                        repeats=2,
-                        axis=-1,
-                    )  # [Si, D]
-                else:  # text: forward_meta.rotary_embs is [2, 1, S, 1, D // 2]
-                    cos = paddle.repeat_interleave(
-                        forward_meta.rotary_embs[0, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
-                        repeats=2,
-                        axis=-1,
-                    )  # [Si, D]
-                    sin = paddle.repeat_interleave(
-                        forward_meta.rotary_embs[1, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
-                        repeats=2,
-                        axis=-1,
-                    )  # [Si, D]
-                q[cu_seq_start_q:cu_seq_end_q] = self.apply_rope(q[cu_seq_start_q:cu_seq_end_q], cos, sin)
-                k[cu_seq_start_q:cu_seq_end_q] = self.apply_rope(k[cu_seq_start_q:cu_seq_end_q], cos, sin)
-
-        return q, k, v
 
     def split_pd_qkv(self, qkv):
 
@@ -378,6 +420,25 @@ class FlashAttentionBackend(AttentionBackend):
                             }
                     # non last block: seq_lens_this_time > block_size
                     else:
+                        if bool(self.num_layers_draft_model) and (
+                            seq_len < self.block_size and i < cur_used_num_blocks - 1
+                        ):
+                            cache_end = seq_len - cache_start
+                            assert cache_end <= self.block_size
+
+                            forward_meta.caches[k_cache_id][block_id, 0:cache_end, :, :] = slice_trans_k[
+                                cache_start:seq_len, :, :
+                            ]
+                            forward_meta.caches[v_cache_id][block_id, 0:cache_end, :, :] = slice_trans_v[
+                                cache_start:seq_len, :, :
+                            ]
+                            if layer_id == self.num_layers - 1:
+                                self.record_block_table_metadata[batch_idx] = {
+                                    "block_id": block_id.item(),
+                                    "cache_end": cache_end,
+                                }
+                            break
+
                         assert seq_len > self.block_size
                         cache_end = cache_start + self.block_size
                         forward_meta.caches[k_cache_id][block_id] = slice_trans_k[cache_start:cache_end, :, :]
@@ -386,18 +447,25 @@ class FlashAttentionBackend(AttentionBackend):
             tensor_start = tensor_end
 
     def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-
-        prefill_q, prefill_k, prefill_v = self.get_splited_qkv(
+        q, k, v = cache_kv_with_rope(
             prefill_qkv,
-            forward_meta,
+            forward_meta.caches[k_cache_id],
+            forward_meta.caches[v_cache_id],
+            self.block_table_prefill,
+            self.attention_metadata.rotary_cos_prefill,
+            self.attention_metadata.rotary_sin_prefill,
             self.prefill_info_dict["cu_seqlens_q"],
-            batch_ids=self.batch_ids_prefill,
+            self.batch_ids_q,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            self.block_size,
         )
 
         prefill_out = flash_attn_unpadded_func(
-            prefill_q,
-            prefill_k,
-            prefill_v,
+            q,
+            k,
+            v,
             self.prefill_info_dict["cu_seqlens_q"],
             self.prefill_info_dict["cu_seqlens_q"],
             max_seqlen_q=self.max_seq_len,
@@ -406,34 +474,28 @@ class FlashAttentionBackend(AttentionBackend):
             causal=self.causal,
         )[0]
 
-        self.update_kv_cache(
-            prefill_k, prefill_v, k_cache_id, v_cache_id, layer_id, forward_meta, self.batch_ids_prefill
-        )
-
         return prefill_out
 
     def forward_decode(self, decode_qkv, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        qkv = decode_qkv.view([-1, 1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
-        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-
-        if self.enable_mm:  # vl
-            q, k = self.apply_rope_dec(q, k, forward_meta)
-            rot_cos = None
-            rot_sin = None
-        else:  # text
-            rot_cos = forward_meta.rotary_embs[0, 0, :, 0, :].astype(q.dtype)
-            rot_sin = forward_meta.rotary_embs[1, 0, :, 0, :].astype(q.dtype)
+        q, k, v = apply_rope_qkv(
+            decode_qkv,
+            self.attention_metadata.rotary_cos_decode,
+            self.attention_metadata.rotary_sin_decode,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+        )
 
         decode_out = flash_attn_kvcache_func(
             q,
             forward_meta.caches[k_cache_id],
             forward_meta.caches[v_cache_id],
-            self.seq_lens_dec,
-            self.block_table_dec,
+            self.attention_metadata.seq_lens_dec,
+            self.attention_metadata.block_table_dec,
             k,
             v,
-            rotary_cos=rot_cos,
-            rotary_sin=rot_sin,
+            rotary_cos=None,
+            rotary_sin=None,
             causal=self.causal,
             is_rotary_interleaved=True,
         )[0].squeeze(1)

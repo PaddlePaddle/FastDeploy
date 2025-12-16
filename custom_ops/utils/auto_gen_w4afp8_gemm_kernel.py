@@ -85,7 +85,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
 """
 
 # [M, K, Number of experts, token Padding Size, weight K group size]
-gemm_case = [[256, 256, 2, 0, 128]]
+gemm_case = [[256, 256, 2, 0, 128], [512, 256, 2, 0, 128]]
 
 dtype = ["BF16"]
 
@@ -174,7 +174,7 @@ for type in dtype:
 
     template_head_file.write(
         """    } else {   \\
-            PADDLE_THROW(phi::errors::Unimplemented("W4aFp8 not supported m=%d k=%d  experts=%d  token_padding_size=%d  kBlockN=%d  groupsize=%d, please add [%d, %d, %d, %d, %d, %d] to the gemm_case array in the custom_ops/utils/auto_gen_w4afp8_gemm_kernel.py file and recompile it\\n", _M, _K, _EXPERTS, _TokenPaddingSize, _kBlockN, _GROUPSIZE, _M, _K, _EXPERTS, _TokenPaddingSize, _kBlockN, _GROUPSIZE));    \\
+            PADDLE_THROW(phi::errors::Unimplemented("W4aFp8 not supported m=%d k=%d  experts=%d  token_padding_size=%d  kBlockN=%d  groupsize=%d, please add [%d, %d, %d, %d, %d] to the gemm_case array in the custom_ops/utils/auto_gen_w4afp8_gemm_kernel.py file and recompile it\\n", _M, _K, _EXPERTS, _TokenPaddingSize, _kBlockN, _GROUPSIZE, _M, _K, _EXPERTS, _TokenPaddingSize, _GROUPSIZE));    \\
         }     \\
     }"""
     )

@@ -228,3 +228,22 @@ template void MoeFastHardamardWrapper<phi::dtype::bfloat16, int8_t>(
     const int hadamard_block_size,
     int8_t *out,
     cudaStream_t &stream);
+
+template void
+MoeFastHardamardWrapper<phi::dtype::bfloat16, phi::dtype::float8_e4m3fn>(
+    const phi::dtype::bfloat16 *x_data,
+    const int64_t *expert_idx_per_token,
+    const int64_t *recv_expert_count,
+    const phi::dtype::bfloat16 *shift,
+    const phi::dtype::bfloat16 *smooth,
+    const float *quant_scales,
+    const int quant_round_type,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const int64_t token_num,
+    const int64_t dim,
+    const int num_max_tokens_per_expert,
+    bool used_in_ep_low_latency,
+    const int hadamard_block_size,
+    phi::dtype::float8_e4m3fn *out,
+    cudaStream_t &stream);
