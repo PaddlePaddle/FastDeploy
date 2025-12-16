@@ -1,4 +1,4 @@
-name: PR Build and Test
+name: ILUVATAR Test
 on:
   pull_request:
     types: [opened, synchronize]
