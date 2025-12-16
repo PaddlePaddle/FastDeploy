@@ -31,7 +31,6 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
-    GPUMemoryChecker,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -187,7 +186,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
-        self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
