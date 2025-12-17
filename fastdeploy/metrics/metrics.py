@@ -18,6 +18,7 @@
 metrics
 """
 import os
+from collections import defaultdict
 from typing import Set
 
 from prometheus_client import (
@@ -57,6 +58,36 @@ class SimpleCollector(Collector):
         self.base_registry = base_registry
         self.exclude_names = exclude_names
 
+    def aggregate_by_pid(self, metric):
+        """
+        Sum the gauge's samples by labelset (removing pid) and replace metric.samples in-place.
+        """
+        if not getattr(metric, "samples", None):
+            return metric
+
+        if len(metric.samples[0]) == 0:
+            return metric
+
+        SampleT = type(metric.samples[0])
+
+        labels_to_values = defaultdict(float)
+        for s in metric.samples:
+            if s.name != metric.name:
+                continue  # for safety
+            labels = dict(s.labels or {})
+            labels.pop("pid", None)
+            agg_key = tuple(sorted(labels.items()))
+            labels_to_values[agg_key] += float(s.value)
+
+        new_samples = []
+        for agg_key, agg_value in labels_to_values.items():
+            labels = dict(agg_key)
+            new_samples.append(SampleT(name=metric.name, labels=labels, value=agg_value))
+
+        metric.samples = new_samples
+
+        return metric
+
     def collect(self):
         """
         Collects and yields metrics not in the exclusion list.
@@ -65,7 +96,9 @@ class SimpleCollector(Collector):
             Metric: Prometheus Metric objects that are not excluded.
         """
         for metric in self.base_registry.collect():
-            if not any(name.startswith(metric.name) for name in self.exclude_names):
+            if metric.type == "gauge":
+                yield self.aggregate_by_pid(metric)
+            else:
                 yield metric
 
 
@@ -82,12 +115,9 @@ def get_filtered_metrics() -> str:
         # multiprocess 会将当前共享目录中的所有指标收集到base_registry中
         multiprocess.MultiProcessCollector(base_registry)
 
+        # 将所有指标通过SimpleCollector进行后处理，然后注册到filtered_registry中
         filtered_registry = CollectorRegistry()
-        # 注册一个新的colletor，过滤gauge指标
-        filtered_registry.register(SimpleCollector(base_registry, EXCLUDE_LABELS))
-
-        # 将gauge指标重新注册到filtered_registry中，从内存中读取
-        main_process_metrics.re_register_gauge(filtered_registry)
+        filtered_registry.register(SimpleCollector(base_registry, exclude_names=[]))
 
         return generate_latest(filtered_registry).decode("utf-8")
 
