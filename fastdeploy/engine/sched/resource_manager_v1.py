@@ -1032,19 +1032,22 @@ class ResourceManagerV1(ResourceManager):
         Check whether there are enough slot and gpu resource for the prefilled request,
         of which the cache is saved in cpu buffer.
         """
-        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        assert request_id in self.preallocated_reqs, "request_id must be in preallocate"
-        need_blocks_num = len(self.preallocated_reqs[request_id].disaggregate_info["block_tables"])
-        return self.available_batch() > 0 and self.cache_manager.can_allocate_gpu_blocks(need_blocks_num)
+        with self.lock:
+            assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+            assert request_id in self.preallocated_reqs, "request_id must be in preallocate"
+            need_blocks_num = len(self.preallocated_reqs[request_id].disaggregate_info["block_tables"])
+            return self.available_batch() > 0 and self.cache_manager.can_allocate_gpu_blocks(need_blocks_num)
 
     def add_prefilled_request(self, request_output: RequestOutput):
         """
         In P/D aggregated deployment, D should continue to decode after receiving first token and cache from P.
         NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
         """
+        self.lock.acquire()
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if request_output.request_id not in self.requests:
             llm_logger.error(f"Request {request_output.request_id} not found in requests")
+            self.lock.release()
             return
         request = self.requests[request_output.request_id]
 
@@ -1062,6 +1065,7 @@ class ResourceManagerV1(ResourceManager):
         request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
         request.metrics = request_output.metrics
         self.running.append(request)
+        self.lock.release()
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
