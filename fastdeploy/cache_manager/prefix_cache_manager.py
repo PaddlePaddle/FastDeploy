@@ -33,6 +33,7 @@ from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.cache_manager.ops import get_all_visible_devices
 from fastdeploy.cache_manager.transfer_factory import get_hash_str
+from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -615,8 +616,8 @@ class PrefixCacheManager:
                 keys.append(cur_block_key)
                 current_tokens += block_size
                 prefix_block_key = [cur_block_key]
-            logger.debug(f"prefetch_cache_from_storage start, req_id: {req_id}, keys: {keys}")
-            self.prefetch_cache_from_storage(req_id, keys, gpu_extra_block_ids, is_sync=False)
+            logger.debug(f"issue_prefetch_storage_task start, req_id: {req_id}, keys: {keys}")
+            self.issue_prefetch_storage_task(req_id, keys, gpu_extra_block_ids, is_sync=False)
             prefetch_from_storage = True
 
         if len(gpu_recv_block_ids) > 0:
@@ -628,9 +629,9 @@ class PrefixCacheManager:
                 match_cpu_block_ids,
             )
         if prefetch_from_storage:
-            storage_block_ids = self.wait_prefetch_cache_from_storage(req_id)
+            storage_block_ids = self.wait_prefetch_storage_task(req_id)
             logger.debug(
-                f"prefetch_cache_from_storage finish, req_id: {req_id}, storage_block_ids: {storage_block_ids}"
+                f"issue_prefetch_storage_task finish, req_id: {req_id}, storage_block_ids: {storage_block_ids}"
             )
 
         return gpu_recv_block_ids, gpu_extra_block_ids, storage_block_ids
@@ -824,7 +825,7 @@ class PrefixCacheManager:
             prefix_block_key = [cur_block_key]
 
         logger.debug(f"start prefetch cache from storage, req_id: {req_id}, block_keys: {block_keys}")
-        matched_block_ids = self.prefetch_cache_from_storage(req_id, block_keys, extra_gpu_block_ids)
+        matched_block_ids = self.issue_prefetch_storage_task(req_id, block_keys, extra_gpu_block_ids)
         logger.debug(f"finish prefetch cache from storage, req_id: {req_id}, matched_block_ids: {matched_block_ids}")
 
         return matched_block_ids
@@ -965,12 +966,6 @@ class PrefixCacheManager:
                     keys.append(node.hash_value)
                     node = node.parent
 
-                # TODO: support async write back to storage
-                if self.kvcache_storage_backend is not None and self.write_policy == "write_through" and keys:
-                    keys = list(reversed(keys))
-                    gpu_block_ids = task.block_tables[: len(keys)]
-                    self._write_back_storage(task_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
-
                 if req_id in self.cache_info:
                     del self.cache_info[req_id]
 
@@ -995,49 +990,76 @@ class PrefixCacheManager:
                 logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
                 raise e
 
-    def _write_back_storage(self, task_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def write_cache_to_storage(self, request: Request):
+        """
+        For finished request, write cache to storage.
+        NOTE: this function does not modify the global params
+        """
         if self.kvcache_storage_backend is None:
             return
 
-        logger.debug(f"start write cache back to storage, task_id: {task_id}, hash_keys: {hash_keys}")
+        req_id = request.request_id
+        keys = []
+        node = self.req_leaf_map[req_id]
+        while node != self.radix_tree_root:
+            keys.append(node.hash_value)
+            node = node.parent
+        keys = list(reversed(keys))
+        if not keys:
+            return
+
+        gpu_block_ids = request.block_tables[: len(keys)]
+        logger.debug(f"start write cache back to storage, req_id: {req_id}, keys: {keys}")
+        tic = time.time()
+        self.issue_write_back_storage_task(req_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
+        cost_time = time.time() - tic
+        logger.debug(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+
+    def issue_write_back_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+        if self.kvcache_storage_backend is None:
+            return
+
         if len(hash_keys) != len(gpu_block_ids):
             err_msg = f"write_back_storage error: hash_keys({len(hash_keys)}) != gpu_block_ids({len(gpu_block_ids)})"
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[task_id] = Event()
-        tic = time.time()
-        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task_id, hash_keys, gpu_block_ids, timeout))
+        self.task_write_back_event[req_id] = Event()
+        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, req_id, hash_keys, gpu_block_ids, timeout))
         if is_sync:
-            self.sync_write_back_task(task_id)
-        cost_time = time.time() - tic
-        logger.debug(f"finish write cache back to storage, task_id: {task_id}, cost_time: {cost_time:.6f}s")
+            self.wait_write_storage_task(req_id)
 
-    def sync_write_back_task(self, task_id):
+    def wait_write_storage_task(self, req_id):
         """
-        同步ssd任务
-        当issue_ssd_task中设置is_sync为False时需主动调用该函数同步结果
+        Sync write back task
         """
-        self.task_write_back_event[task_id].wait()
-        del self.task_write_back_event[task_id]
+        if req_id in self.task_write_back_event:
+            self.task_write_back_event[req_id].wait()
+            del self.task_write_back_event[req_id]
 
-    def prefetch_cache_from_storage(self, task_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_prefetch_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+        """
+        Prefetch cache from storage task
+        """
         storage_block_ids = []
-        self.task_prefetch_event[task_id] = Event()
+        self.task_prefetch_event[req_id] = Event()
         # issue task to cache_transfer_manager
-        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task_id, hash_keys, gpu_block_ids, timeout))
+        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
         if is_sync:
-            storage_block_ids = self.wait_prefetch_cache_from_storage(task_id)
+            storage_block_ids = self.wait_prefetch_storage_task(req_id)
         return storage_block_ids
 
-    def wait_prefetch_cache_from_storage(self, task_id):
+    def wait_prefetch_storage_task(self, req_id):
         """
         Wait for prefetch cache from storage task to finish
         """
-        self.task_prefetch_event[task_id].wait()
-        storage_block_ids = self.task_prefetch_blocks_ids[task_id]
-        del self.task_prefetch_event[task_id]
-        del self.task_prefetch_blocks_ids[task_id]
+        if req_id not in self.task_prefetch_event:
+            return None
+
+        self.task_prefetch_event[req_id].wait()
+        storage_block_ids = self.task_prefetch_blocks_ids[req_id]
+        del self.task_prefetch_event[req_id]
+        del self.task_prefetch_blocks_ids[req_id]
         return storage_block_ids
 
     def free_nodes_directly(self, node):

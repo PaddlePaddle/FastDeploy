@@ -1139,39 +1139,45 @@ class ResourceManagerV1(ResourceManager):
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
         try:
+            if isinstance(request_ids, str):
+                request_ids = (request_ids,)
+            else:
+                request_ids = set(request_ids)
+
+            need_postprocess_reqs = []
             with self.lock:
-                if isinstance(request_ids, str):
-                    request_ids = (request_ids,)
-                else:
-                    request_ids = set(request_ids)
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
-                        # Invalid request ID.
                         continue
-                    if request in self.running:  # normally run and finished
+                    if request in self.waiting:
+                        llm_logger.error(f"request {request.request_id} scheduled into waiting list, after finished")
+                        continue
+                    if request in self.running:
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        try:
-                            self._free_blocks(request)
-                        except Exception as e:
-                            llm_logger.warning(f"release block failed {req_id}: {e}")
-                    if (
-                        request.request_id in self.to_be_rescheduled_request_id_set
-                    ):  # finished after preempted, blocks have been recycled.
-                        self.to_be_rescheduled_request_id_set.remove(
-                            request.request_id
-                        )  # just remove from to_be_rescheduled_request_id_set
-                    if (
-                        request in self.waiting
-                    ):  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
-                        raise RuntimeError(f"request {request.request_id} scheduled into waiting list, after finished")
+                        need_postprocess_reqs.append(request)
+                    if request.request_id in self.to_be_rescheduled_request_id_set:
+                        # finished after preempted, blocks have been recycled.
+                        self.to_be_rescheduled_request_id_set.remove(request.request_id)
 
                     self.tasks_list[request.idx] = None
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+
+            # Do not block the main thread here
+            for req in need_postprocess_reqs:
+                self.cache_manager.write_cache_to_storage(req)
+
+            with self.lock:
+                for req in need_postprocess_reqs:
+                    try:
+                        self._free_blocks(req)
+                    except Exception as e:
+                        llm_logger.warning(f"release block failed {req.request_id}: {e}")
+
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
