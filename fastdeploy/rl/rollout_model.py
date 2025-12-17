@@ -79,7 +79,7 @@ class RolloutModel(nn.Layer):
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
         if self.fd_config.quant_config is not None:
             quantization_context = multi_switch_config_context(
-                (self.fd_config.quant_config, "is_checkpoint_bf16", self.is_checkpoint_bf16),
+                (self.fd_config.quant_config, "is_checkpoint_bf16", True),
                 (self.fd_config.load_config, "dynamic_load_weight", False),
             )
         else:
