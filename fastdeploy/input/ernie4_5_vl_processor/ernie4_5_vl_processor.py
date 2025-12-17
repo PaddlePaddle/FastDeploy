@@ -241,6 +241,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             outputs = self.ernie4_5_processor.request2ids(request)
+            delattr(request, "chat_template_kwargs")
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
@@ -285,7 +286,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request.enable_thinking = model_status == "think_start"
         if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
             request.sampling_params.top_p = _SAMPLING_EPS
-
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

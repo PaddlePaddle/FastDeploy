@@ -241,35 +241,12 @@ class Request:
         if request_id is not None:
             setattr(req, "request_id", request_id)
 
-        # if prompt is not None and hasattr(req, "prompt"):
-        #     setattr(req, "prompt", prompt)
-
-        # if (
-        #     hasattr(req, "disable_chat_template")
-        #     and req.disable_chat_template
-        #     and not getattr(req, "prompt_token_ids", None)
-        # ):
-        #     assert (
-        #         len(getattr(req, "messages", [])) > 0
-        #     ), "messages can not be an empty list, unless prompt_token_ids is passed"
-        #     setattr(req, "prompt", req.messages[0]["content"])
-        #     setattr(req, "messages", [])
-
         if pooling_params is None:
             sampling_params = SamplingParams.from_generic_request(req)
         else:
             sampling_params = SamplingParams()
 
         guided_json_object = cls._process_guided_json(req)
-
-        # ChatCompletionRequest
-        # if hasattr(req, "messages") and hasattr(req, "prompt_token_ids"):
-        #     if not req.prompt_token_ids:
-        #         # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-        #         assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
-        #         if req.disable_chat_template:
-        #             req.prompt = req.messages[0]["content"]
-        #             req.messages = []
 
         metrics = RequestMetrics()
         request = cls(
@@ -295,19 +272,8 @@ class Request:
             add_special_tokens=getattr(req, "add_special_tokens", None),
         )
 
-        # if (
-        #     hasattr(req, "disable_chat_template")
-        #     and req.disable_chat_template
-        #     and not getattr(req, "prompt_token_ids", None)
-        # ):
-        #     assert (
-        #         len(getattr(req, "messages", [])) > 0
-        #     ), "messages can not be an empty list, unless prompt_token_ids is passed"
-        #     setattr(request, "prompt", req.messages[0]["content"])
-        #     setattr(request, "messages", [])
-
         if hasattr(req, "messages"):
-            if not req.prompt_token_ids:
+            if hasattr(req, "prompt_token_ids") and not req.prompt_token_ids:
                 # If disable_chat_template is set, then the first message in messages will be used as the prompt.
                 assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
                 if req.disable_chat_template:

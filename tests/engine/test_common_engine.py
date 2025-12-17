@@ -435,6 +435,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def receive_json_once(self, block):
                 return self.msg, None
 
+            def receive_pyobj_once(self, block):
+                return self.msg, None
+
             def close(self):
                 pass
 

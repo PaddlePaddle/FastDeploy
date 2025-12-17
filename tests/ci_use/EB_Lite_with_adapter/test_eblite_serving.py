@@ -23,6 +23,8 @@ import time
 
 import pytest
 
+from fastdeploy.engine.request import Request
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 print("project_root", project_root)
@@ -48,6 +50,8 @@ FD_ZMQ_CONTROL_CMD_SERVER_PORTS = int(os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS
 FD_ZMQ_CONTROL_CMD_SERVER_PORT = FD_ZMQ_CONTROL_CMD_SERVER_PORTS
 
 env["FD_ENABLE_INTERNAL_ADAPTER"] = str(FD_ENABLE_INTERNAL_ADAPTER)
+env["FD_ZMQ_RECV_REQUEST_SERVER_PORT"] = str(FD_ZMQ_RECV_REQUEST_SERVER_PORT)
+env["FD_ZMQ_SEND_RESPONSE_SERVER_PORT"] = str(FD_ZMQ_SEND_RESPONSE_SERVER_PORT)
 env["FD_ZMQ_RECV_REQUEST_SERVER_PORTS"] = str(FD_ZMQ_RECV_REQUEST_SERVER_PORTS)
 env["FD_ZMQ_SEND_RESPONSE_SERVER_PORTS"] = str(FD_ZMQ_SEND_RESPONSE_SERVER_PORTS)
 env["FD_ZMQ_CONTROL_CMD_SERVER_PORTS"] = str(FD_ZMQ_CONTROL_CMD_SERVER_PORTS)
@@ -242,7 +246,7 @@ def setup_and_run_server():
 
 def test_request_and_response(zmq_req_client):
     prompt_token_ids = [5300, 93956, 55791]
-    req_id = "test"
+    req_id = "test_0"
     request = {
         "req_id": req_id,
         "request_id": req_id,
@@ -266,6 +270,7 @@ def test_request_and_response(zmq_req_client):
         "top_p": 0.8,
         "frequency_penalty": 0.0,
     }
+    request = Request.from_dict(request)
     result_queue = queue.Queue()
     zmq_req_client.start(result_queue)
     zmq_req_client.send_request(request)
