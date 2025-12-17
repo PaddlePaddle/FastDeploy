@@ -28,6 +28,7 @@ import paddle
 import zmq
 
 from fastdeploy import envs
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import (
     CompletionOutput,
     PoolingOutput,
@@ -262,7 +263,10 @@ class TokenProcessor:
             token_ids = stream_data.tokens  # numpy.array
             if token_ids is not None and token_ids[-1] <= 0:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                    if (
+                        task_id in self.resource_manager.to_be_rescheduled_request_id_set
+                        and token_ids[-1] == PREEMPTED_TOKEN_ID
+                    ):
                         self.resource_manager.reschedule_preempt_task(task_id)
                 continue
 
@@ -722,9 +726,13 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        if (
+                            task_id in self.resource_manager.to_be_rescheduled_request_id_set
+                            and len(token_ids) > 0
+                            and token_ids[-1] == PREEMPTED_TOKEN_ID
+                        ):
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
             else:
@@ -735,7 +743,10 @@ class TokenProcessor:
                     llm_logger.info(f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        if (
+                            task_id in self.resource_manager.to_be_rescheduled_request_id_set
+                            and token_id == PREEMPTED_TOKEN_ID
+                        ):
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
 

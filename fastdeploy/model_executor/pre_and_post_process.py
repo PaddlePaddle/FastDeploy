@@ -21,7 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, SpeculativeConfig
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
@@ -404,6 +404,8 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+    for preempted_idx in share_inputs["preempted_idx"]:
+        sampler_output.sampled_token_ids[preempted_idx] = PREEMPTED_TOKEN_ID
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:

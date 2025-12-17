@@ -628,6 +628,8 @@ class GPUModelRunner(ModelRunnerBase):
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
 
+        self.share_inputs["preempted_idx"] = []
+
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
@@ -737,6 +739,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"].append(idx)
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -1373,6 +1376,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["preempted_idx"] = []
 
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
