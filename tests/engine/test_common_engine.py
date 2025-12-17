@@ -253,8 +253,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
             cfg = self._make_cfg(
                 splitwise_role="prefill",
-                num_gpu_blocks_override=3,
+                num_gpu_blocks_override=4,
                 router="0.0.0.0:30000",
+                kv_cache_ratio=1,
             )
 
         # Patch EngineWorkerQueue before EngineService ctor to avoid real IPC
@@ -337,7 +338,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
     def test_start_mixed_branch_cache_after_load_and_zmq(self):
         """Cover lines 215-217 and 231 in start()."""
-        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=2)
+        cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
 
         class DummyQ:
             def __init__(self, *a, **k):
