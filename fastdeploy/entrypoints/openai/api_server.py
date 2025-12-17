@@ -30,7 +30,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
+from opentelemetry.propagate import extract
 
+import fastdeploy.metrics.trace as tracing
+from fastdeploy import envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
@@ -58,12 +61,6 @@ from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
-from fastdeploy.metrics.trace_util import (
-    fd_start_span,
-    inject_to_metadata,
-    instrument,
-    lable_span,
-)
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -73,6 +70,8 @@ from fastdeploy.utils import (
     is_port_available,
     retrive_model_from_server,
 )
+
+tracing.process_tracing_init()
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
@@ -246,7 +245,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
 app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
-instrument(app)
 
 
 env_api_key_func = environment_variables.get("FD_API_KEY")
@@ -367,19 +365,23 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
 
 
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: ChatCompletionRequest):
+async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
     api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    if envs.TRACES_ENABLE:
+        if req.headers:
+            headers = dict(req.headers)
+            trace_context = extract(headers)
+            request.trace_context = trace_context
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            inject_to_metadata(request)
-            lable_span(request)
+            tracing.label_span(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
@@ -399,18 +401,23 @@ async def create_chat_completion(request: ChatCompletionRequest):
 
 
 @app.post("/v1/completions")
-async def create_completion(request: CompletionRequest):
+async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
     api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    if envs.TRACES_ENABLE:
+        if req.headers:
+            headers = dict(req.headers)
+            trace_context = extract(headers)
+            request.trace_context = trace_context
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            lable_span(request)
+            tracing.label_span(request)
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
@@ -471,6 +478,7 @@ async def create_embedding(request: EmbeddingRequest):
 
 
 @app.get("/update_model_weight")
+@tracing.trace_span("update_model_weight")
 def update_model_weight(request: Request) -> Response:
     """
     update model weight
@@ -485,6 +493,7 @@ def update_model_weight(request: Request) -> Response:
 
 
 @app.get("/clear_load_weight")
+@tracing.trace_span("clear_load_weight")
 def clear_load_weight(request: Request) -> Response:
     """
     clear model weight
@@ -499,6 +508,7 @@ def clear_load_weight(request: Request) -> Response:
 
 
 @app.post("/rearrange_experts")
+@tracing.trace_span("rearrange_experts")
 async def rearrange_experts(request: Request):
     """
     rearrange experts
@@ -509,6 +519,7 @@ async def rearrange_experts(request: Request):
 
 
 @app.post("/get_per_expert_tokens_stats")
+@tracing.trace_span("get_per_expert_tokens_stats")
 async def get_per_expert_tokens_stats(request: Request):
     """
     get per expert tokens stats
@@ -519,6 +530,7 @@ async def get_per_expert_tokens_stats(request: Request):
 
 
 @app.post("/check_redundant")
+@tracing.trace_span("check_redundant")
 async def check_redundant(request: Request):
     """
     check redundant
@@ -537,7 +549,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
-    fd_start_span("FD_START")
+    # fd_start_span("FD_START")
 
     options = {
         "bind": f"{args.host}:{args.port}",
@@ -565,6 +577,7 @@ if _metrics_port is None or (_main_port is not None and _metrics_port == _main_p
 
 
 @metrics_app.get("/metrics")
+@tracing.trace_span("metrics")
 async def metrics():
     """
     metrics
@@ -574,6 +587,7 @@ async def metrics():
 
 
 @metrics_app.get("/config-info")
+@tracing.trace_span("config-info")
 def config_info() -> Response:
     """
     Get the current configuration of the API server.

@@ -531,7 +531,8 @@ class GPUModelRunner(ModelRunnerBase):
                         assert (
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                        grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                        mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
@@ -555,7 +556,8 @@ class GPUModelRunner(ModelRunnerBase):
             merge_image_features, feature_idx, thw_idx = [], 0, 0
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
-                mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                 mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                 feature_start = feature_position.offset
@@ -635,6 +637,7 @@ class GPUModelRunner(ModelRunnerBase):
         batch_pooling_params = []
         for i in range(req_len):
             request = req_dicts[i]
+            # assert isinstance(request, Request)
             idx = request.idx
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
@@ -653,14 +656,14 @@ class GPUModelRunner(ModelRunnerBase):
                     logits_info, schemata_key = self._init_logits_processor(request)
                     request.schemata_key = schemata_key
 
-                    if self.scheduler_config.splitwise_role == "decode":
-                        if (
-                            hasattr(request, "prefill_end_index")
-                            and hasattr(request, "prompt_token_ids")
-                            and request.prefill_end_index > len(request.prompt_token_ids)
-                        ):
-                            if hasattr(request, "output_token_ids"):
-                                prefill_tokens.extend(request.output_token_ids)
+                    if (
+                        self.scheduler_config.splitwise_role == "decode"
+                        and hasattr(request, "prefill_end_index")
+                        and hasattr(request, "prompt_token_ids")
+                        and request.prefill_end_index > len(request.prompt_token_ids)
+                        and hasattr(request, "output_token_ids")
+                    ):
+                        prefill_tokens.extend(request.output_token_ids)
 
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
@@ -746,6 +749,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 self.forward_batch_reqs_list[idx] = None
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    self.routing_replay_manager.clear_request(batch_id=idx)
+
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -777,12 +785,12 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -1000,12 +1008,12 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -1210,7 +1218,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
+        self.share_inputs["bad_tokens_len"] = [-1] * max_num_seqs
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
         self.share_inputs["is_chunk_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
@@ -1440,7 +1448,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
+        max_bad_tokens_len = max(self.share_inputs["bad_tokens_len"])
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
