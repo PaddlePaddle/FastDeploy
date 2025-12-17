@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 import threading
 import types
@@ -23,7 +24,20 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-pytest.importorskip("paddle")
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+# Provide a lightweight paddle stub so imports in fastdeploy modules succeed
+_DummyPaddle = types.SimpleNamespace(Tensor=object)
+_DummyPaddle.distributed = types.SimpleNamespace()
+sys.modules["paddle"] = _DummyPaddle
+sys.modules["paddle.distributed"] = _DummyPaddle.distributed
+
+# Stub fastdeploy package to avoid executing heavyweight __init__ during tests
+if "fastdeploy" not in sys.modules:
+    fastdeploy_stub = types.ModuleType("fastdeploy")
+    fastdeploy_stub.__path__ = [os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fastdeploy"))]
+    sys.modules["fastdeploy"] = fastdeploy_stub
+sys.modules.setdefault("fastdeploy.platforms", types.SimpleNamespace(current_platform=lambda: None))
 
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
@@ -68,7 +82,8 @@ class _DummyMainMetrics:
 class _DummyIPCSignal:
     def __init__(self, name, array, **kwargs):
         self.name = name
-        self.value = np.ones_like(array)
+        self.dtype = kwargs.get("dtype", np.array(array).dtype)
+        self.value = np.ones_like(array, dtype=self.dtype)
 
 
 # Mock engine cache queue used to capture issued tasks.
@@ -184,6 +199,7 @@ def _create_manager(
         num_key_value_heads=1,
         head_dim=1,
         _architecture="",
+        dtype="float16",
     )
     config = SimpleNamespace(
         cache_config=cache_config,
@@ -512,7 +528,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         created_signals = {}
 
         def _signal_factory(name=None, array=None, **kwargs):
-            signal = SimpleNamespace(name=name, value=np.array(array, copy=True))
+            dtype = kwargs.get("dtype", np.array(array).dtype)
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
+            signal.dtype = dtype
             created_signals[name] = signal
             return signal
 
@@ -574,7 +592,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         ready_snapshots = {}
 
         def _signal_factory(name=None, array=None, **kwargs):
-            signal = SimpleNamespace(name=name, value=np.array(array, copy=True))
+            dtype = kwargs.get("dtype", np.array(array).dtype)
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
+            signal.dtype = dtype
             if name == "cache_ready_signal":
                 ready_snapshots["initial"] = signal.value.copy()
             return signal
