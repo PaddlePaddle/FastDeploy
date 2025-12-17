@@ -106,7 +106,6 @@ __global__ void speculate_limit_thinking_content_length_kernel_v1(
   int discarded_tokens = original_accept_num - new_accept_num;
   if (discarded_tokens > 0) {
     step_idx[bid] -= discarded_tokens;
-    seq_lens_decoder[bid] -= discarded_tokens;
   }
 
   accept_num[bid] = new_accept_num;
