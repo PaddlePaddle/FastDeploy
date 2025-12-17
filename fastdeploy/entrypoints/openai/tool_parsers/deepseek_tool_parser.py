@@ -59,6 +59,10 @@ class DeepSeekToolParser(ToolParser):
         
         self.model_name = model_name or ""
         self.buffer: str = ""
+        # Streaming state
+        self.current_tool_id: int = -1
+        self.current_tool_name_sent: bool = False
+        self.streamed_args_for_tool: list[str] = []
         
         # 特殊标记
         self.tool_calls_begin_token = "<｜tool▁calls▁begin｜>"
@@ -276,10 +280,15 @@ class DeepSeekToolParser(ToolParser):
                         
                         # 对于 V3-0324/R1，需要从代码块中提取 JSON
                         if not self.is_v31:
-                            # 移除 ```json 和 ``` 标记
-                            args_text = re.sub(r"^```json\s*", "", args_text, flags=re.MULTILINE)
-                            args_text = re.sub(r"\s*```\s*$", "", args_text, flags=re.MULTILINE)
-                            args_text = args_text.strip()
+                            # 仅提取最后一个 code block，避免历史 buffer 累积造成重复片段
+                            code_blocks = re.findall(r"```json\s*(.*?)\s*```", args_text, flags=re.DOTALL)
+                            if code_blocks:
+                                args_text = code_blocks[-1].strip()
+                            else:
+                                # 如果未匹配到 code block，回退到去除标记的方式
+                                args_text = re.sub(r"^```json\s*", "", args_text, flags=re.MULTILINE)
+                                args_text = re.sub(r"\s*```\s*$", "", args_text, flags=re.MULTILINE)
+                                args_text = args_text.strip()
                         
                         if args_text:
                             try:
@@ -328,16 +337,18 @@ class DeepSeekToolParser(ToolParser):
                             prev_args = self.streamed_args_for_tool[self.current_tool_id]
                             if args_str.startswith(prev_args):
                                 new_args = args_str[len(prev_args):]
-                                if new_args:
-                                    self.streamed_args_for_tool[self.current_tool_id] = args_str
-                                    return DeltaMessage(
-                                        tool_calls=[
-                                            DeltaToolCall(
-                                                index=self.current_tool_id,
-                                                function=DeltaFunctionCall(arguments=new_args).model_dump(exclude_none=True),
-                                            )
-                                        ]
-                                    )
+                                # 如果没有新增内容（或只是重复的整段），直接返回 None，避免重复推送
+                                if not new_args or new_args.strip() == "" or new_args.strip() == prev_args.strip():
+                                    return None
+                                self.streamed_args_for_tool[self.current_tool_id] = args_str
+                                return DeltaMessage(
+                                    tool_calls=[
+                                        DeltaToolCall(
+                                            index=self.current_tool_id,
+                                            function=DeltaFunctionCall(arguments=new_args).model_dump(exclude_none=True),
+                                        )
+                                    ]
+                                )
                         else:
                             # 第一次收到参数
                             self.streamed_args_for_tool.append(args_str)
