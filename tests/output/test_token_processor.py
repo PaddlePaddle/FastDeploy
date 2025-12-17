@@ -15,11 +15,9 @@ limitations under the License.
 """
 
 import copy
-import sys
 import time
 import types
 from collections import Counter
-from pathlib import Path
 from unittest import mock
 
 import numpy as np
