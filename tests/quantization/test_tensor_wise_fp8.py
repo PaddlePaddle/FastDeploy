@@ -23,6 +23,7 @@ from fastdeploy.model_executor.layers.quantization.tensor_wise_fp8 import (
     TensorWiseFP8Config,
     TensorWiseFP8LinearMethod,
 )
+from fastdeploy.platforms import current_platform
 
 
 # Dummy classes for test
@@ -96,6 +97,7 @@ class TestTensorWiseFP8LinearMethod(unittest.TestCase):
         self.assertAlmostEqual(self.method.total_scale, 1.0)
         self.layer.weight.copy_.assert_called_once()
 
+    @unittest.skipIf(not hasattr(current_platform, "is_gpu") or not current_platform.is_gpu(), "No GPU, skip test")
     @patch("fastdeploy.model_executor.ops.gpu.fused_hadamard_quant_fp8", autospec=True)
     @patch("fastdeploy.model_executor.ops.gpu.cutlass_fp8_fp8_half_gemm_fused", autospec=True)
     def test_apply(self, mock_gemm, mock_quant):
@@ -105,6 +107,47 @@ class TestTensorWiseFP8LinearMethod(unittest.TestCase):
         x = paddle.randn([4, 8])
         out = self.method.apply(self.layer, x)
         self.assertTrue((out == x).all())
+
+
+@unittest.skipIf(
+    not hasattr(current_platform, "is_intel_hpu") or not current_platform.is_intel_hpu(), "No Intel HPU, skip test"
+)
+class TestHPUTensorWiseFP8LinearMethod(unittest.TestCase):
+    """Test suite for TensorWiseFP8LinearMethod"""
+
+    def setUp(self):
+        from fastdeploy.model_executor.layers.backends import (
+            HpuTensorWiseFP8LinearMethod,
+        )
+
+        """Initialize test fixtures"""
+        self.layer = DummyLayer()
+        self.method = HpuTensorWiseFP8LinearMethod(TensorWiseFP8Config())
+
+    def test_create_weights(self):
+        """Verify weight dtype is set to float8_e4m3fn"""
+        self.method.create_weights(self.layer)
+        self.assertEqual(self.layer.weight_dtype, "float8_e4m3fn")
+
+    def test_process_prequanted_weights(self):
+        """Verify prequantized weights and scales are processed correctly"""
+        self.layer.weight_scale = MagicMock()
+        self.layer.act_scale = MagicMock()
+        self.layer.act_scale_inv = MagicMock()
+        self.layer.weight.copy_ = MagicMock()
+        self.layer.weight_scale.set_value = MagicMock()
+        self.layer.act_scale.set_value = MagicMock()
+        self.layer.act_scale_inv.set_value = MagicMock()
+        state_dict = {
+            "weight": paddle.randn([8, 4]),
+            "weight_scale": paddle.to_tensor([0.5], dtype="float32"),
+            "act_scale": paddle.to_tensor([2.0], dtype="float32"),
+        }
+        self.method.process_prequanted_weights(self.layer, state_dict)
+        self.layer.weight.copy_.assert_called_once()
+        self.layer.weight_scale.set_value.assert_called_once()
+        self.layer.act_scale.set_value.assert_called_once()
+        self.layer.act_scale_inv.set_value.assert_called_once()
 
 
 if __name__ == "__main__":
