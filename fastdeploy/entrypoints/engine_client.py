@@ -33,6 +33,7 @@ from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
+    FMQFactory,
     IPCSignal,
     KVCacheStatus,
     ModelWeightsStatus,
@@ -49,7 +50,6 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
-    to_tensor,
 )
 
 
@@ -82,6 +82,7 @@ class EngineClient:
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.fmq_a2e_producer = None
 
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
@@ -348,7 +349,7 @@ class EngineClient:
             request_id_idx = task.get("request_id")
             parts = request_id_idx.rsplit("_", 1)
             if len(parts) == 1:
-                self._send_task(task)
+                await self._send_task(task)
             else:
                 request_id = parts[0]
                 index = int(parts[1])
@@ -357,21 +358,25 @@ class EngineClient:
                 for i in range(index * n, (index + 1) * n):
                     child_task = copy(task)
                     child_task["request_id"] = f"{request_id}_{i}"
-                    self._send_task(child_task)
+                    await self._send_task(child_task)
             tracing.trace_slice_end(
                 tracing.TraceSpanName.PREPROCESSING, task.get("request_id").split("_")[0], thread_finish_flag=True
             )
         except Exception as e:
-            api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
+            api_server_logger.error(f"fmq send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
-    def _send_task(self, task):
-        if not self.enable_mm:
-            self.zmq_client.send_json(task)
-        else:
-            if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
-                to_tensor([task])
-            self.zmq_client.send_pyobj(task)
+    def _get_producer(self):
+        if self.fmq_a2e_producer is None:
+            self.fmq_a2e_producer = FMQFactory.q_a2e_producer()
+        return self.fmq_a2e_producer
+
+    async def _send_task(self, task):
+        try:
+            producer = self._get_producer()
+            await producer.put(task)
+        except Exception as e:
+            api_server_logger.error(f"Failed to send task via FMQ: {e}")
 
     def valid_parameters(self, data):
         """

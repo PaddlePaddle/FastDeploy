@@ -28,6 +28,8 @@ import zmq
 import zmq.asyncio
 
 from fastdeploy import envs
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import fmq_logger
 
 # ==========================
@@ -232,19 +234,28 @@ class Queue(BaseComponent):
         if self.role != Role.PRODUCER:
             raise PermissionError("Only producers can send messages.")
 
-        desc = None
-        payload = data
+        _zmq_metrics_stats = ZMQMetricsStats()
+        try:
+            desc = None
+            payload = data
 
-        if isinstance(data, bytes) and len(data) >= shm_threshold:
-            desc = Descriptor.create(data)
-            payload = None
+            if isinstance(data, bytes) and len(data) >= shm_threshold:
+                desc = Descriptor.create(data)
+                payload = None
 
-        msg = Message(msg_id=self._msg_id, payload=payload, descriptor=desc)
-        raw = msg.serialize()
+            msg = Message(msg_id=self._msg_id, payload=payload, descriptor=desc, timestamp=time.perf_counter())
+            raw = msg.serialize()
+            _zmq_metrics_stats.msg_bytes_send_total += len(raw)
 
-        async with self.lock:
-            await self.socket.send(raw, copy=self.copy)
-            self._msg_id += 1
+            async with self.lock:
+                await self.socket.send(raw, copy=self.copy)
+                self._msg_id += 1
+        except Exception as e:
+            _zmq_metrics_stats.msg_send_failed_total += 1
+            fmq_logger.error(f"Failed to send message: {e}")
+        finally:
+            _zmq_metrics_stats.msg_send_total += 1
+            main_process_metrics.record_zmq_stats(_zmq_metrics_stats, self.endpoint.address)
 
     async def get(self, timeout: int = None) -> Optional[Message]:
         # Receive data from queue

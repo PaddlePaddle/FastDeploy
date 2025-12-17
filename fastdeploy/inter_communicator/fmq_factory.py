@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import os
+
 from fastdeploy.inter_communicator.fmq import FMQ
 
 
@@ -29,55 +31,66 @@ class FMQFactory:
     Worker: q_e2w consumer / q_w2e producer
     """
 
-    _fmq = FMQ()
+    _fmq = None
+    _pid = None
+
+    @classmethod
+    def _get_fmq(cls):
+        current_pid = os.getpid()
+        if cls._pid != current_pid:
+            FMQ._instance = None
+            FMQ._context = None
+            cls._fmq = FMQ()
+            cls._pid = current_pid
+        return cls._fmq
 
     # ------------------------------
     # API → Engine
     # ------------------------------
     @classmethod
     def q_a2e_producer(cls):
-        return cls._fmq.queue("q_a2e", role="producer")
+        return cls._get_fmq().queue("q_a2e", role="producer")
 
     @classmethod
     def q_a2e_consumer(cls):
-        return cls._fmq.queue("q_a2e", role="consumer")
+        return cls._get_fmq().queue("q_a2e", role="consumer")
 
     # ------------------------------
     # Engine → Worker
     # ------------------------------
     @classmethod
     def q_e2w_producer(cls):
-        return cls._fmq.queue("q_e2w", role="producer")
+        return cls._get_fmq().queue("q_e2w", role="producer")
 
     @classmethod
     def q_e2w_consumer(cls):
-        return cls._fmq.queue("q_e2w", role="consumer")
+        return cls._get_fmq().queue("q_e2w", role="consumer")
 
     # ------------------------------
     # Worker → Engine
     # ------------------------------
     @classmethod
     def q_w2e_producer(cls):
-        return cls._fmq.queue("q_w2e", role="producer")
+        return cls._get_fmq().queue("q_w2e", role="producer")
 
     @classmethod
     def q_w2e_consumer(cls):
-        return cls._fmq.queue("q_w2e", role="consumer")
+        return cls._get_fmq().queue("q_w2e", role="consumer")
 
     # ------------------------------
     # Engine → API
     # ------------------------------
     @classmethod
     def q_e2a_producer(cls):
-        return cls._fmq.queue("q_e2a", role="producer")
+        return cls._get_fmq().queue("q_e2a", role="producer")
 
     @classmethod
     def q_e2a_consumer(cls):
-        return cls._fmq.queue("q_e2a", role="consumer")
+        return cls._get_fmq().queue("q_e2a", role="consumer")
 
     # ------------------------------
     # Destroy context
     # ------------------------------
     @classmethod
     async def destroy(cls):
-        await cls._fmq.destroy()
+        await cls._get_fmq().destroy()

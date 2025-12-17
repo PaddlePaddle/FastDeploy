@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import multiprocessing
@@ -46,6 +47,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
+    FMQFactory,
     IPCSignal,
     ZmqIpcServer,
     ZmqTcpServer,
@@ -1048,20 +1050,28 @@ class EngineService:
                 cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
             )
         else:
-            self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+            self.fmq_a2e_consumer = None
             self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
         self.recv_result_handle_thread = threading.Thread(
             target=self.send_response_server.recv_result_handle, daemon=True
         )
         self.recv_result_handle_thread.start()
         time.sleep(3)
-        self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
+        self.insert_task_to_scheduler_thread = threading.Thread(
+            target=self._run_insert_zmq_task_to_scheduler, daemon=True
+        )
         self.insert_task_to_scheduler_thread.start()
 
         self.receive_output_thread = threading.Thread(target=self._zmq_send_generated_tokens, daemon=True)
         self.receive_output_thread.start()
 
-    def _insert_zmq_task_to_scheduler(self):
+    def _run_insert_zmq_task_to_scheduler(self):
+        try:
+            asyncio.run(self._insert_zmq_task_to_scheduler())
+        except Exception as e:
+            self.llm_logger.error(f"Async loop crashed: {e}")
+
+    async def _insert_zmq_task_to_scheduler(self):
         tracing.trace_set_thread_info("Insert Task to Scheduler")
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
@@ -1071,10 +1081,22 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
-                    err, data = self.recv_request_server.receive_json_once(block)
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    if not self.cfg.model_config.enable_mm:
+                        err, data = self.recv_request_server.receive_json_once(block)
+                    else:
+                        err, data = self.recv_request_server.receive_pyobj_once(block)
                 else:
-                    err, data = self.recv_request_server.receive_pyobj_once(block)
+                    err = None
+                    if self.fmq_a2e_consumer is None:
+                        self.fmq_a2e_consumer = FMQFactory.q_a2e_consumer()
+                    try:
+                        msg = await self.fmq_a2e_consumer.get()
+                        if msg is None:
+                            continue
+                        data = msg.payload
+                    except Exception as e:
+                        err = e
                 if err is not None:
                     # The message "Context was terminated" is normal when closing a ZMQ context
                     if "Context was terminated" in str(err):
@@ -1516,6 +1538,15 @@ class EngineService:
             self.recv_request_server.close()
         if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
             self.recv_control_cmd_server.close()
+        if hasattr(self, "fmq_a2e_consumer") and self.fmq_a2e_consumer is not None:
+            try:
+                if hasattr(self.fmq_a2e_consumer, "socket") and self.fmq_consumer.socket is not None:
+                    self.fmq_a2e_consumer.socket.close()
+                    llm_logger.info("FMQ consumer socket closed successfully.")
+            except Exception as e:
+                llm_logger.error(f"Error closing fmq_consumer: {e}")
+            finally:
+                self.fmq_a2e_consumer = None
 
     # 从 async_llm 移到 common_engine
     def _worker_processes_ready(self):
