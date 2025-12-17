@@ -43,9 +43,7 @@ class DeepSeekReasoningParser(ReasoningParser):
         self.think_end_token_id = self.vocab.get(self.think_end_token)
 
         if self.think_end_token_id is None:
-            raise RuntimeError(
-                "DeepSeek reasoning parser could not locate think end " "tokens in the tokenizer!"
-            )
+            raise RuntimeError("DeepSeek reasoning parser could not locate think end " "tokens in the tokenizer!")
 
         # Detect model version to determine if reasoning toggle is supported
         self.model_name = model_name or ""
@@ -189,4 +187,3 @@ class DeepSeekReasoningParser(ReasoningParser):
             # In thinking stage or unknown, return delta as reasoning_content
             # Will be handled correctly if </think> appears later
             return DeltaMessage(reasoning_content=delta_text)
-

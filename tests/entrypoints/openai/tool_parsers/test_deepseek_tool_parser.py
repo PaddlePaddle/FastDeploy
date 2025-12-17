@@ -17,8 +17,10 @@
 import json
 import unittest
 
-from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
-from fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser import DeepSeekToolParser
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
+from fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser import (
+    DeepSeekToolParser,
+)
 
 
 class DummyTokenizer:
@@ -81,11 +83,11 @@ class TestDeepSeekToolParserV31(unittest.TestCase):
     def test_batch_parallel_tool_calls(self):
         """Test parallel tool calls (V3.1 format)."""
         text = (
-            '<think>需要查询多个信息</think>\n\n'
-            '<｜tool▁calls▁begin｜>'
+            "<think>需要查询多个信息</think>\n\n"
+            "<｜tool▁calls▁begin｜>"
             '<｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京", "unit": "c"}<｜tool▁call▁end｜>'
             '<｜tool▁call▁begin｜>get_time<｜tool▁sep｜>{"timezone": "Asia/Shanghai"}<｜tool▁call▁end｜>'
-            '<｜tool▁calls▁end｜>'
+            "<｜tool▁calls▁end｜>"
         )
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
@@ -291,14 +293,14 @@ class TestDeepSeekToolParserV30324(unittest.TestCase):
     def test_batch_single_tool_call(self):
         """Test single tool call (V3-0324/R1 format)."""
         text = (
-            '<think>需要查询天气</think>\n\n'
-            '<｜tool▁calls▁begin｜>'
-            '<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n'
-            '```json\n'
+            "<think>需要查询天气</think>\n\n"
+            "<｜tool▁calls▁begin｜>"
+            "<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n"
+            "```json\n"
             '{"location": "北京", "unit": "c"}\n'
-            '```\n'
-            '<｜tool▁call▁end｜>'
-            '<｜tool▁calls▁end｜>'
+            "```\n"
+            "<｜tool▁call▁end｜>"
+            "<｜tool▁calls▁end｜>"
         )
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
@@ -310,19 +312,19 @@ class TestDeepSeekToolParserV30324(unittest.TestCase):
     def test_batch_parallel_tool_calls(self):
         """Test parallel tool calls (V3-0324/R1 format)."""
         text = (
-            '<think>需要查询多个信息</think>\n\n'
-            '<｜tool▁calls▁begin｜>'
-            '<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n'
-            '```json\n'
+            "<think>需要查询多个信息</think>\n\n"
+            "<｜tool▁calls▁begin｜>"
+            "<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n"
+            "```json\n"
             '{"location": "北京", "unit": "c"}\n'
-            '```\n'
-            '<｜tool▁call▁end｜>'
-            '<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_time\n'
-            '```json\n'
+            "```\n"
+            "<｜tool▁call▁end｜>"
+            "<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_time\n"
+            "```json\n"
             '{"timezone": "Asia/Shanghai"}\n'
-            '```\n'
-            '<｜tool▁call▁end｜>'
-            '<｜tool▁calls▁end｜>'
+            "```\n"
+            "<｜tool▁call▁end｜>"
+            "<｜tool▁calls▁end｜>"
         )
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
@@ -342,14 +344,14 @@ class TestDeepSeekToolParserV30324(unittest.TestCase):
     def test_batch_invalid_format_with_content_before_tool(self):
         """Test invalid format: non-whitespace content between reasoning end and tool calls."""
         text = (
-            '<think>思考内容</think>\n\nABC\n'
-            '<｜tool▁calls▁begin｜>'
-            '<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n'
-            '```json\n'
+            "<think>思考内容</think>\n\nABC\n"
+            "<｜tool▁calls▁begin｜>"
+            "<｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n"
+            "```json\n"
             '{"location": "北京"}\n'
-            '```\n'
-            '<｜tool▁call▁end｜>'
-            '<｜tool▁calls▁end｜>'
+            "```\n"
+            "<｜tool▁call▁end｜>"
+            "<｜tool▁calls▁end｜>"
         )
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertFalse(result.tools_called)
@@ -520,7 +522,26 @@ class TestDeepSeekToolParserV30324(unittest.TestCase):
             current_text=current_text,
             delta_text=delta_text,
             previous_token_ids=[128806, 128808, 300, 128814, 200, 201, 202, 10, 400, 401, 500, 501, 502, 503, 10],
-            current_token_ids=[128806, 128808, 300, 128814, 200, 201, 202, 10, 400, 401, 500, 501, 502, 503, 10, 402, 10, 128809],
+            current_token_ids=[
+                128806,
+                128808,
+                300,
+                128814,
+                200,
+                201,
+                202,
+                10,
+                400,
+                401,
+                500,
+                501,
+                502,
+                503,
+                10,
+                402,
+                10,
+                128809,
+            ],
             delta_token_ids=[402, 10, 128809],
             request=self.request,
         )
@@ -580,7 +601,7 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
 
     def test_empty_arguments(self):
         """Tool call with empty arguments should return empty dict."""
-        text = '<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜><｜tool▁call▁end｜><｜tool▁calls▁end｜>'
+        text = "<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜><｜tool▁call▁end｜><｜tool▁calls▁end｜>"
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
         args = json.loads(result.tool_calls[0].function.arguments)
@@ -599,6 +620,13 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
 
+    def test_reasoning_end_immediately_followed_by_tool_calls(self):
+        """覆盖 tool_calls_begin 紧随 </think>（tool_calls_begin_pos 为 0）的分支。"""
+        text = '<think>思考内容</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>'
+        result = self.parser.extract_tool_calls(text, self.request)
+        self.assertTrue(result.tools_called)
+        self.assertEqual(result.content, "")
+
     def test_detect_model_version_default(self):
         """Unknown model name defaults to V3.1."""
         parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-unknown")
@@ -611,6 +639,7 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
 
     def test_init_missing_tokenizer(self):
         """Missing required tokens should raise RuntimeError."""
+
         class MissingTokenizer:
             def get_vocab(self):
                 return {}
@@ -627,7 +656,7 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
             "fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser.re.finditer",
             side_effect=Exception("boom"),
         ):
-            text = '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>test<｜tool▁sep｜>{}<｜tool▁call▁end｜><｜tool▁calls▁end｜>'
+            text = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>test<｜tool▁sep｜>{}<｜tool▁call▁end｜><｜tool▁calls▁end｜>"
             result = parser.extract_tool_calls(text, self.request)
             self.assertFalse(result.tools_called)
             self.assertEqual(result.content, text)
@@ -641,14 +670,14 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
 
     def test_extract_tool_calls_both_json_parsers_fail(self):
         """Both json and partial parser fail should still keep function name."""
-        text = '<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>invalid json{<｜tool▁call▁end｜><｜tool▁calls▁end｜>'
+        text = "<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>invalid json{<｜tool▁call▁end｜><｜tool▁calls▁end｜>"
         result = self.parser.extract_tool_calls(text, self.request)
         if result.tools_called:
             self.assertEqual(result.tool_calls[0].function.name, "get_weather")
 
     def test_extract_tool_calls_with_empty_function_arguments(self):
         """Empty function arguments string should return empty dict."""
-        text = '<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>   <｜tool▁call▁end｜><｜tool▁calls▁end｜>'
+        text = "<think>需要查询天气</think>\n\n<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>   <｜tool▁call▁end｜><｜tool▁calls▁end｜>"
         result = self.parser.extract_tool_calls(text, self.request)
         self.assertTrue(result.tools_called)
         args = json.loads(result.tool_calls[0].function.arguments)
@@ -676,6 +705,56 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
             request=self.request,
         )
         self.assertIsNone(msg)
+
+    def test_streaming_existing_args_list_not_appended(self):
+        """覆盖 len(streamed_args_for_tool) > current_tool_id 分支，不追加空字符串。"""
+        parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3.1")
+        parser.buffer = ""
+        parser.current_tool_name_sent = False
+        parser.streamed_args_for_tool = ["existing"]
+        parser.current_tool_id = -1
+
+        current_text = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>"
+        msg = parser.extract_tool_calls_streaming(
+            previous_text="",
+            current_text=current_text,
+            delta_text=current_text,
+            previous_token_ids=[],
+            current_token_ids=[parser.tool_calls_begin_token_id, parser.tool_call_begin_token_id],
+            delta_token_ids=[parser.tool_calls_begin_token_id, parser.tool_call_begin_token_id],
+            request=self.request,
+        )
+        self.assertIsNone(msg)
+        self.assertEqual(len(parser.streamed_args_for_tool), 1)
+
+    def test_streaming_empty_function_name_returns_none(self):
+        """工具名为空时应返回 None，覆盖 function_name 为空的分支。"""
+        parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3.1")
+        parser.buffer = ""
+        parser.current_tool_name_sent = False
+        parser.streamed_args_for_tool = []
+        parser.current_tool_id = -1
+
+        delta = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜><｜tool▁sep｜>"
+        msg = parser.extract_tool_calls_streaming(
+            previous_text="",
+            current_text=delta,
+            delta_text=delta,
+            previous_token_ids=[],
+            current_token_ids=[
+                parser.tool_calls_begin_token_id,
+                parser.tool_call_begin_token_id,
+                parser.tool_sep_token_id,
+            ],
+            delta_token_ids=[
+                parser.tool_calls_begin_token_id,
+                parser.tool_call_begin_token_id,
+                parser.tool_sep_token_id,
+            ],
+            request=self.request,
+        )
+        self.assertIsNone(msg)
+        self.assertFalse(parser.current_tool_name_sent)
 
     def test_streaming_v30324_no_newline_yet(self):
         """V3-0324 streaming: separator received but no newline yet."""
@@ -817,14 +896,14 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
     def test_streaming_v30324_code_block_removal(self):
         """V3-0324 code block should be stripped before parsing."""
         parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3-0324")
-        parser.buffer = "```json\n{\"test\": \"value\"}\n```"
+        parser.buffer = '```json\n{"test": "value"}\n```'
         parser.current_tool_name_sent = True
         parser.streamed_args_for_tool = [""]
         parser.current_tool_id = 0
 
         previous_text = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>test\n"
-        current_text = previous_text + "```json\n{\"test\": \"value\"}\n```<｜tool▁call▁end｜>"
-        delta_text = "```json\n{\"test\": \"value\"}\n```<｜tool▁call▁end｜>"
+        current_text = previous_text + '```json\n{"test": "value"}\n```<｜tool▁call▁end｜>'
+        delta_text = '```json\n{"test": "value"}\n```<｜tool▁call▁end｜>'
         msg = parser.extract_tool_calls_streaming(
             previous_text=previous_text,
             current_text=current_text,
@@ -841,14 +920,14 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
     def test_streaming_v30324_partial_code_block(self):
         """V3-0324 partial code block should not crash."""
         parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3-0324")
-        parser.buffer = "```json\n{\"test\": \""
+        parser.buffer = '```json\n{"test": "'
         parser.current_tool_name_sent = True
         parser.streamed_args_for_tool = [""]
         parser.current_tool_id = 0
 
         previous_text = "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>test\n"
-        current_text = previous_text + "```json\n{\"test\": \""
-        delta_text = "```json\n{\"test\": \""
+        current_text = previous_text + '```json\n{"test": "'
+        delta_text = '```json\n{"test": "'
         msg = parser.extract_tool_calls_streaming(
             previous_text=previous_text,
             current_text=current_text,
@@ -881,7 +960,7 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
             delta_token_ids=[400, 401, 128809],
             request=self.request,
         )
-        # Should not raise; msg may be None or contain empty args
+        self.assertIsNone(msg)
 
     def test_streaming_empty_args_text_at_end(self):
         """End token with empty args should not error."""
@@ -903,12 +982,32 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
             delta_token_ids=[128809],
             request=self.request,
         )
-        # Should not raise; msg may be None or contain empty args
+        self.assertIsNone(msg)
+
+    def test_streaming_end_token_id_without_marker(self):
+        """delta 中仅包含结束 token id 但 buffer 不含结束标记时应返回 None。"""
+        parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3.1")
+        parser.buffer = '{"foo": 1}'
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = [""]
+        parser.current_tool_id = 0
+
+        msg = parser.extract_tool_calls_streaming(
+            previous_text="",
+            current_text=parser.buffer,
+            delta_text="",
+            previous_token_ids=[],
+            current_token_ids=[parser.tool_calls_begin_token_id, parser.tool_call_end_token_id],
+            delta_token_ids=[parser.tool_call_end_token_id],
+            request=self.request,
+        )
+        self.assertIsNone(msg)
 
     def test_init_model_tokenizer_none_raises(self):
         """__init__ should raise ValueError when model_tokenizer is missing."""
+        from unittest.mock import PropertyMock, patch
+
         from fastdeploy.entrypoints.openai.tool_parsers import abstract_tool_parser
-        from unittest.mock import patch, PropertyMock
 
         fake_vocab = {
             "<｜tool▁calls▁begin｜>": 1,
@@ -917,9 +1016,14 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
             "<｜tool▁call▁end｜>": 4,
         }
 
-        with patch.object(
-            abstract_tool_parser.ToolParser, "__init__", lambda self, tokenizer: setattr(self, "model_tokenizer", tokenizer)
-        ), patch.object(DeepSeekToolParser, "vocab", new_callable=PropertyMock, return_value=fake_vocab):
+        with (
+            patch.object(
+                abstract_tool_parser.ToolParser,
+                "__init__",
+                lambda self, tokenizer: setattr(self, "model_tokenizer", tokenizer),
+            ),
+            patch.object(DeepSeekToolParser, "vocab", new_callable=PropertyMock, return_value=fake_vocab),
+        ):
             with self.assertRaises(ValueError):
                 DeepSeekToolParser(tokenizer=None, model_name="deepseek-v3.1")
 
@@ -964,7 +1068,10 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
         parser.streamed_args_for_tool = [""]
         parser.current_tool_id = 0
 
-        with unittest.mock.patch("fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser.partial_json_parser.loads", side_effect=Exception("boom")):
+        with unittest.mock.patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser.partial_json_parser.loads",
+            side_effect=Exception("boom"),
+        ):
             msg = parser.extract_tool_calls_streaming(
                 previous_text="",
                 current_text=parser.buffer,
@@ -1047,9 +1154,12 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
         parser.streamed_args_for_tool = [""]
         parser.current_tool_id = 0
 
-        with unittest.mock.patch("json.loads", side_effect=json.JSONDecodeError("err", "doc", 0)), unittest.mock.patch(
-            "fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser.partial_json_parser.loads",
-            return_value={"foo": 1},
+        with (
+            unittest.mock.patch("json.loads", side_effect=json.JSONDecodeError("err", "doc", 0)),
+            unittest.mock.patch(
+                "fastdeploy.entrypoints.openai.tool_parsers.deepseek_tool_parser.partial_json_parser.loads",
+                return_value={"foo": 1},
+            ),
         ):
             msg = parser.extract_tool_calls_streaming(
                 previous_text="",
@@ -1086,7 +1196,7 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
         """Cover streaming branch where partial_json_parser succeeds and returns new args (line ~326)."""
         parser = DeepSeekToolParser(tokenizer=self.tokenizer, model_name="deepseek-v3.1")
         parser.current_tool_name_sent = True
-        parser.streamed_args_for_tool = ['{']
+        parser.streamed_args_for_tool = ["{"]
         parser.current_tool_id = 0
         parser.buffer = '{"a":1'
 
@@ -1152,4 +1262,3 @@ class TestDeepSeekToolParserEdgeCases(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

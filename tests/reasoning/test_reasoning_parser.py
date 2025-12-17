@@ -33,7 +33,6 @@ class DummyTokenizer:
         self.vocab = {
             "<think>": 99,
             "</think>": 100,
-            "<think>": 101,
             "<tool_call>": 102,
             "</tool_call>": 103,
             "<response>": 104,
@@ -722,6 +721,18 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
         self.assertEqual(reasoning, "abc")
         self.assertEqual(content, "xyz")
 
+    def test_batch_end_tag_split_not_return_two_parts(self):
+        """覆盖 len(parts) != 2 的分支（异常 split 结果）。"""
+
+        class WeirdStr(str):
+            def split(self, sep=None, maxsplit=-1):
+                return ["only_one_part"]
+
+        text = WeirdStr("abc</think>xyz")
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertIsNone(reasoning)
+        self.assertEqual(content, text)
+
     def test_batch_no_reasoning_tags(self):
         """测试无思考标签格式（思考开关关闭时）"""
         text = "direct response"
@@ -933,6 +944,7 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
 
     def test_init_without_end_token_raises(self):
         """测试 tokenizer 中没有结束 token 时抛出 RuntimeError"""
+
         class TokenizerWithoutEndToken:
             def get_vocab(self):
                 # 只有开始 token，没有结束 token
@@ -947,9 +959,7 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
     def test_batch_reasoning_stage_no_end_token(self):
         """测试在 REASONING_STAGE 但没有结束标签的情况"""
         text = "some reasoning content without end tag"
-        reasoning, content = self.parser.extract_reasoning_content(
-            text, self.request, output_stage="REASONING_STAGE"
-        )
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request, output_stage="REASONING_STAGE")
         # 应该将整个输出作为 reasoning_content
         self.assertEqual(reasoning, text)
         self.assertIsNone(content)
@@ -957,6 +967,7 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
     # ---- extract_reasoning_content_streaming edge cases ----
     def test_streaming_delta_with_start_and_end_but_find_fails(self):
         """测试 delta 中包含开始和结束 token，但 find 返回 -1 的情况"""
+
         # 创建一个没有 think_start_token_id 的 parser（模拟 None 情况）
         class TokenizerWithoutStartToken:
             def get_vocab(self):
@@ -1114,7 +1125,7 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
         parser.model_tokenizer = None
         parser.think_start_token = "<think>"
         parser.think_end_token = "</think>"
-        
+
         # 测试检查逻辑
         with self.assertRaises(ValueError) as context:
             if not parser.model_tokenizer:
@@ -1123,9 +1134,9 @@ class TestDeepSeekReasoningParser(unittest.TestCase):
                 )
         self.assertIn("model tokenizer must be passed", str(context.exception))
 
-
     def test_streaming_with_think_start_token_id_none(self):
         """测试 think_start_token_id 为 None 时的流式处理"""
+
         # 创建一个没有开始 token 的 tokenizer
         class TokenizerWithoutStartToken:
             def get_vocab(self):
