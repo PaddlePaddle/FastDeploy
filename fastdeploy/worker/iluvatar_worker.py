@@ -130,7 +130,7 @@ class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
 
             if envs.FD_MAX_KVCACHE_BLOCKS > 0 and num_blocks_local > envs.FD_MAX_KVCACHE_BLOCKS:
                 logger.info(f"------- Reset num_blocks_local {num_blocks_local} to {envs.FD_MAX_KVCACHE_BLOCKS}")
-                num_blocks_local = min(envs.FD_MAX_KVCACHE_BLOCKS, num_blocks_local)
+                num_blocks_local = envs.FD_MAX_KVCACHE_BLOCKS
             logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
