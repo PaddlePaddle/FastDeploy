@@ -21,6 +21,7 @@ import paddle
 paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
 import deep_gemm
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
@@ -30,7 +31,6 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     quant_weight_ue8m0,
-    requant_weight_ue8m0,
     transform_scale_ue8m0,
 )
 from fastdeploy.model_executor.utils import (
@@ -39,7 +39,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 
-from ..utils import get_tensor, per_block_cast_to_fp8
+from ..utils import get_sm_version, get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -58,6 +58,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.quant_round_type = 1
         self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
         self.is_checkpoint_bf16 = is_checkpoint_bf16
+        self.deepgemm_scale_ue8m0 = True if get_sm_version() == 100 else False
 
     def name(self) -> str:
         return "block_wise_fp8"
@@ -86,9 +87,6 @@ class BlockWiseFP8Config(QuantConfigBase):
             return BlockWiseFP8MoEMethod(self)
         else:
             return BlockWiseFP8LinearMethod(self)
-            from fastdeploy.model_executor.layers.linear import UnquantizedLinearMethod
-
-            return UnquantizedLinearMethod()
 
 
 class BlockWiseFP8LinearMethod(QuantMethodBase):
@@ -180,12 +178,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
     def process_weights_after_loading(self, layer) -> None:
         def _process_quantize():
             weight_tensor = layer.weight.transpose([1, 0])
-            quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
-            requant = False
-            if requant:
-                quanted_weight_tensor, weight_block_scale_tensor = requant_weight_ue8m0(
-                    quanted_weight_tensor.to(weight_block_scale_tensor.place), weight_block_scale_tensor, [128, 128]
-                )
+
+            if not self.quant_config.deepgemm_scale_ue8m0:
+                quanted_weight_tensor, weight_block_scale_tensor = per_block_cast_to_fp8(weight_tensor)
             else:
                 quanted_weight_tensor, weight_block_scale_tensor = quant_weight_ue8m0(weight_tensor, [128, 128])
                 weight_block_scale_tensor = transform_scale_ue8m0(
@@ -244,26 +239,21 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
+        if not self.quant_config.deepgemm_scale_ue8m0:
+            x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
+                x, self.quant_config.weight_block_size[0]
+            )
+        else:
+            x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
+            x_scale_tensor = transform_scale_ue8m0(x_scale_tensor, mn=x.shape[-2])
 
-        x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
-        x_scale_tensor = transform_scale_ue8m0(x_scale_tensor, mn=x.shape[-2])
-
-        linear_out: paddle.Tensor = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
-        # print(f"[FP8Linear] x_quantized: {x}", x.stride())
-        # print(f"[FP8Linear] x_scale_tensor: {x_scale_tensor}", x_scale_tensor.stride())
-        # print(f"[FP8Linear] layer.weight: {layer.weight}", layer.weight.stride())
-        # print(f"[FP8Linear] layer.weight_scale_inv: {layer.weight_scale_inv}", layer.weight_scale_inv.stride())
-
+        linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         deep_gemm.fp8_gemm_nt(
             (x, x_scale_tensor),
             (layer.weight, layer.weight_scale_inv),
             linear_out,
-            # disable_ue8m0_cast=True,
+            disable_ue8m0_cast=(not self.quant_config.deepgemm_scale_ue8m0),
         )
-        # print(f"[FP8Linear] block_tables 3: {block_tables}")
-        # print(f"[FP8Linear] linear_out: {linear_out}")
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
-        # print(f"[FP8Linear] linear_out after bias: {linear_out}")
-        # raise ValueError('xxxxxx')
         return linear_out

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import paddle
 from paddle.utils.cpp_extension import CppExtension, CUDAExtension, setup
-from setuptools import find_namespace_packages, find_packages
+from setuptools import find_namespace_packages
 
 
 def load_module_from_path(module_name, path):
@@ -40,7 +40,6 @@ def load_module_from_path(module_name, path):
 def update_git_repo():
     try:
         print("update third party repo...", flush=True)
-        original_dir = os.getcwd()
         submodule_dir = os.path.dirname(os.path.abspath(__file__))
         third_party_path = os.path.join(submodule_dir, "third_party")
         root_path = Path(third_party_path)
@@ -66,24 +65,6 @@ def update_git_repo():
                 "\033[33m[===WARNING===]third_party directory already exists, skip clone and update.\033[0m",
                 flush=True,
             )
-
-        # # apply deep gemm patch
-        # deep_gemm_dir = "third_party/DeepGEMM"
-        # dst_path = os.path.join(submodule_dir, deep_gemm_dir)
-        # # patch = "0001-DeepGEMM-95e81b3.patch"
-        # # patch = "0002-DeepGEMM-c9f8b34.patch"
-        # patch = "0003-DeepGEMM-c9f8b34.patch"
-        # patch_source = os.path.join(submodule_dir, patch)
-        # patch_destination = os.path.join(dst_path, patch)
-        # if not os.path.exists(patch_destination):
-        #     shutil.copy(patch_source, patch_destination)
-        #     apply_cmd = ["git", "apply", patch]
-        #     os.chdir(dst_path)
-        #     subprocess.run(apply_cmd, check=True)
-        # os.chdir(dst_path)
-        # deep_gemm_install_cmd = ["bash", "install.sh"]
-        # subprocess.run(deep_gemm_install_cmd, check=True)
-        # os.chdir(original_dir)
     except subprocess.CalledProcessError:
         raise Exception("Git submodule update and apply patch failed. Maybe network connection is poor.")
 
@@ -325,33 +306,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
     ]
 
-    # dg_third_party_include_dirs = (
-    #     "third_party/cutlass/include/cute",
-    #     "third_party/cutlass/include/cutlass",
-    # )
-
-    # dg_include_dir = "third_party/DeepGEMM/deep_gemm/include"
-    # os.makedirs(dg_include_dir, exist_ok=True)
-
-    # for d in dg_third_party_include_dirs:
-    #     dirname = d.split("/")[-1]
-    #     src_dir = d
-    #     dst_dir = os.path.join(dg_include_dir, dirname)
-
-    #     # Remove existing directory if it exists
-    #     if os.path.exists(dst_dir):
-    #         if os.path.islink(dst_dir):
-    #             os.unlink(dst_dir)
-    #         else:
-    #             shutil.rmtree(dst_dir)
-    #     print(f"Copying {src_dir} to {dst_dir}")
-
-    #     # Copy the directory
-    #     try:
-    #         shutil.copytree(src_dir, dst_dir)
-    #     except Exception as e:
-    #         raise RuntimeError(f"Failed to copy from {src_dir} to {dst_dir}: {e}")
-
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
     nvcc_compile_args += ["-DPADDLE_DEV"]
@@ -456,8 +410,6 @@ elif paddle.is_compiled_with_cuda():
                     "-O3",  # Common optimization flag
                     "-DNDEBUG",  # Common debug flag
                     # Potentially add -DENABLE_SM100_FEATURES if specific macros are identified
-                    # "-DCUTLASS_ARCH_MMA_SM100A_ENABLED",
-                    # "-DCUTE_ARCH_TMA_SM100_ENABLED",
                 ]
                 # Placeholder for SM100-specific kernel auto-generation scripts
                 # These might be needed if Blackwell has new FP8 hardware features
@@ -519,15 +471,6 @@ elif paddle.is_compiled_with_cuda():
             libraries=["cublasLt"],
             extra_link_args=["-lcuda", "-lnvidia-ml"],
         ),
-        # packages=find_packages(where="third_party/DeepGEMM"),
-        # package_dir={"": "third_party/DeepGEMM"},
-        # package_data={
-        #     "deep_gemm": [
-        #         "include/deep_gemm/**/*",
-        #         "include/cute/**/*",
-        #         "include/cutlass/**/*",
-        #     ]
-        # },
         include_package_data=True,
     )
 elif paddle.is_compiled_with_xpu():

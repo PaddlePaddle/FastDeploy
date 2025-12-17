@@ -21,7 +21,7 @@ FD_CPU_USE_BF16=${3:-"false"}
 # FD_BUILDING_ARCS: Specify target CUDA architectures for custom ops, e.g., "[80, 90, 100]".
 # For SM90 (Hopper), use 90. For SM100 (Blackwell), use 100.
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
-FD_BUILDING_ARCS=${4:-"[100]"}
+FD_BUILDING_ARCS=${4:-""}
 # FD_USE_PRECOMPILED: Specify whether to use precompiled custom ops.
 # 0 = build ops from source (default)
 # 1 = use precompiled ops
@@ -252,7 +252,7 @@ function extract_ops_from_precompiled_wheel() {
 
   echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
   mkdir -p "$DST_DIR"
-  # cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
+
   # Check for modern Python packaging approach (fastdeploy_ops directory)
   # If exists, copy the entire directory; otherwise, fall back to legacy method (individual files)
   if [ -d "$SRC_DIR/fastdeploy_ops" ]; then
