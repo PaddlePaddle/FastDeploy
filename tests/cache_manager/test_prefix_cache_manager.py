@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 import threading
 import types
@@ -23,8 +22,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
