@@ -62,7 +62,7 @@ def parse_args():
     parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel, i.e. tp_size, tp_num")
-    parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
+    parser.add_argument("--ipc_suffix", type=str, default=None, help="ipc suffix")
     parser.add_argument(
         "--protocol",
         type=str,
@@ -945,7 +945,7 @@ def main():
         name="cache_ready_signal",
         array=cache_ready_signal_data,
         dtype=np.int32,
-        suffix=args.engine_pid,
+        suffix=args.ipc_suffix,
         create=False,
     )
     cache_ready_signal.value[rank] = 1

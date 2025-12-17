@@ -208,8 +208,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
-        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
 
         # Rollout routing replay config
         self.routing_replay_manager = None
@@ -1610,7 +1610,7 @@ class GPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -1692,6 +1692,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
+        logger.info("kv cache is initialized!")
 
     def _initialize_attn_backend(self) -> None:
         """
