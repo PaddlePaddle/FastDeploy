@@ -279,6 +279,7 @@ class PrefixCacheManager:
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
                 + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
             )

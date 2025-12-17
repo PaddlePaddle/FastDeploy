@@ -245,7 +245,7 @@ class ModelConfig:
         """
         check if the model architecture disable for mm prefill
         """
-        return self._architecture in ["Ernie5ForCausalLM"]
+        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
@@ -1355,9 +1355,11 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
-            assert (
-                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+            assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+                f"prefill_kvcache_block_num: {self.prefill_kvcache_block_num} should be larger "
+                f"than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+                "the max_model_len or increase num_gpu_blocks_override"
+            )
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1378,9 +1380,11 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
-        assert (
-            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+        assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+            f"current device block num: {self.prefill_kvcache_block_num} "
+            f"should be larger than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+            "the max_model_len or replace the machine with larger GPU cards"
+        )
 
     def print(self):
         """
@@ -1494,14 +1498,17 @@ class RoutingReplayConfig:
     """Configuration for Routing Replay used in RL training"""
 
     def __init__(self, args) -> None:
+
         self.enable_routing_replay: bool = False
+
+        # Routing store type: local/rdma
         self.routing_store_type: str = "local"
 
         # Local routing store
         self.local_store_dir: str = "./routing_replay_output"
 
         # RDMA routing store
-        # TODO: Add RDMA routing store configuration attributes here when the feature is implemented.
+        self.rdma_store_server: str = ""
 
         if args is not None:
             for key, value in args.items():
@@ -1694,7 +1701,9 @@ class FDConfig:
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
-
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): R3 support prefix caching
+            self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
@@ -1730,6 +1739,8 @@ class FDConfig:
                         f"set to max_num_batched_tokens."
                     )
                     self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+            # TODO: mm encoder_cache close for now
+            self.cache_config.max_encoder_cache = 0
         else:
             self.cache_config.max_encoder_cache = 0
 
@@ -1741,7 +1752,7 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
