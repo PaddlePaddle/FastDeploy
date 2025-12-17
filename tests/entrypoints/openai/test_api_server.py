@@ -75,17 +75,28 @@ def _build_args(**overrides):
 def _reload_api_server(args):
     """Import/reload api_server with patched parse_args/model loader/template.
 
-    We also patch environment_variables so FD_API_KEY lookup never depends on
-    the real environment (which can be different between local and CI).
+    We also patch envs/environment_variables so FD_API_KEY/trace flags lookup
+    never depends on the real environment (which can differ between local/CI).
     """
-    # Mock environment_variables.get("FD_API_KEY") to return a function that returns []
+    # Build a fake envs module that provides the attributes trace_util expects.
     mock_env_vars = MagicMock()
     mock_env_vars.get.return_value = lambda: []  # Returns empty list, not None
+
+    fake_envs_mod = types.ModuleType("fastdeploy.envs")
+    fake_envs_mod.TRACES_ENABLE = "false"
+    fake_envs_mod.FD_SERVICE_NAME = ""
+    fake_envs_mod.FD_HOST_NAME = ""
+    fake_envs_mod.TRACES_EXPORTER = "console"
+    fake_envs_mod.EXPORTER_OTLP_ENDPOINT = ""
+    fake_envs_mod.EXPORTER_OTLP_HEADERS = ""
+    fake_envs_mod.environment_variables = mock_env_vars
+
     with (
         patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
         patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
         patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
-        patch("fastdeploy.envs.environment_variables", mock_env_vars),
+        patch.dict("sys.modules", {"fastdeploy.envs": fake_envs_mod}),
+        patch("fastdeploy.envs", fake_envs_mod),
     ):
         from fastdeploy.entrypoints.openai import api_server as api_server_mod
 
@@ -245,19 +256,6 @@ def test_load_data_service_branches():
         assert api_server.load_data_service() is expert  # success branch 131-142
         # Subsequent call returns cached engine (line ~131)
         assert api_server.load_data_service() is expert
-
-
-@pytest.mark.asyncio
-async def test_lifespan_context_initializes_and_closes():
-    # Disabled in local environment to avoid dependency on full FastDeploy setup.
-    pass
-
-
-@pytest.mark.asyncio
-async def test_lifespan_tokenizer_and_served_model_name_branches():
-    """Cover branches where tokenizer and served_model_name are pre-set."""
-    # Disabled in local environment to avoid dependency on full FastDeploy setup.
-    pass
 
 
 @pytest.mark.asyncio
@@ -508,11 +506,6 @@ def test_launchers_and_controller_paths():
         api_server.launch_controller_server()  # lines 687-692
 
 
-def test_controller_routes_and_models_listing():
-    # Disabled in local environment to avoid dependency on full FastDeploy setup.
-    pass
-
-
 def test_worker_monitor_and_main_paths():
     args = _build_args()
     api_server = _reload_api_server(args)
@@ -545,11 +538,6 @@ def test_worker_monitor_and_main_paths():
 
 @pytest.mark.asyncio
 async def test_lifespan_covers_setup_and_cleanup_paths():
-    # Disabled in local environment to avoid dependency on full FastDeploy setup.
-    pass
-
-
-def test_health_unhealthy_and_routes_listing():
     args = _build_args()
     with _patch_common_imports(args):
         api_server = _reload_api_server(args)
