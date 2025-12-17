@@ -15,6 +15,7 @@
 """
 
 import threading
+import paddle
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -45,31 +46,28 @@ def is_last_thread():
 
     return thread_name == "thread1"
 
+
+
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
-    real_bs = forward_meta.seq_lens_this_time.shape[0]
 
     res = [forward_meta] * split_num
 
-    if real_bs < split_num or forward_meta.ids_remove_padding.shape[0] == 0:
-        return res
+    total_token_num = forward_meta.ids_remove_padding.shape[0]
 
-    mc_bs = (real_bs + split_num - 1) // split_num
+    # assert total_token_num >= split_num
+
+    if total_token_num < split_num:
+        return res
+    
+    print("total_token_num", total_token_num)
+    chunk_token_num = (total_token_num + split_num - 1) // split_num
 
     for i in range(0, split_num):
-        start_bs = i * mc_bs
+        start_token_id = i * chunk_token_num
 
-        end_bs = start_bs + mc_bs
-        end_bs = min(end_bs, real_bs)
-
-        if start_bs >= end_bs:
-            continue
-
-        start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
-        end_token_id = forward_meta.cu_seqlens_q[end_bs].item()
-
-        if start_token_id >= end_token_id:
-            continue
+        end_token_id = start_token_id + chunk_token_num
+        end_token_id = min(total_token_num, end_token_id)
 
         res[i] = ForwardMeta(
             ids_remove_padding=None,
@@ -77,6 +75,11 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             attn_backend=forward_meta.attn_backend,
             caches=forward_meta.caches,
         )
+        
+        # 我们需要处理的这一段token位于[start_bs, end_bs)里面！
+        start_bs = forward_meta.batch_id_per_token[start_token_id]
+        end_bs = forward_meta.batch_id_per_token[end_token_id-1]
+        end_bs += 1
 
         if len(forward_meta.rotary_embs.shape) == 6:
             max_bs = forward_meta.rotary_embs.shape[0]
@@ -88,24 +91,41 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
         res[i].ids_remove_padding = forward_meta.ids_remove_padding[start_token_id:end_token_id]
         res[i].batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
 
-        res[i].seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs]
-        res[i].seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs]
-        res[i].seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs]
+        # 下面这三个要好好弄，小心出错！
+        # 我需要记录下  start_bs 他被上一个chunk 瓜分了多少了！
+        start_bs_s_token_by_left_chunk = start_token_id - forward_meta.cu_seqlens_q[start_bs].item()
+        end_bs_s_token_by_right_chunk = forward_meta.cu_seqlens_q[end_bs].item() - end_token_id
+
+
+        res[i].seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs] + 0
+        res[i].seq_lens_this_time[0] -= start_bs_s_token_by_left_chunk
+        res[i].seq_lens_this_time[-1] -= end_bs_s_token_by_right_chunk
+        
+        res[i].seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
+        if res[i].seq_lens_encoder[0].item() > 0:
+            res[i].seq_lens_encoder[0] -= start_bs_s_token_by_left_chunk
+        if res[i].seq_lens_encoder[-1].item() > 0:
+            res[i].seq_lens_encoder[-1] -= end_bs_s_token_by_right_chunk
+        
+
+        res[i].seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
+        res[i].seq_lens_decoder[0] += start_bs_s_token_by_left_chunk
 
         res[i].block_tables = forward_meta.block_tables[start_bs:end_bs]
 
-        res[i].cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs : end_bs + 1] - start_token_id
-        res[i].cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs : end_bs + 1] - start_token_id
+        cu_seqlens_q = [0] + paddle.cumsum(res[i].seq_lens_this_time).numpy().tolist()
+        res[i].cu_seqlens_q = paddle.to_tensor(cu_seqlens_q).cast("int32")
+        res[i].cu_seqlens_k = res[i].cu_seqlens_q
 
         for key in GLOBAL_ATTN_BUFFERS[i]:
             setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i][key])
 
         if forward_meta.attn_mask_offsets is not None:
             mask_num = forward_meta.attn_mask_offsets.shape[0]
-            token_num = forward_meta.ids_remove_padding.shape[0]
-            if mask_num == token_num * 2:
+            total_token_num = forward_meta.ids_remove_padding.shape[0]
+            if mask_num == total_token_num * 2:
                 res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id * 2 : end_token_id * 2]
-            elif mask_num == token_num:
+            elif mask_num == total_token_num:
                 res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id:end_token_id]
             else:
                 assert False, "Invalid attn_mask_offsets shape"

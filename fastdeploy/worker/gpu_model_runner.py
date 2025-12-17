@@ -2482,8 +2482,8 @@ class GPUModelRunner(ModelRunnerBase):
         model_output0 = haha(split_res[0])
         model_output1 = haha(split_res[1])
 
-        # model_output = paddle.concat([model_output0, model_output1], axis=0)
-        # model_output = model_output[:real_token_num]
+        model_output = paddle.concat([model_output0, model_output1], axis=0)
+        model_output = model_output[:real_token_num]
         
         # if baseline_model_output.shape[0] > 0:
         #     assert (baseline_model_output - model_output).abs().max().item() == 0

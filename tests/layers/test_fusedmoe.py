@@ -502,10 +502,10 @@ class FuseMoEWrapper(paddle.nn.Layer):
             # avoiding invoke clean_low_latency_buffer in mixed ep.
             layer_idx=666,
             weight_key_map=weight_key_map,
-            topk_method="noaux_tc",
-            topk_group=4,
-            n_group=8,
-            gate_correction_bias=paddle.zeros([self.fd_config.model_config.moe_num_experts], paddle.float32),
+            # topk_method="noaux_tc",
+            # topk_group=4,
+            # n_group=8,
+            # gate_correction_bias=paddle.zeros([self.fd_config.model_config.moe_num_experts], paddle.float32),
             # gate_correction_bias = gate_correction_bias_real_data
         )
         moe_layer = self.fused_moe
@@ -544,11 +544,11 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 6144
-        self.moe_intermediate_size = 2560
-        self.moe_num_experts = 320
-        self.moe_k = 8
-        self.num_layers = 61
+        self.hidden_size = 7168
+        self.moe_intermediate_size = 3584
+        self.moe_num_experts = 160
+        self.moe_k = 4
+        self.num_layers = 69
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
@@ -607,9 +607,9 @@ class TestFusedMoE(unittest.TestCase):
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
         is_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
-        test_token_nums = [1 * i for i in [1]]
+        test_token_nums = [4096, 8192]
         if is_decoder:
-            test_token_nums = [6, 8, 10, 20]
+            test_token_nums = [10, 20, 40, 60, 80, 100, 128]
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)

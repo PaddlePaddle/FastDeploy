@@ -1921,18 +1921,18 @@ class FDConfig:
             engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
                 self.parallel_config.local_data_parallel_id
             ]
-        if self.parallel_config.local_data_parallel_id == 1:
-            connector_port = 9512
-        elif self.parallel_config.local_data_parallel_id == 0:
-            connector_port = 9513
+        # if self.parallel_config.local_data_parallel_id == 1:
+        #     connector_port = 9512
+        # elif self.parallel_config.local_data_parallel_id == 0:
+        #     connector_port = 9513
         
-        assert self.parallel_config.local_data_parallel_id in [0,1]
+        # assert self.parallel_config.local_data_parallel_id in [0,1]
 
-        # connector_port = (
-        #     self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
-        #     if self.cache_config.pd_comm_port
-        #     else None
-        # )
+        connector_port = (
+            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+            if self.cache_config.pd_comm_port
+            else None
+        )
         print("zkkkkk", connector_port)
 
         # the information for registering this server to router or splitwise_scheduler
