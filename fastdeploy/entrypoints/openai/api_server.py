@@ -84,7 +84,7 @@ if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
-MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
+MAX_CONCURRENT_CONNECTIONS = args.max_concurrency
 connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
