@@ -238,7 +238,8 @@ def start_server(server_args, wait_before_check=60):
         print_logs_on_failure()
         stop_processes()
         return False
-
+    # ensure service is ready
+    time.sleep(5)
     return True
 
 
@@ -302,7 +303,12 @@ def setup_ep_env():
     for key, value in env_vars.items():
         os.environ[key] = value
         print(f"设置环境变量: {key}={value}")
-
+    # 获取并设置RDMA网卡
+    # BKCL_RDMA_NICS和KVCACHE_RDMA_NICS一致
+    rdma_nics = get_rdma_nics()
+    if rdma_nics:
+        os.environ["BKCL_RDMA_NICS"] = rdma_nics
+        print(f"设置环境变量: BKCL_RDMA_NICS={rdma_nics}")
     return original_values
 
 
