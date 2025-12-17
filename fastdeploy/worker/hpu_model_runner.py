@@ -23,6 +23,7 @@ import paddle
 import paddle.nn as nn
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
 from fastdeploy.engine.request import Request
@@ -212,7 +213,7 @@ def rebuild_padding_v3_1(
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
-from fastdeploy.model_executor.ops.intel_hpu import fused_mlp
+from fastdeploy.model_executor.ops.intel_hpu import fused_mlp, fused_mlp_ref
 
 
 def fused_attention_forward(
@@ -231,6 +232,7 @@ def fused_attention_forward(
         residual_input: the residual tensor
         forward_meta: the forward meta data
     """
+    forward_meta.measurement_mode = getattr(self, "measurement_mode", False)
     return forward_meta.attn_backend.forward(
         src,
         qkv_proj,
@@ -273,18 +275,33 @@ def fused_mlp_forward(
     Returns:
         paddle.Tensor: The output tensor after applying the MLP layer and (optionally) all-reduce.
     """
-    out = fused_mlp(
-        hidden_states,
-        self.up_gate_proj.weight,
-        None,
-        self.down_proj.weight,
-        getattr(self.up_gate_proj, "act_scale", None),
-        getattr(self.up_gate_proj, "weight_scale", None),
-        None,
-        getattr(self.down_proj, "act_scale", None),
-        getattr(self.down_proj, "weight_scale", None),
-        False,
-    )
+    measurement_mode = getattr(self, "measurement_mode", False)
+    if measurement_mode:
+        up_gate_proj_act_scale_key = self.up_gate_proj.weight_key.replace("weight", "activation_scale")
+        down_proj_act_scale_key = self.down_proj.weight_key.replace("weight", "activation_scale")
+        out = fused_mlp_ref(
+            hidden_states,
+            self.up_gate_proj.weight,
+            None,
+            self.down_proj.weight,
+            permuted_weights=False,
+            measurement_mode=measurement_mode,
+            up_gate_act_scale_key=up_gate_proj_act_scale_key,
+            down_act_scale_key=down_proj_act_scale_key,
+        )
+    else:
+        out = fused_mlp(
+            hidden_states,
+            self.up_gate_proj.weight,
+            None,
+            self.down_proj.weight,
+            getattr(self.up_gate_proj, "act_scale", None),
+            getattr(self.up_gate_proj, "weight_scale", None),
+            None,
+            getattr(self.down_proj, "act_scale", None),
+            getattr(self.down_proj, "weight_scale", None),
+            False,
+        )
 
     # all_reduce
     if self.up_gate_proj.tp_size > 1:
@@ -300,31 +317,43 @@ def fused_mlp_forward(
 import types
 
 from fastdeploy.model_executor.layers.attention.attention import Attention
+from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
 from fastdeploy.model_executor.models.qwen2 import Qwen2Attention, Qwen2MLP
+from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
 
 
-def convert_model(model):
+def convert_model(model, measurement_mode=False, init_done=False):
     """ """
+    if measurement_mode:
+        from fastdeploy.model_executor.ops.intel_hpu import init_measure_dict
+
+        if not init_done:
+            init_measure_dict()
+
     for name, module in model.named_children():
         if len(list(module.named_children())) > 0:
-            # print(f"********** model {model.__class__.__name__} has submodule: name={name}, module={module.__class__.__name__}")
             if isinstance(module, Ernie4_5_Attention):
                 module.forward = types.MethodType(fused_self_atten_forward, module)
             if isinstance(module, Qwen2Attention):
                 module.forward = types.MethodType(fused_self_atten_forward, module)
+            if isinstance(module, Qwen3Attention):
+                module.forward = types.MethodType(fused_self_atten_forward, module)
             if isinstance(module, Ernie4_5_MLP):
+                module.measurement_mode = measurement_mode
                 module.forward = types.MethodType(fused_mlp_forward, module)
             if isinstance(module, Qwen2MLP):
                 module.forward = types.MethodType(fused_mlp_forward, module)
-            convert_model(module)
+            convert_model(module, measurement_mode, True)
         else:
-            # print(f"*********[ Leaf node]  Loading submodule: name={name} -- module: {module.__class__.__name__}")
             if isinstance(module, Attention):
+                module.measurement_mode = measurement_mode
                 module.forward = types.MethodType(fused_attention_forward, module)
+            if isinstance(module, FusedMoE):
+                module.measurement_mode = measurement_mode
 
     return model
 
@@ -346,6 +375,8 @@ class HPUModelRunner(ModelRunnerBase):
         self.device_id = device_id
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
+        # This measurement_mode only works in BF16 mode!
+        self.measurement_mode = True if envs.FD_HPU_MEASUREMENT_MODE == "1" else False
 
         self.guided_backend = None
         if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
@@ -848,7 +879,7 @@ class HPUModelRunner(ModelRunnerBase):
         # 3. Load drafter model(for speculative decoding)
 
         # 4. Convert model to HPU format
-        self.model = convert_model(self.model)
+        self.model = convert_model(self.model, measurement_mode=self.measurement_mode, init_done=False)
 
         time_after_load = time.perf_counter()
         logger.info(f"Model loading took {time_after_load - time_before_load} seconds")
@@ -886,8 +917,16 @@ class HPUModelRunner(ModelRunnerBase):
 
         key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
+        cache_type = self.model_config.dtype
+        if (
+            self.quant_config
+            and hasattr(self.quant_config, "kv_cache_quant_type")
+            and self.quant_config.kv_cache_quant_type is not None
+        ):
+            cache_type = self.quant_config.kv_cache_quant_type
+            cache_type = "float8_e4m3fn" if "float8" in cache_type else cache_type
+
         for i in range(self.model_config.num_hidden_layers):
-            cache_type = self.model_config.dtype
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=key_cache_shape,
                 fill_value=0,
@@ -1371,6 +1410,11 @@ class HPUModelRunner(ModelRunnerBase):
 
         if int(os.environ.get("HABANA_PROFILE", 0)) == 1:
             self.prof.step()
+        if self.measurement_mode:
+            if not self.share_inputs["not_need_stop"][0]:
+                from fastdeploy.model_executor.ops.intel_hpu import save_measure_dict
+
+                save_measure_dict()
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
