@@ -347,9 +347,7 @@ async def test_chat_completion_branches_and_completion_branches():
 
     # Healthy path with ErrorResponse -> ChatCompletionResponse -> streaming
     api_server.app.state.dynamic_load_weight = False
-    api_server.connection_semaphore = SimpleNamespace(
-        acquire=AsyncMock(), release=MagicMock(), status=lambda: "ok"
-    )
+    api_server.connection_semaphore = SimpleNamespace(acquire=AsyncMock(), release=MagicMock(), status=lambda: "ok")
 
     from fastdeploy.entrypoints.openai.protocol import (
         ChatCompletionResponse,
@@ -622,6 +620,7 @@ def test_list_models_error_response_branch():
     with _patch_common_imports(args):
         api_server = _reload_api_server(args)
         api_server.app.state.dynamic_load_weight = False
+
         class FakeErrorResponse:
             def model_dump(self):
                 return {"err": True}
