@@ -277,7 +277,8 @@ struct MoeFCGemm {
           code_scale(const_cast<float*>(code_scale)),
           code_zp(const_cast<float*>(code_zp)),
           host_problem_sizes(nullptr) {
-      if (quant_method != WintQuantMethod::kNone || platform::is_same<uint8_t, ElementB>::value ||
+      if (quant_method != WintQuantMethod::kNone ||
+          platform::is_same<uint8_t, ElementB>::value ||
           platform::is_same<uint4b_t, ElementB>::value) {
         assert(weight_scales);
       }
@@ -380,7 +381,8 @@ struct MoeFCGemm {
   }
 
   static Status can_implement(Arguments const& args) {
-    if (args.quant_method != WintQuantMethod::kNone || platform::is_same<uint8_t, ElementB>::value ||
+    if (args.quant_method != WintQuantMethod::kNone ||
+        platform::is_same<uint8_t, ElementB>::value ||
         platform::is_same<uint4b_t, ElementB>::value) {
       if (args.weight_scales == nullptr) {
         CUTLASS_TRACE_HOST(
@@ -416,7 +418,6 @@ struct MoeFCGemm {
 
   template <typename dummy>
   struct KernelRunner<true, dummy> {
-
     CUTLASS_DEVICE
     static void run_kernel(Params const& params,
                            SharedStorage& shared_storage) {  // NOLINT
@@ -471,9 +472,13 @@ struct MoeFCGemm {
         int64_t rows_to_jump = 0;
 
         if (params.problem_visitor.total_rows < 0) {
-          rows_to_jump = problem_idx == 0 ? 0 : params.problem_visitor.last_row_for_problem[problem_idx - 1];
+          rows_to_jump = problem_idx == 0
+                             ? 0
+                             : params.problem_visitor
+                                   .last_row_for_problem[problem_idx - 1];
         } else {
-          rows_to_jump = problem_idx * (params.problem_visitor.total_rows / params.problem_visitor.problem_count);
+          rows_to_jump = problem_idx * (params.problem_visitor.total_rows /
+                                        params.problem_visitor.problem_count);
         }
 
         // begin address offset for A for current tile
@@ -496,11 +501,13 @@ struct MoeFCGemm {
             0,
         };
 
-        // the begin threadblock_offset of B, which holds the same column id with C
+        // the begin threadblock_offset of B, which holds the same column id
+        // with C
         cutlass::MatrixCoord tb_offset_B{0,
                                          threadblock_offset.n() / kInterleave};
 
-        // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
+        // the begin threadblock_offset of scale, which holds the same column id
+        // with C, but with no row id
         cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
 
         // Compute position within threadblock
@@ -628,7 +635,7 @@ struct MoeFCGemm {
     static constexpr bool compile_needed =
         platform::is_same<KernelArch, arch::Sm75>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
-#elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 910)
+#elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1010)
     static constexpr bool compile_needed =
         platform::is_same<KernelArch, arch::Sm80>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
@@ -649,9 +656,17 @@ template <typename Mma_,  ///! Threadblock-scoped matrix multiply-accumulate
           GroupScheduleMode GroupScheduleMode_  ///! Type of scheduling to //
                                                 /// NOLINT perform
           >
-struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, KernelArch, GroupScheduleMode_> {
+struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_,
+                                          Epilogue_,
+                                          ThreadblockSwizzle_,
+                                          KernelArch,
+                                          GroupScheduleMode_> {
  public:
-  using Base = MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, KernelArch, GroupScheduleMode_>;
+  using Base = MoeFCGemm<Mma_,
+                         Epilogue_,
+                         ThreadblockSwizzle_,
+                         KernelArch,
+                         GroupScheduleMode_>;
   using Mma = Mma_;
   using Epilogue = Epilogue_;
   using EpilogueOutputOp = typename Epilogue::OutputOp;
@@ -711,7 +726,11 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
     //
 
     CUTLASS_HOST_DEVICE
-    Params() : Base::Params(), local_scale(nullptr), code_scale(nullptr), code_zp(nullptr) {}
+    Params()
+        : Base::Params(),
+          local_scale(nullptr),
+          code_scale(nullptr),
+          code_zp(nullptr) {}
 
     CUTLASS_HOST_DEVICE
     Params(Arguments const& args,
@@ -738,7 +757,6 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
   using SharedStorage = typename Base::SharedStorage;
 
  public:
-
   //
   // Methods
   //
@@ -753,7 +771,8 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
       return Status::kInvalid;
     } else if (args.weight_scales == nullptr || args.local_scale == nullptr) {
       CUTLASS_TRACE_HOST(
-          "Wint2xMoeFCGemm::can_implement() - weight_scales and local_scale is expected to be not nullptr!");
+          "Wint2xMoeFCGemm::can_implement() - weight_scales and local_scale is "
+          "expected to be not nullptr!");
       return Status::kInvalid;
     }
     return Status::kSuccess;
@@ -778,38 +797,49 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
     CUTLASS_DEVICE
     static MmaQuantArguments prepare_quant_args(
-        Params const& params, cutlass::gemm::GemmCoord const& threadblock_offset,
-        int64_t problem_idx, const int32_t gemm_k, const int32_t gemm_n, const int thread_idx) {
-      // the begin threadblock_offset of scale, which holds the same column id with C, but with no row id
+        Params const& params,
+        cutlass::gemm::GemmCoord const& threadblock_offset,
+        int64_t problem_idx,
+        const int32_t gemm_k,
+        const int32_t gemm_n,
+        const int thread_idx) {
+      // the begin threadblock_offset of scale, which holds the same column id
+      // with C, but with no row id
       cutlass::MatrixCoord tb_offset_scale{0, threadblock_offset.n()};
       cutlass::MatrixCoord tb_offset_local_scale{0, threadblock_offset.n() * 2};
 
-      ElementScale* weight_scale_ptr = params.weight_scales + problem_idx * gemm_n;
-      typename Mma::QuantParamsAccessor::IteratorSuperScale iterator_super_scale(
-          Mma::QuantParamsAccessor::LayoutSuperScale(gemm_n),
-          weight_scale_ptr,
-          {1, gemm_n},
-          thread_idx,
-          tb_offset_scale);
+      ElementScale* weight_scale_ptr =
+          params.weight_scales + problem_idx * gemm_n;
+      typename Mma::QuantParamsAccessor::IteratorSuperScale
+          iterator_super_scale(
+              Mma::QuantParamsAccessor::LayoutSuperScale(gemm_n),
+              weight_scale_ptr,
+              {1, gemm_n},
+              thread_idx,
+              tb_offset_scale);
 
-      int local_scale_pointer_offset = ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
+      int local_scale_pointer_offset =
+          ((ThreadblockShape::kK + 127) / 128) * (gemm_n * 2);
       int64_t offset_in_bytes = problem_idx * gemm_k * gemm_n / 128;
-      uint4b_t *local_scale_ptr = reinterpret_cast<uint4b_t *>(params.local_scale + offset_in_bytes);
+      uint4b_t* local_scale_ptr =
+          reinterpret_cast<uint4b_t*>(params.local_scale + offset_in_bytes);
 
-      typename Mma::QuantParamsAccessor::IteratorLocalScale iterator_local_scale(
-          Mma::QuantParamsAccessor::LayoutLocalScale(gemm_n * 2),
-          local_scale_ptr,
-          {(gemm_k + 127) / 128, gemm_n * 2},
-          thread_idx,
-          tb_offset_local_scale);
+      typename Mma::QuantParamsAccessor::IteratorLocalScale
+          iterator_local_scale(
+              Mma::QuantParamsAccessor::LayoutLocalScale(gemm_n * 2),
+              local_scale_ptr,
+              {(gemm_k + 127) / 128, gemm_n * 2},
+              thread_idx,
+              tb_offset_local_scale);
 
       float* code_scale_ptr = params.code_scale + problem_idx * gemm_n;
-      typename Mma::QuantParamsAccessor::IteratorCodeScaleZp iterator_code_scale(
-          Mma::QuantParamsAccessor::LayoutCodeScaleZp(gemm_n),
-          code_scale_ptr,
-          {1, gemm_n},
-          thread_idx,
-          tb_offset_scale);
+      typename Mma::QuantParamsAccessor::IteratorCodeScaleZp
+          iterator_code_scale(
+              Mma::QuantParamsAccessor::LayoutCodeScaleZp(gemm_n),
+              code_scale_ptr,
+              {1, gemm_n},
+              thread_idx,
+              tb_offset_scale);
 
       float* code_zp_ptr = params.code_zp + problem_idx * gemm_n;
       typename Mma::QuantParamsAccessor::IteratorCodeScaleZp iterator_code_zp(
@@ -819,8 +849,11 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
           thread_idx,
           tb_offset_scale);
 
-      MmaQuantArguments mma_quant_args(
-          iterator_super_scale, iterator_local_scale, iterator_code_scale, iterator_code_zp, local_scale_pointer_offset);
+      MmaQuantArguments mma_quant_args(iterator_super_scale,
+                                       iterator_local_scale,
+                                       iterator_code_scale,
+                                       iterator_code_zp,
+                                       local_scale_pointer_offset);
       return mma_quant_args;
     }
 
@@ -858,9 +891,13 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
       const int64_t gemm_k = params.problem_visitor.gemm_k;
       const int64_t gemm_n = params.problem_visitor.gemm_n;
-      // wint2.5 and wint2.0 is quantized and packed along k dimension with group_size 64.
-      const int64_t quant_gemm_k = WintQuantTraits<ElementA, QuantMethod>::CaclPackedDim(gemm_k);
-      int64_t bytes_per_expert_matrix = (quant_gemm_k * gemm_n / 8) * cutlass::sizeof_bits<QuantElementB>::value;
+      // wint2.5 and wint2.0 is quantized and packed along k dimension with
+      // group_size 64.
+      const int64_t quant_gemm_k =
+          WintQuantTraits<ElementA, QuantMethod>::CaclPackedDim(gemm_k);
+      int64_t bytes_per_expert_matrix =
+          (quant_gemm_k * gemm_n / 8) *
+          cutlass::sizeof_bits<QuantElementB>::value;
 
       // Outer 'persistent' loop to iterate over tiles
       while (problem_visitor.next_tile()) {
@@ -881,9 +918,13 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         int64_t rows_to_jump = 0;
 
         if (params.problem_visitor.total_rows < 0) {
-          rows_to_jump = problem_idx == 0 ? 0 : params.problem_visitor.last_row_for_problem[problem_idx - 1];
+          rows_to_jump = problem_idx == 0
+                             ? 0
+                             : params.problem_visitor
+                                   .last_row_for_problem[problem_idx - 1];
         } else {
-          rows_to_jump = problem_idx * (params.problem_visitor.total_rows / params.problem_visitor.problem_count);
+          rows_to_jump = problem_idx * (params.problem_visitor.total_rows /
+                                        params.problem_visitor.problem_count);
         }
 
         // begin address offset for A for current tile
@@ -895,7 +936,8 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
         // the begin threadblock_offset of A, which holds the same row id with C
         cutlass::MatrixCoord tb_offset_A{threadblock_offset.m(), 0};
 
-        // begin address offset for B for current problem_idx, totally num_experts problems
+        // begin address offset for B for current problem_idx, totally
+        // num_experts problems
         char* byte_ptr_B = ((char*)params.ptr_B) +                 // NOLINT
                            problem_idx * bytes_per_expert_matrix;  // NOLINT
         ElementB* ptr_B = reinterpret_cast<ElementB*>(byte_ptr_B);
@@ -904,9 +946,12 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
                 ? gemm_n
                 : gemm_k * kInterleave;
 
-        // the begin threadblock_offset of B, which holds the same column id with C
-        cutlass::MatrixCoord tb_offset_B{0, threadblock_offset.n() / kInterleave};
-        cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave, problem_size.n() / kInterleave};
+        // the begin threadblock_offset of B, which holds the same column id
+        // with C
+        cutlass::MatrixCoord tb_offset_B{0,
+                                         threadblock_offset.n() / kInterleave};
+        cutlass::MatrixCoord extent_B{problem_size.k() * kInterleave,
+                                      problem_size.n() / kInterleave};
 
         // Compute position within threadblock
         int thread_idx = threadIdx.x;
@@ -919,14 +964,15 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
                                            tb_offset_A);
 
         typename Mma::IteratorB iterator_B(
-            LayoutB(ldm_B),
-            ptr_B,
-            extent_B,
-            thread_idx,
-            tb_offset_B);
+            LayoutB(ldm_B), ptr_B, extent_B, thread_idx, tb_offset_B);
 
-        MmaQuantArguments mma_quant_args = prepare_quant_args(
-            params, threadblock_offset, problem_idx, gemm_k, gemm_n, thread_idx);
+        MmaQuantArguments mma_quant_args =
+            prepare_quant_args(params,
+                               threadblock_offset,
+                               problem_idx,
+                               gemm_k,
+                               gemm_n,
+                               thread_idx);
 
         typename Mma::FragmentC accumulators;
         accumulators.clear();
@@ -965,8 +1011,10 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
 
         EpilogueOutputOp output_op(params.output_op);
 
-        ElementC* ptr_C =
-            params.ptr_C ? reinterpret_cast<ElementC*>(params.ptr_C) + problem_idx * gemm_n : nullptr;
+        ElementC* ptr_C = params.ptr_C
+                              ? reinterpret_cast<ElementC*>(params.ptr_C) +
+                                    problem_idx * gemm_n
+                              : nullptr;
         ElementC* ptr_D =
             reinterpret_cast<ElementC*>(params.ptr_D) + rows_to_jump * gemm_n;
 
@@ -1012,8 +1060,9 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_, Epilogue_, ThreadblockSwizzle_, 
   CUTLASS_DEVICE
   void operator()(Params const& params,
                   SharedStorage& shared_storage) {  // NOLINT
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 910)
-    KernelRunner<WintQuantMethod::kWeightOnlyInt2, true>::run_kernel(params, shared_storage);
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1010)
+    KernelRunner<WintQuantMethod::kWeightOnlyInt2, true>::run_kernel(
+        params, shared_storage);
 #else
     CUTLASS_NOT_IMPLEMENTED();
 #endif
