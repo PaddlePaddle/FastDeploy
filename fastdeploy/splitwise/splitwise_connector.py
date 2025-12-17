@@ -55,7 +55,7 @@ class SplitwiseConnector:
         self.current_request_ids = dict()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
-        if self.cfg.cache_config.pd_comm_port is not None:
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.zmq_ctx = zmq.Context()
             self.push_sockets: Dict[str, zmq.Socket] = {}
             self.pull_socket = None
@@ -71,8 +71,8 @@ class SplitwiseConnector:
         self.router_socket.setsockopt(zmq.LINGER, 0)
         self.router_socket.setsockopt(zmq.SNDHWM, 1000)
         self.router_socket.setsockopt(zmq.ROUTER_MANDATORY, 1)
-        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[0]}")
-        self.logger.info(f"_init_network: bind {self.cfg.cache_config.pd_comm_port}")
+        self.logger.info(f"_init_network: bind {self.cfg.cache_config.local_pd_comm_port}")
+        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.local_pd_comm_port}")
 
         self.poller = zmq.Poller()
         self.poller.register(self.router_socket, zmq.POLLIN)
