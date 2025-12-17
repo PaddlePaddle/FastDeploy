@@ -386,7 +386,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.is_hpu_perf_breakdown_sync_mode = int(os.environ.get("HPU_PERF_BREAKDOWN_SYNC_MODE", 1)) == 1
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(
-            self.local_rank + int(self.parallel_config.engine_worker_queue_port)
+            self.local_rank + int(self.parallel_config.local_engine_worker_queue_port)
         )
 
         if int(os.environ.get("HABANA_PROFILE", 0)) == 1:
