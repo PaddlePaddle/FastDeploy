@@ -112,7 +112,7 @@ def build_metadata(
 
 
 def make_model_config() -> ModelConfig:
-    return ModelConfig({"model": str(PROJECT_ROOT)})
+    return ModelConfig({"model": "This is Model~"})
 
 
 class TestResolvedConfigAndFactories:
@@ -287,6 +287,3 @@ class TestDispatchPooler:
         bad_metadata = build_metadata([1], [PoolingParams(task="score")])
         with pytest.raises(ValueError):
             dispatch.forward(hidden[:1], bad_metadata)
-
-
-if __name__ == "__main__":
