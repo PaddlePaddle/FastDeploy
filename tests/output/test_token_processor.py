@@ -26,10 +26,6 @@ import numpy as np
 import paddle
 import pytest
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
 from fastdeploy.output import token_processor
