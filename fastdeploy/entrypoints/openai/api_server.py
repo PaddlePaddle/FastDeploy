@@ -295,7 +295,7 @@ def acquire_connection():
         current_count = connection_counter_shm.value[0]
         if current_count >= MAX_CONCURRENT_CONNECTIONS:
             api_server_logger.info(
-                f"Reach max request concurrency: {current_count}/{MAX_CONCURRENT_CONNECTIONS}"
+                f"Reached max request concurrency: {current_count}/{MAX_CONCURRENT_CONNECTIONS}"
             )
             raise HTTPException(
                 status_code=429, 
