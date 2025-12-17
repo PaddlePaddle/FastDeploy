@@ -80,6 +80,9 @@ class XpuWorker(WorkerBase):
             local_rank=self.local_rank,
         )
 
+    def get_num_running_request(self):
+        return self.model_runner.get_num_running_request()
+
     def exist_prefill(self):
         """
         check whether prefill stage exist
