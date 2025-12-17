@@ -17,7 +17,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def _isolate_env_and_model_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Configure env and patch model auto registry in a reversible way.
