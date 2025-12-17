@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,11 +21,6 @@ import numpy as np
 import paddle
 import pytest
 from paddleformers.transformers.configuration_utils import PretrainedConfig
-
-# Ensure repository root is importable when running the file directly.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from fastdeploy.config import ModelConfig, PoolerConfig
 from fastdeploy.engine.pooling_params import PoolingParams
