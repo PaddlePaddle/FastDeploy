@@ -275,7 +275,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         )
 
         # 4. EP combine
-        return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+        return self.ep_decoder_runner.combine(
+            ffn_out, topk_idx, topk_weights, handle, quant_group_size=quant_group_size
+        )
 
     def apply_tp(
         self,
