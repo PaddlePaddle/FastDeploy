@@ -274,10 +274,13 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+
+        if self.ep_size > 1 or weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
@@ -293,7 +296,6 @@ class FusedMoE(nn.Layer):
                 self.weight_loader(param, loaded_weight_shard, expert_id, shard_id, "fused")
         else:
             if weight_need_transpose and source != "fused":
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # 2.gate up splited in disk
             assert shard_id in ["gate", "down", "up"]
