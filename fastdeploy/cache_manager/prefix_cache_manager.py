@@ -819,10 +819,6 @@ class PrefixCacheManager:
         current_tokens = num_cached_tokens
         while current_tokens <= len(input_ids) - block_size:
             cur_block_key = get_hash_str(input_ids[current_tokens : current_tokens + block_size], prefix_block_key)
-            logger.debug(
-                f"to remove...prefetch_cache_from_storage debug, req_id: {req_id}, current_tokens: {current_tokens}, "
-                f"prefix_block_key: {prefix_block_key}, cur_block_key: {cur_block_key}"
-            )
             block_keys.append(cur_block_key)
             current_tokens += block_size
             prefix_block_key = [cur_block_key]
@@ -1710,9 +1706,6 @@ class PrefixCacheManager:
                 )
                 prefix_block_key.extend(extra_keys)
                 hash_value = get_hash_str(current_block, prefix_block_key)
-                logger.debug(
-                    f"to remove... mm_build_path build node, prefix_block_key: {prefix_block_key}, hash_value: {hash_value}"
-                )
                 prefix_block_key = [hash_value]
                 allocated_block_id = gpu_block_ids.pop(0)
                 node_id = self.node_id_pool.pop()

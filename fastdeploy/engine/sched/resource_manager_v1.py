@@ -696,6 +696,7 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                                 if (
                                     self.config.cache_config.enable_prefix_caching
+                                    and self.config.cache_config.kvcache_storage_backend
                                     and num_new_tokens >= self.config.cache_config.block_size
                                 ):
                                     matched_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
@@ -746,8 +747,8 @@ class ResourceManagerV1(ResourceManager):
                                 request.block_tables.extend(extra_gpu_block_ids)
                                 if (
                                     self.config.cache_config.enable_prefix_caching
-                                    and num_new_tokens >= self.config.cache_config.block_size
                                     and self.config.cache_config.kvcache_storage_backend
+                                    and num_new_tokens >= self.config.cache_config.block_size
                                 ):
                                     matched_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                                     num_new_tokens -= len(matched_block_ids) * self.config.cache_config.block_size

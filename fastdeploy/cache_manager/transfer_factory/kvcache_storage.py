@@ -51,7 +51,7 @@ class KVCacheStorage(ABC):
         self,
         key: str,
         target_location: Optional[Any] = None,
-        target_sizes: Optional[Any] = None,
+        target_size: Optional[Any] = None,
     ) -> paddle.Tensor | None:
         """
         Retrieve the value associated with the given key.
@@ -76,9 +76,8 @@ class KVCacheStorage(ABC):
     def set(
         self,
         key: str,
-        value: Optional[Any] = None,
         target_location: Optional[Any] = None,
-        target_sizes: Optional[Any] = None,
+        target_size: Optional[Any] = None,
     ) -> bool:
         """
         Store the value associated with the given key.
@@ -90,7 +89,6 @@ class KVCacheStorage(ABC):
     def batch_set(
         self,
         keys: List[str],
-        values: Optional[Any] = None,
         target_locations: Optional[Any] = None,
         target_sizes: Optional[Any] = None,
     ) -> bool:
@@ -101,7 +99,7 @@ class KVCacheStorage(ABC):
         pass
 
     @abstractmethod
-    def exists(self, key: str) -> bool:
+    def exists(self, keys: List[str]) -> bool:
         """
         Check if the key exists in the storage.
         Returns True if the key exists, False otherwise.

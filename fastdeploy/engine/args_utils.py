@@ -1009,7 +1009,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake", None],
+            choices=["mooncake"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )

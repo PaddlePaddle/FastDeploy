@@ -93,7 +93,7 @@ class MooncakeStore(KVCacheStorage):
             self.warmup()
             logger.info("Mooncake store warmup successfully.")
         except Exception as e:
-            logger.error(f"Mooncake stroe initialization failed: {e}, traceback: {traceback.format_exc()}")
+            logger.error(f"Mooncake store initialization failed: {e}, traceback: {traceback.format_exc()}")
             raise
 
     def warmup(self):
@@ -117,26 +117,26 @@ class MooncakeStore(KVCacheStorage):
         self,
         key,
         target_location: Optional[List[int]] = None,
-        target_sizes: Optional[List[int]] = None,
+        target_size: Optional[List[int]] = None,
     ) -> List[int]:
         pass
 
     def batch_set(
         self,
         keys: List[str],
-        target_location: Optional[List[int]] = None,
+        target_locations: Optional[List[int]] = None,
         target_sizes: Optional[List[int]] = None,
     ) -> List[int]:
         """
         Batch put multiple objects into the store.
         Args:
             keys (list): list of object names to be stored
-            target_location (list): list of memory locations where the data are stored
+            target_locations (list): list of memory locations where the data are stored
             target_sizes (list): list of byte sizes corresponding to each object
         Return:
             List[int]: List of status codes for each operation (0 = success, negative = error)
         """
-        if not (len(keys) == len(target_location) == len(target_sizes)):
+        if not (len(keys) == len(target_locations) == len(target_sizes)):
             err_msg = "The length of keys, target_location and target_sizes must match."
             logger.error(err_msg)
             raise ValueError(err_msg)
@@ -146,44 +146,44 @@ class MooncakeStore(KVCacheStorage):
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        return self._put_batch_zero_copy_impl(keys, target_location, target_sizes)
+        return self._put_batch_zero_copy_impl(keys, target_locations, target_sizes)
 
     def get(
         self,
         key,
         target_location: Optional[Any] = None,
-        target_sizes: Optional[Any] = None,
+        target_size: Optional[Any] = None,
     ) -> List[int]:
         pass
 
     def batch_get(
         self,
         keys: List[str],
-        target_location: Optional[Any] = None,
+        target_locations: Optional[Any] = None,
         target_sizes: Optional[Any] = None,
     ) -> List[int]:
         """
         Batch get multiple objects from the store.
         Args:
             keys (list): list of object names to be fetched
-            target_location (list): list of memory locations where the data should be stored
+            target_locations (list): list of memory locations where the data should be stored
             target_sizes (list): list of byte sizes corresponding to each object
         Returns:
             List[int]: List of bytes read for each operation (positive = success, negative = error)
         """
-        if not (len(keys) == len(target_location) == len(target_sizes)):
-            err_msg = "The length of keys, target_location and target_sizes must match."
+        if not (len(keys) == len(target_locations) == len(target_sizes)):
+            err_msg = "The length of keys, target_locations and target_sizes must match."
             logger.error(err_msg)
             raise ValueError(err_msg)
 
         if len(keys) == 0:
-            err_msg = "The length of keys, target_location and target_sizes must be greater than zero"
+            err_msg = "The length of keys, target_locations and target_sizes must be greater than zero"
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        return self._get_batch_zero_copy_impl(keys, target_location, target_sizes)
+        return self._get_batch_zero_copy_impl(keys, target_locations, target_sizes)
 
-    def exists(self, keys):
+    def exists(self, keys: List[str]):
         """
         Check existence of multiple objects in a single batch operation.
         Args:
@@ -197,28 +197,29 @@ class MooncakeStore(KVCacheStorage):
         logger.debug(f"mooncake store exists results: {result}, cost_time: {cost_time:.3f}ms")
         return result
 
-    def delete(self, key, timeout=5) -> None:
+    def delete(self, key, timeout=5) -> bool:
         while timeout:
             result = self.store.remove(key)
             if result == 0:
                 logger.info("Successfully removed")
-                break
+                return True
             else:
                 time.sleep(1)
                 timeout -= 1
-        return result
+        return False
 
     def close(self):
         # MooncakeDistributedStore will automatically call the destructor, so
         # it is unnecessary to close it manually.
         pass
 
-    def clear(self) -> None:
+    def clear(self) -> bool:
         """
         clear all the objects in the store
         """
         count = self.store.remove_all()
         logger.info(f"Removed {count} objects")
+        return True
 
     def _put_batch_zero_copy_impl(self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]) -> int:
         try:

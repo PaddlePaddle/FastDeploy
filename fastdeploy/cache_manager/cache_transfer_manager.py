@@ -15,7 +15,6 @@
 """
 
 import argparse
-import asyncio
 import concurrent.futures
 import gc
 import json
@@ -109,9 +108,9 @@ def parse_args():
     parser.add_argument(
         "--kvcache_storage_backend",
         type=str,
-        default="None",
-        choices=["mooncake", "None"],
-        help="The storage backend for kvcache storage.",
+        default=None,
+        choices=["mooncake"],
+        help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
         "--write_policy",
@@ -123,17 +122,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-
-class TimeoutController:
-    def __init__(self):
-        self._stop_event = threading.Event()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def should_stop(self):
-        return self._stop_event.is_set()
 
 
 class CacheTransferManager:
@@ -228,7 +216,7 @@ class CacheTransferManager:
             create=False,
         )
 
-        if args.kvcache_storage_backend == "None":
+        if args.kvcache_storage_backend is None:
             self.storage_backend = None
         elif args.kvcache_storage_backend == "mooncake":
             logger.info("Start initialize mooncake store...")
@@ -480,7 +468,7 @@ class CacheTransferManager:
             ]
             kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
             kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
-            result = self.storage_backend.batch_get(keys, target_location=kv_cache_ptrs, target_sizes=kv_block_sizes)
+            result = self.storage_backend.batch_get(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
 
             k_result, v_result = result[:block_num], result[block_num:]
             success_block_num = 0
@@ -512,12 +500,6 @@ class CacheTransferManager:
             )
 
             return valid_gpu_block_ids
-
-            # for layer_id in range(len(self.gpu_cache_k_tensors)):
-            #     k_tensor = self.gpu_cache_k_tensors[layer_id][0]
-            #     logger.debug(f"to remove...layer {layer_id}, k_tensor: {k_tensor}, mean: {paddle.mean(k_tensor)}")
-            #     v_tensor = self.gpu_cache_v_tensors[layer_id][0]
-            #     logger.debug(f"to remove...layer {layer_id}, v_tensor: {v_tensor}, mean: {paddle.mean(v_tensor)}")
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in _run_read_storage: "
@@ -544,8 +526,7 @@ class CacheTransferManager:
             valid_gpu_block_ids = []
 
             if match_block_num > 0:
-                # TODO: 支持 timeout, 考虑实际读取的 block 数量
-                # TODO: timeout系数自行调节，比如timeout = 0.100 * len(gpu_block_ids)
+                # TODO: support timeout with actual block count
                 try:
                     valid_gpu_block_ids = self._run_read_storage(
                         k_cache_keys, v_cache_keys, gpu_block_ids, cpu_block_ids
@@ -576,13 +557,6 @@ class CacheTransferManager:
                 f"_run_write_back_storage, k_cache_keys: {k_cache_keys}, v_cache_keys: {v_cache_keys}, "
                 f"gpu_block_ids: {gpu_block_ids}"
             )
-
-            # for layer_id in range(len(self.gpu_cache_k_tensors)):
-            #     k_tensor = self.gpu_cache_k_tensors[layer_id][0]
-            #     logger.debug(f"to remove...layer {layer_id}, k_tensor: {k_tensor}, mean: {paddle.mean(k_tensor)}")
-            #     v_tensor = self.gpu_cache_v_tensors[layer_id][0]
-            #     logger.debug(f"to remove...layer {layer_id}, v_tensor: {v_tensor}, mean: {paddle.mean(v_tensor)}")
-
             key_cache_size = [
                 self.key_cache_shape[0],
                 self.key_cache_shape[1],
@@ -619,7 +593,7 @@ class CacheTransferManager:
             ]
             kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
             kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
-            self.storage_backend.batch_set(keys, target_location=kv_cache_ptrs, target_sizes=kv_block_sizes)
+            self.storage_backend.batch_set(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in _run_write_back_storage: "
@@ -650,17 +624,8 @@ class CacheTransferManager:
                 gpu_block_ids = []
             else:
                 try:
-                    # TODO: 支持 timeout，考虑实际写出的 block 数量
-                    # TODO: timeout系数自行调节，比如timeout = 0.100 * len(gpu_block_ids)
+                    # TODO: support timeout with actual block count
                     self._run_write_back_storage(k_cache_keys, v_cache_keys, gpu_block_ids, cpu_block_ids)
-                    result = (
-                        CacheStatus.GPU2STORAGE,
-                        task_id,
-                        keys,
-                        gpu_block_ids,
-                    )
-                except asyncio.TimeoutError:
-                    logger.error(f"Write back storage task timed out after {timeout} seconds")
                 except Exception as e:
                     logger.error(f"Error in write back storage task: {e}")
                     gpu_block_ids = []
