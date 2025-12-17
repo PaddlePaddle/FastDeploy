@@ -75,6 +75,9 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
 from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    RoutingReplayManager,
+)
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -162,6 +165,11 @@ class GPUModelRunner(ModelRunnerBase):
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+
+        # Rollout routing replay config
+        self.routing_replay_manager = None
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
 
     def exist_prefill(self):
         """
@@ -313,11 +321,18 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    if prefill_start_index == 0:
+                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -338,6 +353,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 has_preempted_task = True
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    self.routing_replay_manager.clear_request(batch_id=idx)
+
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -716,6 +736,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
+        self.share_inputs["is_chunk_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
         self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32")
@@ -972,6 +993,9 @@ class GPUModelRunner(ModelRunnerBase):
         Initialize forward meta and attention meta data
         """
         # Initialize forward meta
+        routing_replay_table = None
+        if self.routing_replay_manager is not None:
+            routing_replay_table = self.routing_replay_manager.get_routing_table()
         self.forward_meta = ForwardMeta(
             input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
@@ -989,6 +1013,7 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
+            routing_replay_table=routing_replay_table,
         )
 
         # Update Batch type for cuda graph
@@ -1313,6 +1338,9 @@ class GPUModelRunner(ModelRunnerBase):
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
+
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.clear_routing_table()
 
     def _update_chunked_prefill(self, tasks):
         """
@@ -1694,6 +1722,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
+
+        # Routing replay
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            if (
+                not self.exist_prefill()
+                and not self.exist_decode()
+                and self.share_inputs["is_block_step"].sum() == 0
+                and self.share_inputs["is_chunk_step"].sum() == 0
+            ):
+                self.routing_replay_manager.put_table_to_store()
+
         return None
 
     def _add_cache(self, model_forward_batch) -> None:
