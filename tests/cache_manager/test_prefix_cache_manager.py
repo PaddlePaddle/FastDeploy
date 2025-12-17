@@ -24,21 +24,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-
-# Provide a lightweight paddle stub so imports in fastdeploy modules succeed
-_DummyPaddle = types.SimpleNamespace(Tensor=object)
-_DummyPaddle.distributed = types.SimpleNamespace()
-sys.modules["paddle"] = _DummyPaddle
-sys.modules["paddle.distributed"] = _DummyPaddle.distributed
-
-# Stub fastdeploy package to avoid executing heavyweight __init__ during tests
-if "fastdeploy" not in sys.modules:
-    fastdeploy_stub = types.ModuleType("fastdeploy")
-    fastdeploy_stub.__path__ = [os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fastdeploy"))]
-    sys.modules["fastdeploy"] = fastdeploy_stub
-sys.modules.setdefault("fastdeploy.platforms", types.SimpleNamespace(current_platform=lambda: None))
-
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
