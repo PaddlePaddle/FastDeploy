@@ -343,11 +343,11 @@ def test_mtp_accept_ratio(api_url):
     with open(baseline_path, "r", encoding="utf-8") as f:
         baseline = f.read()
     baseline_ratio = {
-        'accepted_tokens': 131, 
-        'rejected_tokens': 23, 
-        'accept_ratio': 0.4122137404580153, 
-        'average_accept_length': 1.7012987012987013, 
-        'accept_ratio_per_head': [0.7012987012987013]
+        "accepted_tokens": 131,
+        "rejected_tokens": 23,
+        "accept_ratio": 0.4122137404580153,
+        "average_accept_length": 1.7012987012987013,
+        "accept_ratio_per_head": [0.7012987012987013],
     }
 
     response = send_request(url=api_url, payload=payload)
@@ -359,9 +359,7 @@ def test_mtp_accept_ratio(api_url):
     print("speculate_metrics_2", speculate_metrics_2)
     assert result_2 == baseline, f"与baseline存在diff，result_2: {result}\n baseline: {baseline}"
     assert speculate_metrics_2 == baseline_ratio, (
-        f"speculate_metrics存在diff，"
-        f"speculate_metrics_2: {speculate_metrics_2}\n "
-        f"baseline: {baseline_ratio}"
+        f"speculate_metrics存在diff，" f"speculate_metrics_2: {speculate_metrics_2}\n " f"baseline: {baseline_ratio}"
     )
     assert speculate_metrics_2["accept_ratio"] > 0, "accept_ratio异常"
     prompt_tokens = chunks[-1]["usage"]["prompt_tokens"]
