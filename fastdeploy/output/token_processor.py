@@ -27,6 +27,7 @@ import numpy as np
 import paddle
 import zmq
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.engine.request import (
     CompletionOutput,
@@ -120,6 +121,30 @@ class TokenProcessor:
         self.total_step_per_request = {}
         self.accept_token_num_per_head_per_request = {}
         self.accept_token_num_per_head = [0] * MAX_DRAFT_TOKENS
+
+        # health monitor
+        self.timestamp_for_alive_before_handle_batch = None
+        self.timestamp_for_alive_after_handle_batch = None
+        self.health_lock = threading.Lock()
+        self.engine_output_token_hang = False
+
+    def healthy(self):
+        """
+        whether token processor is healthy
+        """
+        with self.health_lock:
+            if self.timestamp_for_alive_after_handle_batch is None:  # has entered handle batch
+                if (
+                    self.timestamp_for_alive_before_handle_batch is not None
+                    and time.time() - self.timestamp_for_alive_before_handle_batch
+                    > envs.FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT
+                ):
+                    return False
+                else:
+                    return True
+            if self.engine_output_token_hang:
+                return False
+            return True
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
@@ -337,6 +362,7 @@ class TokenProcessor:
         """
         read tokens from paddle inference engine and process
         """
+        tracing.trace_set_thread_info("Token Processor")
 
         if current_platform.is_xpu():
             from fastdeploy.model_executor.ops.xpu import (
@@ -404,7 +430,14 @@ class TokenProcessor:
                     if self.output_tokens[0, 0] == -2:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = time.time()
+                    self.timestamp_for_alive_after_handle_batch = None
                 self._process_batch_output()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = None
+                    self.timestamp_for_alive_after_handle_batch = time.time()
+
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
 
@@ -673,6 +706,12 @@ class TokenProcessor:
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
+            rid = task_id.split("_")[0]
+            trace_carrier = task.trace_carrier
+            metrics = task.metrics
+            t = metrics.inference_start_time
+            ts = int(t * 1_000_000_000) if t is not None else 0
+            tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
                 if accept_num[i] == -3:
@@ -717,11 +756,21 @@ class TokenProcessor:
 
             self.total_step += 1
             current_time = time.time()
+            trace_carrier = None
             if self.tokens_counter[task_id] == 0:
                 task.metrics.record_recv_first_token()
                 task.metrics.cal_cost_time()
                 metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
+
+                tracing.trace_report_span(
+                    name=tracing.TraceSpanName.PREFILL,
+                    rid=rid,
+                    start_time_ns=int(task.metrics.inference_start_time * 1e9),
+                    end_time_ns=int(time.time() * 1e9),
+                    thread_finish_flag=False,
+                )
+
             else:
                 task.metrics.record_recv_token()
                 if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
@@ -743,6 +792,7 @@ class TokenProcessor:
                 metrics=metrics,
                 ic_req_data=task.ic_req_data,
                 prompt_token_ids_len=task.prompt_token_ids_len,
+                trace_carrier=trace_carrier,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
@@ -768,7 +818,9 @@ class TokenProcessor:
                         and self.cfg.cache_config.enable_prefix_caching
                         and self.cfg.cache_config.enable_output_caching
                     ):
-                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0:
+                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0 and (
+                            task_id not in self.resource_manager.to_be_rescheduled_request_id_set
+                        ):
                             self.resource_manager.cache_output_tokens(
                                 task
                             )  # when enable prefix caching, cache kv cache for output tokens
@@ -797,6 +849,15 @@ class TokenProcessor:
 
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
+                    trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
+                    result.trace_carrier = trace_carrier
+                    tracing.trace_report_span(
+                        name=tracing.TraceSpanName.DECODE,
+                        rid=rid,
+                        start_time_ns=int(task.metrics.inference_start_time * 1e9),
+                        end_time_ns=int(time.time() * 1e9),
+                        thread_finish_flag=True,
+                    )
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(
