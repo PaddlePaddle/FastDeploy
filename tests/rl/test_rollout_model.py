@@ -6,7 +6,6 @@ intentionally avoid any heavy engine or model initialization. They should not
 modify global environment in a way that affects other test modules.
 """
 
-import os
 import types
 
 import pytest  # type: ignore
@@ -214,5 +213,3 @@ def test_glm4moe_mapping_removes_gate_correction():
 
 if __name__ == "__main__":
     pytest.main()
-
-
