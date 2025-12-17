@@ -23,8 +23,8 @@ from typing import List, Optional
 
 import numpy as np
 import paddle
-from paddle import nn
 import zmq
+from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -121,7 +121,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         # used by SamplingMetadata
-        self.enable_logprob = fd_config.model_config.enable_logprob # fd_config.model_config.enable_logprob
+        self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         #  Sampler
@@ -159,7 +159,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
-    # Initialize ZMQ client for async output
+        # Initialize ZMQ client for async output
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -508,7 +508,11 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
-            if hasattr(request, 'sampling_params') and request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
+            if (
+                hasattr(request, "sampling_params")
+                and request.sampling_params is not None
+                and request.sampling_params.prompt_logprobs is not None
+            ):
                 self.prompt_logprobs_reqs[request.request_id] = request
 
                 if len(request.output_token_ids) == 0:

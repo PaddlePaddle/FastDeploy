@@ -51,6 +51,7 @@ if current_platform.is_xpu():
         update_inputs_v1,
     )
 
+
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
     pooler_outputs: List = None,
