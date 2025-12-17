@@ -25,7 +25,6 @@ from fastdeploy.distributed.communication import tensor_model_parallel_all_reduc
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
-    fd_cast,
     h2d_copy,
     process_weight_transpose,
     set_weight_attrs,
@@ -348,25 +347,31 @@ class MergedReplicatedLinear(ReplicatedLinear):
         self.output_sizes = output_sizes
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        assert loaded_shard_id in ["q_a", "kv_a"]
         if not param._is_initialized():
             param.initialize()
+        if loaded_shard_id is None:
+            axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
+            if hasattr(param, "tensor_track"):
+                param.tensor_track.mark(start=0, end=loaded_weight.shape[axis])
 
-        if loaded_shard_id == "q_a":
-            param_shard_offset = 0
-            param_shard_size = self.output_sizes[0]
         else:
-            # loaded_shard_id == "kv_a"
-            param_shard_offset = self.output_sizes[0]
-            param_shard_size = self.output_sizes[1]
-        if hasattr(param, "tensor_track"):
-            param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        param = slice_fn(
-            param,
-            (self.fd_config.model_config.model_format == "torch") ^ True,
-            start=param_shard_offset,
-            end=param_shard_offset + param_shard_size,
-        )
+            assert loaded_shard_id in ["q_a", "kv_a", "gate", "up"]
+
+            if loaded_shard_id == "q_a" or "gate":
+                param_shard_offset = 0
+                param_shard_size = self.output_sizes[0]
+            elif loaded_shard_id == "kv_a" or "up":
+                param_shard_offset = self.output_sizes[0]
+                param_shard_size = self.output_sizes[1]
+
+            if hasattr(param, "tensor_track"):
+                param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
+            param = slice_fn(
+                param,
+                (self.fd_config.model_config.model_format == "torch") ^ True,
+                start=param_shard_offset,
+                end=param_shard_offset + param_shard_size,
+            )
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -879,57 +884,57 @@ class RowParallelLinear(LinearBase):
         if self.with_bias and self.tp_size > 1 and self.reduce_results:
             set_weight_attrs(self.bias, {"tp_row_bias": True})
 
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        # In tp_size > 1 and ep_size > 1, weight and bias of this layer will not be split in specific module.
-        # For example, weight and bias of this layer in shared_experts will not split, but will be split in o_proj.
-        # So, we add a white list to avoid split weight and bias in these layers.
-        if (
-            self.fd_config.parallel_config.tensor_parallel_size > 1
-            and self.fd_config.parallel_config.expert_parallel_size > 1
-        ):
-            layer_white_list = ["shared_experts"]
-        else:
-            layer_white_list = []
-        layer_in_white_list = any(key in self.prefix for key in layer_white_list)
+    # def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+    #     # In tp_size > 1 and ep_size > 1, weight and bias of this layer will not be split in specific module.
+    #     # For example, weight and bias of this layer in shared_experts will not split, but will be split in o_proj.
+    #     # So, we add a white list to avoid split weight and bias in these layers.
+    #     if (
+    #         self.fd_config.parallel_config.tensor_parallel_size > 1
+    #         and self.fd_config.parallel_config.expert_parallel_size > 1
+    #     ):
+    #         layer_white_list = ["shared_experts"]
+    #     else:
+    #         layer_white_list = []
+    #     layer_in_white_list = any(key in self.prefix for key in layer_white_list)
 
-        output_dim = getattr(param, "output_dim", None)
-        weight_need_transpose = getattr(param, "weight_need_transpose", False)
-        if weight_need_transpose:
-            loaded_weight = loaded_weight.transpose([1, 0])
-        # Tensor parallelism splits the weight along the output_dim
-        if (
-            output_dim is not None
-            and self.fd_config is not None
-            and self.fd_config.parallel_config.tensor_parallel_size > 1
-        ):
-            dim = -1 if output_dim else 0
-            if isinstance(loaded_weight, paddle.Tensor):
-                size = loaded_weight.shape[dim]
-            else:
-                size = loaded_weight.get_shape()[dim]
-            block_size = size // self.fd_config.parallel_config.tensor_parallel_size
-            shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
-            shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
+    #     output_dim = getattr(param, "output_dim", None)
+    #     weight_need_transpose = getattr(param, "weight_need_transpose", False)
+    #     if weight_need_transpose:
+    #         loaded_weight = loaded_weight.transpose([1, 0])
+    #     # Tensor parallelism splits the weight along the output_dim
+    #     if (
+    #         output_dim is not None
+    #         and self.fd_config is not None
+    #         and self.fd_config.parallel_config.tensor_parallel_size > 1
+    #     ):
+    #         dim = -1 if output_dim else 0
+    #         if isinstance(loaded_weight, paddle.Tensor):
+    #             size = loaded_weight.shape[dim]
+    #         else:
+    #             size = loaded_weight.get_shape()[dim]
+    #         block_size = size // self.fd_config.parallel_config.tensor_parallel_size
+    #         shard_offset = self.fd_config.parallel_config.tensor_parallel_rank * block_size
+    #         shard_size = (self.fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
 
-            # when use_sequence_parallel_moe, we don't split.
-            if not layer_in_white_list:
-                loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
+    #         # when use_sequence_parallel_moe, we don't split.
+    #         if not layer_in_white_list:
+    #             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
-        tp_row_bias = getattr(param, "tp_row_bias", None)
-        if not layer_in_white_list and tp_row_bias:
-            loaded_weight = loaded_weight / self.fd_config.parallel_config.tensor_parallel_size
+    #     tp_row_bias = getattr(param, "tp_row_bias", None)
+    #     if not layer_in_white_list and tp_row_bias:
+    #         loaded_weight = loaded_weight / self.fd_config.parallel_config.tensor_parallel_size
 
-        # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-        loaded_weight = fd_cast(loaded_weight, param)
+    #     # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
+    #     loaded_weight = fd_cast(loaded_weight, param)
 
-        if param.shape != loaded_weight.shape:
-            # for e_score_correction_bias
-            loaded_weight = loaded_weight.reshape(param.shape)
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        loaded_weight = get_tensor(loaded_weight)
-        param.copy_(loaded_weight, False)
+    #     if param.shape != loaded_weight.shape:
+    #         # for e_score_correction_bias
+    #         loaded_weight = loaded_weight.reshape(param.shape)
+    #     assert param.shape == loaded_weight.shape, (
+    #         f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+    #     )
+    #     loaded_weight = get_tensor(loaded_weight)
+    #     param.copy_(loaded_weight, False)
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]
