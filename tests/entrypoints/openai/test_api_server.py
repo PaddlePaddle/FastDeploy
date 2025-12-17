@@ -154,11 +154,14 @@ def _fake_handlers():
         def __init__(self, *_, **__):
             pass
 
-        async def create_chat_completion(self, req):
-            return req  # will be swapped in tests
+        # Accept flexible arguments so tests don't depend on exact signature.
+        async def create_chat_completion(self, *args, **kwargs):
+            # For our tests we don't care about the actual return here,
+            # concrete behaviours are provided via MagicMock/AsyncMock later.
+            return args[0] if args else None
 
-        async def create_completion(self, req):
-            return req
+        async def create_completion(self, *args, **kwargs):
+            return args[0] if args else None
 
         async def create_embedding(self, req):
             return SimpleNamespace(model_dump=lambda: {"emb": True})
@@ -545,12 +548,12 @@ async def test_lifespan_covers_setup_and_cleanup_paths():
         engine_client.check_health.return_value = (False, "bad")
         api_server.app.state.engine_client = engine_client
 
-    resp = api_server.health(MagicMock())
-    assert resp.status_code == 404
+        resp = api_server.health(MagicMock())
+        assert resp.status_code == 404
 
-    # keep existing list routes coverage
-    routes = asyncio.run(api_server.list_all_routes())
-    assert isinstance(routes, dict)
+        # keep existing list routes coverage, staying inside the running event loop
+        routes = await api_server.list_all_routes()
+        assert isinstance(routes, dict)
 
 
 @pytest.mark.asyncio
