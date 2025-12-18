@@ -20,6 +20,7 @@ import multiprocessing
 import os
 import platform
 import re
+import subprocess
 import time
 from collections.abc import Sequence
 from concurrent.futures.process import ProcessPoolExecutor
@@ -33,10 +34,9 @@ import paddle
 import psutil
 import requests
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import api_server_logger
+from fastdeploy.utils import api_server_logger, envs
 
 _USAGE_STATS_ENABLED = None
 _USAGE_STATS_SERVER = envs.FD_USAGE_STATS_SERVER
@@ -71,10 +71,8 @@ def is_usage_stats_enabled():
     return _USAGE_STATS_ENABLED
 
 
-def get_formatted_time() -> str:
-    utc_time = datetime.datetime.now(datetime.timezone.utc)
-    beijing_time = utc_time + datetime.timedelta(hours=8)
-    return beijing_time.strftime("%Y-%m-%d %H:%M:%S")
+def get_current_timestamp_ns() -> int:
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
 
 
 def cuda_is_initialized() -> bool:
@@ -107,13 +105,34 @@ def cuda_get_device_properties(device, names: Sequence[str], init_cuda=False) ->
                 result.append(value)
             return tuple(result)
         except Exception as e:
-            print(f"Warning: Failed to get CUDA properties: {e}")
+            api_server_logger.debug(f"Warning: Failed to get CUDA properties: {e}")
             return tuple([None] * len(names))
 
     # Run in subprocess to avoid initializing CUDA as a side effect.
     mp_ctx = multiprocessing.get_context("fork")
     with ProcessPoolExecutor(max_workers=1, mp_context=mp_ctx) as executor:
         return executor.submit(cuda_get_device_properties, device, names, True).result()
+
+
+def get_xpu_model():
+    try:
+        result = subprocess.run(["xpu-smi"], capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return None
+
+        pattern = r"^\|\s*(\d+)\s+(\w+)\s+\w+"
+        lines = result.stdout.split("\n")
+
+        for line in lines:
+            match = re.search(pattern, line)
+            if match:
+                model = match.group(2)
+                return model
+
+        return "P800"
+    except Exception:
+        return "P800"
 
 
 def get_cuda_version():
@@ -128,11 +147,19 @@ def get_cuda_version():
         return None
 
 
-def cuda_device_count_stateless() -> int:
+def cuda_device_count() -> int:
     if not paddle.device.is_compiled_with_cuda():
         return 0
 
     device_count = paddle.device.cuda.device_count()
+    return device_count
+
+
+def xpu_device_count() -> int:
+    if not paddle.device.is_compiled_with_xpu():
+        return 0
+
+    device_count = paddle.device.xpu.device_count()
     return device_count
 
 
@@ -258,8 +285,12 @@ class UsageMessage:
 
     def _report_usage_once(self, fd_config: FDConfig, extra_kvs: dict[str, Any]):
         if current_platform.is_cuda_alike():
-            self.gpu_num = cuda_device_count_stateless()
+            self.gpu_num = cuda_device_count()
             self.gpu_type, self.gpu_memory_per_device = cuda_get_device_properties(0, ("name", "total_memory"))
+        if current_platform.is_xpu():
+            self.gpu_num = xpu_device_count()
+            self.gpu_type = get_xpu_model()
+            self.gpu_memory_per_device = paddle.device.xpu.memory_total()
         if current_platform.is_cuda():
             self.cuda_runtime = get_cuda_version()
         self.provider = detect_cloud_provider()
@@ -283,7 +314,7 @@ class UsageMessage:
         from fastdeploy import __version__ as FD_VERSION
 
         self.fd_version = FD_VERSION
-        self.log_time = get_formatted_time()
+        self.log_time = get_current_timestamp_ns()
         self.source = envs.FD_USAGE_SOURCE
 
         self.config = json.dumps({k: simple_convert(v) for k, v in vars(fd_config).items()})
@@ -296,9 +327,9 @@ class UsageMessage:
     def _send_to_server(self, data: dict[str, Any]) -> None:
         try:
             requests.post(url=_USAGE_STATS_SERVER, json=data, timeout=10)
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
             # silently ignore unless we are using debug log
-            api_server_logger.debug("Failed to send usage data to server")
+            api_server_logger.debug(f"Failed to send usage data to server, errot: {str(e)}")
 
     def _report_continuous_usage(self):
         """Report usage every 10 minutes."""
@@ -306,7 +337,7 @@ class UsageMessage:
             time.sleep(600)
             data = {
                 "uuid": self.uuid,
-                "log_time": get_formatted_time(),
+                "log_time": get_current_timestamp_ns(),
             }
             data.update(_GLOBAL_RUNTIME_DATA)
 
