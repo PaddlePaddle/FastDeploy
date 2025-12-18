@@ -25,6 +25,9 @@ from unittest import mock
 
 import numpy as np
 
+from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.sampling_params import SamplingParams
+
 
 class DummyTokenizer:
     bos_token = "<s>"
@@ -312,8 +315,9 @@ class DataProcessorTestCase(unittest.TestCase):
                 return super().process_response(response_dict)
 
         processor = MinimalProcessor()
-        defaults = processor._apply_default_parameters({})
-        self.assertAlmostEqual(defaults["top_p"], 0.5)
+        request = Request(request_id="test_0", sampling_params=SamplingParams())
+        defaults = processor._apply_default_parameters(request)
+        self.assertAlmostEqual(defaults.sampling_params.top_p, 0.5)
         with self.assertRaises(NotImplementedError):
             processor.process_request({}, max_model_len=None)
         with self.assertRaises(NotImplementedError):
@@ -326,15 +330,16 @@ class DataProcessorTestCase(unittest.TestCase):
             processor.ids2tokens([1], "task")
 
     def test_process_request_obj_prompt_defaults(self):
-        request = {"prompt": "hi", "temperature": 0, "top_p": 0, "stop": ["stop"]}
+        request = {"request_id": "test_0", "prompt": "hi", "temperature": 0, "top_p": 0, "stop": ["stop"]}
+        request = Request.from_dict(request)
         processed = self.processor.process_request_obj(request, max_model_len=5)
 
-        self.assertEqual(processed["prompt_token_ids"], [2])
-        self.assertEqual(processed["stop_token_ids"], [[4]])
-        self.assertEqual(processed["stop_seqs_len"], [1])
-        self.assertEqual(processed["temperature"], 1)
-        self.assertAlmostEqual(processed["top_p"], 1e-5)
-        self.assertEqual(processed["max_tokens"], 4)
+        self.assertEqual(processed.prompt_token_ids, [2])
+        self.assertEqual(processed.sampling_params.stop_token_ids, [[4]])
+        self.assertEqual(processed.sampling_params.stop_seqs_len, [1])
+        self.assertEqual(processed.sampling_params.temperature, 1)
+        self.assertAlmostEqual(processed.sampling_params.top_p, 1e-5)
+        self.assertEqual(processed.sampling_params.max_tokens, 4)
 
     def test_process_request_obj_messages_template(self):
         request = {
@@ -342,12 +347,14 @@ class DataProcessorTestCase(unittest.TestCase):
             "messages": [{"role": "user", "content": "hello"}],
             "chat_template_kwargs": {"system": "system prompt"},
         }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = {"system": "system prompt"}
         processed = self.processor.process_request_obj(request, max_model_len=6)
 
-        self.assertEqual(processed["prompt_token_ids"], [len("system prompt hello")])
-        self.assertEqual(processed["system"], "system prompt")
-        self.assertTrue(processed["enable_thinking"])
-        self.assertEqual(processed["prompt_tokens"], "system prompt hello")
+        self.assertEqual(processed.prompt_token_ids, [len("system prompt hello")])
+        self.assertEqual(processed.system, "system prompt")
+        self.assertTrue(processed.enable_thinking)
+        self.assertEqual(processed.prompt_tokens, "system prompt hello")
 
     def test_process_request_object_handles_sequences(self):
         request = DummyRequest(
@@ -373,9 +380,13 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_request_obj_rejects_bad_kwargs(self):
         request = {
+            "request_id": "test_0",
             "messages": [{"role": "user", "content": "hi"}],
             "chat_template_kwargs": "invalid",
         }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = "invalid"
+        request.sampling_params = SamplingParams()
         with self.assertRaisesRegex(ValueError, "chat_template_kwargs must be a dict"):
             self.processor.process_request_obj(request)
 
@@ -429,9 +440,10 @@ class DataProcessorTestCase(unittest.TestCase):
         req_id = "stream"
         processor.decode_status[req_id] = [0, 0, [], ""]
         response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
+        response = RequestOutput.from_dict(response)
 
         result = processor.process_response_obj_streaming(response, enable_thinking=False)
-        self.assertEqual(result["outputs"]["text"], "7")
+        self.assertEqual(result.outputs.text, "7")
         self.assertNotIn(req_id, processor.decode_status)
 
     def test_process_response_obj_normal_with_reasoning(self):
@@ -445,12 +457,13 @@ class DataProcessorTestCase(unittest.TestCase):
             "request_id": "normal",
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
+        response = RequestOutput.from_dict(response)
 
         result = processor.process_response_obj_normal(response, enable_thinking=True)
-        self.assertEqual(result["outputs"]["completion_tokens"], "7")
-        self.assertEqual(result["outputs"]["text"], "tool-text")
-        self.assertEqual(result["outputs"]["reasoning_content"], "because")
-        self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
+        self.assertEqual(result.outputs.completion_tokens, "7")
+        self.assertEqual(result.outputs.text, "tool-text")
+        self.assertEqual(result.outputs.reasoning_content, "because")
+        self.assertEqual(result.outputs.reasoning_token_num, 1)
 
     def test_process_response_obj_dispatch(self):
         processor = self.processor
@@ -527,17 +540,20 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(self.processor.process_logprob_response([1, 2]), "1 2")
 
     def test_process_request_obj_uses_existing_ids(self):
-        request = {"prompt_token_ids": [1, 2, 3], "max_tokens": 5}
+        request = {"request_id": "test_0", "prompt_token_ids": [1, 2, 3], "max_tokens": 5}
+        request = Request.from_dict(request)
         processed = self.processor.process_request_obj(request, max_model_len=6)
-        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
-        self.assertEqual(processed["max_tokens"], 5)
+        self.assertEqual(processed.prompt_token_ids, [1, 2, 3])
+        self.assertEqual(processed.sampling_params.max_tokens, 5)
 
     def test_process_request_obj_requires_chat_template(self):
         original_template = self.processor.tokenizer.chat_template
         self.processor.tokenizer.chat_template = None
         self.addCleanup(lambda: setattr(self.processor.tokenizer, "chat_template", original_template))
         with self.assertRaisesRegex(ValueError, "chat_template"):
-            self.processor.process_request_obj({"messages": [{"role": "user", "content": "hi"}]})
+            request = {"request_id": "test_0", "messages": [{"role": "user", "content": "hi"}]}
+            request = Request.from_dict(request)
+            self.processor.process_request_obj(request)
 
     def test_update_bad_words_with_warnings(self):
         processor = self.processor

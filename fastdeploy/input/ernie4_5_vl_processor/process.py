@@ -311,6 +311,7 @@ class DataProcessor:
             "tools": getattr(request, "tools", None),
             "documents": getattr(request, "documents", None),
             "enable_thinking": getattr(request, "enable_thinking", None),
+            "system": getattr(request, "system", None),
         }
         prompt = self.tokenizer.apply_chat_template(
             message_dict,

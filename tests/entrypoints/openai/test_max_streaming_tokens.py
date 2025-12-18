@@ -19,6 +19,7 @@ import unittest
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponseChoice,
@@ -151,6 +152,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": True,
             },
         ]
+        response_data = [RequestOutput.from_dict(data) for data in response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -250,6 +252,9 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 }
             ],
         ]
+        response_data = [
+            [RequestOutput.from_dict(data) for data in response_data_list] for response_data_list in response_data
+        ]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -338,6 +343,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "metrics": {},
             },
         ]
+        final_response_data = [RequestOutput.from_dict(x) for x in final_response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = [
@@ -417,8 +423,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     },
                     "num_cached_tokens": 3,
                     "finished": True,
-                    "previous_num_tokens": 2,
                 },
+                "previous_num_tokens": 2,
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=10, n=2
                 ),
@@ -446,8 +452,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     },
                     "num_cached_tokens": 0,
                     "finished": True,
-                    "previous_num_tokens": 1,
                 },
+                "previous_num_tokens": 1,
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=1, n=2
                 ),
@@ -479,13 +485,14 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         max_tokens_list = [10, 1]
 
         for idx, case in enumerate(test_cases):
+            resp_data = RequestOutput.from_dict(case["test_data"])
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                data=case["test_data"],
+                data=resp_data,
                 request=case["mock_request"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
-                previous_num_tokens=case["test_data"]["previous_num_tokens"],
+                previous_num_tokens=case["previous_num_tokens"],
                 num_cached_tokens=num_cached_tokens,
                 num_input_image_tokens=num_input_image_tokens,
                 num_input_video_tokens=num_input_video_tokens,
@@ -530,6 +537,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": True,
             },
         ]
+        response_data = [RequestOutput.from_dict(item) for item in response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -544,21 +552,19 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         async def mock_process_response_chat(response, stream, include_stop_str_in_output):
             delta_msg_mock = Mock()
-            delta_msg_mock.content = response["outputs"]["text"]
-            if response["outputs"]["text"] == "a":
+            delta_msg_mock.content = response.outputs.text
+            if response.outputs.text == "a":
                 delta_msg_mock.reasoning_content = "Thinking for a"
-            elif response["outputs"]["text"] == "bc":
+            elif response.outputs.text == "bc":
                 delta_msg_mock.reasoning_content = "Thinking for bc"
             delta_msg_mock.tool_calls = None
-            response["outputs"]["delta_message"] = delta_msg_mock
+            response.outputs.delta_message = delta_msg_mock
 
             reasoning_content = (
                 delta_msg_mock.reasoning_content if (delta_msg_mock and delta_msg_mock.reasoning_content) else None
             )
             reasoning_tokens = reasoning_content.split() if reasoning_content else []
-            response["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
-
-            response["outputs"]["num_cached_tokens"] = response.get("num_cached_tokens", 0)
+            response.outputs.reasoning_token_num = len(reasoning_tokens)
 
             yield response
 
@@ -665,6 +671,9 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 }
             ],
         ]
+        response_data = [
+            [RequestOutput.from_dict(item) for item in response_data_list] for response_data_list in response_data
+        ]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -689,7 +698,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         generator = self.completion_serving.completion_stream_generator(
             request=request,
             num_choices=1,
-            request_id="test-request-id",
+            request_id="test-request-id_0",
             created_time=1620000000,
             model_name="test-model",
             prompt_batched_token_ids=[[10, 20, 30]],

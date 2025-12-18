@@ -25,7 +25,7 @@ from typing import List, Optional
 import numpy as np
 
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -720,7 +720,7 @@ class OpenAIServingChat:
 
     async def _create_chat_completion_choice(
         self,
-        data: dict,
+        data: RequestOutput,
         request: ChatCompletionRequest,
         prompt_token_ids: list,
         prompt_tokens: str,

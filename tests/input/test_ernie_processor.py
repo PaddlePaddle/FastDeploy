@@ -17,6 +17,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 
 
@@ -80,12 +81,13 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 准备输入
         response_dict = {"finished": False, "request_id": "test", "outputs": {"token_ids": [4, 5]}}
         kwargs = {"enable_thinking": True}
+        response = RequestOutput.from_dict(response_dict)
 
         # 调用方法
-        result = self.processor.process_response_obj_streaming(response_dict, **kwargs)
+        result = self.processor.process_response_obj_streaming(response, **kwargs)
 
         # 验证结果
-        self.assertEqual(result["outputs"]["completion_tokens"], "delta_text")
+        self.assertEqual(result.outputs.completion_tokens, "delta_text")
 
     def test_process_request_obj(self):
         request_dict = {
@@ -96,8 +98,10 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "temperature": 1,
             "top_p": 1,
         }
-        result = self.processor.process_request_obj(request_dict, 100)
-        self.assertEqual(result["prompt_token_ids"], [1])
+        request = Request.from_dict(request_dict)
+        request.chat_template_kwargs = {"chat_template": "Hello!"}
+        result = self.processor.process_request_obj(request, 100)
+        self.assertEqual(result.prompt_token_ids, [1])
 
     def test_process_response_obj_normal(self):
         mock_tokens = ["reasoning", "token", "list"]
@@ -111,19 +115,20 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         response_dict = {
             "request_id": "request-id_0",
             "outputs": {"token_ids": [2, 3, 4, 5, 1], "text": "Initial text", "top_logprobs": []},
-            "finish_reason": "stop",
+            # "finish_reason": "stop",
             "finished": True,
         }
+        response = RequestOutput.from_dict(response_dict)
         kwargs = {"enable_thinking": True}
 
         with patch("fastdeploy.input.ernie4_5_processor.data_processor_logger"):
-            result = self.processor.process_response_obj_normal(response_dict, **kwargs)
+            result = self.processor.process_response_obj_normal(response, **kwargs)
 
         self.mock_reasoning_parser.extract_reasoning_content.assert_called_once()
-        self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")
-        self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
-        self.assertEqual(result["outputs"]["text"], "Mock final text")
-        self.assertIn("completion_tokens", result["outputs"])
+        self.assertEqual(result.outputs.reasoning_content, "Mock reasoning content")
+        self.assertEqual(result.outputs.reasoning_token_num, len(mock_tokens))
+        self.assertEqual(result.outputs.text, "Mock final text")
+        self.assertTrue(hasattr(result.outputs, "completion_tokens"))
 
     def test_think_status(self):
         """测试 思考机制"""
@@ -134,11 +139,12 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "temperature": 0.7,
             "top_p": 0.9,
         }
+        request = Request.from_dict(request)
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
         self.processor.process_request_obj(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        self.assertEqual(request.enable_thinking, True)
 
         request = {
             "prompt": "hello",
@@ -147,8 +153,9 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "temperature": 0.7,
             "top_p": 0.9,
         }
+        request = Request.from_dict(request)
         self.processor.process_request_obj(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        self.assertEqual(request.enable_thinking, True)
 
 
 if __name__ == "__main__":

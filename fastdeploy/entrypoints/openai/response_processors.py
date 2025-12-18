@@ -96,7 +96,7 @@ class ChatResponseProcessor:
                             all_audio_tokens = None
                         if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
                             response = await self.data_processor.process_response_obj(
-                                response_dict=request_output,
+                                response_obj=request_output,
                                 stream=stream,
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
@@ -104,7 +104,7 @@ class ChatResponseProcessor:
                             )
                         else:
                             response = self.data_processor.process_response_obj(
-                                response_dict=request_output,
+                                response_obj=request_output,
                                 stream=stream,
                                 include_stop_str_in_output=include_stop_str_in_output,
                                 audio_tokens=all_audio_tokens,
@@ -122,7 +122,7 @@ class ChatResponseProcessor:
                             self._audio_buffer[req_id] = [token_ids]
                 else:
                     yield self.data_processor.process_response_obj(
-                        response_dict=request_output,
+                        response_obj=request_output,
                         stream=stream,
                         include_stop_str_in_output=include_stop_str_in_output,
                     )
@@ -151,13 +151,13 @@ class ChatResponseProcessor:
 
                     if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
                         await self.data_processor.process_response_obj(
-                            response_dict=request_output,
+                            response_obj=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
                     else:
                         self.data_processor.process_response_obj(
-                            response_dict=request_output,
+                            response_obj=request_output,
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
@@ -178,13 +178,13 @@ class ChatResponseProcessor:
                         if part["decode_type"] == 0:
                             if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
                                 await self.data_processor.process_response_obj(
-                                    response_dict=part["request_output"],
+                                    response_obj=part["request_output"],
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )
                             else:
                                 self.data_processor.process_response_obj(
-                                    response_dict=request_output,
+                                    response_obj=request_output,
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )

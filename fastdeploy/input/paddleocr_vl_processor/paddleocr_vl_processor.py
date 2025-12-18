@@ -257,8 +257,8 @@ class PaddleOCRVLProcessor(TextProcessor):
             request.sampling_params.top_p = _SAMPLING_EPS
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
+            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+            parts = request.request_id.split("_")
             if len(parts) > 1:
                 real_req_id = parts[0]
                 index = int(parts[1])
@@ -266,8 +266,8 @@ class PaddleOCRVLProcessor(TextProcessor):
                 for idx in range(index * n, (index + 1) * n):
                     self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
+                self.model_status_dict[request.request_id] = model_status
+            request.enable_thinking = model_status == "think_start"
 
         return request
 

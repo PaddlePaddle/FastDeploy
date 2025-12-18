@@ -235,7 +235,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.sampling_params.top_p = _SAMPLING_EPS
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
             parts = request.request_id.split("_")
             if len(parts) > 1:
                 real_req_id = parts[0]
@@ -289,7 +289,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             return None
         return response_dict
 
-    def process_response_obj(self, response_dict, stream, **kwargs):
+    def process_response_obj(self, response_obj, stream, **kwargs):
         """
         Preprocess the response
 
@@ -300,72 +300,72 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         if stream:
-            return self.process_response_obj_streaming(response_dict, **kwargs)
+            return self.process_response_obj_streaming(response_obj, **kwargs)
         else:
-            return self.process_response_obj_normal(response_dict, **kwargs)
+            return self.process_response_obj_normal(response_obj, **kwargs)
 
-    def process_response_obj_normal(self, response_dict, **kwargs):
+    def process_response_obj_normal(self, response_obj, **kwargs):
         """
         Preprocess the response
 
         Args:
-            response_dict (Dict): response for engine, contain ids fields
+            response_obj : response for engine, contain ids fields
 
         Returns:
             Dict: response contain text fields
         """
-        token_ids = getattr(response_dict.outputs, "token_ids", [])
-        is_end = getattr(response_dict, "finished", None)
-        req_id = getattr(response_dict, "request_id")
+        token_ids = getattr(response_obj.outputs, "token_ids", [])
+        is_end = getattr(response_obj, "finished", None)
+        req_id = getattr(response_obj, "request_id")
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            setattr(response_dict.outputs, "text", full_text)
+            setattr(response_obj.outputs, "text", full_text)
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
-                    response_dict,
+                    response_obj,
                     self.model_status_dict[req_id],
                 )
-                setattr(response_dict.outputs, "text", text)
-                setattr(response_dict.outputs, "reasoning_content", reasoning_content)
+                setattr(response_obj.outputs, "text", text)
+                setattr(response_obj.outputs, "reasoning_content", reasoning_content)
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
-                setattr(response_dict.outputs, "reasoning_token_num", len(reasoning_tokens))
+                setattr(response_obj.outputs, "reasoning_token_num", len(reasoning_tokens))
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_obj)
                 if tool_call_info.tools_called:
-                    setattr(response_dict.outputs, "tool_calls", tool_call_info.tool_calls)
-                    setattr(response_dict.outputs, "text", tool_call_info.content)
-            setattr(response_dict.outputs, "completion_tokens", full_text)
+                    setattr(response_obj.outputs, "tool_calls", tool_call_info.tool_calls)
+                    setattr(response_obj.outputs, "text", tool_call_info.content)
+            setattr(response_obj.outputs, "completion_tokens", full_text)
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
-        return response_dict
+        return response_obj
 
-    def process_response_obj_streaming(self, response_dict, **kwargs):
+    def process_response_obj_streaming(self, response_obj, **kwargs):
         """
         Preprocess the response streaming
 
         Args:
-            response_dict (Dict): response for engine, contain ids fields
+            response_obj : response for engine, contain ids fields
 
         Returns:
             Dict: response contain text fields
         """
-        is_end = getattr(response_dict, "finished", None)
-        req_id = getattr(response_dict, "request_id", None)
-        token_ids = getattr(response_dict.outputs, "token_ids", [])
+        is_end = getattr(response_obj, "finished", None)
+        req_id = getattr(response_obj, "request_id", None)
+        token_ids = getattr(response_obj.outputs, "token_ids", [])
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        setattr(response_dict.outputs, "completion_tokens", delta_text)
+        setattr(response_obj.outputs, "completion_tokens", delta_text)
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
@@ -376,10 +376,10 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
                 self.model_status_dict[req_id],
             )
-            setattr(response_dict.outputs, "delta_message", reasoning_delta_message)
+            setattr(response_obj.outputs, "delta_message", reasoning_delta_message)
             reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
-            setattr(response_dict.outputs, "reasoning_token_num", len(reasoning_tokens))
+            setattr(response_obj.outputs, "reasoning_token_num", len(reasoning_tokens))
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -391,11 +391,11 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                response_dict,
+                response_obj,
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
-                setattr(response_dict.outputs, "delta_message", tool_call_delta_message)
-        setattr(response_dict.outputs, "text", delta_text)
+                setattr(response_obj.outputs, "delta_message", tool_call_delta_message)
+        setattr(response_obj.outputs, "text", delta_text)
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -403,7 +403,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 del self.tool_parser_dict[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
-        return response_dict
+        return response_obj
 
     def messages2ids(self, request_or_messages, **kwargs):
         """
@@ -422,6 +422,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             "messages": getattr(request_or_messages, "messages", None),
             "tools": getattr(request_or_messages, "tools", None),
             "documents": getattr(request_or_messages, "documents", None),
+            "system": getattr(request_or_messages, "system", None),
+            "enable_thinking": getattr(request_or_messages, "enable_thinking", None),
         }
         spliced_message = self.tokenizer.apply_chat_template(
             message_dict,

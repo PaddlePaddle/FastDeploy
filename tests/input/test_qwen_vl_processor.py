@@ -191,17 +191,18 @@ class TestQwenVLProcessor(unittest.TestCase):
                 }
             ],
         }
+        request = Request.from_dict(request)
 
         result = self.processor.process_request_obj(request, 1024 * 100)
 
-        self.assertEqual(result["prompt_token_ids_len"], result["multimodal_inputs"]["position_ids"].shape[0])
-        self.assertEqual(result["prompt_token_ids_len"], result["multimodal_inputs"]["token_type_ids"].shape[0])
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
         self.assertEqual(
-            result["multimodal_inputs"]["images"].shape[0],
-            sum(map(lambda x: x.prod(), result["multimodal_inputs"]["grid_thw"])),
+            result.multimodal_inputs["images"].shape[0],
+            sum(map(lambda x: x.prod(), result.multimodal_inputs["grid_thw"])),
         )
         self.assertEqual(
-            result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
+            result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
 
     def test_process_request_obj_enable_thinking(self):
@@ -220,9 +221,10 @@ class TestQwenVLProcessor(unittest.TestCase):
             ],
             "chat_template_kwargs": {"enable_thinking": True},
         }
+        request = Request.from_dict(request)
 
         result = self.processor.process_request_obj(request, 100)
-        self.assertEqual(result.get("enable_thinking"), False)
+        self.assertEqual(result.enable_thinking, False)
 
     def test_prompt(self):
         """
@@ -286,12 +288,13 @@ class TestQwenVLProcessor(unittest.TestCase):
                 }
             ],
         }
+        request = Request.from_dict(request)
         result = self.processor.process_request_obj(request, 1024 * 100)
 
         # Create equivalent request in prompt format
         prompt = {
             "request_id": "12345",
-            "prompt": request["prompt_tokens"],
+            "prompt": request.prompt_tokens,
             "multimodal_data": {
                 "image": [mock_pil_image(480, 640)],
                 "video": [{"video": b"123"}],
@@ -301,10 +304,10 @@ class TestQwenVLProcessor(unittest.TestCase):
         result2 = self.processor.process_request(request2, 1024 * 100)
 
         # Verify both processing methods produce identical results
-        self.assertEqual(result["prompt_token_ids"], result2.prompt_token_ids)
-        self.assertTrue(np.equal(result["multimodal_inputs"]["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
+        self.assertEqual(result.prompt_token_ids, result2.prompt_token_ids)
+        self.assertTrue(np.equal(result.multimodal_inputs["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
         self.assertTrue(
-            np.equal(result["multimodal_inputs"]["position_ids"], result2.multimodal_inputs["position_ids"]).all()
+            np.equal(result.multimodal_inputs["position_ids"], result2.multimodal_inputs["position_ids"]).all()
         )
 
     def test_apply_chat_template(self):
@@ -357,10 +360,11 @@ class TestQwenVLProcessor(unittest.TestCase):
                 }
             ],
         }
+        request = Request.from_dict(request)
 
         # Process request through the processor
         self.processor.process_request_obj(request, 1024 * 100)
-        prompt2 = request["prompt_tokens"]
+        prompt2 = request.prompt_tokens
 
         # Verify both methods produce identical prompt strings
         self.assertEqual(prompt, prompt2)
@@ -374,11 +378,12 @@ class TestQwenVLProcessor(unittest.TestCase):
             "temperature": 0.7,
             "top_p": 0.9,
         }
+        request = Request.from_dict(request)
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
         self.processor.process_request_obj(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        self.assertEqual(request.enable_thinking, True)
 
         request = {
             "prompt": "hello",
@@ -387,8 +392,9 @@ class TestQwenVLProcessor(unittest.TestCase):
             "temperature": 0.7,
             "top_p": 0.9,
         }
+        request = Request.from_dict(request)
         self.processor.process_request_obj(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        self.assertEqual(request.enable_thinking, True)
 
 
 if __name__ == "__main__":

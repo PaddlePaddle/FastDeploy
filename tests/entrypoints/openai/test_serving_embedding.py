@@ -52,7 +52,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
-                self.response_data.to_dict(),
+                self.response_data,
             ]
         )
         self.mock_engine_client.connection_manager.get_connection = AsyncMock(
@@ -75,6 +75,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
     async def test_create_embedding_success(self):
         # Setup
         request = EmbeddingChatRequest(
+            request_id="test_request_id",
             model="text-embedding-ada-002",
             messages=[
                 {"role": "user", "content": "Hello"},
@@ -113,8 +114,8 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(result), len(expected_prompts))
                 for r, prompt, rid in zip(result, expected_prompts, expected_ids):
                     # print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
-                    self.assertEqual(r["prompt"], prompt)
-                    self.assertEqual(r["request_id"], rid)
+                    self.assertEqual(r.prompt, prompt)
+                    self.assertEqual(r.request_id, rid)
 
         # 测试非 EmbeddingCompletionRequest 输入
         with self.subTest(name="non-embedding request"):

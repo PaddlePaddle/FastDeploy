@@ -392,7 +392,7 @@ class OpenAIServingCompletion:
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if tool_called or getattr(output, "tool_call", None):
+            if tool_called or getattr(output, "tool_calls", None):
                 return "tool_calls"
             else:
                 return "stop"
@@ -591,7 +591,7 @@ class OpenAIServingCompletion:
                             created=created_time,
                             model=model_name,
                             choices=choices,
-                            metrics=getattr(res, "metrics", None) if request.collect_metrics else None,
+                            metrics=getattr(res, "metrics", None).to_dict() if request.collect_metrics else None,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
@@ -631,7 +631,7 @@ class OpenAIServingCompletion:
                                         image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
-                                metrics=getattr(res, "metrics", None) if request.collect_metrics else None,
+                                metrics=getattr(res, "metrics", None).to_dict() if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")

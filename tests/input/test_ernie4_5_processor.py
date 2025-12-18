@@ -19,6 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from fastdeploy.engine.request import Request, RequestOutput
+
 MODULE_PATH = "fastdeploy.input.ernie4_5_processor"
 
 from fastdeploy.input.ernie4_5_processor import _SAMPLING_EPS, Ernie4_5Processor
@@ -178,23 +180,25 @@ class TestErnie4_5Processor(unittest.TestCase):
         """Test prompt-based tokenization, truncation, and temperature/top_p correction."""
         proc = self._make_processor()
         req = {
+            "request_id": "test_0",
             "prompt": "hello",
             "temperature": 0.0,
             "top_p": 0.0,
         }
+        req = Request.from_dict(req)
 
         processed = proc.process_request_obj(req, max_model_len=10)
 
-        self.assertIn("eos_token_ids", processed)
-        self.assertEqual(processed["eos_token_ids"], [proc.tokenizer.eos_token_id])
+        self.assertTrue(hasattr(processed, "eos_token_ids"))
+        self.assertEqual(processed.eos_token_ids, [proc.tokenizer.eos_token_id])
 
         expected_ids = proc.tokenizer.convert_tokens_to_ids(proc.tokenizer.tokenize("hello"))
-        self.assertEqual(processed["prompt_token_ids"], expected_ids)
+        self.assertEqual(processed.prompt_token_ids, expected_ids)
 
-        self.assertEqual(processed["max_tokens"], max(1, 10 - len(expected_ids)))
-        self.assertEqual(processed["temperature"], 1)
-        self.assertAlmostEqual(processed["top_p"], _SAMPLING_EPS)
-        self.assertEqual(processed["prompt_tokens"], "hello")
+        self.assertEqual(processed.sampling_params.max_tokens, max(1, 10 - len(expected_ids)))
+        self.assertEqual(processed.sampling_params.temperature, 1)
+        self.assertAlmostEqual(processed.sampling_params.top_p, _SAMPLING_EPS)
+        self.assertEqual(processed.prompt_tokens, "hello")
 
     def test_pad_batch_data_right_and_left_and_empty(self):
         """Test left/right padding and empty input behavior."""
@@ -229,20 +233,21 @@ class TestErnie4_5Processor(unittest.TestCase):
             "request_id": "req-1",
             "outputs": {"token_ids": [10, 11]},
         }
+        response = RequestOutput.from_dict(response)
 
         result = proc.process_response_obj_streaming(response, enable_thinking=False, include_stop_str_in_output=False)
 
-        outputs = result["outputs"]
+        outputs = result.outputs
 
-        self.assertIn("completion_tokens", outputs)
-        self.assertIn("text", outputs)
-        self.assertEqual(outputs["completion_tokens"], outputs["text"])
+        self.assertTrue(hasattr(outputs, "completion_tokens"))
+        self.assertTrue(hasattr(outputs, "text"))
+        self.assertEqual(outputs.completion_tokens, outputs.text)
 
-        self.assertIn("reasoning_token_num", outputs)
-        self.assertGreaterEqual(outputs["reasoning_token_num"], 0)
+        self.assertTrue(hasattr(outputs, "reasoning_token_num"))
+        self.assertGreaterEqual(outputs.reasoning_token_num, 0)
 
-        self.assertIn("delta_message", outputs)
-        delta_msg = outputs["delta_message"]
+        self.assertTrue(hasattr(outputs, "delta_message"))
+        delta_msg = outputs.delta_message
         self.assertTrue(hasattr(delta_msg, "tool_calls"))
 
         self.assertNotIn("req-1", proc.decode_status)
@@ -265,25 +270,13 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         proc = self._make_processor()
 
-        class ReqObj(dict):
-            """Mock request object supporting attributes, set(), and to_dict()."""
-
-            def set(self, k, v):
-                self[k] = v
-
-            def __getattr__(self, item):
-                return self.get(item, None)
-
-            def to_dict(self):
-                return dict(self)
-
-        request = ReqObj(
-            {
-                "messages": [{"role": "user", "content": "hello"}],
-                "temperature": 0.5,
-                "top_p": 0.5,
-            }
-        )
+        request = {
+            "request_id": "test_0",
+            "messages": [{"role": "user", "content": "hello"}],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        request = Request.from_dict(request)
 
         processed = proc.process_request(request, max_model_len=20, chat_template_kwargs={"extra": "VALUE"})
 
@@ -293,24 +286,27 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertIsNotNone(processed.prompt_token_ids)
         self.assertEqual(processed.prompt_token_ids, expected_ids)
 
-        self.assertIn("max_tokens", processed)
-        self.assertEqual(processed["max_tokens"], max(1, 20 - len(expected_ids)))
+        self.assertTrue(hasattr(processed.sampling_params, "max_tokens"))
+        self.assertEqual(processed.sampling_params.max_tokens, max(1, 20 - len(expected_ids)))
 
     def test_process_request_obj_chat_template_kwargs(self):
         """Test chat_template_kwargs insertion in process_request_obj."""
         proc = self._make_processor()
 
         req = {
+            "request_id": "test_0",
             "messages": [{"role": "user", "content": "hey"}],
             "chat_template_kwargs": {"A": "B"},
             "temperature": 0.5,
             "top_p": 0.5,
         }
+        req = Request.from_dict(req)
+        req.chat_template_kwargs = {"A": "B"}
 
         result = proc.process_request_obj(req, max_model_len=30)
 
-        self.assertIn("prompt_token_ids", result)
-        self.assertEqual(result["A"], "B")
+        self.assertTrue(hasattr(result, "prompt_token_ids"))
+        self.assertEqual(getattr(result, "A"), "B")
 
     def test_init_generation_config_exception(self):
         """Test fallback behavior when GenerationConfig loading fails."""
@@ -346,11 +342,12 @@ class TestErnie4_5Processor(unittest.TestCase):
             "request_id": "task-99",
             "outputs": {"token_ids": [10, 11], "text": ""},
         }
+        resp = RequestOutput.from_dict(resp)
 
         result = proc.process_response_obj_normal(resp, enable_thinking=False, include_stop_str_in_output=False)
 
-        self.assertIn("tool_call", result["outputs"])
-        self.assertEqual(result["outputs"]["tool_call"][0]["name"], "fake_tool")
+        self.assertTrue(hasattr(result.outputs, "tool_calls"))
+        self.assertEqual(result.outputs.tool_calls[0]["name"], "fake_tool")
 
 
 if __name__ == "__main__":

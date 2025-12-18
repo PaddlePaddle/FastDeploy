@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
 
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     CompletionRequest,
@@ -75,11 +76,11 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         self.engine_client.max_model_len = 20
         self.engine_client.data_processor = self.multi_modal_processor
 
-        async def mock_add_data(current_req_dict):
-            if current_req_dict.get("max_tokens") is None:
-                current_req_dict["max_tokens"] = self.engine_client.max_model_len - 1
-            current_req_dict["max_tokens"] = min(
-                self.engine_client.max_model_len - 4, max(0, current_req_dict.get("max_tokens"))
+        async def mock_add_data(current_req_obj):
+            if current_req_obj.sampling_params.max_tokens is None:
+                current_req_obj.sampling_params.max_tokens = self.engine_client.max_model_len - 1
+            current_req_obj.sampling_params.max_tokens = min(
+                self.engine_client.max_model_len - 4, max(0, current_req_obj.sampling_params.max_tokens)
             )
 
         self.engine_client.add_requests = AsyncMock(side_effect=mock_add_data)
@@ -109,24 +110,23 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             "num_cached_tokens": 0,
             "top_logprobs": None,
             "draft_top_logprobs": None,
-            "tool_call": None,
+            "tool_calls": None,
         }
 
         if tool_call:
-            outputs["tool_call"] = [
+            outputs["tool_calls"] = [
                 {"index": 0, "type": "function", "function": {"name": tool_call["name"], "arguments": json.dumps({})}}
             ]
-
-        return [
-            {
-                "request_id": request_id,
-                "outputs": outputs,
-                "metrics": {"request_start_time": 0.1},
-                "finished": True,
-                "error_msg": None,
-                "output_token_ids": output_token_num,
-            }
-        ]
+        response_dict = {
+            "request_id": request_id,
+            "outputs": outputs,
+            "metrics": {"request_start_time": 0.1},
+            "finished": True,
+            "error_msg": None,
+        }
+        resp = RequestOutput.from_dict(response_dict)
+        resp.output_token_ids = output_token_num
+        return [resp]
 
     def _generate_stream_inference_response(
         self, request_id: str, total_token_num: int, tool_call: Any = None
@@ -168,16 +168,16 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 )
                 outputs["delta_message"] = delta_msg
 
-            frame = [
-                {
-                    "request_id": f"{request_id}_0",
-                    "error_code": 200,
-                    "outputs": outputs,
-                    "metrics": metrics,
-                    "finished": (i == total_token_num - 1),
-                    "error_msg": None,
-                }
-            ]
+            frame_dict = {
+                "request_id": f"{request_id}_0",
+                "error_code": 200,
+                "outputs": outputs,
+                "metrics": metrics,
+                "finished": (i == total_token_num - 1),
+                "error_msg": None,
+            }
+            resp = RequestOutput.from_dict(frame_dict)
+            frame = [resp]
             stream_responses.append(frame)
         return stream_responses
 
@@ -189,6 +189,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户传max_tokens=5，生成数=5→length",
                 "request": ChatCompletionRequest(
+                    request_id="test_chat_0",
                     model="ernie4.5-vl",
                     messages=[{"role": "user", "content": "描述这张图片"}],
                     stream=False,
@@ -202,6 +203,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户未传max_tokens，生成数=10→stop",
                 "request": ChatCompletionRequest(
+                    request_id="test_chat_0",
                     model="ernie4.5-vl",
                     messages=[{"role": "user", "content": "描述这张图片"}],
                     stream=False,
@@ -214,6 +216,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户未传max_tokens，生成数=16→length",
                 "request": ChatCompletionRequest(
+                    request_id="test_chat_0",
                     model="ernie4.5-vl",
                     messages=[{"role": "user", "content": "描述这张图片"}],
                     stream=False,
@@ -226,6 +229,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户传max_tokens，生成数=10→stop",
                 "request": ChatCompletionRequest(
+                    request_id="test_chat_0",
                     model="ernie4.5-vl",
                     messages=[{"role": "user", "content": "描述这张图片"}],
                     stream=False,
@@ -239,6 +243,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "生成数<max_tokens，触发tool_call→tool_calls",
                 "request": ChatCompletionRequest(
+                    request_id="test_chat_0",
                     model="ernie4.5-vl",
                     messages=[{"role": "user", "content": "描述这张图片"}],
                     stream=False,
@@ -268,15 +273,10 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
         for case in test_cases:
             with self.subTest(case=case["name"]):
-                request_dict = {
-                    "messages": case["request"].messages,
-                    "chat_template": "default",
-                    "request_id": "test_chat_0",
-                    "max_tokens": case["request"].max_tokens,
-                }
-                await self.engine_client.add_requests(request_dict)
+                request_obj = Request.from_generic_request(case["request"], "test_chat_0")
+                await self.engine_client.add_requests(request_obj)
                 processed_req = self.multi_modal_processor.process_request_obj(
-                    request_dict, self.engine_client.max_model_len
+                    request_obj, self.engine_client.max_model_len
                 )
                 mock_response_queue.get.side_effect = self._generate_inference_response(
                     request_id="test_chat_0", output_token_num=case["output_token_num"], tool_call=case["tool_call"]
@@ -284,11 +284,11 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
                 result = await self.chat_serving.chat_completion_full_generator(
                     request=case["request"],
-                    request_id="test_chat",
+                    request_id="test_chat_0",
                     model_name="ernie4.5-vl",
-                    prompt_token_ids=processed_req["prompt_token_ids"],
+                    prompt_token_ids=processed_req.prompt_token_ids,
                     prompt_tokens="描述这张图片",
-                    max_tokens=processed_req["max_tokens"],
+                    max_tokens=processed_req.sampling_params.max_tokens,
                 )
                 self.assertEqual(
                     result.choices[0].finish_reason, case["expected_finish_reason"], f"场景 {case['name']} 失败"
@@ -301,7 +301,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户传max_tokens=6，生成数=6→length",
                 "request": CompletionRequest(
-                    request_id="test_completion",
+                    request_id="test_completion_0",
                     model="ernie4.5-vl",
                     prompt="描述这张图片：<image>xxx</image>",
                     stream=False,
@@ -314,7 +314,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户未传max_tokens，生成数=12→stop",
                 "request": CompletionRequest(
-                    request_id="test_completion",
+                    request_id="test_completion_0",
                     model="ernie4.5-vl",
                     prompt="描述这张图片：<image>xxx</image>",
                     stream=False,
@@ -326,7 +326,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "用户传max_tokens=20（修正为16），生成数=16→length",
                 "request": CompletionRequest(
-                    request_id="test_completion",
+                    request_id="test_completion_0",
                     model="ernie4.5-vl",
                     prompt="描述这张图片：<image>xxx</image>",
                     stream=False,
@@ -343,47 +343,44 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
         for case in test_cases:
             with self.subTest(case=case["name"]):
-                request_dict = {
-                    "prompt": case["request"].prompt,
-                    "request_id": "test_completion",
-                    "multimodal_data": {"image": ["xxx"]},
-                    "max_tokens": case["request"].max_tokens,
-                }
-                await self.engine_client.add_requests(request_dict)
+                request_obj = Request.from_generic_request(
+                    case["request"], "test_completion_0", case["request"].prompt
+                )
+                await self.engine_client.add_requests(request_obj)
                 processed_req = self.multi_modal_processor.process_request_obj(
-                    request_dict, self.engine_client.max_model_len
+                    request_obj, self.engine_client.max_model_len
                 )
                 self.engine_client.data_processor.process_response_obj = (
                     lambda data, stream, include_stop_str_in_output: data
                 )
                 mock_response_queue = AsyncMock()
-                mock_response_queue.get.side_effect = lambda: [
-                    {
-                        "request_id": "test_completion_0",
-                        "error_code": 200,
-                        "outputs": {
-                            "text": "这是一张风景图"[: case["output_token_num"]],
-                            "token_ids": list(range(case["output_token_num"])),
-                            "top_logprobs": None,
-                            "draft_top_logprobs": None,
-                        },
-                        "metrics": {"request_start_time": 0.1},
-                        "finished": True,
-                        "error_msg": None,
-                        "output_token_ids": case["output_token_num"],
-                    }
-                ]
+                resp_dict = {
+                    "request_id": "test_completion_0",
+                    "error_code": 200,
+                    "outputs": {
+                        "text": "这是一张风景图"[: case["output_token_num"]],
+                        "token_ids": list(range(case["output_token_num"])),
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                    },
+                    "metrics": {"request_start_time": 0.1},
+                    "finished": True,
+                    "error_msg": None,
+                }
+                resp = RequestOutput.from_dict(resp_dict)
+                resp.output_token_ids = case["output_token_num"]
+                mock_response_queue.get.side_effect = lambda: [resp]
                 self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
 
                 result = await self.completion_serving.completion_full_generator(
                     request=case["request"],
                     num_choices=1,
-                    request_id="test_completion",
+                    request_id="test_completion_0",
                     created_time=1699999999,
                     model_name="ernie4.5-vl",
-                    prompt_batched_token_ids=[processed_req["prompt_token_ids"]],
+                    prompt_batched_token_ids=[processed_req.prompt_token_ids],
                     prompt_tokens_list=[case["request"].prompt],
-                    max_tokens_list=[processed_req["max_tokens"]],
+                    max_tokens_list=[processed_req.sampling_params.max_tokens],
                 )
 
                 self.assertIsInstance(result, CompletionResponse)
@@ -453,15 +450,10 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
         for case in test_cases:
             with self.subTest(case=case["name"]):
-                request_dict = {
-                    "messages": case["request"].messages,
-                    "chat_template": "default",
-                    "request_id": "test_chat_stream_0",
-                    "max_tokens": case["request"].max_tokens,
-                }
-                await self.engine_client.add_requests(request_dict)
+                request_obj = Request.from_generic_request(case["request"], "test_chat_stream_0")
+                await self.engine_client.add_requests(request_obj)
                 processed_req = self.multi_modal_processor.process_request_obj(
-                    request_dict, self.engine_client.max_model_len
+                    request_obj, self.engine_client.max_model_len
                 )
 
                 self.engine_client.data_processor.process_response_obj = (
@@ -481,9 +473,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     request=case["request"],
                     request_id="test_chat_stream_0",
                     model_name="ernie4.5-vl",
-                    prompt_token_ids=processed_req["prompt_token_ids"],
+                    prompt_token_ids=processed_req.prompt_token_ids,
                     prompt_tokens="描述这张图片",
-                    max_tokens=processed_req["max_tokens"],
+                    max_tokens=processed_req.sampling_params.max_tokens,
                 )
 
                 final_finish_reason = None
@@ -498,6 +490,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                         try:
                             json_part = chunk_str.strip().lstrip("data: ").rstrip("\n\n")
                             chunk_dict = json.loads(json_part)
+                            print(chunk_dict)
                             if chunk_dict.get("choices") and len(chunk_dict["choices"]) > 0:
                                 finish_reason = chunk_dict["choices"][0].get("finish_reason")
                                 if finish_reason:
@@ -543,15 +536,12 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
         for case in test_cases:
             with self.subTest(case=case["name"]):
-                request_dict = {
-                    "prompt": case["request"].prompt,
-                    "multimodal_data": {"image": ["xxx"]},
-                    "request_id": "test_completion_stream_0",
-                    "max_tokens": case["request"].max_tokens,
-                }
-                await self.engine_client.add_requests(request_dict)
+                request_obj = Request.from_generic_request(
+                    case["request"], "test_completion_stream_0", case["request"].prompt
+                )
+                await self.engine_client.add_requests(request_obj)
                 processed_req = self.multi_modal_processor.process_request_obj(
-                    request_dict, self.engine_client.max_model_len
+                    request_obj, self.engine_client.max_model_len
                 )
                 self.engine_client.data_processor.process_response_obj = (
                     lambda data, stream, include_stop_str_in_output: data
@@ -570,9 +560,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     created_time=0,
                     request_id="test_completion_stream",
                     model_name="ernie4.5-vl",
-                    prompt_batched_token_ids=[processed_req["prompt_token_ids"]],
+                    prompt_batched_token_ids=[processed_req.prompt_token_ids],
                     prompt_tokens_list=case["request"].prompt,
-                    max_tokens_list=[processed_req["max_tokens"]],
+                    max_tokens_list=[processed_req.sampling_params.max_tokens],
                 )
 
                 final_finish_reason = None
@@ -602,7 +592,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "单prompt → max_tokens_list长度1",
                 "request": CompletionRequest(
-                    request_id="test_single_prompt",
+                    request_id="test_single_prompt_0",
                     model="ernie4.5-vl",
                     prompt="请介绍人工智能的应用",
                     stream=False,
@@ -615,7 +605,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             {
                 "name": "多prompt → max_tokens_list长度2",
                 "request": CompletionRequest(
-                    request_id="test_multi_prompt",
+                    request_id="test_multi_prompt_0",
                     model="ernie4.5-vl",
                     prompt=["请介绍Python语言", "请说明机器学习的步骤"],
                     stream=False,
@@ -627,12 +617,12 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             },
         ]
 
-        async def mock_format_and_add_data(current_req_dict):
-            req_idx = int(current_req_dict["request_id"].split("_")[-1])
+        async def mock_format_and_add_data(current_req_obj):
+            req_idx = int(current_req_obj.request_id.split("_")[-1])
             if isinstance(case["mock_max_tokens"], list):
-                current_req_dict["max_tokens"] = case["mock_max_tokens"][req_idx]
+                current_req_obj.sampling_params.max_tokens = case["mock_max_tokens"][req_idx]
             else:
-                current_req_dict["max_tokens"] = case["mock_max_tokens"]
+                current_req_obj.sampling_params.max_tokens = case["mock_max_tokens"]
             return [101, 102, 103, 104]
 
         self.engine_client.format_and_add_data = AsyncMock(side_effect=mock_format_and_add_data)
