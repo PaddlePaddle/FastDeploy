@@ -248,7 +248,7 @@ def scheduler_fixture(monkeypatch):
 
 def test_put_requests_handles_duplicates_and_load_accounting(scheduler_fixture):
     """测试 put_requests：验证重复请求处理及负载计数是否正确更新。"""
-    scheduler, fake_redis = scheduler_fixtur
+    scheduler, fake_redis = scheduler_fixture
 
     req = _make_request("req-1")
     duplicate = _make_request("req-1")
@@ -301,7 +301,7 @@ def test_get_requests_can_steal_remote_request(monkeypatch, scheduler_fixture):
     assert fake_redis.sorted_sets[f"{scheduler.topic}.load.0"]["peer"] == 1
 
 
-def def test_get_requests_requeues_when_chunked_limits_hit(monkeypatch, scheduler_fixture):
+def test_get_requests_requeues_when_chunked_limits_hit(monkeypatch, scheduler_fixture):
     """测试 get_requests：当触发分块预填充限制时，长任务应被重新放回队列。"""
     scheduler, fake_redis = scheduler_fixture
     monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
