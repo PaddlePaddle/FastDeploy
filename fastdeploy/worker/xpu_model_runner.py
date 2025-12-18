@@ -118,7 +118,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         # used by SamplingMetadata
-        self.enable_logprob = False  # fd_config.model_config.enable_logprob
+        self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         #  Sampler
@@ -1006,7 +1006,7 @@ class XPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 

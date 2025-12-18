@@ -261,7 +261,6 @@ class ResourceManagerV1(ResourceManager):
                     self.running.insert(0, preempted_req)
                     continue
                 preempted_req.status = RequestStatus.PREEMPTED
-                preempted_req.last_preempted_blocksize = len(preempted_req.block_tables)
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
                     self.tasks_list[preempted_req.idx] = None
@@ -429,6 +428,10 @@ class ResourceManagerV1(ResourceManager):
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
                     from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                elif current_platform.is_iluvatar():
+                    from fastdeploy.model_executor.ops.iluvatar import (
+                        get_img_boundaries,
+                    )
                 else:
                     from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
@@ -736,14 +739,6 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                        # If num_new_block is less than the last preempted block size, use the last preempted block size instead.
-                        # For normal requests, when allocating blocks, we reserve two extra blocks for decoding.
-                        # In the request rescheduling scenario, we currently only consider the number of tokens already generated,
-                        # which might lead to allocating fewer blocks than the previous allocation, causing repeated rescheduling.
-                        # This adjustment ensures we at least allocate as many blocks as before to avoid this issue.
-                        last_preempted_blocksize = getattr(request, "last_preempted_blocksize", 0)
-                        if num_new_block < last_preempted_blocksize:
-                            num_new_block = last_preempted_blocksize
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
