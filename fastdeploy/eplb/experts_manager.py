@@ -38,7 +38,7 @@ class RedundantExpertManager:
     def __init__(
         self,
         rank: int = 0,
-        ep_size: int = 32,
+        ep_size: int = 64,
         fd_config: FDConfig = None,
         ipc_signal_suffix: int = 0,
     ):
@@ -54,6 +54,7 @@ class RedundantExpertManager:
         self.num_hidden_layers = self.fd_config.model_config.num_hidden_layers
         self.num_logical_experts = self.fd_config.model_config.moe_num_experts
         self.ipc_signal_suffix = ipc_signal_suffix
+        self.local_rank = self.rank % self.fd_config.parallel_config.tensor_parallel_size
 
         self.num_replicas = self.num_logical_experts + self.num_redundant_experts
         self.num_groups = self.num_logical_experts
@@ -171,20 +172,21 @@ class RedundantExpertManager:
         """
         listen_rearrange_expert_signal
         """
-        if self.rank == 0:
+        dp_ipc_signal_suffix = f"{self.ipc_signal_suffix}_dp{self.fd_config.parallel_config.local_data_parallel_id}"
+        if self.local_rank == 0:
             rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
             rearrange_experts_ips_size_signal = IPCSignal(
                 name="rearrange_experts_ips_size",
                 array=rearrange_experts_ips_size_array,
                 dtype=np.int32,
-                suffix=self.ipc_signal_suffix,
+                suffix=dp_ipc_signal_suffix,
                 create=False,
             )
 
             shm_rearrange_experts_ips_list = IPCSignal(
                 name="rearrange_experts_ips_list",
                 shm_size=self.eplb_config.redundant_expert_ip_shm_size,
-                suffix=self.ipc_signal_suffix,
+                suffix=dp_ipc_signal_suffix,
                 create=False,
             )
 
@@ -193,16 +195,25 @@ class RedundantExpertManager:
                 name="rearrange_experts_status",
                 array=rearrange_experts_status,
                 dtype=np.int32,
-                suffix=self.ipc_signal_suffix,
+                suffix=dp_ipc_signal_suffix,
+                create=False,
+            )
+            signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_tensor_array = IPCSignal(
+                name="signal_update_weight_from_tensor",
+                array=signal_update_weight_from_tensor,
+                dtype=np.int32,
+                suffix=dp_ipc_signal_suffix,
                 create=False,
             )
 
+        tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{self.local_rank}"
         signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
         signal_update_weight_from_disk_array = IPCSignal(
             name="signal_update_weight_from_disk",
             array=signal_update_weight_from_disk,
             dtype=np.int32,
-            suffix=self.ipc_signal_suffix,
+            suffix=tp_ipc_signal_suffix,
             create=False,
         )
 
@@ -214,12 +225,21 @@ class RedundantExpertManager:
             name="all_experts_token_stats",
             array=experts_token_stats,
             dtype=np.int32,
-            suffix=self.ipc_signal_suffix,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
+        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+        self.update_weight_from_disk_result = IPCSignal(
+            name="result_update_weight_from_disk",
+            array=result_update_weight_from_disk,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
             create=False,
         )
 
         while True:
-            if self.rank == 0:
+            if self.local_rank == 0:
                 now = int(time.time())
                 if rearrange_experts_ips_size_signal.value[0] > 0:
                     # step 1. all reduce experts token stats
@@ -267,8 +287,8 @@ class RedundantExpertManager:
         eplb_strategy = self.eplb_config.redundant_expert_eplb_strategy
         if is_init:
             num_groups = 1
-            num_nodes = 2
-            num_gpus = 2 * 8
+            num_nodes = 8
+            num_gpus = 8 * 8
             eplb_strategy = ""
         # eplb
         rank_expert_list, logical_to_physical_map, expert_count = rebalance_experts(
@@ -291,7 +311,7 @@ class RedundantExpertManager:
         self.model_expert_id_to_ep_rank_array[..., : logical_to_physical_map.shape[-1]] = logical_to_physical_map[:]
         self.model_expert_in_rank_num_list[:] = expert_count[:]
 
-        if self.rank == 0:
+        if self.local_rank == 0:
             workload = RedundantExpertWorkload()
             workload.tokens_per_expert_stats_list = self.model_tokens_per_expert_stats_list.tolist()
             workload.ep_rank_to_expert_id_list = rank_expert_list.tolist()
@@ -304,16 +324,7 @@ class RedundantExpertManager:
         update_weight_from_disk
         """
         begin_time = time.time()
-        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        update_weight_from_disk_result = IPCSignal(
-            name="result_update_weight_from_disk",
-            array=result_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=self.ipc_signal_suffix,
-            create=False,
-        )
-        update_weight_from_disk_result.value[0] = 0
-
+        self.update_weight_from_disk_result.value[0] = 0
         self.logger.info(f"redundant_expert: update_weight_from_disk send to async process, rank {self.rank}")
         self.parent_mg_conn.send(
             {
@@ -326,7 +337,7 @@ class RedundantExpertManager:
         self.tensor_infos = response["weights"]
 
         # 更新权重加载结果
-        update_weight_from_disk_result.value[0] = 1 if response["result"] else -1
+        self.update_weight_from_disk_result.value[0] = 1 if response["result"] else -1
         self.logger.info(
             "redundant_expert: update_weight_from_disk end, rank"
             + f" {self.rank} {response['result']}, cost {int(time.time() - begin_time)}s"
@@ -441,15 +452,7 @@ class RedundantExpertManager:
                 or not self.eplb_config.redundant_expert_enable_schedule_cordon
             ):
                 self.logger.info("redundant_expert: allreduce_load_weight_result success, notify infer.py")
-                signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-                signal_update_weight_from_tensor_array = IPCSignal(
-                    name="signal_update_weight_from_tensor",
-                    array=signal_update_weight_from_tensor,
-                    dtype=np.int32,
-                    suffix=self.ipc_signal_suffix,
-                    create=False,
-                )
-                signal_update_weight_from_tensor_array.value[0] = 1
+                self.signal_update_weight_from_tensor_array.value[0] = 1
         return True
 
     def allgather_load_weight_result(self):

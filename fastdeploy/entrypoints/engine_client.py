@@ -96,7 +96,7 @@ class EngineClient:
         else:
             self.is_master = False
 
-        if self.config.eplb_config.enable_eplb and self.config.parallel_config.expert_parallel_rank == 0:
+        if self.config.eplb_config.enable_eplb:
             self.init_eplb_signals(ipc_signal_suffix=port)
 
         array_size = min(max_chips_per_node, tensor_parallel_size)
@@ -126,17 +126,21 @@ class EngineClient:
         """
         Initialize eplb signals.
         """
+        if self.config.parallel_config.tensor_parallel_rank != 0:
+            # only TP rank 0 need to init eplb signals, rank 0 manage all EPLB signals for all TP ranks
+            return
         self.signal_clear_experts_token_stats_list = []
         self.local_experts_token_stats_array_list = []
         self.expert_tokens_stats_array_list = []
         self.signal_update_weight_from_disk_array_list = []
         self.update_weight_from_disk_result_list = []
+        dp_ipc_signal_suffix = f"{ipc_signal_suffix}_dp{self.config.parallel_config.local_data_parallel_id}"
         rearrange_experts_status = np.zeros([1], dtype=np.int32)
         self.rearrange_experts_signal = IPCSignal(
             name="rearrange_experts_status",
             array=rearrange_experts_status,
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
+            suffix=dp_ipc_signal_suffix,
             create=False,
         )
 
@@ -145,14 +149,14 @@ class EngineClient:
             name="rearrange_experts_ips_size",
             array=rearrange_experts_ips_size_array,
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
+            suffix=dp_ipc_signal_suffix,
             create=False,
         )
 
         self.shm_rearrange_experts_ips_list = IPCSignal(
             name="rearrange_experts_ips_list",
             shm_size=self.config.eplb_config.redundant_expert_ip_shm_size,
-            suffix=ipc_signal_suffix,
+            suffix=dp_ipc_signal_suffix,
             create=False,
         )
 
@@ -161,27 +165,19 @@ class EngineClient:
             name="signal_update_weight_from_tensor",
             array=signal_update_weight_from_tensor,
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
+            suffix=dp_ipc_signal_suffix,
             create=False,
         )
 
-        if envs.FD_ENABLE_MULTI_API_SERVER:
-            engine_worker_suffix = [
-                self.config.parallel_config.engine_worker_queue_port[
-                    self.config.parallel_config.local_data_parallel_id
-                ]
-            ]
-        else:
-            engine_worker_suffix = self.config.parallel_config.engine_worker_queue_port
-
-        for suffix_port in engine_worker_suffix:
+        for tp_rank_id in range(self.config.parallel_config.tensor_parallel_size):
+            tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{tp_rank_id}"
             signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
             self.signal_clear_experts_token_stats_list.append(
                 IPCSignal(
                     name="signal_clear_experts_token_stats",
                     array=signal_clear_experts_token_stats,
                     dtype=np.int32,
-                    suffix=suffix_port,
+                    suffix=tp_ipc_signal_suffix,
                     create=False,
                 )
             )
@@ -192,7 +188,7 @@ class EngineClient:
                     name="signal_update_weight_from_disk",
                     array=signal_update_weight_from_disk,
                     dtype=np.int32,
-                    suffix=suffix_port,
+                    suffix=tp_ipc_signal_suffix,
                     create=False,
                 )
             )
@@ -203,7 +199,7 @@ class EngineClient:
                     name="result_update_weight_from_disk",
                     array=result_update_weight_from_disk,
                     dtype=np.int32,
-                    suffix=suffix_port,
+                    suffix=tp_ipc_signal_suffix,
                     create=False,
                 )
             )
@@ -217,7 +213,7 @@ class EngineClient:
                     name="all_experts_token_stats",
                     array=experts_token_stats,
                     dtype=np.int32,
-                    suffix=suffix_port,
+                    suffix=tp_ipc_signal_suffix,
                     create=False,
                 )
             )
@@ -226,7 +222,7 @@ class EngineClient:
                     name="local_experts_token_stats",
                     array=experts_token_stats,
                     dtype=np.int32,
-                    suffix=suffix_port,
+                    suffix=tp_ipc_signal_suffix,
                     create=False,
                 )
             )
@@ -541,10 +537,10 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
-        if self.config.parallel_config.expert_parallel_rank != 0:
+        if self.config.parallel_config.tensor_parallel_rank != 0:
             content = {
                 "code": 1,
-                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
             }
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code
@@ -589,6 +585,8 @@ class EngineClient:
                 status_code = HTTPStatus.BAD_REQUEST
             else:
                 weight = np.array(request_dict["data"], dtype=np.int32)
+                api_server_logger.info(f"expert_tokens_stats_array_list: {weight}")
+
                 for idx in range(len(self.expert_tokens_stats_array_list)):
                     self.expert_tokens_stats_array_list[idx].value[:] = weight[:]
                     self.signal_update_weight_from_disk_array_list[idx].value[0] = 1
@@ -645,10 +643,10 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
-        if self.config.parallel_config.expert_parallel_rank != 0:
+        if self.config.parallel_config.tensor_parallel_rank != 0:
             content = {
                 "code": 1,
-                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
             }
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code
@@ -688,10 +686,10 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
-        if self.config.parallel_config.expert_parallel_rank != 0:
+        if self.config.parallel_config.tensor_parallel_rank != 0:
             content = {
                 "code": 1,
-                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
             }
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code
