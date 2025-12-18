@@ -55,7 +55,32 @@ jobs:
               fi
             '
 
-            wget -q --no-proxy ${fd_archive_url}
+            # Download with retry and validation
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if wget -q --no-proxy ${fd_archive_url} && [ -f FastDeploy.tar.gz ] && [ -s FastDeploy.tar.gz ]; then
+                echo "Download successful, file size: $(stat -c%s FastDeploy.tar.gz) bytes"
+                break
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                echo "Download failed or file is empty, retry $RETRY_COUNT/$MAX_RETRIES..."
+                rm -f FastDeploy.tar.gz
+                sleep 2
+              fi
+            done
+            
+            if [ ! -f FastDeploy.tar.gz ] || [ ! -s FastDeploy.tar.gz ]; then
+              echo "ERROR: Failed to download FastDeploy.tar.gz after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            
+            # Verify tar.gz integrity before extraction
+            if ! tar -tzf FastDeploy.tar.gz > /dev/null 2>&1; then
+              echo "ERROR: FastDeploy.tar.gz is corrupted or incomplete"
+              exit 1
+            fi
+            
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
