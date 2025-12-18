@@ -56,11 +56,11 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
     )
 
-    recover_decode_task = None
     share_external_data = None
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
@@ -189,9 +189,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
+        increment_value = (
+            4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
+        )
+
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
-            fill_value=4,
+            fill_value=increment_value,
             dtype="int64",
         ).cpu()
 
@@ -208,8 +212,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
-        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
 
         # Rollout routing replay config
         self.routing_replay_manager = None
@@ -463,7 +467,7 @@ class GPUModelRunner(ModelRunnerBase):
                         multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
-                                inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
+                                inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
                             )
                             multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
                             multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
@@ -482,7 +486,7 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         multi_vision_inputs["images_lst"].append(
-                            inputs["images"][request.image_start : request.image_end].cuda()
+                            inputs["images"][request.image_start : request.image_end].to(self.device)
                         )
                         multi_vision_inputs["grid_thw_lst"].extend(
                             paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
@@ -1610,7 +1614,7 @@ class GPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -1692,6 +1696,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
+        logger.info("kv cache is initialized!")
 
     def _initialize_attn_backend(self) -> None:
         """
