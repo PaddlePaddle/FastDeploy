@@ -1022,7 +1022,6 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id);
@@ -1033,7 +1032,6 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);

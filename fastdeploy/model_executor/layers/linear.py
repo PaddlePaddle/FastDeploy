@@ -356,25 +356,31 @@ class MergedReplicatedLinear(ReplicatedLinear):
         self.output_sizes = output_sizes
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        assert loaded_shard_id in ["q_a", "kv_a"]
         if not param._is_initialized():
             param.initialize()
+        if loaded_shard_id is None:
+            axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
+            if hasattr(param, "tensor_track"):
+                param.tensor_track.mark(start=0, end=loaded_weight.shape[axis])
 
-        if loaded_shard_id == "q_a":
-            param_shard_offset = 0
-            param_shard_size = self.output_sizes[0]
         else:
-            # loaded_shard_id == "kv_a"
-            param_shard_offset = self.output_sizes[0]
-            param_shard_size = self.output_sizes[1]
-        if hasattr(param, "tensor_track"):
-            param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        param = slice_fn(
-            param,
-            (self.fd_config.model_config.model_format == "torch") ^ True,
-            start=param_shard_offset,
-            end=param_shard_offset + param_shard_size,
-        )
+            assert loaded_shard_id in ["q_a", "kv_a", "gate", "up"]
+
+            if loaded_shard_id in ["q_a", "gate"]:
+                param_shard_offset = 0
+                param_shard_size = self.output_sizes[0]
+            elif loaded_shard_id in ["kv_a", "up"]:
+                param_shard_offset = self.output_sizes[0]
+                param_shard_size = self.output_sizes[1]
+
+            if hasattr(param, "tensor_track"):
+                param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
+            param = slice_fn(
+                param,
+                (self.fd_config.model_config.model_format == "torch") ^ True,
+                start=param_shard_offset,
+                end=param_shard_offset + param_shard_size,
+            )
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )

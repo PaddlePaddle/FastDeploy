@@ -283,10 +283,12 @@ class VocabParallelEmbedding(nn.Layer):
         if output_dim == 0:
             h2d_copy(param[: shard_weight.shape[0]], shard_weight)
             if not current_platform.is_maca():
-                param[shard_weight.shape[0] :].fill_(0)
+                if param.shape[0] != shard_weight.shape[0]:
+                    param[shard_weight.shape[0] :].fill_(0)
         else:
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
-            param[:, shard_weight.shape[1] :].fill_(0)
+            if param.shape[1] != shard_weight.shape[1]:
+                param[:, shard_weight.shape[1] :].fill_(0)
 
     def forward(self, ids_remove_padding=None) -> paddle.Tensor:
         """

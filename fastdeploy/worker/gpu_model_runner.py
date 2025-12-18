@@ -190,9 +190,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
+        increment_value = (
+            4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
+        )
+
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
-            fill_value=4,
+            fill_value=increment_value,
             dtype="int64",
         ).cpu()
 
@@ -705,6 +709,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 self.forward_batch_reqs_list[idx] = None
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    self.routing_replay_manager.clear_request(batch_id=idx)
+
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
