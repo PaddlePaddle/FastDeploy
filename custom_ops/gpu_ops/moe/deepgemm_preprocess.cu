@@ -16,10 +16,11 @@
 #include "paddle/extension.h"
 
 template <typename scalar_t>
-__global__ void
-cuda_kernel(const scalar_t *__restrict__ topk_ids, int32_t *__restrict__ res,
-            int32_t *__restrict__ res_padded, size_t numel, int num_experts) {
-
+__global__ void cuda_kernel(const scalar_t *__restrict__ topk_ids,
+                            int32_t *__restrict__ res,
+                            int32_t *__restrict__ res_padded,
+                            size_t numel,
+                            int num_experts) {
   extern __shared__ int32_t tokens_per_ep[];
 
   for (size_t i = threadIdx.x; i < num_experts; i += blockDim.x) {
@@ -29,7 +30,7 @@ cuda_kernel(const scalar_t *__restrict__ topk_ids, int32_t *__restrict__ res,
 
   for (size_t i = threadIdx.x; i < numel; i += blockDim.x) {
     int32_t expert_id = topk_ids[i];
-    if(expert_id >= 0) atomicAdd(&tokens_per_ep[expert_id], 1);
+    if (expert_id >= 0) atomicAdd(&tokens_per_ep[expert_id], 1);
   }
 
   __syncthreads();
@@ -42,6 +43,7 @@ cuda_kernel(const scalar_t *__restrict__ topk_ids, int32_t *__restrict__ res,
 
 paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
                                             int64_t num_experts) {
+  CUDA_CHECK(cudaGetLastError());
 
   int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
 
@@ -52,8 +54,12 @@ paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
   using scalar_t = int64_t;
 
   cuda_kernel<<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
-      topk_ids.data<scalar_t>(), token_nums_per_expert.data<int32_t>(),
-      token_nums_per_expert.data<int32_t>() + num_experts, topk_ids_numel,
+      topk_ids.data<scalar_t>(),
+      token_nums_per_expert.data<int32_t>(),
+      token_nums_per_expert.data<int32_t>() + num_experts,
+      topk_ids_numel,
       num_experts);
+
+  CUDA_CHECK(cudaGetLastError());
   return token_nums_per_expert;
 }
