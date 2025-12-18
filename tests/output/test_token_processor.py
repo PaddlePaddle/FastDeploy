@@ -1050,3 +1050,27 @@ def test_warmup_processor_stop_joins_worker():
     warm.worker = worker
     warm.stop()
     worker.join.assert_called_once()
+
+
+def test_healthy_behaviour_respects_timeout(monkeypatch):
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = time.time() - 1
+    processor.timestamp_for_alive_after_handle_batch = None
+    monkeypatch.setattr(envs, "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", 0.1)
+
+    assert processor.healthy() is False
+
+
+def test_healthy_detects_engine_hang():
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = None
+    processor.timestamp_for_alive_after_handle_batch = time.time()
+    processor.engine_output_token_hang = True
+
+    assert processor.healthy() is False
+
+
+def test_process_sampling_results_use_zmq_rejects_speculative():
+    processor, _, _, _ = _make_processor(speculative_method="mtp")
+    with pytest.raises(NotImplementedError):
+        processor.process_sampling_results_use_zmq()
