@@ -90,6 +90,7 @@ def _reload_api_server(args):
         # attributes (metrics, trace flags, etc.) intact to avoid affecting
         # unrelated tests such as splitwise/e2e schedulers.
         patch("fastdeploy.envs.environment_variables", mock_env_vars),
+        patch("fastdeploy.envs.TRACES_ENABLE", "false"),
     ):
         from fastdeploy.entrypoints.openai import api_server as api_server_mod
 
