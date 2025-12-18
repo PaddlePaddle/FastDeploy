@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import unittest
 from unittest import IsolatedAsyncioTestCase
@@ -149,7 +165,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat_single(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat_single(response, stream, include_stop_str_in_output):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_single
@@ -305,6 +321,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
             {
                 "request_id": "test_request_id_1",
@@ -318,6 +335,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
         ]
 
@@ -477,6 +495,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 prompt_logprobs_res_list=prompt_logprobs_res_list,
                 response_processor=mock_response_processor,
                 max_tokens=max_tokens_list[idx],
+                speculate_metrics=None,
             )
 
             expected = case["expected"]
@@ -523,7 +542,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat(response, stream, include_stop_str_in_output):
             delta_msg_mock = Mock()
             delta_msg_mock.content = response["outputs"]["text"]
             if response["outputs"]["text"] == "a":

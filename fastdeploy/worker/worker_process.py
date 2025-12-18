@@ -173,12 +173,7 @@ class PaddleDisWorkerProc:
             exist_swapped_task_signal:
             model_weights_status:
         """
-        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if (
-            self.parallel_config.enable_expert_parallel
-            and self.parallel_config.data_parallel_size > 1
-            and not envs.FD_ENABLE_MULTI_API_SERVER
-        ):
+        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
@@ -218,7 +213,7 @@ class PaddleDisWorkerProc:
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -230,7 +225,7 @@ class PaddleDisWorkerProc:
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -240,7 +235,7 @@ class PaddleDisWorkerProc:
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -250,7 +245,7 @@ class PaddleDisWorkerProc:
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -260,7 +255,7 @@ class PaddleDisWorkerProc:
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -305,11 +300,11 @@ class PaddleDisWorkerProc:
             rank=self.local_rank,
             ep_size=self.ranks,
             fd_config=self.fd_config,
-            ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
+            ipc_signal_suffix=self.parallel_config.local_engine_worker_queue_port,
         )
 
         dp_ipc_signal_suffix = (
-            f"{self.parallel_config.engine_worker_queue_port}_dp{self.parallel_config.local_data_parallel_id}"
+            f"{self.parallel_config.local_engine_worker_queue_port}_dp{self.parallel_config.local_data_parallel_id}"
         )
         if local_rank == 0:  # master rank0
             signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
@@ -356,7 +351,7 @@ class PaddleDisWorkerProc:
             [MODEL_MAIN_NAME],
             self.local_rank,
             self.ranks,
-            shm_uuid=self.parallel_config.engine_worker_queue_port,
+            shm_uuid=self.parallel_config.local_engine_worker_queue_port,
             eplb_config=self.eplb_config,
             logger=logger,
         )
@@ -413,51 +408,40 @@ class PaddleDisWorkerProc:
         self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = int((tp_size + 7) // 8)
-        req_ids = []
+        self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
 
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             # run eplb
             self._run_eplb(tp_rank)
-            if tp_rank == 0:
+
+            if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
-                    )
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
-            self.insert_step = False
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+                if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
+                        if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if tp_size > 1:
-                # Synchronize the signal for other workers
-                self._tp_barrier_wait()
+            # Synchronize the signal set by tp_rank0 visiable to other workers
+            self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
-                if self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
-                else:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
@@ -471,22 +455,27 @@ class PaddleDisWorkerProc:
                         self.model_weights_status,
                         # model_weights_signal
                         self.worker.model_runner,
-                        self.parallel_config.engine_worker_queue_port,
+                        self.parallel_config.local_engine_worker_queue_port,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                        time.sleep(0.01)
+                    continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
-                self.insert_step = True
 
                 tasks, read_finish = self.task_queue.get_tasks()
+                # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
-                    # Ensure that every worker get the task
-                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                    self.task_queue.read_finish_flag.set(0)
+                    # Reset the two signal.
+                    if self.nnode > 1:
+                        self.task_queue.read_finish_flag.set(0)
+                    else:
+                        self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
@@ -503,8 +492,7 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
-                if self.ranks > 1:
-                    self._tp_barrier_wait()
+                self._tp_barrier_wait() if tp_size > 1 else None
 
                 time.sleep(0.001)
                 continue
@@ -595,10 +583,10 @@ class PaddleDisWorkerProc:
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             task_address = (
                 self.parallel_config.pod_ip,
-                self.parallel_config.engine_worker_queue_port,
+                self.parallel_config.local_engine_worker_queue_port,
             )
         else:
-            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.engine_worker_queue_port}.sock"
+            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.local_engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
@@ -936,10 +924,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
-    if args.load_strategy != "meta":
-        parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-            parallel_config.local_data_parallel_id
-        ]
     parallel_config.set_communicate_group()
 
     load_config = LoadConfig(vars(args))
@@ -990,7 +974,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
+    if not (
+        current_platform.is_cuda()
+        or current_platform.is_xpu()
+        or current_platform.is_maca()
+        or current_platform.is_iluvatar()
+    ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
@@ -1014,6 +1003,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         eplb_config=eplb_config,
         routing_replay_config=routing_replay_config,
     )
+    logger.info(f"parallel_config.local_engine_worker_queue_port {parallel_config.local_engine_worker_queue_port}")
+
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
@@ -1021,8 +1012,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
-        fd_config.cache_config.enable_prefix_caching = False
-        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 

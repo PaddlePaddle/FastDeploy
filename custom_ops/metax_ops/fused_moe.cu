@@ -14,9 +14,10 @@
 
 #pragma once
 
-#include "fused_moe_op.h"
+#include "fused_moe_helper.h"
 #include "helper.h"
-#include "mc_fused_moe_helper.h"
+
+namespace phi {
 
 __global__ void compute_total_rows_before_expert_kernel(
     int* sorted_experts,
@@ -42,58 +43,61 @@ void compute_total_rows_before_expert(int* sorted_indices,
       sorted_indices, total_indices, num_experts, total_rows_before_expert);
 }
 
-template <paddle::DataType T,
-          typename ElementA,
-          typename ElementB,
-          typename ElementC>
+}  // namespace phi
+
+template <paddle::DataType T>
 void FusedMoeKernel(const paddle::Tensor& input,
                     const paddle::Tensor& gate_weight,
-                    const paddle::Tensor& ffn1_weight,
-                    const paddle::optional<paddle::Tensor>& ffn1_scale,
-                    const paddle::optional<paddle::Tensor>& ffn1_bias,
-                    const paddle::Tensor& ffn2_weight,
-                    const paddle::optional<paddle::Tensor>& ffn2_scale,
-                    const paddle::optional<paddle::Tensor>& ffn2_bias,
+                    const paddle::Tensor& up_gate_proj_weight,
+                    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+                    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+                    const paddle::Tensor& down_proj_weight,
+                    const paddle::optional<paddle::Tensor>& down_proj_scale,
+                    const paddle::optional<paddle::Tensor>& down_proj_bias,
                     const std::string& quant_method,
                     const int moe_topk,
                     const bool group_moe,
                     const bool norm_topk_prob,
                     paddle::Tensor* output) {
+  using namespace phi;
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
   auto* output_data = output->data<data_t>();
 
-  auto moe_compute =
-      McMoeHelper<data_t, ElementA, ElementB, ElementC>(quant_method);
+  auto int8_moe_gemm_runner = McMoeGemmRunner<DataType_, int8_t>();
 
-  moe_compute.computeFFN(&input,
-                         &gate_weight,
-                         &ffn1_weight,
-                         ffn1_scale ? ffn1_scale.get_ptr() : nullptr,
-                         ffn1_bias ? ffn1_bias.get_ptr() : nullptr,
-                         &ffn2_weight,
-                         ffn2_scale ? ffn2_scale.get_ptr() : nullptr,
-                         ffn2_bias ? ffn2_bias.get_ptr() : nullptr,
-                         nullptr,
-                         moe_topk,
-                         group_moe,
-                         norm_topk_prob,
-                         1.0,  // ComputeFFN
-                         "ffn",
-                         output);
+  auto moe_compute =
+      McMoeHelper<data_t, DataType_>(quant_method, &int8_moe_gemm_runner);
+
+  moe_compute.computeFFN(
+      &input,
+      &gate_weight,
+      &up_gate_proj_weight,
+      up_gate_proj_scale ? up_gate_proj_scale.get_ptr() : nullptr,
+      up_gate_proj_bias ? up_gate_proj_bias.get_ptr() : nullptr,
+      &down_proj_weight,
+      down_proj_scale ? down_proj_scale.get_ptr() : nullptr,
+      down_proj_bias ? down_proj_bias.get_ptr() : nullptr,
+      nullptr,
+      moe_topk,
+      group_moe,
+      norm_topk_prob,
+      1.0,  // ComputeFFN
+      "ffn",
+      output);
 }
 
 std::vector<paddle::Tensor> FusedExpertMoe(
     const paddle::Tensor& input,
     const paddle::Tensor& gate_weight,
-    const paddle::Tensor& ffn1_weight,
-    const paddle::Tensor& ffn2_weight,
-    const paddle::optional<paddle::Tensor>& ffn1_bias,
-    const paddle::optional<paddle::Tensor>& ffn1_scale,
-    const paddle::optional<paddle::Tensor>& ffn2_bias,
-    const paddle::optional<paddle::Tensor>& ffn2_scale,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_bias,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
     const std::string& quant_method,
     const int moe_topk,
     const bool norm_topk_prob,
@@ -107,40 +111,22 @@ std::vector<paddle::Tensor> FusedExpertMoe(
 
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
-      FusedMoeKernel<paddle::DataType::BFLOAT16,
-                     maca_bfloat16,
-                     int8_t,
-                     maca_bfloat16>(input,
-                                    gate_weight,
-                                    ffn1_weight,
-                                    ffn1_scale,
-                                    ffn1_bias,
-                                    ffn2_weight,
-                                    ffn2_scale,
-                                    ffn2_bias,
-                                    quant_method,
-                                    moe_topk,
-                                    group_moe,
-                                    norm_topk_prob,
-                                    &output);
+      FusedMoeKernel<paddle::DataType::BFLOAT16>(input,
+                                                 gate_weight,
+                                                 up_gate_proj_weight,
+                                                 up_gate_proj_scale,
+                                                 up_gate_proj_bias,
+                                                 down_proj_weight,
+                                                 down_proj_scale,
+                                                 down_proj_bias,
+                                                 quant_method,
+                                                 moe_topk,
+                                                 group_moe,
+                                                 norm_topk_prob,
+                                                 &output);
       break;
-    // case paddle::DataType::FLOAT16:
-    //   FusedMoeKernel<paddle::DataType::FLOAT16>(input,
-    //                                             gate_weight,
-    //                                             ffn1_weight,
-    //                                             ffn1_scale,
-    //                                             ffn1_bias,
-    //                                             ffn2_weight,
-    //                                             ffn2_scale,
-    //                                             ffn2_bias,
-    //                                             quant_method,
-    //                                             moe_topk,
-    //                                             group_moe,
-    //                                             norm_topk_prob,
-    //                                             &output);
-    //   break;
     default:
-      PD_THROW("Only support bf16 for FusedMoeKernel");
+      PD_THROW("Unsupported data type for FusedMoeKernel");
   }
   return {output};
 }
@@ -148,36 +134,36 @@ std::vector<paddle::Tensor> FusedExpertMoe(
 std::vector<std::vector<int64_t>> FusedExpertMoeInferShape(
     const std::vector<int64_t>& input_shape,
     const std::vector<int64_t>& gate_weight_shape,
-    const std::vector<int64_t>& ffn1_weight_shape,
-    const std::vector<int64_t>& ffn2_weight_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_bias_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn1_scale_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_bias_shape,
-    const paddle::optional<std::vector<int64_t>>& ffn2_scale_shape) {
+    const std::vector<int64_t>& up_gate_proj_weight_shape,
+    const std::vector<int64_t>& down_proj_weight_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_bias_shape,
+    const paddle::optional<std::vector<int64_t>>& up_gate_proj_scale_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_bias_shape,
+    const paddle::optional<std::vector<int64_t>>& down_proj_scale_shape) {
   return {input_shape};
 }
 
 std::vector<paddle::DataType> FusedExpertMoeInferDtype(
     const paddle::DataType& input_dtype,
     const paddle::DataType& gate_weight_dtype,
-    const paddle::DataType& ffn1_weight_dtype,
-    const paddle::DataType& ffn2_weight_dtype,
-    const paddle::optional<paddle::DataType>& ffn1_bias_dtype,
-    const paddle::optional<paddle::DataType>& ffn1_scale_dtype,
-    const paddle::optional<paddle::DataType>& ffn2_bias_dtype,
-    const paddle::optional<paddle::DataType>& ffn2_scale_dtype) {
+    const paddle::DataType& up_gate_proj_weight_dtype,
+    const paddle::DataType& down_proj_weight_dtype,
+    const paddle::optional<paddle::DataType>& up_gate_proj_bias_dtype,
+    const paddle::optional<paddle::DataType>& up_gate_proj_scale_dtype,
+    const paddle::optional<paddle::DataType>& down_proj_bias_dtype,
+    const paddle::optional<paddle::DataType>& down_proj_scale_dtype) {
   return {input_dtype};
 }
 
-PD_BUILD_OP(fused_expert_moe)
+PD_BUILD_STATIC_OP(fused_expert_moe)
     .Inputs({"input",
              "gate_weight",
-             "ffn1_weight",
-             "ffn2_weight",
-             paddle::Optional("ffn1_bias"),
-             paddle::Optional("ffn1_scale"),
-             paddle::Optional("ffn2_bias"),
-             paddle::Optional("ffn2_scale")})
+             "up_gate_proj_weight",
+             "down_proj_weight",
+             paddle::Optional("up_gate_proj_bias"),
+             paddle::Optional("up_gate_proj_scale"),
+             paddle::Optional("down_proj_bias"),
+             paddle::Optional("down_proj_scale")})
     .Outputs({"output"})
     .Attrs({"quant_method:std::string",
             "moe_topk:int",

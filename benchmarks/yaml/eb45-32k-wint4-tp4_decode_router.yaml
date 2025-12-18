@@ -1,0 +1,16 @@
+max_model_len: 32768
+max_num_seqs: 256
+gpu_memory_utilization: 0.9
+kv_cache_ratio: 0.8
+tensor_parallel_size: 4
+cache_queue_port: 55663
+enable_chunked_prefill: True
+splitwise_role: decode
+engine_worker_queue_port: 6678
+cache_transfer_protocol: "rdma,ipc"
+rdma_comm_ports: "7671,7672,7673,7674"
+pd_comm_port: "2334"
+max_num_batched_tokens: 384
+max_num_partial_prefills: 3
+max_long_partial_prefills: 3
+quantization: wint4
