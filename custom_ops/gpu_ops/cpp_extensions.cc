@@ -284,16 +284,13 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size,
-                                          const bool use_ue8m0);
+                                          const int block_size);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size,
-                                                 const bool use_ue8m0);
+                                                 const int block_size);
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor& input,
     paddle::Tensor& recv_expert_count,
-    const int block_size,
-    const bool use_ue8m0);
+    const int block_size);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
@@ -1029,7 +1026,6 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id);
@@ -1040,7 +1036,6 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);
@@ -1237,14 +1232,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
@@ -1252,7 +1245,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("recv_expert_count"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
 #ifdef ENABLE_MACHETE
