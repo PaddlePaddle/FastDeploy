@@ -349,9 +349,13 @@ async def test_chat_completion_branches_and_completion_branches():
     api_server.app.state.dynamic_load_weight = True
     api_server.app.state.engine_client = MagicMock()
     api_server.app.state.engine_client.is_workers_alive.return_value = (False, "down")
+    fake_req = SimpleNamespace(headers={})
 
     # dynamic_load_weight unhealthy path
-    resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp = await api_server.create_chat_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp.status_code == 304  # lines 374-398
 
     # Healthy path with ErrorResponse -> ChatCompletionResponse -> streaming
@@ -369,35 +373,53 @@ async def test_chat_completion_branches_and_completion_branches():
     chat_handler = MagicMock()
     chat_handler.create_chat_completion = AsyncMock(return_value=error_resp)
     api_server.app.state.chat_handler = chat_handler
-    resp2 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp2 = await api_server.create_chat_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp2.status_code == 500
 
     success_resp = ChatCompletionResponse(id="1", model="m", choices=[], usage=UsageInfo())
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=success_resp)
-    resp3 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp3 = await api_server.create_chat_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp3.status_code == 200
 
     async def stream_gen():
         yield "data"
 
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=stream_gen())
-    stream_resp = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    stream_resp = await api_server.create_chat_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert isinstance(stream_resp, api_server.StreamingResponse)
 
     # completion handler mirrors chat path
     completion_handler = MagicMock()
     completion_handler.create_completion = AsyncMock(return_value=error_resp)
     api_server.app.state.completion_handler = completion_handler
-    resp4 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp4 = await api_server.create_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp4.status_code == 500
     api_server.app.state.completion_handler.create_completion = AsyncMock(return_value=success_resp)
-    resp5 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp5 = await api_server.create_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp5.status_code == 200
 
     # completion dynamic_load_weight unhealthy branch
     api_server.app.state.dynamic_load_weight = True
     api_server.app.state.engine_client.is_workers_alive.return_value = (False, "down")
-    resp6 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+    resp6 = await api_server.create_completion(
+        SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+        fake_req,
+    )
     assert resp6.status_code == 304
 
     # HTTPException handling for chat/completion
@@ -411,9 +433,15 @@ async def test_chat_completion_branches_and_completion_branches():
             return False
 
     with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=RaiseHTTP()):
-        resp_err = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+        resp_err = await api_server.create_chat_completion(
+            SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+            fake_req,
+        )
         assert resp_err.status_code == 418
-        resp_err2 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
+        resp_err2 = await api_server.create_completion(
+            SimpleNamespace(model_dump_json=lambda: "{}", stream=False),
+            fake_req,
+        )
         assert resp_err2.status_code == 418
 
 
