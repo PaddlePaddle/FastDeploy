@@ -6,7 +6,6 @@ that were previously uncovered.
 
 import asyncio
 import importlib
-import os
 import types
 from contextlib import ExitStack
 from types import SimpleNamespace
@@ -76,22 +75,36 @@ def _build_args(**overrides):
 def _reload_api_server(args):
     """Import/reload api_server with patched parse_args/model loader/template.
 
-    We also patch `environment_variables.get("FD_API_KEY")` so API key lookup
-    never depends on the real environment (which can differ between local/CI),
-    without replacing the entire `fastdeploy.envs` module.
+    We also provide a lightweight fake `fastdeploy.envs` module so that trace /
+    API-key related lookups never depend on the real environment (which can
+    differ between local/CI).
     """
-    mock_env_vars = MagicMock()
-    mock_env_vars.get.return_value = lambda: []  # Returns empty list, not None
+    fake_envs_mod = types.ModuleType("fastdeploy.envs")
+
+    class _FakeEnvVars:
+        @staticmethod
+        def get(key, default=None):  # pragma: no cover - trivial
+            if key == "FD_API_KEY":
+                # api_server expects an iterable here; using [] avoids NoneType
+                # issues without requiring any real secret material.
+                return []
+            return default
+
+    # Attributes that tracing / metrics code expects on fastdeploy.envs
+    fake_envs_mod.TRACES_ENABLE = "false"
+    fake_envs_mod.FD_SERVICE_NAME = ""
+    fake_envs_mod.FD_HOST_NAME = ""
+    fake_envs_mod.TRACES_EXPORTER = "console"
+    fake_envs_mod.EXPORTER_OTLP_ENDPOINT = ""
+    fake_envs_mod.EXPORTER_OTLP_HEADERS = ""
+    fake_envs_mod.environment_variables = _FakeEnvVars()
 
     with (
         patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
         patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
         patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
-        # Only patch environment_variables on the envs module; keep all other
-        # attributes (metrics, trace flags, etc.) intact to avoid affecting
-        # unrelated tests such as splitwise/e2e schedulers.
-        patch("fastdeploy.envs.environment_variables", mock_env_vars),
-        patch.dict(os.environ, {"TRACES_ENABLE": "false"}),
+        patch.dict("sys.modules", {"fastdeploy.envs": fake_envs_mod}),
+        patch("fastdeploy.envs", fake_envs_mod),
     ):
         from fastdeploy.entrypoints.openai import api_server as api_server_mod
 
