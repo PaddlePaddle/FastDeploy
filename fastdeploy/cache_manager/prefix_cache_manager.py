@@ -32,11 +32,10 @@ from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.cache_manager.ops import get_all_visible_devices
-from fastdeploy.cache_manager.transfer_factory import get_hash_str
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_hash_str, get_logger
 
 logger = get_logger("prefix_cache_manager", "cache_manager.log")
 
@@ -1891,11 +1890,11 @@ class PrefixCacheManager:
                         self.task_write_back_event[task_id].set()
                 else:
                     (
+                        event_type,
+                        transfer_task_id,
                         swap_node_ids,
                         task_gpu_block_id,
                         task_cpu_block_id,
-                        event_type,
-                        transfer_task_id,
                     ) = data
                     length = len(task_gpu_block_id)
                     for i in range(length):

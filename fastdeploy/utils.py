@@ -17,6 +17,7 @@
 import argparse
 import asyncio
 import codecs
+import hashlib
 import importlib
 import json
 import logging
@@ -822,6 +823,18 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             f"Unsupported model source: {model_source}, please choose one of ['MODELSCOPE', 'AISTUDIO', 'HUGGINGFACE']"
         )
     return model_name_or_path
+
+
+def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = []) -> str:
+    """
+    calculate hash value of a block with additional keys
+
+    Args:
+        token_ids: Input token IDs
+        extra_keys: Additional keys for block identification
+    """
+    value = (token_ids, extra_keys)
+    return hashlib.sha256(pickle.dumps(value)).hexdigest()
 
 
 def is_list_of(
