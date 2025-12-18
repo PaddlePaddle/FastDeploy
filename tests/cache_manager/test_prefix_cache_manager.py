@@ -417,7 +417,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=True,
             )
 
@@ -465,7 +465,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=False,
             )
 
@@ -501,7 +501,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                     device_ids=[0],
                     pod_ip="127.0.0.1",
                     engine_worker_queue_port=8000,
-                    pid_suffix="pid",
+                    ipc_suffix="pid",
                     create_cache_tensor=False,
                 )
 
@@ -562,7 +562,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=False,
             )
 
@@ -616,7 +616,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 value_cache_shape="1",
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
             )
 
         self.assertEqual(len(processes), 1)
@@ -650,7 +650,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 value_cache_shape="1",
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
             )
 
         self.assertIsNone(processes)
@@ -702,7 +702,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=True,
             )
 
