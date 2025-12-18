@@ -34,6 +34,7 @@ class KvCacheQuantzationTypes(str, Enum):
 
     INT8 = "int8"
     FP8 = "float8_e4m3fn"
+    FP8_E4M3 = "float8_e4m3"
     BLOCK_WISE_FP8 = "block_wise_fp8"
     INT8_ZP = "int8_zp"
     INT4_ZP = "int4_zp"
@@ -65,6 +66,8 @@ class KvCacheQuantConfig(QuantConfigBase):
         if self.quant_type == KvCacheQuantzationTypes.INT8 or self.quant_type == KvCacheQuantzationTypes.INT8_ZP:
             self.max_bound = 127.0
             self.is_channel_wise = True
+        elif self.quant_type == KvCacheQuantzationTypes.FP8_E4M3:
+            self.max_bound = 240.0
         elif (
             self.quant_type == KvCacheQuantzationTypes.FP8
             or self.quant_type == KvCacheQuantzationTypes.FP8_ZP
@@ -101,6 +104,12 @@ class KvCacheQuantConfig(QuantConfigBase):
             )
 
             return XPUKVCacheMethodBase(self)
+        elif current_platform.is_intel_hpu():
+            from fastdeploy.model_executor.layers.backends.intel_hpu.quantization.kv_cache import (
+                HPUKVCacheMethodBase,
+            )
+
+            return HPUKVCacheMethodBase(self)
         else:
             return KVCacheMethodBase(self)
 

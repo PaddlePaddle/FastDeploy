@@ -33,7 +33,13 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
+from fastdeploy.utils import (
+    ceil_div,
+    check_unified_ckpt,
+    get_host_ip,
+    get_logger,
+    parse_ports,
+)
 
 logger = get_logger("config", "config.log")
 
@@ -559,7 +565,8 @@ class ParallelConfig:
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
-        self.engine_worker_queue_port: str = "9923"
+        self.engine_worker_queue_port: Union[int, str, list] = None
+        self.local_engine_worker_queue_port: Optional[int] = None
         # cuda visible devices
         self.device_ids: str = "0"
         # First token id
@@ -579,11 +586,9 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
-            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
-        elif isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = [self.engine_worker_queue_port]
+
+        self.engine_worker_queue_port = parse_ports(self.engine_worker_queue_port)
+
         # currently, the expert parallel size is equal data parallel size
         if self.enable_expert_parallel:
             self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
@@ -1267,11 +1272,14 @@ class CacheConfig:
         self.model_cfg = None
         self.enable_chunked_prefill = False
         self.rdma_comm_ports = None
+        self.local_rdma_comm_ports = None
         self.cache_transfer_protocol = None
         self.pd_comm_port = None
+        self.local_pd_comm_port = None
         self.enable_prefix_caching = False
         self.enable_ssd_cache = False
         self.cache_queue_port = None
+        self.local_cache_queue_port = None
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
@@ -1281,11 +1289,9 @@ class CacheConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        if self.rdma_comm_ports is not None and isinstance(self.rdma_comm_ports, str):
-            self.rdma_comm_ports = self.rdma_comm_ports.split(",")
-
-        if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
-            self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
+        self.cache_queue_port = parse_ports(self.cache_queue_port)
+        self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
+        self.pd_comm_port = parse_ports(self.pd_comm_port)
 
         if self.swap_space is None:
             self.enable_hierarchical_cache = False
@@ -1657,7 +1663,7 @@ class FDConfig:
         if test_mode:
             return
         self.check()
-        self.print()
+        # self.print()    # NOTE: it's better to explicitly call .print() when FDConfig is initialized
 
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -1671,7 +1677,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        self.local_device_ids = self.parallel_config.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -1775,6 +1780,41 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+        self.postprocess_devices_and_ports()
+
+    def postprocess_devices_and_ports(self):
+        try:
+            # get devices and ports for current dp
+            self.local_device_ids = self.parallel_config.device_ids.split(",")[
+                self.parallel_config.local_data_parallel_id
+                * self.parallel_config.tensor_parallel_size : (self.parallel_config.local_data_parallel_id + 1)
+                * self.parallel_config.tensor_parallel_size
+            ]
+            self.parallel_config.local_engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
+                self.parallel_config.local_data_parallel_id
+            ]
+            self.cache_config.local_cache_queue_port = (
+                self.cache_config.cache_queue_port[self.parallel_config.local_data_parallel_id]
+                if self.cache_config.cache_queue_port
+                else None
+            )
+            self.cache_config.local_pd_comm_port = (
+                self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+                if self.cache_config.pd_comm_port
+                else None
+            )
+            self.cache_config.local_rdma_comm_ports = (
+                self.cache_config.rdma_comm_ports[
+                    self.parallel_config.local_data_parallel_id
+                    * self.parallel_config.tensor_parallel_size : (self.parallel_config.local_data_parallel_id + 1)
+                    * self.parallel_config.tensor_parallel_size
+                ]
+                if self.cache_config.rdma_comm_ports
+                else None
+            )
+        except Exception as e:
+            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
 
     def check(self):
         """
@@ -1924,18 +1964,6 @@ class FDConfig:
         elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
             self.splitwise_version = "v1"
 
-        if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
-        else:
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
-                self.parallel_config.local_data_parallel_id
-            ]
-        connector_port = (
-            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
-            if self.cache_config.pd_comm_port
-            else None
-        )
-
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
         transfer_protocol = (
@@ -1945,9 +1973,9 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
-            "connector_port": connector_port,
-            "rdma_ports": self.cache_config.rdma_comm_ports,
-            "engine_worker_queue_port": engine_worker_queue_port,
+            "connector_port": self.cache_config.local_pd_comm_port,
+            "rdma_ports": self.cache_config.local_rdma_comm_ports,
+            "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
             "device_ids": self.local_device_ids,
             "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,

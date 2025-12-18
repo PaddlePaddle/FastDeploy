@@ -33,6 +33,7 @@ if current_platform.is_iluvatar():
         set_stop_value_multi_ends,
         step_paddle,
         update_inputs,
+        update_inputs_v1,
     )
 elif current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import (
