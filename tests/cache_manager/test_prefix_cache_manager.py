@@ -177,6 +177,8 @@ def _create_manager(
         cache_queue_port=9000,
         cache_transfer_protocol="zmq",
         rdma_comm_ports=None,
+        local_cache_queue_port=9000,
+        local_rdma_comm_ports=None,
     )
     model_config = SimpleNamespace(
         num_attention_heads=1,
@@ -714,6 +716,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
             total_block_num=5,
             prefill_kvcache_block_num=3,
             model_cfg=SimpleNamespace(num_hidden_layers=1),
+            cache_queue_port=9000,
+            rdma_comm_ports=None,
+            local_cache_queue_port=9000,
+            local_rdma_comm_ports=None,
         )
 
         with patch(
