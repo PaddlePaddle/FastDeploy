@@ -357,10 +357,10 @@ class MergedReplicatedLinear(ReplicatedLinear):
         else:
             assert loaded_shard_id in ["q_a", "kv_a", "gate", "up"]
 
-            if loaded_shard_id == "q_a" or "gate":
+            if loaded_shard_id in ["q_a", "gate"]:
                 param_shard_offset = 0
                 param_shard_size = self.output_sizes[0]
-            elif loaded_shard_id == "kv_a" or "up":
+            elif loaded_shard_id in ["kv_a", "up"]:
                 param_shard_offset = self.output_sizes[0]
                 param_shard_size = self.output_sizes[1]
 
