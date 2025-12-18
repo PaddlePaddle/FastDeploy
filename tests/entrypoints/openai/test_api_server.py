@@ -482,6 +482,49 @@ async def test_other_routes_reward_embedding_and_weights():
 
 
 @pytest.mark.asyncio
+async def test_chat_and_completion_tracing_headers_branch():
+    args = _build_args(dynamic_load_weight=False)
+    api_server = _reload_api_server(args)
+    api_server.envs.TRACES_ENABLE = "true"
+
+    fake_req = SimpleNamespace(headers={"x-request-id": "1"})
+    body = SimpleNamespace(model_dump_json=lambda: "{}", stream=False)
+
+    from fastdeploy.entrypoints.openai.protocol import (
+        ChatCompletionResponse,
+        CompletionResponse,
+        UsageInfo,
+    )
+
+    chat_resp = ChatCompletionResponse(id="1", model="m", choices=[], usage=UsageInfo())
+    completion_resp = CompletionResponse(id="2", model="m", choices=[], usage=UsageInfo())
+
+    api_server.app.state.chat_handler = SimpleNamespace(create_chat_completion=AsyncMock(return_value=chat_resp))
+    api_server.app.state.completion_handler = SimpleNamespace(
+        create_completion=AsyncMock(return_value=completion_resp)
+    )
+    api_server.connection_semaphore = SimpleNamespace(acquire=AsyncMock(), release=MagicMock(), status=lambda: "ok")
+
+    class DummyCM:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with (
+        patch("fastdeploy.entrypoints.openai.api_server.extract", return_value="ctx"),
+        patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()),
+    ):
+        resp_chat = await api_server.create_chat_completion(body, fake_req)
+        resp_comp = await api_server.create_completion(body, fake_req)
+
+    assert resp_chat.status_code == 200
+    assert resp_comp.status_code == 200
+    assert getattr(body, "trace_context", None) == "ctx"
+
+
+@pytest.mark.asyncio
 async def test_expert_and_stats_routes():
     args = _build_args()
     with _patch_common_imports(args, engine_client_cls=_dummy_engine_client()):
@@ -700,3 +743,63 @@ def test_config_info_engine_not_loaded():
         api_server.llm_engine = None
     resp = api_server.config_info()
     assert resp.status_code == 500
+
+
+def test_control_scheduler_engine_not_loaded():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        api_server.llm_engine = None
+
+        class DummyErrorInfo:
+            def __init__(self, message: str, code=None, **_):
+                self.message = message
+                self.code = str(code) if code is not None else code
+
+        class DummyErrorResponse:
+            def __init__(self, error):
+                self.error = error
+
+            def model_dump(self):
+                return {"error": {"message": self.error.message, "code": self.error.code}}
+
+        with (
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", DummyErrorInfo),
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorResponse", DummyErrorResponse),
+        ):
+            req = SimpleNamespace(reset=False, load_shards_num=None, reallocate_shard=False)
+            resp = api_server.control_scheduler(req)
+    assert resp.status_code == 500
+
+
+def test_control_scheduler_update_config_success():
+    args = _build_args()
+    with _patch_common_imports(args):
+        api_server = _reload_api_server(args)
+        scheduler = SimpleNamespace(update_config=MagicMock(), reset=MagicMock())
+        engine = SimpleNamespace(clear_data=MagicMock(), scheduler=scheduler)
+        api_server.llm_engine = SimpleNamespace(engine=engine)
+
+        class DummyErrorInfo:
+            def __init__(self, message: str, code=None, **_):
+                self.message = message
+                self.code = str(code) if code is not None else code
+
+        class DummyErrorResponse:
+            def __init__(self, error):
+                self.error = error
+
+            def model_dump(self):
+                return {"error": {"message": self.error.message, "code": self.error.code}}
+
+        with (
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorInfo", DummyErrorInfo),
+            patch("fastdeploy.entrypoints.openai.api_server.ErrorResponse", DummyErrorResponse),
+        ):
+            req = SimpleNamespace(reset=True, load_shards_num=2, reallocate_shard=True)
+            resp = api_server.control_scheduler(req)
+
+    assert resp.status_code == 200
+    engine.clear_data.assert_called_once()
+    scheduler.reset.assert_called_once()
+    scheduler.update_config.assert_called_once()
