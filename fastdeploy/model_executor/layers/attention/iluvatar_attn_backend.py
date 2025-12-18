@@ -95,35 +95,54 @@ class IluvatarAttnBackend(AttentionBackend):
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.dtype = paddle.get_default_dtype()
         self.enable_mm = fd_config.model_config.enable_mm
+        self.rope_batch_stride = self.max_context_len * self.head_dim if self.enable_mm else 0
+        if "paddleocr" in fd_config.model_config.model_type:
+            self.is_interleaved_rope_mode = False
+        else:
+            self.is_interleaved_rope_mode = True
+
+    def split_cos_sin(self, batch_ids, forward_meta: ForwardMeta):
+        if self.enable_mm:
+            # the num_seqs dim of rotary_embs > 1 (e.g. ernie-vl and paddleocr-vl)
+            cos = forward_meta.rotary_embs[batch_ids, 0, 0, :, :, :]
+            sin = forward_meta.rotary_embs[batch_ids, 1, 0, :, :, :]
+        else:
+            #  the num_seqs dim of rotary_embs = 1 (e.g. ernie-text)
+            cos = forward_meta.rotary_embs[0, 0, :, :, :]
+            sin = forward_meta.rotary_embs[1, 0, :, :, :]
+        return cos, sin
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
-        if self.enable_mm:
-            # VL: TODO: The first 0 may need to be replaced with batch_id
-            # of max_num_seqs when running multiple batch case later
-            self.rope_cos = forward_meta.rotary_embs[0, 0, 0, :, :, :]
-            self.rope_sin = forward_meta.rotary_embs[0, 1, 0, :, :, :]
-        else:
-            # text
-            self.rope_cos = forward_meta.rotary_embs[0, 0, :, :, :]
-            self.rope_sin = forward_meta.rotary_embs[1, 0, :, :, :]
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
         self.prefill_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_encoder)[0]
         self.decode_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_decoder)[0]
         self.prefill_len = len(self.prefill_info_dict["batch_ids"])
         self.decode_len = len(self.decode_info_dict["batch_ids"])
+        prefill_batch_ids = self.prefill_info_dict["batch_ids"]
+        decode_batch_ids = self.decode_info_dict["batch_ids"]
+        if prefill_batch_ids.dim() == 0:
+            prefill_batch_ids = prefill_batch_ids.unsqueeze(0)
+        if decode_batch_ids.dim() == 0:
+            decode_batch_ids = decode_batch_ids.unsqueeze(0)
         # only prefill
         if self.decode_len == 0:
-            cu_seq_ids = list(range(self.prefill_len + 1))
-            self.prefill_info_dict["cu_seqlens_q"] = forward_meta.cu_seqlens_q[cu_seq_ids]
             self.mixed = False
+            cu_seq_ids = self.prefill_info_dict["batch_ids"] + 1
+            self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
+                [forward_meta.cu_seqlens_q[:1], forward_meta.cu_seqlens_q[cu_seq_ids]]
+            )
+            self.rope_cos, self.rope_sin = self.split_cos_sin(prefill_batch_ids, forward_meta)
         # only decode
         elif self.prefill_len == 0:
             self.mixed = False
+            self.rope_cos, self.rope_sin = self.split_cos_sin(decode_batch_ids, forward_meta)
         # both prefill and decode
         else:
             self.mixed = True
+            self.prefill_rope_cos, self.prefill_rope_sin = self.split_cos_sin(prefill_batch_ids, forward_meta)
+            self.decode_rope_cos, self.decode_rope_sin = self.split_cos_sin(decode_batch_ids, forward_meta)
             self.prefill_num_tokens = paddle.sum(forward_meta.seq_lens_encoder).item()
             self.prefill_info_dict["cu_seqlens_q"] = paddle.zeros(
                 [self.prefill_len + 1], dtype=forward_meta.cu_seqlens_q.dtype
@@ -141,7 +160,7 @@ class IluvatarAttnBackend(AttentionBackend):
             )
 
             prefill_start, decode_start, start = 0, self.prefill_num_tokens, 0
-            non_zeros_ids = forward_meta.seq_lens_this_time != 0
+            non_zeros_ids = paddle.where(forward_meta.seq_lens_this_time)[0]
             non_zeros_seq_lens = forward_meta.seq_lens_this_time[non_zeros_ids]
             end = non_zeros_seq_lens[0]
             if end > 1:
@@ -234,6 +253,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 v_cache,
                 block_tables=forward_meta.block_tables[self.prefill_info_dict["batch_ids"], :],
                 cu_seqlens_qkv=self.prefill_info_dict["cu_seqlens_q"],
+                rope_sin=self.rope_sin,
+                rope_cos=self.rope_cos,
                 num_heads=self.num_heads,
                 head_dim=self.head_dim,
                 num_kv_heads=self.num_kv_heads,
@@ -244,8 +265,7 @@ class IluvatarAttnBackend(AttentionBackend):
                 q_rope=True,
                 k_rope=True,
                 v_rope=False,
-                rope_sin=self.rope_sin,
-                rope_cos=self.rope_cos,
+                is_interleaved_rope_mode=self.is_interleaved_rope_mode,
             )
         elif self.prefill_len == 0:
             output = paged_attention(
@@ -272,6 +292,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 v=qkv,
                 rope_sin=self.rope_sin,
                 rope_cos=self.rope_cos,
+                rope_batch_stride=self.rope_batch_stride,
+                is_interleaved_rope_mode=self.is_interleaved_rope_mode,
             )
         else:
             output = mixed_fused_paged_attention(
@@ -282,6 +304,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 decode_block_tables=forward_meta.block_tables[self.decode_info_dict["batch_ids"], :],
                 cu_seqlens_qkv=self.prefill_info_dict["cu_seqlens_q"],
                 seq_lens=forward_meta.seq_lens_decoder[self.decode_info_dict["batch_ids"], 0] + 1,
+                prefill_rope_sin=self.prefill_rope_sin,
+                prefill_rope_cos=self.prefill_rope_cos,
                 prefill_num_tokens=self.prefill_num_tokens,
                 num_heads=self.num_heads,
                 head_dim=self.head_dim,
@@ -298,8 +322,10 @@ class IluvatarAttnBackend(AttentionBackend):
                 softcap=self.attention_metadata.softcap,
                 use_cuda_graph=self.attention_metadata.use_cuda_graph,
                 use_sqrt_alibi=self.attention_metadata.use_sqrt_alibi,
-                rope_sin=self.rope_sin,
-                rope_cos=self.rope_cos,
+                decode_rope_sin=self.decode_rope_sin,
+                decode_rope_cos=self.decode_rope_cos,
+                rope_batch_stride=self.rope_batch_stride,
+                is_interleaved_rope_mode=self.is_interleaved_rope_mode,
             )
 
         return output

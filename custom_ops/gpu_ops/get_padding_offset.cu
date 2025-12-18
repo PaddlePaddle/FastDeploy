@@ -28,8 +28,13 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
                                 const int max_seq_len) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
+#ifdef PADDLE_WITH_COREX
+  const int warp_id = threadIdx.x / 64;
+  const int lane_id = threadIdx.x % 64;
+#else
   const int warp_id = threadIdx.x / 32;
   const int lane_id = threadIdx.x % 32;
+#endif
 
   int cum_seq_len = 0;
 
