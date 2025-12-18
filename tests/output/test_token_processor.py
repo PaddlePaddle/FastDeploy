@@ -292,6 +292,7 @@ def test_process_batch_output_use_zmq_finishes_on_eos():
 def test_recycle_resources_updates_metrics_and_state():
     processor, rm, _, _ = _make_processor()
     task = types.SimpleNamespace(request_id="req-1", block_tables=[1], disaggregate_info=None)
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
 
@@ -350,6 +351,7 @@ def test_process_per_token_handles_recovery_stop_and_cleanup():
         output_token_ids=[],
         block_tables=[1],
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
     rm.requests[task.request_id] = types.SimpleNamespace(idx=0)
@@ -438,6 +440,7 @@ def test_recycle_resources_prefill_sends_first_token():
         disaggregate_info={"role": "prefill"},
         eos_token_ids=[1],
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task_id] = task
     result = RequestOutput(request_id=task_id, outputs=None, finished=False, metrics=metrics)
@@ -526,6 +529,7 @@ def test_process_batch_output_consumes_tokens_and_finishes_task():
         num_total_tokens=1,
         block_tables=[1],
     )
+    task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
@@ -562,6 +566,7 @@ def test_process_batch_output_logprob_records_topk_and_caching():
         block_tables=[1],
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
     processor.output_tokens[1, 0] = 1
@@ -637,6 +642,7 @@ def test_process_batch_output_speculative_recovery_stop_finishes():
         block_tables=[1],
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
     processor.output_tokens[1] = 1
@@ -681,6 +687,7 @@ def test_process_batch_output_prefill_chunk_and_adapter_skip():
         block_tables=[1],
         prefill_chunk_info=[{"idx": 0}, {"idx": 1}],
     )
+    task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
@@ -724,6 +731,7 @@ def test_process_batch_output_handles_multimodal_and_negative_token():
         multimodal_inputs={"num_input_image_tokens": 2, "num_input_video_tokens": 3},
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
     rm.to_be_rescheduled_request_id_set = {task.request_id}
@@ -761,6 +769,7 @@ def test_process_batch_output_speculative_logprob_targets_topk_scores():
         block_tables=[1],
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
     processor.output_tokens[1, 0] = 3
@@ -821,6 +830,7 @@ def test_clear_data_invokes_scheduler_cleanup():
         block_tables=[1],
         get=lambda key, default=None: getattr(task, key, default),
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.stop_flags = [True] * rm.max_num_seqs
     processor.tokens_counter[task.request_id] = 0
@@ -871,6 +881,7 @@ def test_process_batch_output_speculative_negative_token_reschedules():
         block_tables=[1],
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task_id] = task
     rm.to_be_rescheduled_request_id_set = {task_id}
@@ -908,6 +919,7 @@ def test_process_batch_output_records_second_decode_token():
         block_tables=[1],
         get=lambda key, default=None: None,
     )
+    task.trace_carrier = None
     task.metrics.inference_start_time = time.time()
     task.metrics.decode_inference_start_time = task.metrics.inference_start_time
     rm.tasks_list[0] = task
@@ -972,6 +984,7 @@ def test_process_batch_output_logs_recovery_stop_for_non_speculative():
         num_total_tokens=1,
         block_tables=[1],
     )
+    task.trace_carrier = None
     task.get = lambda k, d=None: getattr(task, k, d)
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
@@ -1008,6 +1021,7 @@ def test_process_batch_output_sets_multimodal_token_counts():
         block_tables=[1],
         multimodal_inputs={"num_input_image_tokens": 4, "num_input_video_tokens": 5},
     )
+    task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
