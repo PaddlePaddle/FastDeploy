@@ -74,7 +74,9 @@ class _FakeRedis:
         bucket = self.lists.get(key)
         if not bucket:
             return None
-        if count is None or count <= 1:
+        if count == 0:
+            return []
+        if count is None or count == 1:
             return [bucket.pop(0)]
         count = min(count, len(bucket))
         result = [bucket.pop(0) for _ in range(count)]
