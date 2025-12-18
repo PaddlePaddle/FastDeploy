@@ -221,6 +221,9 @@ def sampler_op_stubs(monkeypatch):
         actual_len = paddle.to_tensor([1], dtype="int32")
         return verify_scores, verify_tokens, actual_len
 
+    monkeypatch.setattr(sampler_module, "speculate_verify", _speculate_verify, raising=False)
+    monkeypatch.setattr(sampler_module, "top_p_candidates", _top_p_candidates, raising=False)
+
     if not hasattr(gpu_mod, "speculate_verify"):
         _set_attr(gpu_mod, "speculate_verify", _speculate_verify, original_gpu_attrs)
     if not hasattr(gpu_mod, "top_p_candidates"):
