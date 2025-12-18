@@ -50,9 +50,10 @@ class _FakeRedis:
     def delete(self, *keys: str) -> int:
         removed = 0
         for key in keys:
-            removed += int(key in self.kv or key in self.lists)
+            removed += int(key in self.kv or key in self.lists or key in self.sorted_sets)
             self.kv.pop(key, None)
             self.lists.pop(key, None)
+            self.sorted_sets.pop(key, None)
         return removed
 
     def exists(self, key: str) -> int:
