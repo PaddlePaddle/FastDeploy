@@ -2284,6 +2284,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Then there is data on other runner, the current runner is required to execute part of the model.
         # But not need to run the below code.
         if not self.not_need_stop():
+            self._execute_empty_input(self.forward_meta)
             return None
 
         if self.use_cudagraph:
@@ -2569,6 +2570,11 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if hasattr(self.model, "empty_input_forward"):
             self.model.empty_input_forward(forward_meta)
+            if self.fd_config.speculative_config.method in ["mtp"] and hasattr(
+                self.proposer.model, "empty_input_forward"
+            ):
+                for _ in range(self.fd_config.speculative_config.num_model_steps):
+                    self.proposer.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
