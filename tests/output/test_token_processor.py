@@ -406,6 +406,39 @@ def test_postprocess_buffers_and_merges_speculative_results():
     assert processor._batch_result_buffer is None
 
 
+def test_postprocess_emits_finished_speculative_batch():
+    processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
+    processor.cached_generated_tokens = mock.Mock()
+
+    finished_output = RequestOutput(
+        request_id="req-finished",
+        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        finished=True,
+        metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
+    )
+
+    processor.postprocess([finished_output], mtype=3)
+
+    processor.cached_generated_tokens.put_results.assert_called_once_with([finished_output])
+    assert processor._batch_result_buffer is None
+
+
+def test_postprocess_passes_through_unknown_type():
+    processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
+    processor.cached_generated_tokens = mock.Mock()
+
+    output = RequestOutput(
+        request_id="req-direct",
+        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        finished=False,
+        metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
+    )
+
+    processor.postprocess([output], mtype=99)
+
+    processor.cached_generated_tokens.put_results.assert_called_once_with([output])
+
+
 def test_record_speculative_decoding_metrics_tracks_acceptance():
     processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
     with mock.patch.object(token_processor, "main_process_metrics", _Metrics()):
@@ -1068,6 +1101,15 @@ def test_healthy_detects_engine_hang():
     processor.engine_output_token_hang = True
 
     assert processor.healthy() is False
+
+
+def test_healthy_recent_prehandle_activity_is_ok(monkeypatch):
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = time.time()
+    processor.timestamp_for_alive_after_handle_batch = None
+    monkeypatch.setattr(envs, "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", 5)
+
+    assert processor.healthy() is True
 
 
 def test_process_sampling_results_use_zmq_rejects_speculative():
