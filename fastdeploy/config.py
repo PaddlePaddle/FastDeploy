@@ -1596,7 +1596,9 @@ class FDConfig:
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
-                self.speculative_config.num_speculative_tokens + 1 if self.speculative_config is not None else 1
+                self.speculative_config.num_speculative_tokens + 1
+                if self.speculative_config is not None and self.speculative_config.method is not None
+                else 1
             )
             self.graph_opt_config._set_cudagraph_sizes(
                 max_capture_size=max_capture_shape, dec_token_per_query_per_step=dec_token_per_query_per_step
