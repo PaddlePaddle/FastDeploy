@@ -329,7 +329,7 @@ class ResourceManagerV1(ResourceManager):
                         token_st += h * w // 4
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
-        elif inputs.get("mm_positions", None) is not None or inputs.get("mm_hashes", None) is not None:
+        elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
