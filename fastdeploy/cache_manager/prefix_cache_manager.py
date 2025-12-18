@@ -601,25 +601,6 @@ class PrefixCacheManager:
         if gpu_extra_block_num > 0:
             gpu_extra_block_ids = self.allocate_gpu_blocks(gpu_extra_block_num)
 
-        storage_block_ids = []
-        prefetch_from_storage = False
-        if self.kvcache_storage_backend is not None:
-            keys = []
-            prefix_block_key = []
-            num_cached_tokens = 0
-            if req_id in self.cache_info:
-                last_node, num_cached_tokens = self.cache_info[req_id]
-                prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
-            current_tokens = num_cached_tokens
-            while current_tokens < len(input_ids):
-                cur_block_key = get_hash_str(input_ids[current_tokens : current_tokens + block_size], prefix_block_key)
-                keys.append(cur_block_key)
-                current_tokens += block_size
-                prefix_block_key = [cur_block_key]
-            logger.debug(f"issue_prefetch_storage_task start, req_id: {req_id}, keys: {keys}")
-            self.issue_prefetch_storage_task(req_id, keys, gpu_extra_block_ids, is_sync=False)
-            prefetch_from_storage = True
-
         if len(gpu_recv_block_ids) > 0:
             self._prepare_cpu_cache(
                 req_id,
@@ -628,13 +609,8 @@ class PrefixCacheManager:
                 cpu_recv_block_ids,
                 match_cpu_block_ids,
             )
-        if prefetch_from_storage:
-            storage_block_ids = self.wait_prefetch_storage_task(req_id)
-            logger.debug(
-                f"issue_prefetch_storage_task finish, req_id: {req_id}, storage_block_ids: {storage_block_ids}"
-            )
 
-        return gpu_recv_block_ids, gpu_extra_block_ids, storage_block_ids
+        return gpu_recv_block_ids, gpu_extra_block_ids
 
     def get_required_block_num(self, input_token_num, block_size):
         """
@@ -851,7 +827,6 @@ class PrefixCacheManager:
                 hit_info = {}
                 hit_info["gpu_cache_blocks"] = 0
                 hit_info["cpu_cache_blocks"] = 0
-                hit_info["storage_cache_blocks"] = 0
                 self.metrics.req_count += 1
                 input_ids = task.prompt_token_ids
                 req_id = task.request_id
@@ -877,7 +852,7 @@ class PrefixCacheManager:
                 current_time = time.time()
                 self._update_matched_node_info(req_id, match_block_node, current_time)
                 # 2. prepare cache
-                (gpu_recv_block_ids, gpu_extra_block_ids, storage_cached_block_ids) = self._prepare_cache(
+                (gpu_recv_block_ids, gpu_extra_block_ids) = self._prepare_cache(
                     req_id,
                     input_ids,
                     block_size,
@@ -897,7 +872,6 @@ class PrefixCacheManager:
                 gpu_build_path_block_ids = []
 
                 gpu_build_path_block_ids = gpu_extra_block_ids
-                logger.debug(f"request_block_ids: req_id {req_id} left_input_ids {len(left_input_ids)}")
                 leaf_node = self.build_path(
                     req_id,
                     current_time,
@@ -921,7 +895,6 @@ class PrefixCacheManager:
                 )
                 hit_info["gpu_cache_blocks"] = gpu_match_token_num // block_size
                 hit_info["cpu_cache_blocks"] = cpu_match_token_num // block_size
-                hit_info["storage_cache_blocks"] = len(storage_cached_block_ids)
                 self.metrics._update_history_hit_metrics()
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
