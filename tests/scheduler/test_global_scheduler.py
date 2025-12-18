@@ -56,7 +56,7 @@ class _FakeRedis:
         return removed
 
     def exists(self, key: str) -> int:
-        if key in self.kv or key in self.lists:
+        if key in self.kv or key in self.lists or key in self.sorted_sets:
             return 1
         return 0
 
