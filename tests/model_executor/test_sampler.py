@@ -475,19 +475,19 @@ def test_speculative_sampler_compute_and_forward(set_platform, fd_config_factory
     sampler = sampler_module.SpeculativeSampler(cfg)
 
     share_inputs = {
-        "seq_lens_this_time": _tensor([[1]], dtype="int32"),
-        "seq_lens_encoder": _tensor([[0]], dtype="int32"),
-        "seq_lens_decoder": _tensor([[0]], dtype="int32"),
-        "output_padding_offset": _tensor([[0]], dtype="int32"),
-        "output_cum_offsets": _tensor([[0]], dtype="int32"),
+        "seq_lens_this_time": _tensor([[1]], dtype="int64"),
+        "seq_lens_encoder": _tensor([[0]], dtype="int64"),
+        "seq_lens_decoder": _tensor([[0]], dtype="int64"),
+        "output_padding_offset": _tensor([[0]], dtype="int64"),
+        "output_cum_offsets": _tensor([[0]], dtype="int64"),
         "accept_tokens": _tensor([[0, 0]], dtype="int64"),
-        "accept_num": _tensor([1], dtype="int32"),
-        "step_idx": _tensor([[0]], dtype="int32"),
+        "accept_num": _tensor([1], dtype="int64"),
+        "step_idx": _tensor([[0]], dtype="int64"),
         "stop_flags": _tensor([[False]], dtype="bool"),
         "draft_tokens": _tensor([[0, 0]], dtype="int64"),
-        "max_dec_len": _tensor([[8]], dtype="int32"),
+        "max_dec_len": _tensor([[8]], dtype="int64"),
         "is_block_step": _tensor([[False]], dtype="bool"),
-        "actual_draft_token_num": _tensor([[1]], dtype="int32"),
+        "actual_draft_token_num": _tensor([[1]], dtype="int64"),
     }
 
     metadata = _build_sampling_metadata(share_inputs=share_inputs)
