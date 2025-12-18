@@ -245,7 +245,7 @@ def test_put_requests_handles_duplicates_and_load_accounting(scheduler_fixture):
 
 def test_get_requests_can_steal_remote_request(monkeypatch, scheduler_fixture):
     scheduler, fake_redis = scheduler_fixture
-    envs.FD_ENABLE_MAX_PREFILL = 0
+    monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
     monkeypatch.setattr(global_scheduler.random, "sample", lambda seq, k: list(seq)[:k])
     monkeypatch.setattr(global_scheduler.random, "choice", lambda seq: list(seq)[0])
