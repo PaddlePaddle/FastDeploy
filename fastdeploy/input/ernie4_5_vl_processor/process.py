@@ -306,12 +306,17 @@ class DataProcessor:
             raise ValueError("This model does not support chat template.")
 
         chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
+        # message_dict = {
+        #     "messages": getattr(request, "messages", None),
+        #     "tools": getattr(request, "tools", None),
+        #     "documents": getattr(request, "documents", None),
+        #     "enable_thinking": getattr(request, "enable_thinking", None),
+        #     "system": getattr(request, "system", None),
+        # }
         message_dict = {
-            "messages": getattr(request, "messages", None),
-            "tools": getattr(request, "tools", None),
-            "documents": getattr(request, "documents", None),
-            "enable_thinking": getattr(request, "enable_thinking", None),
-            "system": getattr(request, "system", None),
+            key: getattr(request, key, None)
+            for key in ["messages", "tools", "documents", "enable_thinking", "system"]
+            if getattr(request, key, None) is not None
         }
         prompt = self.tokenizer.apply_chat_template(
             message_dict,

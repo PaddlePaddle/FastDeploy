@@ -469,11 +469,11 @@ class DataProcessorTestCase(unittest.TestCase):
         processor = self.processor
         calls = {}
 
-        def fake_stream(response_dict, **kwargs):
+        def fake_stream(response_obj, **kwargs):
             calls["stream"] = kwargs
             return "stream"
 
-        def fake_normal(response_dict, **kwargs):
+        def fake_normal(response_obj, **kwargs):
             calls["normal"] = kwargs
             return "normal"
 

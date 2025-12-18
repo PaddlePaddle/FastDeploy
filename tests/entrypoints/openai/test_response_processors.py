@@ -26,7 +26,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.mock_data_processor = MagicMock()
         self.mock_data_processor.process_response_obj = MagicMock(
-            side_effect=lambda response_dict, **_: {"processed": True, "raw": response_dict}
+            side_effect=lambda response_obj, **_: {"processed": True, "raw": response_obj}
         )
 
     async def asyncSetUp(self):
