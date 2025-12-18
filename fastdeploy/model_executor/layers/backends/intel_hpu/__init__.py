@@ -18,9 +18,11 @@ intel_hpu backend methods
 
 from .attention.hpu_attn_backend import HPUAttentionBackend
 from .moe.fused_moe_hpu_backend import HpuMoEMethod, HpuTensorWiseFP8MoEMethod
+from .quantization.tensor_wise_fp8 import HpuTensorWiseFP8LinearMethod
 
 __all__ = [
     "HPUAttentionBackend",
     "HpuMoEMethod",
     "HpuTensorWiseFP8MoEMethod",
+    "HpuTensorWiseFP8LinearMethod",
 ]

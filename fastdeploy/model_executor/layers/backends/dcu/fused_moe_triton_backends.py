@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
@@ -101,6 +103,7 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -117,6 +120,8 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
         scores += layer.gate_correction_bias
         topk_weights, topk_ids = paddle.topk(scores, k=top_k, axis=-1, sorted=False)
         topk_weights = topk_weights / topk_weights.sum(axis=-1, keepdim=True)
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         intermediate_cache1 = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],

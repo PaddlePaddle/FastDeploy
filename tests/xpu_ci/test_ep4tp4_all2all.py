@@ -65,6 +65,7 @@ def test_ep4tp4_all2all(xpu_env):
             "--tensor-parallel-size",
             "4",
             "--enable-expert-parallel",
+            "--enable-prefix-caching",
             "--data-parallel-size",
             "1",
             "--max-model-len",
@@ -81,8 +82,6 @@ def test_ep4tp4_all2all(xpu_env):
             str(port_num + 47873),
             "--gpu-memory-utilization",
             "0.9",
-            "--load-choices",
-            "default",
         ]
 
         # 启动服务器

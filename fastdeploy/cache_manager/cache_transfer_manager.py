@@ -66,6 +66,13 @@ def parse_args():
         choices=["uint8", "bfloat16", "block_wise_fp8"],
         help="cache dtype",
     )
+    parser.add_argument(
+        "--default_dtype",
+        type=str,
+        default="bfloat16",
+        choices=["float16", "bfloat16", "uint8"],
+        help="paddle default dtype, swap_cache_batch only support float16、bfloat16 and uint8 now",
+    )
     parser.add_argument("--key_cache_shape", type=str, default="", help="key cache shape")
     parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--cache_queue_port", type=int, default=9923, help="cache queue port")
@@ -78,7 +85,7 @@ def parse_args():
         help="engine worker queue port",
     )
     parser.add_argument("--num_cpu_blocks", type=int, default=4, help="cpu cache block number")
-    parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
+    parser.add_argument("--ipc_suffix", type=str, default=None, help="engine pid")
     parser.add_argument(
         "--protocol",
         type=str,
@@ -124,6 +131,7 @@ class CacheTransferManager:
         self.num_gpu_blocks = self.key_cache_shape[0]
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
+        paddle.set_default_dtype(args.default_dtype)
 
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -132,7 +140,7 @@ class CacheTransferManager:
         self.n_ranks = args.mp_num
         self.rank = rank
         self.device = device
-        self.engine_pid = args.engine_pid
+        self.ipc_suffix = args.ipc_suffix
         self.cache_dtype = args.cache_dtype
 
         address = (args.pod_ip, args.cache_queue_port)
@@ -149,7 +157,7 @@ class CacheTransferManager:
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
         swap_space_ready_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
@@ -157,7 +165,7 @@ class CacheTransferManager:
             name="swap_space_ready_signal",
             array=swap_space_ready_data,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
 
@@ -172,7 +180,7 @@ class CacheTransferManager:
             name="cache_task_broadcast_signal",
             array=cache_task_broadcast_data,
             dtype=np.int32,
-            suffix=args.engine_pid,
+            suffix=args.ipc_suffix,
             create=False,
         )
 
@@ -645,7 +653,7 @@ class CacheTransferManager:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
         while True:
@@ -740,6 +748,6 @@ if __name__ == "__main__":
 
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
+    logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_tprank{args.rank}.log")
     set_device(args.device_id)
     main()

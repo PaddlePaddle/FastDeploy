@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -57,6 +58,7 @@ from fastdeploy.worker.output import (
     LogprobsLists,
     LogprobsTensors,
     PromptLogprobs,
+    SpeculateMetrics,
 )
 
 NONES = itertools.repeat(None)
@@ -103,6 +105,7 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -134,6 +137,8 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
+            tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+            del request.trace_context
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
             max_tokens = None
@@ -220,8 +225,6 @@ class OpenAIServingChat:
 
         max_streaming_response_tokens = max(1, max_streaming_response_tokens)
 
-        enable_thinking = self._get_thinking_status(request)
-
         include_stop_str_in_output = request.include_stop_str_in_output
 
         stream_options = request.stream_options
@@ -277,7 +280,6 @@ class OpenAIServingChat:
                 generator = response_processor.process_response_chat(
                     response,
                     stream=True,
-                    enable_thinking=enable_thinking,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
 
@@ -286,11 +288,11 @@ class OpenAIServingChat:
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
-                    if res["metrics"]["first_token_time"] is not None:
+                    if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
+                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -306,7 +308,7 @@ class OpenAIServingChat:
                                     else self.engine_client.ori_vocab_size
                                 )
                                 prompt_logprobs_res = self._build_prompt_logprobs(
-                                    prompt_logprobs_tensors, num_prompt_logprobs
+                                    prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                                 )
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
@@ -373,13 +375,21 @@ class OpenAIServingChat:
                             request.top_logprobs if request.top_logprobs != -1 else self.engine_client.ori_vocab_size
                         )
                         logprobs_res = self._create_chat_logprobs(
-                            output_top_logprobs, request.logprobs, num_top_logprobs
+                            output_top_logprobs,
+                            request.logprobs,
+                            num_top_logprobs,
+                            request.include_logprobs_decode_token,
                         )
 
                         if request.include_draft_logprobs and output_draft_top_logprobs is not None:
                             draft_logprobs_res = self._create_chat_logprobs(
-                                output_draft_top_logprobs, request.logprobs, num_top_logprobs
+                                output_draft_top_logprobs,
+                                request.logprobs,
+                                num_top_logprobs,
+                                request.include_logprobs_decode_token,
                             )
+
+                    output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
                     delta_message = DeltaMessage(
                         reasoning_content="",
@@ -412,8 +422,22 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
+                        speculate_metrics=output_speculate_metrics,
                     )
                     if res["finished"]:
+                        trace_carrier = res.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = res["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in res:
+                                del res["trace_carrier"]
                         num_choices -= 1
                         main_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
@@ -427,6 +451,11 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
+
+                        inference_start_time[idx] = 0
+
+                    if request.collect_metrics:
+                        chunk.metrics = res["metrics"]
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
@@ -482,6 +511,7 @@ class OpenAIServingChat:
             )
             yield f"data: {error_data}\n\n"
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
@@ -502,7 +532,6 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         num_choices = 1 if request.n is None else request.n
-        enable_thinking = self._get_thinking_status(request)
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
@@ -530,6 +559,7 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
+            speculate_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -557,7 +587,6 @@ class OpenAIServingChat:
                 generator = response_processor.process_response_chat(
                     response,
                     stream=False,
-                    enable_thinking=enable_thinking,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
                 async for data in generator:
@@ -577,7 +606,10 @@ class OpenAIServingChat:
                         )
                         # logprobs
                         logprobs_res = self._create_chat_logprobs(
-                            output_top_logprobs, request.logprobs, num_top_logprobs
+                            output_top_logprobs,
+                            request.logprobs,
+                            num_top_logprobs,
+                            request.include_logprobs_decode_token,
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents[idx].extend(logprobs_res.content)
@@ -585,7 +617,10 @@ class OpenAIServingChat:
                         # draft_logprobs
                         if request.include_draft_logprobs and output_draft_top_logprobs is not None:
                             draft_logprobs_res = self._create_chat_logprobs(
-                                output_draft_top_logprobs, request.logprobs, num_top_logprobs
+                                output_draft_top_logprobs,
+                                request.logprobs,
+                                num_top_logprobs,
+                                request.include_logprobs_decode_token,
                             )
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
                                 draft_logprob_contents[idx].extend(draft_logprobs_res.content)
@@ -596,10 +631,26 @@ class OpenAIServingChat:
                             if request.prompt_logprobs != -1
                             else self.engine_client.ori_vocab_size
                         )
-                        prompt_logprobs_res = self._build_prompt_logprobs(prompt_logprobs_tensors, num_prompt_logprobs)
+                        prompt_logprobs_res = self._build_prompt_logprobs(
+                            prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
+                        )
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
+                    speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
                     if data["finished"]:
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = data["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in data:
+                                del data["trace_carrier"]
                         num_choices -= 1
                         reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
                         if data["outputs"].get("image_token_num"):
@@ -621,9 +672,11 @@ class OpenAIServingChat:
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
                             max_tokens=max_tokens,
+                            speculate_metrics=speculate_metrics[idx],
                         )
                         choices.append(choice)
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
@@ -674,6 +727,7 @@ class OpenAIServingChat:
         prompt_logprobs_res_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
+        speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
         idx = int(data["request_id"].split("_")[-1])
         output = data["outputs"]
@@ -731,6 +785,7 @@ class OpenAIServingChat:
             draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
             finish_reason=finish_reason,
+            speculate_metrics=speculate_metrics,
         )
 
     def _create_chat_logprobs(
@@ -738,6 +793,7 @@ class OpenAIServingChat:
         output_top_logprobs,
         request_logprobs: Optional[bool] = None,
         request_top_logprobs: Optional[int] = None,
+        request_decode_flag: Optional[bool] = True,
     ) -> Optional[LogProbs]:
         """Create OpenAI-style logprobs for chat completions."""
         if output_top_logprobs is None or len(output_top_logprobs) < 3 or any(not lst for lst in output_top_logprobs):
@@ -755,6 +811,7 @@ class OpenAIServingChat:
                 request_logprobs=request_logprobs,
                 response_logprobs=top_logprobs,
                 request_top_logprobs=request_top_logprobs,
+                request_decode_flag=request_decode_flag,
             )
             if logprobs_res is None:
                 logprobs_res = step_logprobs_res
@@ -767,6 +824,7 @@ class OpenAIServingChat:
         request_logprobs: bool,
         response_logprobs: Optional[LogprobsLists],
         request_top_logprobs: int,
+        request_decode_flag: bool,
     ) -> Optional[LogProbs]:
         """
         Construct a logprobs response object in line with the OpenAI style.
@@ -796,12 +854,16 @@ class OpenAIServingChat:
             # Construct the candidate token structure (LogProbEntry) of topk
             top_logprob_entries: List[LogProbEntry] = []
             for tid, lp in zip(topk_token_ids, topk_logprobs):
-                token_str = self.engine_client.data_processor.process_logprob_response(
-                    [tid], clean_up_tokenization_spaces=False
-                )
-                token_bytes = token_str.encode("utf-8", errors="replace")
-                if "\ufffd" in token_str:
-                    token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                if request_decode_flag:
+                    token_str = self.engine_client.data_processor.process_logprob_response(
+                        [tid], clean_up_tokenization_spaces=False
+                    )
+                    token_bytes = token_str.encode("utf-8", errors="replace")
+                    if "\ufffd" in token_str:
+                        token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
+                else:
+                    token_str = ""
+                    token_bytes = []
                 entry = LogProbEntry(token=token_str, logprob=lp, bytes=list(token_bytes))
                 top_logprob_entries.append(entry)
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
@@ -819,27 +881,11 @@ class OpenAIServingChat:
             api_server_logger.error(error_msg)
             return None
 
-    def _get_thinking_status(self, request: ChatCompletionRequest) -> bool:
-        """
-        Get the thinking status from the request.
-        """
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
-        options = request.chat_template_kwargs.get("options") if request.chat_template_kwargs else None
-        if options:
-            thinking_mode = options.get("thinking_mode")
-            if thinking_mode:
-                if thinking_mode == "close" or thinking_mode == "false":
-                    enable_thinking = False
-                else:
-                    enable_thinking = True
-        return enable_thinking
-
     def _build_prompt_logprobs(
         self,
         prompt_logprobs_tensors: LogprobsTensors,
         num_prompt_logprobs: int,
+        include_logprobs_decode_token: bool,
     ):
         """Update with prompt logprobs from worker.
         Args:
@@ -851,10 +897,13 @@ class OpenAIServingChat:
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
-        decoded_tokens = [
-            self.engine_client.data_processor.process_logprob_response(token_id)
-            for token_id in token_ids.flatten().tolist()
-        ]
+        if include_logprobs_decode_token:
+            decoded_tokens = [
+                self.engine_client.data_processor.process_logprob_response(token_id)
+                for token_id in token_ids.flatten().tolist()
+            ]
+        else:
+            decoded_tokens = None
 
         # Recover shapes.
         num_prompt_tokens, num_logprobs = logprobs.shape

@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.worker.output import PromptLogprobs
+from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
 class InvalidParameterException(Exception):
@@ -230,6 +230,7 @@ class ChatCompletionResponseChoice(BaseModel):
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -295,6 +296,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionStreamResponse(BaseModel):
@@ -308,6 +310,7 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class CompletionResponseChoice(BaseModel):
@@ -329,6 +332,7 @@ class CompletionResponseChoice(BaseModel):
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionResponse(BaseModel):
@@ -374,6 +378,7 @@ class CompletionResponseStreamChoice(BaseModel):
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionStreamResponse(BaseModel):
@@ -387,6 +392,7 @@ class CompletionStreamResponse(BaseModel):
     model: str
     choices: List[CompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class StreamOptions(BaseModel):
@@ -455,6 +461,7 @@ class CompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
     prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -498,6 +505,9 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -613,9 +623,10 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
-    top_logprobs: Optional[int] = 0
+    top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
 
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -671,6 +682,9 @@ class ChatCompletionRequest(BaseModel):
     mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None):
         """
@@ -922,8 +936,18 @@ class EmbeddingChatRequest(BaseModel):
     user: Optional[str] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
 
-    add_special_tokens: bool = Field(
+    # --8<-- [start:chat-embedding-extra-params]
+    add_generation_prompt: bool = Field(
         default=False,
+        description=(
+            "If true, the generation prompt will be added to the chat template. "
+            "This is a parameter used by chat template in tokenizer config of the "
+            "model."
+        ),
+    )
+
+    add_special_tokens: bool = Field(
+        default=True,
         description=(
             "If true, special tokens (e.g. BOS) will be added to the prompt "
             "on top of what is added by the chat template. "

@@ -238,7 +238,8 @@ def start_server(server_args, wait_before_check=60):
         print_logs_on_failure()
         stop_processes()
         return False
-
+    # ensure service is ready
+    time.sleep(5)
     return True
 
 
@@ -284,12 +285,13 @@ def setup_ep_env():
     """
     env_vars = {
         "BKCL_ENABLE_XDR": "1",
-        "BKCL_RDMA_NICS": "xgbe1,xgbe2,xgbe3,xgbe4",
+        "BKCL_RDMA_NICS": "eth1,eth1,eth2,eth2",
         "BKCL_TRACE_TOPO": "1",
         "BKCL_PCIE_RING": "1",
         "XSHMEM_MODE": "1",
         "XSHMEM_QP_NUM_PER_RANK": "32",
         "BKCL_RDMA_VERBS": "1",
+        "MOE_FFN_USE_DENSE_INPUT": "1",
     }
 
     # 保存原始值
@@ -301,7 +303,12 @@ def setup_ep_env():
     for key, value in env_vars.items():
         os.environ[key] = value
         print(f"设置环境变量: {key}={value}")
-
+    # 获取并设置RDMA网卡
+    # BKCL_RDMA_NICS和KVCACHE_RDMA_NICS一致
+    rdma_nics = get_rdma_nics()
+    if rdma_nics:
+        os.environ["BKCL_RDMA_NICS"] = rdma_nics
+        print(f"设置环境变量: BKCL_RDMA_NICS={rdma_nics}")
     return original_values
 
 

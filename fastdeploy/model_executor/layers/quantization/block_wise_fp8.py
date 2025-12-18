@@ -138,7 +138,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 weight_shape = layer.weight_shape
                 weight_scale_inv_shape = weight_scale_inv_shape
                 extra_weight_attrs["output_dim"] = (
-                    not extra_weight_attrs["output_dim"] if extra_weight_attrs["output_dim"] is not None else None
+                    not extra_weight_attrs["output_dim"]
+                    if extra_weight_attrs.get("output_dim", None) is not None
+                    else None
                 )
 
             layer.weight_dtype = "float8_e4m3fn"

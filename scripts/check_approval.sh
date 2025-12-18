@@ -44,10 +44,10 @@ HAS_CUSTOM_REGISTRER=`git diff -U0 upstream/$BRANCH | grep '^\+' | grep -zoE "PD
 if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(dengkaipeng)) approval for adding custom op.\n"
     echo_line2="You must have one QA(DDDivano(zhengtianyu)) approval for adding custom op.\n"
-    echo_line3="You must have one PaddlePaddle RD (XiaoguangHu01(huxiaoguang), jeff41404(gaoxiang), phlrain(liuhongyu)) approval for adding custom op.\n"
+    echo_line3="You must have one PaddlePaddle RD (jeff41404(gaoxiang), yongqiangma(mayongqiang)) approval for adding custom op.\n"
     check_approval "$echo_line1" 1 qingqing01 Jiang-Jia-Jun heavengate
     check_approval "$echo_line2" 1 DDDivano
-    check_approval "$echo_line3" 1 XiaoguangHu01 jeff41404 phlrain
+    check_approval "$echo_line3" 1 jeff41404 yongqiangma
 fi
 
 WORKER_OR_CONFIG_LIST=(
