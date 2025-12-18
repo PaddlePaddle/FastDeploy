@@ -40,3 +40,4 @@ opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser
 msgspec
 safetensors>=0.7.0
+py-cpuinfo
