@@ -486,6 +486,7 @@ async def test_chat_and_completion_tracing_headers_branch():
     args = _build_args(dynamic_load_weight=False)
     api_server = _reload_api_server(args)
     api_server.envs.TRACES_ENABLE = "true"
+    api_server.app.state.dynamic_load_weight = False
 
     fake_req = SimpleNamespace(headers={"x-request-id": "1"})
     body = SimpleNamespace(model_dump_json=lambda: "{}", stream=False)
