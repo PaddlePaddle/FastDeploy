@@ -57,31 +57,33 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
            "Cum offsets tensor must be contiguous");
   PD_CHECK(seq_len.is_contiguous(), "Seq lens tensor must be contiguous");
 
-  int r = baidu::xpu::api::plugin::speculate_get_padding_offset(
-      xpu_ctx->x_context(),
-      batch_id_per_token.data<int>(),
-      cum_offsets_out.data<int>(),
-      cu_seqlens_q.data<int>(),
-      cu_seqlens_k.data<int>(),
-      cum_offsets.data<int>(),
-      seq_len.data<int>(),
-      seq_length,
-      bsz);
-  PD_CHECK(r == 0, "XPU speculate_get_padding_offset failed");
+  if (token_num_data > 0) {
+    int r = baidu::xpu::api::plugin::speculate_get_padding_offset(
+        xpu_ctx->x_context(),
+        batch_id_per_token.data<int>(),
+        cum_offsets_out.data<int>(),
+        cu_seqlens_q.data<int>(),
+        cu_seqlens_k.data<int>(),
+        cum_offsets.data<int>(),
+        seq_len.data<int>(),
+        seq_length,
+        bsz);
+    PD_CHECK(r == 0, "XPU speculate_get_padding_offset failed");
 
-  r = baidu::xpu::api::plugin::speculate_remove_padding<int64_t>(
-      xpu_ctx->x_context(),
-      x_remove_padding.data<int64_t>(),
-      input_ids.data<int64_t>(),
-      draft_tokens.data<int64_t>(),
-      seq_len.data<int>(),
-      seq_lens_encoder.data<int>(),
-      cum_offsets_out.data<int>(),
-      seq_length,
-      max_draft_tokens,
-      bsz,
-      token_num_data);
-  PD_CHECK(r == 0, "XPU speculate_remove_padding failed");
+    r = baidu::xpu::api::plugin::speculate_remove_padding<int64_t>(
+        xpu_ctx->x_context(),
+        x_remove_padding.data<int64_t>(),
+        input_ids.data<int64_t>(),
+        draft_tokens.data<int64_t>(),
+        seq_len.data<int>(),
+        seq_lens_encoder.data<int>(),
+        cum_offsets_out.data<int>(),
+        seq_length,
+        max_draft_tokens,
+        bsz,
+        token_num_data);
+    PD_CHECK(r == 0, "XPU speculate_remove_padding failed");
+  }
 
   return {x_remove_padding,
           cum_offsets_out,
