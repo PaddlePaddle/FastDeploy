@@ -351,7 +351,9 @@ async def test_chat_completion_branches_and_completion_branches():
     )
 
     error_resp = ErrorResponse(error=ErrorInfo(message="err"))
-    api_server.app.state.chat_handler = MagicMock(create_chat_completion=AsyncMock(return_value=error_resp))
+    chat_handler = MagicMock()
+    chat_handler.create_chat_completion = AsyncMock(return_value=error_resp)
+    api_server.app.state.chat_handler = chat_handler
     resp2 = await api_server.create_chat_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp2.status_code == 500
 
@@ -368,7 +370,9 @@ async def test_chat_completion_branches_and_completion_branches():
     assert isinstance(stream_resp, api_server.StreamingResponse)
 
     # completion handler mirrors chat path
-    api_server.app.state.completion_handler = MagicMock(create_completion=AsyncMock(return_value=error_resp))
+    completion_handler = MagicMock()
+    completion_handler.create_completion = AsyncMock(return_value=error_resp)
+    api_server.app.state.completion_handler = completion_handler
     resp4 = await api_server.create_completion(SimpleNamespace(model_dump_json=lambda: "{}", stream=False))
     assert resp4.status_code == 500
     api_server.app.state.completion_handler.create_completion = AsyncMock(return_value=success_resp)
