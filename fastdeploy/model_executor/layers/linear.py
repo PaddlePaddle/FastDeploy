@@ -836,6 +836,7 @@ class RowParallelLinear(LinearBase):
         self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
+        self.layer_id = layer_id
         self.split_token = (
             fd_config.parallel_config.use_sequence_parallel_moe
             and layer_id >= fd_config.model_config.moe_layer_start_index

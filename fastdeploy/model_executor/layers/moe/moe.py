@@ -42,7 +42,7 @@ except:
 import numpy as np
 
 
-def get_moe_method():
+def get_moe_method(layer=None):
     """
     return moe method based on device platform
     """
@@ -54,7 +54,7 @@ def get_moe_method():
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
-        return XPUMoEMethod(None)
+        return XPUMoEMethod(None, layer)
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
@@ -223,7 +223,7 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # unquantized quant_method
-            self.quant_method = get_moe_method()
+            self.quant_method = get_moe_method(self)
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         self.is_rearrange = False
