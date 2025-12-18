@@ -140,7 +140,7 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
-    if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
+    if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)
         return

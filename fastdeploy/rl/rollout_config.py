@@ -66,6 +66,7 @@ class RolloutModelConfig:
         num_nextn_predict_layers: int = 0,
         eplb_config: str = {},
         routing_replay_config: str = None,
+        load_choices: str = "default_v1",
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -115,6 +116,7 @@ class RolloutModelConfig:
         self.num_nextn_predict_layers = num_nextn_predict_layers
         self.eplb_config = eplb_config
         self.routing_replay_config = routing_replay_config
+        self.load_choices = load_choices
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())
