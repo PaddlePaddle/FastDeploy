@@ -304,7 +304,7 @@ def test_get_requests_can_steal_remote_request(monkeypatch, scheduler_fixture):
 def test_get_requests_requeues_when_chunked_limits_hit(scheduler_fixture):
     """测试 get_requests：当触发分块预填充限制时，长任务应被重新放回队列。"""
     scheduler, fake_redis = scheduler_fixture
-    envs.FD_ENABLE_MAX_PREFILL = 0
+    monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
     queue = scheduler._request_queue_name()
     short_request = ScheduledRequest(_make_request("short", token_count=2), queue, scheduler._response_queue_name())
@@ -331,7 +331,7 @@ def test_get_requests_returns_empty_when_resources_insufficient(scheduler_fixtur
     """测试 get_requests：当资源不足时（available_blocks=0），应返回空列表。"""
     scheduler, fake_redis = scheduler_fixture
 
-    envs.FD_ENABLE_MAX_PREFILL = 0
+    monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
     result = scheduler.get_requests(
         available_blocks=0,
