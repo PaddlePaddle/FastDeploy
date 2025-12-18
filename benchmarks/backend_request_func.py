@@ -252,7 +252,7 @@ async def async_request_eb_openai_chat_completions(
                                     if content:
                                         res_ttft = choices[0].get("arrival_time", timestamp)
                                         output.res_ttft = res_ttft
-                                        usage = data.get("usage", {})
+                                        usage = data.get("usage") or {}
                                         output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
 
                                 output.generated_text += content or ""

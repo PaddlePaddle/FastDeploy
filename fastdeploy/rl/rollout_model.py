@@ -21,6 +21,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MoeForCausalLM,
     Ernie4_5_MoePretrainedModel,
@@ -50,6 +51,10 @@ from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
 )
+from fastdeploy.model_executor.utils import (
+    multi_switch_config_context,
+    process_final_after_loading,
+)
 from fastdeploy.rl.rollout_config import RolloutModelConfig
 
 
@@ -64,13 +69,33 @@ class RolloutModel(nn.Layer):
 
     def _init_model(self) -> nn.Layer:
         """Load model from loader based on config."""
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        return model_loader.load_model(fd_config=self.fd_config)
+
+    def load_weights(self, weights_iterator):
+        """Load weights_iterator."""
+
         context = paddle.LazyGuard()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
-        with context:
-            model_cls = ModelRegistry.get_class(architectures)
-            model = model_cls(self.fd_config)
+        if self.fd_config.quant_config is not None:
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.quant_config, "is_checkpoint_bf16", True),
+                (self.fd_config.load_config, "dynamic_load_weight", False),
+            )
+        else:
+            # bf16
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.load_config, "dynamic_load_weight", False)
+            )
+        with quantization_context:
+            with context:
+                model_cls = ModelRegistry.get_class(architectures)
+                model = model_cls(self.fd_config)
         model.eval()
-        return model
+        model.load_weights(weights_iterator)
+        if self.fd_config.speculative_config.model_type != "mtp":
+            process_final_after_loading(model, self.fd_config)
+        self.rollout_model = model
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""
