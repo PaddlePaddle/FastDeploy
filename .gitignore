@@ -148,7 +148,6 @@ visitor_fp8_gemm_fused.cu
 custom_ops/third_party
 
 fastdeploy/model_executor/ops/base
-fastdeploy/model_executor/ops/gpu/deep_gemm
 
 gemm_profiles.json
 nohup.out
