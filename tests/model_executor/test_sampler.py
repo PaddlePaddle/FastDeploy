@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Unit tests for the sampler helpers covering guided decoding and speculative flows."""
 
 from __future__ import annotations
 
@@ -292,9 +291,13 @@ def test_top_p_normalize_and_padding_params():
     top_k = paddle.to_tensor([[2], [3]], dtype="int64")
     seq_lens_this_time = paddle.to_tensor([[1], [2]], dtype="int64")
     seq_lens_encoder = paddle.to_tensor([[0], [1]], dtype="int64")
-    padded_p, padded_k = sampler_module.padding_sampling_params(top_p, top_k, seq_lens_this_time, seq_lens_encoder)
+    infer_seed = paddle.to_tensor([[123], [456]], dtype="int64")
+    padded_p, padded_k, padded_seed = sampler_module.padding_sampling_params(
+        top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder
+    )
     assert list(padded_p.shape) == [2, 1]
     assert list(padded_k.shape) == [2, 1]
+    assert list(padded_seed.shape) == [padded_p.shape[0], 1]
 
 
 def test_guided_decoding_tracks_processors_and_reasoning(fd_config_factory):
@@ -480,10 +483,10 @@ def test_speculative_sampler_compute_and_forward(set_platform, fd_config_factory
         "accept_tokens": _tensor([[0, 0]], dtype="int64"),
         "accept_num": _tensor([1], dtype="int32"),
         "step_idx": _tensor([[0]], dtype="int32"),
-        "stop_flags": _tensor([[0]], dtype="int32"),
+        "stop_flags": _tensor([[False]], dtype="bool"),
         "draft_tokens": _tensor([[0, 0]], dtype="int64"),
         "max_dec_len": _tensor([[8]], dtype="int32"),
-        "is_block_step": _tensor([[0]], dtype="int32"),
+        "is_block_step": _tensor([[False]], dtype="bool"),
         "actual_draft_token_num": _tensor([[1]], dtype="int32"),
     }
 
