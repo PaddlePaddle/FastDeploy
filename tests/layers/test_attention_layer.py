@@ -270,7 +270,7 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
-        input_ids = paddle.zeros([batch_size, seq_len if mode == ForwardMode.EXTEND else 1], dtype="int64")
+        input_ids = paddle.zeros([batch_size, fd_config.model_config.max_model_len], dtype="int64")
         token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, seq_lens_this_time, token_num
@@ -302,27 +302,22 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        # prefill_batch_size = 1
-        # prefill_seq_len = 4096
+        prefill_batch_size = 1
+        prefill_seq_len = 2048
 
-        # prefill_hidden_states = paddle.randn(
-        #     [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
-        #     dtype=act_tensor_dtype,
-        # )
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=self.fd_config,
+            attn_backend=self.attn_backend,
+            cache_quant_type_str=self.cache_quant_type_str,
+        )
 
-        # forward_meta = self.create_forward_meta(
-        #     batch_size=prefill_batch_size,
-        #     seq_len=prefill_seq_len,
-        #     mode=ForwardMode.EXTEND,
-        #     fd_config=self.fd_config,
-        #     attn_backend=self.attn_backend,
-        #     cache_quant_type_str=self.cache_quant_type_str,
-        # )
+        self.attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(forward_meta, prefill_hidden_states)
 
-        # self.attn_backend.init_attention_metadata(forward_meta)
-        # self.attn_forward(forward_meta, prefill_hidden_states)
-
-        # paddle.device.synchronize()
+        paddle.device.synchronize()
 
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
@@ -332,21 +327,21 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # for i in range(test_steps):
-        #     start_events[i].record()
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
 
-        #     self.attn_forward(forward_meta, prefill_hidden_states)
+            self.attn_forward(forward_meta, prefill_hidden_states)
 
-        #     end_events[i].record()
-        # paddle.device.synchronize()
+            end_events[i].record()
+        paddle.device.synchronize()
 
-        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        # print(times[-5:])
-        # return
-
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
         # p.stop()
+
+        return
 
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],

@@ -253,8 +253,6 @@ class XPUForwardMeta(ForwardMeta):
     dec_batch: Optional[paddle.Tensor] = None
     #
     total_enc_len: Optional[paddle.Tensor] = None
-    # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
-    pos_emb_type: Optional[str] = "NORMAL"
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
 
@@ -343,6 +341,9 @@ class HPUForwardMeta(ForwardMeta):
 
     #
     pre_caches_length: int = 0
+
+    # AMAX measurement of activations in bf16 mode for quantization calibration
+    measurement_mode: bool = False
 
     @classmethod
     def init_forward_meta(cls, share_inputs: Dict, attn_backend: "AttentionBackend_HPU"):

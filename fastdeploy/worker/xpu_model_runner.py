@@ -924,10 +924,8 @@ class XPUModelRunner(ModelRunnerBase):
             head_dim = self.model_config.head_dim
             if "paddleocr" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
-                self.share_inputs["pos_emb_type"] = "NEOX"
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
-                self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
 
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=[
@@ -1020,8 +1018,6 @@ class XPUModelRunner(ModelRunnerBase):
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
-        if self.enable_mm:
-            self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
 
@@ -1112,7 +1108,7 @@ class XPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -1500,6 +1496,9 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
+
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
 
         # Reset free list
         free_list = list(

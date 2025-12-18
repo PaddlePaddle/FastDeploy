@@ -30,7 +30,12 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    PromptLogprobs,
+    SampleLogprobs,
+    SpeculateMetrics,
+)
 
 
 class RequestStatus(Enum):
@@ -394,6 +399,7 @@ class CompletionOutput:
     reasoning_content: Optional[str] = None
     reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
     def to_dict(self):
         """
@@ -514,6 +520,8 @@ class RequestMetrics:
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
 
+    speculate_metrics: Optional[SpeculateMetrics] = None
+
     def __post_init__(self):
         if self.arrival_time is None:
             self.arrival_time = time.time()
@@ -616,6 +624,7 @@ class RequestOutput:
         # for internal adapter
         ic_req_data: Optional[dict] = None,
         prompt_token_ids_len: Optional[int] = 0,
+        trace_carrier: dict = dict(),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -632,6 +641,7 @@ class RequestOutput:
         self.error_msg = error_msg
         self.ic_req_data = ic_req_data
         self.prompt_token_ids_len = prompt_token_ids_len
+        self.trace_carrier = trace_carrier
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -664,6 +674,8 @@ class RequestOutput:
             self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
                 next_output.outputs.draft_top_logprobs.sampled_token_ranks
             )
+        if next_output.metrics.speculate_metrics is not None:
+            self.outputs.speculate_metrics = next_output.metrics.speculate_metrics
 
     def __repr__(self) -> str:
         return (
@@ -680,6 +692,7 @@ class RequestOutput:
             f"metrics={self.metrics}, "
             f"error_code={self.error_code}, "
             f"error_msg={self.error_msg},"
+            f"trace_carrier={self.trace_carrier}"
         )
 
     @classmethod
@@ -695,7 +708,8 @@ class RequestOutput:
         else:
             d.pop("metrics", None)
             metrics = None
-        return RequestOutput(**d, outputs=completion_output, metrics=metrics)
+        trace_carrier = d.pop("trace_carrier", {})
+        return RequestOutput(**d, outputs=completion_output, metrics=metrics, trace_carrier=trace_carrier)
 
     def to_dict(self):
         """convert RequestOutput into a serializable dict"""
@@ -716,6 +730,7 @@ class RequestOutput:
             "error_msg": self.error_msg,
             "ic_req_data": self.ic_req_data,
             "prompt_token_ids_len": self.prompt_token_ids_len,
+            "trace_carrier": self.trace_carrier,
         }
 
 

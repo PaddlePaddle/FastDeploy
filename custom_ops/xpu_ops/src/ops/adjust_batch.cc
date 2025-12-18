@@ -71,16 +71,18 @@ std::vector<paddle::Tensor> AdjustBatchKernel(
       const_cast<int32_t *>(decoder_batch_idx.data<int32_t>())};
 
   auto out = paddle::empty({token_num, dim}, x.type(), x.place());
-
-  int r = baidu::xpu::api::plugin::eb_adjust_batch<XPUType, XPUType>(
-      ctx,
-      reinterpret_cast<const XPUType *>(x.data<data_t>()),
-      reinterpret_cast<XPUType *>(out.data<data_t>()),
-      encoder_seqs_lods_vp,
-      decoder_seqs_lods_vp,
-      encoder_batch_map_vp,
-      decoder_batch_map_vp,
-      dim);
+  if (token_num > 0) {
+    int r = baidu::xpu::api::plugin::eb_adjust_batch<XPUType, XPUType>(
+        ctx,
+        reinterpret_cast<const XPUType *>(x.data<data_t>()),
+        reinterpret_cast<XPUType *>(out.data<data_t>()),
+        encoder_seqs_lods_vp,
+        decoder_seqs_lods_vp,
+        encoder_batch_map_vp,
+        decoder_batch_map_vp,
+        dim);
+    PD_CHECK(r == 0, "XPU eb_adjust_batch failed");
+  }
   return {out};
 }
 
