@@ -979,6 +979,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         or current_platform.is_xpu()
         or current_platform.is_maca()
         or current_platform.is_iluvatar()
+        or current_platform.is_intel_hpu()
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0

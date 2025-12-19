@@ -540,6 +540,7 @@ class EngineArgs:
             or current_platform.is_xpu()
             or current_platform.is_maca()
             or current_platform.is_iluvatar()
+            or current_platform.is_intel_hpu()
         ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
