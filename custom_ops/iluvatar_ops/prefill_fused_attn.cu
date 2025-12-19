@@ -16,25 +16,25 @@
 #include "iluvatar_context.h"
 
 template <paddle::DataType T>
-void PrefillFusedPagedAttnKernel(
-    const paddle::Tensor& qkv,
-    paddle::Tensor& k_cache,
-    paddle::Tensor& v_cache,
-    const paddle::Tensor& block_table,
-    const paddle::Tensor& cu_seqlens_qkv,
-    const paddle::optional<paddle::Tensor>& rope_sin,
-    const paddle::optional<paddle::Tensor>& rope_cos,
-    int num_heads,
-    int head_dim,
-    int num_kv_heads,
-    int block_size,
-    int max_seq_len,
-    float scale,
-    bool causal,
-    bool q_rope,
-    bool k_rope,
-    bool v_rope,
-    paddle::Tensor& out) {
+void PrefillFusedPagedAttnKernel(const paddle::Tensor& qkv,
+                                 paddle::Tensor& k_cache,
+                                 paddle::Tensor& v_cache,
+                                 const paddle::Tensor& block_table,
+                                 const paddle::Tensor& cu_seqlens_qkv,
+                                 const paddle::Tensor& rope_sin,
+                                 const paddle::Tensor& rope_cos,
+                                 int num_heads,
+                                 int head_dim,
+                                 int num_kv_heads,
+                                 int block_size,
+                                 int max_seq_len,
+                                 float scale,
+                                 bool causal,
+                                 bool q_rope,
+                                 bool k_rope,
+                                 bool v_rope,
+                                 bool is_interleaved_rope_mode,
+                                 paddle::Tensor& out) {
   // check dtype and contiguous
   const auto& dtype = qkv.dtype();
   cuinferDataType_t data_type;
@@ -139,8 +139,28 @@ void PrefillFusedPagedAttnKernel(
           "cu_seqlens_qkv_dims[0] must be equal to batch_size + 1"));
 
   int block_table_stride = block_table.strides()[0];
-  const float* rope_sin_ptr = rope_sin ? rope_sin.get().data<float>() : nullptr;
-  const float* rope_cos_ptr = rope_cos ? rope_cos.get().data<float>() : nullptr;
+  const float* rope_sin_ptr = rope_sin.data<float>();
+  const float* rope_cos_ptr = rope_cos.data<float>();
+  const auto& rope_dims = rope_sin.dims();
+  std::vector<int> rope_shape_vec, rope_stride_vec;
+  int rope_ndim;
+  if (rope_dims.size() == 4) {
+    // [batch_size, max_seq_len, 1, head_dim]
+    PADDLE_ENFORCE_EQ(rope_dims[0],
+                      batch_size,
+                      common::errors::InvalidArgument(
+                          "rope_dims[0] must be equal to batch_size"));
+    rope_shape_vec = std::vector<int>({batch_size, max_seq_len, head_dim});
+    rope_stride_vec = std::vector<int>({max_seq_len * head_dim, head_dim, 1});
+    rope_ndim = 3;
+  } else if (rope_dims.size() == 3) {
+    // [max_seq_len, 1, head_dim]
+    rope_shape_vec = std::vector<int>({max_seq_len, head_dim});
+    rope_stride_vec = std::vector<int>({head_dim, 1});
+    rope_ndim = 2;
+  } else {
+    PD_THROW("Unsupported rope_ndim = %d for Paged attn", rope_ndim);
+  }
 
   cuinferHandle_t cuinfer_handle =
       iluvatar::getContextInstance()->getIxInferHandle();
@@ -226,22 +246,22 @@ void PrefillFusedPagedAttnKernel(
 
   cuinferTensorDescriptor_t cos_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&cos_desc));
-  CUINFER_CHECK(cuinferSetTensorNdDescriptor(
-      cos_desc,
-      CUINFER_DATA_FLOAT,
-      2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+  CUINFER_CHECK(cuinferSetTensorNdDescriptor(cos_desc,
+                                             CUINFER_DATA_FLOAT,
+                                             rope_ndim,
+                                             rope_shape_vec.data(),
+                                             rope_stride_vec.data()));
 
   cuinferTensorDescriptor_t sin_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&sin_desc));
-  CUINFER_CHECK(cuinferSetTensorNdDescriptor(
-      sin_desc,
-      CUINFER_DATA_FLOAT,
-      2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+  CUINFER_CHECK(cuinferSetTensorNdDescriptor(sin_desc,
+                                             CUINFER_DATA_FLOAT,
+                                             rope_ndim,
+                                             rope_shape_vec.data(),
+                                             rope_stride_vec.data()));
 
+  cuinferAttentionRopeMode_t rope_mode =
+      is_interleaved_rope_mode ? CUINFER_ATTEN_NORMAL : CUINFER_ATTEN_OCRV1;
   CUINFER_CHECK(cuinferFmhaFwdMergedFuseRopeFunc(cuinfer_handle,
                                                  qkv_desc,
                                                  qkv.data(),
@@ -269,7 +289,8 @@ void PrefillFusedPagedAttnKernel(
                                                  scale,
                                                  q_rope,
                                                  k_rope,
-                                                 v_rope));
+                                                 v_rope,
+                                                 rope_mode));
 
   CUINFER_CHECK(cuinferDestroyTensorDescriptor(qkv_desc));
   CUINFER_CHECK(cuinferDestroyTensorDescriptor(qkv_seqlens_desc));
@@ -287,8 +308,8 @@ std::vector<paddle::Tensor> PrefillFusedPagedAttn(
     paddle::Tensor& v_cache,
     const paddle::Tensor& block_table,
     const paddle::Tensor& cu_seqlens_qkv,
-    const paddle::optional<paddle::Tensor>& rope_sin,
-    const paddle::optional<paddle::Tensor>& rope_cos,
+    const paddle::Tensor& rope_sin,
+    const paddle::Tensor& rope_cos,
     int num_heads,
     int head_dim,
     int num_kv_heads,
@@ -298,51 +319,56 @@ std::vector<paddle::Tensor> PrefillFusedPagedAttn(
     bool causal,
     bool q_rope,
     bool k_rope,
-    bool v_rope) {
+    bool v_rope,
+    bool is_interleaved_rope_mode) {
   const auto dtype = qkv.dtype();
   auto out =
       paddle::empty({qkv.shape()[0], num_heads * head_dim}, dtype, qkv.place());
 
   switch (dtype) {
     case paddle::DataType::BFLOAT16:
-      PrefillFusedPagedAttnKernel<paddle::DataType::BFLOAT16>(qkv,
-                                                              k_cache,
-                                                              v_cache,
-                                                              block_table,
-                                                              cu_seqlens_qkv,
-                                                              rope_sin,
-                                                              rope_cos,
-                                                              num_heads,
-                                                              head_dim,
-                                                              num_kv_heads,
-                                                              block_size,
-                                                              max_seq_len,
-                                                              scale,
-                                                              causal,
-                                                              q_rope,
-                                                              k_rope,
-                                                              v_rope,
-                                                              out);
+      PrefillFusedPagedAttnKernel<paddle::DataType::BFLOAT16>(
+          qkv,
+          k_cache,
+          v_cache,
+          block_table,
+          cu_seqlens_qkv,
+          rope_sin,
+          rope_cos,
+          num_heads,
+          head_dim,
+          num_kv_heads,
+          block_size,
+          max_seq_len,
+          scale,
+          causal,
+          q_rope,
+          k_rope,
+          v_rope,
+          is_interleaved_rope_mode,
+          out);
       break;
     case paddle::DataType::FLOAT16:
-      PrefillFusedPagedAttnKernel<paddle::DataType::FLOAT16>(qkv,
-                                                             k_cache,
-                                                             v_cache,
-                                                             block_table,
-                                                             cu_seqlens_qkv,
-                                                             rope_sin,
-                                                             rope_cos,
-                                                             num_heads,
-                                                             head_dim,
-                                                             num_kv_heads,
-                                                             block_size,
-                                                             max_seq_len,
-                                                             scale,
-                                                             causal,
-                                                             q_rope,
-                                                             k_rope,
-                                                             v_rope,
-                                                             out);
+      PrefillFusedPagedAttnKernel<paddle::DataType::FLOAT16>(
+          qkv,
+          k_cache,
+          v_cache,
+          block_table,
+          cu_seqlens_qkv,
+          rope_sin,
+          rope_cos,
+          num_heads,
+          head_dim,
+          num_kv_heads,
+          block_size,
+          max_seq_len,
+          scale,
+          causal,
+          q_rope,
+          k_rope,
+          v_rope,
+          is_interleaved_rope_mode,
+          out);
       break;
     default:
       PD_THROW("Unsupported data type for Paged attn");
@@ -382,8 +408,8 @@ PD_BUILD_STATIC_OP(prefill_fused_paged_attn)
              "v_cache",
              "block_table",
              "cu_seqlens_qkv",
-             paddle::Optional("rope_sin"),
-             paddle::Optional("rope_cos")})
+             "rope_sin",
+             "rope_cos"})
     .Outputs({"out"})
     .Attrs({"num_heads:int",
             "head_dim:int",
@@ -394,7 +420,8 @@ PD_BUILD_STATIC_OP(prefill_fused_paged_attn)
             "causal:bool",
             "q_rope:bool",
             "k_rope:bool",
-            "v_rope:bool"})
+            "v_rope:bool",
+            "is_interleaved_rope_mode:bool"})
     .SetKernelFn(PD_KERNEL(PrefillFusedPagedAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(PrefillFusedPagedAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PrefillFusedPagedAttnInferDtype));
