@@ -20,6 +20,8 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponse,
     ErrorInfo,
     ErrorResponse,
+    ModelInfo,
+    ModelList,
     UsageInfo,
 )
 
@@ -337,6 +339,24 @@ async def test_wrap_streaming_generator():
     assert out == ["a", "b"]
     api_server.connection_semaphore.release.assert_called_once()
 
+    # Success path with span and last_chunk event (count > 0)
+    span = MagicMock()
+    span.is_recording.return_value = True
+    api_server.connection_semaphore = SimpleNamespace(status=lambda: "ok", release=MagicMock())
+    with patch("opentelemetry.trace.get_current_span", return_value=span):
+
+        async def gen3():
+            yield "chunk1"
+            yield "chunk2"
+
+        wrapped = api_server.wrap_streaming_generator(gen3())
+        out = []
+        async for item in wrapped():
+            out.append(item)
+        assert out == ["chunk1", "chunk2"]
+        span.add_event.assert_called()
+        api_server.connection_semaphore.release.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_chat_and_completion_routes():
@@ -353,6 +373,27 @@ async def test_chat_and_completion_routes():
     assert resp.status_code == 304
     resp = await api_server.create_completion(body, fake_req)
     assert resp.status_code == 304
+
+    # Healthy path with dynamic_load_weight=True (missing branch 383, 419)
+    api_server.app.state.dynamic_load_weight = True
+    api_server.app.state.engine_client.is_workers_alive.return_value = (True, "ok")
+    api_server.connection_semaphore = SimpleNamespace(acquire=AsyncMock(), release=MagicMock(), status=lambda: "ok")
+    success_resp = ChatCompletionResponse(id="1", model="m", choices=[], usage=UsageInfo())
+    api_server.app.state.chat_handler = SimpleNamespace(create_chat_completion=AsyncMock(return_value=success_resp))
+    api_server.app.state.completion_handler = SimpleNamespace(create_completion=AsyncMock(return_value=success_resp))
+
+    class DummyCM:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        resp = await api_server.create_chat_completion(body, fake_req)
+        assert resp.status_code == 200
+        resp = await api_server.create_completion(body, fake_req)
+        assert resp.status_code == 200
 
     # Healthy paths
     api_server.app.state.dynamic_load_weight = False
@@ -432,6 +473,23 @@ async def test_chat_completion_tracing():
     assert resp_chat.status_code == 200
     assert resp_comp.status_code == 200
     assert getattr(body, "trace_context", None) == "ctx"
+
+    # TRACES_ENABLE=True but req.headers is None/empty (missing branch 379, 415)
+    api_server.envs.TRACES_ENABLE = "true"
+    fake_req_no_headers = SimpleNamespace(headers=None)
+    body2 = SimpleNamespace(model_dump_json=lambda: "{}", stream=False)
+    api_server.app.state.chat_handler = SimpleNamespace(create_chat_completion=AsyncMock(return_value=chat_resp))
+    api_server.app.state.completion_handler = SimpleNamespace(
+        create_completion=AsyncMock(return_value=completion_resp)
+    )
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        resp_chat2 = await api_server.create_chat_completion(body2, fake_req_no_headers)
+        resp_comp2 = await api_server.create_completion(body2, fake_req_no_headers)
+
+    assert resp_chat2.status_code == 200
+    assert resp_comp2.status_code == 200
+    assert not hasattr(body2, "trace_context")
 
 
 @pytest.mark.asyncio
@@ -576,7 +634,8 @@ async def test_lifespan_and_health():
         assert isinstance(routes, dict)
 
 
-def test_list_models():
+@pytest.mark.asyncio
+async def test_list_models():
     args = _build_args()
     with _patch_common_imports(args):
         api_server = _reload_api_server(args)
@@ -588,9 +647,21 @@ def test_list_models():
 
         api_server.ErrorResponse = FakeErrorResponse
         api_server.app.state.model_handler = MagicMock(list_models=AsyncMock(return_value=FakeErrorResponse()))
-    resp = asyncio.run(api_server.list_models())
+    resp = await api_server.list_models()
     assert resp.status_code == 200
     assert resp.body
+
+    # dynamic_load_weight=True but workers_alive returns True (missing branch 442)
+    api_server.app.state.dynamic_load_weight = True
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.is_workers_alive.return_value = (True, "ok")
+
+    # Return ModelList instead of ErrorResponse (missing branch 449)
+    model_list = ModelList(data=[ModelInfo(id="test-model", object="model")])
+    api_server.app.state.model_handler.list_models = AsyncMock(return_value=model_list)
+    resp2 = await api_server.list_models()
+    assert resp2.status_code == 200
+    assert "data" in resp2.body.decode() if hasattr(resp2.body, "decode") else True
 
 
 def test_control_scheduler():
@@ -624,6 +695,18 @@ def test_control_scheduler():
             engine.clear_data.assert_called_once()
             scheduler.reset.assert_called_once()
             scheduler.update_config.assert_called_once()
+
+            # Only reset, no update_config (missing branch 681)
+            scheduler2 = SimpleNamespace(update_config=MagicMock(), reset=MagicMock())
+            engine2 = SimpleNamespace(clear_data=MagicMock(), scheduler=scheduler2)
+            api_server.llm_engine = SimpleNamespace(engine=engine2)
+            req2 = SimpleNamespace(reset=True, load_shards_num=None, reallocate_shard=False)
+            resp2 = api_server.control_scheduler(req2)
+
+            assert resp2.status_code == 200
+            engine2.clear_data.assert_called_once()
+            scheduler2.reset.assert_called_once()
+            scheduler2.update_config.assert_not_called()
 
 
 def test_config_info():
