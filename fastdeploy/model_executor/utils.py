@@ -351,6 +351,9 @@ def is_paddle_support_new_h2d():
 
     code = """
 import paddle
+import resource
+
+resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 try:
     dst = paddle.zeros([2, 4], dtype='bfloat16')
     src = paddle.ones([2, 2], dtype='bfloat16', device='cpu')
