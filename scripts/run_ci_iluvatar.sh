@@ -4,7 +4,6 @@ echo "$DIR"
 
 #先kill一遍
 ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ixsmi -r
 
 unset http_proxy
 unset https_proxy
@@ -22,7 +21,6 @@ bash build.sh || exit 1
 
 CI_PATH=tests/ci_use/iluvatar_UT
 export INFERENCE_MSG_QUEUE_ID=232132
-export FD_DEBUG=1
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
 export FD_SAMPLING_CLASS=rejection
 
@@ -42,8 +40,17 @@ do
     ps -efww | grep -E '${cur_test_file}' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
     if [ ${exit_code} -ne 0 ]; then
-        echo "log/workerlog.0"
-        cat log/workerlog.0
+        if [ ! -f "./log/workerlog.0" ]; then
+            echo "------------------- log/launch_worker.log -----------------"
+            cat log/launch_worker.log
+        else
+            echo "------------------- log/workerlog.0 -----------------"
+            cat log/workerlog.0
+        fi
+        if [ -f "log/fastdeploy_error.log" ]; then
+            echo "------------------- log/fastdeploy_error.log -----------------"
+            cat log/fastdeploy_error.log
+        fi
         exit 1
     fi
 done

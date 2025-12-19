@@ -9,8 +9,7 @@ concurrency:
 
 jobs:
   CI_ILUVATAR:
-    runs-on:
-      group: IXUCA
+    runs-on: [self-hosted, ILUVATAR_8Card]
     steps:
       - name: Print current runner name
         run: |
@@ -21,7 +20,7 @@ jobs:
 
       - name: Code Checkout
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:paddle-ocr-vl-1107
         run: |
           REPO="https://github.com/${{ github.repository }}.git"
           FULL_REPO="${{ github.repository }}"
@@ -54,7 +53,7 @@ jobs:
 
       - name: Run CI unittest
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:paddle-ocr-vl-1107
         run: |
           runner_name="${{ runner.name }}"
           last_char="${runner_name: -1}"

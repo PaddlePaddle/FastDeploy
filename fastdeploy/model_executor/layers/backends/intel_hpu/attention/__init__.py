@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .hpu_attn_backend import HPUAttentionBackend
-
-__all__ = [
-    "HPUAttentionBackend",
-]
+"""
+intel_hpu attention
+"""
