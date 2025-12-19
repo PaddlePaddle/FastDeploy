@@ -208,10 +208,12 @@ DINLINE void multi_gpu_barrier(const RankSignals& sg,
         &self_sg->peer_counter[val % 2][blockIdx.x][threadIdx.x];
     if constexpr (need_fence) {
       st_flag_release(peer_counter_ptr, val);
-      while (ld_flag_acquire(self_counter_ptr) != val);
+      while (ld_flag_acquire(self_counter_ptr) != val)
+        ;
     } else {
       st_flag_volatile(peer_counter_ptr, val);
-      while (ld_flag_volatile(self_counter_ptr) != val);
+      while (ld_flag_volatile(self_counter_ptr) != val)
+        ;
     }
   }
   if constexpr (is_start || need_fence) __syncthreads();
