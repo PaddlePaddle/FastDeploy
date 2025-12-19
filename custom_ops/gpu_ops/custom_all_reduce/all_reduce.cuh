@@ -543,6 +543,7 @@ class CustomAllreduce {
     for (auto [_, ptr] : ipc_handles_) {
       CUDACHECK(cudaIpcCloseMemHandle(ptr));
     }
+
     ipc_handles_.clear();
     d_rank_data_base_ = d_rank_data_base_origin_;
   }
