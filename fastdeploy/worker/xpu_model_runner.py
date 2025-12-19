@@ -508,12 +508,12 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
-            if (
-                hasattr(request, "sampling_params")
-                and request.sampling_params is not None
-                and request.sampling_params.prompt_logprobs is not None
-            ):
-                self.prompt_logprobs_reqs[request.request_id] = request
+                if (
+                    hasattr(request, "sampling_params")
+                    and request.sampling_params is not None
+                    and request.sampling_params.prompt_logprobs is not None
+                ):
+                    self.prompt_logprobs_reqs[request.request_id] = request
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
