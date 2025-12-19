@@ -24,137 +24,6 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-int sum(const int *value, int num) {
-    int sum_value = 0;
-    for (int i = 0; i <= num; i++) {
-        sum_value += value[i];
-    }
-    return sum_value;
-}
-
-void find_candidate_pred_tokens(const int64_t *input_ids,
-        const int64_t *input_ids_len,
-        const int64_t *pre_ids,
-        const int64_t *step_idx,
-        const int *draft_token_num,
-        int64_t *draft_tokens,
-        int32_t *seq_lens_this_time,
-        int32_t *seq_lens_encoder,
-        int32_t *seq_lens_decoder,
-        int64_t *max_dec_len,
-        int64_t input_ids_stride,
-        int64_t pre_ids_stride,
-        int64_t draft_tokens_stride,
-        int64_t max_batch_size,
-        int max_ngram_size = 3,
-        int max_draft_tokens = 10) {
-    int threshold = 128;
-    char *env_var = getenv("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD");
-    if (env_var) {
-        threshold = std::stoi(env_var);
-    }
-    int unprocessed_batch_size = 0;
-    for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-        if (seq_lens_encoder[batch_idx] > 0 || seq_lens_decoder[batch_idx] > 0) {
-            unprocessed_batch_size++;
-        }
-    }
-    for (int batch_idx = 0; batch_idx < max_batch_size; batch_idx++) {
-        max_draft_tokens = std::min(static_cast<int64_t>(
-            draft_token_num[batch_idx]), max_dec_len[batch_idx] - step_idx[batch_idx] - 1);
-        if (seq_lens_encoder[batch_idx] > 0) {
-            continue;
-        } else if (seq_lens_decoder[batch_idx] == 0) {
-            seq_lens_this_time[batch_idx] = 0;
-            continue;
-        }
-        // printf("bid: %d. enc: %d. dec. %d\n", batch_idx, seq_lens_encoder[batch_idx], seq_lens_decoder[batch_idx]);
-
-        const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
-        int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
-        const int64_t *cur_pre_ids = pre_ids + batch_idx * pre_ids_stride;
-        const int64_t cur_step_idx = step_idx[batch_idx];
-        const int64_t cur_input_ids_len = input_ids_len[batch_idx];
-        seq_lens_this_time[batch_idx] = 1;
-        unprocessed_batch_size--;
-
-        auto sum_token_num = sum(seq_lens_this_time, batch_idx);
-        int left_min_token_num = unprocessed_batch_size;
-
-        if (sum_token_num + max_draft_tokens + left_min_token_num > threshold) {
-            int tmp_max_draft_tokens = threshold - sum_token_num - left_min_token_num;
-            max_draft_tokens = tmp_max_draft_tokens < max_draft_tokens ? tmp_max_draft_tokens : max_draft_tokens;
-        }
-
-        if (sum_token_num + left_min_token_num >= threshold - 1) {
-            continue;
-        }
-
-        for (int ngram_size = max_ngram_size; ngram_size > 0; --ngram_size) {
-            // Extract the last n tokens as our search ngram
-            if (cur_step_idx < ngram_size) {
-                continue;
-            }
-            const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
-
-            // Iterate through sliding windows of size ngram_size
-            bool match_input = false;
-            for (int64_t i = 0; i <= cur_input_ids_len - ngram_size; ++i) {
-                // Check if the current window matches the ngram
-                bool match = true;
-                for (int j = 0; j < ngram_size; j++) {
-                    if (ngram[j] != cur_input_ids[i + j]) {
-                        match = false;
-                        break;
-                    }
-                }
-                if (match) {
-                    int64_t start_idx = i + ngram_size;
-                    int64_t end_idx = std::min(start_idx + max_draft_tokens, cur_input_ids_len);
-                    if (start_idx >= end_idx)
-                        continue;
-
-                    int64_t cur_draft_token_num = end_idx - start_idx;
-
-                    seq_lens_this_time[batch_idx] = cur_draft_token_num + 1;
-                    memcpy(cur_draft_tokens + 1, cur_input_ids + start_idx, sizeof(int64_t) * cur_draft_token_num);
-                    // To break the current batch_idx for-loop
-                    ngram_size = 0;
-                    match_input = true;
-                    break;
-                    // }
-                }
-            }
-            if (!match_input) {
-                for (int64_t i = 0; i <= cur_step_idx - ngram_size; ++i) {
-                    // Check if the current window matches the ngram
-                    bool match = true;
-
-                    for (int j = 0; j < ngram_size; j++) {
-                        if (ngram[j] != cur_pre_ids[i + j]) {
-                            match = false;
-                            break;
-                        }
-                    }
-
-                    if (match) {
-                        int64_t start_idx = i + ngram_size;
-                        int64_t end_idx = std::min(start_idx + max_draft_tokens, cur_step_idx);
-                        int64_t cur_draft_token_num = end_idx - start_idx;
-                        if (start_idx >= end_idx)
-                            continue;
-
-                        seq_lens_this_time[batch_idx] = cur_draft_token_num + 1;
-                        memcpy(cur_draft_tokens + 1, cur_pre_ids + start_idx, sizeof(int64_t) * cur_draft_token_num);
-                        ngram_size = 0;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
-
 void NgramMatch(const paddle::Tensor &input_ids,
         const paddle::Tensor &input_ids_len,
         const paddle::Tensor &pre_ids,
@@ -179,22 +48,68 @@ void NgramMatch(const paddle::Tensor &input_ids,
 
     const int64_t max_batch_size = seq_lens_this_time.shape()[0];
 
-    find_candidate_pred_tokens(input_ids.data<int64_t>(),
-            input_ids_len.data<int64_t>(),
-            pre_ids.data<int64_t>(),
-            step_idx.data<int64_t>(),
-            draft_token_num.data<int>(),
-            const_cast<int64_t *>(draft_tokens.data<int64_t>()),
-            const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-            const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
-            const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
-            const_cast<int64_t *>(max_dec_len.data<int64_t>()),
-            input_ids_stride,
-            pre_ids_stride,
-            draft_tokens_stride,
-            max_batch_size,
-            max_ngram_size,
-            max_draft_tokens);
+    cudaStream_t stream = input_ids.stream();
+
+    /* ① 阈值：128，环境变量名与文件 2 不同 */
+    int threshold = 128;
+    if (char* e = getenv("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"))
+        threshold = std::stoi(e);
+
+    /* ② 当前已用 token 数（device reduce） */
+    int tokens_used = thrust::reduce(
+        thrust::cuda::par.on(stream),
+        thrust::device_ptr<const int32_t>(seq_lens_this_time.data<int32_t>()),
+        thrust::device_ptr<const int32_t>(seq_lens_this_time.data<int32_t>() + max_batch_size),
+        0,
+        thrust::plus<int>());
+
+    /* ③ device 输出 buffer */
+    paddle::Tensor match_pos = paddle::empty({max_batch_size}, paddle::DataType::INT32, input_ids.place());
+    paddle::Tensor draft_cnt = paddle::empty({max_batch_size}, paddle::DataType::INT32, input_ids.place());
+
+    /* ④ 先跑 kernel（min_ngram_size 固定 1） */
+    ngram_match_kernel_single_thread<<<max_batch_size, 1, 0, stream>>>(
+        input_ids.data<int64_t>(),
+        input_ids_len.data<int64_t>(),
+        pre_ids.data<int64_t>(),
+        step_idx.data<int64_t>(),
+        max_ngram_size,
+        1,                                     // 文件 1 最小 ngram 为 1
+        max_draft_tokens,
+        input_ids_stride,
+        pre_ids_stride,
+        match_pos.data<int>(),
+        draft_cnt.data<int>());
+
+    /* ⑤ 根据策略写回草稿 token & 更新 seq_lens_this_time */
+    thrust::for_each(
+        thrust::cuda::par.on(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(static_cast<int>(max_batch_size)),
+        [=] __device__ (int b) {
+            int32_t& len = const_cast<int32_t*>(seq_lens_this_time.data<int32_t>())[b];
+
+            /* 文件 1 特有：encoder 分支直接跳过 */
+            if (seq_lens_encoder[b] > 0) return;
+            if (seq_lens_decoder[b] == 0) { len = 0; return; }
+
+            int cnt = draft_cnt.data<int>()[b];
+            if (cnt <= 0) { len = 1; return; }   // 未命中也占 1 个 slot
+
+            /* 阈值二次裁剪（与文件 2 相同逻辑） */
+            int left = max_batch_size - b - 1;
+            if (tokens_used + cnt + left > threshold)
+                cnt = max(0, threshold - tokens_used - left);
+            if (cnt == 0) { len = 1; return; }
+
+            /* 拷贝草稿 token（从偏移 1 开始写） */
+            const int64_t* src = (match_pos.data<int>()[b] < input_ids_len.data<int64_t>()[b]) ?
+                                 (input_ids.data<int64_t>() + b * input_ids_stride) :
+                                 (pre_ids.data<int64_t>()   + b * pre_ids_stride);
+            int64_t* dst = const_cast<int64_t*>(draft_tokens.data<int64_t>()) + b * draft_tokens_stride + 1;
+            for (int i = 0; i < cnt; ++i) dst[i] = src[match_pos.data<int>()[b] + i];
+            len = cnt + 1;               // 文件 1：直接覆盖为 cnt+1
+        });
 }
 
 PD_BUILD_STATIC_OP(ngram_match)
