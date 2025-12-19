@@ -427,7 +427,8 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                    if self.ranks > 1:
+                        self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             self.insert_step = False
             req_dicts = None
@@ -450,7 +451,8 @@ class PaddleDisWorkerProc:
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
-                    paddle.distributed.barrier()
+                    if self.ranks > 1:
+                        paddle.distributed.barrier()
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
