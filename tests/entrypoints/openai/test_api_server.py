@@ -38,11 +38,16 @@ class DummyErrorResponse:
 
 
 def _build_args(**overrides):
-    """Return a SimpleNamespace with minimal required attributes."""
+    """Return a SimpleNamespace with all attributes accessed at import time."""
     base = dict(
         workers=1,
         model="test-model",
+        revision=None,
+        chat_template=None,
+        tool_parser_plugin=None,
+        host="0.0.0.0",
         port=9000,
+        metrics_port=None,
         controller_port=-1,
         max_concurrency=4,
         max_model_len=1024,
@@ -51,12 +56,19 @@ def _build_args(**overrides):
         tensor_parallel_size=1,
         data_parallel_size=1,
         max_num_seqs=8,
-        tool_parser_plugin=None,
+        api_key=None,
+        tokenizer=None,
+        served_model_name=None,
+        ips=None,
+        enable_mm_output=False,
+        tokenizer_base_url=None,
         dynamic_load_weight=False,
+        timeout_graceful_shutdown=0,
+        timeout=0,
         local_data_parallel_id=0,
     )
     base.update(overrides)
-    return SimpleNamespace(**{k: v for k, v in base.items() if k in base})
+    return SimpleNamespace(**base)
 
 
 def _reload_api_server(args):
