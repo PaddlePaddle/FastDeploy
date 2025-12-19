@@ -66,22 +66,22 @@ class RequestFuncOutput:
     reasoning_content: str = ""
     success: bool = False
     latency: float = 0.0
-    end_timestamp: float = 0.0  # 模型完全返回的时间戳（秒, perf_counter基准）
+    end_timestamp: float = 0.0  # Timestamp when the model finishes streaming (seconds, perf_counter-based)
     output_tokens: int = 0
     ttft: float = 0.0  # Time to first token
     arrival_time: list = field(default_factory=list)  # arrival_time
     itl: list = field(default_factory=list)  # list of inter-token latencies
     tpot: float = 0.0  # avg next-token latencies
     prompt_len: int = 0
-    prompt_tokens: int = 0  # 推理侧返回输入token数
-    reasoning_tokens: int = 0  # 思考长度
-    res_ttft: int = 0  # 包含思考首token时延
+    prompt_tokens: int = 0  # Prompt tokens counted by the inference side
+    reasoning_tokens: int = 0  # Number of tokens in the reasoning phase
+    res_ttft: int = 0  # Time to first returned reasoning token
     error: str = ""
     metrics: dict = field(default_factory=dict)
 
 
 def safe_cost(a, b):
-    """时间差计算"""
+    """Calculate the time difference while guarding against None values."""
     if a is None or b is None:
         return None
     return a - b
@@ -100,45 +100,45 @@ def metrics_summary(metrics, token_timestamps):
     arrival_time = m0.get("arrival_time")
     inference_start_time = m0.get("inference_start_time")
 
-    # prefill 总耗时
+    # Total time spent in the prefill stage
     summary["prefill_cost_time"] = safe_cost(m0.get("send_request_output_to_decode_time"), arrival_time)
-    # prefill准备耗时
+    # Time to prepare for prefill
     summary["prefill_prepare_cost_time"] = safe_cost(inference_start_time, arrival_time)
-    # 预处理耗时
+    # Time spent in preprocessing
     summary["preprocess_cost_time"] = safe_cost(m0.get("scheduler_recv_req_time"), arrival_time)
-    # 请求缓存耗时
+    # Time the request waited in the scheduler cache
     summary["cache_in_scheduler_cost_time"] = safe_cost(
         m0.get("engine_get_req_time"), m0.get("scheduler_recv_req_time")
     )
-    # 申请 decode资源耗时
+    # Time to acquire decode resources
     summary["ask_decode_resource_cost_time"] = safe_cost(
         m0.get("ask_decode_resource_finish_time"), m0.get("ask_decode_resource_start_time")
     )
-    # prefill 的首 token 推理耗时
+    # Inference time for the first token during prefill
     summary["prefill_first_token_infer_cost_time"] = safe_cost(
         m0.get("engine_recv_first_token_time"), inference_start_time
     )
-    # prefill 等待 cache 传输耗时
+    # Time spent waiting to transmit cache during prefill
     summary["wait_sending_cache_cost_time"] = safe_cost(
         m0.get("send_request_output_to_decode_time"), m0.get("wait_for_sending_cache_time")
     )
-    # decode分配资源耗时
+    # Time to allocate resources for decode
     summary["decode_preallocate_cost_time"] = safe_cost(
         m_last.get("decode_preallocate_req_time"), m_last.get("decode_recv_req_time")
     )
-    # decode准备推理耗时
+    # Time to prepare for decode inference
     summary["decode_prepare_cost_time"] = safe_cost(
         m_last.get("decode_inference_start_time"), m_last.get("decode_recv_first_token_time")
     )
-    # decode次token推理耗时
+    # Time to infer tokens beyond the first during decode
     summary["decode_second_token_infer_cost_time"] = safe_cost(
         m_last.get("decode_recv_second_token_time"), m_last.get("decode_inference_start_time")
     )
-    # 返回首 token 链路耗时
+    # Latency for the first token to return to the caller
     summary["first_token_transmission_cost_time"] = safe_cost(
         token_timestamps[0], m_last.get("decode_recv_first_token_time")
     )
-    # 返回次 token 链路耗时
+    # Latency for subsequent tokens to return to the caller
     summary["second_token_transmission_cost_time"] = safe_cost(
         token_timestamps[1], m_last.get("decode_recv_second_token_time")
     )
@@ -172,10 +172,10 @@ async def async_request_eb_openai_chat_completions(
         if request_func_input.response_format:
             payload["response_format"] = request_func_input.response_format
 
-        # 超参由yaml传入
+        # Hyperparameters supplied by the YAML configuration
         payload.update(request_func_input.hyper_parameters)
 
-        # 随机输入开关
+        # Optional switch for randomized input lengths
         if request_func_input.random_flag:
             payload["max_tokens"] = request_func_input.output_len
             metadata = payload.get("metadata", {})
@@ -247,7 +247,7 @@ async def async_request_eb_openai_chat_completions(
                                 else:
                                     output.itl.append(timestamp - most_recent_timestamp)
 
-                                # response首token
+                                # First token in the streamed response
                                 if res_ttft == 0.0:
                                     if content:
                                         res_ttft = choices[0].get("arrival_time", timestamp)
@@ -267,10 +267,10 @@ async def async_request_eb_openai_chat_completions(
                             token_timestamps.append(time.time())
 
                     # output.generated_text = generated_text
-                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
+                    # Record when the final streamed chunk was received
                     output.end_timestamp = most_recent_timestamp
 
-                    # 新增metrics统计，计算首token过滤空包
+                    # Populate metrics while skipping empty packets for the first token
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
                     if output.generated_text.strip() == "":
@@ -297,7 +297,7 @@ async def async_request_eb_openai_chat_completions(
 
         output.request_id = request_id
 
-        # 保存失败请求结果
+        # Persist failed request outputs for further inspection
         if not output.success or output.output_tokens == 0:
             with open("error_output.txt", "a") as f:
                 f.write(str(output) + "\n")
@@ -328,7 +328,7 @@ async def async_request_eb_openai_completions(
                 "continuous_usage_stats": True,
             },
         }
-        # 超参由yaml传入
+        # Hyperparameters supplied by the YAML configuration
         payload.update(request_func_input.hyper_parameters)
 
         if request_func_input.ignore_eos:

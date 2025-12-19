@@ -137,12 +137,12 @@ class CMakeBuild(build_ext):
 
 
 class PostInstallCommand(install):
-    """在标准安装完成后执行自定义命令"""
+    """Run a custom command after the standard installation completes."""
 
     def run(self):
-        # 先执行标准安装步骤
+        # Run the standard installation steps first.
         install.run(self)
-        # 执行自定义命令
+        # Execute the custom command to prepare OpenTelemetry after install.
         subprocess.check_call(["opentelemetry-bootstrap", "-a", "install"])
 
 

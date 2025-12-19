@@ -13,11 +13,11 @@ failed_tests_file="failed_tests.log"
 
 
 ##################################
-# 执行 pytest，每个文件单独跑
-# 使用 pytest 的 --collect-only 输出，并从每行中提取真正的测试文件路径（形如 tests/.../test_*.py）。
-# 注意：pytest 在收集失败时会输出形如 "ERROR tests/xxx/test_xxx.py::test_xxx ..." 的行，
-# 为了避免把前缀 "ERROR"/"FAILED"/"collecting" 等误当成文件名，这里只保留行中出现的
-# "tests/.../test_*.py" 这一段，其他前后内容直接丢弃。
+# Run pytest, executing each file independently.
+# Use pytest's --collect-only output and extract the actual test file paths (tests/.../test_*.py).
+# Note: when collection fails, pytest prints lines like "ERROR tests/xxx/test_xxx.py::test_xxx ...".
+# To avoid treating prefixes like "ERROR"/"FAILED"/"collecting" as file names, keep only the
+# "tests/.../test_*.py" segment from each line and discard the rest.
 TEST_FILES=$(
   python -m pytest --collect-only -q -c "${PYTEST_INI}" "${tests_path}" --rootdir="${run_path}" --disable-warnings 2>&1 \
     | grep -E 'tests/.+\/test_.*\.py' \
@@ -44,7 +44,7 @@ for file in $TEST_FILES; do
 done
 
 ##################################
-# 汇总结果
+# Summaries
 ##################################
 echo "===================================="
 echo "Pytest total: $((failed_pytest + success_pytest))"

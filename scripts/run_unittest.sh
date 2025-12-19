@@ -23,11 +23,11 @@ python -m pip install xgrammar==0.1.19 torch==2.6.0
 bash tools/build_wheel.sh
 
 
-# 获取显存占用最小的gpu
+# Identify the GPU with the lowest memory usage
 gpu_info=$(nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits 2>/dev/null)
 
 if [ -z "$gpu_info" ]; then
-  echo "错误: 未找到 GPU 或 nvidia-smi 不可用。"
+  echo "Error: No GPU found or nvidia-smi is unavailable."
   exit 1
 fi
 
@@ -46,14 +46,14 @@ done <<< "$gpu_info"
 
 export CUDA_VISIBLE_DEVICES=${min_gpu}
 
-# 使用 find 命令查找 test 目录下的 .py 文件
+# Locate Python test files under the tests directory
 test_files=$(find tests -type f -name "test*.py")
 
-# 遍历每个找到的测试文件
+# Execute each discovered test file
 for test_file in $test_files; do
     python $test_file
 
-    # 检查前一个命令的退出状态码
+    # Verify the exit code of the previous command
     if [ $? -ne 0 ]; then
         echo $test_file
         exit 1

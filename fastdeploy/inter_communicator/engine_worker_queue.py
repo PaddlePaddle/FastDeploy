@@ -395,7 +395,7 @@ class EngineWorkerQueue:
             self.client_read_info_flag: ListProxy = self.manager.get_client_read_info_flag(self.local_data_parallel_id)
             self.lock_info: AcquirerProxy = self.manager.get_lock_info(self.local_data_parallel_id)
 
-            # p/d 分离获取
+            # Retrieve objects used for producer/decoder disaggregation
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
@@ -413,7 +413,7 @@ class EngineWorkerQueue:
             self.finished_add_cache_task_list = self.manager.get_finish_add_cache_task_queue(
                 self.local_data_parallel_id
             )
-            # p/d互联
+            # Producer/decoder connectivity resources
             self.connect_rdma_tasks = self.manager.get_connect_rdma_tasks(self.local_data_parallel_id)
             self.client_get_connect_task_flag = self.manager.get_client_get_connect_task_flag(
                 self.local_data_parallel_id

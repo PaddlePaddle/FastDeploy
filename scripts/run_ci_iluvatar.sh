@@ -2,7 +2,7 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
-#先kill一遍
+# Kill any lingering test processes before starting
 ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
 unset http_proxy
