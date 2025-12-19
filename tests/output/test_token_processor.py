@@ -289,6 +289,54 @@ def test_process_batch_output_use_zmq_finishes_on_eos():
     assert connector.calls == []
 
 
+def test_process_batch_output_use_zmq_parses_logprobs():
+    processor, rm, _, _ = _make_processor(enable_logprob=True)
+    base_time = time.time()
+    task = Request(
+        request_id="req-zmq-logprob",
+        prompt=["hi"],
+        prompt_token_ids=[1],
+        prompt_token_ids_len=1,
+        messages=[[{"content": "hi", "role": "user"}]],
+        history=[],
+        tools=[],
+        system="system",
+        eos_token_ids=[6],
+        metrics=RequestMetrics(
+            arrival_time=base_time,
+            preprocess_start_time=base_time - 0.2,
+            preprocess_end_time=base_time - 0.1,
+            inference_start_time=base_time,
+        ),
+    )
+    task.metrics.decode_inference_start_time = base_time
+    task.disaggregate_info = None
+    task.ic_req_data = None
+    rm.tasks_list[0] = task
+    rm.req_dict[task.request_id] = task
+    rm.requests[task.request_id] = types.SimpleNamespace(idx=0)
+
+    logprob_list = token_processor.LogprobsLists(
+        logprob_token_ids=[[1, 2]],
+        logprobs=[[0.1, 0.2]],
+        sampled_token_ranks=[0],
+    )
+    logprob_holder = types.SimpleNamespace(tolists=lambda: logprob_list)
+    stream = types.SimpleNamespace(
+        batch_id=0,
+        tokens=np.array([5], dtype=np.int64),
+        pooler_output=None,
+        logprobs=logprob_holder,
+        prompt_logprobs={"0": -0.1},
+    )
+    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
+        results = processor._process_batch_output_use_zmq([stream])
+
+    assert results[0].outputs.logprob == 0.1
+    assert results[0].outputs.top_logprobs is logprob_list
+    assert results[0].prompt_logprobs == {"0": -0.1}
+
+
 def test_recycle_resources_updates_metrics_and_state():
     processor, rm, _, _ = _make_processor()
     task = types.SimpleNamespace(request_id="req-1", block_tables=[1], disaggregate_info=None)
@@ -406,6 +454,56 @@ def test_postprocess_buffers_and_merges_speculative_results():
     assert processor._batch_result_buffer is None
 
 
+def test_postprocess_emits_finished_speculative_batch():
+    processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
+    processor.cached_generated_tokens = mock.Mock()
+
+    finished_output = RequestOutput(
+        request_id="req-finished",
+        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        finished=True,
+        metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
+    )
+
+    processor.postprocess([finished_output], mtype=3)
+
+    processor.cached_generated_tokens.put_results.assert_called_once_with([finished_output])
+    assert processor._batch_result_buffer is None
+
+
+def test_postprocess_passes_through_unknown_type():
+    processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
+    processor.cached_generated_tokens = mock.Mock()
+
+    output = RequestOutput(
+        request_id="req-direct",
+        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        finished=False,
+        metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
+    )
+
+    processor.postprocess([output], mtype=99)
+
+    processor.cached_generated_tokens.put_results.assert_called_once_with([output])
+
+
+def test_postprocess_logs_and_swallows_exception():
+    processor, _, _, _ = _make_processor()
+    processor.cached_generated_tokens = mock.Mock()
+    processor.cached_generated_tokens.put_results.side_effect = RuntimeError("boom")
+
+    output = RequestOutput(
+        request_id="req-error",
+        outputs=None,
+        finished=False,
+        metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
+    )
+
+    processor.postprocess([output])
+
+    processor.cached_generated_tokens.put_results.assert_called_once()
+
+
 def test_record_speculative_decoding_metrics_tracks_acceptance():
     processor, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=True)
     with mock.patch.object(token_processor, "main_process_metrics", _Metrics()):
@@ -451,6 +549,37 @@ def test_recycle_resources_prefill_sends_first_token():
         processor._recycle_resources(task_id, 0, task, result, is_prefill=True)
 
     assert rm.stop_flags[0] is True
+    assert connector.calls and connector.calls[0][1][0] is result
+
+
+def test_recycle_resources_prefill_failure_sets_error():
+    processor, rm, _, connector = _make_processor()
+    task_id = "req-prefill-failed"
+    metrics = RequestMetrics(
+        arrival_time=time.time(),
+        preprocess_start_time=time.time(),
+        preprocess_end_time=time.time(),
+        inference_start_time=time.time(),
+    )
+    task = types.SimpleNamespace(
+        request_id=task_id,
+        metrics=metrics,
+        block_tables=[1],
+        disaggregate_info={"role": "prefill"},
+        eos_token_ids=[1],
+    )
+    task.trace_carrier = None
+    rm.tasks_list[0] = task
+    rm.req_dict[task_id] = task
+    result = RequestOutput(request_id=task_id, outputs=None, finished=False, metrics=metrics)
+    processor.engine_worker_queue = mock.Mock()
+    processor.engine_worker_queue.get_finished_req.side_effect = [[(task_id, "failed")]]
+
+    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
+        processor._recycle_resources(task_id, 0, task, result, is_prefill=True)
+
+    assert result.error_code == 400
+    assert "failed" in result.error_message
     assert connector.calls and connector.calls[0][1][0] is result
 
 
@@ -900,6 +1029,21 @@ def test_process_batch_output_speculative_negative_token_reschedules():
     assert rm.recycled[-1] == f"reschedule-{task_id}"
 
 
+def test_process_batch_output_use_zmq_reschedules_negative_token():
+    processor, rm, _, _ = _make_processor()
+    task = types.SimpleNamespace(request_id="req-zmq-neg")
+    rm.tasks_list[0] = task
+    rm.req_dict[task.request_id] = task
+    rm.to_be_rescheduled_request_id_set = {task.request_id}
+
+    stream = types.SimpleNamespace(batch_id=0, tokens=np.array([-1], dtype=np.int64), pooler_output=None)
+    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
+        results = processor._process_batch_output_use_zmq([stream])
+
+    assert results == []
+    assert rm.recycled[-1] == f"reschedule-{task.request_id}"
+
+
 def test_process_batch_output_records_second_decode_token():
     processor, rm, _, _ = _make_processor()
     processor.cfg.scheduler_config.splitwise_role = "decode"
@@ -962,6 +1106,51 @@ def test_record_speculative_metrics_calls_init_when_missing():
         processor._record_speculative_decoding_metrics(accept_num=[1])
 
     assert metrics.init_called is True
+
+
+def test_process_batch_output_prefill_sets_draft_tokens():
+    processor, rm, _, connector = _make_processor(speculative_method="mtp")
+    processor.cfg.scheduler_config.splitwise_role = "prefill"
+    metrics = RequestMetrics(
+        arrival_time=time.time(),
+        preprocess_start_time=time.time(),
+        preprocess_end_time=time.time(),
+        inference_start_time=time.time(),
+    )
+    metrics.decode_inference_start_time = metrics.inference_start_time
+    task = types.SimpleNamespace(
+        request_id="req-prefill-draft",
+        disaggregate_info={"role": "prefill"},
+        eos_token_ids=[99],
+        metrics=metrics,
+        output_token_ids=[],
+        messages=None,
+        num_cached_tokens=0,
+        ic_req_data=None,
+        prompt_token_ids_len=0,
+        num_total_tokens=1,
+        block_tables=[1],
+        get=lambda key, default=None: None,
+    )
+    task.trace_carrier = None
+    rm.tasks_list[0] = task
+    rm.req_dict[task.request_id] = task
+    processor.engine_worker_queue = mock.Mock()
+    processor.engine_worker_queue.get_finished_req.side_effect = [[(task.request_id, "finished")]]
+    processor.output_tokens[1] = 1
+    processor.output_tokens[2] = 2
+    processor.output_tokens[2 + SPECULATE_MAX_BSZ] = 11
+    processor.output_tokens[2 + SPECULATE_MAX_BSZ + 1] = 12
+
+    with (
+        mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False),
+        mock.patch.object(token_processor, "main_process_metrics", _Metrics()),
+    ):
+        processor._process_batch_output()
+
+    assert connector.calls
+    sent = connector.calls[0][1][0]
+    assert sent.outputs.draft_token_ids == [11, 12]
 
 
 def test_process_batch_output_logs_recovery_stop_for_non_speculative():
@@ -1050,3 +1239,58 @@ def test_warmup_processor_stop_joins_worker():
     warm.worker = worker
     warm.stop()
     worker.join.assert_called_once()
+
+
+def test_healthy_behaviour_respects_timeout(monkeypatch):
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = time.time() - 1
+    processor.timestamp_for_alive_after_handle_batch = None
+    monkeypatch.setattr(envs, "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", 0.1)
+
+    assert processor.healthy() is False
+
+
+def test_healthy_detects_engine_hang():
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = None
+    processor.timestamp_for_alive_after_handle_batch = time.time()
+    processor.engine_output_token_hang = True
+
+    assert processor.healthy() is False
+
+
+def test_healthy_recent_prehandle_activity_is_ok(monkeypatch):
+    processor, _, _, _ = _make_processor()
+    processor.timestamp_for_alive_before_handle_batch = time.time()
+    processor.timestamp_for_alive_after_handle_batch = None
+    monkeypatch.setattr(envs, "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", 5)
+
+    assert processor.healthy() is True
+
+
+def test_record_completion_metrics_updates_counters():
+    processor, _, _, _ = _make_processor()
+    task_id = "req-complete"
+    metrics = RequestMetrics(
+        arrival_time=time.time(), preprocess_start_time=time.time(), preprocess_end_time=time.time()
+    )
+    metrics.inference_start_time = time.time() - 0.2
+    metrics.engine_recv_first_token_time = time.time() - 0.1
+    task = types.SimpleNamespace(request_id=task_id, metrics=metrics, user="user-a")
+    processor.tokens_counter[task_id] = 4
+
+    with (
+        mock.patch.object(token_processor, "main_process_metrics", _Metrics()) as metrics_obj,
+        mock.patch.object(token_processor, "trace_print"),
+    ):
+        processor._record_completion_metrics(task, current_time=time.time())
+
+        assert metrics_obj.request_decode_time.value is not None
+        assert metrics_obj.request_success_total.value == 1
+        assert metrics_obj.request_generation_tokens.value == 4
+
+
+def test_process_sampling_results_use_zmq_rejects_speculative():
+    processor, _, _, _ = _make_processor(speculative_method="mtp")
+    with pytest.raises(NotImplementedError):
+        processor.process_sampling_results_use_zmq()
