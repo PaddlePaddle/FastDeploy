@@ -356,12 +356,21 @@ def report_usage_stats(fd_config: FDConfig) -> None:
     """Report usage statistics if enabled."""
     if not is_usage_stats_enabled():
         return
+    quant_val = fd_config.model_config.quantization
+    if quant_val is None:
+        quantization_str = None
+    elif isinstance(quant_val, dict):
+        quantization_str = quant_val.get("quantization")
+    elif isinstance(quant_val, str):
+        quantization_str = quant_val
+    else:
+        quantization_str = str(quant_val)
     usage_message = UsageMessage()
     usage_message.report_usage(
         fd_config,
         extra_kvs={
             "num_layers": fd_config.model_config.num_hidden_layers,
-            "quantization": fd_config.model_config.quantization["quantization"],
+            "quantization": quantization_str,
             "block_size": fd_config.cache_config.block_size,
             "gpu_memory_utilization": fd_config.cache_config.gpu_memory_utilization,
             "enable_prefix_caching": fd_config.cache_config.enable_prefix_caching,
