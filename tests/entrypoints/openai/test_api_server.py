@@ -6,6 +6,7 @@ that were previously uncovered.
 
 import asyncio
 import importlib
+import sys
 import types
 from contextlib import ExitStack
 from types import SimpleNamespace
@@ -88,16 +89,23 @@ def _reload_api_server(args):
     fake_envs_mod.EXPORTER_OTLP_HEADERS = ""
     fake_envs_mod.environment_variables = _FakeEnvVars()
 
-    with (
-        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
-        patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
-        patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
-        patch.dict("sys.modules", {"fastdeploy.envs": fake_envs_mod}),
-        patch("fastdeploy.envs", fake_envs_mod),
-    ):
-        from fastdeploy.entrypoints.openai import api_server as api_server_mod
+    # Save original sys.argv and replace with minimal valid args to avoid parse errors
+    original_argv = sys.argv[:]
+    sys.argv = ["api_server.py", "--model", "test-model", "--port", "9000"]
 
-        return importlib.reload(api_server_mod)
+    try:
+        with (
+            patch("fastdeploy.utils.FlexibleArgumentParser.parse_args", return_value=args),
+            patch("fastdeploy.utils.retrive_model_from_server", return_value=args.model),
+            patch("fastdeploy.entrypoints.chat_utils.load_chat_template", return_value=None),
+            patch.dict("sys.modules", {"fastdeploy.envs": fake_envs_mod}),
+            patch("fastdeploy.envs", fake_envs_mod),
+        ):
+            from fastdeploy.entrypoints.openai import api_server as api_server_mod
+
+            return importlib.reload(api_server_mod)
+    finally:
+        sys.argv = original_argv
 
 
 def _dummy_engine_args(config_parallel_id=0):
