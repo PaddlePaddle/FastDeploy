@@ -352,9 +352,9 @@ class XPUEPPrefillRunner(XPUEPRunner):
         **kwargs,
     ):
         self.num_combined_tokens = x.shape[0]
-        x_scale_tensor = kwargs.get("x_scale_tensor", None)
+        x_scale = kwargs.get("x_scale", None)
         dispatch_args = {
-            "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
+            "x": (x, x_scale) if x_scale is not None else x,
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
@@ -428,11 +428,27 @@ class XPUEPDecoderRunner(XPUEPRunner):
             dispatch_hook,
             valid_token_num,
         ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8)
-        # no need to call dispatch_hook here, because it has already been done in xDeepEP
-        # if dispatch_hook is not None:
-        #     dispatch_hook()
+        # valid_token_num is optional:
+        # - if valid_token_num is None, it means that we CANNOT accurately know
+        #   the size of the tensor, but the advantage is that it can reduce
+        #   the overhead of kernel launch.
+        # - if valid_token_num is NOT None, it means that we CAN accurately know
+        #   the size of the tensor, but the disadvantage is that it will interrupt
+        #   the process of kernel launch.
+        if valid_token_num is None and dispatch_hook is not None:
+            dispatch_hook()
 
-        return recv_hidden_states, recv_expert_count, handle, valid_token_num
+        if valid_token_num is None:
+            valid_token_num = -1
+
+        if isinstance(recv_hidden_states, tuple):
+            recv_x = recv_hidden_states[0]
+            recv_x_scale = recv_hidden_states[1]
+        else:
+            recv_x = recv_hidden_states
+            recv_x_scale = None
+
+        return recv_x, recv_x_scale, recv_expert_count, handle, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
