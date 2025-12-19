@@ -412,7 +412,7 @@ class OpenAIServingChat:
                     if getattr(output, "audio_content", None) is not None:
                         delta_message.audio_content = getattr(output, "audio_content")
 
-                    if not getattr(res, "finished", None) and getattr(output, "delta_message", None):
+                    if not getattr(res, "finished", None) and getattr(output, "enable_parser"):
                         delta_message_output = output.delta_message
                         if delta_message_output is None:
                             continue

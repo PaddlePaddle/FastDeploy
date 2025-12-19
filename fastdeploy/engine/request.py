@@ -540,6 +540,7 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    enable_parser: bool = False
 
     def to_dict(self):
         """
