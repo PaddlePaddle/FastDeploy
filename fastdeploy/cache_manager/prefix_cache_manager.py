@@ -1891,11 +1891,11 @@ class PrefixCacheManager:
                         self.task_write_back_event[task_id].set()
                 else:
                     (
+                        event_type,
+                        transfer_task_id,
                         swap_node_ids,
                         task_gpu_block_id,
                         task_cpu_block_id,
-                        event_type,
-                        transfer_task_id,
                     ) = data
                     length = len(task_gpu_block_id)
                     for i in range(length):

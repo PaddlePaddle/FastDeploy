@@ -26,7 +26,7 @@ from fastdeploy.utils import get_logger
 logger = get_logger("cache_storage", "cache_storage.log")
 
 
-def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = None) -> str:
+def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = []) -> str:
     """
     calculate hash value of a block with additional keys
 
@@ -34,10 +34,7 @@ def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = None) -> str:
         token_ids: Input token IDs
         extra_keys: Additional keys for block identification
     """
-    if extra_keys is None:
-        value = token_ids
-    else:
-        value = (token_ids, extra_keys)
+    value = (token_ids, extra_keys)
     return hashlib.sha256(pickle.dumps(value)).hexdigest()
 
 
