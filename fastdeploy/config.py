@@ -33,7 +33,13 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
+from fastdeploy.utils import (
+    ceil_div,
+    check_unified_ckpt,
+    get_host_ip,
+    get_logger,
+    parse_ports,
+)
 
 logger = get_logger("config", "config.log")
 
@@ -240,6 +246,12 @@ class ModelConfig:
                 )
 
         self._post_init()
+
+    def disable_mm_prefill_batch(self):
+        """
+        check if the model architecture disable for mm prefill
+        """
+        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
@@ -553,7 +565,8 @@ class ParallelConfig:
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
-        self.engine_worker_queue_port: str = "9923"
+        self.engine_worker_queue_port: Union[int, str, list] = None
+        self.local_engine_worker_queue_port: Optional[int] = None
         # cuda visible devices
         self.device_ids: str = "0"
         # First token id
@@ -573,11 +586,9 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
-            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
-        elif isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = [self.engine_worker_queue_port]
+
+        self.engine_worker_queue_port = parse_ports(self.engine_worker_queue_port)
+
         # currently, the expert parallel size is equal data parallel size
         if self.enable_expert_parallel:
             self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
@@ -1261,11 +1272,14 @@ class CacheConfig:
         self.model_cfg = None
         self.enable_chunked_prefill = False
         self.rdma_comm_ports = None
+        self.local_rdma_comm_ports = None
         self.cache_transfer_protocol = None
         self.pd_comm_port = None
+        self.local_pd_comm_port = None
         self.enable_prefix_caching = False
         self.enable_ssd_cache = False
         self.cache_queue_port = None
+        self.local_cache_queue_port = None
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
@@ -1275,11 +1289,9 @@ class CacheConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        if self.rdma_comm_ports is not None and isinstance(self.rdma_comm_ports, str):
-            self.rdma_comm_ports = self.rdma_comm_ports.split(",")
-
-        if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
-            self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
+        self.cache_queue_port = parse_ports(self.cache_queue_port)
+        self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
+        self.pd_comm_port = parse_ports(self.pd_comm_port)
 
         if self.swap_space is None:
             self.enable_hierarchical_cache = False
@@ -1349,9 +1361,11 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
-            assert (
-                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+            assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+                f"prefill_kvcache_block_num: {self.prefill_kvcache_block_num} should be larger "
+                f"than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+                "the max_model_len or increase num_gpu_blocks_override"
+            )
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1372,9 +1386,11 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
-        assert (
-            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+        assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+            f"current device block num: {self.prefill_kvcache_block_num} "
+            f"should be larger than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+            "the max_model_len or replace the machine with larger GPU cards"
+        )
 
     def print(self):
         """
@@ -1488,14 +1504,17 @@ class RoutingReplayConfig:
     """Configuration for Routing Replay used in RL training"""
 
     def __init__(self, args) -> None:
+
         self.enable_routing_replay: bool = False
+
+        # Routing store type: local/rdma
         self.routing_store_type: str = "local"
 
         # Local routing store
         self.local_store_dir: str = "./routing_replay_output"
 
         # RDMA routing store
-        # TODO: Add RDMA routing store configuration attributes here when the feature is implemented.
+        self.rdma_store_server: str = ""
 
         if args is not None:
             for key, value in args.items():
@@ -1618,7 +1637,7 @@ class FDConfig:
                 and self.model_config is not None
                 and self.model_config.enable_mm
             ):
-                self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+                self.max_prefill_batch = 1  # TODO:当前V0多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
@@ -1644,7 +1663,7 @@ class FDConfig:
         if test_mode:
             return
         self.check()
-        self.print()
+        # self.print()    # NOTE: it's better to explicitly call .print() when FDConfig is initialized
 
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -1658,7 +1677,6 @@ class FDConfig:
         """
         calculate some parameters
         """
-        self.local_device_ids = self.parallel_config.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -1688,7 +1706,9 @@ class FDConfig:
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
-
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            # TODO(gongshaotian): R3 support prefix caching
+            self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
@@ -1724,6 +1744,8 @@ class FDConfig:
                         f"set to max_num_batched_tokens."
                     )
                     self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+            # TODO: mm encoder_cache close for now
+            self.cache_config.max_encoder_cache = 0
         else:
             self.cache_config.max_encoder_cache = 0
 
@@ -1735,7 +1757,7 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -1758,6 +1780,41 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+        self.postprocess_devices_and_ports()
+
+    def postprocess_devices_and_ports(self):
+        try:
+            # get devices and ports for current dp
+            self.local_device_ids = self.parallel_config.device_ids.split(",")[
+                self.parallel_config.local_data_parallel_id
+                * self.parallel_config.tensor_parallel_size : (self.parallel_config.local_data_parallel_id + 1)
+                * self.parallel_config.tensor_parallel_size
+            ]
+            self.parallel_config.local_engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
+                self.parallel_config.local_data_parallel_id
+            ]
+            self.cache_config.local_cache_queue_port = (
+                self.cache_config.cache_queue_port[self.parallel_config.local_data_parallel_id]
+                if self.cache_config.cache_queue_port
+                else None
+            )
+            self.cache_config.local_pd_comm_port = (
+                self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+                if self.cache_config.pd_comm_port
+                else None
+            )
+            self.cache_config.local_rdma_comm_ports = (
+                self.cache_config.rdma_comm_ports[
+                    self.parallel_config.local_data_parallel_id
+                    * self.parallel_config.tensor_parallel_size : (self.parallel_config.local_data_parallel_id + 1)
+                    * self.parallel_config.tensor_parallel_size
+                ]
+                if self.cache_config.rdma_comm_ports
+                else None
+            )
+        except Exception as e:
+            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
 
     def check(self):
         """
@@ -1907,18 +1964,6 @@ class FDConfig:
         elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
             self.splitwise_version = "v1"
 
-        if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
-        else:
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
-                self.parallel_config.local_data_parallel_id
-            ]
-        connector_port = (
-            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
-            if self.cache_config.pd_comm_port
-            else None
-        )
-
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
         transfer_protocol = (
@@ -1928,9 +1973,9 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
-            "connector_port": connector_port,
-            "rdma_ports": self.cache_config.rdma_comm_ports,
-            "engine_worker_queue_port": engine_worker_queue_port,
+            "connector_port": self.cache_config.local_pd_comm_port,
+            "rdma_ports": self.cache_config.local_rdma_comm_ports,
+            "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
             "device_ids": self.local_device_ids,
             "transfer_protocol": transfer_protocol,
             "tp_size": self.parallel_config.tensor_parallel_size,

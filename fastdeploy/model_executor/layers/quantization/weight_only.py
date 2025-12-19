@@ -101,7 +101,7 @@ class WeightOnlyConfig(QuantConfigBase):
                     XPUWeightOnlyMoEMethod,
                 )
 
-                return XPUWeightOnlyMoEMethod(self)
+                return XPUWeightOnlyMoEMethod(self, layer)
             else:
                 from fastdeploy.model_executor.layers.backends import (
                     XPUWeightOnlyLinearMethod,

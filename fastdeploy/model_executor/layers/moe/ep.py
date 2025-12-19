@@ -536,6 +536,8 @@ class EPPrefillRunner(EPRunner):
         )
 
     def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
+        if EPPrefillRunner.allocate_on_comm_stream == allocate_on_comm_stream:
+            return
         logger.info(
             f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream"
         )

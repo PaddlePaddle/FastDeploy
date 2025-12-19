@@ -33,6 +33,7 @@ if current_platform.is_iluvatar():
         set_stop_value_multi_ends,
         step_paddle,
         update_inputs,
+        update_inputs_v1,
     )
 elif current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import (
@@ -144,7 +145,6 @@ def speculate_limit_thinking_content_length(
     step_idx: paddle.Tensor,
     limit_think_status: paddle.Tensor,
     accept_num: paddle.Tensor,
-    seq_lens_decoder: paddle.Tensor,
     stop_flags: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
     think_end_id: int,
@@ -158,7 +158,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
@@ -172,7 +171,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             think_end_id,
             line_break_id,
@@ -344,21 +342,12 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
-        set_stop_value_multi_ends(
-            sampler_output.sampled_token_ids,
-            model_output.stop_flags,
-            model_output.seq_lens_this_time,
-            model_output.eos_token_id,
-            model_output.next_tokens,
-            model_output.pre_ids,
-            model_output.step_idx,
-            model_output.stop_token_ids,
-            model_output.stop_seqs_len,
-            model_output.min_tokens,
-            False,
-        )  # multi ends
-    elif current_platform.is_maca():
+    if (
+        current_platform.is_cuda()
+        or current_platform.is_iluvatar()
+        or current_platform.is_dcu()
+        or current_platform.is_maca()
+    ):
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
@@ -460,7 +449,6 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
