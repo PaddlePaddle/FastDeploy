@@ -958,7 +958,7 @@ class EngineArgs:
         )
         parallel_group.add_argument(
             "--shutdown-comm-group-if-worker-idle",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.shutdown_comm_group_if_worker_idle,
             help="Shutdown communication group when worker is idle.",
         )
