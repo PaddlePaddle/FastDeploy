@@ -219,6 +219,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             if not self.quant_config.deepgemm_scale_ue8m0:
                 permute_scale = permute_scale.transpose([1, 0]).contiguous()
                 permute_scale = permute_scale.transpose([1, 0])
+            else:
+                permute_scale = transform_scale_ue8m0(permute_scale, mn=permute_scale.shape[-2])
 
             # up_gate_proj
             ffn_out = paddle.empty(
@@ -242,6 +244,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
             else:
                 ffn_in_x, ffn_in_x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(ffn_out, use_ue8m0=True)
+                ffn_in_x_scale_tensor = transform_scale_ue8m0(
+                    ffn_in_x_scale_tensor, mn=ffn_in_x_scale_tensor.shape[-2]
+                )
 
             if not self.quant_config.deepgemm_scale_ue8m0:
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
@@ -338,10 +343,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         expected_m = 128
-        if self.quant_config.deepgemm_scale_ue8m0 and permute_input[1].dtype != paddle.int32:
-            permute_input[1] = self._cast_to_e8m0_with_rounding_up(permute_input[1])
         deep_gemm.m_grouped_fp8_gemm_nt_masked(
-            permute_input,
+            (
+                permute_input[0],
+                (
+                    self._cast_to_e8m0_with_rounding_up(permute_input[1])
+                    if self.quant_config.deepgemm_scale_ue8m0 and permute_input[1].dtype != paddle.int32
+                    else permute_input[1]
+                ),
+            ),
             (
                 getattr(layer, self.added_weight_attrs[0]),
                 getattr(layer, self.added_scale_attrs[0]),
@@ -360,11 +370,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             self.quant_config.weight_block_size[0],
         )
 
-        if self.quant_config.deepgemm_scale_ue8m0 and scale.dtype != paddle.int32:
-            scale = self._cast_to_e8m0_with_rounding_up(scale)
-
         deep_gemm.m_grouped_fp8_gemm_nt_masked(
-            (act_out_fp8, scale),
+            (
+                act_out_fp8,
+                (
+                    self._cast_to_e8m0_with_rounding_up(scale)
+                    if self.quant_config.deepgemm_scale_ue8m0 and scale.dtype != paddle.int32
+                    else scale
+                ),
+            ),
             (
                 getattr(layer, self.added_weight_attrs[1]),
                 getattr(layer, self.added_scale_attrs[1]),
