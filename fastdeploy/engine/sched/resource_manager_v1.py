@@ -224,10 +224,12 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
-    def reschedule_preempt_task(self, request_id):
+    def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                if process_func is not None:
+                    process_func(request)
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
@@ -368,7 +370,8 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
-            assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
+            if not inputs.get("tts", False):
+                assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
 
             # start
             if pre_end_idx >= prompt_token_ids_len:
@@ -378,7 +381,7 @@ class ResourceManagerV1(ResourceManager):
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
-            request.audio_start = start_patch_map["audio_num"]
+            request.audio_start = request.audio_end # audio use token_num not audio_num
 
             # end
             if new_end_idx >= prompt_token_ids_len:
@@ -393,7 +396,7 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
+            if end_modal_id == IDS_TYPE_FLAG["image"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
 
             if end_modal_id == IDS_TYPE_FLAG["video"] and "can_split_idx_list" in inputs:
@@ -402,11 +405,28 @@ class ResourceManagerV1(ResourceManager):
                     if can_split_idx_list[i] >= new_end_idx:
                         new_end_idx = can_split_idx_list[i]
                         break
+            
+            if end_modal_id == IDS_TYPE_FLAG["audio"] and new_end_idx > end_patch_map["end_idx"]:
+                new_end_idx = end_patch_map["end_idx"]
+             
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
             request.video_end = end_patch_map["video_num"]
-            request.audio_end = end_patch_map["audio_num"]
+
+            # audio end
+            request.audio_end = 0
+            pre_patch_end_idx = 0
+            for patch_idx in range(end_patch_idx + 1):
+                patch_map = inputs["patch_map"][patch_idx]
+                modal_id = patch_map["modal_id"]
+                if modal_id == IDS_TYPE_FLAG["audio"]:
+                    if patch_idx != end_patch_idx:
+                        request.audio_end += patch_map["token_num"]
+                    else:
+                        request.audio_end += new_end_idx - pre_patch_end_idx
+                pre_patch_end_idx = patch_map["end_idx"]
+            request.audio_end = max(request.audio_end, request.audio_start)
         elif (
             inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
