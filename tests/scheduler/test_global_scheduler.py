@@ -28,24 +28,24 @@ from fastdeploy.scheduler.workers import Task
 
 class _FakeRedis:
     """
-    内存中的 Redis 替身，模拟调度器使用的 Redis API。
-    用于单元测试，避免依赖真实的 Redis 服务。
+    In-memory Redis stand-in that simulates the Redis API used by the scheduler.
+    Used for unit tests to avoid depending on a real Redis service.
     """
 
     def __init__(self) -> None:
-        # 模拟 Redis 的 Key-Value 存储
+        # Simulated Redis key-value storage
         self.kv: Dict[str, str] = {}
-        # 模拟 Redis 的 List (用于队列)
+        # Simulated Redis list (for queues)
         self.lists: Dict[str, List[bytes]] = {}
-        # 模拟 Redis 的 Sorted Set (用于负载均衡记录)
+        # Simulated Redis sorted set (for load balancing records)
         self.sorted_sets: Dict[str, Dict[str, float]] = {}
         self.version = "fake-redis"
-        # 用于模拟阻塞弹出的返回值存储
+        # Storage for simulated blocking-pop return values
         self.blocking_returns: Dict[str, List[bytes]] = {}
 
     # ---------------------------- helpers used in the tests -----------------
     def queue_blocking_value(self, key: str, value: bytes) -> None:
-        """测试辅助函数：预先放入将在 blpop 中返回的数据"""
+        """Test helper: pre-enqueue a value that will be returned by blpop"""
         self.blocking_returns.setdefault(key, []).append(value)
 
     # -------------------------------- redis-like operations -----------------
@@ -91,12 +91,12 @@ class _FakeRedis:
         return result if result else None
 
     def blpop(self, keys: Iterable[str], timeout: int) -> Optional[Tuple[bytes, bytes]]:
-        # 模拟阻塞弹出：先检查普通队列
+        # Simulate blocking pop: check normal queue first
         for key in keys:
             bucket = self.lists.get(key)
             if bucket:
                 return key.encode("utf-8"), bucket.pop(0)
-        # 再检查测试预设的阻塞返回队列
+        # Then check the pre-seeded blocking return queue for tests
         for key in keys:
             bucket = self.blocking_returns.get(key)
             if bucket:
@@ -122,10 +122,10 @@ class _FakeRedis:
         start: int = 0,
         num: Optional[int] = None,
     ) -> List[bytes]:
-        """模拟按分数范围查询 Sorted Set，用于获取低负载节点"""
+        """Simulate querying a Sorted Set by score range, used to fetch low-load nodes"""
         bucket = self.sorted_sets.get(key, {})
         items = [item for item in bucket.items() if min_score <= item[1] <= max_score]
-        # 按 (分数, 成员名) 排序，保证确定性
+        # Sort by (score, member) to ensure determinism
         items.sort(key=lambda it: (it[1], it[0]))
         members = [member.encode("utf-8") for member, _ in items]
         if num is None or num < 0:
@@ -140,7 +140,7 @@ class _FakeRedis:
 
 
 class _ImmediateWorkers:
-    """一个同步执行回调的 Worker 池，用于简化测试流程。"""
+    """A worker pool that executes callbacks synchronously to simplify the test flow."""
 
     def __init__(self, name, work, max_task_batch_size, task_filters=None):
         self.work = work
@@ -159,7 +159,7 @@ class _ImmediateWorkers:
                 seen.add(task.id)
                 unique_tasks.append(task)
             tasks = unique_tasks
-        # 同步执行任务并将结果保存
+        # Execute tasks synchronously and store results
         results = self.work(tasks)
         if results:
             self.results.extend(results)
@@ -171,7 +171,7 @@ class _ImmediateWorkers:
 
 
 class _DormantThread:
-    """线程桩（Stub），记录启动状态但不执行实际的目标函数。"""
+    """Thread stub that records start state but does not execute the actual target function."""
 
     def __init__(self, target=None, args=None, kwargs=None, daemon=None):
         self.target = target
@@ -193,7 +193,7 @@ class _SamplingParamsStub:
 
 
 def _make_request(request_id: str, token_count: int = 4) -> Request:
-    """构造一个测试用的 Request 对象"""
+    """Build a Request object for tests"""
     tokens = list(range(token_count))
     return Request(
         request_id=request_id,
@@ -210,7 +210,7 @@ def _make_request(request_id: str, token_count: int = 4) -> Request:
 
 
 def _make_output(request_id: str, finished: bool = False) -> RequestOutput:
-    """构造一个测试用的 RequestOutput 对象"""
+    """Build a RequestOutput object for tests"""
     completion = CompletionOutput.from_dict({"index": 0, "send_idx": 0, "token_ids": [1]})
     return RequestOutput(request_id=request_id, outputs=completion, finished=finished)
 
@@ -218,11 +218,11 @@ def _make_output(request_id: str, finished: bool = False) -> RequestOutput:
 @pytest.fixture
 def scheduler_fixture(monkeypatch):
     """
-    初始化 GlobalScheduler 并替换其依赖（Redis, Workers, Thread）为 Mock 对象。
+    Initialize GlobalScheduler and replace its dependencies (Redis, Workers, Thread) with mock objects.
     """
     fake_redis = _FakeRedis()
 
-    # 使用 monkeypatch 替换全局依赖
+    # Use monkeypatch to replace global dependencies
     monkeypatch.setattr(global_scheduler, "ConnectionPool", lambda **_: object())
     monkeypatch.setattr(global_scheduler, "AdaptedRedis", lambda connection_pool: fake_redis)
     monkeypatch.setattr(global_scheduler, "Workers", _ImmediateWorkers)
@@ -247,42 +247,42 @@ def scheduler_fixture(monkeypatch):
 
 
 def test_put_requests_handles_duplicates_and_load_accounting(scheduler_fixture):
-    """测试 put_requests：验证重复请求处理及负载计数是否正确更新。"""
+    """Test put_requests: verify duplicate request handling and that load counters are updated correctly."""
     scheduler, fake_redis = scheduler_fixture
 
     req = _make_request("req-1")
     duplicate = _make_request("req-1")
 
-    # 尝试放入原始请求和重复请求
+    # Try to enqueue the original request and a duplicate request
     results = scheduler.put_requests([req, duplicate])
 
-    # 预期结果：第一个成功，第二个因 ID 重复失败
+    # Expected: first succeeds, second fails due to duplicate ID
     assert results == [("req-1", None), ("req-1", "duplicate request_id")]
 
-    # 验证 Redis 队列中只有一个请求
+    # Verify only one request exists in the Redis queue
     queue = scheduler._request_queue_name()
     assert len(fake_redis.lists[queue]) == 1
 
-    # 验证负载表 (Sorted Set) 计数增加
+    # Verify the load table (Sorted Set) counter increases
     load_table = fake_redis.sorted_sets[scheduler._load_table_name()]
     assert load_table[scheduler.name] == 1
 
 
 def test_get_requests_can_steal_remote_request(monkeypatch, scheduler_fixture):
-    """测试 get_requests：验证当本地空闲时，能从其他节点窃取任务（Work Stealing）。"""
+    """Test get_requests: verify that when local is idle, it can steal tasks from other nodes (work stealing)."""
     scheduler, fake_redis = scheduler_fixture
     monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
-    # Mock 随机函数以确保测试行为确定性（总是选中第一个）
+    # Mock random functions to make the test deterministic (always pick the first)
     monkeypatch.setattr(global_scheduler.random, "sample", lambda seq, k: list(seq)[:k])
     monkeypatch.setattr(global_scheduler.random, "choice", lambda seq: list(seq)[0])
 
-    # 构造远程节点的队列和请求
+    # Build the remote node's queue and request
     peer_queue = scheduler._request_queue_name("peer")
     peer_request = ScheduledRequest(_make_request("stolen"), peer_queue, scheduler._response_queue_name("peer"))
     fake_redis.rpush(peer_queue, peer_request.serialize())
 
-    # 设置负载表：本地负载为0，对端负载为2（触发窃取条件）
+    # Set load table: local load is 0, peer load is 2 (triggers stealing condition)
     fake_redis.sorted_sets[f"{scheduler.topic}.load.0"] = {scheduler.name: 0, "peer": 2}
 
     requests = scheduler.get_requests(
@@ -293,16 +293,16 @@ def test_get_requests_can_steal_remote_request(monkeypatch, scheduler_fixture):
         batch=2,
     )
 
-    # 验证成功窃取到 "stolen" 请求
+    # Verify we successfully stole the "stolen" request
     assert [req.request_id for req in requests] == ["stolen"]
-    # 验证请求被记录在 stolen_requests 中
+    # Verify the request is recorded in stolen_requests
     assert "stolen" in scheduler.stolen_requests
-    # 验证对端负载计数减少
+    # Verify the peer load counter decreases
     assert fake_redis.sorted_sets[f"{scheduler.topic}.load.0"]["peer"] == 1
 
 
 def test_get_requests_requeues_when_chunked_limits_hit(monkeypatch, scheduler_fixture):
-    """测试 get_requests：当触发分块预填充限制时，长任务应被重新放回队列。"""
+    """Test get_requests: when chunked prefill limits are hit, long requests should be re-queued."""
     scheduler, fake_redis = scheduler_fixture
     monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
@@ -311,7 +311,7 @@ def test_get_requests_requeues_when_chunked_limits_hit(monkeypatch, scheduler_fi
     long_request = ScheduledRequest(_make_request("long", token_count=10), queue, scheduler._response_queue_name())
     fake_redis.rpush(queue, short_request.serialize(), long_request.serialize())
 
-    # 长任务阈值为4 (fixture设置)，token=10 的任务会被跳过
+    # Long-task threshold is 4 (set by fixture); the task with token=10 will be skipped
     pulled = scheduler.get_requests(
         available_blocks=100,
         block_size=1,
@@ -320,15 +320,15 @@ def test_get_requests_requeues_when_chunked_limits_hit(monkeypatch, scheduler_fi
         batch=2,
     )
 
-    # 只有短任务被取出
+    # Only the short task is pulled
     assert [req.request_id for req in pulled] == ["short"]
-    # 长任务应该还在队列中（被重新放入）
+    # The long task should still be in the queue (re-queued)
     assert len(fake_redis.lists[queue]) == 1
     assert fake_redis.lists[queue][0] == long_request.serialize()
 
 
 def test_get_requests_returns_empty_when_resources_insufficient(monkeypatch, scheduler_fixture):
-    """测试 get_requests：当资源不足时（available_blocks=0），应返回空列表。"""
+    """Test get_requests: when resources are insufficient (available_blocks=0), it should return an empty list."""
     scheduler, fake_redis = scheduler_fixture
 
     monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
@@ -342,18 +342,18 @@ def test_get_requests_returns_empty_when_resources_insufficient(monkeypatch, sch
     )
 
     assert result == []
-    # 确认没有与 Redis 进行不必要的交互
+    # Ensure there was no unnecessary interaction with Redis
     assert fake_redis.lists == {}
 
 
 def test_get_requests_blocking_pop_returns_when_idle(monkeypatch, scheduler_fixture):
-    """测试 get_requests：模拟空闲状态下的阻塞读取（Blocking Pop）。"""
+    """Test get_requests: simulate blocking read (blocking pop) when idle."""
     scheduler, fake_redis = scheduler_fixture
     monkeypatch.setattr(envs, "FD_ENABLE_MAX_PREFILL", 0)
 
     queue = scheduler._request_queue_name()
     request = ScheduledRequest(_make_request("blocked"), queue, scheduler._response_queue_name())
-    # 放入 fake-redis 的阻塞返回区
+    # Put into fake-redis blocking return buffer
     fake_redis.queue_blocking_value(queue, request.serialize())
 
     pulled = scheduler.get_requests(
@@ -368,10 +368,10 @@ def test_get_requests_blocking_pop_returns_when_idle(monkeypatch, scheduler_fixt
 
 
 def test_put_results_worker_routes_local_and_stolen_responses(scheduler_fixture):
-    """测试结果处理 Worker：区分本地任务结果和窃取任务结果的路由逻辑。"""
+    """Test result-processing worker: route local results and stolen results correctly."""
     scheduler, fake_redis = scheduler_fixture
 
-    # 预设状态：一个本地任务，一个窃取来的任务
+    # Preset state: one local task and one stolen task
     with scheduler.mutex:
         scheduler.local_responses = {"local": []}
         scheduler.stolen_requests = {
@@ -387,17 +387,17 @@ def test_put_results_worker_routes_local_and_stolen_responses(scheduler_fixture)
 
     scheduler._put_results_worker([local_task, stolen_task])
 
-    # 本地任务结果存入 local_responses
+    # Local task result is stored in local_responses
     assert len(scheduler.local_responses["local"]) == 1
-    # 窃取任务结果发送回对端队列
+    # Stolen task result is sent back to the peer queue
     peer_queue = scheduler._response_queue_name("peer")
     assert len(fake_redis.lists[peer_queue]) == 1
-    # 窃取任务完成后，从 stolen_requests 中移除
+    # After the stolen task finishes, remove it from stolen_requests
     assert "stolen" not in scheduler.stolen_requests
 
 
 def test_put_results_worker_keeps_unfinished_stolen_request(monkeypatch, scheduler_fixture):
-    """测试结果处理 Worker：对于未完成的窃取任务，应保留在 stolen_requests 中以便后续处理。"""
+    """Test result-processing worker: unfinished stolen tasks should remain in stolen_requests for later handling."""
     scheduler, fake_redis = scheduler_fixture
 
     with scheduler.mutex:
@@ -409,18 +409,18 @@ def test_put_results_worker_keeps_unfinished_stolen_request(monkeypatch, schedul
             )
         }
 
-    # 任务状态为未完成 finished=False
+    # Task is unfinished: finished=False
     unfinished = Task("stolen", _make_output("stolen", finished=False))
     scheduler._put_results_worker([unfinished])
 
     peer_queue = scheduler._response_queue_name("peer")
     assert len(fake_redis.lists[peer_queue]) == 1
-    # 仍在追踪列表中
+    # Still in the tracking map
     assert "stolen" in scheduler.stolen_requests
 
 
 def test_get_results_returns_batches_and_cleans_up(scheduler_fixture):
-    """测试 get_results：批量获取结果并验证读取后是否被清理。"""
+    """Test get_results: fetch results in batches and verify they are cleaned up after reading."""
     scheduler, _ = scheduler_fixture
 
     responses = [ScheduledResponse(_make_output("req", finished=(i == 63))) for i in range(64)]
@@ -431,12 +431,12 @@ def test_get_results_returns_batches_and_cleans_up(scheduler_fixture):
 
     assert "req" in result
     assert len(result["req"]) == 64
-    # 读取后应从 local_responses 中移除
+    # After reading, it should be removed from local_responses
     assert "req" not in scheduler.local_responses
 
 
 def test_reset_and_update_config_refreshes_tables(scheduler_fixture):
-    """测试 reset 和 update_config：验证状态清理和配置热更新功能。"""
+    """Test reset and update_config: verify state cleanup and hot config update."""
     scheduler, fake_redis = scheduler_fixture
 
     queue = scheduler._request_queue_name()
@@ -447,27 +447,27 @@ def test_reset_and_update_config_refreshes_tables(scheduler_fixture):
     scheduler.local_responses = {"req": []}
     scheduler.stolen_requests = {"req": ScheduledRequest(_make_request("req"), queue, resp_queue)}
 
-    # 执行重置
+    # Perform reset
     scheduler.reset()
 
-    # 验证 Redis 数据和本地状态已被清理
+    # Verify Redis data and local state have been cleared
     assert queue not in fake_redis.lists
     assert resp_queue not in fake_redis.lists
     assert scheduler.name not in fake_redis.sorted_sets[scheduler._load_table_name()]
     assert scheduler.local_responses == {}
     assert scheduler.stolen_requests == {}
 
-    # 测试配置更新（如分片数量变更）
+    # Test config update (e.g., shard count change)
     scheduler.update_config(load_shards_num=3, reallocate=True)
     assert scheduler.load_shards_num == 3
     assert scheduler.shard == scheduler._get_hash_slot(scheduler.name) % 3
 
 
 def test_mark_helpers_and_block_calculation(scheduler_fixture):
-    """测试辅助函数：Block 计算、请求标记逻辑。"""
+    """Test helper functions: block calculation and request marking logic."""
     scheduler, _ = scheduler_fixture
 
-    # 测试 Block 数量计算 (ceil division)
+    # Test block count calculation (ceil division)
     assert global_scheduler.GlobalScheduler.calc_required_blocks(17, 4) == 5
 
     queue_name = scheduler._request_queue_name("peer")
@@ -475,12 +475,12 @@ def test_mark_helpers_and_block_calculation(scheduler_fixture):
     assert scheduler_name == "peer"
     assert scheduler._load_table_name(slot=3) == f"{scheduler.topic}.load.{3 % scheduler.load_shards_num}"
 
-    # 测试请求标记（用于区分窃取任务）
+    # Test request marking (to distinguish stolen tasks)
     scheduled = ScheduledRequest(_make_request("mark"), queue_name, scheduler._response_queue_name("peer"))
     global_scheduler.GlobalScheduler._mark_request(scheduled)
     assert scheduled.request_id.startswith("mark<")
 
-    # 测试响应去标记
+    # Test response unmarking
     response = ScheduledResponse(_make_output(scheduled.request_id))
     global_scheduler.GlobalScheduler._unmark_response(response, queue_name)
     assert response.request_id == "mark"
