@@ -567,7 +567,7 @@ class ParallelConfig:
         # disable sequence parallel moe
         self.disable_sequence_parallel_moe: bool = False
         # shutdown comm group if worker idle
-        self.shutdown_comm_group_if_worker_idle: bool = False
+        self.shutdown_comm_group_if_worker_idle: bool = None
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -587,7 +587,8 @@ class ParallelConfig:
             self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
 
-        self.shutdown_comm_group_if_worker_idle = not self.use_ep
+        if self.shutdown_comm_group_if_worker_idle is None:
+            self.shutdown_comm_group_if_worker_idle = not self.use_ep
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
