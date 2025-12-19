@@ -887,6 +887,12 @@ def parse_args():
         help="Configation of Rollout Routing Replay.",
     )
 
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
+    )
+
     args = parser.parse_args()
     return args
 
