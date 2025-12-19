@@ -19,5 +19,5 @@ jobs:
     needs: [clone]
     uses: ./.github/workflows/_iluvatar_cases.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:paddle-ocr-vl-1107
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
