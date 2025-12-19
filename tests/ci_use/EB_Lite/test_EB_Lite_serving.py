@@ -334,6 +334,7 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
+        top_p=0.0,
         max_tokens=10,
         extra_body={"min_tokens": 5, "include_stop_str_in_output": True},
         stream=False,
@@ -1167,8 +1168,8 @@ def test_structured_outputs_json_schema(openai_client):
     Test structured outputs json_schema functionality with the local service
     """
     chat_param = {
-        "temperature": 0,
-        "max_tokens": 64,
+        "temperature": 1,
+        "max_tokens": 1024,
     }
 
     # json_object
@@ -1306,8 +1307,8 @@ def test_structured_outputs_structural_tag(openai_client):
     """
 
     structural_tag_param = {
-        "temperature": 0,
-        "max_tokens": 64,
+        "temperature": 1,
+        "max_tokens": 1024,
         "messages": [
             {
                 "role": "system",
@@ -1356,8 +1357,8 @@ def test_structured_outputs_choice(openai_client):
     Test structured outputs choice functionality with the local service
     """
     choice_param = {
-        "temperature": 0,
-        "max_tokens": 64,
+        "temperature": 1,
+        "max_tokens": 1024,
         "messages": [{"role": "user", "content": "What is the landmark building in Shenzhen?"}],
         "extra_body": {
             "guided_choice": ["Ping An Finance Centre", "China Resources Headquarters", "KK100", "Diwang Mansion"]
@@ -1385,8 +1386,8 @@ def test_structured_outputs_regex(openai_client):
     Test structured outputs regex functionality with the local service
     """
     regex_param = {
-        "temperature": 0,
-        "max_tokens": 64,
+        "temperature": 1,
+        "max_tokens": 1024,
         "messages": [
             {
                 "role": "user",
@@ -1435,8 +1436,9 @@ def test_structured_outputs_grammar(openai_client):
     """
 
     grammar_param = {
-        "temperature": 0,
-        "max_tokens": 64,
+        "temperature": 1,
+        "top_p": 0.0,
+        "max_tokens": 1024,
         "messages": [
             {
                 "role": "user",
