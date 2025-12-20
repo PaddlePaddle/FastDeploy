@@ -24,9 +24,11 @@ import numpy as np
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
+    ChatCompletionToolsParam,
     CompletionRequest,
     CompletionResponse,
     DeltaMessage,
+    FunctionDefinition,
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
@@ -167,6 +169,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     completion_token_ids=None,
                 )
                 outputs["delta_message"] = delta_msg
+                outputs["enable_parser"] = True
 
             frame_dict = {
                 "request_id": f"{request_id}_0",
@@ -412,6 +415,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     stream=True,
                     max_tokens=10,
                     return_token_ids=True,
+                    tools=[ChatCompletionToolsParam(type="function", function=FunctionDefinition(name="test_tool"))],
                 ),
                 "total_token_num": 3,
                 "tool_call": {"name": "test_tool"},
@@ -462,7 +466,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
 
                 mock_response_queue = AsyncMock()
                 stream_responses = self._generate_stream_inference_response(
-                    request_id="test_chat_stream_0_0",
+                    request_id="test_chat_stream_0",
                     total_token_num=case["total_token_num"],
                     tool_call=case["tool_call"],
                 )
@@ -490,7 +494,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                         try:
                             json_part = chunk_str.strip().lstrip("data: ").rstrip("\n\n")
                             chunk_dict = json.loads(json_part)
-                            print(chunk_dict)
                             if chunk_dict.get("choices") and len(chunk_dict["choices"]) > 0:
                                 finish_reason = chunk_dict["choices"][0].get("finish_reason")
                                 if finish_reason:
