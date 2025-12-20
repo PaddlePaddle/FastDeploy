@@ -146,6 +146,7 @@ async def lifespan(app: FastAPI):
     """
     async context manager for FastAPI lifespan
     """
+    global engine_args
     import logging
 
     uvicorn_access = logging.getLogger("uvicorn.access")
@@ -172,8 +173,8 @@ async def lifespan(app: FastAPI):
         verification = False
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
-    engine_args = EngineArgs.from_cli_args(args)
-    fd_config = engine_args.create_engine_config(port_availability_check=False)
+    engine_args = EngineArgs.from_cli_args(args, skip_port_check=True)
+    fd_config = engine_args.create_engine_config()
     engine_client = EngineClient(
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
