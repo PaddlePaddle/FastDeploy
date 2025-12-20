@@ -34,6 +34,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
+from FastDeploy.fastdeploy.engine.request import RequestOutput
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -739,13 +740,14 @@ class LLM:
                     "token_ids": new_token_ids,
                 },
             }
+            response_obj = RequestOutput.from_dict(response_dict)
 
             processed_response = self.llm_engine.data_processor.process_response_obj_streaming(
-                response_dict, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
+                response_obj, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
             )
 
             # Extract incremental text
-            incremental_result.outputs.text = processed_response["outputs"]["text"]
+            incremental_result.outputs.text = processed_response.outputs.text
 
         # Set the prompt
         if isinstance(prompts, list):
