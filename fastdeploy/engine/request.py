@@ -221,17 +221,19 @@ class Request:
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
         
+        metadata = d.get("metadata", None)
         # temp code for debug, need to remove
-        sched_batch_info = SchedBatchInfo(
-            sched_batch_id=d.get("sched_batch_id", 0),
-            sched_batch_cnt=d.get("sched_batch_cnt", None),
-            sched_ts=d.get("sched_ts", 0),
-            sched_interval=d.get("sched_interval", 10),
-            sched_batch_local_id=d.get("sched_batch_local_id", 0),
-        )
-        d["ic_req_data"] = {
-            "sched_batch_info": sched_batch_info,
-        }
+        if metadata:
+            sched_batch_info = SchedBatchInfo(
+                sched_batch_id=metadata.get("sched_batch_id", 0),
+                sched_batch_cnt=metadata.get("sched_batch_cnt", None),
+                sched_ts=metadata.get("sched_ts", 0),
+                sched_interval=metadata.get("sched_interval", 10),
+                sched_batch_local_id=metadata.get("sched_batch_local_id", 0),
+            )
+            d["ic_req_data"] = {
+                "sched_batch_info": sched_batch_info,
+            }
 
         return cls(
             request_id=d["request_id"],

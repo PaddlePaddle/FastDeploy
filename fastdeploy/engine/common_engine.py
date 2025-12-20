@@ -147,9 +147,6 @@ class EngineService:
         if self.cfg.eplb_config.enable_eplb:
             current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
             init_eplb_signals(cfg, current_suffix)
-        
-        if envs.FD_ENABLE_BATCH_SCHEDULER:
-            self._init_parallel_env()
 
         if self.use_async_llm:
             # Add worker management attributes
@@ -352,7 +349,7 @@ class EngineService:
                 create=True,
             )
 
-    def _init_parallel_env(self, start_port=6070):
+    def init_parallel_env(self, start_port=6070):
         local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
         global_data_parallel_id = self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
         os.environ["PADDLE_TRAINER_ID"] = str(global_data_parallel_id)
@@ -957,7 +954,7 @@ class EngineService:
                     
                     with req_info_lock:
                         for task in tasks:
-                            print(f"sched batch info: {task.ic_req_data['sched_batch_info']}")
+                            self.llm_logger.info(f"sched batch info: {task.ic_req_data['sched_batch_info']}")
                             buffered_req_info[task.request_id] = task.ic_req_data["sched_batch_info"]
                 is_fetching = False
             except Exception as e:
@@ -1120,6 +1117,7 @@ class EngineService:
                         # Wait for current forward to finish
                         time.sleep(0.01)
                     execute_time = int((time.time() - start_execute_time) * 1000)
+                    print(f"execute time: {execute_time}")
 
                     # Report to IM
                     if last_sched_batch_id != -1:

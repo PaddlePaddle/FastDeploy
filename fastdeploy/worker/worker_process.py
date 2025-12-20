@@ -267,7 +267,7 @@ class PaddleDisWorkerProc:
                 name="infer_finished_signal",
                 array=infer_finished_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
+                suffix=self.parallel_config.local_engine_worker_queue_port,
                 create=False,
             )
 

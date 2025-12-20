@@ -138,6 +138,8 @@ class LLMEngine:
 
         self.engine.start()
         self.engine.create_data_processor()
+        if envs.FD_ENABLE_BATCH_SCHEDULER:
+            self.engine.init_parallel_env()
         self.data_processor = self.engine.data_processor
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
