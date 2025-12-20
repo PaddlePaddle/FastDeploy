@@ -30,11 +30,11 @@ from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from FastDeploy.fastdeploy.engine.request import RequestOutput
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
