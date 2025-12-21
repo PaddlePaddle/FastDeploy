@@ -144,7 +144,6 @@ def speculate_limit_thinking_content_length(
     step_idx: paddle.Tensor,
     limit_think_status: paddle.Tensor,
     accept_num: paddle.Tensor,
-    seq_lens_decoder: paddle.Tensor,
     stop_flags: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
     think_end_id: int,
@@ -158,7 +157,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
@@ -172,7 +170,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             think_end_id,
             line_break_id,
@@ -465,7 +462,6 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )

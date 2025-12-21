@@ -275,6 +275,7 @@ class PrefixCacheManager:
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
                 + f" --engine_pid {pid_suffix}"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"

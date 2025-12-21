@@ -266,6 +266,11 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
+    """
+
     engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
@@ -905,6 +910,12 @@ class EngineArgs:
             type=int,
             default=EngineArgs.chunked_moe_size,
             help="Chunked size of moe input.",
+        )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
         )
 
         # Load group
