@@ -46,6 +46,7 @@ python -m pip install -r requirements.txt
 --shuffle：是否打乱数据集，默认False不打乱
 --seed：打乱数据集时的随机种子，默认0
 --pd-metrics：开启PD分离metrics指标收集，会添加请求参数collect_metrics=True，默认False
+--ip-list：支持多个ip:port，将总请求数以及总并发数均分到每个IP，按整除取余分配。例：0.0.0.0:1211,0.0.0.0:1222，默认为空
 ```
 
 ##### /v1/chat/completions接口压测单条数据调试

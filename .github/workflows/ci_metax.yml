@@ -133,9 +133,9 @@ jobs:
           cp ${REPLACE_FILES_PATH}/all_things.py ${PACKAGES_LINK}/use_triton_in_paddle/cuda/
 
           sudo chmod 777 -R ${REPLACE_FILES_PATH}/mctlass
-          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx.h /opt/maca/include/mctlassEx/
-          sudo cp ${REPLACE_FILES_PATH}/mctlass/libmctlassEx.so /opt/maca/lib/
-          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx_xcore1000.mcfb /opt/maca/lib/
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx.h ${MACA_PATH}/include/mctlassEx/
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/libmctlassEx.so ${MACA_PATH}/lib/
+          sudo cp ${REPLACE_FILES_PATH}/mctlass/mctlassEx_xcore1000.mcfb ${MACA_PATH}/lib/
 
           bash build.sh
 
@@ -154,9 +154,15 @@ jobs:
             }
           }
 
-          ignore_error "timeout -s 9 600s python tests/ci_use/Metax_UT/run_ernie_vl_28B.py"
+          ignore_error "bash scripts/run_ci_metax.sh"
+          if (( exit_code != 0 )); then
+            exit ${exit_code}
+          fi
 
-          echo -e "\n=========== Fastdeploy workerlog.0 ==========="
-          cat log/workerlog.0
+          ignore_error "timeout -s 9 600s python tests/metax_ci/run_ernie_vl_28B.py"
+          if (( exit_code != 0 )); then
+            echo -e "\n=========== Fastdeploy workerlog.0 ==========="
+            cat log/workerlog.0
+          fi
 
           exit ${exit_code}

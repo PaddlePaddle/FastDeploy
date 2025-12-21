@@ -25,20 +25,7 @@ from fastdeploy.model_executor.ops.gpu import per_token_quant, per_token_quant_p
 paddle.seed(2024)
 
 
-def ceil_to_ue8m0_paddle(x: paddle.Tensor):
-    """
-    x > 0
-    return 2 ^ ceil(log2(x))
-    """
-    # log2(x)
-    log2_x = paddle.log(x) / paddle.log(paddle.to_tensor(2.0, dtype=x.dtype))
-    # ceil
-    ceil_log2_x = paddle.ceil(log2_x)
-    # 2^k
-    return paddle.pow(paddle.to_tensor(2.0, dtype=x.dtype), ceil_log2_x)
-
-
-def per_token_quant_paddle(input_tensor, block_size, use_ue8m0: bool = False):
+def per_token_quant_paddle(input_tensor, block_size):
     MAX_VALUE = 448.0
     epsilon = 1e-10
 
@@ -46,6 +33,7 @@ def per_token_quant_paddle(input_tensor, block_size, use_ue8m0: bool = False):
     token_num = input_shape[0]
     hidden_size = input_shape[1]
 
+    # According to https://github.com/PaddlePaddle/FastDeploy/pull/3659
     padding_size = (block_size - hidden_size % block_size) % block_size
 
     padded_input = input_tensor
@@ -60,8 +48,6 @@ def per_token_quant_paddle(input_tensor, block_size, use_ue8m0: bool = False):
     max_abs_val = paddle.max(paddle.abs(reshaped_input), axis=-1, keepdim=True)
     max_abs_val = paddle.clip(max_abs_val, min=epsilon)
     scale = max_abs_val / MAX_VALUE
-    if use_ue8m0:
-        scale = ceil_to_ue8m0_paddle(scale)
 
     quanted_value = reshaped_input / scale
 
@@ -75,8 +61,8 @@ def per_token_quant_paddle(input_tensor, block_size, use_ue8m0: bool = False):
     return quanted_x, quanted_scale
 
 
-def per_token_quant_padding_paddle(input_tensor, block_size, dtype, use_ue8m0):
-    quanted_x, intermediate_scale = per_token_quant_paddle(input_tensor, block_size, use_ue8m0)
+def per_token_quant_padding_paddle(input_tensor, block_size, dtype):
+    quanted_x, intermediate_scale = per_token_quant_paddle(input_tensor, block_size)
     token_num = input_tensor.shape[0]
 
     tma_alignment_elements = 4
@@ -102,16 +88,16 @@ class TestPerTokenQuant(unittest.TestCase):
         self.input_tensor = self.get_input(shape=[self.token_num, self.hidden_size], dtype=self.dtype)
 
     def test_per_token_quant(self):
-        for use_ue8m0 in [False, True]:
-            paddle_output, paddle_output_scale = per_token_quant_paddle(self.input_tensor, self.block_size, use_ue8m0)
-            output, output_scale = per_token_quant(self.input_tensor, self.block_size, use_ue8m0)
+        paddle_output, paddle_output_scale = per_token_quant_paddle(self.input_tensor, self.block_size)
+        output, output_scale = per_token_quant(self.input_tensor, self.block_size)
 
-            np.testing.assert_allclose(paddle_output_scale.numpy(), output_scale.numpy(), rtol=1e-6)
+        np.testing.assert_allclose(paddle_output_scale.numpy(), output_scale.numpy(), rtol=1e-6)
 
-            output_rel_diff = paddle.mean(
-                paddle.abs(output.to(paddle.float32) - paddle_output.to(paddle.float32))
-            ) / paddle.mean(paddle.abs(paddle_output.to(paddle.float32)))
-            assert output_rel_diff < 0.001
+        output_rel_diff = paddle.mean(
+            paddle.abs(output.to(paddle.float32) - paddle_output.to(paddle.float32))
+        ) / paddle.mean(paddle.abs(paddle_output.to(paddle.float32)))
+
+        assert output_rel_diff < 0.001
 
 
 class TestPerTokenQuantCase1(TestPerTokenQuant):
@@ -150,25 +136,24 @@ class TestPerTokenQuantPadding(TestPerTokenQuant):
         self.input_tensor = self.get_input(shape=[self.token_num, self.hidden_size], dtype=self.dtype)
 
     def test_per_token_quant_padding(self):
-        for use_ue8m0 in [False, True]:
-            paddle_output, paddle_output_scale = per_token_quant_padding_paddle(
-                self.input_tensor, self.block_size, self.dtype, use_ue8m0
-            )
-            output, output_scale = per_token_quant_padding(self.input_tensor, self.block_size, use_ue8m0)
+        paddle_output, paddle_output_scale = per_token_quant_padding_paddle(
+            self.input_tensor, self.block_size, self.dtype
+        )
+        output, output_scale = per_token_quant_padding(self.input_tensor, self.block_size)
 
-            self.assertEqual(paddle_output_scale.shape, output_scale.shape)
-            np.testing.assert_allclose(
-                paddle_output_scale[0 : self.token_num].numpy(),
-                output_scale[0 : self.token_num].numpy(),
-                rtol=1e-5,
-                atol=1e-5,
-            )
+        self.assertEqual(paddle_output_scale.shape, output_scale.shape)
+        np.testing.assert_allclose(
+            paddle_output_scale[0 : self.token_num].numpy(),
+            output_scale[0 : self.token_num].numpy(),
+            rtol=1e-5,
+            atol=1e-5,
+        )
 
-            output_rel_diff = paddle.mean(
-                paddle.abs(output.to(paddle.float32) - paddle_output.to(paddle.float32))
-            ) / paddle.mean(paddle.abs(paddle_output.to(paddle.float32)) + 1e-9)
+        output_rel_diff = paddle.mean(
+            paddle.abs(output.to(paddle.float32) - paddle_output.to(paddle.float32))
+        ) / paddle.mean(paddle.abs(paddle_output.to(paddle.float32)) + 1e-9)
 
-            assert output_rel_diff < 0.001
+        assert output_rel_diff < 0.001
 
 
 class TestPerTokenQuantPaddingCase1(TestPerTokenQuantPadding):
