@@ -32,6 +32,7 @@ from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
+from fastdeploy.multimodal.utils import set_processor_kwargs
 from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
@@ -293,15 +294,17 @@ class DataProcessor:
                 raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
         return images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items
 
+    @set_processor_kwargs
     def request2ids(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Dict[str, Any], tgts: List[str] = None, **kwargs
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat messages into model inputs.
         Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
         """
         images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.extract_mm_items(request)
-
+        print(f"video_max_frames: {self.max_frames} video_min_frames: {self.min_frames}")
+        
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
 

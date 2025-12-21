@@ -217,6 +217,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        processor_kwargs = self._parse_processor_kwargs(request.get("mm_processor_kwargs"))
         if request.get("prompt_token_ids"):
             messages = request.get("messages")
             if messages:
@@ -243,7 +244,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            outputs = self.ernie4_5_processor.request2ids(request)
+            outputs = self.ernie4_5_processor.request2ids(request, **processor_kwargs)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 

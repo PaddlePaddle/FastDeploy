@@ -46,3 +46,27 @@ def process_transparency(image):
         pass
 
     return ImageOps.exif_transpose(image)
+
+def set_processor_kwargs(func):
+    """
+    set processor kwargs by requests
+    """
+    def wrapper(self, *args, **kwargs):
+        original_kwargs = {}
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                original_kwargs[k] = getattr(self, k)
+                setattr(self, k, v)
+            elif hasattr(self, k.replace("video_", "")):
+                k = k.replace("video_", "")
+                original_kwargs[k] = getattr(self, k)
+                setattr(self, k, v)
+
+        ret = func(self, *args, **kwargs)
+
+        for k, v in original_kwargs.items():
+            setattr(self, k, v)
+            
+        return ret
+    return wrapper
+
