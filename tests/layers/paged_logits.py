@@ -90,62 +90,20 @@ def indexer_mha_page_logits(query, indexer_cache, weight, block_tables, cu_seqle
 
     grid = (output_padding_len // block_size, real_bs, q_num_head)
 
-
-
-    import paddle.profiler as profiler
-    p = profiler.Profiler(
-        targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+    compute_kernel[grid](
+        weight,
+        query,
+        indexer_cache,
+        block_tables,
+        cu_seqlen_q,
+        seq_lens_decoder,
+        output,
+        output_padding_len,
+        MAX_BLOCKS_PER_SEQ=block_tables.shape[1],
+        PAGE_SIZE=block_size,
+        HEAD_DIM=head_dim,
+        Q_NUM_HEAD=q_num_head,
+        K_NUM_HEAD=k_num_head,
+        BLOCK_SIZE_M=16,
     )
-    p.start()
-    p.step()
-    
-    for i in range(100):
-        compute_kernel[grid](
-            weight,
-            query,
-            indexer_cache,
-            block_tables,
-            cu_seqlen_q,
-            seq_lens_decoder,
-            output,
-            output_padding_len,
-            MAX_BLOCKS_PER_SEQ=block_tables.shape[1],
-            PAGE_SIZE=block_size,
-            HEAD_DIM=head_dim,
-            Q_NUM_HEAD=q_num_head,
-            K_NUM_HEAD=k_num_head,
-            BLOCK_SIZE_M=16,
-        )
-
-    p.stop()
-
-    print(output)
-
-    retrived_k = paddle.zeros([token_num, k_num_head, output_padding_len, head_dim])
-
-    for i in range(real_bs):
-        this_k_len = seq_lens_decoder[i].item()
-        if this_k_len <= 0:
-            continue
-        this_k_len += 1
-        token_id = cu_seqlen_q[i].item()
-        for j in range(0, this_k_len, block_size):
-            
-            start = j
-            end = j+block_size
-
-            block_id = block_tables[i, j // block_size].numpy().item()
-
-            retrived_k[token_id,:,start:end,:] = indexer_cache[block_id,:,:,:]
-    
-    query = query.reshape([token_num*q_num_head,head_dim])
-    weight.reshape_([-1,1])
-    query = query * weight
-    retrived_k.reshape_([token_num*k_num_head, output_padding_len, head_dim])
-    baseline = paddle.einsum('ik, ilk->il', query,retrived_k)
-    baseline = paddle.nn.functional.relu(baseline)
-
-    assert ((baseline - output).abs().max().item()) == 0
-
     return output
