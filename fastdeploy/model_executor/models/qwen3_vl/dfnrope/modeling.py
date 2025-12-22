@@ -47,7 +47,6 @@ class Qwen3VisionPatchEmbed(nn.Layer):
             stride=kernel_size,
             bias_attr=True,
         )
-        set_weight_attrs(self.proj.weight, {"weight_need_transpose": model_format == "torch"})
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         # L, C = hidden_states.shape
@@ -124,8 +123,9 @@ class Qwen3VisionPatchMerger(nn.Layer):
         self.hidden_size = context_dim * (spatial_merge_size**2)
         self.use_postshuffle_norm = use_postshuffle_norm
 
-        norm_shape = context_dim if not use_postshuffle_norm else self.hidden_size
-        self.norm = nn.LayerNorm(norm_shape, epsilon=norm_eps)
+        if self.use_postshuffle_norm:
+            context_dim = self.hidden_size
+        self.norm = nn.LayerNorm(context_dim, epsilon=norm_eps)
 
         if tensor_parallel_degree > 1:
             mp_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
@@ -143,7 +143,7 @@ class Qwen3VisionPatchMerger(nn.Layer):
                 input_is_parallel=True,
                 has_bias=True,
             )
-            set_weight_attrs(self.linear_fc1.weight, {"output_dim": True})
+            set_weight_attrs(self.linear_fc1.weight, {"output_dim": True})  # Column segmentation
             set_weight_attrs(self.linear_fc2.weight, {"output_dim": False})
         else:
             self.linear_fc1 = nn.Linear(self.hidden_size, self.hidden_size, bias_attr=True)
@@ -152,24 +152,64 @@ class Qwen3VisionPatchMerger(nn.Layer):
         set_weight_attrs(self.linear_fc1.weight, {"weight_need_transpose": model_format == "torch"})
         set_weight_attrs(self.linear_fc2.weight, {"weight_need_transpose": model_format == "torch"})
 
-        self.act = nn.GELU()
+        self.act_fn = nn.GELU()
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        # if self.use_postshuffle_norm:
-        # 	hidden_states = self.norm(hidden_states.reshape([-1, self.hidden_size]))
-        # else:
-        # 	hidden_states = self.norm(hidden_states).reshape([-1, self.hidden_size])
-
-        # hidden_states = self.linear_fc1(hidden_states)
-        # hidden_states =
-        # hidden_states =
         if self.use_postshuffle_norm:
             hidden_states = self.norm(hidden_states.view(-1, self.hidden_size))
         else:
             hidden_states = self.norm(hidden_states).view(-1, self.hidden_size)
 
-        hidden_states = self.linear_fc2(self.act(self.linear_fc1(hidden_states)))
-        return hidden_states
+        hidden_states_parallel = self.linear_fc1(hidden_states)
+        hidden_states_parallel = self.act_fn(hidden_states_parallel)
+        out = self.linear_fc2(hidden_states_parallel)
+        return out
+
+
+class Qwen3RMSNorm(nn.Layer):
+    def __init__(self, hidden_size, eps=1e-6, use_bias=True):
+        """
+        Qwen3RMSNorm is equivalent to T5LayerNorm
+        """
+        super().__init__()
+        self.use_bias = use_bias
+
+        self.weight = paddle.create_parameter(
+            shape=[hidden_size],
+            dtype=paddle.get_default_dtype(),
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+
+        if self.use_bias:
+            self.bias = paddle.create_parameter(
+                shape=[hidden_size],
+                dtype=paddle.get_default_dtype(),
+                default_initializer=nn.initializer.Constant(0.0),
+            )
+        else:
+            self.bias = None
+
+        self.variance_epsilon = eps
+
+    def forward(self, hidden_states):
+        # RMS
+        if paddle.in_dynamic_mode():
+            with paddle.amp.auto_cast(False):
+                variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
+                hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
+        else:
+            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
+            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
+
+        # dtype 对齐（AMP / bf16 / fp16）
+        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
+            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+
+        # affine
+        if self.use_bias:
+            return hidden_states * self.weight + self.bias
+        else:
+            return hidden_states * self.weight
 
 
 class Qwen3VisionBlock(nn.Layer):
@@ -178,18 +218,19 @@ class Qwen3VisionBlock(nn.Layer):
         dim: int,
         num_heads: int,
         mlp_hidden_dim: int,
-        hidden_act: str,
-        tensor_parallel_degree: int,
-        norm_eps: float,
+        hidden_act: str = "gelu",
+        tensor_parallel_degree: int = 1,
+        tensor_parallel_rank: int = 0,
         model_format: str = "",
     ) -> None:
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim, epsilon=norm_eps)
-        self.norm2 = nn.LayerNorm(dim, epsilon=norm_eps)
+        self.norm1 = nn.LayerNorm(dim, epsilon=1e-6)
+        self.norm2 = nn.LayerNorm(dim, epsilon=1e-6)
         self.attn = VisionFlashAttention2(
             dim=dim,
             num_heads=num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
+            tensor_parallel_rank=tensor_parallel_rank,
             model_format=model_format,
         )
         self.mlp = Qwen3VisionMLP(
@@ -277,7 +318,7 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
                     mlp_hidden_dim=vision_config.intermediate_size,
                     hidden_act=vision_config.hidden_act,
                     tensor_parallel_degree=config.pretrained_config.tensor_parallel_degree,
-                    norm_eps=1e-6,
+                    tensor_parallel_rank=config.pretrained_config.tensor_parallel_rank,
                     model_format=model_format,
                 )
                 for _ in range(vision_config.depth)
@@ -285,7 +326,7 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
         )
 
         self.out_hidden_size = vision_config.out_hidden_size * (1 + len(self.deepstack_visual_indexes))
-        self._set_model_format_attrs(model_format)
+        # self._set_model_format_attrs(model_format)
 
     def _set_model_format_attrs(self, model_format):
         if model_format is None:
@@ -379,10 +420,8 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
 
     def _build_cu_seqlens(self, grid_thw: list[list[int]]) -> paddle.Tensor:
         grid_tensor = paddle.to_tensor(grid_thw, dtype="int32")
-        per_item = grid_tensor[:, 1] * grid_tensor[:, 2]
-        repeats = grid_tensor[:, 0]
-        per_frame = paddle.repeat_interleave(per_item, repeats)
-        cu_seqlens = paddle.cumsum(per_frame, axis=0)
+        per_frame = paddle.repeat_interleave(grid_tensor[:, 1] * grid_tensor[:, 2], grid_tensor[:, 0])
+        cu_seqlens = paddle.cumsum(per_frame, axis=0, dtype="int32")
         cu_seqlens = paddle.concat([paddle.zeros([1], dtype="int32"), cu_seqlens])
         return cu_seqlens
 

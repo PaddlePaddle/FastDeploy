@@ -230,6 +230,11 @@ class ModelConfig:
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
+        # Align external multimodal rope_3d configuration
+        if hasattr(self, "rope_scaling") and "mrope_section" in self.rope_scaling:
+            setattr(self, "rope_3d", True)
+            setattr(self, "freq_allocation", self.rope_scaling["mrope_section"][0])
+
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
@@ -347,10 +352,18 @@ class ModelConfig:
                 )
             elif "torch_dtype" in self.model_config:
                 self.model_format = "torch"
-                logger.info("The model format is Hugging Face")
+                logger.info("The model format is Hugging Face Torch")
             elif "dtype" in self.model_config:
-                self.model_format = "paddle"
-                logger.info("The model format is Paddle")
+                # https://github.com/huggingface/transformers/releases/tag/v4.56.0  Transformers 4.56 version deprecated torch_dtype
+                if (
+                    "transformers_version" in self.model_config
+                    and self.model_config["transformers_version"][:4] > "4.56"
+                ):
+                    self.model_format = "torch"
+                    logger.info("The model format is Hugging Face Torch")
+                else:
+                    self.model_format = "paddle"
+                    logger.info("The model format is Paddle")
             else:
                 raise ValueError(
                     "Unknown model format. Please ensure your config.json contains "

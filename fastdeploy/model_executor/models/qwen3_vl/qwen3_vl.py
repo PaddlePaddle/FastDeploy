@@ -278,13 +278,8 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         image_mask: paddle.Tensor,
     ):
         """For only image inputs case"""
-        (
-            mm_embeddings_main,
-            mm_embeddings_multiscale,
-        ) = paddle.spilit(
-            image_features,
-            [self.visual_dim, self.multiscale_dim],
-            dim=-1,
+        mm_embeddings_main, mm_embeddings_multiscale = paddle.split(
+            image_features, num_or_sections=[self.visual_dim, self.multiscale_dim], axis=-1
         )
 
         deepstack_input_embeds = input_embeddings.new_zeros(
@@ -312,7 +307,14 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         if image_features is None:
             return input_embeddings
 
-        image_mask = ids_remove_padding == self.image_token_id
+        image_mask = ids_remove_padding == self.model.image_token_id
+        image_token_num = image_mask.sum()
+
+        video_mask = ids_remove_padding == self.model.video_token_id
+        video_token_num = video_mask.sum()
+
+        if image_token_num.item() <= 0 and video_token_num.item() <= 0:
+            return input_embeddings
 
         deepstack_input_embeds = None
 
@@ -326,7 +328,10 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
                 image_mask,
             )
 
-        input_embeddings[image_mask] = mm_embeddings
+        if image_token_num.item() > 0:
+            input_embeddings[image_mask] = mm_embeddings
+        if video_token_num.item() > 0:
+            input_embeddings[video_mask] = mm_embeddings
 
         if deepstack_input_embeds is not None:
             self._set_deepstack_input_embeds(deepstack_input_embeds)
@@ -339,10 +344,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
-        logger.info(f"ids_remove_padding: {ids_remove_padding}")
         input_embeddings = self.get_input_embeddings(ids_remove_padding, image_features)
-        logger.info(f"input_embeddings: {input_embeddings}")
-        # self._input_embeddings.copy_(input_embeddings, False)
         deepstack_inputs = None
         if self.use_deepstack:
             deepstack_inputs = self._get_deepstack_input_embeds(input_embeddings.shape[0])
@@ -355,7 +357,6 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             deepstack_inputs=deepstack_inputs,
         )
 
-        logger.info(f"hidden_states: {hidden_states}")
         if self.use_deepstack:
             self._clear_deepstack_input_embeds(input_embeddings.shape[0])
 

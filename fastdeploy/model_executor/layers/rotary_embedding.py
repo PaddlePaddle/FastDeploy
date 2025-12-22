@@ -412,6 +412,7 @@ class ErnieVlRotaryEmbedding3D:
         partial_rotary_factor,
         max_position,
         freq_allocation,
+        rope_scaling: dict = None,
     ):
         self.rotary_dim = rotary_dim
         self.base = base
@@ -513,12 +514,16 @@ class QwenVlRotaryEmbedding3D:
         partial_rotary_factor,
         max_position,
         freq_allocation,
+        rope_scaling: dict = None,
     ):
         self.rotary_dim = rotary_dim
         self.base = base
         self.paritial_rotary_factor = partial_rotary_factor
         self.max_position = max_position
         self.freq_allocation = freq_allocation
+        self.rope_scaling = rope_scaling
+        if "mrope_interleaved" in self.rope_scaling:
+            self.rope_interleaved = self.rope_scaling["mrope_interleaved"]
 
     def __call__(self, position_ids, max_len_lst, cumsum_seqlens):
         rot_emb = paddle.zeros((2, 1, self.max_position, 1, self.rotary_dim // 2), dtype="float32")
@@ -624,6 +629,7 @@ def get_rope_3d(
     partial_rotary_factor: float,
     max_position: int,
     freq_allocation: int,
+    rope_scaling: dict,
     model_type: str,
     max_len_lst: list[int],
     cumsum_seqlens: list[int],
@@ -648,19 +654,19 @@ def get_rope_3d(
     """
     if "ernie" in model_type:
         rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(
-            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
+            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation, rope_scaling
         )
     elif "qwen" in model_type:
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
-            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
+            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation, rope_scaling
         )
     elif "paddleocr" in model_type:
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
-            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
+            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation, rope_scaling
         )
     else:  # default ernie
         rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(
-            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
+            rotary_dim, base, partial_rotary_factor, max_position, freq_allocation, rope_scaling
         )
 
     rotary_emb_3d = rotary_emb3d_layer(position_ids, max_len_lst, cumsum_seqlens)
