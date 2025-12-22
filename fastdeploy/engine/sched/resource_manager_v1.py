@@ -906,23 +906,23 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
-            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
+            request.metrics.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.metrics.cpu_cache_token_num = hit_info["cpu_match_token_num"]
             request.cache_info = [matched_block_num, no_cache_block_num]
             request.block_tables = common_block_ids
             request.skip_allocate = False
 
             # Report the number of cached tokens to Prometheus metrics
             main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
+            main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
 
             if matched_token_num == request.need_prefill_tokens:
                 request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
                 request.skip_allocate = True
             else:
                 request.num_computed_tokens = matched_token_num
-            request.cache_prepare_time = time.time() - cache_prepare_time
+            request.metrics.gpu_cpu_cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
@@ -944,11 +944,11 @@ class ResourceManagerV1(ResourceManager):
             )
 
             matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
-            request.num_cached_tokens += matched_token_num
+            request.metrics.storage_cache_token_num = matched_token_num
             request.num_computed_tokens += matched_token_num
             if request.num_computed_tokens == request.need_prefill_tokens:
                 request.num_computed_tokens = request.num_computed_tokens - self.config.cache_config.block_size
-            request.cache_prepare_time += time.time() - tic
+            request.metrics.storage_cache_prepare_time = time.time() - tic
             request.cache_info[0] += len(matched_block_ids)  # matched_block_num
             request.cache_info[1] -= len(matched_block_ids)  # no_cache_block_num
 

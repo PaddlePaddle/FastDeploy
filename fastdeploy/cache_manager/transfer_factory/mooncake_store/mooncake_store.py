@@ -194,7 +194,7 @@ class MooncakeStore(KVCacheStorage):
         tic = time.time()
         result = {k: v for k, v in zip(keys, self.store.batch_is_exist(keys))}
         cost_time = (time.time() - tic) * 1000
-        logger.debug(f"mooncake store exists results: {result}, cost_time: {cost_time:.3f}ms")
+        logger.debug(f"The exists fun processes {len(keys)} objects, cost_time: {cost_time:.3f}ms")
         return result
 
     def delete(self, key, timeout=5) -> bool:
@@ -228,16 +228,17 @@ class MooncakeStore(KVCacheStorage):
             # List[int]: List of status codes for each operation (0 = success, negative = error)
             cost_time = time.time() - tic
 
+            total_num = len(key_strs)
             success_num = result.count(0)
-            if success_num == len(key_strs):
+            if success_num == total_num:
                 logger.debug(
-                    f"Put all data into Mooncake Store successfully. key_strs: {key_strs}, "
+                    f"Put all data into Mooncake Store successfully."
                     f"success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             else:
                 logger.error(
-                    f"Some of the data was not put into Mooncake Store. key_strs: {key_strs}, "
-                    f"result: {result}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
+                    f"Some of the data was not put into Mooncake Store."
+                    f"total_num: {total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
                 total_bytes = sum(bi for ri, bi in zip(result, buffer_sizes) if ri == 0)
@@ -257,16 +258,17 @@ class MooncakeStore(KVCacheStorage):
             # List[int]: List of bytes read for each operation (positive = success, negative = error)
             cost_time = time.time() - tic
 
+            total_num = len(key_strs)
             success_num = sum(x > 0 for x in result)
-            if success_num == len(key_strs):
+            if success_num == total_num:
                 logger.debug(
-                    f"Get all data from Mooncake Store successfully. key_strs: {key_strs}, "
+                    f"Get all data from Mooncake Store successfully. "
                     f"success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             else:
                 logger.error(
-                    f"Some of the data was not get from Mooncake Store. key_strs:{key_strs}, "
-                    f"result:{result}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
+                    f"Some of the data was not get from Mooncake Store."
+                    f"total_num:{total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
                 total_bytes = sum(bi for ri, bi in zip(result, buffer_sizes) if ri > 0)

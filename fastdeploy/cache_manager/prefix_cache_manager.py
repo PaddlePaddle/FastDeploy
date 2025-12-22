@@ -799,9 +799,11 @@ class PrefixCacheManager:
             current_tokens += block_size
             prefix_block_key = [cur_block_key]
 
-        logger.debug(f"start prefetch cache from storage, req_id: {req_id}, block_keys: {block_keys}")
+        logger.info(f"start prefetch cache from storage, req_id: {req_id}, block num: {len(block_keys)}")
         matched_block_ids = self.issue_prefetch_storage_task(req_id, block_keys, extra_gpu_block_ids)
-        logger.debug(f"finish prefetch cache from storage, req_id: {req_id}, matched_block_ids: {matched_block_ids}")
+        logger.info(
+            f"finish prefetch cache from storage, req_id: {req_id}, matched block num: {len(matched_block_ids)}"
+        )
 
         return matched_block_ids
 
@@ -981,11 +983,11 @@ class PrefixCacheManager:
             return
 
         gpu_block_ids = request.block_tables[: len(keys)]
-        logger.debug(f"start write cache back to storage, req_id: {req_id}, keys: {keys}")
+        logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         tic = time.time()
         self.issue_write_back_storage_task(req_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
         cost_time = time.time() - tic
-        logger.debug(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
     def issue_write_back_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
         if self.kvcache_storage_backend is None:
@@ -1475,7 +1477,6 @@ class PrefixCacheManager:
                 )
                 prefix_block_key.extend(extra_keys)
                 hash_value = get_hash_str(token_block, prefix_block_key)
-                logger.debug(f"match_block: req_id {request.request_id} hash_value: {hash_value}")
                 prefix_block_key = [hash_value]
 
                 if hash_value in current_match_node.children:
