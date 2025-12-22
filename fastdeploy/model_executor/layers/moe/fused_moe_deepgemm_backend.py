@@ -281,8 +281,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
 
-        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
-
+        # tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
