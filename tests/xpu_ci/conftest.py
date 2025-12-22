@@ -303,6 +303,11 @@ def setup_ep_env():
         os.environ[key] = value
         print(f"设置环境变量: {key}={value}")
 
+    # 设置BKCL_RDMA_NICS
+    rdma_nics = get_rdma_nics()
+    if rdma_nics:
+        os.environ["BKCL_RDMA_NICS"] = rdma_nics
+        print(f"设置环境变量: BKCL_RDMA_NICS={rdma_nics}")
     return original_values
 
 
