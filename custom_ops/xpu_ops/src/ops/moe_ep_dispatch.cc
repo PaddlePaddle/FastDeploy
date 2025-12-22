@@ -57,7 +57,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   const int64_t ep_size = 1;
   const int64_t ep_rank = 0;
 
-  if (std::is_same<TY, int8_t>::value) {
+  if (std::is_same<TY, int8_t>::value && !std::is_same<TX, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
     if (token_nums_this_rank > 0) {
@@ -99,7 +99,11 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
           block_num,
           ep_size,
           ep_rank,
-          token_nums_this_rank);
+          token_nums_this_rank,
+          std::is_same<TX, int8_t>::value
+              ? input_scales.get_ptr()->data<float>()
+              : nullptr,
+          expand_input_scales.data<float>());
       PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
     }
   }
@@ -138,10 +142,12 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
   } else if (input_dtype == paddle::DataType::BFLOAT16 &&
              quant_method != "w4a8") {
     APPLY_KERNEL(paddle::bfloat16, paddle::bfloat16);
+  } else if (input_dtype == paddle::DataType::INT8) {
+    APPLY_KERNEL(int8_t, int8_t);
   } else {
     PD_THROW("EPMoeExpertDispatch not support input_dtype=",
              static_cast<int>(input_dtype),
-             "quant_method=",
+             ", quant_method=",
              quant_method);
     return {};
   }
