@@ -56,11 +56,11 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
     )
 
-    recover_decode_task = None
     share_external_data = None
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
@@ -467,7 +467,7 @@ class GPUModelRunner(ModelRunnerBase):
                         multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
-                                inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
+                                inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
                             )
                             multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
                             multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
@@ -486,7 +486,7 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         multi_vision_inputs["images_lst"].append(
-                            inputs["images"][request.image_start : request.image_end].cuda()
+                            inputs["images"][request.image_start : request.image_end].to(self.device)
                         )
                         multi_vision_inputs["grid_thw_lst"].extend(
                             paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
@@ -2770,7 +2770,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
         # Clear parameters and Send single
-        self.dynamic_weight_manager.clear_parameters(pid)
+        self.dynamic_weight_manager.clear_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
@@ -2787,7 +2789,9 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(pid)
+        self.dynamic_weight_manager.update_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:
