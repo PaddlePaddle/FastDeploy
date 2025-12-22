@@ -472,6 +472,7 @@ class ErnieVlRotaryEmbedding3D:
 
         rot_emb_list = []
         for i in range(bsz):
+            # [HWHWHW...TTT..]
             sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, -self.freq_allocation :]
             sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1[i], axis=1)[
                 :, :, :, : self.rotary_dim // 2 - self.freq_allocation : 2
@@ -523,7 +524,7 @@ class QwenVlRotaryEmbedding3D:
         self.freq_allocation = freq_allocation
         self.rope_scaling = rope_scaling
         if "mrope_interleaved" in self.rope_scaling:
-            self.rope_interleaved = self.rope_scaling["mrope_interleaved"]
+            self.mrope_interleaved = self.rope_scaling["mrope_interleaved"]
 
     def __call__(self, position_ids, max_len_lst, cumsum_seqlens):
         rot_emb = paddle.zeros((2, 1, self.max_position, 1, self.rotary_dim // 2), dtype="float32")
@@ -588,29 +589,54 @@ class QwenVlRotaryEmbedding3D:
         section_h = (self.rotary_dim // 2 - self.freq_allocation) // 2  # 24
         section_w = (self.rotary_dim // 2 - self.freq_allocation) // 2  # 24
 
-        sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
-
         rot_emb_list = []
         for i in range(bsz):
-            sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, :section_t]
-            sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1[i], axis=1)[
-                :, :, :, section_t : section_t + section_h
-            ]
-            sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2[i], axis=1)[
-                :, :, :, section_t + section_h : section_t + section_h + section_w
-            ]
-            sin_thw = paddle.concat([sin_t, sin_h, sin_w], axis=-1)
+            # [THWTHWTHW...TT]
+            if self.mrope_interleaved:
+                sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
+                sin_thw = paddle.index_select(sin_bsz, index=tmp_pos_id_0[i], axis=1)[
+                    :, :, :, :
+                ]  # Put T directly here
+                sin_thw[..., 1 : section_h * 3 : 3] = paddle.index_select(sin_bsz, index=tmp_pos_id_1[i], axis=1)[
+                    :, :, :, 1 : section_h * 3 : 3
+                ]  # H covers the corresponding position
+                sin_thw[..., 2 : section_w * 3 : 3] = paddle.index_select(sin_bsz, index=tmp_pos_id_2[i], axis=1)[
+                    :, :, :, 2 : section_w * 3 : 3
+                ]  # W covers the corresponding position
 
-            cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
+                cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
+                cos_thw = paddle.index_select(cos_bsz, index=tmp_pos_id_0[i], axis=1)[
+                    :, :, :, :
+                ]  # Put T directly here
+                cos_thw[..., 1 : section_h * 3 : 3] = paddle.index_select(cos_bsz, index=tmp_pos_id_1[i], axis=1)[
+                    :, :, :, 1 : section_h * 3 : 3
+                ]  # H covers the corresponding position
+                cos_thw[..., 2 : section_w * 3 : 3] = paddle.index_select(cos_bsz, index=tmp_pos_id_2[i], axis=1)[
+                    :, :, :, 2 : section_w * 3 : 3
+                ]  # W covers the corresponding position
 
-            cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, :section_t]
-            cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1[i], axis=1)[
-                :, :, :, section_t : section_t + section_h
-            ]
-            cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2[i], axis=1)[
-                :, :, :, section_t + section_h : section_t + section_h + section_w
-            ]
-            cos_thw = paddle.concat([cos_t, cos_h, cos_w], axis=-1)
+            # [TTT..HHH..WWW..]
+            else:
+                sin_bsz = paddle.index_select(sin, index=batch_indices, axis=0)
+                sin_t = paddle.index_select(sin_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, :section_t]
+                sin_h = paddle.index_select(sin_bsz, index=tmp_pos_id_1[i], axis=1)[
+                    :, :, :, section_t : section_t + section_h
+                ]
+                sin_w = paddle.index_select(sin_bsz, index=tmp_pos_id_2[i], axis=1)[
+                    :, :, :, section_t + section_h : section_t + section_h + section_w
+                ]
+                sin_thw = paddle.concat([sin_t, sin_h, sin_w], axis=-1)
+
+                cos_bsz = paddle.index_select(cos, index=batch_indices, axis=0)
+
+                cos_t = paddle.index_select(cos_bsz, index=tmp_pos_id_0[i], axis=1)[:, :, :, :section_t]
+                cos_h = paddle.index_select(cos_bsz, index=tmp_pos_id_1[i], axis=1)[
+                    :, :, :, section_t : section_t + section_h
+                ]
+                cos_w = paddle.index_select(cos_bsz, index=tmp_pos_id_2[i], axis=1)[
+                    :, :, :, section_t + section_h : section_t + section_h + section_w
+                ]
+                cos_thw = paddle.concat([cos_t, cos_h, cos_w], axis=-1)
 
             rot_emb[0] = cos_thw
             rot_emb[1] = sin_thw

@@ -166,52 +166,6 @@ class Qwen3VisionPatchMerger(nn.Layer):
         return out
 
 
-class Qwen3RMSNorm(nn.Layer):
-    def __init__(self, hidden_size, eps=1e-6, use_bias=True):
-        """
-        Qwen3RMSNorm is equivalent to T5LayerNorm
-        """
-        super().__init__()
-        self.use_bias = use_bias
-
-        self.weight = paddle.create_parameter(
-            shape=[hidden_size],
-            dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(1.0),
-        )
-
-        if self.use_bias:
-            self.bias = paddle.create_parameter(
-                shape=[hidden_size],
-                dtype=paddle.get_default_dtype(),
-                default_initializer=nn.initializer.Constant(0.0),
-            )
-        else:
-            self.bias = None
-
-        self.variance_epsilon = eps
-
-    def forward(self, hidden_states):
-        # RMS
-        if paddle.in_dynamic_mode():
-            with paddle.amp.auto_cast(False):
-                variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-                hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
-        else:
-            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
-
-        # dtype 对齐（AMP / bf16 / fp16）
-        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
-            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
-
-        # affine
-        if self.use_bias:
-            return hidden_states * self.weight + self.bias
-        else:
-            return hidden_states * self.weight
-
-
 class Qwen3VisionBlock(nn.Layer):
     def __init__(
         self,
