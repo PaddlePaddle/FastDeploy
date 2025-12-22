@@ -556,20 +556,19 @@ __global__ void group_idx_and_topk_idx_kernel(
       value = group_scores[lane_id];
     }
 
-    int count_equal_to_top_value = WARP_SIZE - n_group;
-    int pre_count_equal_to_top_value = 0;
+    int neg_inf_num = WARP_SIZE - n_group;
     // Use loop to find the largset top_group
-    while (count_equal_to_top_value < target_num_min) {
+    while (neg_inf_num < target_num_min) {
       __syncwarp();  // Ensure all threads have valid data before reduction
       topk_group_value = cg::reduce(tile, value, cg::greater<T>());
       if (value == topk_group_value) {
         value = neg_inf<T>();
       }
-      pre_count_equal_to_top_value = count_equal_to_top_value;
-      count_equal_to_top_value =
+
+      neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
-    num_equalto_topkth_group = target_num_min - pre_count_equal_to_top_value;
+    num_equalto_topkth_group = target_num_min - neg_inf_num;
   }
   __syncthreads();
 
