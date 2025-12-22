@@ -283,7 +283,12 @@ class Request:
         """
         return self.prompt_token_ids_len + len(self.output_token_ids)
 
-    def __getstate__(self):
+
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+
         """
         Custom getstate method for pickle support.
         Handles unpicklable attributes by filtering them from __dict__.

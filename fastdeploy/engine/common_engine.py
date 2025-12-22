@@ -1567,8 +1567,18 @@ class EngineService:
                 "last_received_request_ids": last_received_request_ids,
                 "last_run_batch_duration": report_info[:, 0].max().item(),
                 "remain_token_num_per_dp": report_info[:, 1].tolist(),
+                "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                "model_id": os.getenv("MODEL_ID"),
             }
             llm_logger.info(f"report info: {payload}")
+
+            try:
+                url = f"http://0.0.0.0:{envs.FD_REPORT_IM_PORT}/end_forward"
+                response = requests.post(url, json=payload)
+                response.raise_for_status()
+                llm_logger.info(f"report IM successful: {response.json()}")
+            except Exception as e:
+                llm_logger.info(f"report IM failed: {e}")
 
     def _exit_sub_services(self):
         """
