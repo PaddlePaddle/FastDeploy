@@ -26,6 +26,8 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
 )
+from fastdeploy.cache_manager.transfer_factory.utils import get_rdma_nics
+from fastdeploy.platforms import current_platform
 
 DEFAULT_GLOBAL_SEGMENT_SIZE = 1024 * 1024 * 1024  # 1 GiB
 DEFAULT_LOCAL_BUFFER_SIZE = 128 * 1024 * 1024  # 128MB
@@ -44,9 +46,18 @@ class MooncakeStoreConfig:
     @staticmethod
     def create() -> "MooncakeStoreConfig":
         """Load the config from a JSON file or environment variables."""
-        file_path = os.getenv("MOONCAKE_CONFIG_PATH")
         config = {}
-        if file_path is not None:
+        file_path = os.getenv("MOONCAKE_CONFIG_PATH")
+
+        if file_path is None:
+            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME")
+            metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
+            global_segment_size = os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)
+            local_buffer_size = os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)
+            protocol = os.environ.get("MOONCAKE_PROTOCOL", "rdma")
+            rdma_devices = os.environ.get("MOONCAKE_RDMA_DEVICES", "")
+            master_server_addr = os.environ.get("MOONCAKE_MASTER_SERVER_ADDR")
+        else:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File path {file_path} for creating MooncakeStoreConfig does not exist.")
             with open(file_path) as fin:
@@ -57,16 +68,13 @@ class MooncakeStoreConfig:
             global_segment_size = config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE)
             local_buffer_size = config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE)
             protocol = config.get("protocol", "rdma")
-            rdma_devices = config.get("rdma_devices", "mlx5_1")
+            rdma_devices = config.get("rdma_devices", "")
             master_server_addr = config.get("master_server_addr")
-        else:
-            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME")
-            metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
-            global_segment_size = os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)
-            local_buffer_size = os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)
-            protocol = os.environ.get("MOONCAKE_PROTOCOL", "rdma")
-            rdma_devices = os.environ.get("MOONCAKE_RDMA_DEVICES", "mlx5_1")
-            master_server_addr = os.environ.get("MOONCAKE_MASTER_SERVER_ADDR")
+
+        if rdma_devices == "" and current_platform.is_cuda():
+            # FIXME: use auto-select NICs in MooncakeStore will raise error and roll back to using TCP
+            rdma_devices = get_rdma_nics()
+            logger.info(f"No RDMA devices specified, defaulting to all available devices: {rdma_devices}")
 
         return MooncakeStoreConfig(
             local_hostname=local_hostname,
