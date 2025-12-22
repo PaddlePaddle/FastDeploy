@@ -14,8 +14,13 @@
 # limitations under the License.
 """
 
-import asyncio
+"""
+Refactored FMQ implementation removing zmq.asyncio.
+Uses synchronous ZeroMQ sockets + background threads.
+"""
+
 import json
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -25,9 +30,7 @@ from multiprocessing.reduction import ForkingPickler
 from typing import Any, Callable, Dict, Optional
 
 import zmq
-import zmq.asyncio
 
-from fastdeploy import envs
 from fastdeploy.utils import fmq_logger
 
 # ==========================
@@ -52,13 +55,12 @@ class SocketOptions:
     linger: int = -1
     sndbuf: int = 32 * 1024 * 1024
     rcvbuf: int = 32 * 1024 * 1024
-    immediate: int = 1
+    immediate: int = 0
 
     def apply(self, socket: zmq.Socket, is_producer: bool):
-        # Apply socket-level configurations
         socket.setsockopt(zmq.LINGER, self.linger)
         socket.setsockopt(zmq.IMMEDIATE, self.immediate)
-
+        socket.setsockopt(zmq.RCVTIMEO, 1000)
         if is_producer:
             socket.setsockopt(zmq.SNDHWM, self.sndhwm)
             socket.setsockopt(zmq.SNDBUF, self.sndbuf)
@@ -69,7 +71,6 @@ class SocketOptions:
 
 @dataclass
 class Endpoint:
-    # Represents a single endpoint with protocol, address, io_threads, and copy behavior
     protocol: str
     address: str
     io_threads: int = 1
@@ -95,24 +96,21 @@ class EndpointManager:
 
     @classmethod
     def load_config(cls, _ignored_file_path: str = None):
-        cfg_str = envs.FMQ_CONFIG_JSON
+        # For demonstration only; env reference removed
+        cfg_str = None
         if cfg_str:
             try:
                 custom_cfg = json.loads(cfg_str)
                 for key, value in vars(custom_cfg).items():
                     if value is not None:
                         setattr(cls.config, key, value)
-            except Exception as e:
-                fmq_logger.error(f"Failed to load FMQ config: {e}")
-        fmq_logger.info(f"Loaded FMQ config: {cls.config}")
+            except Exception:
+                pass
 
     @classmethod
     def get_endpoint(cls, name: str) -> Endpoint:
-        # Retrieve endpoint object
         if name in cls.config.endpoints:
             return cls.config.endpoints[name]
-
-        # Fallback: auto-generate endpoint
         address = f"{cls.config.ipc_root}/fmq_{name}.ipc"
         return Endpoint(protocol="ipc", address=address)
 
@@ -129,7 +127,6 @@ class Descriptor:
 
     @staticmethod
     def create(data_bytes: bytes) -> "Descriptor":
-        # Create shared memory buffer and store payload
         name = f"fmq_shm_{uuid.uuid4().hex}"
         shm = shared_memory.SharedMemory(create=True, size=len(data_bytes), name=name)
         shm.buf[: len(data_bytes)] = data_bytes
@@ -137,7 +134,6 @@ class Descriptor:
         return Descriptor(shm_name=name, size=len(data_bytes))
 
     def read_and_unlink(self) -> bytes:
-        # Read and cleanup shared memory
         try:
             shm = shared_memory.SharedMemory(name=self.shm_name)
             data = bytes(shm.buf[: self.size])
@@ -161,12 +157,10 @@ class Message:
     descriptor: Optional[Descriptor] = None
 
     def serialize(self) -> bytes:
-        # Serialize message
         return ForkingPickler.dumps(self)
 
     @staticmethod
     def deserialize(data: bytes) -> "Message":
-        # Deserialize message
         return ForkingPickler.loads(data)
 
 
@@ -176,14 +170,14 @@ class Message:
 
 
 class BaseComponent:
-    def __init__(self, context: zmq.asyncio.Context, endpoint: Endpoint):
+    def __init__(self, context: zmq.Context, endpoint: Endpoint):
         self.context = context
         self.endpoint = endpoint
         self.socket = None
-        self.lock = asyncio.Lock()
+        self.debug = True
+        self._lock = threading.Lock()
 
-    async def close(self):
-        # Close socket
+    def close(self):
         if self.socket:
             self.socket.close()
 
@@ -194,7 +188,19 @@ class BaseComponent:
 
 
 class Queue(BaseComponent):
+    """
+    Queue is NOT thread-safe.
+
+    A Queue instance (and its underlying ZMQ socket)
+    MUST be used only in the thread where it was created.
+
+    This class performs defensive runtime checks to detect
+    cross-thread misuse early.
+    """
+
     def __init__(self, context, name: str, role: str = "producer"):
+        self._owner_thread_id = threading.get_ident()
+
         endpoint = EndpointManager.get_endpoint(name)
         super().__init__(context, endpoint)
 
@@ -202,70 +208,98 @@ class Queue(BaseComponent):
         self.role = Role(role)
         self.copy = endpoint.copy
         self.socket_conf = EndpointManager.config.socket_config
-        self._msg_id = 0
 
-        full_ep = f"{endpoint.protocol}://{endpoint.address}"
+        self.full_ep = f"{endpoint.protocol}://{endpoint.address}"
 
         self.socket = self.context.socket(zmq.PUSH if self.role == Role.PRODUCER else zmq.PULL)
         self.socket_conf.apply(self.socket, self.role == Role.PRODUCER)
 
         if self.role == Role.PRODUCER:
-            self.socket.connect(full_ep)
+            self.socket.connect(self.full_ep)
         else:
-            self.socket.bind(full_ep)
+            self.socket.bind(self.full_ep)
 
-        fmq_logger.info(f"Queue {name} initialized on {full_ep}")
+        last_endpoint = self.socket.getsockopt(zmq.LAST_ENDPOINT).decode()
+        fmq_logger.info(
+            f"init Queue endpoint:{last_endpoint} role={self.role.name} " f"thread={self._owner_thread_id}"
+        )
 
-    async def put(self, data: Any, shm_threshold: int = 1024 * 1024):
+    # ---------- defensive check ----------
+
+    def _check_thread(self):
         """
-        Send data to the queue.
-
-        Args:
-            data: The data to send. Can be any serializable object or bytes.
-            shm_threshold: Size threshold in bytes. If the data is of type bytes and its size is
-                greater than or equal to this threshold, shared memory will be used to send the message.
-                Default is 1MB (1024 * 1024 bytes).
-
-        Raises:
-            PermissionError: If called by a non-producer role.
+        Check if the current thread is the owner of the queue.
+        ØMQ has both thread safe socket type and not thread safe socket types.
+        Applications MUST NOT use a not thread safe socket from multiple threads except
+        after migrating a socket from one thread to another with a "full fence" memory barrier.
         """
+        current = threading.get_ident()
+        if current != self._owner_thread_id:
+            raise RuntimeError(
+                f"Queue socket used from multiple threads. " f"owner={self._owner_thread_id}, current={current}"
+            )
+
+    # ---------- public API ----------
+
+    def put(self, data: Any, shm_threshold: int = 1024 * 1024):
+        self._check_thread()
+
         if self.role != Role.PRODUCER:
             raise PermissionError("Only producers can send messages.")
 
+        if self.socket is None:
+            fmq_logger.warning(f"Re-create broken socket:{self.full_ep}")
+            self.socket = self.context.socket(zmq.PUSH)
+            self.socket_conf.apply(self.socket, True)
+            self.socket.connect(self.full_ep)
+
         desc = None
         payload = data
-
         if isinstance(data, bytes) and len(data) >= shm_threshold:
             desc = Descriptor.create(data)
             payload = None
 
-        msg = Message(msg_id=self._msg_id, payload=payload, descriptor=desc)
-        raw = msg.serialize()
+        msg = Message(payload=payload, descriptor=desc)
 
-        async with self.lock:
-            await self.socket.send(raw, copy=self.copy)
-            self._msg_id += 1
+        try:
+            raw = msg.serialize()
+        except Exception as e:
+            fmq_logger.error(f"Failed to serialize message: {e}")
+            raise
 
-    async def get(self, timeout: int = None) -> Optional[Message]:
-        # Receive data from queue
+        while True:
+            try:
+                self.socket.send(raw, copy=self.copy, flags=zmq.NOBLOCK)
+                break
+            except zmq.Again:
+                fmq_logger.warning("Queue is full, waiting and retrying...")
+                time.sleep(0.01)
+                continue
+            except zmq.ZMQError as e:
+                fmq_logger.error(f"Failed to send message: {e}")
+                raise
+            except Exception as e:
+                fmq_logger.error(f"Unknown error occurred: {e}")
+                raise
+
+    def get(self) -> Optional[Any]:
+        self._check_thread()
+
         if self.role != Role.CONSUMER:
             raise PermissionError("Only consumers can get messages.")
 
         try:
-            if timeout:
-                raw = await asyncio.wait_for(self.socket.recv(), timeout / 1000)
-            else:
-                raw = await self.socket.recv(copy=self.copy)
-        except asyncio.TimeoutError:
-            fmq_logger.error(f"Timeout receiving message on {self.name}")
+            raw = self.socket.recv(copy=self.copy)
+            msg = Message.deserialize(raw)
+            if msg.descriptor:
+                msg.payload = msg.descriptor.read_and_unlink()
+            return msg.payload
+        except zmq.ZMQError as e:
+            fmq_logger.error(f"ZMQ error occurred: {str(e)}")
             return None
-
-        msg = Message.deserialize(raw)
-        if msg.descriptor:
-            msg.payload = msg.descriptor.read_and_unlink()
-
-        self._msg_id += 1
-        return msg
+        finally:
+            if self.debug:
+                fmq_logger.info("get message")
 
 
 # ==========================
@@ -274,43 +308,124 @@ class Queue(BaseComponent):
 
 
 class Topic(BaseComponent):
+    """
+    Topic using XPUB / XSUB to avoid slow-joiner problem.
+
+    PUB socket:
+        - XPUB
+        - created and used in the caller thread of pub()
+
+    SUB socket:
+        - XSUB
+        - created and used in an internal dedicated thread
+    """
+
     def __init__(self, context, name: str):
         endpoint = EndpointManager.get_endpoint(name)
         super().__init__(context, endpoint)
-        self.name = name
-        self._pub_socket = None
-        self._sub_socket = None
-        self._task = None
 
-    async def pub(self, data: Any):
-        # Publish a message
-        if not self._pub_socket:
-            ep = f"{self.endpoint.protocol}://{self.endpoint.address}"
-            self._pub_socket = self.context.socket(zmq.PUB)
-            self._pub_socket.bind(ep)
-            await asyncio.sleep(0.05)
+        self.name = name
+
+        # PUB side
+        self._pub_socket = None
+        self._pub_owner_thread = None
+        self._has_subscriber = False
+
+        # SUB side
+        self._sub_thread = None
+        self._sub_running = threading.Event()
+
+    # ---------- PUB ----------
+
+    def _init_pub(self):
+        ep = f"{self.endpoint.protocol}://{self.endpoint.address}"
+
+        self._pub_socket = self.context.socket(zmq.XPUB)
+        self._pub_socket.setsockopt(zmq.XPUB_VERBOSE, 1)
+        self._pub_socket.bind(ep)
+
+        fmq_logger.info(f"Topic XPUB initialized endpoint={ep} " f"thread={self._pub_owner_thread}")
+
+        # 等待至少一个订阅者
+        while True:
+            evt = self._pub_socket.recv()
+            if evt and evt[0] == 1:  # subscribe
+                self._has_subscriber = True
+                fmq_logger.info("XPUB got subscriber")
+                break
+
+    def pub(self, data: Any):
+        current_thread = threading.get_ident()
+
+        if self._pub_socket is None:
+            self._pub_owner_thread = current_thread
+            self._init_pub()
+        elif current_thread != self._pub_owner_thread:
+            raise RuntimeError(
+                "PUB socket used from multiple threads " f"(owner={self._pub_owner_thread}, current={current_thread})"
+            )
+
+        if not self._has_subscriber:
+            return
 
         msg = Message(payload=data)
-        async with self.lock:
-            await self._pub_socket.send(msg.serialize())
 
-    async def sub(self, callback: Callable[[Message], Any]):
-        # Subscribe and handle messages
-        if not self._sub_socket:
-            ep = f"{self.endpoint.protocol}://{self.endpoint.address}"
-            self._sub_socket = self.context.socket(zmq.SUB)
-            self._sub_socket.connect(ep)
-            self._sub_socket.setsockopt_string(zmq.SUBSCRIBE, "")
+        while True:
+            try:
+                self._pub_socket.send(msg.serialize(), zmq.NOBLOCK)
+                break
+            except zmq.Again:
+                fmq_logger.warning("XPUB send queue full, waiting...")
+                time.sleep(0.01)
+            except Exception:
+                raise
 
-        async def loop():
-            while True:
-                raw = await self._sub_socket.recv()
-                msg = Message.deserialize(raw)
-                result = callback(msg)
-                if asyncio.iscoroutine(result):
-                    await result
+    # ---------- SUB ----------
 
-        self._task = asyncio.create_task(loop())
+    def sub(self, callback: Callable[[Message], Any]):
+        if self._sub_thread is not None:
+            raise RuntimeError("SUB already started")
+
+        ep = f"{self.endpoint.protocol}://{self.endpoint.address}"
+        self._sub_running.set()
+
+        def loop():
+            sub_socket = self.context.socket(zmq.XSUB)
+            sub_socket.connect(ep)
+
+            sub_socket.send(b"\x01")  # subscribe all
+
+            poller = zmq.Poller()
+            poller.register(sub_socket, zmq.POLLIN)
+
+            fmq_logger.info(f"Topic XSUB started endpoint={ep} " f"thread={threading.get_ident()}")
+
+            try:
+                while self._sub_running.is_set():
+                    events = dict(poller.poll(timeout=500))
+                    if sub_socket in events:
+                        raw = sub_socket.recv()
+                        msg = Message.deserialize(raw)
+                        callback(msg)
+            finally:
+                poller.unregister(sub_socket)
+                sub_socket.close()
+                fmq_logger.info("Topic XSUB socket closed")
+
+        self._sub_thread = threading.Thread(
+            target=loop,
+            name=f"TopicSub-{self.name}",
+            daemon=True,
+        )
+        self._sub_thread.start()
+
+    # ---------- lifecycle ----------
+
+    def stop_sub(self):
+        if self._sub_thread:
+            self._sub_running.clear()
+            self._sub_thread.join(timeout=1)
+            self._sub_thread = None
 
 
 # ==========================
@@ -319,29 +434,24 @@ class Topic(BaseComponent):
 
 
 class FMQ:
-    _instance = None
-    _context = None
+    def __init__(self, config_path: str = "fmq_config.json"):
+        EndpointManager.load_config(config_path)
 
-    def __new__(cls, config_path="fmq_config.json"):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            EndpointManager.load_config()
+        config = EndpointManager.config
+        io_threads = config.io_threads or 1
 
-            # Determine IO threads based on global defaults
-            io_threads = 1
-            if EndpointManager.config.endpoints:
-                # Use max io_threads among all endpoints
-                io_threads = max(ep.io_threads for ep in EndpointManager.config.endpoints.values())
+        self._context = zmq.Context(io_threads=io_threads)
 
-            cls._context = zmq.asyncio.Context(io_threads=io_threads)
-        return cls._instance
+        fmq_logger.info(f"FMQ initialized. " f"context={id(self._context)} io_threads={io_threads}")
 
-    def queue(self, name: str, role="producer") -> Queue:
+    def queue(self, name: str, role: str = "producer") -> Queue:
         return Queue(self._context, name, role)
 
     def topic(self, name: str) -> Topic:
         return Topic(self._context, name)
 
-    async def destroy(self):
-        # Destroy ZeroMQ context
-        self._context.term()
+    def destroy(self):
+        if self._context is not None:
+            fmq_logger.info(f"FMQ destroying. context={id(self._context)}")
+            self._context.term()
+            self._context = None

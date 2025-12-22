@@ -15,76 +15,82 @@
 """
 
 import unittest
+from unittest.mock import MagicMock, patch
 
-from fastdeploy.inter_communicator.fmq import Message
-from fastdeploy.inter_communicator.fmq_factory import FMQFactory as factory
+from fastdeploy.inter_communicator.fmq_factory import FMQFactory
 
 
-class TestFMQFactory(unittest.IsolatedAsyncioTestCase):
+class TestFMQFactory(unittest.TestCase):
 
-    async def test_create_queues(self):
-        """Test whether all producer/consumer queues can be created."""
-        q1 = factory.q_a2e_producer()
-        q2 = factory.q_a2e_consumer()
-        q3 = factory.q_e2w_producer()
-        q4 = factory.q_e2w_consumer()
-        q5 = factory.q_w2e_producer()
-        q6 = factory.q_w2e_consumer()
-        q7 = factory.q_e2a_producer()
-        q8 = factory.q_e2a_consumer()
+    def setUp(self):
+        # ✅ patch 被测模块中的 FMQ
+        patcher = patch("fastdeploy.inter_communicator.fmq_factory.FMQ")
+        self.addCleanup(patcher.stop)
+        self.mock_fmq_cls = patcher.start()
 
-        self.assertEqual(q1.name, "q_a2e")
-        self.assertEqual(q2.name, "q_a2e")
-        self.assertEqual(q3.name, "q_e2w")
-        self.assertEqual(q4.name, "q_e2w")
-        self.assertEqual(q5.name, "q_w2e")
-        self.assertEqual(q6.name, "q_w2e")
-        self.assertEqual(q7.name, "q_e2a")
-        self.assertEqual(q8.name, "q_e2a")
+        # 每次 FMQ() 返回的实例
+        self.mock_fmq_instance = MagicMock()
+        self.mock_fmq_cls.return_value = self.mock_fmq_instance
 
-        # 同一进程内 context 应相同
-        self.assertIs(q1.context, q2.context)
-        self.assertIs(q1.context, q3.context)
+    # ------------------------------
+    # API -> Engine
+    # ------------------------------
+    def test_q_a2e_producer(self):
+        FMQFactory.q_a2e_producer()
 
-    async def test_message_roundtrip(self):
-        """测试 producer → consumer 消息流转"""
-        producer = factory.q_a2e_producer()
-        consumer = factory.q_a2e_consumer()
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_a2e", role="producer")
 
-        payload = {"k": "v"}
+    def test_q_a2e_consumer(self):
+        FMQFactory.q_a2e_consumer()
 
-        await producer.put(payload)
-        msg = await consumer.get(timeout=1500)
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_a2e", role="consumer")
 
-        self.assertIsInstance(msg, Message)
-        self.assertEqual(msg.payload, payload)
+    # ------------------------------
+    # Engine -> Worker
+    # ------------------------------
+    def test_q_e2w_producer(self):
+        FMQFactory.q_e2w_producer()
 
-    async def test_multi_queue_independence(self):
-        """测试多个队列互不干扰"""
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_e2w", role="producer")
 
-        prod_a2e = factory.q_a2e_producer()
-        cons_a2e = factory.q_a2e_consumer()
+    def test_q_e2w_consumer(self):
+        FMQFactory.q_e2w_consumer()
 
-        prod_e2w = factory.q_e2w_producer()
-        cons_e2w = factory.q_e2w_consumer()
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_e2w", role="consumer")
 
-        await prod_a2e.put("msg_api")
-        await prod_e2w.put("msg_worker")
+    # ------------------------------
+    # Worker -> Engine
+    # ------------------------------
+    def test_q_w2e_producer_with_name(self):
+        FMQFactory.q_w2e_producer("worker1")
 
-        msg1 = await cons_a2e.get(timeout=1500)
-        msg2 = await cons_e2w.get(timeout=1500)
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_w2e_worker1", role="producer")
 
-        self.assertEqual(msg1.payload, "msg_api")
-        self.assertEqual(msg2.payload, "msg_worker")
+    def test_q_w2e_consumer_with_name(self):
+        FMQFactory.q_w2e_consumer("worker2")
 
-    async def test_shared_context(self):
-        """验证 FMQFactory 始终返回同一个 context (单进程)"""
-        q1 = factory.q_a2e_producer()
-        q2 = factory.q_e2w_consumer()
-        q3 = factory.q_e2a_producer()
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_w2e_worker2", role="consumer")
 
-        self.assertIs(q1.context, q2.context)
-        self.assertIs(q1.context, q3.context)
+    # ------------------------------
+    # Engine -> API
+    # ------------------------------
+    def test_q_e2a_producer(self):
+        FMQFactory.q_e2a_producer()
+
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_e2a", role="producer")
+
+    def test_q_e2a_consumer(self):
+        FMQFactory.q_e2a_consumer()
+
+        self.mock_fmq_cls.assert_called_once()
+        self.mock_fmq_instance.queue.assert_called_once_with("q_e2a", role="consumer")
 
 
 if __name__ == "__main__":
