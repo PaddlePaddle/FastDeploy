@@ -64,6 +64,7 @@ class PrefixCacheManager:
             self.enable_splitwise = 0
         self.splitwise_role = splitwise_role
         self.config = config
+        self.tensor_parallel_size = tensor_parallel_size
         self.cache_config = config.cache_config
         self.speculative_config = config.speculative_config
         self.local_data_parallel_id = local_data_parallel_id
@@ -93,7 +94,7 @@ class PrefixCacheManager:
         self.write_policy = self.cache_config.write_policy
         self.task_write_back_event = {}
         self.task_prefetch_event = {}
-        self.task_prefetch_blocks_ids = {}
+        self.storage_prefetch_block_ids = {}
 
         # gpu cache data structure
         self.gpu_lru_leaf_heap = []
@@ -1031,9 +1032,9 @@ class PrefixCacheManager:
             return None
 
         self.task_prefetch_event[req_id].wait()
-        storage_block_ids = self.task_prefetch_blocks_ids[req_id]
+        storage_block_ids = self.storage_prefetch_block_ids[req_id]
         del self.task_prefetch_event[req_id]
-        del self.task_prefetch_blocks_ids[req_id]
+        del self.storage_prefetch_block_ids[req_id]
         return storage_block_ids
 
     def free_nodes_directly(self, node):
@@ -1881,9 +1882,12 @@ class PrefixCacheManager:
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
                     logger.info(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
-                    self.task_prefetch_blocks_ids[task_id] = block_ids
-                    if task_id in self.task_prefetch_event:
-                        self.task_prefetch_event[task_id].set()
+                    saved_block_ids = self.storage_prefetch_block_ids.get(task_id, [])
+                    saved_block_ids.append(block_ids)
+                    if len(saved_block_ids) == self.tensor_parallel_size:
+                        self.storage_prefetch_block_ids[task_id] = min(saved_block_ids, key=len)
+                        if task_id in self.task_prefetch_event:
+                            self.task_prefetch_event[task_id].set()
                 elif event_type.value == CacheStatus.GPU2STORAGE.value:
                     logger.info(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]

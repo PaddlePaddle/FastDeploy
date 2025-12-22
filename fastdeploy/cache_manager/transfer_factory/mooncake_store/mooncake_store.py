@@ -42,26 +42,54 @@ class MooncakeStoreConfig:
     master_server_addr: str
 
     @staticmethod
-    def load_from_file() -> "MooncakeStoreConfig":
-        """Load the config from a JSON file."""
+    def create() -> "MooncakeStoreConfig":
+        """Load the config from a JSON file or environment variables."""
         file_path = os.getenv("MOONCAKE_CONFIG_PATH")
-        if file_path is None:
-            raise ValueError("The environment variable 'MOONCAKE_CONFIG_PATH' is not set.")
-        with open(file_path) as fin:
-            config = json.load(fin)
+        config = {}
+        if file_path is not None:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File path {file_path} for creating MooncakeStoreConfig does not exist.")
+            with open(file_path) as fin:
+                config = json.load(fin)
+
+            local_hostname = config.get("local_hostname")
+            metadata_server = config.get("metadata_server")
+            global_segment_size = config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE)
+            local_buffer_size = config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE)
+            protocol = config.get("protocol", "rdma")
+            rdma_devices = config.get("rdma_devices", "mlx5_1")
+            master_server_addr = config.get("master_server_addr")
+        else:
+            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME")
+            metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
+            global_segment_size = os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)
+            local_buffer_size = os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)
+            protocol = os.environ.get("MOONCAKE_PROTOCOL", "rdma")
+            rdma_devices = os.environ.get("MOONCAKE_RDMA_DEVICES", "mlx5_1")
+            master_server_addr = os.environ.get("MOONCAKE_MASTER_SERVER_ADDR")
+
         return MooncakeStoreConfig(
-            local_hostname=config.get("local_hostname"),
-            metadata_server=config.get("metadata_server"),
-            global_segment_size=config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE),
-            local_buffer_size=config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE),
-            protocol=config.get("protocol", "rdma"),
-            rdma_devices=config.get("rdma_devices", ""),
-            master_server_addr=config.get("master_server_addr"),
+            local_hostname=local_hostname,
+            metadata_server=metadata_server,
+            global_segment_size=global_segment_size,
+            local_buffer_size=local_buffer_size,
+            protocol=protocol,
+            rdma_devices=rdma_devices,
+            master_server_addr=master_server_addr,
         )
+
+    def select_rdma_device(self, tp_rank):
+        """Select RDMA device based on rank number."""
+        device_list = self.rdma_devices.split(",")
+        device_index = tp_rank % len(device_list)
+        self.rdma_devices = device_list[device_index]
 
 
 class MooncakeStore(KVCacheStorage):
-    def __init__(self):
+    def __init__(self, tp_rank=None):
+        super().__init__()
+        self.tp_rank = tp_rank
+
         try:
             from mooncake.store import MooncakeDistributedStore
         except ImportError as e:
@@ -73,7 +101,9 @@ class MooncakeStore(KVCacheStorage):
 
         try:
             self.store = MooncakeDistributedStore()
-            self.config = MooncakeStoreConfig.load_from_file()
+            self.config = MooncakeStoreConfig.create()
+            if self.tp_rank is not None:
+                self.config.select_rdma_device(self.tp_rank)
             logger.info(f"Mooncake Configuration loaded, {self.config}.")
 
             ret_code = self.store.setup(

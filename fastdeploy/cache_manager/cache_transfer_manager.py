@@ -58,7 +58,7 @@ def parse_args():
         default="mixed",
         help="splitwise role, can be decode, prefill or mixed",
     )
-    parser.add_argument("--rank", type=int, default=0, help="current rank")
+    parser.add_argument("--rank", type=int, default=0, help="local tp rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--max_model_len", type=int, default=32768, help="max model length")
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
@@ -220,7 +220,7 @@ class CacheTransferManager:
             self.storage_backend = None
         elif args.kvcache_storage_backend == "mooncake":
             logger.info("Start initialize mooncake store...")
-            self.storage_backend = MooncakeStore()
+            self.storage_backend = MooncakeStore(tp_rank=self.rank)
             self._init_storage_buffer(args)
             logger.info("Initialized mooncake store successfully")
         else:
