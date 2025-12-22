@@ -18,6 +18,9 @@ import importlib
 import subprocess
 
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_logger
+
+logger = get_logger("cache_messager", "cache_messager.log")
 
 
 def get_rdma_nics():
@@ -34,8 +37,8 @@ def get_rdma_nics():
         text=True,
         check=False,
     )
-    print(f"get_rdma_nics command: {command}")
-    print(f"get_rdma_nics output: {result.stdout}")
+    logger.info(f"get_rdma_nics command: {command}")
+    logger.info(f"get_rdma_nics output: {result.stdout}")
     if result.returncode != 0:
         raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
 

@@ -260,6 +260,10 @@ class PrefixCacheManager:
             else:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+        if cache_config.kvcache_storage_backend:
+            kvcache_storage_backend_str = cache_config.kvcache_storage_backend
+        else:
+            kvcache_storage_backend_str = "none"
 
         for i in range(tensor_parallel_size):
             launch_cmd = (
@@ -288,7 +292,7 @@ class PrefixCacheManager:
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + f" --default_dtype '{self.config.model_config.dtype}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+                + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
                 + f" --write_policy {cache_config.write_policy}"
                 + f" --max_model_len {self.config.model_config.max_model_len}"
                 + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"

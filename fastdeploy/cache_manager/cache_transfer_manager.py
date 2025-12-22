@@ -109,7 +109,7 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         default=None,
-        choices=["mooncake"],
+        choices=["mooncake", "none"],
         help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
@@ -216,7 +216,7 @@ class CacheTransferManager:
             create=False,
         )
 
-        if args.kvcache_storage_backend is None:
+        if args.kvcache_storage_backend is None or args.kvcache_storage_backend == "none":
             self.storage_backend = None
         elif args.kvcache_storage_backend == "mooncake":
             logger.info("Start initialize mooncake store...")
