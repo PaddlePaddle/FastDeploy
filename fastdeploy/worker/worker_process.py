@@ -421,8 +421,8 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                    if self.ranks > 1:
-                        self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                if self.ranks > 1:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -458,14 +458,18 @@ class PaddleDisWorkerProc:
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
+                        self.parallel_config.shutdown_comm_group_if_worker_idle,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
-                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                        time.sleep(0.01)
-                    continue
+
+                    # 只有不关闭通信组时，清理权重后需要额外等待（否则信号量会同步混乱）
+                    if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                        while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                            time.sleep(0.01)
+                        continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -881,6 +885,12 @@ def parse_args():
         type=json.loads,
         default=None,
         help="Configation of Rollout Routing Replay.",
+    )
+
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
     )
 
     args = parser.parse_args()
