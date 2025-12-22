@@ -345,7 +345,8 @@ class XPUMoEMethod(MoEMethodBase):
             layer.top_k,
             True,
         )
-        token_nums_per_expert_list = list(range(64))  # placeholder, not use
+        # token_nums_per_expert_list = list(range(64))  # placeholder, not use
+        token_nums_per_expert_list = list(range(layer.num_local_experts))
         (
             permute_input,
             permute_indices_per_token,
