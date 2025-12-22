@@ -67,7 +67,8 @@ def get_model_config(model: str, model_config_name: Optional[str] = "config.json
     """
     config_path = os.path.join(model, model_config_name)
     if os.path.exists(config_path):
-        model_config = json.load(open(config_path, "r", encoding="utf-8"))
+        with open(config_path, "r", encoding="utf-8") as f:
+            model_config = json.load(f)
         return model_config
     raise Exception(f"Failed to read model configuration from {config_path}")
 
