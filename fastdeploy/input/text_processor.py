@@ -435,7 +435,7 @@ class DataProcessor(BaseDataProcessor):
                 )
                 setattr(response_obj.outputs, "text", text)
                 setattr(response_obj.outputs, "reasoning_content", reasoning_content)
-                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
                 setattr(response_obj.outputs, "reasoning_token_num", len(reasoning_tokens))
             if self.tool_parser_obj:
                 setattr(response_obj.outputs, "enable_parser", True)
