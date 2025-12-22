@@ -50,7 +50,18 @@ def custom_ar_clear_ipc_handles():
 
 try:
 
-    @paddle.jit.marker.unified
+    def tensor_model_parallel_all_reduce_infer_meta(x: paddle.static.MetaTensor, group_) -> paddle.static.MetaTensor:
+        return paddle.static.MetaTensor(shape=x.shape, dtype=x.dtype)
+
+    @paddle.static.register_op(
+        name="tensor_model_parallel_all_reduce",
+        infer_meta=tensor_model_parallel_all_reduce_infer_meta,
+        input_names=[
+            "input_",
+        ],
+        output_names=["out"],
+        inplace_map={},
+    )
     def tensor_model_parallel_all_reduce(
         input_: paddle.Tensor,
         group_: paddle.distributed.communication.group.Group = None,
