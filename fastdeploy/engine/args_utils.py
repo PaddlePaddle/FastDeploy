@@ -105,7 +105,9 @@ class EngineArgs:
     """
     max_model_len: int = None
     """
-    Maximum context length supported by the model.
+    Maximum context length supported by the model. If set to ``None``,
+    the value will be automatically determined from the model configuration
+    during ``__post_init__``.
     """
     tensor_parallel_size: int = 1
     """
