@@ -1,19 +1,27 @@
 name: CI_METAX
 
 on:
-  workflow_dispatch:
   pull_request:
-    types: [opened, reopened]
+    branches:
+      - develop
+      - 'release/*'
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  workflow_dispatch:
 
 jobs:
-  metax-ci-job:
+  CI_METAX:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger jenkins job
+        env:
+          USER: ${{ secrets.METAX_JENKINS_USER }}
+          TOKEN: ${{ secrets.METAX_JENKINS_API_TOKEN }}
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.0
         with:
           job_name: paddle_fastdeploy_metax_smoketest
-          username: ${{ secrets.METAX_JENKINS_USER }}
-          api_token: ${{ secrets.METAX_JENKINS_API_TOKEN }}
+          username: ${{USER}}
+          api_token: ${{TOKEN}}
           pr_num: ${{ github.event.pull_request.number }}
           project_branch: "develop"
