@@ -2770,7 +2770,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
         # Clear parameters and Send single
-        self.dynamic_weight_manager.clear_parameters(pid)
+        self.dynamic_weight_manager.clear_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
@@ -2787,7 +2789,9 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(pid)
+        self.dynamic_weight_manager.update_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:
