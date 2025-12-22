@@ -2,13 +2,9 @@ name: CI_METAX
 
 on:
   pull_request:
-    branches:
-      - develop
-      - 'release/*'
-    paths-ignore:
-      - '**.md'
-      - '**.txt'
-  workflow_dispatch:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+permissions: read-all
 
 jobs:
   CI_METAX:
@@ -21,7 +17,7 @@ jobs:
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.0
         with:
           job_name: paddle_fastdeploy_metax_smoketest
-          username: ${{USER}}
-          api_token: ${{TOKEN}}
+          username: ${{env.USERE}
+          api_token: ${{env.TOKEN}}
           pr_num: ${{ github.event.pull_request.number }}
           project_branch: "develop"
