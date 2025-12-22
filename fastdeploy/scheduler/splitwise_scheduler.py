@@ -33,7 +33,7 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
 )
-from fastdeploy.utils import scheduler_logger as logger
+from fastdeploy.utils import llm_logger as logger
 
 
 class SplitWiseSchedulerConfig:

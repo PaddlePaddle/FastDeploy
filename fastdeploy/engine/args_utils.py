@@ -61,14 +61,15 @@ def nullable_str(x: str) -> Optional[str]:
     return x if x else None
 
 
-def get_model_architecture(model: str, model_config_name: Optional[str] = "config.json") -> Optional[str]:
+def get_model_config(model: str, model_config_name: Optional[str] = "config.json") -> Optional[dict]:
+    """
+    Load configuration information from model config
+    """
     config_path = os.path.join(model, model_config_name)
     if os.path.exists(config_path):
         model_config = json.load(open(config_path, "r", encoding="utf-8"))
-        architecture = model_config["architectures"][0]
-        return architecture
-    else:
-        return model
+        return model_config
+    raise Exception(f"Failed to read model configuration from {config_path}")
 
 
 @dataclass
@@ -102,7 +103,7 @@ class EngineArgs:
     """
     The base URL of the remote tokenizer service (used instead of local tokenizer if provided).
     """
-    max_model_len: int = 2048
+    max_model_len: int = None
     """
     Maximum context length supported by the model.
     """
@@ -509,10 +510,23 @@ class EngineArgs:
     Whether to skip port availability check. Default is False (not skip).
     """
 
+    enable_port_search: bool = False
+    """
+    Whether to enable searching available ports
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+        model_cfg = get_model_config(self.model, self.model_config_name)
+        if self.max_model_len is None:
+            self.max_model_len = (
+                model_cfg.get("context_len")
+                or model_cfg.get("max_model_len")
+                or model_cfg.get("max_position_embeddings")
+                or 2048
+            )
 
         if not self.tokenizer:
             self.tokenizer = self.model
@@ -549,10 +563,11 @@ class EngineArgs:
         ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
-        if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
+        if "PaddleOCR" in model_cfg["architectures"][0]:
             envs.FD_ENABLE_MAX_PREFILL = 1
 
-        self.post_init_all_ports()
+        if self.enable_port_search:
+            self.post_init_all_ports()
 
     def post_init_all_ports(self):
 
@@ -1224,7 +1239,9 @@ class EngineArgs:
         return parser
 
     @classmethod
-    def from_cli_args(cls, args: FlexibleArgumentParser, skip_port_check=False) -> "EngineArgs":
+    def from_cli_args(
+        cls, args: FlexibleArgumentParser, skip_port_check=False, enable_port_search=False
+    ) -> "EngineArgs":
         """
         Create an instance of EngineArgs from command line arguments.
         """
@@ -1232,7 +1249,7 @@ class EngineArgs:
         for field in dataclass_fields(cls):
             if hasattr(args, field.name):
                 args_dict[field.name] = getattr(args, field.name)
-        return cls(**args_dict, skip_port_check=skip_port_check)
+        return cls(**args_dict, skip_port_check=skip_port_check, enable_port_search=enable_port_search)
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """

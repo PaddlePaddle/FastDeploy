@@ -185,6 +185,9 @@ class FastDeployLogger:
         formatter = ColoredFormatter(
             "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
         )
+        # Use more simple format for console log
+        if print_to_console:
+            formatter = ColoredFormatter("%(levelname)-4s %(asctime)s %(message)s")
 
         # 清除现有的handlers（保持原有逻辑）
         for handler in logger.handlers[:]:

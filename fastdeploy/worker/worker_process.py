@@ -63,7 +63,7 @@ from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
-logger = get_logger("worker_process", "worker_process.log")
+logger = None
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
@@ -1036,6 +1036,8 @@ def run_worker_proc() -> None:
     args = parse_args()
 
     ranks, local_rank = init_distributed_environment()
+    global logger
+    logger = get_logger("worker_process", f"worker_process.{local_rank}.log")
 
     # Get fd_config
     fd_config = initialize_fd_config(args, ranks, local_rank)

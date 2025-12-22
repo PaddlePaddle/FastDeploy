@@ -28,7 +28,7 @@ import zmq
 import zmq.asyncio
 
 from fastdeploy import envs
-from fastdeploy.utils import fmq_logger
+from fastdeploy.utils import llm_logger
 
 # ==========================
 # Config & Enum Definitions
@@ -103,8 +103,8 @@ class EndpointManager:
                     if value is not None:
                         setattr(cls.config, key, value)
             except Exception as e:
-                fmq_logger.error(f"Failed to load FMQ config: {e}")
-        fmq_logger.info(f"Loaded FMQ config: {cls.config}")
+                llm_logger.error(f"Failed to load FMQ config: {e}")
+        llm_logger.info(f"Loaded FMQ config: {cls.config}")
 
     @classmethod
     def get_endpoint(cls, name: str) -> Endpoint:
@@ -214,7 +214,7 @@ class Queue(BaseComponent):
         else:
             self.socket.bind(full_ep)
 
-        fmq_logger.info(f"Queue {name} initialized on {full_ep}")
+        llm_logger.info(f"Queue {name} initialized on {full_ep}")
 
     async def put(self, data: Any, shm_threshold: int = 1024 * 1024):
         """
@@ -257,7 +257,7 @@ class Queue(BaseComponent):
             else:
                 raw = await self.socket.recv(copy=self.copy)
         except asyncio.TimeoutError:
-            fmq_logger.error(f"Timeout receiving message on {self.name}")
+            llm_logger.error(f"Timeout receiving message on {self.name}")
             return None
 
         msg = Message.deserialize(raw)

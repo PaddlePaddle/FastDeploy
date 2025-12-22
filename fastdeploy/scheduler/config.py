@@ -16,9 +16,7 @@
 
 import redis
 
-from fastdeploy.utils import get_logger, llm_logger
-
-config_logger = get_logger("config", "config.log")
+from fastdeploy.utils import llm_logger
 
 from .dp_scheduler import DPScheduler
 from .global_scheduler import GlobalScheduler
@@ -86,10 +84,10 @@ class LocalSchedulerConfig:
         """
         Print the current configuration to logs.
         """
-        config_logger.info("LocalScheduler Configuration Information :")
+        llm_logger.ginfo("LocalScheduler Configuration Information :")
         for k, v in self.__dict__.items():
-            config_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        config_logger.info("=============================================================")
+            llm_logger.ginfo("{:<20}:{:<6}{}".format(k, "", v))
+        llm_logger.ginfo("=============================================================")
 
 
 class DPLocalSchedulerConfig(LocalSchedulerConfig):

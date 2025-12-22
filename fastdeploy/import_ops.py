@@ -40,10 +40,10 @@ def import_custom_ops(package, module_name, global_ns):
             try:
                 global_ns[func_name] = func
             except Exception as e:
-                logger.warning(f"Failed to import op {func_name}: {e}")
+                logger.debug(f"Failed to import op {func_name}: {e}")
 
     except Exception:
-        logger.warning(f"Ops of {package} import failed, it may be not compiled.")
+        logger.debug(f"Ops of {package} import failed, it may be not compiled.")
 
     preprocess_static_op(global_ns)
 
@@ -87,7 +87,7 @@ def wrap_unified_op(original_cpp_ext_op, original_custom_op):
 
     except:
         unified_op = None
-        logger.warning("Paddle version not support JIT mode.")
+        logger.debug("Paddle version not support JIT mode.")
     return unified_op
 
 
