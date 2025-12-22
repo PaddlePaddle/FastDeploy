@@ -41,15 +41,14 @@ def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
 
     if allowed_plugins is None:
         logger.info(
-            "All plugins in this group will be loaded. " "You can set `FD_PLUGINS` to control which plugins to load."
+            "All plugins in this group is not allowed. " "You can set `FD_PLUGINS` to control which plugins to load."
         )
+        return {}
 
     plugins = dict[str, Callable[[], Any]]()
     for plugin in discovered_plugins:
-        if allowed_plugins is None or plugin.name in allowed_plugins:
-            if allowed_plugins is not None:
-                logger.info("Loading plugin %s", plugin.name)
-
+        if plugin.name in allowed_plugins:
+            logger.info("Loading plugin %s", plugin.name)
             try:
                 func = plugin.load()
                 plugins[plugin.name] = func

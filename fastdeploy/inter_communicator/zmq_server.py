@@ -191,7 +191,7 @@ class ZmqServerBase(ABC):
             return str(e), None
 
     def recv_result_handle(self):
-        while True:
+        while self.running:
             try:
                 with self.response_token_lock:
                     client, _, request_id = self.socket.recv_multipart(flags=zmq.NOBLOCK)

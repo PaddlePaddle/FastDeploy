@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import copy
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -31,7 +30,12 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    PromptLogprobs,
+    SampleLogprobs,
+    SpeculateMetrics,
+)
 
 
 class RequestStatus(Enum):
@@ -67,14 +71,8 @@ class Request:
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
         eos_token_ids: Optional[list[int]],
-        arrival_time: float,
         sampling_params: Optional[SamplingParams] = None,
         pooling_params: Optional[PoolingParams] = None,
-        preprocess_start_time: Optional[float] = None,
-        preprocess_end_time: Optional[float] = None,
-        schedule_start_time: Optional[float] = None,
-        inference_start_time: Optional[float] = None,
-        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -102,6 +100,7 @@ class Request:
         num_computed_tokens: int = 0,
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
+        metrics: Optional[RequestMetrics] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -116,13 +115,6 @@ class Request:
         # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
         self.num_cached_tokens = 0
-
-        self.arrival_time = arrival_time
-        self.preprocess_start_time = preprocess_start_time
-        self.preprocess_end_time = preprocess_end_time
-        self.schedule_start_time = schedule_start_time
-        self.inference_start_time = inference_start_time
-        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -171,22 +163,37 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
-        self.llm_engine_recv_req_timestamp = time.time()
         self.ic_req_data = ic_req_data
 
         self.async_process_futures = []
         self.error_message = None
         self.error_code = None
 
+        if metrics is None:
+            self.metrics = RequestMetrics()
+        else:
+            self.metrics = metrics
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
+        metrics: RequestMetrics = None
         if "pooling_params" in d and d["pooling_params"] is not None:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        logprobs = d.get("logprobs", None)
+        if logprobs is not None:
+            if logprobs is True:
+                sampling_params.logprobs = d.get("top_logprobs", None)
+            elif logprobs is False:
+                sampling_params.logprobs = None
+        if "metrics" in d and d["metrics"] is not None:
+            metrics = RequestMetrics.from_dict(d["metrics"])
+        else:
+            metrics = RequestMetrics.from_dict(d)
 
         if (
             isinstance(d.get("multimodal_inputs"), dict)
@@ -215,9 +222,6 @@ class Request:
             sampling_params=sampling_params,
             pooling_params=pooling_params,
             eos_token_ids=d.get("eos_token_ids"),
-            arrival_time=d.get("arrival_time", time.time()),
-            preprocess_start_time=d.get("preprocess_start_time"),
-            preprocess_end_time=d.get("preprocess_end_time"),
             multimodal_inputs=d.get("multimodal_inputs"),
             multimodal_data=d.get("multimodal_data"),
             disable_chat_template=d.get("disable_chat_template"),
@@ -244,8 +248,7 @@ class Request:
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
             ic_req_data=d.get("ic_req_data", None),
-            inference_start_time=d.get("inference_start_time"),
-            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
+            metrics=metrics,
         )
 
     @property
@@ -254,6 +257,22 @@ class Request:
         Total tokens of the request, include prompt tokens and generated tokens.
         """
         return self.prompt_token_ids_len + len(self.output_token_ids)
+
+    def __getstate__(self):
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+        # Create a filtered dictionary without problematic attributes
+        filtered_dict = {}
+        for key, value in self.__dict__.items():
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
+                filtered_dict[key] = []
+            else:
+                filtered_dict[key] = value
+
+        return filtered_dict
 
     def __eq__(self, other):
         """
@@ -265,20 +284,6 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
-        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
-        if (
-            isinstance(multimodal_inputs, dict)
-            and isinstance(multimodal_inputs.get("mm_positions"), list)
-            and len(multimodal_inputs["mm_positions"]) > 0
-        ):
-            # if mm_positions is ImagePosition, convert to dict
-            try:
-                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
-                    multimodal_inputs["mm_positions"][i] = (
-                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
-                    )
-            except Exception as e:
-                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
 
         data = {
             "request_id": self.request_id,
@@ -290,10 +295,6 @@ class Request:
             "history": self.history,
             "tools": self.tools,
             "eos_token_ids": self.eos_token_ids,
-            "arrival_time": self.arrival_time,
-            "preprocess_start_time": self.preprocess_start_time,
-            "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -313,6 +314,21 @@ class Request:
             "audio_end": self.audio_end,
             "ic_req_data": self.ic_req_data,
         }
+
+        # During multimodal PD separation, position_ids are required
+        if isinstance(self.multimodal_inputs, dict):
+            # Optimize multimodal data transfer during PD separation:
+            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): Only position_ids needed for decode nodes
+            # - V0 mode (ENABLE_V1_KVCACHE_SCHEDULER=0): Full field set required for compatibility
+            # This filtering significantly reduces serialized data size for large numpy arrays
+            allowed_keys = {"position_ids"}
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
+
+            data["multimodal_inputs"] = {
+                key: value for key, value in self.multimodal_inputs.items() if key in allowed_keys
+            }
+
         add_params = [
             "guided_json",
             "guided_regex",
@@ -326,6 +342,7 @@ class Request:
                 data[param] = getattr(self, param)
 
         data.update(asdict(self.sampling_params))
+        data.update(asdict(self.metrics))
         return data
 
     def get(self, key: str, default_value=None):
@@ -380,7 +397,9 @@ class CompletionOutput:
     draft_token_ids: list[int] = None
     text: Optional[str] = None
     reasoning_content: Optional[str] = None
+    reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
     def to_dict(self):
         """
@@ -398,6 +417,7 @@ class CompletionOutput:
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
             "reasoning_content": self.reasoning_content,
+            "reasoning_token_num": self.reasoning_token_num,
         }
 
     @classmethod
@@ -419,6 +439,7 @@ class CompletionOutput:
             f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
+            f"reasoning_token_num={self.reasoning_token_num}, "
             f"logprobs={self.logprobs}, "
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
@@ -431,8 +452,22 @@ class RequestMetrics:
 
     Attributes:
         arrival_time: The time when the request arrived.
-        inference_start_time: The time when the inference started.
-        first_token_time: The time when the first token was generated.
+        preprocess_start_time: The time when the preprocess started.
+        preprocess_end_time: The time when the preprocess ended.
+        scheduler_recv_req_time: The time when the scheduler received the request.
+        engine_get_req_time: The time when the engine got the request.
+        ask_decode_resource_start_time: The time when the engine asks for decode resource.
+        ask_decode_resource_finish_time: The time when the engine has asked for decode resource.
+        inference_start_time: The time when engine adds request to the running queue in resource manager.
+        wait_for_sending_cache_time: The time when the engine waited for sending cache.
+        send_request_output_to_decode_time: The time when the engine sent request_output to decode.
+        decode_recv_req_time: The time when the decode received the request.
+        decode_preallocate_req_time: The time when the decode has preallocated resource for the request.
+        decode_recv_first_token_time: The time when the decode received the first token.
+        decode_inference_start_time: The time when the decode sent the request to worker.
+        decode_recv_second_token_time: The time when the decode received the second token.
+
+        first_token_time: The cost time between engine_recv_first_token_time and inference_start_time
         time_in_queue: The time the request spent in the queue.
         model_forward_time: The time spent in the model forward pass when this
                             request was in the batch.
@@ -443,35 +478,53 @@ class RequestMetrics:
 
     """
 
-    arrival_time: float
-    inference_start_time: Optional[float] = None
+    arrival_time: Optional[float] = None  # api server receives request
+    preprocess_start_time: Optional[float] = None  # preprocess start time in api server
+    preprocess_end_time: Optional[float] = None  # preprocess end time in api server
+
+    scheduler_recv_req_time: Optional[float] = None  # scheduler receives request and add to scheduler
+    engine_get_req_time: Optional[float] = None  # engine gets request from scheduler
+    ask_decode_resource_start_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
+    ask_decode_resource_finish_time: Optional[float] = None  # engine has got decode resource (only valid for prefill)
+    add_req_to_resource_manager_time: Optional[float] = None  # engine adds request to resource manager
+    inference_start_time: Optional[float] = None  # requests are added into the engine work queue
+    engine_recv_latest_token_time: Optional[float] = None  # receive the latest token from worker
+    engine_recv_first_token_time: Optional[float] = None  # receive first token from worker
+    wait_for_sending_cache_time: Optional[float] = None  # wait for sending cache (only valid for prefill)
+    send_request_output_to_decode_time: Optional[float] = (
+        None  # send request_output to worker (only valid for prefill)
+    )
+
+    decode_recv_req_time: Optional[float] = None  # decode receive request from prefill (only valid for decode)
+    decode_preallocate_req_time: Optional[float] = (
+        None  # decode has preallocatee resource for req (only valid for decode)
+    )
+    decode_recv_first_token_time: Optional[float] = (
+        None  # decode receive request_output with first token from prefill (only valid for decode)
+    )
+    decode_inference_start_time: Optional[float] = (
+        None  # decode adds request to the engine work queue (only valid for decode)
+    )
+    decode_recv_second_token_time: Optional[float] = (
+        None  # decode receives the second token from worker (only valid for decode)
+    )
+
     first_token_time: Optional[float] = None
     time_in_queue: Optional[float] = None
     preprocess_cost_time: Optional[float] = None
     model_forward_time: Optional[float] = None
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
+
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
-    llm_engine_recv_token_timestamp: Optional[float] = None
+    llm_engine_recv_latest_token_timestamp: Optional[float] = None
 
-    def to_dict(self):
-        """
-        Convert the RequestMetrics object to a dictionary.
-        """
-        return {
-            "arrival_time": self.arrival_time,
-            "inference_start_time": self.inference_start_time,
-            "first_token_time": self.first_token_time,
-            "time_in_queue": self.time_in_queue,
-            "preprocess_cost_time": self.preprocess_cost_time,
-            "model_forward_time": self.model_forward_time,
-            "model_execute_time": self.model_execute_time,
-            "request_start_time": self.request_start_time,
-            "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
-            "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
-            "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
-        }
+    speculate_metrics: Optional[SpeculateMetrics] = None
+
+    def __post_init__(self):
+        if self.arrival_time is None:
+            self.arrival_time = time.time()
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> RequestMetrics:
@@ -482,6 +535,50 @@ class RequestMetrics:
                 for field in fields(cls)
             }
         )
+
+    def to_dict(self):
+        """
+        Convert the RequestMetrics object to a dictionary.
+        """
+        return {k: v for k, v in asdict(self).items()}
+
+    def record_recv_first_token(self):
+        cur_time = time.time()
+        self.record_recv_token(cur_time)
+        self.engine_recv_first_token_time = cur_time
+
+    def record_recv_token(self, cur_time: float = None):
+        cur_time = time.time() if cur_time is None else cur_time
+        self.engine_recv_latest_token_time = cur_time
+        self.llm_engine_recv_latest_token_timestamp = cur_time
+        self.model_execute_time = cur_time - self.arrival_time
+        if self.inference_start_time:
+            self.model_forward_time = cur_time - self.inference_start_time
+
+    def record_decode_recv_second_token(self):
+        cur_time = time.time()
+        self.record_recv_token(cur_time)
+        self.decode_recv_second_token_time = cur_time
+
+    def get_inference_start_time(self, is_decode: bool):
+        if is_decode:
+            return self.decode_inference_start_time
+        else:
+            return self.inference_start_time
+
+    def cal_cost_time(self):
+        """Calculates various timing metrics based on the recorded times"""
+        if self.engine_recv_first_token_time and self.inference_start_time:
+            self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
+        if self.inference_start_time and self.preprocess_end_time:
+            self.time_in_queue = self.inference_start_time - self.preprocess_end_time
+        if self.preprocess_end_time and self.preprocess_start_time:
+            self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
+        self.request_start_time = self.arrival_time
+
+        # for compatibility with old metrics
+        self.llm_engine_recv_req_timestamp = self.engine_get_req_time
+        self.llm_engine_send_req_to_engine_timestamp = self.inference_start_time
 
 
 class RequestOutput:
@@ -527,6 +624,7 @@ class RequestOutput:
         # for internal adapter
         ic_req_data: Optional[dict] = None,
         prompt_token_ids_len: Optional[int] = 0,
+        trace_carrier: dict = dict(),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -543,6 +641,7 @@ class RequestOutput:
         self.error_msg = error_msg
         self.ic_req_data = ic_req_data
         self.prompt_token_ids_len = prompt_token_ids_len
+        self.trace_carrier = trace_carrier
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -557,10 +656,12 @@ class RequestOutput:
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
 
-        if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
-            self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
-        if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
-            self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        if next_output.metrics.model_forward_time is not None:
+            self.metrics.model_forward_time = next_output.metrics.model_forward_time
+        if next_output.metrics.model_execute_time is not None:
+            self.metrics.model_execute_time = next_output.metrics.model_execute_time
+        if next_output.metrics.engine_recv_latest_token_time is not None:
+            self.metrics.engine_recv_latest_token_time = next_output.metrics.engine_recv_latest_token_time
         if next_output.outputs.top_logprobs is not None:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
@@ -573,6 +674,8 @@ class RequestOutput:
             self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
                 next_output.outputs.draft_top_logprobs.sampled_token_ranks
             )
+        if next_output.metrics.speculate_metrics is not None:
+            self.outputs.speculate_metrics = next_output.metrics.speculate_metrics
 
     def __repr__(self) -> str:
         return (
@@ -589,14 +692,24 @@ class RequestOutput:
             f"metrics={self.metrics}, "
             f"error_code={self.error_code}, "
             f"error_msg={self.error_msg},"
+            f"trace_carrier={self.trace_carrier}"
         )
 
     @classmethod
     def from_dict(cls, d: dict):
         """Create instance from dict arguments"""
-        completion_output = CompletionOutput.from_dict(d.pop("outputs"))
-        metrics = RequestMetrics.from_dict(d.pop("metrics"))
-        return RequestOutput(**d, outputs=completion_output, metrics=metrics)
+        if "outputs" in d and isinstance(d["outputs"], dict):
+            completion_output = CompletionOutput.from_dict(d.pop("outputs"))
+        else:
+            d.pop("outputs", None)
+            completion_output = None
+        if "metrics" in d and isinstance(d["metrics"], dict):
+            metrics = RequestMetrics.from_dict(d.pop("metrics"))
+        else:
+            d.pop("metrics", None)
+            metrics = None
+        trace_carrier = d.pop("trace_carrier", {})
+        return RequestOutput(**d, outputs=completion_output, metrics=metrics, trace_carrier=trace_carrier)
 
     def to_dict(self):
         """convert RequestOutput into a serializable dict"""
@@ -617,6 +730,7 @@ class RequestOutput:
             "error_msg": self.error_msg,
             "ic_req_data": self.ic_req_data,
             "prompt_token_ids_len": self.prompt_token_ids_len,
+            "trace_carrier": self.trace_carrier,
         }
 
 

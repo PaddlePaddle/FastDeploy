@@ -90,7 +90,7 @@ class MockAttentionBackend:
 
 
 class MockQuantMethod:
-    def apply(self, layer, x, gate):
+    def apply(self, layer, x, gate, topk_ids_hookfunc=None):
         return x
 
 
@@ -129,6 +129,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.speculative_decoding = False
         model_runner._init_share_inputs(mock_fd_config.scheduler_config.max_num_seqs)
         model_runner.share_inputs["caches"] = None
+        model_runner.routing_replay_manager = None
 
         if dist.get_rank() == 0:
             model_runner.share_inputs["ids_remove_padding"] = paddle.ones([10])
@@ -148,6 +149,7 @@ class TestChunkedMoE(unittest.TestCase):
 
         fused_moe.fd_config = mock_fd_config
         fused_moe.quant_method = MockQuantMethod()
+        fused_moe.enable_routing_replay = None
         return fused_moe
 
     def run_model_runner(self):

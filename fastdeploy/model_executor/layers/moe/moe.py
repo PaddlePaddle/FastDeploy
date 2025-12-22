@@ -14,7 +14,8 @@
 # limitations under the License.
 """
 
-from typing import Optional
+from functools import partial
+from typing import Callable, Optional
 
 import paddle
 from paddle import nn
@@ -26,6 +27,9 @@ from fastdeploy.distributed.communication import (
     tensor_model_parallel_all_reduce_custom,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    save_routing_to_buffer,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
@@ -38,7 +42,7 @@ except:
 import numpy as np
 
 
-def get_moe_method():
+def get_moe_method(layer=None):
     """
     return moe method based on device platform
     """
@@ -50,7 +54,7 @@ def get_moe_method():
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
-        return XPUMoEMethod(None)
+        return XPUMoEMethod(None, layer)
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
@@ -60,7 +64,6 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import HpuMoEMethod
 
         return HpuMoEMethod(None)
-        # return HpuTensorWiseFP8MoEMethod(None)
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
@@ -209,8 +212,10 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
-        self.is_quantized = fd_config.model_config.is_quantized and not (
-            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        self.is_moe_quantized = getattr(self.fd_config.model_config, "is_moe_quantized", False)
+        self.is_quantized = self.is_moe_quantized or (
+            fd_config.model_config.is_quantized
+            and not (fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None)
         )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
@@ -220,13 +225,13 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # unquantized quant_method
-            self.quant_method = get_moe_method()
+            self.quant_method = get_moe_method(self)
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         self.is_rearrange = False
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
-
+        self.enable_routing_replay = fd_config.routing_replay_config.enable_routing_replay
         # Merge normal and RL build model
         if gate_correction_bias is not None:
             self.gate_correction_bias = gate_correction_bias
@@ -270,10 +275,13 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+
+        if self.ep_size > 1 or weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
@@ -289,7 +297,6 @@ class FusedMoE(nn.Layer):
                 self.weight_loader(param, loaded_weight_shard, expert_id, shard_id, "fused")
         else:
             if weight_need_transpose and source != "fused":
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # 2.gate up splited in disk
             assert shard_id in ["gate", "down", "up"]
@@ -600,7 +607,7 @@ class FusedMoE(nn.Layer):
         else:
             self.quant_method.process_loaded_weights(self, state_dict)
 
-    def forward_split_allgather(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward_split_allgather(self, x: paddle.Tensor, gate: nn.Layer, topk_ids_hookfunc: Callable = None):
         """
         Forward split allgather function.
         """
@@ -615,14 +622,14 @@ class FusedMoE(nn.Layer):
         if end_offset > token_num:
             end_offset = token_num
         part_x[: (end_offset - start_offset), :] = x[start_offset:end_offset, :]
-        out = self.quant_method.apply(self, part_x, gate)
+        out = self.quant_method.apply(self, part_x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
         multi_outs = paddle.zeros([token_num_per_rank * self.attn_tp_size, x.shape[1]], dtype=x.dtype)
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         out = multi_outs[:token_num, :]
 
         return out
 
-    def forward(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
+    def forward(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta = None):
         """
         Defines the forward computation of the moe layer.
 
@@ -633,6 +640,21 @@ class FusedMoE(nn.Layer):
             Tensor: Output tensor.s
 
         """
+        topk_ids_hookfunc = None
+        if self.enable_routing_replay:
+            if forward_meta is not None:  # forward_meta is None when execute empty_input_forward
+                topk_ids_hookfunc = partial(
+                    save_routing_to_buffer,
+                    routing_replay_table=forward_meta.routing_replay_table,
+                    batch_id_per_token=forward_meta.batch_id_per_token,
+                    seq_lens_decoder=forward_meta.seq_lens_decoder,
+                    cu_seqlens_q=forward_meta.cu_seqlens_q,
+                    layer_idx=self.layer_idx,
+                    tp_size=self.fd_config.parallel_config.tensor_parallel_size,
+                    ep_size=self.fd_config.parallel_config.expert_parallel_size,
+                    tp_group=self.fd_config.parallel_config.tp_group,
+                )
+
         token_num = x.shape[0]
         if (
             self.ep_size > 1
@@ -640,11 +662,16 @@ class FusedMoE(nn.Layer):
             and (not self.fd_config.parallel_config.use_sequence_parallel_moe)
             and token_num >= self.attn_tp_size
         ):
-            out = self.forward_split_allgather(x, gate)
+            out = self.forward_split_allgather(x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
         elif self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.enable_chunked_moe:
-            out = self.forward_chunked_moe(x, gate, forward_meta)
+            out = self.forward_chunked_moe(
+                x,
+                gate,
+                forward_meta,
+                topk_ids_hookfunc=topk_ids_hookfunc,
+            )
         else:
-            out = self.forward_normal(x, gate)
+            out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
 
         if self.reduce_results and self.tp_size > 1:
             if current_platform.is_intel_hpu():
@@ -653,7 +680,9 @@ class FusedMoE(nn.Layer):
                 out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
-    def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
+    def forward_chunked_moe(
+        self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta, topk_ids_hookfunc: Callable = None
+    ):
         """
         Split input to multi chunk to reduce the memory usage of moe.
 
@@ -677,21 +706,25 @@ class FusedMoE(nn.Layer):
 
             for i in range(forward_meta.max_moe_num_chunk):
                 if i < forward_meta.moe_num_chunk:
-                    out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
+                    out_split_list[i] = self.quant_method.apply(
+                        self, x_split_list[i], gate, topk_ids_hookfunc=topk_ids_hookfunc
+                    )
                 else:
                     # just need to use real data to infer max_moe_num_chunk times.
-                    self.quant_method.apply(self, fake_x, gate)
+                    self.quant_method.apply(self, fake_x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
 
             out = paddle.concat(out_split_list, axis=0)
         else:
             # when only one chunk, just need to use real data to infer once.
-            out = self.quant_method.apply(self, x, gate)
+            out = self.quant_method.apply(self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
             for i in range(forward_meta.max_moe_num_chunk - 1):
-                self.quant_method.apply(self, fake_x, gate)
+                self.quant_method.apply(self, fake_x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
 
         return out
 
-    def forward_normal(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward_normal(
+        self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta, topk_ids_hookfunc: Callable = None
+    ):
         """
         Normal mode of forward.
 
@@ -702,5 +735,5 @@ class FusedMoE(nn.Layer):
             Tensor: Output tensor.s
 
         """
-        out = self.quant_method.apply(self, x, gate)
+        out = self.quant_method.apply(self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
         return out

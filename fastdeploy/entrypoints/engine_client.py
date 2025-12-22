@@ -25,6 +25,7 @@ from http import HTTPStatus
 import numpy as np
 from filelock import FileLock
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
@@ -48,6 +49,7 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    to_tensor,
 )
 
 
@@ -80,13 +82,6 @@ class EngineClient:
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-
-        if self.enable_mm and self.enable_prefix_caching:
-            from fastdeploy.cache_manager.cache_data import (
-                is_mm_model_disable_prefix_cache,
-            )
-
-            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.fd_config.model_config)
 
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
@@ -264,16 +259,6 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
-    def _check_mm_disable_prefix_cache(self, task):
-        is_multimodal_data = False
-        if self.disable_prefix_mm:
-            multimodal_inputs = task.get("multimodal_inputs", [])
-            if multimodal_inputs:
-                token_type_ids = multimodal_inputs.get("token_type_ids", [])
-                if token_type_ids:
-                    is_multimodal_data = np.sum(token_type_ids) > 0
-        return is_multimodal_data
-
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -287,6 +272,8 @@ class EngineClient:
         """
 
         task["preprocess_start_time"] = time.time()
+        request_id = task.get("request_id").split("_")[0]
+        tracing.trace_slice_start(tracing.TraceSpanName.PREPROCESSING, request_id)
         trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
@@ -296,16 +283,6 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
-
-            if self.enable_mm and self.enable_prefix_caching:
-                if self._check_mm_disable_prefix_cache(task):
-                    api_server_logger.error(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
-                    )
-                    raise EngineError(
-                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
-                        error_code=400,
-                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
@@ -375,10 +352,15 @@ class EngineClient:
             else:
                 request_id = parts[0]
                 index = int(parts[1])
+                trace_carrier = tracing.trace_get_proc_propagate_context(request_id)
+                task["trace_carrier"] = trace_carrier
                 for i in range(index * n, (index + 1) * n):
                     child_task = copy(task)
                     child_task["request_id"] = f"{request_id}_{i}"
                     self._send_task(child_task)
+            tracing.trace_slice_end(
+                tracing.TraceSpanName.PREPROCESSING, task.get("request_id").split("_")[0], thread_finish_flag=True
+            )
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
@@ -387,6 +369,8 @@ class EngineClient:
         if not self.enable_mm:
             self.zmq_client.send_json(task)
         else:
+            if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+                to_tensor([task])
             self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):

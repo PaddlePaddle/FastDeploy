@@ -17,7 +17,13 @@
 from __future__ import annotations
 
 import copy
+import json
+import multiprocessing
 import os
+import re
+import signal
+import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -29,8 +35,9 @@ import numpy as np
 import paddle
 import requests
 import zmq
-from opentelemetry import trace
+from tqdm import tqdm
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
@@ -44,7 +51,6 @@ from fastdeploy.inter_communicator import (
     ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
@@ -66,7 +72,7 @@ class EngineService:
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg, start_queue=True):
+    def __init__(self, cfg, start_queue=True, use_async_llm=False):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -74,13 +80,7 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        if cfg.scheduler_config.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
-            if isinstance(self.cfg.cache_config.cache_queue_port, str):
-                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-            if isinstance(self.cfg.cache_config.cache_queue_port, list):
-                self.cfg.cache_config.cache_queue_port = int(
-                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                )
+        self.use_async_llm = use_async_llm
 
         if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
@@ -113,9 +113,8 @@ class EngineService:
 
         self.start_worker_queue_service(start_queue)
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.parallel_config.engine_worker_queue_port[
-            self.cfg.parallel_config.local_data_parallel_id
-        ]
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.cfg.parallel_config.local_engine_worker_queue_port)
+        self.llm_logger.info(f"INFERENCE_MSG_QUEUE_ID: {str(self.cfg.parallel_config.local_engine_worker_queue_port)}")
 
         self.split_connector = SplitwiseConnector(cfg, self.engine_worker_queue, self.resource_manager)
         self.token_processor = TokenProcessor(
@@ -144,15 +143,24 @@ class EngineService:
         self._init_worker_monitor_signals()
 
         if self.cfg.eplb_config.enable_eplb:
-            current_suffix = int(
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            )
+            current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
             init_eplb_signals(cfg, current_suffix)
+
+        if self.use_async_llm:
+            # Add worker management attributes
+            self.worker_proc = None
+            self.do_profile = 1 if self.cfg.cache_config.num_gpu_blocks_override is None else 0
+            self.ipc_signal_suffix = None
+            self.cache_manager_processes = None
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
-    def start(self):
+    def start(self, async_llm_pid=None):
         self.running = True
+
+        if self.use_async_llm:
+            self.start_worker_service(async_llm_pid)
+
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.insert_task_to_worker_thread = threading.Thread(
                 target=self._schedule_request_to_worker_v1, daemon=True
@@ -167,6 +175,69 @@ class EngineService:
 
         self._register_to_router()
 
+    def start_worker_service(self, async_llm_pid=None):
+        # Initialize IPC signals for worker management
+        self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
+        self._init_worker_signals()
+
+        # Create data processor if not exists
+        if not hasattr(self, "data_processor"):
+            self.create_data_processor()
+
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        self.launch_components()
+
+        # If block number is specified and model is deployed in splitwise mode, start cache manager first
+        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
+            self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
+
+        # Start worker processes
+        self.worker_proc = self._start_worker_service()
+        time.sleep(5)
+        self.worker_init_status = dict()
+        result_container = {}
+
+        def check_worker_initialize_status_func(res: dict):
+            res["worker_is_alive"] = True
+            if not self.check_worker_initialize_status():
+                self.llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+                res["worker_is_alive"] = False
+
+        self.check_worker_initialize_status_func_thread = threading.Thread(
+            target=check_worker_initialize_status_func, args=(result_container,), daemon=True
+        )
+        self.check_worker_initialize_status_func_thread.start()
+
+        # Wait model loading
+        while self.loaded_model_signal.value[0] == 0:
+            # Make sure worker process is alive
+            if not self.check_worker_initialize_status_func_thread.is_alive():
+                return False
+            time.sleep(1)
+
+        # If block number is not specified, let workers do profiling to determine the block number,
+        # and then start the cache manager
+        if self.do_profile:
+            self._stop_profile()
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
+            self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
+
+        # Set cache manager signal
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
+            self.launched_cache_manager_signal.value[0] = 1
+
+        # Worker launched
+        self.check_worker_initialize_status_func_thread.join()
+        if not result_container["worker_is_alive"]:
+            self.llm_logger.error("Failed to launch worker processes, check log/workerlog.* for more details.")
+            return False
+
+        # Start ZMQ service for communication with AsyncLLM
+        if async_llm_pid:
+            self.start_zmq_service(async_llm_pid)
+
     def create_data_processor(self):
         self.input_processor = InputPreprocessor(
             self.cfg.model_config,
@@ -178,9 +249,7 @@ class EngineService:
         self.data_processor = self.input_processor.create_processor()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
-        current_suffix = int(
-            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-        )
+        current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
         self.llm_logger.info(f"current_suffix: {current_suffix}")
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -272,52 +341,43 @@ class EngineService:
         """
         start queue service for engine worker communication
         """
-
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (
-                self.cfg.master_ip,
-                int(
-                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                ),
-            )
+            address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]}.sock"
+            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
 
-        if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
-            self.llm_logger.info(f"Starting engine worker queue server service at {address}")
-            self.engine_worker_queue_server = EngineWorkerQueue(
-                address=address,
-                is_server=True,
-                num_client=self.cfg.parallel_config.tensor_parallel_size,
-                local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-            )
-            # Dynamically updates the port value if an anonymous port is used
-            if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
-                    str(self.engine_worker_queue_server.get_server_port())
+        if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
+            if start_queue:
+                self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+                self.engine_worker_queue_server = EngineWorkerQueue(
+                    address=address,
+                    is_server=True,
+                    num_client=self.cfg.parallel_config.tensor_parallel_size,
+                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
-                address = (
-                    self.cfg.master_ip,
-                    int(
-                        self.cfg.parallel_config.engine_worker_queue_port[
-                            self.cfg.parallel_config.local_data_parallel_id
-                        ]
-                    ),
-                )
+                # Dynamically updates the port value if an anonymous port is used
+                if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                    self.cfg.parallel_config.local_engine_worker_queue_port = (
+                        self.engine_worker_queue_server.get_server_port()
+                    )
+                    address = (
+                        self.cfg.master_ip,
+                        self.cfg.parallel_config.local_engine_worker_queue_port,
+                    )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                self.llm_logger.info(
+                    f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
+                )
                 self.cache_task_queue = EngineCacheQueue(
-                    address=(
-                        self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
-                    ),
+                    address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
                     authkey=b"cache_queue_service",
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
-                self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
+                self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
@@ -335,16 +395,21 @@ class EngineService:
         """
         if not isinstance(tasks, list):
             tasks = [tasks]
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
 
         self.resource_manager.check_and_free_block_tables()
 
         need_delete_tasks = []
         for task in tasks:
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
+            rid = task.request_id.split("_")[0]
+            trace_carrier = task.trace_carrier
+            if trace_carrier:
+                tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+                task.trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+            if self.cfg.scheduler_config.splitwise_role == "prefill":
                 status, msg = self.split_connector.check_decode_allocated(task)
-                if not status:
+                if status:
+                    task.metrics.ask_decode_resource_finish_time = time.time()
+                else:
                     self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
                     self.scheduler.put_results(
                         [
@@ -362,8 +427,8 @@ class EngineService:
             tasks.remove(tmp_task)
 
         for item in tasks:
-            item.schedule_start_time = time.time()
             trace_print(LoggingEventName.RESOURCE_ALLOCATE_START, item.request_id, getattr(item, "user", ""))
+
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -386,7 +451,7 @@ class EngineService:
         is_prefill = False
         for i in range(len(tasks)):
             if tasks[i].disaggregate_info is not None:
-                if tasks[i].disaggregate_info["role"] == "decode":
+                if self.cfg.scheduler_config.splitwise_role == "decode":
                     is_decode = True
                 else:
                     is_prefill = True
@@ -400,7 +465,14 @@ class EngineService:
         if not is_decode:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
-                task.inference_start_time = time.time()
+                task.metrics.inference_start_time = time.time()
+                tracing.trace_report_span(
+                    tracing.TraceSpanName.SCHEDULE,
+                    task.request_id.split("_")[0],
+                    int(task.metrics.scheduler_recv_req_time * 1e9),
+                    int(task.metrics.inference_start_time * 1e9),
+                    thread_finish_flag=True,
+                )
                 trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
                 trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
                 trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
@@ -415,7 +487,7 @@ class EngineService:
     def _insert_prefilled_requests(self, request_outputs: List[RequestOutput]):
         """
         Decode insert prefilled requests into engine worker queue.
-        Used in v1_kvcache_scheduler.
+        Used in v0_kvcache_scheduler.
         Args:
             request_outputs: a list of RequestOutput sent by prefill instance
         """
@@ -437,6 +509,10 @@ class EngineService:
 
             cur_req.prompt_token_ids[0] = req_out.outputs.token_ids[0]
             cur_req.num_cached_tokens = req_out.num_cached_tokens
+            req_out.metrics.decode_recv_req_time = cur_req.metrics.decode_recv_req_time
+            req_out.metrics.decode_preallocate_req_time = cur_req.metrics.decode_preallocate_req_time
+            cur_req.metrics = req_out.metrics
+            cur_req.metrics.decode_inference_start_time = time.time()
             if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
 
@@ -607,13 +683,14 @@ class EngineService:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         current_id = 0
         while getattr(self, "running", True):
             try:
                 if self.resource_manager.available_batch() == 0:
                     time.sleep(0.001)
                     continue
-                if self.engine_worker_queue.num_tasks() > 0:
+                if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
                 if hasattr(self, "exist_prefill_task_signal") and self.exist_prefill_task_signal.value[0] > 0:
@@ -644,6 +721,7 @@ class EngineService:
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
+                    task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
                 if len(tasks) == 0:
                     time.sleep(0.001)
@@ -654,8 +732,10 @@ class EngineService:
                     # so the same request sent by the decode api server will be ignored
                     continue
 
-                llm_logger.debug(f"get tasks from scheduler: {tasks}")
+                self.llm_logger.debug(f"get tasks from scheduler: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    for task in tasks:
+                        task.metrics.ask_decode_resource_start_time = time.time()
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
                 insert_successful = self.insert_tasks(tasks, current_id)
@@ -674,6 +754,7 @@ class EngineService:
         """
         Insert tasks to worker with scheduler v1 (ENABLE_V1_KVCACHE_SCHEDULER=1).
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
 
@@ -701,12 +782,12 @@ class EngineService:
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
-                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
+                    reserved_output_blocks=0,  # self.cfg.cache_config.enc_dec_block_num
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
-                    task.schedule_start_time = time.time()
+                    task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -721,14 +802,20 @@ class EngineService:
                         f"Engine has fetched tasks from {self.scheduler.__class__.__name__}: {[task.request_id for task in tasks]}"
                     )
 
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    for task in tasks:
+                        # start async preprocess
+                        self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
                                 time.sleep(0.005)
-                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
+                            self.llm_logger.debug(
+                                f"P has allocated resources and then ask D resource for request: {task.request_id}"
+                            )
+                            task.metrics.ask_decode_resource_start_time = time.time()
                             while True:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
@@ -738,6 +825,7 @@ class EngineService:
                                     )
                                     time.sleep(0.05)
                                 else:
+                                    task.metrics.ask_decode_resource_finish_time = time.time()
                                     break
                             self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
                     else:
@@ -745,58 +833,79 @@ class EngineService:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
                                 time.sleep(0.005)
-                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
+
+                            self.llm_logger.debug(
+                                f"P has allocated resources and then ask D resource for req_id: {task.request_id}"
+                            )
+                            task.metrics.ask_decode_resource_start_time = time.time()
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
                         for task in tasks:
-                            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                                # assure fetch block ids from D
-                                status, msg = self.split_connector.check_decode_allocated(task)
-                                if not status:
-                                    self.llm_logger.error(
-                                        f"D failed to allocate resource for request {task.request_id}, message: {msg}."
-                                    )
-                                    self.scheduler.put_results(
-                                        [
-                                            RequestOutput(
-                                                request_id=task.request_id,
-                                                finished=True,
-                                                error_code=500,
-                                                error_msg=msg,
-                                            )
-                                        ]
-                                    )
-                                    need_delete_tasks.append(task)
-                                    continue
-                                else:
-                                    self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
-
+                            # assure fetch block ids from D
+                            status, msg = self.split_connector.check_decode_allocated(task)
+                            task.metrics.ask_decode_resource_finish_time = time.time()
+                            if not status:
+                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                self.scheduler.put_results(
+                                    [
+                                        RequestOutput(
+                                            request_id=task.request_id,
+                                            finished=True,
+                                            error_code=500,
+                                            error_msg=msg,
+                                        )
+                                    ]
+                                )
+                                need_delete_tasks.append(task)
+                                continue
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
                         self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
-                if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
                         need_check_req_ids = [task.request_id for task in tasks]
                         self.split_connector.send_cache_info_to_messager(tasks, 0)
                         # ensure cache tasks has sent to cache_messager
+                        need_check_req_ids = [task.request_id for task in tasks]
+                        finished_ids, delete_tasks_list = [], []
                         while need_check_req_ids:
-                            req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                            if req_ids:
-                                self.llm_logger.debug(
-                                    f"P has successfully sent cache infos to cache messager for requests: {req_ids}"
-                                )
-                                for req_id in req_ids:
-                                    assert req_id in need_check_req_ids
-                                    need_check_req_ids.remove(req_id)
+                            finished_ids.extend(self.engine_worker_queue.get_finished_add_cache_task_req())
+                            self.llm_logger.debug(
+                                f"P has successfully sent cache infos to cache messager for requests: {finished_ids}"
+                            )
+                            if finished_ids:
+                                for task in tasks:
+                                    result = self.resource_manager.waiting_async_process(task)
+                                    if result is None:
+                                        self.scheduler.put_results(
+                                            [
+                                                RequestOutput(
+                                                    request_id=task.request_id,
+                                                    finished=True,
+                                                    error_code=task.error_code,
+                                                    error_msg=task.error_message,
+                                                )
+                                            ]
+                                        )
+                                        delete_tasks_list.append(task)
+                                    elif result is False:
+                                        if task.request_id in finished_ids:
+                                            need_check_req_ids.remove(task.request_id)
+                                            finished_ids.remove(task.request_id)
                             else:
                                 time.sleep(0.001)
+
+                        for tmp_task in delete_tasks_list:
+                            tasks.remove(tmp_task)
+                            # release resource in P
+                            self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:
+                        task.metrics.add_req_to_resource_manager_time = time.time()
                         trace_print(
                             LoggingEventName.RESOURCE_ALLOCATE_START, task.request_id, getattr(task, "user", "")
                         )
@@ -815,7 +924,7 @@ class EngineService:
 
         while self.running:
             try:
-                if self.engine_worker_queue.num_tasks() > 0:
+                if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -835,7 +944,7 @@ class EngineService:
                             get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
-                                llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
                                 break
                             else:
                                 raise
@@ -862,16 +971,38 @@ class EngineService:
                                 )
                     self.resource_manager.get_real_bsz()
                     for task in tasks:
-                        trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                        if task.task_type == RequestType.PREFILL:
+                            rid = task.request_id.split("_")[0]
+                            trace_carrier = task.trace_carrier
+                            tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+                            trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                            task.trace_carrier = trace_carrier
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.SCHEDULE,
+                                rid,
+                                int(task.metrics.scheduler_recv_req_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            trace_print(
+                                LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(
+                                LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                        if isinstance(task, Request):
+                            if self.cfg.scheduler_config.splitwise_role == "decode":
+                                task.metrics.decode_inference_start_time = time.time()
+                            else:
+                                task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
                 if error_tasks:
                     for request_id, failed in error_tasks:
                         if failed is None:
-                            llm_logger.warning(f"Request {request_id} has no error, skip sending error response.")
+                            self.llm_logger.warning(f"Request {request_id} has no error, skip sending error response.")
                             continue
                         self._send_error_response(request_id, failed)
 
@@ -910,6 +1041,7 @@ class EngineService:
         self.receive_output_thread.start()
 
     def _insert_zmq_task_to_scheduler(self):
+        tracing.trace_set_thread_info("Insert Task to Scheduler")
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -923,7 +1055,13 @@ class EngineService:
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
-                    self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
+                    # The message "Context was terminated" is normal when closing a ZMQ context
+                    if "Context was terminated" in str(err):
+                        self.llm_logger.info(
+                            "Engine stops inserting zmq task into scheduler due to ZMQ context termination (normal shutdown)."
+                        )
+                    else:
+                        self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
                 request, insert_task = None, []
@@ -932,8 +1070,7 @@ class EngineService:
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
-                        request.llm_engine_recv_req_timestamp = time.time()
-                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
@@ -979,7 +1116,7 @@ class EngineService:
                 )
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
-        llm_logger.error(
+        self.llm_logger.error(
             f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}, error_code: {error_code}"
         )
         error_result = RequestOutput(
@@ -1042,7 +1179,7 @@ class EngineService:
                                 elif content.finished:
                                     new_step_contents.append(content)
                                 else:
-                                    llm_logger.warning(
+                                    self.llm_logger.warning(
                                         f"current tokens need to accumulate, req_id: {content.request_id} {content.outputs.token_ids}"
                                     )
                             else:
@@ -1072,16 +1209,16 @@ class EngineService:
                                 elif content.finished:
                                     new_contents.append(content)
                                 else:
-                                    llm_logger.warning(
+                                    self.llm_logger.warning(
                                         f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
                                     )
                             else:
                                 new_contents.append(content)
                         if len(new_contents):
-                            llm_logger.debug(f"Send response for request id: {request_id}")
+                            self.llm_logger.debug(f"Send response for request id: {request_id}")
                             self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
-                llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
+                self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
     def _decode_process_splitwise_requests(self):
         """
@@ -1102,6 +1239,8 @@ class EngineService:
                     self.llm_logger.debug(
                         f"D has received tasks to preallocate resource for tasks: {[task.request_id for task in tasks]}"
                     )
+                    for task in tasks:
+                        task.metrics.decode_recv_req_time = time.time()
                     allocate_resource_requests.extend(tasks)
                 elif isinstance(tasks[0], RequestOutput):
                     self.llm_logger.debug(
@@ -1111,6 +1250,7 @@ class EngineService:
                         tasks = [tasks]
                     for task in tasks:
                         task.finished = False
+                        task.metrics.decode_recv_first_token_time = time.time()
                     prefilled_request_ouputs.extend(tasks)
 
         def _process_allocate_resource_requests():
@@ -1120,6 +1260,8 @@ class EngineService:
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
+                        task.metrics.decode_preallocate_req_time = time.time()
+                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
                         self.split_connector.send_cache_info_to_prefill([task])
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
@@ -1128,6 +1270,7 @@ class EngineService:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
                         self.insert_tasks([task])
+                        task.metrics.decode_preallocate_req_time = time.time()
                         processed_indices.append(idx)
                         is_success = True
 
@@ -1214,10 +1357,8 @@ class EngineService:
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
             device_ids=device_ids,
             pod_ip=self.cfg.master_ip,
-            engine_worker_queue_port=int(
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            ),
-            pid_suffix=ipc_signal_suffix,
+            engine_worker_queue_port=self.cfg.parallel_config.local_engine_worker_queue_port,
+            ipc_suffix=ipc_signal_suffix,
             create_cache_tensor=False,
         )
 
@@ -1226,15 +1367,15 @@ class EngineService:
 
     def clear_data(self):
         try:
-            llm_logger.info("Clear Data: Start")
+            self.llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
-            llm_logger.info("Clear Data: Successfully")
+            self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
-            llm_logger.error(f"Clear data error: {e}")
+            self.llm_logger.error(f"Clear data error: {e}")
             return False
 
     def _register_to_router(self):
@@ -1245,12 +1386,11 @@ class EngineService:
         def _register():
             while True:
                 try:
-                    time.sleep(sleep_seconds)
-
                     api_server_host = self.cfg.router_config.api_server_host
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
+                        time.sleep(sleep_seconds)
                         continue
 
                     router_url = self.cfg.router_config.router
@@ -1259,15 +1399,20 @@ class EngineService:
                         json=self.cfg.register_info,
                         timeout=timeout,
                     )
-                    if not resp.ok:
-                        llm_logger.error(
+
+                    if resp.ok:
+                        self.llm_logger.info("Successfully registered to the router!")
+                        break
+                    else:
+                        self.llm_logger.error(
                             f"Router registration failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
+                        time.sleep(sleep_seconds)
                 except requests.exceptions.RequestException as e:
-                    llm_logger.error(f"Register to router request error: {e}")
+                    self.llm_logger.error(f"Register to router request error: {e}")
                 except Exception as e:
-                    llm_logger.exception(f"Unexpected error during router registration: {e}")
+                    self.llm_logger.exception(f"Unexpected error during router registration: {e}")
 
         if self.cfg.router_config.router is not None:
             register_thread = threading.Thread(target=_register, daemon=True)
@@ -1277,8 +1422,60 @@ class EngineService:
         """
         exit sub services
         """
-        llm_logger.info("Exit sub services.....")
+        self.llm_logger.info("Exit sub services.....")
         self.running = False
+
+        if self.use_async_llm:
+            # Clean up worker processes first (before closing multiprocessing services)
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                self.llm_logger.info("Cleaning up worker processes...")
+                try:
+                    pgid = os.getpgid(self.worker_proc.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    self.llm_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
+
+            # Clean up cache manager processes
+            if hasattr(self, "cache_manager_processes"):
+                self.llm_logger.info("Cleaning up cache manager processes...")
+                self.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+                self.resource_manager.cache_manager.cache_ready_signal.clear()
+                for p in self.cache_manager_processes:
+                    self.llm_logger.info(f"Killing cache manager process {p.pid}")
+                    try:
+                        pgid = os.getpgid(p.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    except Exception as e:
+                        self.llm_logger.error(
+                            f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
+                        )
+
+            if hasattr(self, "cache_task_queue") and self.cache_task_queue is not None:
+                self.llm_logger.info("Cleaning up cache_task_queue...")
+                # Check if cleanup method exists
+                if hasattr(self.cache_task_queue, "cleanup"):
+                    self.cache_task_queue.cleanup()
+                elif hasattr(self.cache_task_queue, "manager"):
+                    try:
+                        self.llm_logger.info("Shutting down cache_task_queue manager...")
+                        self.cache_task_queue.manager.shutdown()
+                    except Exception as e:
+                        self.llm_logger.warning(f"Error shutting down cache_task_queue manager: {e}")
+
+            if hasattr(self, "get_profile_block_num_signal"):
+                self.get_profile_block_num_signal.clear()
+
+            self.worker_ready_signal.clear()
+            self.loaded_model_signal.clear()
+
+            # Clean up other services
+            if hasattr(self, "dp_processed"):
+                for p in self.dp_processed:
+                    self.llm_logger.info(f"Waiting for worker {p.pid} to exit")
+                    p.join()
+                for p in self.dp_engine_worker_queue_server:
+                    p.cleanup()
+
         if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
             self.engine_worker_queue_server.cleanup()
         self.exist_task_signal.clear()
@@ -1296,3 +1493,395 @@ class EngineService:
             self.recv_request_server.close()
         if hasattr(self, "recv_control_cmd_server") and self.recv_control_cmd_server is not None:
             self.recv_control_cmd_server.close()
+
+    # 从 async_llm 移到 common_engine
+    def _worker_processes_ready(self):
+        """
+        judge if all worker processes are ready
+
+        """
+        if np.sum(self.worker_ready_signal.value) == self.cfg.worker_num_per_node:
+            return True
+        return False
+
+    def _init_worker_signals(self):
+        """
+        Initialize shared memory to indicate engine status
+        """
+        # worker_ready_signal 用于worker进程感知engine是否启动完成
+        worker_ready_signal_data = np.zeros(shape=[self.cfg.worker_num_per_node], dtype=np.int32)
+        self.worker_ready_signal = IPCSignal(
+            name="worker_ready_signal",
+            array=worker_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True,
+        )
+
+        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
+            self.launched_cache_manager_signal = IPCSignal(
+                name="launched_cache_manager_signal",
+                array=launched_cache_manager_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
+        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            launched_expert_service_signal_data = np.zeros(
+                shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
+            )
+            self.launched_expert_service_signal = IPCSignal(
+                name="launched_expert_service_signal",
+                array=launched_expert_service_signal_data,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
+        # loaded_model_signal: Used to detect whether each worker has completed model loading
+        loaded_model_signal_data = np.zeros([1], dtype=np.int32)
+        self.loaded_model_signal = IPCSignal(
+            name="loaded_model_signal",
+            array=loaded_model_signal_data,
+            dtype=np.int32,
+            suffix=self.ipc_signal_suffix,
+            create=True,
+        )
+
+        if self.do_profile:
+            if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+                get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
+            else:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+            self.get_profile_block_num_signal = IPCSignal(
+                name="get_profile_block_num",
+                array=get_profile_block_num,
+                dtype=np.int32,
+                suffix=self.ipc_signal_suffix,
+                create=True,
+            )
+
+    def _setting_environ_variables(self):
+        """
+        配置环境变量
+        """
+        variables = {
+            "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
+            "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.parallel_config.device_ids.split(",")),
+            "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
+            "FLAGS_use_append_attn": 1,
+            "NCCL_ALGO": "Ring",
+            "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
+            "OMP_NUM_THREADS": 3,
+        }
+        # environment variables needed by Dy2St
+        variables.update(
+            {
+                "SOT_LOG_LEVEL": os.getenv("SOT_LOG_LEVEL", default="0"),
+                "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
+                "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
+                "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "SOT_ENABLE_COMPILE_TIME_LIMIT": os.getenv("SOT_ENABLE_COMPILE_TIME_LIMIT", default="0"),
+                "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
+                "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
+                "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
+                    "FLAGS_pir_interpreter_record_stream_for_gc_cache", default="1"
+                ),
+                "FLAGS_parameters_persistent_mode_in_dy2st": os.getenv(
+                    "FLAGS_parameters_persistent_mode_in_dy2st", default="1"
+                ),
+            }
+        )
+
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                variables["FLAGS_use_pd_disaggregation_per_chunk"] = 1
+            else:
+                variables["FLAGS_use_pd_disaggregation"] = 1
+            # TODO dynamic load environment variable
+            if self.cfg.scheduler_config.splitwise_role == "prefill":
+                variables["FLAGS_fmt_write_cache_completed_signal"] = 1
+
+        if self.cfg.model_config.enable_mm:
+            variables["FLAGS_max_partition_size"] = 1024
+
+        command_prefix = ""
+        for k, v in variables.items():
+            command_prefix += f"{k}={v} "
+        return command_prefix
+
+    def _start_worker_service(self):
+        """
+        start gpu worker service
+
+        """
+        log_dir = os.getenv("FD_LOG_DIR", default="log")
+        command_prefix = self._setting_environ_variables()
+        current_file_path = os.path.abspath(__file__)
+        current_dir_path = os.path.split(current_file_path)[0]
+        # TODO
+        uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == "1" else "-u"
+        pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
+        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+
+        worker_path = "../worker/worker_process.py"
+        py_script = os.path.join(current_dir_path, worker_path)
+
+        ori_vocab_size = (
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, "sp_model")
+            else len(self.data_processor.tokenizer.vocab)
+        )
+
+        think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
+        if think_end_id > 0:
+            self.llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
+        else:
+            self.llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+        image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
+        line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
+
+        ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
+        ips = None
+        if self.cfg.ips is not None:
+            ips = ",".join(self.cfg.ips)
+        arguments = (
+            f" --devices {self.cfg.parallel_config.device_ids} {py_script}"
+            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.model_config.max_model_len}"
+            f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
+            f" --model {self.cfg.model_config.model!s}"
+            f" --device_ids {self.cfg.parallel_config.device_ids}"
+            f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
+            f" --engine_worker_queue_port {ports}"
+            f" --pod_ip {self.cfg.master_ip}"
+            f" --block_size {self.cfg.cache_config.block_size}"
+            f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
+            f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
+            f" --pad_token_id {self.data_processor.pad_token_id}"
+            f" --engine_pid {self.cfg.parallel_config.engine_worker_queue_port[0]}"
+            f" --max_num_batched_tokens {self.cfg.scheduler_config.max_num_batched_tokens}"
+            f" --splitwise_role {self.cfg.scheduler_config.splitwise_role}"
+            f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
+            f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --chunked_moe_size {self.cfg.parallel_config.chunked_moe_size}"
+            f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
+            f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
+            f" --ori_vocab_size {ori_vocab_size}"
+            f" --think_end_id {think_end_id}"
+            f" --image_patch_id {image_patch_id}"
+            f" --line_break_id {line_break_id}"
+            f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
+            f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
+            f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
+            f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
+            f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
+            f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
+            f" --ips {ips}"
+            f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
+            f" --runner {self.cfg.model_config.runner}"
+            f" --convert {self.cfg.model_config.convert}"
+            f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
+            f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
+            f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+        )
+        if self.cfg.structured_outputs_config.logits_processors is not None:
+            arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+
+        worker_store_true_flag = {
+            "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
+            "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
+            "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
+            "do_profile": self.do_profile,
+            "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
+            "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
+            "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
+            "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
+            "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
+            "enable_logprob": self.cfg.model_config.enable_logprob,
+            "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+        }
+        for worker_flag, value in worker_store_true_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag}"
+
+        worker_default_none_flag = {
+            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+        }
+        for worker_flag, value in worker_default_none_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag} {value}"
+
+        if self.cfg.nnode > 1:
+            pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
+        pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
+        self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
+        p = subprocess.Popen(
+            pd_cmd,
+            stdout=subprocess.PIPE,
+            shell=True,
+            preexec_fn=os.setsid,
+        )
+        return p
+
+    def _stop_profile(self):
+        """
+        Stop profiling of the model server and reset variables.
+        """
+        self.do_profile = 0
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
+        self.cfg.cache_config.reset(num_gpu_blocks)
+        self.resource_manager.reset_cache_config(self.cfg.cache_config)
+        if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
+            self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
+
+    def check_health(self, time_interval_threashold=30):
+        """
+        Check the health of the model server by checking whether all workers are alive.
+
+        """
+        if self.worker_healthy_live_signal.value[0]:
+            elapsed_time = time.time() - self.worker_healthy_live_signal.value[0]
+            if elapsed_time > time_interval_threashold:
+                return False, "Worker Service Not Healthy"
+
+        return True, ""
+
+    def launch_components(self):
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
+            # 单机逻辑
+            self.splitwise_receive_thread = threading.Thread(target=self.split_connector.start_receiver, args=())
+            self.splitwise_receive_thread.daemon = True
+            self.splitwise_receive_thread.start()
+
+        role = self.cfg.scheduler_config.splitwise_role
+        host_ip = self.cfg.host_ip
+        request_queues_for_dp_ipc = None
+        result_queue_for_dp_ipc = None
+        if self.cfg.scheduler_config.name == "splitwise":
+            self.scheduler.start(role, host_ip, self.cfg.register_info)
+        elif self.cfg.scheduler_config.name == "dp":
+            request_queues_for_dp_ipc = []
+            result_queue_for_dp_ipc = multiprocessing.Queue()
+            for i in range(self.cfg.parallel_config.data_parallel_size):
+                request_queues_for_dp_ipc.append(multiprocessing.Queue())
+            self.scheduler.start(
+                self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
+                request_queues_for_dp_ipc,
+                result_queue_for_dp_ipc,
+            )
+
+        if not envs.FD_ENABLE_MULTI_API_SERVER:
+            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+                self.launched_expert_service_signal.value[0] = 1
+                self.dp_processed = []
+                self.dp_engine_worker_queue_server = []
+                for i in range(
+                    1,
+                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+                ):
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        address = (
+                            self.cfg.master_ip,
+                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
+                        )
+                    else:
+                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+
+                    self.llm_logger.info(f"dp start queue service {address}")
+                    self.dp_engine_worker_queue_server.append(
+                        EngineWorkerQueue(
+                            address=address,
+                            is_server=True,
+                            num_client=self.cfg.parallel_config.tensor_parallel_size,
+                            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                        )
+                    )
+                    from fastdeploy.engine.expert_service import (
+                        start_data_parallel_service,
+                    )
+
+                    self.dp_processed.append(
+                        multiprocessing.Process(
+                            target=start_data_parallel_service,
+                            args=(
+                                self.cfg,
+                                i,
+                            ),
+                        )
+                    )
+                    self.llm_logger.info(
+                        f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
+                        + f" data parallel id {i}"
+                    )
+                    self.dp_processed[-1].start()
+                    while self.launched_expert_service_signal.value[i] == 0:
+                        time.sleep(1)
+
+    def check_worker_initialize_status(self):
+        """
+        Check the initlialize status of workers by stdout logging
+        """
+
+        def detect_thread():
+            for line in self.worker_proc.stdout:
+                line = line.decode("utf-8", errors="ignore")
+                if self.worker_init_status.get("finished", False):
+                    break
+                if match := re.search(
+                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    line,
+                ):
+                    self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100
+                elif (match := re.search(r"Start load layer (\d+)", line)) or (
+                    match := re.search(r"set state for layer (\d+)", line)
+                ):
+                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_hidden_layers
+                    self.worker_init_status["layer_loadding"] = progress
+                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
+                        self.worker_init_status["finished"] = True
+
+        self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)
+        self.checking_worker_status_thread.start()
+
+        # display weight loadding progress
+        with tqdm(total=100, desc="Loading Weights") as pbar:
+            progress = 0
+            while progress < 100:
+                progress = int(self.worker_init_status.get("weight_loadding", 0) * 100)
+                if self.worker_init_status.get("layer_loadding", 0) > 0 or self._worker_processes_ready():
+                    progress = 100
+                pbar.update(progress - pbar.n)
+                pbar.refresh()
+                time.sleep(0.5)
+                if self.worker_proc.poll() is not None:
+                    return False
+
+        # display layer loadding progress
+        with tqdm(total=100, desc="Loading Layers") as pbar:
+            progress = 0
+            while progress < 100:
+                progress = int(self.worker_init_status.get("layer_loadding", 0) * 100)
+                if self._worker_processes_ready():
+                    progress = 100
+                pbar.update(progress - pbar.n)
+                pbar.refresh()
+                time.sleep(0.5)
+                if self.worker_proc.poll() is not None:
+                    return False
+
+        self.worker_init_status["finished"] = True
+        try:
+            self.checking_worker_status_thread.join(timeout=1)
+        except Exception:
+            pass
+        return True
