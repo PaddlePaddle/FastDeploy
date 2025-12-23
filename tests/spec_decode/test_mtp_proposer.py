@@ -686,6 +686,9 @@ class TestMTPProposer(unittest.TestCase):
 
         # Ensure the CUDA path loop is taken; make not_need_stop True.
         proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
+        # Ensure seq_lens_this_time is present (some test environments create proposer
+        # without setting this key); use the buffer prepared in _init_model_inputs.
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
         # keep loop minimal
         proposer.num_model_steps = 1
 
