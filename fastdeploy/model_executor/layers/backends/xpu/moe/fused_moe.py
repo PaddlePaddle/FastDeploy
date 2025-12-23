@@ -14,11 +14,14 @@
 # limitations under the License.
 """
 
+import os
 from typing import Callable
 
 import paddle
 from paddle import nn
+from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -27,6 +30,7 @@ from fastdeploy.model_executor.ops.xpu import (
     ep_moe_expert_dispatch,
     moe_expert_ffn,
     moe_topk_select,
+    quant2d_per_token,
     weight_quantize_xpu,
     xpu_moe_layer,
 )
@@ -46,8 +50,10 @@ class XPUMoEMethod(MoEMethodBase):
     def __init__(
         self,
         quant_config: WeightOnlyConfig,
+        layer,
     ) -> None:
         super().__init__(quant_config)
+        self.layer_idx = getattr(layer, "layer_idx", -1)
 
         if self.moe_quant_type in ["w16a16"]:
             self.weight_dtype = "bfloat16"
@@ -57,6 +63,68 @@ class XPUMoEMethod(MoEMethodBase):
             raise ValueError(f"Unsupported moe quant type: {self.moe_quant_type}")
         self.scale_dtype = "float32"
         self.bias_dtype = "float32"
+        self._set_xpu_moe_quant_type()
+
+    def _set_xpu_moe_quant_type(self):
+        """
+        XPU_MOE_FFN_QUANT_TYPE_MAP options:
+        - defalut:
+          - w16a16 -> w_bfloat16_a_bfloat16
+          - weight_only_int8 -> w_channelwise_int8_a_tokenwise_float16
+          - weight_only_int4 -> w_channelwise_int4_a_tokenwise_int15
+          - w4a8 -> w_channelwise_int4_a_expertwise_int8
+        - w_bfloat16_a_bfloat16
+        - w_channelwise_int8_a_float32
+        - w_channelwise_int8_a_tokenwise_float16
+        - w_channelwise_int8_a_tokenwise_int15
+        - w_channelwise_int8_a_expertwise_int8
+        - w_channelwise_int8_a_tokenwise_int8
+        - w_channelwise_int4_a_tokenwise_int15
+        - w_channelwise_int4_a_expertwise_int8
+        - w_channelwise_int4_a_tokenwise_int8
+        - TODO:
+          - w_groupwise_int4_a_expertwise_int8
+          - w_groupwise_int4_a_tokenwise_int8
+        for example: XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_float16:3->5,7->9;w_channelwise_int8_a_tokenwise_int8:6,10->20"
+        """
+        if self.layer_idx < 0:
+            return
+        xpu_moe_ffn_quant_type_map = envs.FD_XPU_MOE_FFN_QUANT_TYPE_MAP
+        self.xpu_moe_quant_type = "default"
+        for quant_type_map in xpu_moe_ffn_quant_type_map.split(";"):
+            quant_type_info = quant_type_map.split(":")
+            if len(quant_type_info) != 2:
+                continue
+            for ids_info in quant_type_info[1].split(","):
+                ids = ids_info.split("->")
+                id_min = int(ids[0])
+                id_max = int(ids[-1])
+                if id_min <= self.layer_idx <= id_max:
+                    self.xpu_moe_quant_type = quant_type_info[0]
+
+        if self.xpu_moe_quant_type == "default":
+            default_quant_type_map = {
+                "w16a16": "w_bfloat16_a_bfloat16",
+                "weight_only_int8": "w_channelwise_int8_a_tokenwise_float16",
+                "weight_only_int4": "w_channelwise_int4_a_tokenwise_int15",
+                "w4a8": "w_channelwise_int4_a_expertwise_int8",
+            }
+            assert (
+                self.moe_quant_type in default_quant_type_map.keys()
+            ), f"Unsupported moe quant type: {self.moe_quant_type}"
+            self.xpu_moe_quant_type = default_quant_type_map[self.moe_quant_type]
+
+        # TODO(zhupengyang): remove XFT_MOE_FC_WINT8_TGEMM later
+        if self.moe_quant_type == "weight_only_int8":
+            xft_moe_fc_wint8_tgemm = os.environ.get("XFT_MOE_FC_WINT8_TGEMM", "")
+            if xft_moe_fc_wint8_tgemm == "FLOAT16":
+                self.xpu_moe_quant_type = "w_channelwise_int8_a_tokenwise_float16"
+            elif xft_moe_fc_wint8_tgemm == "INT8":
+                self.xpu_moe_quant_type = "w_channelwise_int8_a_tokenwise_int8"
+            else:
+                assert xft_moe_fc_wint8_tgemm == "", f"Unsupported XFT_MOE_FC_WINT8_TGEMM={xft_moe_fc_wint8_tgemm}"
+
+        logger.info(f"moe_layer_idx: {self.layer_idx}; xpu_moe_quant_type: {self.xpu_moe_quant_type}")
 
     def import_backend_ep_runner(self) -> None:
         from .ep import XPUEPDecoderRunner, XPUEPPrefillRunner
@@ -283,7 +351,7 @@ class XPUMoEMethod(MoEMethodBase):
             permute_indices_per_token,
             token_num_lod,
             dst_weights,
-            ffn1_act_scale_per_token,
+            ffn1_x_scale_per_token,
         ) = ep_moe_expert_dispatch(
             x,
             topk_idx,
@@ -294,14 +362,16 @@ class XPUMoEMethod(MoEMethodBase):
             self.moe_quant_type,
         )
 
-        if not hasattr(layer, self.added_in_scale_attrs[0]):
-            ffn1_act_scale_per_token = None
+        if hasattr(layer, self.added_in_scale_attrs[0]):
+            ffn1_x_scale = ffn1_x_scale_per_token
+        else:
+            ffn1_x_scale = None
         ffn_out = self.compute_ffn(
             layer,
             permute_input,
+            ffn1_x_scale,
             token_num_lod,
             x.shape[0] * layer.top_k,
-            ffn1_act_scale_per_token,
         )
 
         topk_weights_bf16 = topk_weights.astype("bfloat16")
@@ -337,10 +407,10 @@ class XPUMoEMethod(MoEMethodBase):
     def compute_ffn(
         self,
         layer: nn.Layer,
-        permute_input,
+        ffn1_x,
+        ffn1_x_scale,
         token_num_lod,
         valid_token_num,
-        ffn1_act_scale_per_token=None,
     ):
         """
         Calculate moe
@@ -350,19 +420,19 @@ class XPUMoEMethod(MoEMethodBase):
         else:
             hadamard_block_size = -1
         ffn_out = moe_expert_ffn(
-            permute_input,
+            ffn1_x,
             token_num_lod,
             getattr(layer, self.added_weight_attrs[0]),
             getattr(layer, self.added_weight_attrs[1]),
             None,
             None,
-            ffn1_act_scale_per_token,
+            ffn1_x_scale,
             getattr(layer, self.added_in_scale_attrs[1], None),
             getattr(layer, self.added_scale_attrs[0], None),
             getattr(layer, self.added_scale_attrs[1], None),
             None,
             None,
-            self.moe_quant_type,
+            self.xpu_moe_quant_type,
             hadamard_block_size,
             valid_token_num,
         )
@@ -381,9 +451,12 @@ class XPUMoEMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
         # 2. Dynamic compute blockwise quantization scales
-        # x, x_scale_tensor = fastdeploy.model_executor.ops.xpu.per_token_quant(x)
-        x_scale_tensor = None
+        if "a_tokenwise_int8" in self.xpu_moe_quant_type:
+            x, x_scale = quant2d_per_token(x)
+        else:
+            x_scale = None
         # 3. EP Dispatch
         (
             recv_x,
@@ -396,20 +469,24 @@ class XPUMoEMethod(MoEMethodBase):
             x,
             topk_idx,
             topk_weights,
-            x_scale_tensor=x_scale_tensor,
+            x_scale=x_scale,
         )
 
+        # 4. Compute ffn
         token_num_per_expert = recv_num_tokens_per_expert_list.numpy().tolist()
         token_all_num = sum(token_num_per_expert)
-
-        # 4. Compute ffn
-        moe_dispatch_scale = None
+        if "a_expertwise_int8" in self.xpu_moe_quant_type:
+            moe_dispatch_scale = getattr(layer, self.added_in_scale_attrs[0])
+        elif "a_tokenwise_int8" in self.xpu_moe_quant_type:
+            moe_dispatch_scale = recv_x_scales
+        else:
+            moe_dispatch_scale = None
         (
             permute_input,
             permute_indices_per_token,
             token_num_lod,
             dst_weights,
-            ffn1_act_scale_per_token,
+            ffn1_x_scale_per_token,
         ) = ep_moe_expert_dispatch(
             recv_x,
             recv_topk_idx,
@@ -420,14 +497,18 @@ class XPUMoEMethod(MoEMethodBase):
             self.moe_quant_type,
         )
 
+        if "a_expertwise_int8" in self.xpu_moe_quant_type or "a_tokenwise_int8" in self.xpu_moe_quant_type:
+            ffn1_x_scale = ffn1_x_scale_per_token
+        else:
+            ffn1_x_scale = None
         ffn_out = self.compute_ffn(
             layer,
             permute_input,
+            ffn1_x_scale,
             token_num_lod,
             token_all_num,
         )
 
-        # prmt back per rank
         recv_topk_weights_bf16 = recv_topk_weights.astype("bfloat16")
         tmp_ffn_out = ep_moe_expert_combine(
             ffn_out,
@@ -459,10 +540,15 @@ class XPUMoEMethod(MoEMethodBase):
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
         # 2. EP Dispatch
-        expertwise_scale = None
-        use_fp8 = False
+        if "a_tokenwise_int8" in self.xpu_moe_quant_type:
+            use_fp8 = True
+            expertwise_scale = None
+        else:
+            use_fp8 = False
+            expertwise_scale = None
         (
-            permute_input,
+            recv_x,
+            recv_x_scale,
             token_nums_per_expert,
             handle,
             valid_token_num,
@@ -470,14 +556,15 @@ class XPUMoEMethod(MoEMethodBase):
             x,
             topk_idx,
             topk_weights,
-            expertwise_scale=expertwise_scale,
             use_fp8=use_fp8,
+            expertwise_scale=expertwise_scale,
         )
 
         # 3. Compute ffn
         ffn_out = self.compute_ffn(
             layer,
-            permute_input,
+            recv_x,
+            recv_x_scale,
             token_nums_per_expert,
             valid_token_num,
         )
