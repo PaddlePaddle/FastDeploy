@@ -24,6 +24,7 @@ typedef uint32_t curandStatePhilox4_32_10_t;
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __attribute__((global)) void speculate_verify(
+    const int64_t *sampled_token_ids,
     int64_t *accept_tokens,
     int *accept_num,
     int64_t *step_idx,
@@ -49,7 +50,9 @@ __attribute__((global)) void speculate_verify(
     const int max_candidate_len,
     const int verify_window,
     const bool prefill_one_step_stop,
-    const bool benchmark_mode);
+    const bool benchmark_mode,
+    const bool accept_all_drafts,
+    const bool use_target_sampling);
 }  // namespace plugin
 }  // namespace xpu3
 
@@ -113,6 +116,7 @@ static int64_t topp_sampling_kernel(const int64_t *candidate_ids,
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 static int cpu_wrapper(Context *ctx,
+                       const int64_t *sampled_token_ids,
                        int64_t *accept_tokens,
                        int *accept_num,
                        int64_t *step_idx,
@@ -138,7 +142,9 @@ static int cpu_wrapper(Context *ctx,
                        const int max_candidate_len,
                        const int verify_window,
                        const bool prefill_one_step_stop,
-                       const bool benchmark_mode) {
+                       const bool benchmark_mode,
+                       const bool accept_all_drafts,
+                       const bool use_target_sampling) {
   for (int bid = 0; bid < real_bsz; ++bid) {
     // verify and set stop flags
     int accept_num_now = 1;
@@ -157,6 +163,7 @@ static int cpu_wrapper(Context *ctx,
             verify_tokens + start_token_id * max_candidate_len;
         auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
         auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+        auto *sampled_token_id_now = sampled_token_ids + start_token_id;
 
         int i = 0;
         // printf("seq_lens_this_time[%d]-1: %d \n",bid,
@@ -168,7 +175,43 @@ static int cpu_wrapper(Context *ctx,
           if (seq_lens_encoder[bid] != 0) {
             break;
           }
-          if (USE_TOPK) {
+          if (accept_all_drafts) {
+            // accept all draft tokens
+            step_idx[bid]++;
+            auto accept_token = draft_tokens_now[i + 1];
+            accept_tokens[bid * max_draft_tokens + i] = accept_token;
+
+            if (is_in_end(accept_token, end_tokens, end_length) ||
+                step_idx[bid] >= max_dec_len[bid]) {
+              stop_flags[bid] = true;
+              stop_flag_now_int = 1;
+              if (step_idx[bid] >= max_dec_len[bid])
+                accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+              break;
+            } else {
+              accept_num_now++;
+            }
+            continue;
+          }
+          if (use_target_sampling) {
+            if (sampled_token_id_now[i] == draft_tokens_now[i + 1]) {
+              step_idx[bid]++;
+              auto accept_token = draft_tokens_now[i + 1];
+              accept_tokens[bid * max_draft_tokens + i] = accept_token;
+              if (is_in_end(accept_token, end_tokens, end_length) ||
+                  step_idx[bid] >= max_dec_len[bid]) {
+                stop_flags[bid] = true;
+                stop_flag_now_int = 1;
+                if (step_idx[bid] >= max_dec_len[bid])
+                  accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+                break;
+              } else {
+                accept_num_now++;
+              }
+            } else {
+              break;
+            }
+          } else if (USE_TOPK) {
             if (verify_tokens_now[i * max_candidate_len] ==
                 draft_tokens_now[i + 1]) {
               // accept_num_now++;
@@ -270,7 +313,9 @@ static int cpu_wrapper(Context *ctx,
           const float *verify_scores_now =
               verify_scores + start_token_id * max_candidate_len;
           step_idx[bid]++;
-          if (ENABLE_TOPP) {
+          if (use_target_sampling) {
+            accept_token = sampled_token_id_now[i];
+          } else if (ENABLE_TOPP) {
             auto actual_candidate_len_value =
                 actual_candidate_len_now[i] > max_candidate_len
                     ? max_candidate_len
@@ -307,6 +352,7 @@ static int cpu_wrapper(Context *ctx,
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 static int xpu3_wrapper(Context *ctx,
+                        const int64_t *sampled_token_ids,
                         int64_t *accept_tokens,
                         int *accept_num,
                         int64_t *step_idx,
@@ -332,10 +378,13 @@ static int xpu3_wrapper(Context *ctx,
                         const int max_candidate_len,
                         const int verify_window,
                         const bool prefill_one_step_stop,
-                        const bool benchmark_mode) {
+                        const bool benchmark_mode,
+                        const bool accept_all_drafts,
+                        const bool use_target_sampling) {
   using XPU_INT64 = typename XPUIndexType<int64_t>::type;
   xpu3::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>
-      <<<1, 64, ctx->xpu_stream>>>(
+      <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const XPU_INT64 *>(sampled_token_ids),
           reinterpret_cast<XPU_INT64 *>(accept_tokens),
           accept_num,
           reinterpret_cast<XPU_INT64 *>(step_idx),
@@ -361,11 +410,14 @@ static int xpu3_wrapper(Context *ctx,
           max_candidate_len,
           verify_window,
           prefill_one_step_stop,
-          benchmark_mode);
+          benchmark_mode,
+          accept_all_drafts,
+          use_target_sampling);
   return api::SUCCESS;
 }
 template <bool ENABLE_TOPP, bool USE_TOPK>
 int speculate_verify(Context *ctx,
+                     const int64_t *sampled_token_ids,
                      int64_t *accept_tokens,
                      int *accept_num,
                      int64_t *step_idx,
@@ -391,10 +443,13 @@ int speculate_verify(Context *ctx,
                      const int max_candidate_len,
                      const int verify_window,
                      const bool prefill_one_step_stop,
-                     const bool benchmark_mode) {
+                     const bool benchmark_mode,
+                     const bool accept_all_drafts,
+                     const bool use_target_sampling) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_verify", int64_t);
-  WRAPPER_DUMP_PARAM3(ctx, accept_tokens, accept_num, step_idx);
+  WRAPPER_DUMP_PARAM4(
+      ctx, sampled_token_ids, accept_tokens, accept_num, step_idx);
   WRAPPER_DUMP_PARAM6(ctx,
                       stop_flags,
                       seq_lens_encoder,
@@ -421,6 +476,7 @@ int speculate_verify(Context *ctx,
                       verify_window,
                       prefill_one_step_stop,
                       benchmark_mode);
+  WRAPPER_DUMP_PARAM2(ctx, accept_all_drafts, use_target_sampling);
   WRAPPER_DUMP(ctx);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz * max_draft_tokens, accept_tokens);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, accept_num);
@@ -454,6 +510,7 @@ int speculate_verify(Context *ctx,
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper<ENABLE_TOPP, USE_TOPK>(ctx,
+                                              sampled_token_ids,
                                               accept_tokens,
                                               accept_num,
                                               step_idx,
@@ -479,10 +536,13 @@ int speculate_verify(Context *ctx,
                                               max_candidate_len,
                                               verify_window,
                                               prefill_one_step_stop,
-                                              benchmark_mode);
+                                              benchmark_mode,
+                                              accept_all_drafts,
+                                              use_target_sampling);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper<ENABLE_TOPP, USE_TOPK>(ctx,
+                                               sampled_token_ids,
                                                accept_tokens,
                                                accept_num,
                                                step_idx,
@@ -508,7 +568,9 @@ int speculate_verify(Context *ctx,
                                                max_candidate_len,
                                                verify_window,
                                                prefill_one_step_stop,
-                                               benchmark_mode);
+                                               benchmark_mode,
+                                               accept_all_drafts,
+                                               use_target_sampling);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
@@ -517,6 +579,7 @@ int speculate_verify(Context *ctx,
   template int                                                      \
   baidu::xpu::api::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
       baidu::xpu::api::Context *, /* xpu_ctx */                     \
+      const int64_t *,            /* sampled_token_ids */           \
       int64_t *,                  /* accept_tokens */               \
       int *,                      /* accept_num */                  \
       int64_t *,                  /* step_idx */                    \
@@ -541,8 +604,11 @@ int speculate_verify(Context *ctx,
       int,                        /* max_seq_len */                 \
       int,                        /* max_candidate_len */           \
       int,                        /* verify_window */               \
-      bool,                                                         \
-      bool); /* prefill_one_step_stop */
+      bool,                       /* prefill_one_step_stop */       \
+      bool,                       /* benchmark_mode */              \
+      bool,                       /* accept_all_drafts */           \
+      bool                        /* use_target_sampling */         \
+  );
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)
 INSTANTIATE_SPECULATE_VERIFY(false, true)
