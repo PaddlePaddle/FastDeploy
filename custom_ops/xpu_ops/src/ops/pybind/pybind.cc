@@ -176,8 +176,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const paddle::optional<paddle::Tensor>& ffn2_shift,
     const paddle::optional<paddle::Tensor>& ffn2_smooth,
     const std::string& quant_method,
-    const int hadamard_blocksize,
-    const int valid_token_num);
+    const int hadamard_blocksize);
 
 std::vector<paddle::Tensor> MoeTopkSelect(
     const paddle::Tensor& gating_logits,
@@ -914,7 +913,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("moe_expert_ffn",
         &MoeExpertFFN,
         "MoE expert feed-forward network with quantization support",
-        py::arg("ffn_in"),  // [valid_token_num, hidden_dim]
+        py::arg("ffn_in"),
         py::arg("token_num_info"),
         py::arg("ffn1_weight"),
         py::arg("ffn2_weight"),
@@ -927,8 +926,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("ffn2_shift") = py::none(),
         py::arg("ffn2_smooth") = py::none(),
         py::arg("quant_method"),
-        py::arg("hadamard_blocksize"),
-        py::arg("valid_token_num"));
+        py::arg("hadamard_blocksize"));
 
   m.def("moe_topk_select",
         &MoeTopkSelect,

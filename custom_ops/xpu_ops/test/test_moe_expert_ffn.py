@@ -267,7 +267,6 @@ ffn2_out = moe_expert_ffn(
     ffn2_smooth_tensor,
     quant_method,
     hadamard_blocksize,
-    token_num,
 )
 ffn2_out = ffn2_out.astype("float32").numpy()
 print(f"ffn2_out: {ffn2_out}")
