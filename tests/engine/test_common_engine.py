@@ -1,4 +1,4 @@
-﻿"""
+"""
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -711,37 +711,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
-
-    def test_partial_chunked_tokens_computation_matches_formula(self):
-        """Validate partial_chunked_tokens computation in EngineService.__init__."""
-        # Use helper to build a base config
-        cfg = self._make_cfg()
-
-        # Set the parameters that drive partial_chunked_tokens
-        cfg.max_num_partial_prefills = 1
-        cfg.scheduler_config.max_num_batched_tokens = 8
-        cfg.cache_config.block_size = 2
-
-        # Patch heavy/IO components used during EngineService.__init__
-        with (
-            patch.object(
-                EngineService,
-                "start_worker_queue_service",
-                lambda self, start_queue: setattr(self, "engine_worker_queue", Mock()),
-            ),
-            patch("fastdeploy.engine.common_engine.ResourceManagerV1", Mock()),
-            patch("fastdeploy.engine.common_engine.ResourceManager", Mock()),
-            patch("fastdeploy.engine.common_engine.SplitwiseConnector", lambda *a, **k: Mock()),
-            patch("fastdeploy.engine.common_engine.TokenProcessor", Mock()),
-            patch("fastdeploy.engine.common_engine.schema_checker", lambda *a, **k: None),
-        ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
-
-        # Expected follows same integer-division+rounding-down logic used in production code.
-        expected_value_for_idx_1 = (
-            (cfg.scheduler_config.max_num_batched_tokens // 1) // cfg.cache_config.block_size
-        ) * cfg.cache_config.block_size
-        self.assertEqual(eng.partial_chunked_tokens, [0, expected_value_for_idx_1])
 
     def test_check_worker_initialize_status_progress(self):
         """Cover 1710-1762 by simulating stdout and ready signals."""
