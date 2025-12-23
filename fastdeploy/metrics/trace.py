@@ -46,8 +46,8 @@ try:
 
     opentelemetry_imported = True
 except ImportError as e:
-    print(f"Failed to import opentelemetry, tracing disabled.{e}")
-    logger.error(f"Failed to import opentelemetry, tracing disabled.{e}")
+    print(f"Failed to import opentelemetry, tracing disabled. {e}")
+    logger.error(f"Failed to import opentelemetry, tracing disabled. {e}")
 
     class id_generator:
         class IdGenerator:
