@@ -893,6 +893,12 @@ def parse_args():
         help="Shutdown comm group if worker idle.",
     )
 
+    parser.add_argument(
+        "--enable_entropy",
+        action="store_true",
+        help="Enable output of token-level entropy.",
+    )
+
     args = parser.parse_args()
     return args
 
