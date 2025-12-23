@@ -1034,9 +1034,12 @@ def run_worker_proc() -> None:
     """
     start worker process
     """
-    # 设置信号处理器以优雅退出
+    # Set signal handlers for graceful exit
     def signal_handler(signum, frame):
-        sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+        try:
+            sig_name = signal.Signals(signum).name
+        except (ValueError, AttributeError):
+            sig_name = f"Signal({signum})"
         logger.info(f"Worker process received {sig_name}, shutting down gracefully...")
         sys.exit(0)
     

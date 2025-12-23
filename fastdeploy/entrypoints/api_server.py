@@ -17,6 +17,7 @@
 import json
 import os
 import signal
+import subprocess
 import traceback
 
 import uvicorn
@@ -37,13 +38,13 @@ llm_engine = None
 
 
 def cleanup_engine():
-    """清理引擎资源"""
+    """Clean up engine resources"""
     global llm_engine
     if llm_engine is not None:
         try:
             if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc is not None:
                 try:
-                    # 检查进程是否已经结束
+                    # Check if process has already terminated
                     if llm_engine.worker_proc.poll() is not None:
                         api_server_logger.info("Worker process already terminated")
                         return
@@ -51,9 +52,14 @@ def cleanup_engine():
                     pgid = os.getpgid(llm_engine.worker_proc.pid)
                     api_server_logger.info(f"Terminating worker process group {pgid}")
                     os.killpg(pgid, signal.SIGTERM)
-                    # 等待进程结束
-                    llm_engine.worker_proc.wait(timeout=5)
-                    api_server_logger.info("Worker process terminated successfully")
+                    # Wait for process to terminate
+                    try:
+                        llm_engine.worker_proc.wait(timeout=5)
+                        api_server_logger.info("Worker process terminated successfully")
+                    except subprocess.TimeoutExpired:
+                        api_server_logger.warning("Worker process did not terminate in time, sending SIGKILL")
+                        os.killpg(pgid, signal.SIGKILL)
+                        llm_engine.worker_proc.wait(timeout=2)
                 except ProcessLookupError:
                     api_server_logger.info("Worker process already terminated")
                 except Exception as e:
@@ -63,11 +69,11 @@ def cleanup_engine():
 
 
 def signal_handler(signum, frame):
-    """处理SIGINT和SIGTERM信号"""
+    """Handle SIGINT and SIGTERM signals"""
     sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
     api_server_logger.info(f"Received {sig_name}, initiating graceful shutdown...")
     cleanup_engine()
-    # 让uvicorn处理实际的退出
+    # Let uvicorn handle the actual exit
 
 
 def init_app(args):

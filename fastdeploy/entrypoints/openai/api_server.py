@@ -91,13 +91,13 @@ connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
 def cleanup_processes():
-    """清理所有子进程"""
+    """Clean up all subprocesses"""
     global llm_engine
     if llm_engine is not None:
         try:
             if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc is not None:
                 try:
-                    # 检查进程是否已经结束
+                    # Check if process has already terminated
                     if llm_engine.worker_proc.poll() is not None:
                         api_server_logger.info("Worker process already terminated")
                         return
@@ -105,7 +105,7 @@ def cleanup_processes():
                     pgid = os.getpgid(llm_engine.worker_proc.pid)
                     api_server_logger.info(f"Terminating worker process group {pgid}")
                     os.killpg(pgid, signal.SIGTERM)
-                    # 等待进程结束，如果超时则强制杀死
+                    # Wait for process to terminate, force kill if timeout
                     try:
                         llm_engine.worker_proc.wait(timeout=5)
                         api_server_logger.info("Worker process terminated successfully")
@@ -134,12 +134,12 @@ def cleanup_processes():
 
 
 def signal_handler(signum, frame):
-    """处理SIGINT和SIGTERM信号"""
+    """Handle SIGINT and SIGTERM signals"""
     sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
     api_server_logger.info(f"Received {sig_name}, initiating graceful shutdown...")
     shutdown_event.set()
     cleanup_processes()
-    # 不在这里退出，让gunicorn处理
+    # Don't exit here, let gunicorn handle it
 
 
 class StandaloneApplication(BaseApplication):
@@ -157,24 +157,24 @@ class StandaloneApplication(BaseApplication):
         return self.application
     
     def run(self):
-        """重写run方法以添加信号处理"""
-        # 在主进程中设置信号处理器
+        """Override run method to add signal handling"""
+        # Set signal handlers in the main process
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         
         try:
             super().run()
         finally:
-            # 确保退出时清理所有资源
+            # Ensure cleanup on exit
             cleanup_processes()
     
     # Gunicorn hooks
     def worker_exit(self, server, worker):
-        """当worker进程退出时调用"""
+        """Called when a worker process exits"""
         api_server_logger.info(f"Worker {worker.pid} exiting")
     
     def on_exit(self, server):
-        """当Arbiter退出时调用"""
+        """Called when the Arbiter exits"""
         api_server_logger.info("Gunicorn master process exiting, cleaning up...")
         cleanup_processes()
 
