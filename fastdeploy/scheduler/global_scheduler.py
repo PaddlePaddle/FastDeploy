@@ -29,7 +29,7 @@ from fastdeploy.scheduler import utils
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.scheduler.storage import AdaptedRedis
 from fastdeploy.scheduler.workers import Task, Workers
-from fastdeploy.utils import envs, scheduler_logger
+from fastdeploy.utils import envs, llm_logger
 
 
 class GlobalScheduler:
@@ -125,7 +125,7 @@ class GlobalScheduler:
         self.get_response_workers = threading.Thread(target=self._get_results_worker, daemon=True)
         self.get_response_workers.start()
 
-        scheduler_logger.info(f"Scheduler: name={self.name} redis_version={self.client.version}")
+        llm_logger.info(f"Scheduler: name={self.name} redis_version={self.client.version}")
 
     def _get_hash_slot(self, data: str) -> int:
         """
@@ -198,7 +198,7 @@ class GlobalScheduler:
         try:
             _, name = utils.get_hostname_ip()
         except Exception as e:
-            scheduler_logger.warning(f"Scheduler encountered an error while resolving the IP address. {e}")
+            llm_logger.warning(f"Scheduler encountered an error while resolving the IP address. {e}")
             name = str(uuid.uuid4())
 
         size = len(name)
@@ -237,7 +237,7 @@ class GlobalScheduler:
                 )
                 time.sleep(self.keep_alive_duration / 2)
             except Exception as e:
-                scheduler_logger.error(f"Scheduler keep alive failed: {e}, {str(traceback.format_exc())}")
+                llm_logger.error(f"Scheduler keep alive failed: {e}, {str(traceback.format_exc())}")
                 time.sleep(min(3, self.keep_alive_duration / 4))
 
     def _scheduler_name_from_request_queue(self, request_queue: str) -> str:
@@ -370,10 +370,10 @@ class GlobalScheduler:
                 rem_amount=0,
                 ttl=self.ttl,
             )
-            scheduler_logger.info(f"Scheduler has enqueued some requests: {requests}")
+            llm_logger.info(f"Scheduler has enqueued some requests: {requests}")
 
         if duplicate:
-            scheduler_logger.warning(
+            llm_logger.warning(
                 "Scheduler has received some duplicated requests: "
                 f"{[task for task in tasks if task.reason is not None]}"
             )
@@ -421,7 +421,7 @@ class GlobalScheduler:
         """
 
         if available_blocks <= reserved_output_blocks or batch < 1:
-            scheduler_logger.debug(
+            llm_logger.debug(
                 f"Scheduler's resource are insufficient: available_blocks={available_blocks} "
                 f"reserved_output_blocks={reserved_output_blocks} batch={batch} "
                 f"max_num_batched_tokens={max_num_batched_tokens}"
@@ -491,7 +491,7 @@ class GlobalScheduler:
                     ttl=self.ttl,
                 )
                 serialized_requests += [(lucky_request_queue_name, element) for element in elements]
-                scheduler_logger.info(
+                llm_logger.info(
                     f"Scheduler {self.name} has stolen some requests from another lucky one. "
                     f"(name={lucky} num={len(serialized_requests)})"
                 )
@@ -499,7 +499,7 @@ class GlobalScheduler:
                 exist_num = self.client.exists(self._instance_name(lucky))
                 if exist_num == 0:
                     if self.client.zrem(extend_scheduler_load_table_name, lucky):
-                        scheduler_logger.info(f"Scheduler {lucky} has been removed")
+                        llm_logger.info(f"Scheduler {lucky} has been removed")
 
         # blocked read
         if len(serialized_requests) == 0:
@@ -517,7 +517,7 @@ class GlobalScheduler:
             self.client.zincrby(load_table_name, -1, scheduler_name, rem_amount=0, ttl=self.ttl)
             serialized_requests.append((request_queue_name, element[1]))
             if scheduler_name != self.name:
-                scheduler_logger.info(
+                llm_logger.info(
                     f"Scheduler {self.name} has stolen a request from another scheduler. (name={scheduler_name})"
                 )
 
@@ -573,7 +573,7 @@ class GlobalScheduler:
                         self.stolen_requests[request.request_id] = request
                         continue
 
-                    scheduler_logger.error(f"Scheduler has received a duplicate request from others: {request}")
+                    llm_logger.error(f"Scheduler has received a duplicate request from others: {request}")
 
         requests: List[Request] = [request.raw for request in scheduled_requests]
         if len(remaining_request) > 0:
@@ -596,14 +596,12 @@ class GlobalScheduler:
                     ttl=self.ttl,
                 )
 
-            scheduler_logger.info(f"Scheduler has put remaining request into the queue: {len(remaining_request)}")
+            llm_logger.info(f"Scheduler has put remaining request into the queue: {len(remaining_request)}")
             if len(requests) == 0:
-                scheduler_logger.debug(
-                    f"Scheduler has put all just-pulled request into the queue: {len(remaining_request)}"
-                )
+                llm_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(remaining_request)}")
 
         if len(requests) > 0:
-            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+            llm_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
         return requests
 
     def _put_results_worker(self, tasks: List[Task]):
@@ -649,7 +647,7 @@ class GlobalScheduler:
                 stolen_responses[response_queue_name].append(response.serialize())
                 continue
 
-            scheduler_logger.error(f"Scheduler has received a non-existent response from engine: {[response]}")
+            llm_logger.error(f"Scheduler has received a non-existent response from engine: {[response]}")
 
         with self.mutex:
             for request_id, responses in local_responses.items():
@@ -664,7 +662,7 @@ class GlobalScheduler:
                 self.local_response_not_empty.notify_all()
 
         if len(finished_request_ids) > 0:
-            scheduler_logger.info(f"Scheduler has received some finished responses: {finished_request_ids}")
+            llm_logger.info(f"Scheduler has received some finished responses: {finished_request_ids}")
 
         for response_queue_name, responses in stolen_responses.items():
             self.client.rpush(response_queue_name, *responses, ttl=self.ttl)
@@ -719,7 +717,7 @@ class GlobalScheduler:
                 with self.mutex:
                     for request_id, contents in responses.items():
                         if request_id not in self.local_responses:
-                            scheduler_logger.error(
+                            llm_logger.error(
                                 "Scheduler has received some non-existent response from the queue. "
                                 f"response:{contents} queue:{self._response_queue_name()}"
                             )
@@ -727,7 +725,7 @@ class GlobalScheduler:
                         self.local_responses[request_id] += contents
                     self.local_response_not_empty.notify_all()
             except Exception as e:
-                scheduler_logger.error(
+                llm_logger.error(
                     f"Scheduler get_results_worker exception: {e} " f"traceback: {traceback.format_exc()}"
                 )
 
@@ -793,7 +791,7 @@ class GlobalScheduler:
 
                 if finished:
                     del self.local_responses[request_id]
-                    scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    llm_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
             return results
 
     def reset(self):
@@ -824,7 +822,7 @@ class GlobalScheduler:
             self.client.zrem(self._load_table_name(), self.name)
             self.local_responses = dict()
             self.stolen_requests = dict()
-        scheduler_logger.info("Scheduler has been reset")
+        llm_logger.info("Scheduler has been reset")
 
     def update_config(self, load_shards_num: Optional[int], reallocate: Optional[bool]):
         """
@@ -858,7 +856,7 @@ class GlobalScheduler:
             if reallocate:
                 self.shard = self._get_hash_slot(self.name) % self.load_shards_num
 
-        scheduler_logger.info(
+        llm_logger.info(
             "Scheduler has reload config, "
             f"load_shards_num({old_load_shards_num} => {self.load_shards_num}) "
             f"shard({old_shard} => {self.shard})"

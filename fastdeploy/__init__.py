@@ -63,7 +63,11 @@ paddle.compat.enable_torch_proxy(scope={"triton"})
 if envs.FD_DEBUG != 1:
     import logging
 
-    pf_logger.logger.setLevel(logging.INFO)
+    # Set paddleformers logger to WARNING to suppress INFO logs but still show warnings and errors.
+    pf_logger.logger.setLevel(logging.ERROR)
+    import warnings
+
+    warnings.filterwarnings("ignore", module="paddleformers")
 
 try:
     import use_triton_in_paddle
