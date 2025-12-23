@@ -14,142 +14,19 @@
 # limitations under the License.
 """
 
-from abc import ABC, abstractmethod
-
 import numpy as np
-from paddleformers.generation import GenerationConfig
 from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
+from fastdeploy.input.base_processor import BaseDataProcessor
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
 
 
-class BaseDataProcessor(ABC):
-    """base class for data processor"""
-
-    def __init__(self):
-        """
-        Returns:
-            None
-        """
-        self.tokenizer = self._load_tokenizer()
-        self.tokenizer.bos_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.bos_token)
-        self.tokenizer.cls_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.cls_token)
-        self.tokenizer.sep_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.sep_token)
-        self.tokenizer.eos_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.eos_token)
-        self.tokenizer.mask_token_id = self.tokenizer._convert_token_to_id(self.tokenizer.mask_token)
-        data_processor_logger.info(
-            (
-                f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, ",
-                f"cls_token is {self.tokenizer.cls_token}, {self.tokenizer.cls_token_id}, "
-                f"sep_token is {self.tokenizer.sep_token}, {self.tokenizer.sep_token_id}, "
-                f"eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id}, "
-                f"mask_token is {self.tokenizer.mask_token}, {self.tokenizer.mask_token_id}",
-            )
-        )
-
-    def _apply_default_parameters(self, request):
-        """
-        Apply default value for parameters in request
-        """
-
-        def set_value(req, key, value):
-            value = getattr(self.generation_config, key, value)
-            if isinstance(req, dict):
-                if key not in req or req[key] is None:
-                    req[key] = value
-            else:
-                if req.get(key) is None:
-                    req.set(key, value)
-
-        set_value(request, "top_p", 0.7)
-        set_value(request, "temperature", 1.0)
-        set_value(request, "repetition_penalty", 1.0)
-        set_value(request, "frequency_penalty", 0.0)
-        set_value(request, "presence_penalty", 0.0)
-        return request
-
-    @abstractmethod
-    def process_request(self, request, **kwargs):
-        """
-        Preprocess the request
-
-        Args:
-            request (Dict): may contain text and messages fields
-            **kwargs: others
-
-        Returns:
-            bool: Whether preprocessing is successful
-            str: error message
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def process_response(self, response_dict):
-        """
-        Preprocess the response
-
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
-
-        Returns:
-            Dict: response contain text fields
-        """
-        raise NotImplementedError
-
-    def text2ids(self, text, max_model_len=None):
-        """
-        text to token ids
-
-        Args:
-            text (str): text
-
-        Returns:
-            List[int]: token ids list
-        """
-        raise NotImplementedError
-
-    def messages2ids(self, messages):
-        """
-        Convert multi-turn messages into ID sequences.
-
-        Args:
-            messages (List[List[Dict[str, Any]]]): multi-turn messages.
-
-        Returns:
-            List[int]: ID sequences
-        """
-        raise NotImplementedError
-
-    def ids2tokens(self, token_id, task_id=None):
-        """
-        token ids to strings
-
-        Args:
-            token_id (List[int]): token id
-                        task_id (str): task id
-
-        Returns:
-            List[str]: strings
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _load_tokenizer(self):
-        """
-        load tokenizer
-
-        Returns:
-            tokenizer (AutoTokenizer)
-        """
-        raise NotImplementedError
-
-
 class DataProcessor(BaseDataProcessor):
-    def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None):
+    def __init__(self, model_name_or_path, reasoning_parser_obj=None, tool_parser_obj=None, is_ernie=True):
         """
             Initializes the DecodeStatus object.
 
@@ -163,40 +40,7 @@ class DataProcessor(BaseDataProcessor):
         Raises:
             None.
         """
-
-        self.model_name_or_path = model_name_or_path
-
-        # Generation config
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(self.model_name_or_path)
-        except Exception as e:
-            data_processor_logger.warning(
-                f"Can't find generation config: {e}, so it will not use generation_config field in the model config"
-            )
-            self.generation_config = None
-
-        self.decode_status = dict()
-        self.model_status_dict = dict()
-        self.tool_parser_dict = dict()
-        self.tokenizer = self._load_tokenizer()
-        data_processor_logger.info(
-            f"tokenizer information: bos_token is {self.tokenizer.bos_token}, {self.tokenizer.bos_token_id}, \
-                                eos_token is {self.tokenizer.eos_token}, {self.tokenizer.eos_token_id} "
-        )
-
-        from paddleformers.trl.llm_utils import get_eos_token_id
-
-        self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        data_processor_logger.info(
-            f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
-        )
-        self.eos_token_id_len = len(self.eos_token_ids)
-        self.pad_token_id = self.get_pad_id()
-        self.reasoning_parser = None
-        self.tool_parser_obj = tool_parser_obj
-        if reasoning_parser_obj:
-            self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
-        self.tokenizer.pad_token_id = self.pad_token_id
+        super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj, is_ernie)
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """
@@ -232,6 +76,7 @@ class DataProcessor(BaseDataProcessor):
                 assert isinstance(prompt, str) or (
                     isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
                 ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+
                 if isinstance(prompt, list):  # if prompt is a token id list
                     request.prompt_token_ids = prompt
                 else:
@@ -239,8 +84,6 @@ class DataProcessor(BaseDataProcessor):
                         request.prompt, max_model_len, add_special_tokens=add_special_tokens
                     )
             elif request.messages is not None:
-                if self.tokenizer.chat_template is None:
-                    raise ValueError("This model does not support chat_template.")
                 task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
@@ -250,10 +93,9 @@ class DataProcessor(BaseDataProcessor):
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                task.setdefault("enable_thinking", True)
                 request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
             else:
-                raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
+                raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 
         if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
@@ -284,7 +126,7 @@ class DataProcessor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request: {request}")
         return request
 
-    def process_request_dict(self, request, max_model_len=None, **kwargs):
+    def process_request_dict(self, request, max_model_len=None):
         """
         Preprocess the request
 
@@ -321,12 +163,15 @@ class DataProcessor(BaseDataProcessor):
                 if isinstance(prompt, list):  # if prompt is a token id list
                     request["prompt_token_ids"] = prompt
                 else:
+                    request["prompt_tokens"] = prompt
                     request["prompt_token_ids"] = self.text2ids(
                         request["prompt"], max_model_len, add_special_tokens=add_special_tokens
                     ).tolist()
+                    req_id = request.get("request_id", None)
+                    data_processor_logger.info(
+                        f"req_id:{req_id}, tokens:{prompt}, token_ids: {request["prompt_token_ids"]}"
+                    )
             elif request.get("messages"):
-                if self.tokenizer.chat_template is None:
-                    raise ValueError("This model does not support chat_template.")
                 chat_template_kwargs = request.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
@@ -335,7 +180,6 @@ class DataProcessor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.setdefault("enable_thinking", True)
                 request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
@@ -353,6 +197,7 @@ class DataProcessor(BaseDataProcessor):
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+
         if self.reasoning_parser:
             model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
             parts = request["request_id"].split("_")
@@ -365,13 +210,8 @@ class DataProcessor(BaseDataProcessor):
             else:
                 self.model_status_dict[request["request_id"]] = model_status
             request["enable_thinking"] = model_status == "think_start"
-
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
-
-    def process_logprob_response(self, token_ids, **kwargs):
-        full_text = self.tokenizer.decode(token_ids, **kwargs)
-        return full_text
 
     def process_response(self, response_dict, **kwargs):
         """
@@ -385,7 +225,7 @@ class DataProcessor(BaseDataProcessor):
         """
         req_id = response_dict.request_id
         token_ids = response_dict.outputs.token_ids
-        if token_ids[-1] == self.tokenizer.eos_token_id:
+        if token_ids[-1] in self.eos_token_ids:
             token_ids = token_ids[:-1]
         full_text = self.tokenizer.decode(token_ids)
         response_dict.outputs.text = full_text
@@ -654,25 +494,6 @@ class DataProcessor(BaseDataProcessor):
             from paddleformers.transformers import AutoTokenizer
 
             return AutoTokenizer.from_pretrained(self.model_name_or_path, padding_side="left", use_fast=True)
-
-    def clear_request_status(self, task_id):
-        """
-        clear request status
-
-        Args:
-            task_id (str): task id
-
-        Returns:
-            results_all (str): all token strings
-        """
-        results_all = ""
-        if task_id in self.decode_status:
-            if envs.FD_USE_HF_TOKENIZER:
-                results_all = self.decode_status[task_id][2]
-            else:
-                results_all = "".join(self.decode_status[task_id][3])
-            del self.decode_status[task_id]
-        return results_all
 
     def get_pad_id(self):
         """

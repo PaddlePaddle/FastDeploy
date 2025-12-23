@@ -78,22 +78,15 @@ class InputPreprocessor:
             )
         except:
             if not self.model_config.enable_mm:
-                if not ErnieArchitectures.contains_ernie_arch(architecture):
-                    from fastdeploy.input.text_processor import DataProcessor
+                is_ernie = ErnieArchitectures.is_ernie_arch(architecture)
+                from fastdeploy.input.text_processor import DataProcessor
 
-                    self.processor = DataProcessor(
-                        model_name_or_path=self.model_name_or_path,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
-                else:
-                    from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
-
-                    self.processor = Ernie4_5Processor(
-                        model_name_or_path=self.model_name_or_path,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                    )
+                self.processor = DataProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
+                    is_ernie=is_ernie,
+                )
             else:
                 if ErnieArchitectures.contains_ernie_arch(architecture):
                     from fastdeploy.input.ernie4_5_vl_processor import (
