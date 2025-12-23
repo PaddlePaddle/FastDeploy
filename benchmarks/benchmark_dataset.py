@@ -234,6 +234,7 @@ class EBDataset(BenchmarkDataset):
             if len(samples) >= num_requests:
                 break
             json_data = entry
+
             prompt = entry["text"]
             self.temperature = float(entry.get("temperature", 1))
             self.repetition_penalty = float(entry.get("penalty_score", 0))
