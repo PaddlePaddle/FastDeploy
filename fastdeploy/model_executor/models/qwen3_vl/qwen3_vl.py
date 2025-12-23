@@ -109,7 +109,6 @@ class Qwen3_VLModel(nn.Layer):
             )
             if deepstack_inputs is not None and layer_id < len(deepstack_inputs):
                 hidden_states = hidden_states + deepstack_inputs[layer_id]
-        logger.info(f"after block layers {hidden_states}, residual {residual}")
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
@@ -207,9 +206,9 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
                 if weight_name not in loaded_weight_name:
                     continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                logger.info(
-                    f"[Qwen3-VL] loaded_weight_name: {loaded_weight_name}, weight_name {weight_name}, param_name {param_name}, model_param_name {model_param_name} 1"
-                )
+                # logger.info(
+                #     f"[Qwen3-VL] loaded_weight_name: {loaded_weight_name}, weight_name {weight_name}, param_name {param_name}, model_param_name {model_param_name} 1"
+                # )
                 if model_param_name not in params_dict:
                     logger.info(f"[Qwen3-VL] {model_param_name} not in params_dict1")
                     continue
@@ -275,7 +274,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         self,
         input_embeddings: paddle.Tensor,
         image_features: paddle.Tensor,
-        image_mask: paddle.Tensor,
+        vision_mask: paddle.Tensor,
     ):
         """For only image inputs case"""
         mm_embeddings_main, mm_embeddings_multiscale = paddle.split(
@@ -286,7 +285,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             size=[input_embeddings.shape[0], self.deepstack_num_level * input_embeddings.shape[1]],
         )
 
-        deepstack_input_embeds[image_mask] = mm_embeddings_multiscale
+        deepstack_input_embeds[vision_mask] = mm_embeddings_multiscale
         deepstack_input_embeds = deepstack_input_embeds.view(
             input_embeddings.shape[0], self.deepstack_num_level, self.visual_dim
         )
@@ -325,7 +324,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             ) = self._compute_deepstack_embeds_v0(
                 input_embeddings,
                 image_features,
-                image_mask,
+                image_mask | video_mask,
             )
 
         if image_token_num.item() > 0:
