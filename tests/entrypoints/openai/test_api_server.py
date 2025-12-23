@@ -1,9 +1,3 @@
-"""
-Extra coverage for `fastdeploy.entrypoints.openai.api_server`.
-Tests are lightweight and mock heavy dependencies to exercise branches
-that were previously uncovered.
-"""
-
 import asyncio
 import importlib
 import sys
