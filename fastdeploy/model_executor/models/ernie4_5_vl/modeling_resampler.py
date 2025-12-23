@@ -15,7 +15,6 @@
 """
 
 from copy import deepcopy
-from functools import partial
 
 import numpy as np
 import paddle
@@ -156,7 +155,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.temporal_conv_size = temporal_conv_size
         self.use_recompute_resampler = False
         self.use_temporal_conv = True
-        self.tensor_parallel_degree = config.pretrained_config.tensor_parallel_degree
+        self.tensor_parallel_degree = config.pretrained_config.tensor_model_parallel_size
         self.prefix_name = prefix_name
 
         # for 空间四合一
@@ -351,31 +350,3 @@ class VariableResolutionResamplerModel(nn.Layer):
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
                 param.copy_(tensor, False)
-
-    @classmethod
-    def _get_tensor_parallel_mappings(cls, config, is_split=True):
-
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
-
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads,
-        )
-        res = {"spatial_linear.0.weight": partial(fn, is_column=False)}
-        for k in (
-            "spatial_linear.0.bias",  # row linear bias
-            "spatial_linear.2.weight",
-            "spatial_linear.2.bias",  # linear
-            "spatial_linear.3.weight",
-            "spatial_linear.3.bias",  # layernorm
-            "temporal_linear.0.weight",
-            "temporal_linear.0.weight",  # linear
-            "temporal_linear.2.weight",
-            "temporal_linear.2.bias",  # linear
-            "temporal_linear.3.weight",
-            "temporal_linear.3.bias",  # bias
-        ):
-            res.update({k: lambda x: x})
-        return res
