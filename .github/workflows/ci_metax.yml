@@ -1,7 +1,7 @@
 name: CI_METAX
 
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -12,11 +12,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: jenkins-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   trigger-jenkins:
     name: Trigger Jenkins for PR
     runs-on: ubuntu-latest
     environment: Metax_ci
+
     steps:
       - name: Trigger Jenkins job
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.0
