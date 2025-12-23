@@ -570,6 +570,9 @@ __global__ void group_idx_and_topk_idx_kernel(
       neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
+    // There is a possible case:
+    // may have many different group holding the same score!
+    // but we only accept some of them!
     num_equalto_topkth_group = want_neg_inf_num - last_neg_inf_num;
   }
   __syncthreads();
