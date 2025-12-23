@@ -547,7 +547,7 @@ __global__ void group_idx_and_topk_idx_kernel(
 
   if (case_id < num_tokens) {
     // calculate group_idx
-    int32_t target_num_min = WARP_SIZE - n_group + topk_group;
+    int32_t target_neg_inf_num = WARP_SIZE - n_group + topk_group;
     if (lane_id < n_group &&
         (isfinite(cuda_cast<float, T>(
             group_scores[lane_id]))))  // The check is necessary to avoid
@@ -559,7 +559,7 @@ __global__ void group_idx_and_topk_idx_kernel(
     int neg_inf_num = WARP_SIZE - n_group;
     int last_neg_inf_num = 0;
     // Use loop to find the largset top_group
-    while (neg_inf_num < target_num_min) {
+    while (neg_inf_num < target_neg_inf_num) {
       __syncwarp();  // Ensure all threads have valid data before reduction
       topk_group_value = cg::reduce(tile, value, cg::greater<T>());
       if (value == topk_group_value) {
@@ -570,7 +570,7 @@ __global__ void group_idx_and_topk_idx_kernel(
       neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
-    num_equalto_topkth_group = target_num_min - last_neg_inf_num;
+    num_equalto_topkth_group = target_neg_inf_num - last_neg_inf_num;
   }
   __syncthreads();
 
