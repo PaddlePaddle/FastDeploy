@@ -43,9 +43,19 @@ def cleanup_engine():
         try:
             if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc is not None:
                 try:
+                    # 检查进程是否已经结束
+                    if llm_engine.worker_proc.poll() is not None:
+                        api_server_logger.info("Worker process already terminated")
+                        return
+                    
                     pgid = os.getpgid(llm_engine.worker_proc.pid)
                     api_server_logger.info(f"Terminating worker process group {pgid}")
                     os.killpg(pgid, signal.SIGTERM)
+                    # 等待进程结束
+                    llm_engine.worker_proc.wait(timeout=5)
+                    api_server_logger.info("Worker process terminated successfully")
+                except ProcessLookupError:
+                    api_server_logger.info("Worker process already terminated")
                 except Exception as e:
                     api_server_logger.error(f"Error terminating worker process: {e}")
         except Exception as e:

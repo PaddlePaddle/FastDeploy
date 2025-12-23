@@ -97,26 +97,36 @@ def cleanup_processes():
         try:
             if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc is not None:
                 try:
+                    # 检查进程是否已经结束
+                    if llm_engine.worker_proc.poll() is not None:
+                        api_server_logger.info("Worker process already terminated")
+                        return
+                    
                     pgid = os.getpgid(llm_engine.worker_proc.pid)
                     api_server_logger.info(f"Terminating worker process group {pgid}")
                     os.killpg(pgid, signal.SIGTERM)
                     # 等待进程结束，如果超时则强制杀死
                     try:
                         llm_engine.worker_proc.wait(timeout=5)
+                        api_server_logger.info("Worker process terminated successfully")
                     except subprocess.TimeoutExpired:
                         api_server_logger.warning("Worker process did not terminate in time, sending SIGKILL")
                         os.killpg(pgid, signal.SIGKILL)
                         llm_engine.worker_proc.wait(timeout=2)
+                except ProcessLookupError:
+                    api_server_logger.info("Worker process already terminated")
                 except Exception as e:
                     api_server_logger.error(f"Error terminating worker process: {e}")
             
             if hasattr(llm_engine, "cache_manager_processes") and llm_engine.cache_manager_processes:
                 for proc in llm_engine.cache_manager_processes:
                     try:
-                        proc.terminate()
-                        proc.join(timeout=2)
                         if proc.is_alive():
-                            proc.kill()
+                            proc.terminate()
+                            proc.join(timeout=2)
+                            if proc.is_alive():
+                                proc.kill()
+                                proc.join(timeout=1)
                     except Exception as e:
                         api_server_logger.error(f"Error terminating cache manager process: {e}")
         except Exception as e:
