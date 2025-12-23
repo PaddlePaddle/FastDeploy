@@ -99,6 +99,7 @@ class CudaGraphPiecewiseBackend:
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
+        # print(f"======self.real_shape_to_captured_size: {self.real_shape_to_captured_size}")
         self.unique_memory_pool_id = None
         if self.fd_config.graph_opt_config.use_unique_memory_pool:
             # TODO(gongshaotian): Optimize code
@@ -146,8 +147,12 @@ class CudaGraphPiecewiseBackend:
     def __call__(self, **kwargs) -> List[paddle.Tensor] | paddle.Tensor:
         # Get real shape(all num tokens)
         ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
+        # logger.info(f"ids_remove_padding: {ids_remove_padding}")
         real_shape = ids_remove_padding.shape[0]
         padding_real_shape = self.real_shape_to_captured_size[real_shape]
+        logger.info(f"self.real_shape_to_captured_size: {self.real_shape_to_captured_size}")
+        logger.info(f"real_shape : {real_shape}")
+        logger.info(f"padding_real_shape : {padding_real_shape}")
         logger.debug(
             f"[CUDA GRAPH][ID:{id(self)}] The actual real shape obtained by CUDAGraph is :{real_shape}, "
             f"The padded shape is :{padding_real_shape}, If Padding :{real_shape != padding_real_shape}"
@@ -166,6 +171,7 @@ class CudaGraphPiecewiseBackend:
             return self.run_static_model(entry, **kwargs)
 
         # Capture a new cuda graph
+        # print(f"entry.cuda_graph: {entry.cuda_graph}")
         if entry.cuda_graph is None:
             # Warmup the model
             for n in range(entry.num_finished_warmup, self.warm_up_size):
@@ -182,6 +188,10 @@ class CudaGraphPiecewiseBackend:
 
             new_grpah = graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
             paddle.device.synchronize()
+
+            logger.info(f"**kwargs:")
+            for key, value in kwargs.items():
+                logger.info(f"key=: {key} → value: {value}")
 
             # Capture
             with capture_custom_allreduce():
@@ -206,12 +216,13 @@ class CudaGraphPiecewiseBackend:
             paddle.device.synchronize()
 
             # For CUDAGraph debug
-            # self._save_cudagrpah_dot_files(entry)
+            self._save_cudagrpah_dot_files(entry)
             logger.info(f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
+        # print(f"entry.cuda_graph.replay() ============")
         entry.cuda_graph.replay()
-        logger.debug(f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph replayed for real shape {padding_real_shape}")
+        logger.info(f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph replayed for real shape {padding_real_shape}")
         if len(entry.output_buffers) == 1:
             return entry.output_buffers[0]
         return entry.output_buffers

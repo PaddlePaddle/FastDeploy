@@ -86,8 +86,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.max_logprobs = (
             self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
         )
-        self.use_cudagraph = self.graph_opt_config.use_cudagraph
-        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
 
         # VL model config:
         if self.enable_mm:
@@ -133,10 +131,18 @@ class XPUModelRunner(ModelRunnerBase):
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
 
-        # Cuda Graph
-        self.graph_opt_level = self.graph_opt_config.graph_opt_level
-        self.use_cudagraph = False
+        # CUDA Graph
+        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
+        self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
+
+        # self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
+
+        # # Cuda Graph
+        # self.graph_opt_level = self.graph_opt_config.graph_opt_level
+        # self.use_cudagraph = False
+        # self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
@@ -344,6 +350,21 @@ class XPUModelRunner(ModelRunnerBase):
         )
         rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
+    def only_prefill(self):
+        """
+        check whether prefill only
+        """
+        if_only_prefill = True
+        decode_exists = None
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            only_prefill_batch_list = []
+            decode_exists = self.exist_decode()
+            paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
+            if_only_prefill = all(only_prefill_batch_list)
+
+        if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
+
+        return if_only_prefill
     def only_decode(self):
         """
         Update Batch type for if_only_decode.
@@ -376,6 +397,7 @@ class XPUModelRunner(ModelRunnerBase):
         """
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
+            logger.info("11111111111")
             self.initialize_kv_cache()
 
         req_len = len(req_dicts)
@@ -892,6 +914,24 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
+    def only_decode(self):
+        """
+        check whether decode only
+        """
+        # Update Batch type for cuda graph for if_only_decode
+        if_only_decode = True
+        prefill_exists = None
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            if_only_decode = all(only_decode_batch_list)
+
+        if_only_decode = if_only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
+        return if_only_decode
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -916,6 +956,27 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_profiling=is_dummy_run,
+        )
+
+        # Update Batch type for cuda graph for only_decode_batch
+        if_only_decode = self.only_decode()
+
+        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+        # print(f"prepare input ======= self.use_cudagraph : {self.use_cudagraph}")
+
+        # Update config about moe for better performance
+        # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+            if self.speculative_decoding:
+                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+       
+        # Update Batch type for cuda graph for only_prefill_batch
+        only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
+        # print(f"prepare input ======= self.cudagraph_only_prefill : {self.cudagraph_only_prefill}, only_decode_use_cudagraph : {only_decode_use_cudagraph}")
+
+        self.forward_meta.step_use_cudagraph = (
+            only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -1152,6 +1213,14 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+    # def _dummy_prefill_inputs(self, expected_decode_len: int, batch_size: int):
+    #     """
+    #     Use dummy inputs to run before formal execution.
+    #     Args:
+    #         expected_decode_len: Expected number of tokens generated
+    #         in_capturing: Is cuda graph in capturing state
+    #     """
+    #     block_num = 
 
     def _dummy_run(
         self,
@@ -1164,6 +1233,9 @@ class XPUModelRunner(ModelRunnerBase):
         Args:
             num_tokens: Expected number of tokens generated
         """
+        # print(f"dummy run, num_tokens: {num_tokens}, batch_size: {batch_size}")
+        # if batch_size == 32:
+        #     batch_size = 16
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         if self.speculative_method in ["mtp"]:
@@ -1228,18 +1300,19 @@ class XPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        print(f"capture_sizes : {capture_sizes}")
+        logger.info(f"capture_sizes : {capture_sizes}")
         try:
             for batch_size in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=int(self.scheduler_config.max_num_batched_tokens),
-                    batch_size=min(self.scheduler_config.max_num_seqs, 1),
-                    in_capturing=True,
-                    # expected_decode_len=expected_decode_len,
-                )
-                logger.info(
-                    f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
-                )
+                if batch_size == 1:
+                    self._dummy_run(
+                        num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+                        batch_size=min(self.scheduler_config.max_num_seqs, 1),
+                        in_capturing=True,
+                        # expected_decode_len=expected_decode_len,
+                    )
+                    logger.info(
+                        f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+                    )
         except RuntimeError as e:
             if "out of memory" in str(e):
                 raise RuntimeError(
@@ -1292,8 +1365,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.kv_signal_sender = create_kv_signal_sender()
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
-
-        self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
+        if is_dummy_run:
+            self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
+        logger.info(f"self.forward_meta.step_use_cudagraph: {self.forward_meta.step_use_cudagraph}")
+        # self.forward_meta.step_use_cudagraph = True
+        # in_capture表示本step是不是使用cudagraph
+        # print(f"in_capturing: {in_capturing}, step_use_cudagraph: {self.forward_meta.step_use_cudagraph}")
         self.padding_cudagraph_inputs()
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
@@ -1304,18 +1381,18 @@ class XPUModelRunner(ModelRunnerBase):
             return None
 
         # 2. Padding inputs for cuda grph
-
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
             )
         else:
+            # logger.info(f"ids_remove_padding: {self.share_inputs['ids_remove_padding]}")
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
@@ -1421,6 +1498,7 @@ class XPUModelRunner(ModelRunnerBase):
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
+        logger.info(f"self.scheduler_config.max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens}")
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
@@ -1506,7 +1584,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
-            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.forward_meta.seq_lens_this_time = self.share_inputs["seq_lens_this_time"]
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
     
