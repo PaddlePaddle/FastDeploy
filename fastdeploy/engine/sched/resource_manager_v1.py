@@ -422,10 +422,6 @@ class ResourceManagerV1(ResourceManager):
                     if can_split_idx_list[i] >= new_end_idx:
                         new_end_idx = can_split_idx_list[i]
                         break
-
-            if end_modal_id == IDS_TYPE_FLAG["audio"] and new_end_idx > end_patch_map["end_idx"]:
-                new_end_idx = end_patch_map["end_idx"]
-
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
