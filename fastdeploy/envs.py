@@ -119,6 +119,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
+    # Max allocated KV cache blocks. Use this to limit how many KV cache blocks the engine is allowed to allocate.
+    # Set to -1 (default) for no limit, or a positive integer to cap the maximum number of blocks that can be allocated.
+    "FD_MAX_KVCACHE_BLOCKS": lambda: int(os.getenv("FD_MAX_KVCACHE_BLOCKS", "-1")),
     # Enable or disable model caching.
     # When enabled, the quantized model is stored as a cache for future inference to improve loading efficiency.
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
