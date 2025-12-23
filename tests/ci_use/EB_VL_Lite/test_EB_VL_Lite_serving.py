@@ -776,6 +776,7 @@ def test_structured_outputs_choice(openai_client):
     """
     choice_param = {
         "temperature": 1,
+        "top_p": 0.0,
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": "What is the landmark building in Shenzhen?"}],
         "extra_body": {
@@ -855,6 +856,7 @@ def test_structured_outputs_grammar(openai_client):
 
     grammar_param = {
         "temperature": 1,
+        "top_p": 0.0,
         "max_tokens": 1024,
         "messages": [
             {
@@ -877,7 +879,7 @@ def test_structured_outputs_grammar(openai_client):
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
-    baseline = 40000
+    baseline = 65565
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")

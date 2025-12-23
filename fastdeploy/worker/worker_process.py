@@ -421,6 +421,7 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.ranks > 1:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             req_dicts = None
@@ -441,7 +442,8 @@ class PaddleDisWorkerProc:
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.barrier()
+                if self.ranks > 1:
+                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
@@ -456,14 +458,18 @@ class PaddleDisWorkerProc:
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
+                        self.parallel_config.shutdown_comm_group_if_worker_idle,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
-                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                        time.sleep(0.01)
-                    continue
+
+                    # 只有不关闭通信组时，清理权重后需要额外等待（否则信号量会同步混乱）
+                    if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                        while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                            time.sleep(0.01)
+                        continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -524,11 +530,9 @@ class PaddleDisWorkerProc:
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            # NOTE(liuzichang): Too many block will lead to illegal memory access
-            # We will develop dynamic limits in future.
-            if num_blocks_local > 40000:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
-                num_blocks_local = min(40000, num_blocks_local)
+            if envs.FD_MAX_KVCACHE_BLOCKS > 0 and num_blocks_local > envs.FD_MAX_KVCACHE_BLOCKS:
+                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to {envs.FD_MAX_KVCACHE_BLOCKS}")
+                num_blocks_local = envs.FD_MAX_KVCACHE_BLOCKS
             logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
@@ -881,6 +885,12 @@ def parse_args():
         help="Configation of Rollout Routing Replay.",
     )
 
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -979,6 +989,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         or current_platform.is_xpu()
         or current_platform.is_maca()
         or current_platform.is_iluvatar()
+        or current_platform.is_intel_hpu()
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
