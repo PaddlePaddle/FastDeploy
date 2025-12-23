@@ -212,8 +212,10 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
-        self.is_quantized = fd_config.model_config.is_quantized and not (
-            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        self.is_moe_quantized = getattr(self.fd_config.model_config, "is_moe_quantized", False)
+        self.is_quantized = self.is_moe_quantized or (
+            fd_config.model_config.is_quantized
+            and not (fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None)
         )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
