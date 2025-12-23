@@ -557,6 +557,7 @@ __global__ void group_idx_and_topk_idx_kernel(
     }
 
     int neg_inf_num = WARP_SIZE - n_group;
+    int last_neg_inf_num = 0;
     // Use loop to find the largset top_group
     while (neg_inf_num < target_num_min) {
       __syncwarp();  // Ensure all threads have valid data before reduction
@@ -564,11 +565,12 @@ __global__ void group_idx_and_topk_idx_kernel(
       if (value == topk_group_value) {
         value = neg_inf<T>();
       }
+      last_neg_inf_num = neg_inf_num;
 
       neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
-    num_equalto_topkth_group = neg_inf_num - target_num_min;
+    num_equalto_topkth_group = target_num_min - last_neg_inf_num;
   }
   __syncthreads();
 
