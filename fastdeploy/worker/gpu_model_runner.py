@@ -1313,7 +1313,7 @@ class GPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["req_ids"] = [""] * max_num_seqs
-        self.share_inputs["entropy_list"] = [[] for _ in range(self.scheduler_config.max_num_seqs)]
+        self.share_inputs["entropy_list"] = [[] for _ in range(max_num_seqs)]
 
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
