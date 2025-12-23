@@ -233,20 +233,23 @@ class EBDataset(BenchmarkDataset):
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
+            json_data = entry
+
             prompt = entry["text"]
-            self.temperature = float(entry["temperature"])
-            self.repetition_penalty = float(entry["penalty_score"])
-            self.frequency_penalty = float(entry["frequency_score"])
-            self.presence_penalty = float(entry["presence_score"])
-            self.top_p = float(entry["topp"])
-            self.prompt_len = int(entry["input_token_num"])
-            new_output_len = int(entry["max_dec_len"])
+            self.temperature = float(entry.get("temperature", 1))
+            self.repetition_penalty = float(entry.get("penalty_score", 0))
+            self.frequency_penalty = float(entry.get("frequency_score", 0))
+            self.presence_penalty = float(entry.get("presence_score", 0))
+            self.top_p = float(entry.get("topp", 1))
+            self.prompt_len = int(entry.get("input_token_num", 0))
+            new_output_len = int(entry.get("max_dec_len", 0))
 
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(prompt, None)
             samples.append(
                 SampleRequest(
                     no=cnt,
+                    json_data=json_data,
                     prompt=prompt,
                     prompt_len=self.prompt_len,
                     history_QA=[],
