@@ -70,7 +70,10 @@ def cleanup_engine():
 
 def signal_handler(signum, frame):
     """Handle SIGINT and SIGTERM signals"""
-    sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+    try:
+        sig_name = signal.Signals(signum).name
+    except (ValueError, AttributeError):
+        sig_name = f"Signal({signum})"
     api_server_logger.info(f"Received {sig_name}, initiating graceful shutdown...")
     cleanup_engine()
     # Let uvicorn handle the actual exit

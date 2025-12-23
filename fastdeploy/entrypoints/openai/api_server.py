@@ -135,7 +135,10 @@ def cleanup_processes():
 
 def signal_handler(signum, frame):
     """Handle SIGINT and SIGTERM signals"""
-    sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+    try:
+        sig_name = signal.Signals(signum).name
+    except (ValueError, AttributeError):
+        sig_name = f"Signal({signum})"
     api_server_logger.info(f"Received {sig_name}, initiating graceful shutdown...")
     shutdown_event.set()
     cleanup_processes()
