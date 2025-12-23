@@ -371,7 +371,24 @@ class ResourceManagerV1(ResourceManager):
 
             prompt_token_ids_len = len(request.prompt_token_ids)
             if not inputs.get("tts", False):
-                assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
+                assert prompt_token_ids_len == len(inputs["patch_idx"]), (
+                    prompt_token_ids_len,
+                    len(inputs["patch_idx"]),
+                )
+
+            def _compute_audio_prefix_count(end_idx, end_patch_idx):
+                audio_prefix_count = 0
+                pre_patch_end_idx = 0
+                for patch_idx in range(end_patch_idx + 1):
+                    patch_map = inputs["patch_map"][patch_idx]
+                    modal_id = patch_map["modal_id"]
+                    if modal_id == IDS_TYPE_FLAG["audio"]:
+                        if patch_idx != end_patch_idx:
+                            audio_prefix_count += patch_map["end_idx"] - pre_patch_end_idx
+                        else:
+                            audio_prefix_count += end_idx - pre_patch_end_idx
+                    pre_patch_end_idx = patch_map["end_idx"]
+                return audio_prefix_count
 
             # start
             if pre_end_idx >= prompt_token_ids_len:
@@ -381,7 +398,7 @@ class ResourceManagerV1(ResourceManager):
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
-            request.audio_start = request.audio_end # audio use token_num not audio_num
+            request.audio_start = _compute_audio_prefix_count(pre_end_idx, start_patch_idx)
 
             # end
             if new_end_idx >= prompt_token_ids_len:
@@ -405,28 +422,15 @@ class ResourceManagerV1(ResourceManager):
                     if can_split_idx_list[i] >= new_end_idx:
                         new_end_idx = can_split_idx_list[i]
                         break
-            
+
             if end_modal_id == IDS_TYPE_FLAG["audio"] and new_end_idx > end_patch_map["end_idx"]:
                 new_end_idx = end_patch_map["end_idx"]
-             
+
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
             request.video_end = end_patch_map["video_num"]
-
-            # audio end
-            request.audio_end = 0
-            pre_patch_end_idx = 0
-            for patch_idx in range(end_patch_idx + 1):
-                patch_map = inputs["patch_map"][patch_idx]
-                modal_id = patch_map["modal_id"]
-                if modal_id == IDS_TYPE_FLAG["audio"]:
-                    if patch_idx != end_patch_idx:
-                        request.audio_end += patch_map["token_num"]
-                    else:
-                        request.audio_end += new_end_idx - pre_patch_end_idx
-                pre_patch_end_idx = patch_map["end_idx"]
-            request.audio_end = max(request.audio_end, request.audio_start)
+            request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
             inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
