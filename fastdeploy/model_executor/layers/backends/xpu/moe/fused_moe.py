@@ -458,7 +458,6 @@ class XPUMoEMethod(MoEMethodBase):
         else:
             x_scale = None
         # 3. EP Dispatch
-        recv_x_scales = None
         (
             recv_x,
             recv_topk_idx,
@@ -472,7 +471,7 @@ class XPUMoEMethod(MoEMethodBase):
             topk_weights,
             x_scale=x_scale,
         )
-
+        recv_x, recv_x_scales = recv_x if isinstance(recv_x, tuple) else (recv_x, None)
         # 4. Compute ffn
         token_all_num = sum(recv_num_tokens_per_expert_list)
         if "a_expertwise_int8" in self.xpu_moe_quant_type:
