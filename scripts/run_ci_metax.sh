@@ -73,7 +73,6 @@ is_excluded() {
     done
     return 1
 }
-
 # FIND_PATTERN="test_*.py"
 # declare -a ALL_PATHS=()
 

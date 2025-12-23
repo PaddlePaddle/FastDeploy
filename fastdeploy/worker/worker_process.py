@@ -421,8 +421,8 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                    if self.ranks > 1:
-                        self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                if self.ranks > 1:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -530,11 +530,9 @@ class PaddleDisWorkerProc:
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            # NOTE(liuzichang): Too many block will lead to illegal memory access
-            # We will develop dynamic limits in future.
-            if num_blocks_local > 40000:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
-                num_blocks_local = min(40000, num_blocks_local)
+            if envs.FD_MAX_KVCACHE_BLOCKS > 0 and num_blocks_local > envs.FD_MAX_KVCACHE_BLOCKS:
+                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to {envs.FD_MAX_KVCACHE_BLOCKS}")
+                num_blocks_local = envs.FD_MAX_KVCACHE_BLOCKS
             logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
