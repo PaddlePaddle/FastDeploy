@@ -17,16 +17,20 @@
 import os
 
 from fastdeploy.config import FDConfig
+from fastdeploy.platforms import current_platform
 
 
 def init_rank_and_device_id(fd_config: FDConfig):
     """ """
     rank = (
-        fd_config.parallel_config.expert_parallel_rank * fd_config.parallel_config.tensor_parallel_size
+        fd_config.parallel_config.local_data_parallel_id * fd_config.parallel_config.tensor_parallel_size
         + fd_config.parallel_config.tensor_parallel_rank
     )
 
-    cuda_visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", None)
+    if current_platform.is_xpu():
+        cuda_visible_devices = os.getenv("XPU_VISIBLE_DEVICES", None)
+    else:  # default cuda
+        cuda_visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", None)
 
     if cuda_visible_devices is None:
         device_id = rank

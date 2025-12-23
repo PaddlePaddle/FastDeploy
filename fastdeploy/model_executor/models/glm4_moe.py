@@ -85,7 +85,7 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -161,9 +161,9 @@ class Glm4Moe(nn.Layer):
             reduce_results=False,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta: ForwardMeta = None):
         shared_experts_out = self.shared_experts(x)
-        out = self.experts(x, self.gate)
+        out = self.experts(x, self.gate, forward_meta)
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tensor_parallel_size > 1:
@@ -194,6 +194,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
 
         self.attn = Attention(
@@ -229,8 +230,8 @@ class Glm4MoeAttention(nn.Layer):
 
         if self.use_qk_norm:
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim])).reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim])).reshape(k.shape)
+            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
+            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
             qkv_out = paddle.concat([q, k, v], axis=-1)
 
         atten_out = self.attn(
@@ -275,6 +276,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -282,6 +284,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def forward(
@@ -291,11 +294,9 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -305,7 +306,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -360,15 +361,14 @@ class Glm4MoeModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
@@ -442,7 +442,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             param_down_proj_name="experts.down_proj_",
         )
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -493,6 +493,20 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
+
+    def empty_input_forward(self, forward_meta):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.first_k_dense_replace,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,

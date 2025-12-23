@@ -16,7 +16,9 @@
 
 import redis
 
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import get_logger, llm_logger
+
+config_logger = get_logger("config", "config.log")
 
 from .dp_scheduler import DPScheduler
 from .global_scheduler import GlobalScheduler
@@ -84,10 +86,10 @@ class LocalSchedulerConfig:
         """
         Print the current configuration to logs.
         """
-        llm_logger.info("LocalScheduler Configuration Information :")
+        config_logger.info("LocalScheduler Configuration Information :")
         for k, v in self.__dict__.items():
-            llm_logger.info("{:<20}:{:<6}{}".format(k, "", v))
-        llm_logger.info("=============================================================")
+            config_logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        config_logger.info("=============================================================")
 
 
 class DPLocalSchedulerConfig(LocalSchedulerConfig):
@@ -266,7 +268,8 @@ class SchedulerConfig:
             Exception: If invalid scheduler type is specified
         """
         self.name = "local"  # "local" for LocalScheduler or "global" for GlobalScheduler
-        self.max_num_batched_tokens = 2048
+        self.max_num_batched_tokens = 2048  # base token_num for text inputs
+        self.max_extra_num_batched_tokens = 16384  # extra token_num for multimodal inputs
         self.max_num_seqs = 34
         self.splitwise_role = "mixed"
         self.config = None
@@ -312,6 +315,7 @@ class SchedulerConfig:
         Returns:
             Initialized scheduler instance (LocalScheduler or GlobalScheduler)
         """
+        llm_logger.info("Scheduler Type: %s" % self.name)
 
         if self.name == "global":
             return GlobalScheduler(

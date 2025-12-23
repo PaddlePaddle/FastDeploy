@@ -26,7 +26,7 @@
 4. 确保所有节点能够解析彼此的主机名
 
 * 在线推理启动示例：
-  
+
     ```shell
     python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -36,11 +36,16 @@
     --max-model-len 32768 \
     --max-num-seqs 32 \
     --tensor-parallel-size 16 \
+    --graph-optimization-config '{"use_cudagraph":false}' \
+    --no-enable-prefix-caching \
+    --disable-custom-all-reduce \
     --ips 192.168.1.101,192.168.1.102
     ```
 
+> :bulb: 多机张量并行部署暂不支持CUDAGraphs、PrefixCaching与CustomAllReduce，需在部署命令中显示关闭。
+
 * 离线启动示例：
-  
+
     ```python
     from fastdeploy.engine.sampling_params import SamplingParams
     from fastdeploy.entrypoints.llm import LLM

@@ -108,7 +108,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
 
         test_model1 = TestModel(fd_config=fd_config)
         x = paddle.randint(32, shape=[1, 8])
-        forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
+        forward_meta1 = ForwardMeta(ids_remove_padding=x, step_use_cudagraph=True)
 
         # Trigger Capture
         with sot_warmup_guard(True):

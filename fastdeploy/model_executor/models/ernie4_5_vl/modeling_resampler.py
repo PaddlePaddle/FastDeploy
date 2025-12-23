@@ -165,7 +165,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.temporal_dim = self.in_dim * self.spatial_conv_size * self.spatial_conv_size * self.temporal_conv_size
 
         with paddle.utils.unique_name.guard("mm_resampler_"):
-
+            use_fuse_matmul_bias = False if current_platform.is_maca() or current_platform.is_iluvatar() else True
             self.spatial_linear = nn.Sequential(
                 (
                     RowSequenceParallelLinear(
@@ -173,7 +173,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                         self.spatial_dim,
                         input_is_parallel=True,
                         has_bias=True,
-                        fuse_matmul_bias=False if current_platform.is_iluvatar() else True,
+                        fuse_matmul_bias=use_fuse_matmul_bias,
                     )
                     if self.tensor_parallel_degree > 1
                     else nn.Linear(self.spatial_dim, self.spatial_dim)
@@ -218,15 +218,11 @@ class VariableResolutionResamplerModel(nn.Layer):
         x = x.reshape([-1, C * (spatial_conv_size**2)])
         return x
 
-    def forward(self, x, image_mask, token_type_ids, image_type_ids, grid_thw):
+    def forward(self, x, grid_thw):
         """
         x: image_features
-        image_mask: [B]
-        token_types_ids: [B]
-        image_type_ids:  [B_image]
         grid_thw: [B_image, 3]
         """
-        assert image_type_ids is not None
 
         def fwd_spatial(x):
             """

@@ -39,7 +39,7 @@ from backend_request_func import (
     RequestFuncInput,
     RequestFuncOutput,
 )
-from benchmark_dataset import EBChatDataset, EBDataset, SampleRequest
+from benchmark_dataset import EBChatDataset, EBDataset, RandomTextDataset, SampleRequest
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 from tqdm.asyncio import tqdm
 
@@ -104,6 +104,14 @@ class BenchmarkMetrics:
     median_output_len: float
     std_output_len: float
     percentiles_output_len: list[tuple[float, float]]
+    mean_reasoning_len: float
+    median_reasoning_len: float
+    std_reasoning_len: float
+    percentiles_reasoning_len: list[tuple[float, float]]
+    mean_res_ttft_ms: float
+    median_res_ttft_ms: float
+    std_res_ttft_ms: float
+    percentiles_res_ttft_ms: list[tuple[float, float]]
 
 
 async def get_request(
@@ -160,6 +168,7 @@ def calculate_metrics(
     input_lens: list[int] = []
     infer_input_lens: list[int] = []  # 推理侧输入token数
     actual_output_lens: list[int] = []
+    reasoning_output_lens: list[int] = []
     total_input = 0
     completed = 0
     good_completed = 0
@@ -169,6 +178,7 @@ def calculate_metrics(
     all_tpots: list[float] = []
     ttfts: list[float] = []
     s_ttfts: list[float] = []
+    res_ttfts: list[float] = []
     e2els: list[float] = []
     s_e2els: list[float] = []
     s_decodes: list[float] = []
@@ -186,6 +196,7 @@ def calculate_metrics(
                 continue
 
             actual_output_lens.append(output_len)
+            reasoning_output_lens.append(outputs[i].reasoning_tokens)
             input_lens.append(outputs[i].prompt_len)
             infer_input_lens.append(outputs[i].prompt_tokens)
             total_input += outputs[i].prompt_tokens
@@ -204,6 +215,7 @@ def calculate_metrics(
             ttfts.append(outputs[i].ttft)
             # 推理侧TTFT
             s_ttfts.append(outputs[i].arrival_time[1])
+            res_ttfts.append(outputs[i].res_ttft)
             e2els.append(outputs[i].latency)
             # 推理侧整句时延
             s_e2els.append(outputs[i].arrival_time[-1])
@@ -296,6 +308,14 @@ def calculate_metrics(
         std_output_len=np.std(actual_output_lens or 0) * 1,
         median_output_len=np.median(actual_output_lens or 0) * 1,
         percentiles_output_len=[(p, np.percentile(actual_output_lens or 0, p)) for p in selected_percentiles],
+        mean_reasoning_len=np.mean(reasoning_output_lens or 0) * 1,
+        std_reasoning_len=np.std(reasoning_output_lens or 0) * 1,
+        median_reasoning_len=np.median(reasoning_output_lens or 0) * 1,
+        percentiles_reasoning_len=[(p, np.percentile(reasoning_output_lens or 0, p)) for p in selected_percentiles],
+        mean_res_ttft_ms=np.mean(res_ttfts or 0) * 1000,  # ttfts is empty if streaming is not supported by backend
+        std_res_ttft_ms=np.std(res_ttfts or 0) * 1000,
+        median_res_ttft_ms=np.median(res_ttfts or 0) * 1000,
+        percentiles_res_ttft_ms=[(p, np.percentile(res_ttfts or 0, p) * 1000) for p in selected_percentiles],
     )
 
     return metrics, actual_output_lens
@@ -318,10 +338,12 @@ async def benchmark(
     selected_percentiles: list[float],
     ignore_eos: bool,
     debug: bool,
+    pd_metrics: bool,
     goodput_config_dict: dict[str, float],
     max_concurrency: Optional[int],
     lora_modules: Optional[Iterable[str]],
     extra_body: Optional[dict],
+    ip_list: Optional[list[str]] = None,
 ):
     """Benchmarks an API endpoint using a given set of sample inputs and returns"""
     if backend in ASYNC_REQUEST_FUNCS:
@@ -337,6 +359,10 @@ async def benchmark(
     )
     test_history_QA = input_requests[0].history_QA
     response_format = input_requests[0].response_format
+    random_flag = input_requests[0].random_flag
+
+    if len(ip_list) >= 1:
+        api_url = f"http://{ip_list[0]}{args.endpoint}"
 
     test_input = RequestFuncInput(
         model=model_id,
@@ -351,8 +377,10 @@ async def benchmark(
         logprobs=logprobs,
         ignore_eos=ignore_eos,
         debug=debug,
+        pd_metrics=pd_metrics,
         extra_body=extra_body,
-        response_format=response_format
+        response_format=response_format,
+        random_flag=random_flag,
     )
 
     print("test_input:", test_input)
@@ -384,7 +412,8 @@ async def benchmark(
             logprobs=logprobs,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
-            response_format=response_format
+            response_format=response_format,
+            random_flag=random_flag,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -406,48 +435,133 @@ async def benchmark(
     # and it will simplify the code in limited_request_func.
     #    semaphore = (asyncio.Semaphore(max_concurrency)
     #                 if max_concurrency else contextlib.nullcontext())
-    semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
+    ip_list = ip_list or []
 
-    async def limited_request_func(request_func_input, pbar):
-        if semaphore is None:
-            return await request_func(request_func_input=request_func_input, pbar=pbar)
-        async with semaphore:
-            return await request_func(request_func_input=request_func_input, pbar=pbar)
+    if len(ip_list) <= 1:
+        if len(ip_list) == 1:
+            api_url = f"http://{ip_list[0]}{args.endpoint}"
+        semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
 
-    benchmark_start_time = time.perf_counter()
-    tasks: list[asyncio.Task] = []
-    async for request in get_request(input_requests, request_rate, burstiness):
-        prompt, output_len, no = (
-            request.prompt,
-            request.expected_output_len,
-            request.no,
-        )
-        history_QA = request.history_QA
-        response_format = request.response_format
+        async def limited_request_func(request_func_input, pbar):
+            if semaphore is None:
+                return await request_func(request_func_input=request_func_input, pbar=pbar)
+            async with semaphore:
+                return await request_func(request_func_input=request_func_input, pbar=pbar)
 
-        req_model_id, req_model_name = model_id, model_name
-        if lora_modules:
-            req_lora_module = next(lora_modules)
-            req_model_id, req_model_name = req_lora_module, req_lora_module
+        tasks: list[asyncio.Task] = []
+        benchmark_start_time = time.perf_counter()
 
-        request_func_input = RequestFuncInput(
-            model=req_model_id,
-            model_name=req_model_name,
-            prompt=prompt,
-            no=no,
-            prompt_len=0,
-            history_QA=history_QA,
-            hyper_parameters=hyper_parameters,
-            api_url=api_url,
-            output_len=output_len,
-            logprobs=logprobs,
-            debug=debug,
-            ignore_eos=ignore_eos,
-            extra_body=extra_body,
-            response_format=response_format
-        )
-        tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
-    outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+        async for request in get_request(input_requests, request_rate, burstiness):
+            prompt, output_len, no = (
+                request.prompt,
+                request.expected_output_len,
+                request.no,
+            )
+            history_QA = request.history_QA
+            response_format = request.response_format
+            random_flag = request.random_flag
+
+            req_model_id, req_model_name = model_id, model_name
+            if lora_modules:
+                req_lora_module = next(lora_modules)
+                req_model_id, req_model_name = req_lora_module, req_lora_module
+
+            request_func_input = RequestFuncInput(
+                model=req_model_id,
+                model_name=req_model_name,
+                prompt=prompt,
+                no=no,
+                prompt_len=0,
+                history_QA=history_QA,
+                hyper_parameters=hyper_parameters,
+                api_url=api_url,
+                output_len=output_len,
+                logprobs=logprobs,
+                debug=debug,
+                pd_metrics=pd_metrics,
+                ignore_eos=ignore_eos,
+                extra_body=extra_body,
+                response_format=response_format,
+                random_flag=random_flag,
+            )
+            tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
+
+        outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+    else:
+        # 多ip按DP均分并发
+        assert max_concurrency, "multi-IP 模式必须指定 max_concurrency"
+        n_ip = len(ip_list)
+        concurrency_per_ip = max_concurrency // n_ip
+        concurrency_remainder = max_concurrency % n_ip
+
+        # 分配请求
+        req_per_ip = len(input_requests) // n_ip
+        remainder = len(input_requests) % n_ip
+
+        ip_requests_map = {}
+        start = 0
+        for i, ip in enumerate(ip_list):
+            count = req_per_ip + (1 if i < remainder else 0)
+            print(f"IP: {ip}, requests: {count}")
+            print(f"start: {start}, end: {start + count}")
+            ip_requests_map[ip] = input_requests[start : start + count]
+            start += count
+
+        # exit(8)
+
+        semaphores = {
+            ip: asyncio.Semaphore(concurrency_per_ip + (1 if i < concurrency_remainder else 0))
+            for i, ip in enumerate(ip_list)
+        }
+
+        async def limited_request_func_per_ip(req_input, semaphore, pbar):
+            async with semaphore:
+                return await request_func(request_func_input=req_input, pbar=pbar)
+
+        tasks = []
+        for i, ip in enumerate(ip_list):
+            print(
+                f"Starting benchmark for IP: {ip}, "
+                f"concurrency per IP: {semaphores[ip]._value}, "
+                f"requests per IP: {len(ip_requests_map[ip])}",
+                flush=True,
+            )
+        benchmark_start_time = time.perf_counter()
+
+        for i, ip in enumerate(ip_list):
+            semaphore = semaphores[ip]
+
+            for request in ip_requests_map[ip]:
+                prompt, output_len, no = request.prompt, request.expected_output_len, request.no
+                history_QA = request.history_QA
+
+                req_model_id, req_model_name = model_id, model_name
+                if lora_modules:
+                    req_lora_module = next(lora_modules)
+                    req_model_id = req_model_name = req_lora_module
+
+                req_input = RequestFuncInput(
+                    model=req_model_id,
+                    model_name=req_model_name,
+                    prompt=prompt,
+                    no=no,
+                    prompt_len=0,
+                    history_QA=history_QA,
+                    hyper_parameters=hyper_parameters,
+                    api_url=f"http://{ip}{args.endpoint}",  # ★ 多 IP 模式仅替换 host:port
+                    output_len=output_len,
+                    logprobs=logprobs,
+                    ignore_eos=ignore_eos,
+                    debug=debug,
+                    pd_metrics=pd_metrics,
+                    extra_body=extra_body,
+                    response_format=response_format,
+                    random_flag=random_flag,
+                )
+
+                tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
+
+        outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
 
     outputs.sort(key=lambda x: x.end_timestamp)
 
@@ -460,7 +574,8 @@ async def benchmark(
             api_url=base_url + "/stop_profile",
             output_len=test_output_len,
             logprobs=logprobs,
-            response_format=response_format
+            response_format=response_format,
+            random_flag=random_flag,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -487,6 +602,9 @@ async def benchmark(
             benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
         else:
             benchmark_duration = 0.0
+            print(f"丢弃前数量: {n}")
+            print(f"丢弃后数量: {len(benchmark_outputs)}, 返回结果异常")
+            exit(8)
 
         print(f"丢弃前数量: {n}")
         print(f"丢弃后数量: {len(benchmark_outputs)}")
@@ -494,6 +612,12 @@ async def benchmark(
     else:
         benchmark_duration = time.perf_counter() - benchmark_start_time
         print(f"benchmark_duration: {benchmark_duration} 秒")
+
+    if random_flag:
+        print("指定随机输入输出长度测试")
+        print(f"random_input_len: {args.random_input_len}")
+        print(f"random_output_len: {args.random_output_len}")
+        print(f"random_range_ratio: {args.random_range_ratio}")
 
     metrics, actual_output_lens = calculate_metrics(
         # input_requests=input_requests,
@@ -523,16 +647,19 @@ async def benchmark(
         "request_throughput": metrics.request_throughput,
         "request_goodput:": (metrics.request_goodput if goodput_config_dict else None),
         "output_throughput": metrics.output_throughput,
+        "reasoning_lens": [output.reasoning_tokens for output in outputs],
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": [output.output_tokens for output in outputs],
+        "output_lens": actual_output_lens,
         "ttfts": [output.ttft for output in outputs],
+        "res_ttfts": [output.res_ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": [input.prompt for input in input_requests],
         "generated_texts": [output.generated_text for output in outputs],
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
+        "metrics": [output.metrics for output in outputs],
     }
 
     def process_one_metric(
@@ -567,6 +694,49 @@ async def benchmark(
             p_word = str(int(p)) if int(p) == p else str(p)
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
             result[f"p{p_word}_{metric_attribute_name}_ms"] = value
+
+    def process_pd_metrics(model_outputs, metric_key):
+        # 收集所有该 metric 的数值
+        values = []
+        percentiles = []
+        for p in args.metric_percentiles.split(","):
+            p = p.strip()
+            if p:
+                percentiles.append(float(p))
+        for item in model_outputs:
+            metrics = item.metrics
+            if metrics.get(metric_key, None) is not None:
+                values.append(metrics[metric_key])
+
+        if not values:
+            print(f"[WARN] metric_key '{metric_key}' not found in outputs.")
+            return
+
+        arr = np.array(values) * 1000  # 秒 -> 毫秒
+
+        print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Mean {metric_key} (ms):",
+                np.mean(arr),
+            )
+        )
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Median {metric_key} (ms):",
+                np.median(arr),
+            )
+        )
+        for p in percentiles:
+            v = np.percentile(arr, p)
+            print("{:<40} {:<10.2f}".format(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms):", v))
+            # print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
+        print(
+            "{:<40} {:<10.2f}".format(
+                f"Successful {metric_key}:",
+                len(arr),
+            )
+        )
 
     def process_one_length(
         # E.g., "ttft"
@@ -604,13 +774,28 @@ async def benchmark(
     process_one_length("s_decode", "Decode", "解码速度(tok/s)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
+    process_one_metric("res_ttft", "Response TTFT", "包含思考首token耗时")
     process_one_metric("tpot", "TPOT", "Time per Output Token (excl. 1st token)")
     process_one_metric("itl", "ITL", "Inter-token Latency")
     process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
     process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
+    if any(item.metrics for item in outputs):
+        process_pd_metrics(outputs, "prefill_cost_time")
+        process_pd_metrics(outputs, "prefill_prepare_cost_time")
+        process_pd_metrics(outputs, "preprocess_cost_time")
+        process_pd_metrics(outputs, "cache_in_scheduler_cost_time")
+        process_pd_metrics(outputs, "ask_decode_resource_cost_time")
+        process_pd_metrics(outputs, "prefill_first_token_infer_cost_time")
+        process_pd_metrics(outputs, "wait_sending_cache_cost_time")
+        process_pd_metrics(outputs, "decode_preallocate_cost_time")
+        process_pd_metrics(outputs, "decode_prepare_cost_time")
+        process_pd_metrics(outputs, "decode_second_token_infer_cost_time")
+        process_pd_metrics(outputs, "first_token_transmission_cost_time")
+        process_pd_metrics(outputs, "second_token_transmission_cost_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
+    process_one_length("reasoning_len", "Reasoning Lenth", "思考长度")
     process_one_length("output_len", "Output Length", "Output Length")
 
     print("=" * 50)
@@ -619,7 +804,6 @@ async def benchmark(
 
 
 def benchmark_metrics(
-    max_concurrency: int,
     benchmark_duration: float,
     result_file: str,
     selected_percentiles: list[float],
@@ -628,7 +812,6 @@ def benchmark_metrics(
 ):
     """Benchmark metrics statistics，generate benchmark result"""
     outputs = []
-    first_case_occured = False
     with open(result_file) as f:
         for line in f.readlines():
             if "RequestFuncOutput" in line:
@@ -637,14 +820,7 @@ def benchmark_metrics(
                 para_str = line[start : end + 1]
 
                 output = eval(para_str)
-                if output.no == 1 and first_case_occured is True:
-                    continue
-
-                if output.no == 1 and first_case_occured is False:
-                    first_case_occured = True
-
                 outputs.append(output)
-
 
     input_requests = [[]] * len(outputs)
     goodput_config_dict = check_goodput_args(args)
@@ -658,14 +834,11 @@ def benchmark_metrics(
     )
 
     print("{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
-    print(f"Maximum request concurrency: {max_concurrency}")
-
-    
     print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
     print("{:<40} {:<10.2f}".format("Benchmark duration (s):", benchmark_duration))
     print("{:<40} {:<10}".format("Total input tokens:", metrics.total_input))
     print("{:<40} {:<10}".format("Total generated tokens:", metrics.total_output))
-    print("{:<40} {:<10.3f}".format("Request throughput (req/s):", metrics.request_throughput))
+    print("{:<40} {:<10.2f}".format("Request throughput (req/s):", metrics.request_throughput))
     if goodput_config_dict:
         print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
     print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
@@ -681,13 +854,11 @@ def benchmark_metrics(
         "output_throughput": metrics.output_throughput,
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": [output.output_tokens for output in outputs],
+        "output_lens": actual_output_lens,
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": ["" for input in input_requests],
         "generated_texts": [output.generated_text for output in outputs],
-        "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
     }
 
@@ -765,7 +936,7 @@ def benchmark_metrics(
     process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
     process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
-    process_one_length("input_len", "Cached Tokens", "Cached Tokens")
+    process_one_length("input_len", "Input Length", "Input Length")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("output_len", "Output Length", "Output Length")
 
@@ -877,6 +1048,12 @@ def main(args: argparse.Namespace):
             num_requests=args.num_prompts,
             output_len=args.sharegpt_output_len,
         ),
+        "random": lambda: RandomTextDataset().sample(
+            num_requests=args.num_prompts,
+            random_input_len=args.random_input_len,
+            random_output_len=args.random_output_len,
+            random_range_ratio=args.random_range_ratio,
+        ),
     }
 
     try:
@@ -916,6 +1093,15 @@ def main(args: argparse.Namespace):
     else:
         hyper_parameters = {}
 
+    processed_list = []
+    for item in args.ip_list:
+        if "," in item:
+            processed_list.extend([x.strip() for x in item.split(",") if x.strip()])
+        else:
+            processed_list.append(item)
+
+    ip_list = processed_list
+
     benchmark_result = asyncio.run(
         benchmark(
             backend=backend,
@@ -934,15 +1120,16 @@ def main(args: argparse.Namespace):
             selected_percentiles=[float(p) for p in args.metric_percentiles.split(",")],
             ignore_eos=args.ignore_eos,
             debug=args.debug,
+            pd_metrics=args.pd_metrics,
             goodput_config_dict=goodput_config_dict,
             max_concurrency=args.max_concurrency,
             lora_modules=args.lora_modules,
             extra_body=sampling_params,
+            ip_list=ip_list,
         )
     )
 
     # benchmark_result = benchmark_metrics(
-    # max_concurrency=args.max_concurrency,
     #     benchmark_duration=3600,
     #     result_file="your result file",
     #     selected_percentile_metrics=args.percentile_metrics.split(","),
@@ -1003,7 +1190,7 @@ def main(args: argparse.Namespace):
         if args.result_dir:
             file_name = os.path.join(args.result_dir, file_name)
         with open(file_name, "w", encoding="utf-8") as outfile:
-            json.dump(result_json, outfile)
+            json.dump(result_json, outfile, ensure_ascii=False)
         save_to_pytorch_benchmark_format(args, result_json, file_name)
 
 
@@ -1031,17 +1218,23 @@ if __name__ == "__main__":
         help="API endpoint.",
     )
     parser.add_argument(
+        "--ip-list",
+        nargs="*",
+        default=[],
+        help=(
+            "List of ip:port. "
+            "Supports: "
+            "1) --ip-list 127.0.0.1:8000 --ip-list 127.0.0.1:8001 "
+            "2) --ip-list 127.0.0.1:8000,127.0.0.1:8001"
+        ),
+    )
+    parser.add_argument(
         "--dataset-name",
         type=str,
-        default="sharegpt",
+        default="EBChat",
         choices=[
-            "sharegpt",
-            "burstgpt",
-            "sonnet",
-            "random",
-            "hf",
-            "EB",
             "EBChat",
+            "random",
         ],
         help="Name of the dataset to benchmark on.",
     )
@@ -1129,6 +1322,11 @@ if __name__ == "__main__":
         help="shuffle dataset",
     )
     parser.add_argument(
+        "--pd-metrics",
+        action="store_true",
+        help="请求时增加PD分离参数，metrics: True",
+    )
+    parser.add_argument(
         "--drop-ratio",
         type=float,
         default=0.0,
@@ -1198,7 +1396,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--percentile-metrics",
         type=str,
-        default="ttft,tpot,itl",
+        default="ttft,tpot,itl,reasoning_len",
         help="Comma-separated list of selected metrics to report percentils. "
         "This argument specifies the metrics to report percentiles. "
         'Allowed metric names are "ttft", "tpot", "itl", "e2el". '
@@ -1259,36 +1457,23 @@ if __name__ == "__main__":
     random_group.add_argument(
         "--random-input-len",
         type=int,
-        default=1024,
-        help="Number of input tokens per request, used only for random sampling.",
+        default=200,
+        help="Number of input English words per request, used only for random-text dataset.",
     )
     random_group.add_argument(
         "--random-output-len",
         type=int,
-        default=128,
-        help="Number of output tokens per request, used only for random sampling.",
+        default=1024,
+        help="Number of output tokens per request, used both for random and random-text datasets.",
     )
     random_group.add_argument(
         "--random-range-ratio",
         type=float,
-        default=0.0,
+        default=0.1,
         help="Range ratio for sampling input/output length, "
         "used only for random sampling. Must be in the range [0, 1) to define "
         "a symmetric sampling range"
         "[length * (1 - range_ratio), length * (1 + range_ratio)].",
-    )
-    random_group.add_argument(
-        "--random-prefix-len",
-        type=int,
-        default=0,
-        help=(
-            "Number of fixed prefix tokens before the random context "
-            "in a request. "
-            "The total input length is the sum of `random-prefix-len` and "
-            "a random "
-            "context length sampled from [input_len * (1 - range_ratio), "
-            "input_len * (1 + range_ratio)]."
-        ),
     )
 
     hf_group = parser.add_argument_group("hf dataset options")

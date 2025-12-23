@@ -15,7 +15,6 @@
 import os
 import re
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -23,49 +22,17 @@ import time
 import pytest
 import requests
 
-# Read ports from environment variables; use default values if not set
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
+tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, tests_dir)
 
-# List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
-    """
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-    time.sleep(2)
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -340,4 +307,34 @@ def test_profile_reset_block_num():
     assert lower_bound <= actual_value <= upper_bound, (
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
+    )
+
+
+def test_thinking_with_stop_token_ids(api_url, headers):
+    """
+    Test case to verify thinking behavior when stop token ids are provided.
+    """
+    messages = [{"role": "user", "content": "北京天安门在哪里"}]
+
+    payload = {
+        "messages": messages,
+        "max_tokens": 100,
+        "temperature": 0.8,
+        "seed": 1,
+        "stop_token_ids": [105930],
+    }
+
+    resp = requests.post(api_url, headers=headers, json=payload)
+    assert resp.status_code == 200, f"Unexpected status code: {resp.status_code}"
+
+    try:
+        response_json = resp.json()
+    except Exception as e:
+        assert False, f"Response is not valid JSON: {e}"
+
+    content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    expected_output = "<think>\n好的，用户问“北京天安门在哪里"
+    assert content == expected_output, (
+        f"Unexpected response content.\n" f"Expected: {expected_output!r}\n" f"Actual:   {content!r}"
     )

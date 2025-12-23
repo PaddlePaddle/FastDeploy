@@ -16,6 +16,7 @@
 
 import multiprocessing
 import os
+from typing import Callable
 
 import numpy as np
 import paddle
@@ -175,13 +176,6 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         fused_moe_out = intermediate_cache3.sum(axis=1)
         fused_moe_out = fused_moe_out.reshape_([token_num, hidden_size])
 
-        if layer.tp_size > 1:
-            from fastdeploy.distributed.communication import (
-                tensor_model_parallel_all_reduce,
-            )
-
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
-
         return fused_moe_out
 
     def apply(
@@ -189,6 +183,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.
@@ -201,6 +196,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -212,6 +208,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -223,6 +220,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -388,6 +386,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle gcu compute Fused MoE.

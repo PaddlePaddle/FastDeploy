@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import os
 import shutil
@@ -15,6 +31,7 @@ from fastdeploy.config import (
     LoadConfig,
     ModelConfig,
     ParallelConfig,
+    RoutingReplayConfig,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
@@ -416,6 +433,13 @@ gate_correction_bias_real_data = paddle.to_tensor(
 )
 
 
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
+
+
 class FuseMoEWrapper(paddle.nn.Layer):
     def __init__(
         self,
@@ -447,18 +471,20 @@ class FuseMoEWrapper(paddle.nn.Layer):
             ),
             quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
             # quant_config=WINT8Config({}),
+            # quant_config=WINT4Config({}),
             scheduler_config=SchedulerConfig({}),
             cache_config=CacheConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
             ips=",".join(["0"] * nnodes),
+            routing_replay_config=RoutingReplayConfig({}),
         )
         self.fd_config.parallel_config.tp_group = None
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            self.fd_config.scheduler_config.splitwise_role = "decode"
+            self.fd_config.scheduler_config.splitwise_role = "mixed"
             self.fd_config.model_config.moe_phase.phase = "decode"
 
         weight_key_map = {
@@ -518,12 +544,12 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 7168
-        self.moe_intermediate_size = 3584
-        self.moe_num_experts = 64
+        self.hidden_size = 4096
+        self.moe_intermediate_size = 2048
+        self.moe_num_experts = 160
         self.moe_k = 8
-        self.hidden_act = "silu"
-        self.num_attention_heads = 64
+        self.num_layers = 2
+        self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
@@ -542,7 +568,6 @@ class TestFusedMoE(unittest.TestCase):
             "moe_intermediate_size": self.moe_intermediate_size,
             "moe_num_experts": self.moe_num_experts,
             "moe_k": self.moe_k,
-            "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
             "dtype": "bfloat16",
         }
@@ -573,30 +598,38 @@ class TestFusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
-        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
+        num_layers = self.num_layers
+        real_weight_layers = num_layers // 2
+        fused_moe = [None] * real_weight_layers
+        for i in range(real_weight_layers):
+            fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
-        # test_token_nums = [1024 * i for i in [1,2,4,8,16,32]]
+        is_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
+        test_token_nums = [4096 * i for i in [1, 2, 4, 8]]
+        if is_decoder:
+            test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
-            num_layers = 80
-
             def fake_model_run():
-                for _ in range(num_layers):
-                    out = fused_moe.fused_moe(cache_hidden_states[idx], gating)
+                for j in range(num_layers):
+                    out = fused_moe[j % real_weight_layers].fused_moe(
+                        cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                    )
 
                 return out
 
-            moe_cuda_graphs[idx] = graphs.CUDAGraph()
-            moe_cuda_graphs[idx].capture_begin()
+            if is_decoder:
+                moe_cuda_graphs[idx] = graphs.CUDAGraph()
+                moe_cuda_graphs[idx].capture_begin()
 
             fake_model_run()
 
-            moe_cuda_graphs[idx].capture_end()
+            if is_decoder:
+                moe_cuda_graphs[idx].capture_end()
 
             num_tests = 20
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
@@ -604,7 +637,10 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                moe_cuda_graphs[idx].replay()
+                if is_decoder:
+                    moe_cuda_graphs[idx].replay()
+                else:
+                    fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()
@@ -612,9 +648,20 @@ class TestFusedMoE(unittest.TestCase):
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print("num_token:", num_tokens)
             print(times[-5:])
-            GB = 1.0 * num_tokens * self.moe_k * self.hidden_size * 3.0 / (1e9)
+            rdma_GB = 3.0 * num_tokens * self.moe_k * self.hidden_size / (1e9)
             times_s = (times[-1] / num_layers) / (1e3)
-            print(times[-1], round(GB / times_s, 1))
+            print(times[-1], round(rdma_GB / times_s, 1))
+
+            tmp_layer = fused_moe[0].fused_moe
+            memory_GB = (
+                tmp_layer.num_local_experts
+                * tmp_layer.hidden_size
+                * tmp_layer.moe_intermediate_size
+                * 3
+                / (1e9)
+                * num_layers
+            )
+            print(round(memory_GB / times[-1], 1), "TB/s")
 
         shutil.rmtree(self.model_name_or_path)
 

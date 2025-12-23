@@ -25,27 +25,38 @@ void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
                                   const paddle::Tensor& step_idx,
                                   const paddle::Tensor& limit_think_status,
+                                  const paddle::Tensor& stop_flags,
+                                  const paddle::Tensor& eos_token_ids,
                                   const int64_t think_end_id) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
 
   const int batch_size = next_tokens.shape()[0];
+  const int eos_token_id_len = eos_token_ids.shape()[0];
   int r = baidu::xpu::api::plugin::limit_thinking_content_length_kernel_v1(
       xpu_ctx->x_context(),
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       step_idx.data<int64_t>(),
+      eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_think_status.data<int>()),
+      const_cast<bool*>(stop_flags.data<bool>()),
       think_end_id,
-      batch_size);
+      batch_size,
+      eos_token_id_len);
   PD_CHECK(r == 0,
            "baidu::xpu::api::plugin::limit_thinking_content_length_kernel_v1 "
            "failed.");
 }
 
 PD_BUILD_STATIC_OP(limit_thinking_content_length_v1)
-    .Inputs({"next_tokens", "max_think_lens", "step_idx", "limit_think_status"})
+    .Inputs({"next_tokens",
+             "max_think_lens",
+             "step_idx",
+             "limit_think_status",
+             "stop_flags",
+             "eos_token_ids"})
     .Attrs({"think_end_id: int64_t"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})

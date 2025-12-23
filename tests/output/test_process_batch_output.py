@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import random
 import time
 import unittest
@@ -5,7 +21,7 @@ from unittest.mock import Mock
 
 import paddle
 
-from fastdeploy.engine.request import RequestOutput
+from fastdeploy.engine.request import RequestMetrics, RequestOutput
 from fastdeploy.output.token_processor import TokenProcessor
 
 paddle.set_device("cpu")
@@ -25,20 +41,21 @@ class MockConfig:
     class SchedulerConfig:
         name = "default"
 
+    class CacheConfig:
+        enable_prefix_caching = False
+        enable_output_caching = False
+        block_size = 64
+
     parallel_config = ParallelConfig()
     speculative_config = SpeculativeConfig()
     model_config = ModelConfig()
     scheduler_config = SchedulerConfig()
+    cache_config = CacheConfig()
 
 
 class MockTask:
     def __init__(self):
         self.request_id = "test_request_1"
-        self.arrival_time = time.time()
-        self.inference_start_time = time.time()
-        self.schedule_start_time = time.time()
-        self.preprocess_end_time = time.time() - 0.1
-        self.preprocess_start_time = time.time() - 0.2
         self.eos_token_ids = [2]
         self.output_token_ids = []
         self.messages = "Test prompt"
@@ -46,6 +63,19 @@ class MockTask:
         self.disaggregate_info = None
         self.prefill_chunk_info = None
         self.prefill_chunk_num = 0
+        self.llm_engine_recv_req_timestamp = time.time()
+        self.ic_req_data = {}
+        self.prompt_token_ids_len = 0
+        self.trace_carrier = {}
+
+        now = time.time()
+        self.metrics = RequestMetrics(
+            arrival_time=now,
+            preprocess_start_time=now - 0.2,
+            preprocess_end_time=now - 0.1,
+            scheduler_recv_req_time=now + 0.1,
+            inference_start_time=now + 0.2,
+        )
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):
@@ -113,13 +143,10 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.num_accepted_tokens = 0
         processor.num_emitted_tokens = 0
         processor.max_num_emitted_tokens = 0
-        processor.num_rest_requests_per_head = [
-            0,
-        ] * MAX_DRAFT_TOKENS
-        processor.num_accept_requests_per_head = [
-            0,
-        ] * MAX_DRAFT_TOKENS
         processor.speculative_stats_step = 0
+        processor.total_step_per_request = {}
+        processor.accept_token_num_per_head_per_request = {}
+        processor.accept_token_num_per_head = [0] * MAX_DRAFT_TOKENS
 
         # processor._recycle_resources = Mock()
 

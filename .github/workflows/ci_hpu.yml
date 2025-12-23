@@ -1,0 +1,85 @@
+name: CI_HPU
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - 'release/*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-hpu-ci
+  cancel-in-progress: true
+
+jobs:
+  CI_HPU:
+    runs-on: [self-hosted, HPU-8Card]
+    steps:
+      - name: Print current runner name
+        run: |
+          echo "Current runner name: ${{ runner.name }}"
+
+      - name: Code Checkout
+        env:
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-hpu:latest
+        run: |
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "BASE_BRANCH=${BASE_BRANCH}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}
+            fi
+          '
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git clone ${REPO} ${REPO_NAME} -b ${BASE_BRANCH}
+          cd FastDeploy
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
+            git merge pr/${{ github.event.pull_request.number }}
+            git log -n 3 --oneline
+          else
+            git checkout ${{ github.sha }}
+            git log -n 3 --oneline
+          fi
+
+      - name: Run CI unittest
+        env:
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-hpu:latest
+        run: |
+          runner_name="${{ runner.name }}"
+          last_char="${runner_name: -1}"
+
+          if [[ "$last_char" =~ [0-3] ]]; then
+            hpu_id="$last_char"
+          else
+            hpu_id="0"
+          fi
+          FD_API_PORT=8388
+          FD_ENGINE_QUEUE_PORT=8902
+          FD_METRICS_PORT=8202
+
+          PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "PARENT_DIR:$PARENT_DIR"
+          docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
+          -v $(pwd):/workspace -w /workspace \
+          -v "/ssd1:/ssd1" \
+          -e "MODEL_PATH=/ssd1" \
+          -e "http_proxy=$(git config --global --get http.proxy)" \
+          -e "https_proxy=$(git config --global --get https.proxy)" \
+          -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,localhost,127.0.0.1,0.0.0.0,10.0.0.0/8,192.168.1.0/24" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+           ${docker_image} /bin/bash -c "
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          bash scripts/run_ci_hpu.sh
+          "

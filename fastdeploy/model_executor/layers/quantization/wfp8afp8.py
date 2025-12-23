@@ -21,6 +21,7 @@ import paddle
 
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.layers.moe import FusedMoE
@@ -33,7 +34,11 @@ from fastdeploy.model_executor.layers.quantization.quant_base import (
     QuantMethodBase,
 )
 from fastdeploy.model_executor.layers.utils import per_token_cast_to_fp8
-from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    process_weight_transpose,
+    set_weight_attrs,
+)
 
 
 class WFP8AFP8Config(QuantConfigBase):
@@ -101,22 +106,28 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
                 (weight_shape[i] + weight_block_size[i] - 1) // weight_block_size[i] if weight_block_size[i] > 0 else 1
             )
         scale_shape = scale_shape[::-1]
+        self.model_format = extra_weight_attrs.get("model_format")
         if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+            weight_shape = weight_shape[::-1] if self.model_format == "torch" else weight_shape
             layer.weight = layer.create_parameter(
                 shape=weight_shape,
                 dtype=layer.weight_dtype,
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             quant_attrs = extra_weight_attrs
-            if isinstance(layer, MergedColumnParallelLinear) or isinstance(layer, QKVParallelLinear):
+            if (
+                isinstance(layer, MergedColumnParallelLinear)
+                or isinstance(layer, QKVParallelLinear)
+                or isinstance(layer, MergedReplicatedLinear)
+            ):
+                tensor_output_dim = (self.model_format == "torch") ^ quant_attrs.get("output_dim", True)
                 quant_attrs = {
                     **extra_weight_attrs,
-                    "tensor_track": TensorTracker(
-                        shape=layer.weight_shape, output_dim=extra_weight_attrs.get("output_dim")
-                    ),
+                    "tensor_track": TensorTracker(shape=weight_shape, output_dim=tensor_output_dim),
                 }
+            if self.model_format == "torch" and "output_dim" in quant_attrs:
+                quant_attrs["output_dim"] = not quant_attrs["output_dim"]
             set_weight_attrs(
                 layer.weight,
                 quant_attrs,
@@ -142,30 +153,39 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
     def process_weights_after_loading(self, layer) -> None:
         if not self.quant_config.is_checkpoint_bf16:
             return
-        weight_tensor = layer.weight.transpose([1, 0]).contiguous()
-        assert self.quant_config.weight_block_size == [-1, 1]
-        qweight, weight_scale = per_token_cast_to_fp8(weight_tensor)
 
-        if hasattr(layer.weight, "tensor_track"):
-            layer.weight.tensor_track = None
-        layer.weight.value().get_tensor()._clear()
-        del layer.weight
+        def _process_quantize():
+            weight_tensor = layer.weight.transpose([1, 0]).contiguous()
+            assert self.quant_config.weight_block_size == [-1, 1]
+            qweight, weight_scale = per_token_cast_to_fp8(weight_tensor)
 
-        layer.weight = layer.create_parameter(
-            shape=qweight.shape,
-            dtype="float8_e4m3fn",
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-        layer.weight_scale = layer.create_parameter(
-            shape=weight_scale.shape,
-            dtype="float32",
-            is_bias=False,
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
+            if hasattr(layer.weight, "tensor_track"):
+                layer.weight.tensor_track = None
+            layer.weight.value().get_tensor()._clear()
+            del layer.weight
 
-        layer.weight.copy_(qweight, False)
-        layer.weight_scale.copy_(weight_scale, False)
+            layer.weight = layer.create_parameter(
+                shape=qweight.shape,
+                dtype="float8_e4m3fn",
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            layer.weight_scale = layer.create_parameter(
+                shape=weight_scale.shape,
+                dtype="float32",
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.weight.copy_(qweight, False)
+            layer.weight_scale.copy_(weight_scale, False)
+
+        if self.quant_config.is_checkpoint_bf16:
+            if self.model_format == "torch":
+                process_weight_transpose(layer, "weight")
+            _process_quantize()
+        else:
+            return
 
     def process_loaded_weights(self, layer, weights) -> None:
         """ """

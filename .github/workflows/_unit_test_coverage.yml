@@ -45,7 +45,7 @@ jobs:
     needs: check_cov_skip
     if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
-      diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
+      all_cov_file_url: ${{ steps.cov_upload.outputs.all_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
       diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
@@ -98,11 +98,14 @@ jobs:
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
           DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
-          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
-          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
-          FD_CACHE_QUEUE_PORT=$((42098 + DEVICE_PORT * 100))
+          FLASK_PORT=$((8068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((8088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
+          FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
+          FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -110,6 +113,9 @@ jobs:
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
+          echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
+          echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
+          echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -145,9 +151,15 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
+          export RDMA_DEVICES=$(find /dev/infiniband/uverbs* -maxdepth 1 -not -type d | xargs -I{} echo '--device {}:{}')
+
           docker run --rm --net=host \
           --name ${runner_name} \
-          --cap-add=SYS_PTRACE --shm-size=64G \
+          --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
+          --shm-size=64G \
+          ${RDMA_DEVICES} \
+          --device=/dev/infiniband/rdma_cm \
+          --ulimit memlock=-1:-1 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -159,6 +171,10 @@ jobs:
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
+          -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
+          -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
+          -e "FD_RDMA_PORT=${FD_RDMA_PORT}" \
+          -e "CLEAN_CUDA=1" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
@@ -196,7 +212,7 @@ jobs:
           if [[ "$IS_PR" == "true" ]]; then
             echo "Running diff coverage for PR..."
             diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
-            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+            # python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
           else
             echo "Running full coverage"
             coverage report -m > full_coverage_report.txt
@@ -244,15 +260,15 @@ jobs:
 
           target_path_stripped="${target_path#paddle-github-action/}"
 
-          if [[ "$IS_PR" == "true" ]]; then
-            diff_cov_file="diff_coverage.xml"
-            if [ -f ${diff_cov_file} ]; then
-              python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
-              DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
-            fi
+          all_coverage_file="python_coverage_all.xml"
+          if [ -f ${all_coverage_file} ]; then
+            python ${push_file} ${all_coverage_file} ${target_path}/CoverageData
+            ALL_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${all_coverage_file}
+            echo "all_cov_file_url=${ALL_COV_FILE_URL}" >> $GITHUB_OUTPUT
+            echo "all_cov_file_url=${ALL_COV_FILE_URL}" >> $GITHUB_ENV
+          fi
 
+          if [[ "$IS_PR" == "true" ]]; then
             diff_cov_result_json="diff_coverage.json"
             if [ -f ${diff_cov_result_json} ]; then
               python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
@@ -346,28 +362,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+      all_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.all_cov_file_url }}
     steps:
-      - name: coverage diff file download
+      - name: Clone FastDeploy
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Download diff coverage file
         shell: bash
-        env:
-          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
-          cd FastDeploy
-          if [ -z "${diff_cov_file_url}" ]; then
-            echo "No diff coverage file URL provided."
+          echo "Downloading all coverage file..."
+          if ! wget --no-proxy "${all_cov_file_url}" -O python_coverage_all.xml; then
+            echo "Download failed, skipping upload."
             exit 0
           fi
-          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+
+          sed -i 's|<source>/workspace/FastDeploy/fastdeploy</source>|<source>fastdeploy</source>|' python_coverage_all.xml
+
       - name: Upload diff coverage report
-        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
+        if: always() && hashFiles('python_coverage_all.xml') != ''
+        uses: codecov/codecov-action@v4
         with:
-          files: ./FastDeploy/diff_coverage.xml
+          files: ./python_coverage_all.xml
+          flags: GPU
           name: python diff coverage
+          fail_ci_if_error: false
           verbose: true
           disable_search: true
-          commit_parent: false
-          flags: diff

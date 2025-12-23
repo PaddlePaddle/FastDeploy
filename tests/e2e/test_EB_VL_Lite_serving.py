@@ -17,7 +17,6 @@ import os
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -25,58 +24,16 @@ import time
 import openai
 import pytest
 import requests
-
-# Read ports from environment variables; use default values if not set
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
-
-# List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
+from utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
 os.environ["FD_USE_MACHETE"] = "0"
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
-    """
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        current_pid = os.getpid()
-        parent_pid = os.getppid()
-        for pid in output.splitlines():
-            pid = int(pid)
-            if pid in (current_pid, parent_pid):
-                print(f"Skip killing current process (pid={pid}) on port {port}")
-                continue
-            os.kill(pid, signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -247,9 +204,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-fp32")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev-1215")
     else:
-        base_file = "ernie-4_5-vl-base-tp2-fp32"
+        base_file = "ernie-4_5-vl-base-tp2-dev-1215"
     with open(base_file, "r") as f:
         content2 = f.read()
 
@@ -588,7 +545,7 @@ def test_chat_with_thinking(openai_client, capsys):
         max_tokens=10,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
-    assert response.choices[0].message.reasoning_content is None
+    assert response.choices[0].message.reasoning_content == ""
     assert "</think>" not in response.choices[0].message.content
 
     # test logic
@@ -679,7 +636,7 @@ def test_chat_with_reasoning_max_tokens(openai_client):
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
-    baseline = 40000
+    baseline = 65565
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")
@@ -759,4 +716,4 @@ def test_thinking_logic_flag(openai_client, capsys):
             "chat_template_kwargs": {"enable_thinking": False},
         },
     )
-    assert response_case_3.choices[0].message.reasoning_content is None
+    assert response_case_3.choices[0].message.reasoning_content == ""

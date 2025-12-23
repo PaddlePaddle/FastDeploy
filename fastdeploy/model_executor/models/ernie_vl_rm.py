@@ -57,12 +57,14 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         )
         self.ernie = Ernie4_5_VLModel(fd_config=fd_config)
         self.head_dtype = paddle.bfloat16
+        self.fd_config = fd_config
 
         # Persistent buffers for CUDA graphs.
-        self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.rm_head = nn.Sequential(
             (
@@ -110,28 +112,35 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
-            image_token_num=vl_moe_meta.image_token_num.item(),
+            image_token_num=vl_moe_meta.num_image_patch_id.item(),
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.ernie(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,
         )
+
+        if isinstance(hidden_states, tuple):
+            hidden_states = hidden_states[0]
+
         hidden_states = hidden_states.to(self.head_dtype)
         logits = self.rm_head(hidden_states)
-        return logits
+        return logits.cast("float32")
 
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForProcessRewardModel",
     module_name="ernie_vl_rm",
-    category=[ModelCategory.REWARD],
-    primary_use=ModelCategory.REWARD,
+    category=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
 )
-@default_pooling_type("ALL")
+@default_pooling_type("LAST")
 class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
 
     def __init__(self, fd_config: FDConfig):
@@ -143,7 +152,13 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
         pooler_config = fd_config.model_config.pooler_config
         assert pooler_config is not None
 
-        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config)})
+        self.pooler = DispatchPooler(
+            {
+                "encode": Pooler.for_encode(pooler_config, fd_config.model_config),
+                "embed": Pooler.for_embed(pooler_config, fd_config.model_config),
+                "reward": Pooler.for_reward(pooler_config, fd_config.model_config),
+            },
+        )
 
         self.process_weights_before_loading_fn = process_weights_before_loading(skip_prefixes=["lm_head"])
 
@@ -155,4 +170,5 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
     @paddle.no_grad()
     def load_weights(self, weights_iterator):
         # Filter out lm_head weights of Ernie4_5_VLMoeForConditionalGeneration
+
         Ernie4_5_VLMoeForConditionalGeneration.load_weights(self, weights_iterator)

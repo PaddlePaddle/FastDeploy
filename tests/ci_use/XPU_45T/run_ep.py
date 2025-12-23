@@ -1,49 +1,73 @@
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 
 import psutil
+from paddleformers.trainer import strtobool
 
 from fastdeploy import LLM, SamplingParams
 
 
 def test_fd_ep():
     """ """
-
     msg1 = [
         {"role": "system", "content": ""},
         {"role": "user", "content": "北京天安门广场在哪里?"},
     ]
     messages = [msg1]
+    print(f"[INFO] messages: {messages}")
 
     # 采样参数
     sampling_params = SamplingParams(top_p=0, max_tokens=500)
 
     # 模型路径与设备配置
-    model = os.getenv("model_path", "/home/ERNIE-4.5-300B-A47B-Paddle")
+    model_root = os.getenv("MODEL_PATH", "/home")
+    model = f"{model_root}/ERNIE-4.5-300B-A47B-Paddle"
     xpu_visible_devices = os.getenv("XPU_VISIBLE_DEVICES", "0")
     xpu_device_num = len(xpu_visible_devices.split(","))
 
-    enable_expert_parallel = True
+    enable_expert_parallel = strtobool(os.getenv("enable_expert_parallel", "1"))
+    enable_tensor_parallel = strtobool(os.getenv("enable_tensor_parallel", "0"))
+    disable_sequence_parallel_moe = strtobool(os.getenv("disable_sequence_parallel_moe", "0"))
+    print(f"enable_expert_parallel: {enable_expert_parallel}, enable_tensor_parallel: {enable_tensor_parallel}")
     if enable_expert_parallel:
-        tensor_parallel_size = 1
-        data_parallel_size = xpu_device_num
+        if enable_tensor_parallel:
+            tensor_parallel_size = xpu_device_num
+            data_parallel_size = 1
+        else:
+            tensor_parallel_size = 1
+            data_parallel_size = xpu_device_num
     else:
         tensor_parallel_size = xpu_device_num
         data_parallel_size = 1
-
-    engine_worker_queue_port = [str(8023 + i * 10) for i in range(data_parallel_size)]
+    xpu_id = int(os.getenv("XPU_ID", "0"))
+    base_port = 8023 + xpu_id * 100
+    engine_worker_queue_port = [str(base_port + i * 10) for i in range(data_parallel_size)]
     engine_worker_queue_port = ",".join(engine_worker_queue_port)
-
-    print(f"[INFO] messages: {messages}")
 
     llm = LLM(
         model=model,
         enable_expert_parallel=enable_expert_parallel,
         tensor_parallel_size=tensor_parallel_size,
         data_parallel_size=data_parallel_size,
+        disable_sequence_parallel_moe=disable_sequence_parallel_moe,
         max_model_len=8192,
         quantization="wint4",
         engine_worker_queue_port=engine_worker_queue_port,
         max_num_seqs=8,
+        load_choices="default",
     )
 
     try:

@@ -16,7 +16,6 @@ import json
 import os
 import re
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -24,48 +23,13 @@ import time
 import openai
 import pytest
 import requests
-
-# Read ports from environment variables; use default values if not set
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-
-# List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
-    """
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
+from utils.serving_utils import (
+    FD_API_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -215,7 +179,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     f_o.close()
 
     # base result
-    content2 = "这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示某种手工艺品。成年人手里拿着一个扇子，上面有彩色的图案，可能是通过某种方式绘制或涂鸦而成。孩子们看起来很专注，可能是在观察或参与这个过程。\n\n背景中还有其他几个人，其中一个人穿着粉色的衣服，背对着镜头。整个场景看起来像是在一个室内环境中，光线充足，氛围轻松愉快。"
+    content2 = "这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示一件艺术品。成年人手里拿着一个扇子，上面有各种颜色的颜料混合在一起，看起来像是通过某种方式创作的艺术品。孩子们也参与其中，一个孩子正在仔细观察，另一个孩子则在旁边观看。\n\n背景中还有其他人在进行类似的活动，环境看起来像是在一个室内空间，可能是教室或工作室。整体氛围显得非常温馨和愉快，大家似乎都在享受这个创作过程。"
 
     # Verify that result is same as the base result
     assert content1 == content2

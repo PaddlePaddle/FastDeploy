@@ -15,20 +15,50 @@
 """
 
 import os
-import subprocess
-import sys
+import uuid
 
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
+# set prometheus dir
+if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
+    prom_dir = f"/tmp/fd_prom_{str(uuid.uuid4())}"
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
+    if os.path.exists(prom_dir):
+        os.rmdir(prom_dir)
+    os.mkdir(prom_dir)
+
 import typing
+
+import paddle
+
+# first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
+# otherwise, the Prometheus package will be imported first,
+# which will prevent correct multi-process setup
+from fastdeploy.metrics.prometheus_multiprocess_setup import (
+    setup_multiprocess_prometheus,
+)
+
+setup_multiprocess_prometheus()
+
 
 from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import current_package_version, envs
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
+# paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
+# specifically for the 'triton' module. This means `import torch` inside 'triton'
+# will actually import paddle's compatibility layer (acting as torch).
+#
+# 'scope' acts as an allowlist. To add other modules, you can do:
+# paddle.compat.enable_torch_proxy(scope={"triton", "new_module"})
+#
+# Note: Ensure that any torch APIs used in 'new_module' are already implemented in Paddle.
+
 
 if envs.FD_DEBUG != 1:
     import logging
@@ -44,57 +74,6 @@ except ImportError:
 # TODO(tangbinhan): remove this code
 
 __version__ = current_package_version()
-
-
-def _patch_fastsafetensors():
-    try:
-        file_path = (
-            subprocess.check_output(
-                [
-                    sys.executable,
-                    "-c",
-                    "import fastsafetensors, os; \
-             print(os.path.join(os.path.dirname(fastsafetensors.__file__), \
-             'frameworks', '_paddle.py'))",
-                ]
-            )
-            .decode()
-            .strip()
-        )
-
-        with open(file_path, "r") as f:
-            content = f.read()
-        if "DType.U16: DType.BF16," in content and "DType.U8: paddle.uint8," in content:
-            return
-
-        modified = False
-        if "DType.U16: DType.BF16," not in content:
-            lines = content.splitlines()
-            new_lines = []
-            inside_block = False
-            for line in lines:
-                new_lines.append(line)
-                if "need_workaround_dtypes: Dict[DType, DType] = {" in line:
-                    inside_block = True
-                elif inside_block and "}" in line:
-                    new_lines.insert(-1, "    DType.U16: DType.BF16,")
-                    inside_block = False
-                    modified = True
-            content = "\n".join(new_lines)
-
-        if "DType.I8: paddle.uint8," in content:
-            content = content.replace("DType.I8: paddle.uint8,", "DType.U8: paddle.uint8,")
-            modified = True
-
-        if modified:
-            with open(file_path, "w") as f:
-                f.write(content + "\n")
-
-    except Exception as e:
-        print(f"Failed to patch fastsafetensors: {e}")
-
-
-_patch_fastsafetensors()
 
 
 MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}

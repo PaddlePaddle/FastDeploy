@@ -56,6 +56,16 @@ jobs:
           REPO: ${{ github.event.repository.name }}
           JOB_NAME: 'CI_XPU'
 
+      - name: Rerun Check PR Template
+        if: ${{ contains(github.event.comment.body, 'check_pr_template') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Check PR Template'
+
       - name: Rerun Codestyle-check
         if: ${{ contains(github.event.comment.body, 'codestyle') || contains(github.event.comment.body, 'pre_commit') }}
         uses: ./.github/actions/rerun-workflow

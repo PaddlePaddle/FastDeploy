@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import unittest
 from unittest import IsolatedAsyncioTestCase
@@ -101,37 +117,37 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.2, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [3], "text": "c", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.3, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [4], "text": "d", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.4, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [5], "text": "e", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.5, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [6], "text": "f", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.6, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
+                "metrics": {"engine_recv_latest_token_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                 "finished": True,
             },
         ]
@@ -149,7 +165,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat_single(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat_single(response, stream, include_stop_str_in_output):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_single
@@ -169,6 +185,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             model_name="test-model",
             prompt_token_ids=[1, 2, 3],
             prompt_tokens="Hello",
+            max_tokens=10,
         )
 
         chunks = []
@@ -216,7 +233,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 {
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
-                    "metrics": {"arrival_time": 0.2, "first_token_time": None},
+                    "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                     "finished": False,
                 },
             ],
@@ -224,7 +241,11 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 {
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
-                    "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
+                    "metrics": {
+                        "engine_recv_latest_token_time": 0.7,
+                        "first_token_time": None,
+                        "request_start_time": 0.1,
+                    },
                     "finished": True,
                 }
             ],
@@ -251,6 +272,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             created_time=11,
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["Hello"],
+            max_tokens_list=[100],
         )
 
         chunks = []
@@ -299,6 +321,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
             {
                 "request_id": "test_request_id_1",
@@ -312,6 +335,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     ],
                 },
                 "finished": True,
+                "metrics": {},
             },
         ]
 
@@ -352,6 +376,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             model_name=model_name,
             prompt_batched_token_ids=prompt_batched_token_ids,
             prompt_tokens_list=prompt_tokens_list,
+            max_tokens_list=[100, 100],
         )
 
         self.assertEqual(actual_response, expected_completion_response)
@@ -442,6 +467,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         prompt_token_ids = [1, 2]
         prompt_tokens = "test_prompt"
         logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
+        draft_logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
         mock_response_processor = Mock()
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
@@ -449,6 +475,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         num_input_image_tokens = [0, 0]
         num_input_video_tokens = [0, 0]
         num_image_tokens = [0, 0]
+        prompt_logprobs_res_list = [[], []]
+        max_tokens_list = [10, 1]
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
@@ -463,7 +491,11 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 num_input_video_tokens=num_input_video_tokens,
                 num_image_tokens=num_image_tokens,
                 logprob_contents=logprob_contents,
+                draft_logprob_contents=draft_logprob_contents,
+                prompt_logprobs_res_list=prompt_logprobs_res_list,
                 response_processor=mock_response_processor,
+                max_tokens=max_tokens_list[idx],
+                speculate_metrics=None,
             )
 
             expected = case["expected"]
@@ -494,7 +526,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             {
                 "request_id": "test-request-id_0",
                 "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
-                "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
+                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
                 "finished": True,
             },
         ]
@@ -510,7 +542,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat(response, stream, enable_thinking, include_stop_str_in_output):
+        async def mock_process_response_chat(response, stream, include_stop_str_in_output):
             delta_msg_mock = Mock()
             delta_msg_mock.content = response["outputs"]["text"]
             if response["outputs"]["text"] == "a":
@@ -532,7 +564,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance.process_response_chat = mock_process_response_chat
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
-        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "ErineTestReasoningParser")
+        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "Ernie45VLThinkingReasoningParser")
         mock_processor_instance.data_processor = Mock(
             process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
         )
@@ -554,6 +586,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             model_name="test-model",
             prompt_token_ids=[10, 20, 30],
             prompt_tokens="Hello",
+            max_tokens=10,
         )
 
         chunks = []
@@ -610,7 +643,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
-                        "arrival_time": 0.3,
+                        "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
                         "inference_start_time": 0.1,
                         "request_start_time": 0.0,
@@ -623,7 +656,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
-                        "arrival_time": 0.3,
+                        "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
                         "inference_start_time": 0.1,
                         "request_start_time": 0.0,
@@ -661,6 +694,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             model_name="test-model",
             prompt_batched_token_ids=[[10, 20, 30]],
             prompt_tokens_list=["Hello"],
+            max_tokens_list=[100],
         )
 
         chunks = []

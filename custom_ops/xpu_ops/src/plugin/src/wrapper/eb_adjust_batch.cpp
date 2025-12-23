@@ -23,6 +23,7 @@ template <typename TX, typename TY>
 __attribute__((global)) void eb_adjust_batch(TX *src,
                                              TY *dst,
                                              int *encoder_seqs_lods,
+                                             int *decoder_seqs_lods,
                                              int *encoder_batch_map,
                                              int *decoder_batch_map,
                                              int en_batch,
@@ -41,6 +42,7 @@ static int cpu_wrapper(api::Context *ctx,
                        const TX *x,
                        TY *y,
                        const int *encoder_seqs_lods,
+                       const int *decoder_seqs_lods,
                        const int *encoder_batch_map,
                        const int *decoder_batch_map,
                        int en_batch,
@@ -56,11 +58,12 @@ static int cpu_wrapper(api::Context *ctx,
     // get copy size && src_offset
     int cpy_m = 0;
     if (de_batch > 0 && decoder_batch_map[de_idx] == i) {
-      cpy_m = 1;
-      ret = api::cast<TX, TY>(ctx,
-                              x + cur_offset * hidden_dim,
-                              y + (encoder_len_total + de_idx) * hidden_dim,
-                              cpy_m * hidden_dim);
+      cpy_m = decoder_seqs_lods[de_idx + 1] - decoder_seqs_lods[de_idx];
+      ret = api::cast<TX, TY>(
+          ctx,
+          x + cur_offset * hidden_dim,
+          y + (encoder_len_total + decoder_seqs_lods[de_idx]) * hidden_dim,
+          cpy_m * hidden_dim);
       WRAPPER_ASSERT_SUCCESS(ctx, ret);
       de_idx++;
     }
@@ -84,6 +87,7 @@ static int xpu3_wrapper(api::Context *ctx,
                         const TX *x,
                         TY *y,
                         api::VectorParam<int32_t> &encoder_seqs_lods,  // NOLINT
+                        api::VectorParam<int32_t> &decoder_seqs_lods,  // NOLINT
                         api::VectorParam<int32_t> &encoder_batch_map,  // NOLINT
                         api::VectorParam<int32_t> &decoder_batch_map,  // NOLINT
                         int en_batch,
@@ -98,6 +102,7 @@ static int xpu3_wrapper(api::Context *ctx,
       reinterpret_cast<XPU_INDEX_TYPE_TX *>(const_cast<TX *>(x)),
       reinterpret_cast<XPU_INDEX_TYPE_TY *>(y),
       encoder_seqs_lods.xpu,
+      decoder_seqs_lods.xpu,
       encoder_batch_map.xpu,
       decoder_batch_map.xpu,
       en_batch,
@@ -111,6 +116,7 @@ int eb_adjust_batch(api::Context *ctx,
                     const TX *x,
                     TY *y,
                     api::VectorParam<int32_t> &encoder_seqs_lods,  // NOLINT
+                    api::VectorParam<int32_t> &decoder_seqs_lods,  // NOLINT
                     api::VectorParam<int32_t> &encoder_batch_map,  // NOLINT
                     api::VectorParam<int32_t> &decoder_batch_map,  // NOLINT
                     int64_t hidden_dim) {
@@ -119,28 +125,35 @@ int eb_adjust_batch(api::Context *ctx,
   // if (dev_id ==0) {
   //     ctx->set_debug_level(0xA1);
   // }
-
+  // std::cout << decoder_seqs_lods.cpu[0] << " " << decoder_seqs_lods.cpu[1] <<
+  // std::endl;
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T2(ctx, "eb_adjust_batch", TX, TY);
   WRAPPER_DUMP_PARAM6(ctx,
                       x,
                       y,
                       encoder_seqs_lods,
+                      decoder_seqs_lods,
                       encoder_batch_map,
-                      decoder_batch_map,
-                      hidden_dim);
+                      decoder_batch_map);
+  WRAPPER_DUMP_PARAM1(ctx, hidden_dim);
   WRAPPER_DUMP(ctx);
   int encoder_batch = encoder_batch_map.len;
-  int total_batch = encoder_batch + decoder_batch_map.len;
+  int decoder_batch = decoder_batch_map.len;
+  int total_batch = encoder_batch + decoder_batch;
   int max_encoder_lod = encoder_seqs_lods.cpu[encoder_batch];
-  int m = max_encoder_lod + decoder_batch_map.len;
+  int max_decoder_lod = decoder_seqs_lods.cpu[decoder_batch];
+  int m = max_encoder_lod + max_decoder_lod;
   WRAPPER_CHECK_PTR(ctx, TX, m * hidden_dim, x);
   WRAPPER_CHECK_PTR(ctx, TY, m * hidden_dim, y);
   WRAPPER_ASSERT_GT(ctx, hidden_dim, 0);
   // check VectorParam
   WRAPPER_ASSERT_EQ(ctx, encoder_seqs_lods.len, encoder_batch_map.len + 1);
+  WRAPPER_ASSERT_EQ(ctx, decoder_seqs_lods.len, decoder_batch_map.len + 1);
   WRAPPER_ASSERT_GE(ctx, encoder_seqs_lods.cpu[0], 0);
   WRAPPER_ASSERT_LE(ctx, encoder_seqs_lods.cpu[0], max_encoder_lod);
+  WRAPPER_ASSERT_GE(ctx, decoder_seqs_lods.cpu[0], 0);
+  WRAPPER_ASSERT_LE(ctx, decoder_seqs_lods.cpu[0], max_decoder_lod);
   for (int i = 0; i < encoder_batch_map.len; ++i) {
     WRAPPER_ASSERT_GE(ctx, encoder_batch_map.cpu[i], 0);
     WRAPPER_ASSERT_LT(ctx, encoder_batch_map.cpu[i], total_batch)
@@ -150,12 +163,15 @@ int eb_adjust_batch(api::Context *ctx,
   for (int i = 0; i < decoder_batch_map.len; ++i) {
     WRAPPER_ASSERT_GE(ctx, decoder_batch_map.cpu[i], 0);
     WRAPPER_ASSERT_LT(ctx, decoder_batch_map.cpu[i], total_batch)
+    WRAPPER_ASSERT_GE(ctx, decoder_seqs_lods.cpu[i + 1], 0);
+    WRAPPER_ASSERT_LE(ctx, decoder_seqs_lods.cpu[i + 1], max_decoder_lod);
   }
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper<TX, TY>(ctx,
                                x,
                                y,
                                encoder_seqs_lods.cpu,
+                               decoder_seqs_lods.cpu,
                                encoder_batch_map.cpu,
                                decoder_batch_map.cpu,
                                encoder_batch_map.len,
@@ -166,6 +182,8 @@ int eb_adjust_batch(api::Context *ctx,
     api::ctx_guard RAII_GUARD(ctx);
     api::VectorParam<int32_t> encoder_seqs_lods_xpu =
         encoder_seqs_lods.to_xpu(RAII_GUARD);
+    api::VectorParam<int32_t> decoder_seqs_lods_xpu =
+        decoder_seqs_lods.to_xpu(RAII_GUARD);
     api::VectorParam<int32_t> encoder_batch_map_xpu =
         encoder_batch_map.to_xpu(RAII_GUARD);
     api::VectorParam<int32_t> decoder_batch_map_xpu =
@@ -174,6 +192,7 @@ int eb_adjust_batch(api::Context *ctx,
                                 x,
                                 y,
                                 encoder_seqs_lods_xpu,
+                                decoder_seqs_lods_xpu,
                                 encoder_batch_map_xpu,
                                 decoder_batch_map_xpu,
                                 encoder_batch_map.len,
@@ -187,6 +206,7 @@ int eb_adjust_batch(api::Context *ctx,
   template int eb_adjust_batch<TX, TY>(api::Context *,              \
                                        const TX *,                  \
                                        TY *,                        \
+                                       api::VectorParam<int32_t> &, \
                                        api::VectorParam<int32_t> &, \
                                        api::VectorParam<int32_t> &, \
                                        api::VectorParam<int32_t> &, \

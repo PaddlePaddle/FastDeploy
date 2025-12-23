@@ -31,9 +31,6 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     sot_warmup_guard,
 )
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
-    LogitsProcessorBase,
-)
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -106,7 +103,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
 
     def exist_prefill(self):
         """
@@ -182,7 +179,7 @@ class GCUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                request.logits_processor, request.logits_cached = logits_info
+                request.logits_processor = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
@@ -587,7 +584,6 @@ class GCUModelRunner(ModelRunnerBase):
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
-            input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
@@ -640,7 +636,7 @@ class GCUModelRunner(ModelRunnerBase):
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
         )
         # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -653,12 +649,12 @@ class GCUModelRunner(ModelRunnerBase):
             for i in range(self.model_config.num_hidden_layers):
 
                 cache_kvs[f"key_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
                 cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
@@ -926,29 +922,36 @@ class GCUModelRunner(ModelRunnerBase):
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
         logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
-    def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
+    def _get_p_done_idxs_gd(self, model_forward_batch: Optional[List[Request]], num_running_requests: int):
         """
-        Get the index of the request that needs to be skipped during execution.
-        Args:
-            model_forward_batch: A list of requests to be executed by this runner.
-        Returns:
-            A list of indices corresponding to the requests that need to be skipped.
+        Returns indices for guided decoding.
+        When Prefill is done, async compiled logits_processor must be joined.
         """
-        skip_idx_list = []
-        if not self.cache_config.enable_chunked_prefill or self.guided_backend is None:
-            return skip_idx_list
+        if self.guided_backend is None:
+            return []
 
-        for task in model_forward_batch:
-            if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
+        prefill_done_idxs = []
+        for idx in range(0, num_running_requests):
+            if self.share_inputs["step_idx"][idx] == 0:
+                prefill_done_idxs.append(idx)
 
-        for task in self.restore_chunked_prefill_request.values():
-            if task.idx in skip_idx_list or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
+        if self.cache_config.enable_chunked_prefill:
+            if model_forward_batch is not None:
+                for task in model_forward_batch:
+                    # new Request with ChunkPrefill, unfinished, store
+                    if task.chunk_idx < len(task.prefill_chunk_info):
+                        if task.request_id not in self.restore_chunked_prefill_request:
+                            self.restore_chunked_prefill_request[task.request_id] = task
 
-        return skip_idx_list
+            for id, task in list(self.restore_chunked_prefill_request.items()):
+                # unfinished, remove
+                if task.chunk_idx < len(task.prefill_chunk_info) and task.idx in prefill_done_idxs:
+                    prefill_done_idxs.remove(task.idx)
+                # finished, add
+                if task.chunk_idx == len(task.prefill_chunk_info) and task.idx not in prefill_done_idxs:
+                    prefill_done_idxs.append(task.idx)
+
+        return prefill_done_idxs
 
     def execute_model(
         self,
@@ -968,13 +971,13 @@ class GCUModelRunner(ModelRunnerBase):
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop():
-            self._execute_empty_input()
+            self._execute_empty_input(self.forward_meta)
             return None
 
         # 1. Prepare inputs of model and sampler.
-        skip_idx_list = self._get_skip_idx(model_forward_batch)
+        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
         self._prepare_inputs()
-        self.sampler.pre_process(skip_idx_list)
+        self.sampler.pre_process(p_done_idxs)
 
         # 2. Padding inputs for cuda graph
 
@@ -1010,7 +1013,7 @@ class GCUModelRunner(ModelRunnerBase):
             sampler_output = self.sampler(
                 logits,
                 self.sampling_metadata,
-                skip_idx_list,
+                p_done_idxs,
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(sampler_output.sampled_token_ids, 0)
@@ -1082,36 +1085,17 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
         self._update_chunked_prefill(model_forward_batch)
-        self._add_cache(model_forward_batch)
         self.seq_lens_this_time_buffer.copy_(self.share_inputs["seq_lens_this_time"], False)
         return None
 
-    def _add_cache(self, model_forward_batch) -> None:
-        """
-        Add cache for guided decoding.
-        """
-        if self.guided_backend is None:
-            return
-
-        for request in model_forward_batch:
-            logits_cached = request.get("logits_cached", None)
-            if logits_cached is None or logits_cached:
-                continue
-
-            request.logits_cached = True
-            if isinstance(request.logits_processor, LogitsProcessorBase):
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor)
-            else:
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor.result())
-
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 

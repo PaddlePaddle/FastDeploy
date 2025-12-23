@@ -21,9 +21,17 @@ import time
 import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from fastdeploy.engine.pooling_params import PoolingParams
+from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
 class InvalidParameterException(Exception):
@@ -202,6 +210,7 @@ class ChatMessage(BaseModel):
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
     reasoning_content: Optional[str] = None
+    audio_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
@@ -214,11 +223,14 @@ class ChatCompletionResponseChoice(BaseModel):
     Chat completion response choice.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     message: ChatMessage
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
+    prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -262,6 +274,7 @@ class DeltaMessage(BaseModel):
     role: Optional[str] = None
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
+    audio_content: Optional[str] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
@@ -275,12 +288,15 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     Chat completion response choice for stream response.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     delta: DeltaMessage
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
+    prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionStreamResponse(BaseModel):
@@ -294,6 +310,7 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class CompletionResponseChoice(BaseModel):
@@ -301,6 +318,7 @@ class CompletionResponseChoice(BaseModel):
     Completion response choice.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     text: str
     prompt_token_ids: Optional[List[int]] = None
@@ -310,9 +328,11 @@ class CompletionResponseChoice(BaseModel):
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
     draft_logprobs: Optional[CompletionLogprobs] = None
+    prompt_logprobs: Optional[PromptLogprobs] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionResponse(BaseModel):
@@ -344,11 +364,13 @@ class CompletionResponseStreamChoice(BaseModel):
     Completion response choice for stream response.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     text: str
     arrival_time: float = None
     logprobs: Optional[CompletionLogprobs] = None
     draft_logprobs: Optional[CompletionLogprobs] = None
+    prompt_logprobs: Optional[PromptLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     prompt_tokens: Optional[str] = None
@@ -356,6 +378,7 @@ class CompletionResponseStreamChoice(BaseModel):
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionStreamResponse(BaseModel):
@@ -369,6 +392,7 @@ class CompletionStreamResponse(BaseModel):
     model: str
     choices: List[CompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class StreamOptions(BaseModel):
@@ -437,6 +461,8 @@ class CompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
+    prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
@@ -451,6 +477,8 @@ class CompletionRequest(BaseModel):
     temperature: Optional[float] = Field(default=None, ge=0)
     top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
@@ -477,6 +505,9 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -486,8 +517,6 @@ class CompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         # parse request model into dict
         if self.suffix is not None:
@@ -497,6 +526,8 @@ class CompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
+        if request_id is not None:
+            req_dict["request_id"] = request_id
         if prompt is not None:
             req_dict["prompt"] = prompt
 
@@ -567,6 +598,18 @@ class CompletionRequest(BaseModel):
 
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def check_logprobs(cls, data):
+        if (logprobs := data.get("logprobs")) is not None:
+            if logprobs < -1:
+                raise ValueError("`logprobs` must be a greater than -1.")
+
+        if (prompt_logprobs := data.get("prompt_logprobs")) is not None:
+            if prompt_logprobs < -1:
+                raise ValueError("`prompt_logprobs` must be a greater than -1.")
+        return data
+
 
 class ChatCompletionRequest(BaseModel):
     """
@@ -580,8 +623,10 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
-    top_logprobs: Optional[int] = 0
+    top_logprobs: Optional[int] = None
+    prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
 
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -604,6 +649,8 @@ class ChatCompletionRequest(BaseModel):
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
@@ -635,6 +682,9 @@ class ChatCompletionRequest(BaseModel):
     mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None):
         """
@@ -644,11 +694,10 @@ class ChatCompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
+        req_dict["prompt_logprobs"] = self.prompt_logprobs
         req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
         req_dict["top_p_normalized_logprobs"] = self.top_p_normalized_logprobs
 
@@ -666,10 +715,10 @@ class ChatCompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
-        if "prompt_token_ids" in req_dict:
-            if "messages" in req_dict:
-                del req_dict["messages"]
-        else:
+        if request_id is not None:
+            req_dict["request_id"] = request_id
+
+        if "prompt_token_ids" not in req_dict or not req_dict["prompt_token_ids"]:
             # If disable_chat_template is set, then the first message in messages will be used as the prompt.
             assert (
                 len(req_dict["messages"]) > 0
@@ -749,12 +798,15 @@ class ChatCompletionRequest(BaseModel):
     def check_logprobs(cls, data):
 
         if (top_logprobs := data.get("top_logprobs")) is not None:
-            if top_logprobs < 0:
-                raise ValueError("`top_logprobs` must be a positive value.")
+            if top_logprobs < -1:
+                raise ValueError("`top_logprobs` must be a greater than -1.")
 
-            if top_logprobs > 0 and not data.get("logprobs"):
+            if not data.get("logprobs"):
                 raise ValueError("when using `top_logprobs`, `logprobs` must be set to true.")
 
+        if (prompt_logprobs := data.get("prompt_logprobs")) is not None:
+            if prompt_logprobs < -1:
+                raise ValueError("`prompt_logprobs` must be a greater than -1.")
         return data
 
 
@@ -895,7 +947,7 @@ class EmbeddingChatRequest(BaseModel):
     )
 
     add_special_tokens: bool = Field(
-        default=False,
+        default=True,
         description=(
             "If true, special tokens (e.g. BOS) will be added to the prompt "
             "on top of what is added by the chat template. "
@@ -977,9 +1029,9 @@ PoolingChatRequest = EmbeddingChatRequest
 
 
 class ChatRewardRequest(BaseModel):
-    model: Optional[str] = None  # 指定模型，例如 "default" 或支持 embedding 的 chat 模型
-    messages: Union[List[Any], List[int]]  # 聊天消息列表（必选）
-    user: Optional[str] = None  # 调用方标识符
+    model: Optional[str] = None
+    messages: Union[List[Any], List[int]]
+    user: Optional[str] = None
 
     dimensions: Optional[int] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
@@ -1048,15 +1100,15 @@ class ChatRewardRequest(BaseModel):
 
 
 class ChatRewardData(BaseModel):
-    index: Optional[int] = None  # 数据索引（可选）
-    object: str = "reward"  # 固定为 "reward"
-    score: List[float]  # reward 分数（浮点数列表）
+    index: Optional[int] = None
+    object: str = "reward"
+    score: List[float]
 
 
 class ChatRewardResponse(BaseModel):
-    id: str  # 响应 ID，例如 chat-reward-<uuid>
-    object: str = "object"  # 固定为 "object"
-    created: int  # 创建时间（Unix 时间戳）
-    model: str  # 使用的模型名
-    data: List[ChatRewardData]  # reward 结果列表
-    usage: Optional[UsageInfo] = None  # Token 使用情况
+    id: str
+    object: str = "object"
+    created: int
+    model: str
+    data: List[ChatRewardData]
+    usage: Optional[UsageInfo] = None

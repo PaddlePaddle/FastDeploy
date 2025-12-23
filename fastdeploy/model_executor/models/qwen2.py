@@ -61,7 +61,6 @@ class Qwen2MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -90,7 +89,7 @@ class Qwen2MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -176,6 +175,7 @@ class Qwen2DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -193,11 +193,9 @@ class Qwen2DecoderLayer(nn.Layer):
     ):
         """ """
         # Self Attention
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -207,7 +205,7 @@ class Qwen2DecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -278,16 +276,14 @@ class Qwen2Model(nn.Layer):
     ):
         """ """
 
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -314,7 +310,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         self.qwen2 = Qwen2Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
-
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -351,7 +347,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = (
                 self.process_weights_before_loading_fn(loaded_weight_name)
@@ -379,6 +375,10 @@ class Qwen2ForCausalLM(ModelForCasualLM):
                 weight_loader(param, loaded_weight)
             model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(
+                self.qwen2.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @classmethod
     def name(self):

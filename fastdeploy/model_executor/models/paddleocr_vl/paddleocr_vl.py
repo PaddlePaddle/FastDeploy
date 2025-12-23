@@ -15,17 +15,12 @@
 """
 
 import re
-from functools import partial
 from typing import Dict, Optional, Union
 
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddleformers.transformers import PretrainedModel
-from paddleformers.transformers.configuration_utils import PretrainedConfig
-from paddleformers.utils.log import logger
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -45,6 +40,7 @@ from fastdeploy.model_executor.utils import (
     default_weight_loader,
     process_weights_after_loading,
 )
+from fastdeploy.platforms import current_platform
 
 from .projector import Projector
 from .siglip import SiglipVisionModel
@@ -95,23 +91,10 @@ class PaddleOCRVLModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
-    def load_state_dict(self, state_dict):
-        """
-        Load model parameters from a given state dictionary.
-
-        Args:
-            state_dict (dict[str, np.ndarray | paddle.Tensor]):
-                A dictionary containing model parameters, where keys are parameter names
-                and values are NumPy arrays or PaddlePaddle tensors.
-        """
-        self.embed_tokens.load_state_dict(state_dict)
-        self.norm.load_state_dict(state_dict)
-        for i in range(self.num_layers):
-            logger.info(f"Start load layer {i}")
-            self.layers[i].load_state_dict(state_dict)
-
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -119,13 +102,18 @@ class PaddleOCRVLModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         hidden_states = input_embeddings
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
+        out = self.norm(hidden_states, residual)[0]
 
-        out = self.norm(hidden_states)
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
 
         return out
 
@@ -154,14 +142,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
         # Persistent buffers for CUDA graphs.
-        if envs.FD_ENABLE_MAX_PREFILL:
-            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len
-        else:
-            max_length = fd_config.model_config.max_model_len
-        self._input_embeddings = paddle.zeros(
-            [max_length, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
@@ -184,7 +169,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = (
                 self.process_weights_before_loading_fn(loaded_weight_name)
@@ -247,8 +232,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.model.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         image_mask = ids_remove_padding == self.model.config.image_token_id
         image_token_num = image_mask.sum()
 
@@ -263,193 +251,16 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.model(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             forward_meta=forward_meta,
         )
 
         return hidden_states
-
-
-class PaddleOCRVLPretrainedModel(PretrainedModel):
-
-    config_class = FDConfig
-
-    def _init_weight(self, layer):
-        """
-        _init_weight
-        """
-        return None
-
-    @classmethod
-    def arch_name(self):
-        return "PaddleOCRVLForConditionalGeneration"
-
-    from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
-    from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
-    from fastdeploy.model_executor.models.utils import WeightMeta
-
-    weight_infos = [
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(".embed_tokens.weight", False),
-        WeightMeta("lm_head.weight", True),
-    ]
-
-    weight_vison = [
-        # resampler_model
-        WeightMeta("ernie.resampler_model.spatial_linear.0.weight", False),
-        WeightMeta("resampler_model.spatial_linear.0.weight", False),
-        # vision
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.proj.weight",
-            False,
-        ),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc2.weight", False),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.weight", True),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.bias", True),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.bias",
-            True,
-            tsm.GQA,
-        ),
-    ]
-
-    @classmethod
-    def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split=True):
-        """
-        get_tensor_parallel_mappings
-        """
-        from fastdeploy.model_executor.models.tp_utils import (
-            build_expanded_keys,
-            has_prefix,
-            split_or_merge_func_v1,
-        )
-
-        fn = split_or_merge_func_v1(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads,
-            num_key_value_heads=config.num_key_value_heads,
-            head_dim=config.head_dim,
-        )
-        vision_fn = split_or_merge_func_v1(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.vision_config.get("num_heads"),
-            num_key_value_heads=config.vision_config.get("num_heads"),
-            head_dim=config.vision_config.get("hidden_size") // config.vision_config.get("num_heads"),
-        )
-
-        def get_tensor_parallel_split_mappings(
-            num_layers: int,
-            moe_num_experts: list[int],
-            moe_layer_start_index: int,
-            prefix_name: str,
-        ):
-            base_actions = {}
-            for weight_name, is_column, extra in cls.weight_infos:
-                params = {
-                    "is_column": is_column,
-                    **({extra.value: True} if extra else {}),
-                }
-
-                if "lm_head.weight" in weight_name or weight_name == "":
-                    key = weight_name
-                elif not has_prefix(prefix_name, weight_name):
-                    key = f"{prefix_name}{weight_name}"
-                else:
-                    key = weight_name
-                base_actions[key] = partial(fn, **params)
-            final_actions = {}
-            final_actions = build_expanded_keys(
-                base_actions,
-                num_layers,
-                (moe_layer_start_index if moe_layer_start_index > 0 else num_layers),
-                text_num_experts=moe_num_experts[0],
-                img_num_experts=moe_num_experts[1],
-            )
-            return final_actions
-
-        def get_vison_parallel_split_mappings(num_layers: int):
-            base_actions = {}
-            for weight_name, is_column, extra in cls.weight_vison:
-                params = {
-                    "is_column": is_column,
-                    **({extra.value: True} if extra else {}),
-                }
-                base_actions[weight_name] = partial(vision_fn, **params)
-            final_actions = {}
-            final_actions = build_expanded_keys(
-                base_actions,
-                num_layers,
-            )
-            return final_actions
-
-        moe_layer_start_index = -1
-        if isinstance(config.moe_layer_start_index, list):
-            moe_layer_start_index = min(config.moe_layer_start_index)
-        elif isinstance(config.moe_layer_start_index, int):
-            moe_layer_start_index = config.moe_layer_start_index
-
-        mappings = get_tensor_parallel_split_mappings(
-            config.num_hidden_layers,
-            config.moe_num_experts,
-            moe_layer_start_index,
-            config.prefix_name,
-        )
-        vision_mappings = get_vison_parallel_split_mappings(config.vision_config.get("depth"))
-
-        return {**mappings, **vision_mappings}

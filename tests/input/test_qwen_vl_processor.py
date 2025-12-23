@@ -204,6 +204,26 @@ class TestQwenVLProcessor(unittest.TestCase):
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
 
+    def test_process_request_dict_enable_thinking(self):
+        num_completion_token_ids = 10
+        request = {
+            "request_id": "12345",
+            "completion_token_ids": [1] * num_completion_token_ids,
+            "stop": ["stop", "eof"],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Hello"},
+                    ],
+                }
+            ],
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+
+        result = self.processor.process_request_dict(request, 100)
+        self.assertEqual(result.get("enable_thinking"), False)
+
     def test_prompt(self):
         """
         Test processing of prompt with image and video placeholders
@@ -344,6 +364,31 @@ class TestQwenVLProcessor(unittest.TestCase):
 
         # Verify both methods produce identical prompt strings
         self.assertEqual(prompt, prompt2)
+
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
 
 
 if __name__ == "__main__":

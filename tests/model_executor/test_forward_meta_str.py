@@ -30,6 +30,7 @@ class TOYGPUModelRunner:
         self.pre_max_block_num = 16
         # Not the tensor in real sense, just for make ForwardMeta
         self.share_inputs = {}
+
         self.share_inputs["input_ids"] = paddle.full(
             [self.max_num_seqs, self.max_model_len],
             0,
@@ -63,7 +64,6 @@ class TOYGPUModelRunner:
         """
         # Ignore the attentionbackbend for simplify
         self.forward_meta = ForwardMeta(
-            input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             # rotary_embs=self.share_inputs["rope_emb"],# Ignore the rope_emb for simplify
             # attn_backend=self.attn_backends[0],# Ignore the attn_backbend for simplify

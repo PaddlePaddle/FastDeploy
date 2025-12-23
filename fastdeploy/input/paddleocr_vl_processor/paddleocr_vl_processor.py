@@ -22,6 +22,9 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+from fastdeploy.input.utils import process_stop_token_ids
+
 
 class PaddleOCRVLProcessor(TextProcessor):
     """
@@ -61,7 +64,6 @@ class PaddleOCRVLProcessor(TextProcessor):
             tool_parser_obj: Tool parser instance
         """
         super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
-
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self.processor = DataProcessor(
@@ -209,11 +211,8 @@ class PaddleOCRVLProcessor(TextProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
@@ -251,6 +250,22 @@ class PaddleOCRVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
+
+        if self.reasoning_parser:
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            parts = request["request_id"].split("_")
+            if len(parts) > 1:
+                real_req_id = parts[0]
+                index = int(parts[1])
+                n = request.get("n", 1)
+                for idx in range(index * n, (index + 1) * n):
+                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+            else:
+                self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
 
         return request
 

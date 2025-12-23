@@ -104,8 +104,10 @@ class Qwen2_5_VLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -124,9 +126,7 @@ class Qwen2_5_VLModel(nn.Layer):
                 residual,
             )
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -154,10 +154,11 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
         # Persistent buffers for CUDA graphs.
-        self._input_embeddings = paddle.zeros(
-            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -210,7 +211,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -233,10 +234,9 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -251,7 +251,9 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         self.model.load_state_dict(state_dict)
         self.visual.load_state_dict(state_dict)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
         else:
             self.lm_head.load_state_dict(state_dict)
 
@@ -262,28 +264,16 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
-        """
-        empty_input_forward
-        """
-        fake_hidden_states = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
-            dtype=paddle.get_default_dtype(),
-        )
-        for i in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
-        ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
-
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta: ForwardMeta = None,
     ) -> paddle.Tensor:
 
-        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.model.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
 
         image_mask = ids_remove_padding == self.model.image_token_id
         image_token_num = image_mask.sum()
@@ -308,12 +298,15 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.model(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             forward_meta=forward_meta,

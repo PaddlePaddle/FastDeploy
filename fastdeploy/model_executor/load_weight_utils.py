@@ -15,6 +15,7 @@
 """
 
 import contextlib
+import copy
 import hashlib
 import inspect
 import json
@@ -25,8 +26,6 @@ from functools import wraps
 from pathlib import Path
 
 import paddle
-import paddle.distributed as dist
-from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from paddleformers.utils.log import logger
@@ -37,11 +36,7 @@ from tqdm import tqdm
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.linear import KVBatchLinear
-from fastdeploy.model_executor.models.tp_utils import (
-    check_tensor_parallel_prerequisites,
-)
-from fastdeploy.model_executor.utils import switch_config_context
-from fastdeploy.platforms import current_platform
+from fastdeploy.model_executor.utils import multi_switch_config_context
 
 
 def pdparams_weight_iterator(paddle_file_list: list[str]):
@@ -57,10 +52,19 @@ def pdparams_weight_iterator(paddle_file_list: list[str]):
 def load_weights_from_cache(model, weights_iterator):
     params_dict = dict(model.named_parameters())
     for loaded_weight_name, loaded_weight in weights_iterator:
+        if loaded_weight_name not in params_dict:
+            logger.info(f"{loaded_weight_name} is not in model parameters.")
+            continue
         param = params_dict[loaded_weight_name]
+        if param.shape != loaded_weight.shape:
+            raise ValueError(
+                f"Shape mismatch between loaded weight {loaded_weight_name}: {loaded_weight.shape}, expected shape: {param.shape}"
+            )
         param.copy_(loaded_weight, False)
         if "embeddings" in loaded_weight_name and getattr(model, "tie_word_embeddings", False):
-            model.lm_head.load_state_dict({model.lm_head.weight_key: loaded_weight})
+            model.lm_head.linear.weight.set_value(
+                loaded_weight.transpose([1, 0]).astype(model.lm_head.linear.weight.dtype)
+            )
         for _, model_sublayer in model.named_sublayers():
             if isinstance(model_sublayer, KVBatchLinear):
                 model_sublayer.process_weights_after_loading()
@@ -69,17 +73,18 @@ def load_weights_from_cache(model, weights_iterator):
 def get_weight_iterator(model_path: str):
     _, files_list, use_safetensors = get_all_weights_file(model_path)
     if use_safetensors:
-        weights_iterator = fast_weights_iterator(files_list)
+        weights_iterator = safetensors_weights_iterator(files_list)
     else:
         weights_iterator = pdparams_weight_iterator(files_list)
     return weights_iterator
 
 
 def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
+
     weight_cache_context = contextlib.nullcontext()
     weight_cache_dir = None
     enable_cache = False
-    if envs.FD_ENABLE_MODEL_LOAD_CACHE:
+    if envs.FD_ENABLE_MODEL_LOAD_CACHE and fd_config.quant_config is not None:
         model_weight_cache_path = os.path.join(fd_config.model_config.model, weight_cache_path)
         # model_type + quantization + tp_size + ep_size
         weight_cache_key = "_".join(
@@ -98,7 +103,10 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
                 f"Loading will prioritize cached models. Users are responsible for ensuring the saved model is correct. If any error occurs, deleting the cache at {weight_cache_dir} may resolve it."
             )
             enable_cache = True
-            weight_cache_context = switch_config_context(fd_config.quant_config, "is_quantized", True)
+
+            weight_cache_context = multi_switch_config_context(
+                (fd_config.quant_config, "is_checkpoint_bf16", False),
+            )
 
     return enable_cache, weight_cache_dir, weight_cache_context
 
@@ -126,32 +134,34 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
                 tp_weight_cache_dir = os.path.join(
                     weight_cache_dir, f"rank{str(fd_config.parallel_config.tensor_parallel_rank)}"
                 )
-                context = switch_config_context(fd_config.model_config, "model", tp_weight_cache_dir)
+                context = multi_switch_config_context((fd_config.model_config, "model", tp_weight_cache_dir))
             else:
                 context = contextlib.nullcontext()
 
             with context:
                 result = func(*args, **kwargs)
-            if (
-                envs.FD_ENABLE_MODEL_LOAD_CACHE
-                and weight_cache_dir is not None
-                and not os.path.exists(weight_cache_dir)
-            ):
-                assert fd_config.quant_config is not None and getattr(
-                    fd_config.quant_config, "is_checkpoint_bf16", False
-                ), "Save cache only for dynamic quantization"
+
+            if envs.FD_ENABLE_MODEL_LOAD_CACHE:
+                if not (
+                    fd_config.quant_config is not None and getattr(fd_config.quant_config, "is_checkpoint_bf16", False)
+                ):
+                    # Save cache only for dynamic quantization
+                    return result
+                if weight_cache_dir is None:
+                    return result
                 tp_weight_cache_dir = os.path.join(
                     weight_cache_dir, f"rank{str(fd_config.parallel_config.tensor_parallel_rank)}"
                 )
-                logger.info(f"Saving model to {tp_weight_cache_dir}")
-                os.makedirs(
-                    tp_weight_cache_dir,
-                    exist_ok=True,
-                )
-                _save_model(model.state_dict(), os.path.join(tp_weight_cache_dir, "cache.pdparams"))
-            else:
-                reason = "weights already cached" if envs.FD_ENABLE_MODEL_LOAD_CACHE else "cache disabled"
-                logger.info(f"Skip saving ,{reason}")
+                if not os.path.exists(tp_weight_cache_dir):
+                    logger.info(f"Saving model to {tp_weight_cache_dir}")
+                    os.makedirs(
+                        tp_weight_cache_dir,
+                        exist_ok=True,
+                    )
+                    _save_model(model.state_dict(), os.path.join(tp_weight_cache_dir, "cache.pdparams"))
+                else:
+                    reason = "weights already cached" if envs.FD_ENABLE_MODEL_LOAD_CACHE else "cache disabled"
+                    logger.info(f"Skip saving ,{reason}")
             return result
 
         return wrapper
@@ -233,18 +243,22 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             )
         return base_range
 
+    prefix_layer_name = (
+        "mtp_block" if getattr(fd_config.speculative_config, "model_type", "main") == "mtp" else "layers"
+    )
+
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
         for j in get_expert_ranges(fd_config):
-            up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            down_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
+            up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
+            down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
 
-            up_gate_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            down_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight"
+            up_gate_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
+            down_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.quant_weight"
 
-            up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            down_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
+            up_gate_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
+            down_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight_scale"
 
-            down_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.activation_scale"
+            down_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
@@ -259,7 +273,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             num_experts = num_experts[0]
 
         for j in range(num_experts):
-            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
+            up_gate_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
     for k in num_local_ffn_keys:
@@ -267,8 +281,18 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             filtered_map[k] = weight_list[k]
 
     if fd_config.parallel_config.tensor_parallel_size > 1:
+        no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
+        if fd_config.parallel_config.use_sequence_parallel_moe:
+            for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
+                no_tp_keys = [
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight",
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.bias",
+                ]
+                for k in no_tp_keys:
+                    if k in weight_list:
+                        no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
-        new_actions = {k: v for k, v in tp_actions.items() if k not in num_local_ffn_keys}
+        new_actions = {k: v for k, v in tp_actions.items() if k not in no_tp_action_keys}
 
     state_dict = {}
     # Get all safetensor file paths that need to be opened
@@ -303,7 +327,7 @@ def safetensors_weights_iterator(safe_tensor_list: list[str]):
         safe_tensor_list,
         desc="Loading safetensors checkpoint shards",
     ):
-        with safe_open(st_file, framework="np") as f:
+        with safe_open(st_file, framework="paddle", device="cpu") as f:
             for name in f.keys():
                 param = f.get_tensor(name)
                 yield name, param
@@ -323,45 +347,7 @@ def fast_weights_iterator(safe_tensor_list: list[str]):
                 yield name, param_slice
 
 
-def fastsafetensors_weights_iterator(
-    safetensor_list: list[str],
-):
-    """
-    Return an iterator over tensors on GPU from a given safetensor_list.
-    """
-    world_size = dist.get_world_size()
-    if world_size > 1:
-        pg = dist.get_group()
-        device = f"gpu:{pg.rank}" if paddle.is_compiled_with_cuda() else "cpu"
-    else:
-        pg = SingleGroup()
-        device = f"gpu:{pg.rank()}" if paddle.is_compiled_with_cuda() else "cpu"
-
-    safetensor_files_sub_lists = [
-        safetensor_list[i : i + world_size] for i in range(0, len(safetensor_list), world_size)
-    ]
-
-    for st_file in tqdm(
-        safetensor_files_sub_lists,
-        desc="Loading fastsafetensors checkpoint shards",
-    ):
-        loader = SafeTensorsFileLoader(pg, device, nogds=True, debug_log=False, framework="paddle")
-        rank_file_map = {i: [f] for i, f in enumerate(st_file)}
-        loader.add_filenames(rank_file_map)
-        try:
-            fb = loader.copy_files_to_device()
-            try:
-                keys = list(fb.key_to_rank_lidx.keys())
-                for k in keys:
-                    t = fb.get_tensor(k)
-                    yield k, t
-            finally:
-                fb.close()
-        finally:
-            loader.close()
-
-
-def load_pre_sharded_checkpoint(model_path: str, local_rank: int, use_fastsafetensor: bool = False):
+def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     """
     load_pre_sharded_checkpoint
     """
@@ -370,7 +356,7 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int, use_fastsafete
     _, safetensor_files, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
     weights_iterator = safetensors_weights_iterator(safetensor_files)
     for name, weight in weights_iterator:
-        state_dict[name] = weight
+        state_dict[name] = weight.clone()
     return state_dict
 
 
@@ -380,9 +366,9 @@ def get_all_weights_file(model_path: str):
     """
     model_path = Path(model_path)
     use_safetensors = True
-    if any(model_path.glob("*.pdparams")):
+    files_list = [str(file) for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
+    if len(files_list) > 0:
         key_name_list = []
-        files_list = [str(file) for file in model_path.glob("*.pdparams")]
         use_safetensors = False
     else:
         safe_model_path = model_path / "model.safetensors"
@@ -401,44 +387,6 @@ def get_all_weights_file(model_path: str):
     return key_name_list, files_list, use_safetensors
 
 
-def load_tp_checkpoint_v1(
-    model_path: str,
-    cls: PretrainedModel,
-    fd_config: FDConfig,
-    use_fastsafetensor: bool = True,
-):
-    """
-    load_tp_checkpoint_v1
-    """
-
-    safetensor_keys, safetensor_files, _ = get_all_weights_file(model_path)
-
-    if use_fastsafetensor:
-        weights_iterator = fastsafetensors_weights_iterator(safetensor_files)
-    else:
-        weights_iterator = safetensors_weights_iterator(safetensor_files)
-
-    tensor_parallel_filtered_map = {}
-    check_tensor_parallel_prerequisites(
-        fd_config,
-        cls,
-        tensor_parallel_filtered_map,
-        safetensor_keys,
-    )
-    need_tp = True if tensor_parallel_filtered_map else False
-    state_dict = {}
-    for key, weight in weights_iterator:
-        paddle.device.synchronize()
-        if need_tp and key in tensor_parallel_filtered_map:
-            action = tensor_parallel_filtered_map.pop(key)
-            tensor = action(weight).clone()
-        else:
-            tensor = weight.clone()
-        state_dict[key] = tensor
-        weight.value().get_tensor()._clear()
-    return state_dict
-
-
 def deal_state_dict(state_dict):
     """deal_state_dict"""
     device = paddle.CUDAPinnedPlace()
@@ -449,6 +397,30 @@ def deal_state_dict(state_dict):
             src_tensor = src.value().get_tensor()
             src_tensor._clear()
             src_tensor._share_data_with(dst_tensor)
+
+
+def load_cache_scale(fd_config, state_dict):
+    file_path = fd_config.model_config.kv_cache_quant_scale_path
+    prefix_layer_name = fd_config.model_config.prefix_layer_name
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            data = json.load(f)
+            for i in range(fd_config.model_config.num_hidden_layers):
+
+                k_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachek_matmul.activation_scale"
+                v_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachev_matmul.activation_scale"
+
+                k_scale = data[k_scale_name]
+                k_scale_tensor = paddle.to_tensor(k_scale, dtype=paddle.get_default_dtype())
+                state_dict[k_scale_name] = k_scale_tensor * 448.0
+
+                v_scale = data[v_scale_name]
+                v_scale_tensor = paddle.to_tensor(v_scale, dtype=paddle.get_default_dtype())
+                state_dict[v_scale_name] = v_scale_tensor * 448.0
+
+                logger.info(f"Loaded kv cache scales for layer {i}.")
+    else:
+        logger.warning(f"No kv_cache_scale.json found at {file_path}, skipping...")
 
 
 def load_composite_checkpoint(
@@ -463,7 +435,7 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+    if fd_config.parallel_config.use_ep:
         state_dict = load_ep_checkpoint(cls, model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
@@ -475,22 +447,24 @@ def load_composite_checkpoint(
             state_dict = load_pre_sharded_checkpoint(
                 model_path,
                 fd_config.parallel_config.tensor_parallel_rank,
-                use_fastsafetensor=False,
             )
         else:
-            if fd_config.load_config.use_fastsafetensor and (
-                current_platform.available() and current_platform.is_cuda()
-            ):
-                state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
-                deal_state_dict(state_dict)
-            else:
-                # NOTE: for very big model, cpu will be out of memory
-                state_dict = load_tp_checkpoint(
-                    model_path,
-                    cls,
-                    fd_config.model_config.pretrained_config,
-                    return_numpy=return_numpy,
-                )
+            fd_config.model_config.pretrained_config.use_sequence_parallel_moe = (
+                fd_config.parallel_config.use_sequence_parallel_moe
+            )
+            # NOTE: for very big model, cpu will be out of memory
+            state_dict = load_tp_checkpoint(
+                model_path,
+                cls,
+                fd_config.model_config.pretrained_config,
+                return_numpy=return_numpy,
+            )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
+
+    if hasattr(fd_config.quant_config, "kv_cache_quant_type"):
+        kv_cache_quant_type = fd_config.quant_config.kv_cache_quant_type
+        if kv_cache_quant_type == "float8_e4m3fn":
+            load_cache_scale(fd_config, state_dict)
+
     return state_dict

@@ -38,15 +38,18 @@
 | ```use_cudagraph```                | `bool`      | __[已废弃]__ 2.3版本开始 CUDAGraph 默认开启，详细说明参考 [graph_optimization.md](./features/graph_optimization.md) |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":true, "graph_opt_level":0}'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
+| ```use_internode_ll_two_stage``` | `bool` | 是否在DeepEP MoE中使用两阶段通信, default: False |
+| ```disable_sequence_parallel_moe``` | `bool` | 禁止在TP+EP中使用序列并行优化, default: False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
-| ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |
+| ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、 `guidance`、`off`, 默认为 `off` |
 | ```guided_decoding_disable_any_whitespace``` | `bool`   | guided decoding期间是否禁止生成空格，默认False |
 | ```speculative_config```           | `dict[str]` | 投机解码配置，仅支持标准格式json字符串，默认为None |
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
 | ```logprobs_mode```       | `str`      | 指定logprobs中返回的内容。支持的模式：`raw_logprobs`、`processed_logprobs'、`raw_logits`,`processed_logits'。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs。|
+| ```max_logprobs```       | `int`      | 服务支持返回的最大logprob数量，默认20。-1表示词表大小。 |
 | ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
 | ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 | ```chat_template```       | `str`      | 指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板 |
@@ -55,6 +58,7 @@
 | ```load_choices```       | `str`      | 默认使用"default" loader进行权重加载，加载torch权重/权重加速需开启 "default_v1"|
 | ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用）。 |
 | ```max_processor_cache```  | `int` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用）。 |
+| ```api_key```  |`dict[str]`| 校验服务请求头中的API密钥，支持传入多个密钥；与环境变量`FD_API_KEY`中的值效果相同，且优先级高于环境变量配置|
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 
@@ -78,3 +82,39 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 当启用 `enable_chunked_prefill` 时，服务通过动态分块处理长输入序列，显著提升GPU资源利用率。在此模式下，原有 `max_num_batched_tokens` 参数不再约束预填充阶段的批处理token数量（限制单次prefill的token数量），因此引入 `max_num_partial_prefills` 参数，专门用于限制同时处理的分块批次数。
 
 为优化短请求的调度优先级，新增 `max_long_partial_prefills` 与 `long_prefill_token_threshold` 参数组合。前者限制单个预填充批次中的长请求数量，后者定义长请求的token阈值。系统会优先保障短请求的批处理空间，从而在混合负载场景下降低短请求延迟，同时保持整体吞吐稳定。
+
+## 4. ```api_key``` 参数使用说明
+
+启动参数多值配置方式， 优先级高于环境变量中配置。
+```bash
+  --api-key "key1"
+  --api-key "key2"
+```
+环境变量多值配置方式，使用逗号分隔
+```bash
+  export FD_API_KEY="key1,key2"
+```
+
+使用 Curl 命令请求时，增加 API_KEY头信息，进行请求合法性校验。匹配任一```api_key```即可。
+```bash
+curl -X POST "http://0.0.0.0:8265/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer key1" \
+-d '{
+  "messages": [
+    {"role": "user", "content":"你好"}
+  ],
+  "stream": false,
+  "return_token_ids": true,
+  "chat_template_kwargs": {"enable_thinking": true}
+}'
+```
+解析`Authorization: Bearer` 后 `key1`进行校验。
+
+使用 openai sdk 进行请求时，需要传`api_key`参数。
+```python
+client = OpenAI(
+    api_key="your-api-key-here",
+    base_url="http://localhost:8000/v1"
+)
+```

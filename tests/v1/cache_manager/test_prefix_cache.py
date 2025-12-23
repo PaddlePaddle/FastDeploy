@@ -30,7 +30,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     )
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
-    model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=8192)
+    model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=4196)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
@@ -48,9 +48,16 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
 
 
+def test_block_num_limit():
+    import pytest
+
+    with pytest.raises(AssertionError):
+        make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=20)
+
+
 def test_normal_case():
     block_size = 64
-    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=100)
+    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=False, num_gpu_blocks_override=128)
     req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
     req2 = Request.from_dict(
         {"request_id": "req2", "prompt_token_ids": [1] * 1600 + [2] * 1600, "prompt_token_ids_len": 3200}
@@ -61,14 +68,14 @@ def test_normal_case():
     (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req1, block_size)
     assert len(common_block_ids) == 0
     assert matched_token_num == 0
-    assert len(cache_manager.gpu_free_block_list) == 100
+    assert len(cache_manager.gpu_free_block_list) == 128
     req1.block_tables.extend(common_block_ids)
     # allocate for req1 inputs
     num_new_block = 50
     req1.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
     req1.num_computed_tokens += 50 * block_size
     cache_manager.update_cache_blocks(req1, block_size, req1.num_computed_tokens)
-    assert len(cache_manager.gpu_free_block_list) == 50
+    assert len(cache_manager.gpu_free_block_list) == 78
     # allocate for req2 inputs
     (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req2, block_size)
     assert len(common_block_ids) == 25
@@ -85,13 +92,13 @@ def test_normal_case():
     assert matched_token_num == 25 * block_size
     req3.num_cached_tokens = matched_token_num
     req3.num_computed_tokens = 25 * block_size
-    assert len(cache_manager.gpu_free_block_list) == 25
+    assert len(cache_manager.gpu_free_block_list) == 53
     req3.block_tables.extend(common_block_ids)
     num_new_block = 25
     assert cache_manager.can_allocate_gpu_blocks(num_new_block)
     req3.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
     cache_manager.update_cache_blocks(req3, block_size, req3.num_computed_tokens)
-    assert len(cache_manager.gpu_free_block_list) == 0
+    assert len(cache_manager.gpu_free_block_list) == 28
 
 
 def test_mm_extra_keys():
