@@ -14,11 +14,13 @@
 # limitations under the License.
 """
 
+import os
+import traceback
 from abc import abstractmethod
 
-import deep_ep
 import paddle
 from paddle import nn
+from paddle.distributed.communication import deep_ep
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
@@ -89,7 +91,6 @@ class DeepEPEngineHighThroughput(DeepEPEngineBase):
             self.group,
             int(1e9),
             0,
-            num_experts=self.num_experts,
             low_latency_mode=False,
             num_qps_per_rank=1,
         )
@@ -107,31 +108,71 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
 
     def get_low_latency_buffer(self):
         """
-        Initialize low latency buffer for decode phase.
+        Initialize XPU-compatible low latency buffer for decode phase.
         Args:
             group: The MPI group object.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
             hidden_size: The hidden_size dimension of the model.
         """
-        # NOTES: the low-latency mode will consume much more space than the normal mode
-        # So we recommend that `num_max_dispatch_tokens_per_rank`
-        #   (the actual batch size in the decoding engine) should be less than 256
-        num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
-            self.num_max_dispatch_tokens_per_rank,
-            self.hidden_size,
-            self.ep_size,
-            self.num_experts,
-        )
-        # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
-        assert self.num_experts % self.ep_size == 0
-        self.deepep_engine = deep_ep.Buffer(
-            self.group,
-            0,
-            num_rdma_bytes,
-            self.num_experts,
-            low_latency_mode=True,
-            num_qps_per_rank=self.num_experts // self.ep_size,
-        )
+        try:
+            print("[DeepEP] Initializing low latency buffer for XPU...")
+            print(
+                f"[DeepEP] hidden_size={self.hidden_size}, ep_size={self.ep_size}, "
+                f"num_experts={self.num_experts}, num_local_experts={self.num_local_experts}"
+            )
+
+            # Check XPU environment
+            device_info = paddle.get_device()
+            print(f"[DeepEP] Current device: {device_info}")
+
+            if not device_info.startswith("xpu"):
+                raise RuntimeError(f"Expected XPU device, but got {device_info}")
+
+            # Check critical environment variables
+            bkcl_comm_size = os.environ.get("BKCL_COMM_SIZE")
+            bkcl_rank = os.environ.get("BKCL_RANK_ID")
+            if bkcl_comm_size is None or bkcl_rank is None:
+                print("[DeepEP] Warning: BKCL_COMM_SIZE or BKCL_RANK_ID not set")
+            else:
+                print(f"[DeepEP] BKCL environment: COMM_SIZE={bkcl_comm_size}, RANK_ID={bkcl_rank}")
+
+            # Get buffer size hint
+            print("[DeepEP] Getting RDMA size hint...")
+            num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
+                self.num_max_dispatch_tokens_per_rank,
+                self.hidden_size,
+                self.ep_size,
+                self.num_experts,
+            )
+            print(f"[DeepEP] RDMA size hint: {num_rdma_bytes} bytes")
+
+            # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
+            if self.num_experts % self.ep_size != 0:
+                raise ValueError(f"num_experts({self.num_experts}) must be divisible by ep_size({self.ep_size})")
+
+            print("[DeepEP] Creating DeepEP buffer with following parameters:")
+            print(f"  - group: {self.group}")
+            print("  - num_nvl_bytes: 0 (XPU doesn't support NVLink)")
+            print(f"  - num_rdma_bytes: {num_rdma_bytes}")
+            print("  - low_latency_mode: True")
+            print(f"  - num_qps_per_rank: {self.num_experts // self.ep_size}")
+
+            self.deepep_engine = deep_ep.Buffer(
+                self.group,
+                0,  # num_nvl_bytes=0 for XPU
+                num_rdma_bytes,
+                low_latency_mode=True,
+                num_qps_per_rank=self.num_experts // self.ep_size,
+            )
+            print("[DeepEP] Low latency buffer initialized successfully!")
+
+        except Exception as e:
+            print("[DeepEP] ERROR: Failed to initialize low latency buffer!")
+            print(f"[DeepEP] Error type: {type(e).__name__}")
+            print(f"[DeepEP] Error message: {str(e)}")
+            print("[DeepEP] Traceback:")
+            traceback.print_exc()
+            raise e
 
     def low_latency_dispatch(
         self,
@@ -139,6 +180,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         topk_idx: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
+        quant_group_size: int = 128,
     ):
         """
         Args:
@@ -156,25 +198,67 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             event: the event after executing the kernel (valid only if `async_finish` is set).
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
-        moe_in_w4a8_scale = None
-        (
-            packed_recv_x,
-            recv_expert_count,
-            handle,
-            dispatch_hook,
-            valid_token_num,
-        ) = self.deepep_engine.low_latency_dispatch(
-            hidden_states,
-            moe_in_w4a8_scale,
-            topk_idx,
-            self.num_max_dispatch_tokens_per_rank,
-            self.num_experts,
-            use_fp8=use_fp8,
-            async_finish=False,
-            return_recv_hook=True,
-        )
+        try:
+            # 调试信息输入
+            print("[DeepEP] Starting low_latency_dispatch...")
+            print(f"[DeepEP] hidden_states: shape={hidden_states.shape}, dtype={hidden_states.dtype}")
+            print(f"[DeepEP] hidden_states: device={hidden_states.place}")
+            print(f"[DeepEP] topk_idx: shape={topk_idx.shape}, dtype={topk_idx.dtype}")
 
-        return packed_recv_x, recv_expert_count, handle, dispatch_hook, valid_token_num
+            if expertwise_scale is not None:
+                print(f"[DeepEP] expertwise_scale: shape={expertwise_scale.shape}, dtype={expertwise_scale.dtype}")
+                print(f"[DeepEP] Using FP8 mode: {use_fp8}, quant_group_size: {quant_group_size}")
+            else:
+                print("[DeepEP] Not using FP8 mode")
+
+            if self.deepep_engine is None:
+                raise RuntimeError("DeepEP engine not initialized. Please call get_low_latency_buffer() first.")
+
+            print("==========before engine low_latency_dispatch")
+
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                dispatch_hook,
+                valid_token_num,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                expertwise_scale,
+                self.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+                num_per_channel=quant_group_size,
+            )
+            print("==========after engine low_latency_dispatch")
+
+            print("[DeepEP] low_latency_dispatch completed successfully")
+            print(f"[DeepEP] packed_recv_x: shape={packed_recv_x.shape}, dtype={packed_recv_x.dtype}")
+            print(f"[DeepEP] recv_expert_count: shape={recv_expert_count.shape}, dtype={recv_expert_count.dtype}")
+            print(f"[DeepEP] recv_expert_count values: {recv_expert_count.numpy()}")
+            print(f"[DeepEP] dispatch_hook type: {type(dispatch_hook)}")
+            print(f"[DeepEP] valid_token_num: {valid_token_num}")
+            print(f"[DeepEP] handle type: {type(handle)}")
+
+            return packed_recv_x, recv_expert_count, handle, dispatch_hook, valid_token_num
+
+        except Exception as e:
+            print("[DeepEP] ERROR in low_latency_dispatch!")
+            print(f"[DeepEP] Error type: {type(e).__name__}")
+            print(f"[DeepEP] Error message: {str(e)}")
+            print("[DeepEP] Full traceback:")
+            traceback.print_exc()
+
+            # 尝试获取更多调试信息
+            if hasattr(e, "__cause__"):
+                print(f"[DeepEP] Error cause: {e.__cause__}")
+            if hasattr(e, "args"):
+                print(f"[DeepEP] Error args: {e.args}")
+
+            raise e
 
     def low_latency_combine(
         self,
@@ -348,32 +432,64 @@ class XPUEPPrefillRunner(XPUEPRunner):
         x: paddle.Tensor,
         topk_idx: paddle.Tensor,
         topk_weights: paddle.Tensor,
+        expert_alignment: int = 1,
         *args,
         **kwargs,
     ):
-        self.num_combined_tokens = x.shape[0]
-        x_scale = kwargs.get("x_scale", None)
+        buffer = self.ep_engine.deepep_engine
+        if buffer is None:
+            raise RuntimeError("DeepEP buffer not initialized!")
+
+        # 获取详细的分发布局信息，与GPU版本对齐
+        (
+            num_tokens_per_rank,
+            num_tokens_per_rdma_rank,
+            num_tokens_per_expert,
+            is_token_in_rank,
+            event,
+        ) = buffer.get_dispatch_layout(
+            topk_idx,
+            self.ep_engine.num_experts,
+            previous_event=kwargs.get("previous_event", None),
+            allocate_on_comm_stream=False,  # XPU暂时不支持流分配
+            async_finish=self.ep_engine.async_finish,
+        )
+
+        x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
-            "x": (x, x_scale) if x_scale is not None else x,
+            "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
+            "num_tokens_per_rank": num_tokens_per_rank,
+            "num_tokens_per_rdma_rank": num_tokens_per_rdma_rank,
+            "is_token_in_rank": is_token_in_rank,
+            "num_tokens_per_expert": num_tokens_per_expert,
+            "async_finish": self.ep_engine.async_finish,
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
+            "expert_alignment": expert_alignment,
+            "previous_event": event,
         }
-        return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
+        return buffer.dispatch(**dispatch_args)
 
     def combine(
         self,
         tmp_ffn_out: paddle.Tensor,
         handle: tuple,
         recv_topk_weights: paddle.Tensor,
+        event=None,
     ):
+        buffer = self.ep_engine.deepep_engine
+        if buffer is None:
+            raise RuntimeError("DeepEP buffer not initialized!")
+
         combine_args = {
             "x": tmp_ffn_out,
+            "handle": handle,
+            "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
-            "num_combined_tokens": self.num_combined_tokens,
+            "previous_event": event,
         }
-        fused_moe_out, _, _ = self.ep_engine.deepep_engine.combine(**combine_args)
-
-        return fused_moe_out
+        fused_moe_out, _, event = buffer.combine(**combine_args)
+        return fused_moe_out, event
 
 
 class XPUEPDecoderRunner(XPUEPRunner):
@@ -420,6 +536,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
     ):
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = expertwise_scale is not None
+        quant_group_size = kwargs.get("quant_group_size", 128)
 
         (
             recv_hidden_states,
@@ -427,7 +544,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
             handle,
             dispatch_hook,
             valid_token_num,
-        ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8)
+        ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8, quant_group_size)
         # valid_token_num is optional:
         # - if valid_token_num is None, it means that we CANNOT accurately know
         #   the size of the tensor, but the advantage is that it can reduce
@@ -456,5 +573,5 @@ class XPUEPDecoderRunner(XPUEPRunner):
         )
         if combine_hook is not None:
             combine_hook()
-
+        print("===============================> low_latency_combine")
         return combined_hidden_states
