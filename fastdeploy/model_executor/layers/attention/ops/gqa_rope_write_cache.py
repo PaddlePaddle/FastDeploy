@@ -51,6 +51,7 @@ def gqa_rope_write_cache(
     kv_token_num: int = 1,
     max_seq_len: int = 0,
     rms_norm_eps: float = 1e-6,
+    use_neox_rotary_style: bool = False,
     cache_quant_type: str = "none",
     rope_3d: bool = False,
 ):
@@ -87,6 +88,7 @@ def gqa_rope_write_cache(
             kv_token_num,
             max_seq_len,
             rms_norm_eps,
+            use_neox_rotary_style,
             cache_quant_type,
             rope_3d,
         )

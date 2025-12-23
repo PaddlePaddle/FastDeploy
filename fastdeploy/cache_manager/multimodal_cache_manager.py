@@ -53,9 +53,6 @@ class MultimodalLRUCache(ABC):
             else:
                 item_size = self.get_item_size(mm_items[idx])
                 if self.current_cache_size + item_size >= self.max_cache_size:
-                    if item_size > self.max_cache_size:
-                        # cannot be inserted even if we clear all cached data, skip it directly
-                        continue
                     needed = item_size - (self.max_cache_size - self.current_cache_size)
                     evicted_hashes.extend(self.evict_cache(needed))
                 self.cache[mm_hashes[idx]] = mm_items[idx]

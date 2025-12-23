@@ -52,6 +52,8 @@ def paged_attention(
     v: paddle.Tensor = None,
     rope_sin: paddle.Tensor = None,
     rope_cos: paddle.Tensor = None,
+    rope_batch_stride: int = 0,
+    is_interleaved_rope_mode: bool = True,
 ):
     return paged_attn(
         q,
@@ -77,6 +79,8 @@ def paged_attention(
         use_cuda_graph,
         use_sqrt_alibi,
         merged_qkv,
+        rope_batch_stride,
+        is_interleaved_rope_mode,
     )
 
 
@@ -86,6 +90,8 @@ def prefill_fused_paged_attention(
     v_cache: paddle.Tensor,
     block_tables: paddle.Tensor,
     cu_seqlens_qkv: paddle.Tensor,
+    rope_sin: paddle.Tensor,
+    rope_cos: paddle.Tensor,
     num_heads: int,
     head_dim: int,
     num_kv_heads: int,
@@ -96,8 +102,7 @@ def prefill_fused_paged_attention(
     q_rope: bool = True,
     k_rope: bool = True,
     v_rope: bool = False,
-    rope_sin: paddle.Tensor = None,
-    rope_cos: paddle.Tensor = None,
+    is_interleaved_rope_mode: bool = True,
 ):
     return prefill_fused_paged_attn(
         qkv,
@@ -117,6 +122,7 @@ def prefill_fused_paged_attention(
         q_rope,
         k_rope,
         v_rope,
+        is_interleaved_rope_mode,
     )
 
 
@@ -128,6 +134,8 @@ def mixed_fused_paged_attention(
     decode_block_tables: paddle.Tensor,
     cu_seqlens_qkv: paddle.Tensor,
     seq_lens: paddle.Tensor,
+    prefill_rope_sin: paddle.Tensor,
+    prefill_rope_cos: paddle.Tensor,
     prefill_num_tokens: int,
     num_heads: int,
     head_dim: int,
@@ -144,8 +152,10 @@ def mixed_fused_paged_attention(
     softcap: float = 0.0,
     use_cuda_graph: bool = False,
     use_sqrt_alibi: bool = False,
-    rope_sin: paddle.Tensor = None,
-    rope_cos: paddle.Tensor = None,
+    decode_rope_sin: paddle.Tensor = None,
+    decode_rope_cos: paddle.Tensor = None,
+    rope_batch_stride: int = 0,
+    is_interleaved_rope_mode: bool = True,
 ):
     return mixed_fused_paged_attn(
         qkv,
@@ -155,8 +165,10 @@ def mixed_fused_paged_attention(
         decode_block_tables,
         cu_seqlens_qkv,
         seq_lens,
-        rope_sin,
-        rope_cos,
+        prefill_rope_sin,
+        prefill_rope_cos,
+        decode_rope_sin,
+        decode_rope_cos,
         prefill_num_tokens,
         num_heads,
         head_dim,
@@ -173,4 +185,6 @@ def mixed_fused_paged_attention(
         softcap,
         use_cuda_graph,
         use_sqrt_alibi,
+        rope_batch_stride,
+        is_interleaved_rope_mode,
     )

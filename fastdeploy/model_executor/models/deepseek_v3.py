@@ -411,14 +411,14 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
+            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
 
             fmha_out_decode = (
                 self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
                 .transpose([1, 0, 2])
-                .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+                .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
             if fmha_out is None:
@@ -581,7 +581,7 @@ class DeepSeekV3Model(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):
@@ -803,7 +803,7 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )

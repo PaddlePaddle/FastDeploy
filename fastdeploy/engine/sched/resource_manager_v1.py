@@ -224,10 +224,12 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
-    def reschedule_preempt_task(self, request_id):
+    def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                if process_func is not None:
+                    process_func(request)
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
@@ -329,7 +331,7 @@ class ResourceManagerV1(ResourceManager):
                         token_st += h * w // 4
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
-        else:
+        elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
@@ -368,7 +370,25 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
-            assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
+            if not inputs.get("tts", False):
+                assert prompt_token_ids_len == len(inputs["patch_idx"]), (
+                    prompt_token_ids_len,
+                    len(inputs["patch_idx"]),
+                )
+
+            def _compute_audio_prefix_count(end_idx, end_patch_idx):
+                audio_prefix_count = 0
+                pre_patch_end_idx = 0
+                for patch_idx in range(end_patch_idx + 1):
+                    patch_map = inputs["patch_map"][patch_idx]
+                    modal_id = patch_map["modal_id"]
+                    if modal_id == IDS_TYPE_FLAG["audio"]:
+                        if patch_idx != end_patch_idx:
+                            audio_prefix_count += patch_map["end_idx"] - pre_patch_end_idx
+                        else:
+                            audio_prefix_count += end_idx - pre_patch_end_idx
+                    pre_patch_end_idx = patch_map["end_idx"]
+                return audio_prefix_count
 
             # start
             if pre_end_idx >= prompt_token_ids_len:
@@ -378,7 +398,7 @@ class ResourceManagerV1(ResourceManager):
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
-            request.audio_start = start_patch_map["audio_num"]
+            request.audio_start = _compute_audio_prefix_count(pre_end_idx, start_patch_idx)
 
             # end
             if new_end_idx >= prompt_token_ids_len:
@@ -393,7 +413,7 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
+            if end_modal_id == IDS_TYPE_FLAG["image"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
 
             if end_modal_id == IDS_TYPE_FLAG["video"] and "can_split_idx_list" in inputs:
@@ -406,7 +426,7 @@ class ResourceManagerV1(ResourceManager):
 
             request.image_end = end_patch_map["image_num"]
             request.video_end = end_patch_map["video_num"]
-            request.audio_end = end_patch_map["audio_num"]
+            request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
             inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
@@ -428,6 +448,10 @@ class ResourceManagerV1(ResourceManager):
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
                     from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                elif current_platform.is_iluvatar():
+                    from fastdeploy.model_executor.ops.iluvatar import (
+                        get_img_boundaries,
+                    )
                 else:
                     from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
@@ -484,9 +508,9 @@ class ResourceManagerV1(ResourceManager):
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
-                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
+                    cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                    cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
@@ -654,12 +678,14 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
-                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
-                    ):
+                    if (
+                        self.config.model_config.disable_mm_prefill_batch()
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
                         break
                     if request.status == RequestStatus.WAITING:
-                        result = self._waiting_async_process(request)
+                        result = self.waiting_async_process(request)
                         if result is None:
                             error_reqs.append((request.request_id, request.error_message))
                             self.waiting.popleft()
@@ -696,7 +722,6 @@ class ResourceManagerV1(ResourceManager):
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                            request.inference_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -766,7 +791,7 @@ class ResourceManagerV1(ResourceManager):
 
             return scheduled_reqs, error_reqs
 
-    def _waiting_async_process(self, request: Request) -> None:
+    def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
         Args:
@@ -785,7 +810,7 @@ class ResourceManagerV1(ResourceManager):
         request.async_process_futures = []
         return False
 
-    def _apply_async_preprocess(self, request: Request) -> None:
+    def apply_async_preprocess(self, request: Request) -> None:
         request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
 
     def _has_features_info(self, task):
@@ -815,7 +840,7 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
@@ -915,7 +940,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_request(self, request: Request) -> None:
         with self.lock:
-            self._apply_async_preprocess(request)
+            self.apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
@@ -937,7 +962,6 @@ class ResourceManagerV1(ResourceManager):
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
-                request.inference_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -1044,7 +1068,7 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if request_output.request_id not in self.requests:
-            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            llm_logger.error(f"Request {request_output.request_id} not found in requests")
             return
         request = self.requests[request_output.request_id]
 
@@ -1057,8 +1081,10 @@ class ResourceManagerV1(ResourceManager):
         ):
             request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
         request.need_prefill_tokens = len(request.prompt_token_ids) + 1
-        request.inference_start_time = time.time()
-        request.schedule_start_time = time.time()
+
+        request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
+        request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
+        request.metrics = request_output.metrics
         self.running.append(request)
 
     def _free_blocks(self, request: Request):
