@@ -151,6 +151,7 @@ class _RecordingBuffer:
         use_fp8,
         async_finish,
         return_recv_hook,
+        num_per_channel,
     ):
         call = {
             "hidden_states": hidden_states,
@@ -161,6 +162,7 @@ class _RecordingBuffer:
             "use_fp8": use_fp8,
             "async_finish": async_finish,
             "return_recv_hook": return_recv_hook,
+            "num_per_channel": num_per_channel,
             "hook_called": False,
         }
         self.low_latency_dispatch_two_stage_calls.append(call)
@@ -204,6 +206,7 @@ class _RecordingBuffer:
         async_finish,
         dispatch_use_fp8,
         return_recv_hook,
+        num_per_channel,
     ):
         call = {
             "hidden_states": hidden_states,
@@ -213,6 +216,7 @@ class _RecordingBuffer:
             "async_finish": async_finish,
             "dispatch_use_fp8": dispatch_use_fp8,
             "return_recv_hook": return_recv_hook,
+            "num_per_channel": num_per_channel,
             "hook_called": False,
         }
         self.low_latency_combine_two_stage_calls.append(call)
