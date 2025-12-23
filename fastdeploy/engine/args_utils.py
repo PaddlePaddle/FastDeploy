@@ -509,6 +509,11 @@ class EngineArgs:
     Whether to skip port availability check. Default is False (not skip).
     """
 
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -853,6 +858,12 @@ class EngineArgs:
             nargs="+",
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
+        )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
         )
 
         # Parallel processing parameters group
