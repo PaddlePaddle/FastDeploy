@@ -16,7 +16,7 @@
 PD分离测试 - Prefill/Decode分离部署模式
 
 测试配置:
-- 模型: ERNIE-4.5-300B-A47B-Paddle
+- 模型: ERNIE-4.5-21B-A3B-Paddle
 - 量化: wint4
 - Tensor Parallel: 4
 - 特性: splitwise PD分离, RDMA cache传输
@@ -34,6 +34,7 @@ from conftest import (
     cleanup_resources,
     get_model_path,
     get_port_num,
+    get_xpu_id,
     restore_pd_env,
     setup_pd_env,
     stop_processes,
@@ -128,6 +129,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     Returns:
         bool: 服务是否启动成功
     """
+    xpu_id = get_xpu_id()
 
     # 停止旧进程
     stop_processes()
@@ -163,14 +165,17 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     print("启动Prefill节点...")
     prefill_env = os.environ.copy()
     prefill_env["FD_LOG_DIR"] = "log_prefill"
-    prefill_env["XPU_VISIBLE_DEVICES"] = "0,1,2,3"
+    if xpu_id == 0:
+        prefill_env["XPU_VISIBLE_DEVICES"] = "0,1"
+    else:
+        prefill_env["XPU_VISIBLE_DEVICES"] = "4,5"
 
     prefill_cmd = [
         "python",
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
         "--model",
-        f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--port",
         str(port_num + 11),
         "--metrics-port",
@@ -180,7 +185,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-queue-port",
         str(port_num + 14),
         "--tensor-parallel-size",
-        "4",
+        "2",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -192,7 +197,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        f"{port_num + 15},{port_num + 16},{port_num + 17},{port_num + 18}",
+        f"{port_num + 15},{port_num + 16}",
         "--pd-comm-port",
         str(port_num + 19),
         "--router",
@@ -209,14 +214,17 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     print("启动Decode节点...")
     decode_env = os.environ.copy()
     decode_env["FD_LOG_DIR"] = "log_decode"
-    decode_env["XPU_VISIBLE_DEVICES"] = "4,5,6,7"
+    if xpu_id == 0:
+        decode_env["XPU_VISIBLE_DEVICES"] = "2,3"
+    else:
+        decode_env["XPU_VISIBLE_DEVICES"] = "6,7"
 
     decode_cmd = [
         "python",
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
         "--model",
-        f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--port",
         str(port_num + 21),
         "--metrics-port",
@@ -226,7 +234,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-queue-port",
         str(port_num + 24),
         "--tensor-parallel-size",
-        "4",
+        "2",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -238,7 +246,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        f"{port_num + 25},{port_num + 26},{port_num + 27},{port_num + 28}",
+        f"{port_num + 25},{port_num + 26}",
         "--pd-comm-port",
         str(port_num + 29),
         "--router",

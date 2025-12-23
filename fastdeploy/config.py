@@ -579,6 +579,8 @@ class ParallelConfig:
         self.use_internode_ll_two_stage: bool = False
         # disable sequence parallel moe
         self.disable_sequence_parallel_moe: bool = False
+        # shutdown comm group if worker idle
+        self.shutdown_comm_group_if_worker_idle: bool = None
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -595,6 +597,9 @@ class ParallelConfig:
         else:
             self.expert_parallel_size = 1
         self.use_ep = self.expert_parallel_size > 1
+
+        if self.shutdown_comm_group_if_worker_idle is None:
+            self.shutdown_comm_group_if_worker_idle = not self.use_ep
 
         # pd_disaggregation
         use_pd_disaggregation: int = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
@@ -912,17 +917,19 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size[bs] = end
         self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self, max_capture_size: int = 0):
+    def _set_cudagraph_sizes(self, max_capture_size: int = 0, dec_token_per_query_per_step: int = 1):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Shape [1, 2, 4, 8, 16, ... 120, 128]
-        draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        # Shape [128, 144, ... 240, 256]
-        draft_capture_sizes += [16 * i for i in range(9, 17)]
-        # Shape [256, 288, ... 992, 1024]
-        draft_capture_sizes += [32 * i for i in range(9, 33)]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128] * dec_token_per_query_per_step
+        draft_capture_sizes = [i * dec_token_per_query_per_step for i in [1, 2, 4]] + [
+            8 * i * dec_token_per_query_per_step for i in range(1, 17)
+        ]
+        # Shape [128, 144, ... 240, 256] * dec_token_per_query_per_step
+        draft_capture_sizes += [16 * i * dec_token_per_query_per_step for i in range(9, 17)]
+        # Shape [256, 288, ... 992, 1024] * dec_token_per_query_per_step
+        draft_capture_sizes += [32 * i * dec_token_per_query_per_step for i in range(9, 33)]
 
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
@@ -1591,7 +1598,14 @@ class FDConfig:
             max_capture_shape = min(512, max_capture_shape)
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
+            dec_token_per_query_per_step = (
+                self.speculative_config.num_speculative_tokens + 1
+                if self.speculative_config is not None and self.speculative_config.method is not None
+                else 1
+            )
+            self.graph_opt_config._set_cudagraph_sizes(
+                max_capture_size=max_capture_shape, dec_token_per_query_per_step=dec_token_per_query_per_step
+            )
         self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
         self.tokenizer = tokenizer
@@ -1755,6 +1769,7 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
+
         if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")

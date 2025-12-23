@@ -276,6 +276,11 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
+    """
+
     engine_worker_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for worker queue communication.
@@ -543,7 +548,13 @@ class EngineArgs:
                     f"scheduler, please provide --router argument."
                 )
 
-        if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
+        if not (
+            current_platform.is_cuda()
+            or current_platform.is_xpu()
+            or current_platform.is_maca()
+            or current_platform.is_iluvatar()
+            or current_platform.is_intel_hpu()
+        ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
@@ -960,6 +971,12 @@ class EngineArgs:
             type=int,
             default=EngineArgs.chunked_moe_size,
             help="Chunked size of moe input.",
+        )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
         )
 
         # Load group
