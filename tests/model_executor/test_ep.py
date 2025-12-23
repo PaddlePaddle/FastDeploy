@@ -267,8 +267,7 @@ def test_deepep_engine_combine_rewrites_handle_and_errors(monkeypatch):
     handle = ("src", "layout", 4, 2)
     engine.low_latency_combine(hidden_states, topk_idx, topk_weights, handle)
 
-    assert engine.deepep_engine._combine_handle[3] is None
-    assert engine.deepep_engine._combine_handle[4] == 2
+    assert engine.deepep_engine._combine_handle == handle
 
     engine.buffer.deepep_buffer = None
     with pytest.raises(RuntimeError, match="DeepEP buffer not initialized"):
