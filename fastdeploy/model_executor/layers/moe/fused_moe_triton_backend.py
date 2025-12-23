@@ -1232,7 +1232,7 @@ def python_op_fused_moe_kernel_paddle(
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
-    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0])
+    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(x, quant_config.weight_block_size[0])
 
     fused_moe_kernel_paddle[grid](
         x_q,
@@ -1283,7 +1283,7 @@ def python_op_fused_moe_kernel_paddle(
 
     grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),)
 
-    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
+    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
         intermediate_cache2, quant_config.weight_block_size[0]
     )
 
