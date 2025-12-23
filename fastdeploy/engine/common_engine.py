@@ -1148,7 +1148,7 @@ class EngineService:
 
     def _zmq_send_generated_tokens(self):
         """
-        Recieve output for zmq
+        Receive output for zmq
         """
         while self.running:
             try:

@@ -270,7 +270,7 @@ def process_tracing_init():
         # )
         trace.set_tracer_provider(tracer_provider)
     except Exception as e:
-        logger.error(f": initialize opentelemetry error:{e}")
+        logger.error(f"Initialize opentelemetry error: {e}")
         logger.warning("please set correct otlp endpoint")
         tracing_enabled = False
         return
@@ -628,7 +628,7 @@ def trace_slice_end(
     thread_context = reqs_context[rid].threads_context[pid]
 
     if not thread_context.cur_slice_stack:
-        logger.warning(f"No matching with the SLICE_START event{name} is required.")
+        logger.warning(f"No matching SLICE_START event for {name} is required.")
         return
 
     ts = ts or __get_cur_time_ns()

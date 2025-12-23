@@ -355,7 +355,7 @@ class TokenProcessor:
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
                     self.postprocess(batch_result)
             except Exception as e:
-                llm_logger.error(f"Recieve message error: {e}")
+                llm_logger.error(f"Receive message error: {e}")
                 continue
 
     def process_sampling_results(self):
