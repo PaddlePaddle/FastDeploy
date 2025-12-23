@@ -952,10 +952,12 @@ class EngineService:
                         for task in tasks:
                             self.resource_manager.add_request(task)
                     
-                    with req_info_lock:
-                        for task in tasks:
-                            self.llm_logger.info(f"sched batch info: {task.ic_req_data['sched_batch_info']}")
-                            buffered_req_info[task.request_id] = task.ic_req_data["sched_batch_info"]
+                    if envs.FD_ENABLE_BATCH_SCHEDULER:
+                        with req_info_lock:
+                            for task in tasks:
+                                batch_info = json.loads(task.ic_req_data["batch_info"])
+                                self.llm_logger.info(f"sched batch info: {batch_info}")
+                                buffered_req_info[task.request_id] = batch_info
                 is_fetching = False
             except Exception as e:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
@@ -971,9 +973,9 @@ class EngineService:
                 # Find the latest scheduled batch
                 for local_info in all_buffered_req_info:
                     for _, sched_info in local_info.items():
-                        if sched_info.sched_batch_id > last_sched_batch_id:
-                            last_sched_batch_id = sched_info.sched_batch_id
-                            last_sched_batch_cnt = sched_info.sched_batch_cnt
+                        if sched_info["sched_batch_id"] > last_sched_batch_id:
+                            last_sched_batch_id = sched_info["sched_batch_id"]
+                            last_sched_batch_cnt = sched_info["sched_batch_cnt"]
                 
                 # Currently no new reqs
                 if last_sched_batch_id == -1:
@@ -984,8 +986,8 @@ class EngineService:
                 req_num_count = [0] * dp_size
                 for local_info in all_buffered_req_info:
                     for req_id, sched_info in local_info.items():
-                        if sched_info.sched_batch_id == last_sched_batch_id:
-                            req_num_count[sched_info.sched_batch_local_id] += 1
+                        if sched_info["sched_batch_id"] == last_sched_batch_id:
+                            req_num_count[sched_info["sched_batch_local_id"]] += 1
                             last_received_request_ids.append(req_id)
                 
                 flag = True

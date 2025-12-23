@@ -286,12 +286,12 @@ class SplitwiseConnector:
                     cache_info[addr] = []
                 cache_info[addr].append(info)
 
-        self.logger.debug(f"send cache info to prefill, {cache_info}")
+        self.logger.info(f"send cache info to prefill, {cache_info}")
         if len(cache_info):
             for key, info in cache_info.items():
                 self._send_message(key, "cache_sync", info)
 
-    def _serialize_message(self, msg_type: str, payload) -> bytes:
+    def :_serialize_message(self, msg_type: str, payload) -> bytes:
         # TODO 压缩
         if msg_type == "decode" or msg_type == "prefill":
             payload = [output.to_dict() for output in payload]

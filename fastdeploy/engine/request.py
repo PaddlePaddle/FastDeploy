@@ -60,15 +60,6 @@ class ImagePosition:
 
 
 @dataclass
-class SchedBatchInfo:
-    sched_batch_id: int = 0    # id of scheduled batch
-    sched_batch_cnt: List[int] = None  # req num scheduled for each DP instance
-    sched_ts: int = 0  # timestamp
-    sched_interval: int = 10  # interval of scheduling
-    sched_batch_local_id: int = 0  
-
-
-@dataclass
 class Request:
     def __init__(
         self,
@@ -220,20 +211,6 @@ class Request:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
-        
-        metadata = d.get("metadata", None)
-        # temp code for debug, need to remove
-        if metadata:
-            sched_batch_info = SchedBatchInfo(
-                sched_batch_id=metadata.get("sched_batch_id", 0),
-                sched_batch_cnt=metadata.get("sched_batch_cnt", None),
-                sched_ts=metadata.get("sched_ts", 0),
-                sched_interval=metadata.get("sched_interval", 10),
-                sched_batch_local_id=metadata.get("sched_batch_local_id", 0),
-            )
-            d["ic_req_data"] = {
-                "sched_batch_info": sched_batch_info,
-            }
 
         return cls(
             request_id=d["request_id"],
