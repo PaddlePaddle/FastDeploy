@@ -21,7 +21,6 @@ import time
 import numpy as np
 import paddle
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.utils import get_logger, set_random_seed
@@ -127,10 +126,11 @@ class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-
-            if envs.FD_MAX_KVCACHE_BLOCKS > 0 and num_blocks_local > envs.FD_MAX_KVCACHE_BLOCKS:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to {envs.FD_MAX_KVCACHE_BLOCKS}")
-                num_blocks_local = envs.FD_MAX_KVCACHE_BLOCKS
+            # NOTE(liuzichang): Too many block will lead to illegal memory access
+            # We will develop dynamic limits in future.
+            if num_blocks_local > 40000:
+                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
+                num_blocks_local = min(40000, num_blocks_local)
             logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
