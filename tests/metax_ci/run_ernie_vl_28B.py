@@ -21,6 +21,7 @@ llm = fastdeploy.LLM(
     quantization="wint8",
     load_choices="default_v1",
     disable_custom_all_reduce=True,
+    graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
 )
 
 prompts = [

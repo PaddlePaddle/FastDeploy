@@ -86,6 +86,9 @@ class ParallelEHProjection(nn.Layer):
                 )
             if self.tp_size > 1:
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
+                if self.bias_key is not None:
+                    set_weight_attrs(self.linear.bias, {"output_dim": True})
+
         else:
             self.linear = RowParallelLinear(
                 embedding_dim,

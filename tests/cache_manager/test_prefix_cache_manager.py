@@ -23,8 +23,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-pytest.importorskip("paddle")
-
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
@@ -68,7 +66,8 @@ class _DummyMainMetrics:
 class _DummyIPCSignal:
     def __init__(self, name, array, **kwargs):
         self.name = name
-        self.value = np.ones_like(array)
+        self.dtype = kwargs.get("dtype", np.array(array).dtype)
+        self.value = np.ones_like(array, dtype=self.dtype)
 
 
 # Mock engine cache queue used to capture issued tasks.
@@ -178,12 +177,15 @@ def _create_manager(
         cache_queue_port=9000,
         cache_transfer_protocol="zmq",
         rdma_comm_ports=None,
+        local_cache_queue_port=9000,
+        local_rdma_comm_ports=None,
     )
     model_config = SimpleNamespace(
         num_attention_heads=1,
         num_key_value_heads=1,
         head_dim=1,
         _architecture="",
+        dtype="float16",
     )
     config = SimpleNamespace(
         cache_config=cache_config,
@@ -417,7 +419,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=True,
             )
 
@@ -465,7 +467,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=False,
             )
 
@@ -501,7 +503,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                     device_ids=[0],
                     pod_ip="127.0.0.1",
                     engine_worker_queue_port=8000,
-                    pid_suffix="pid",
+                    ipc_suffix="pid",
                     create_cache_tensor=False,
                 )
 
@@ -512,7 +514,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         created_signals = {}
 
         def _signal_factory(name=None, array=None, **kwargs):
-            signal = SimpleNamespace(name=name, value=np.array(array, copy=True))
+            dtype = kwargs.get("dtype", np.array(array).dtype)
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
+            signal.dtype = dtype
             created_signals[name] = signal
             return signal
 
@@ -560,7 +564,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=False,
             )
 
@@ -574,7 +578,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         ready_snapshots = {}
 
         def _signal_factory(name=None, array=None, **kwargs):
-            signal = SimpleNamespace(name=name, value=np.array(array, copy=True))
+            dtype = kwargs.get("dtype", np.array(array).dtype)
+            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
+            signal.dtype = dtype
             if name == "cache_ready_signal":
                 ready_snapshots["initial"] = signal.value.copy()
             return signal
@@ -612,7 +618,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 value_cache_shape="1",
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
             )
 
         self.assertEqual(len(processes), 1)
@@ -646,7 +652,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 value_cache_shape="1",
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
             )
 
         self.assertIsNone(processes)
@@ -698,7 +704,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 device_ids=[0],
                 pod_ip="127.0.0.1",
                 engine_worker_queue_port=8000,
-                pid_suffix="pid",
+                ipc_suffix="pid",
                 create_cache_tensor=True,
             )
 
@@ -710,6 +716,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
             total_block_num=5,
             prefill_kvcache_block_num=3,
             model_cfg=SimpleNamespace(num_hidden_layers=1),
+            cache_queue_port=9000,
+            rdma_comm_ports=None,
+            local_cache_queue_port=9000,
+            local_rdma_comm_ports=None,
         )
 
         with patch(
