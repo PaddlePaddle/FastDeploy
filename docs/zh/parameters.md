@@ -7,11 +7,11 @@
 | 参数名                                | 类型        | 说明 |
 |:-----------------------------------|:----------| :----- |
 | ```port```                         | `int`       | 仅服务化部署需配置，服务HTTP请求端口号，默认8000 |
-| ```metrics_port```                 | `int`       | 仅服务化部署需配置，服务监控Metrics端口号，默认8001 |
+| ```metrics_port```                 | `int`       | 仅服务化部署需配置，服务监控Metrics端口号，默认None（与主端口共用） |
 | ```max_waiting_time```             | `int`       | 仅服务化部署需配置，服务请求建立连接最大等待时间，默认-1 表示无等待时间限制|
 | ```max_concurrency```              | `int`       | 仅服务化部署需配置，服务实际建立连接数目，默认512 |
-| ```engine_worker_queue_port```     | `int`       | FastDeploy内部引擎进程通信端口, 默认8002 |
-| ```cache_queue_port```             | `int`       | FastDeploy内部KVCache进程通信端口, 默认8003 |
+| ```engine_worker_queue_port```     | `list[int]` | FastDeploy内部引擎进程通信端口列表，会根据data_parallel_size自动分配 |
+| ```cache_queue_port```             | `list[int]` | FastDeploy内部KVCache进程通信端口列表，会根据data_parallel_size自动分配 |
 | ```max_model_len```                | `int`       | 推理默认最大支持上下文长度，默认2048 |
 | ```tensor_parallel_size```         | `int`       | 模型默认张量并行数，默认1 |
 | ```data_parallel_size```           | `int`       | 模型默认数据并行数，默认1 |
@@ -19,15 +19,15 @@
 | ```max_num_seqs```                 | `int`       | Decode阶段最大的并发数，默认为8 |
 | ```mm_processor_kwargs```          | `dict[str]` | 多模态处理器参数配置，如：{"image_min_pixels": 3136, "video_fps": 2} |
 | ```tokenizer```                    | `str`      | tokenizer 名或路径，默认为模型路径 |
-| ```use_warmup```                   | `int`      | 是否在启动时进行warmup，会自动生成极限长度数据进行warmup，默认自动计算KV Cache时会使用 |
+| ```use_warmup```                   | `int`      | 是否在启动时进行warmup，会自动生成极限长度数据进行warmup，默认0（不启用） |
 | ```limit_mm_per_prompt```          | `dict[str]` | 限制每个prompt中多模态数据的数量，如：{"image": 10, "video": 3}，默认都为1 |
-| ```enable_mm```                    | `bool`      | __[已废弃]__ 是否支持多模态数据（仅针对多模模型），默认False |
+| ```enable_mm```                    | `bool`      | __[已废弃]__ 是否支持多模态数据（仅针对多模模型），模型架构会自动检测是否为多模态模型，无需手动设置 |
 | ```quantization```                 | `str`       | 模型量化策略，当在加载BF16 CKPT时，指定wint4或wint8时，支持无损在线4bit/8bit量化 |
 | ```gpu_memory_utilization```       | `float`     | GPU显存利用率，默认0.9 |
 | ```num_gpu_blocks_override```      | `int`       | 预分配KVCache块数，此参数可由FastDeploy自动根据显存情况计算，无需用户配置，默认为None |
 | ```max_num_batched_tokens```       | `int`       | Prefill阶段最大Batch的Token数量，默认为None(与max_model_len一致) |
 | ```kv_cache_ratio```               | `float`     | KVCache块按kv_cache_ratio比例分给Prefill阶段和Decode阶段, 默认0.75 |
-| ```enable_prefix_caching```        | `bool`      | 是否开启Prefix Caching，默认False |
+| ```enable_prefix_caching```        | `bool`      | 是否开启Prefix Caching，默认True（GPU/XPU/HPU平台），其他平台默认False |
 | ```swap_space```                   | `float`     | 开启Prefix Caching时，用于swap KVCache的CPU内存大小，单位GB，默认None |
 | ```enable_chunked_prefill```         | `bool`      | 开启Chunked Prefill，默认False |
 | ```max_num_partial_prefills```     | `int`       | 开启Chunked Prefill时，Prefill阶段的最大并发数，默认1 |
@@ -35,7 +35,7 @@
 | ```long_prefill_token_threshold``` | `int`       | 开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04 |
 | ```static_decode_blocks```         | `int`       | 推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2|
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
-| ```use_cudagraph```                | `bool`      | __[已废弃]__ 2.3版本开始 CUDAGraph 默认开启，详细说明参考 [graph_optimization.md](./features/graph_optimization.md) |
+| ```use_cudagraph```                | `bool`      | __[已废弃，从2.3版本开始]__ CUDAGraph 默认开启，现在通过 `graph_optimization_config` 中的 `use_cudagraph` 参数控制，详细说明参考 [graph_optimization.md](./features/graph_optimization.md) |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":true, "graph_opt_level":0}'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
 | ```use_internode_ll_two_stage``` | `bool` | 是否在DeepEP MoE中使用两阶段通信, default: False |
@@ -45,20 +45,27 @@
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、 `guidance`、`off`, 默认为 `off` |
 | ```guided_decoding_disable_any_whitespace``` | `bool`   | guided decoding期间是否禁止生成空格，默认False |
 | ```speculative_config```           | `dict[str]` | 投机解码配置，仅支持标准格式json字符串，默认为None |
-| ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
-| ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
-| ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
-| ```logprobs_mode```       | `str`      | 指定logprobs中返回的内容。支持的模式：`raw_logprobs`、`processed_logprobs'、`raw_logits`,`processed_logits'。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs。|
+| ```dynamic_load_weight```          | `bool`      | 是否动态加载权重，默认False |
+| ```enable_expert_parallel```       | `bool`      | 是否启用专家并行，默认False |
+| ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob，默认False。如果不需要使用logprob，则在启动时可以省略此参数 |
+| ```logprobs_mode```       | `str`      | 指定logprobs中返回的内容，默认`raw_logprobs`。支持的模式：`raw_logprobs`、`processed_logprobs`、`raw_logits`、`processed_logits`。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs|
 | ```max_logprobs```       | `int`      | 服务支持返回的最大logprob数量，默认20。-1表示词表大小。 |
 | ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
 | ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 | ```chat_template```       | `str`      | 指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板 |
 | ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
 | ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
-| ```load_choices```       | `str`      | 默认使用"default" loader进行权重加载，加载torch权重/权重加速需开启 "default_v1"|
-| ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用）。 |
-| ```max_processor_cache```  | `int` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用）。 |
-| ```api_key```  |`dict[str]`| 校验服务请求头中的API密钥，支持传入多个密钥；与环境变量`FD_API_KEY`中的值效果相同，且优先级高于环境变量配置|
+| ```load_choices```       | `str`      | 权重加载器选择，默认使用"default_v1"。支持"default"和"default_v1"，后者用于加载torch权重和权重加速|
+| ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用），默认-1（自动计算）|
+| ```max_processor_cache```  | `float` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用），默认-1（自动计算）|
+| ```api_key```  |`list[str]`| 校验服务请求头中的API密钥，支持传入多个密钥；与环境变量`FD_API_KEY`中的值效果相同，且优先级高于环境变量配置|
+| ```enable_output_caching```        | `bool`      | 是否启用输出tokens的KV缓存，仅在V1调度器（ENABLE_V1_KVCACHE_SCHEDULER=1）下有效，默认True |
+| ```workers```                      | `int`       | 仅服务化部署需配置，API服务器worker进程数量，默认1 |
+| ```timeout```                      | `int`       | 仅服务化部署需配置，worker静默超时时间（秒），设置为0表示禁用超时，默认0 |
+| ```timeout_graceful_shutdown```    | `int`       | 仅服务化部署需配置，优雅关闭超时时间（秒），设置为0表示无限超时，默认0 |
+| ```router```                       | `str`       | 路由服务器URL，用于splitwise部署中的请求路由，如 `http://127.0.0.1:8000` |
+| ```disable_chunked_mm_input```     | `bool`      | 禁用多模态输入的分块处理，默认False |
+| ```logits_processors```            | `list[str]` | 服务支持的logits处理器的完全限定类名（FQCN）列表，如 `fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor` |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 
