@@ -1701,7 +1701,10 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
-        self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
+        self.cache_config.max_block_num_per_seq = int(
+            (self.model_config.max_model_len + self.cache_config.block_size - 1) // self.cache_config.block_size
+            + self.cache_config.enc_dec_block_num
+        )
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
