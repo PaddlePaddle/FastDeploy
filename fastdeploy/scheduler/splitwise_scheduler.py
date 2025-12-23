@@ -416,7 +416,7 @@ class ResultReader:
                     result = RequestOutput.from_dict(data)
                     self.data.appendleft(result)
                 except Exception as e:
-                    logger.error(f"Parse Result Error:{e}, {str(traceback.format_exc())}, {result}")
+                    logger.error(f"Parse Result Error: {e}, {str(traceback.format_exc())}, {result}")
         return total
 
 

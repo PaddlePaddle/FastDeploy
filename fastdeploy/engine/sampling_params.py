@@ -213,7 +213,7 @@ class SamplingParams:
             if self.logprobs is not None and (self.logprobs < 0 or self.logprobs > 20):
                 raise ValueError("Invalid value for 'top_logprobs': must be between 0 and 20.")
             if self.prompt_logprobs is not None:
-                raise ValueError("prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled.")
+                raise ValueError("prompt_logprobs is not supported when FD_USE_GET_SAVE_OUTPUT_V1 is disabled.")
         else:  # True (1)
             if self.logprobs is not None and self.logprobs < -1:
                 raise ValueError(f"logprobs must be a non-negative value or -1, got {self.logprobs}.")

@@ -119,9 +119,9 @@ class GCUModelRunner(ModelRunnerBase):
         Init speculative proposer
         """
         if self.speculative_method == "ngram":
-            raise NotImplementedError("NgramProposer is not support by GCUModelRunner.")
+            raise NotImplementedError("NgramProposer is not supported by GCUModelRunner.")
         elif self.speculative_method == "mtp":
-            raise NotImplementedError("MTPProposer is not support by GCUModelRunner.")
+            raise NotImplementedError("MTPProposer is not supported by GCUModelRunner.")
         else:
             self.proposer = None
 
@@ -644,7 +644,7 @@ class GCUModelRunner(ModelRunnerBase):
         if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):
-            raise NotImplementedError("prefix_caching is not support by GCUModelRunner.")
+            raise NotImplementedError("prefix_caching is not supported by GCUModelRunner.")
         else:
             for i in range(self.model_config.num_hidden_layers):
 

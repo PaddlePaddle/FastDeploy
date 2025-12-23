@@ -522,7 +522,7 @@ class LLMEngine:
         if think_end_id > 0:
             llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
         else:
-            llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+            llm_logger.info("No </think> token found in vocabulary, the model cannot do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
