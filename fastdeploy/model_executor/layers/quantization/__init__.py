@@ -102,6 +102,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             quantization_config["is_quantized"] = True
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
+        print("quant_config", quant_config)
     return quant_config
 
 

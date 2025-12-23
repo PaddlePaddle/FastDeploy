@@ -425,8 +425,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 fmha_out = fmha_out_decode
             else:
                 fmha_out = fmha_out + fmha_out_decode
-
-        output = self.o_proj(fmha_out)
+        if fmha_out is None:
+            output = paddle.zeros_like(hidden_states)
+        else:
+            output = self.o_proj(fmha_out)
         return output
 
     def load_state_dict(self, state_dict):
@@ -536,14 +538,14 @@ class DeepSeekV3Model(nn.Layer):
         """
         super().__init__()
         self.num_layers = fd_config.model_config.num_hidden_layers
-        fd_config.model_config.pretrained_config.prefix_name = "deepseek_v3"
+        fd_config.model_config.pretrained_config.prefix_name = "model"
 
         self.embed_tokens = VocabParallelEmbedding(
             fd_config,
             num_embeddings=fd_config.model_config.vocab_size,
             embedding_dim=fd_config.model_config.hidden_size,
             params_dtype=paddle.get_default_dtype(),
-            prefix="deepseek_v3.embed_tokens",
+            prefix=(f"{fd_config.model_config.pretrained_config.prefix_name}.embed_tokens"),
         )
 
         self.layers = nn.LayerList(
@@ -560,7 +562,7 @@ class DeepSeekV3Model(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix="deepseek_v3.norm",
+            prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
     def load_state_dict(self, state_dict):

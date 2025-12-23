@@ -25,6 +25,7 @@ from fastdeploy.model_executor.utils import (
     default_weight_loader,
     process_weight_transpose,
     set_weight_attrs,
+    weight_fully_copied,
 )
 from fastdeploy.platforms import current_platform
 
@@ -311,5 +312,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
     def process_weights_after_loading(self, layer):
         if self.model_format != "torch":
             return
-        process_weight_transpose(layer, "up_gate_proj_weight")
-        process_weight_transpose(layer, "down_proj_weight")
+        if weight_fully_copied(layer.up_gate_proj_weight):
+            process_weight_transpose(layer, "up_gate_proj_weight")
+        if weight_fully_copied(layer.down_proj_weight):
+            process_weight_transpose(layer, "down_proj_weight")

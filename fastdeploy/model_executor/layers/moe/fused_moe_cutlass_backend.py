@@ -871,7 +871,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass create weight process.
         """
-        self.weight_dtype = "int8"
         self.ffn1_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size // 2,
@@ -882,24 +881,76 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             layer.moe_intermediate_size // 2,
             layer.hidden_size,
         ]
-        setattr(
-            layer,
-            self.added_weight_attrs[0],
-            layer.create_parameter(
-                shape=self.ffn1_weight_shape,
-                dtype=self.weight_dtype,
+        self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
+        self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
+
+        self.model_format = extra_weight_attrs.get("model_format")
+        print("self.quant_config.is_quantized", self.quant_config.is_quantized)
+        if not self.quant_config.is_quantized and layer.fd_config.load_config.load_choices == "default_v1":
+            if self.model_format != "torch":
+                up_gate_proj_weight_shape = [
+                    layer.num_local_experts,
+                    layer.hidden_size // 2,
+                    layer.moe_intermediate_size * 2,
+                ]
+                down_proj_weight_shape = [layer.num_local_experts, layer.moe_intermediate_size // 2, layer.hidden_size]
+            else:
+                up_gate_proj_weight_shape = [
+                    layer.num_local_experts,
+                    layer.moe_intermediate_size * 2,
+                    layer.hidden_size,
+                ]
+                down_proj_weight_shape = [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size]
+                up_gate_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=up_gate_proj_weight_shape, output_dim=False),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+                down_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=down_proj_weight_shape, output_dim=True),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+
+            layer.up_gate_proj_weight = layer.create_parameter(
+                shape=up_gate_proj_weight_shape,
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            self.added_weight_attrs[1],
-            layer.create_parameter(
-                shape=self.ffn2_weight_shape,
-                dtype=self.weight_dtype,
+            )
+            layer.down_proj_weight = layer.create_parameter(
+                shape=down_proj_weight_shape,
+                dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
+            )
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                up_gate_proj_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                down_proj_attrs,
+            )
+        else:
+            self.weight_dtype = "int8"
+
+            setattr(
+                layer,
+                self.added_weight_attrs[0],
+                layer.create_parameter(
+                    shape=self.ffn1_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                self.added_weight_attrs[1],
+                layer.create_parameter(
+                    shape=self.ffn2_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
         self.create_w4afp8_scale_weights(layer, layer.weight_key_map)
 
@@ -924,6 +975,114 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 layer.down_proj_bias,
                 extra_weight_attrs,
             )
+
+    def process_weights_after_loading(self, layer):
+        """ """
+
+        def _process_quantize(weight_idx):
+            # weight
+            weight_name = self.added_weight_attrs[weight_idx]
+            unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+            scale_name = self.added_scale_attrs[weight_idx]
+
+            weight_dtype = "int8"
+            scale_dtype = "float32"
+
+            block_size = getattr(layer.moe_quant_config, "hadamard_block_size", 512)
+
+            quant_weight_list = []
+            scale_list = []
+
+            for expert_id in range(layer.num_local_experts):
+                expert_weight = getattr(layer, unquantized_weight_name)[expert_id]
+
+                quant_weight, weight_scale = group_wise_int4_weight_quantize(expert_weight, group_size=128)
+
+                quant_weight = pack(quant_weight.transpose([1, 0]), bits=4)
+
+                if weight_type == "down":
+                    weight_scale = weight_scale / (block_size**0.5)
+
+                quant_weight = w4afp8_gemm_weight_convert(quant_weight)
+
+                quant_weight_list.append(quant_weight)
+                scale_list.append(weight_scale)
+
+            free_tensor(getattr(layer, unquantized_weight_name))
+
+            stacked_quant_weight = paddle.stack(quant_weight_list, axis=0)
+            stacked_scale = paddle.stack(scale_list, axis=0)
+
+            setattr(
+                layer,
+                weight_name,
+                layer.create_parameter(
+                    shape=stacked_quant_weight.shape,
+                    dtype=weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+            processed_scale = stacked_scale / (440 * 7 * 2 ** (-9))
+
+            if len(processed_scale.shape) == 3:
+                if weight_type == "gate_up" and processed_scale.shape[-1] * 128 != layer.hidden_size:
+                    assert (
+                        layer.hidden_size // 128 % processed_scale.shape[-1] == 0
+                    ), "weight_scale_group_size must be a multiple of 128"
+                    processed_scale = processed_scale.repeat_interleave(
+                        layer.hidden_size // 128 // processed_scale.shape[-1], axis=-1
+                    )
+                elif weight_type == "down" and processed_scale.shape[-1] * 128 != layer.moe_intermediate_size:
+                    assert (
+                        layer.moe_intermediate_size // 128 % processed_scale.shape[-1] == 0
+                    ), "weight_scale_group_size must be a multiple of 128"
+                    processed_scale = processed_scale.repeat_interleave(
+                        layer.moe_intermediate_size // 128 // processed_scale.shape[-1], axis=-1
+                    )
+
+                origin_shape = processed_scale.shape
+                processed_scale = processed_scale.transpose([0, 2, 1])
+                processed_scale = processed_scale.reshape([-1, processed_scale.shape[-1]])
+                processed_scale = w4afp8_gemm_scale_permute(processed_scale)
+                processed_scale = processed_scale.reshape(
+                    [origin_shape[0], origin_shape[2], origin_shape[1] // 128, 128]
+                )
+                processed_scale = processed_scale.transpose([0, 2, 1, 3])
+            else:
+                processed_scale = w4afp8_gemm_scale_permute(processed_scale)
+
+            setattr(
+                layer,
+                scale_name,
+                layer.create_parameter(
+                    shape=processed_scale.shape,
+                    dtype=scale_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+            getattr(layer, weight_name).copy_(stacked_quant_weight, False)
+            getattr(layer, scale_name).copy_(processed_scale, False)
+
+        # 主逻辑
+        if not self.quant_config.is_quantized:
+            weight_id_map = {"gate_up": 0, "down": 1}
+
+            if weight_fully_copied(layer.up_gate_proj_weight):
+                weight_type = "gate_up"
+            else:
+                weight_type = "down"
+
+            if self.model_format == "torch":
+                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                    "quant_weight", "weight"
+                )
+                process_weight_transpose(layer, unquantized_weight_name)
+
+            _process_quantize(weight_id_map[weight_type])
+        else:
+            return
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -1455,7 +1614,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             getattr(layer, weight_name).copy_(weight, False)
             getattr(layer, scale_name).copy_(scale, False)
 
-        if self.quant_config.is_checkpoint_bf16:
+        if not self.quant_config.is_quantized:
             weight_id_map = {"gate_up": 0, "down": 1}
             if weight_fully_copied(layer.up_gate_proj_weight):
                 weight_type = "gate_up"
