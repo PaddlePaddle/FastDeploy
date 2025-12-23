@@ -568,7 +568,7 @@ __global__ void group_idx_and_topk_idx_kernel(
       neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
-    num_equalto_topkth_group = target_num_min - neg_inf_num;
+    num_equalto_topkth_group = neg_inf_num - target_num_min;
   }
   __syncthreads();
 
