@@ -5,6 +5,7 @@ tests_path="$DIR/../tests/"
 export PYTEST_INI="$DIR/../tests/cov_pytest.ini"
 run_path=$( realpath "$DIR/../")
 
+
 export COVERAGE_FILE=${COVERAGE_FILE:-$DIR/../coveragedata/.coverage}
 export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 
