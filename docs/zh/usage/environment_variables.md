@@ -88,7 +88,4 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # cache_transfer_manager 进程残留时连续错误阈值
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),}
-
-    # KVCache Block块分配值的上限。此变量限制引擎分配的块数上限。当为默认值-1时表示不设限
-    "FD_MAX_KVCACHE_BLOCKS": lambda: int(os.getenv("FD_MAX_KVCACHE_BLOCKS", "-1")),
 ```
