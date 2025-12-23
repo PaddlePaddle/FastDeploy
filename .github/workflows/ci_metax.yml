@@ -16,7 +16,7 @@ jobs:
   trigger-jenkins:
     name: Trigger Jenkins for PR
     runs-on: ubuntu-latest
-    environment: Metax-ci
+    environment: Metax_ci
     steps:
       - name: Trigger Jenkins job
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.0
