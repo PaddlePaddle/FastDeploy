@@ -1449,6 +1449,26 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
+    
+
+        path = "************"
+        visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", "0").split(",")
+        meta_src_id = int(visible_devices[int(os.getenv("FLAGS_selected_gpus", "0"))])
+
+        model_state_dict = model.state_dict()
+        clean_state_dict = {}
+        for key, tensor in model_state_dict.items():
+            clean_state_dict[key] = tensor.clone()
+    
+        model_path = os.path.join(
+            self.fd_config.model_config.model,
+            f"model_state.tp0{meta_src_id}.pdparams",
+        )
+       
+        paddle.save(clean_state_dict, model_path, safetensors=True)
+    
+        logger.info(f"success saved model state dict to {model_path}")
+    
 
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
