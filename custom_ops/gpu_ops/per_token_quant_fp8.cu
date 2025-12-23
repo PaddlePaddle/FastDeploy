@@ -16,145 +16,29 @@
 
 constexpr float epsilon = 1e-10;
 
-template <typename T>
-__global__ void quant_per_token_per_block(
-    const T *input,
-    phi::dtype::float8_e4m3fn *quanted_res,
-    float *quanted_scale,
-    const int token_num,
-    const int hidden_size,
-    const int hidden_size_scale,
-    const bool use_finegrained_range) {
-  const int bid = blockIdx.x;
-  const int tid = threadIdx.x;
-  const int warp_id = tid / 32;
-  const int lane_id = tid % 32;
-  const int num_warp = blockDim.x / 32;
-  static constexpr int NUM_PER_THREADS = 128 / 32;  // 4
-  static constexpr float MAX_VALUE = 448.f;
-  // Note(ZKK) use ceil_div!!
-  const int end_iter = (hidden_size + 127) / 128;  // warp_iter_num
-  AlignedVector<T, NUM_PER_THREADS> load_vec;
-  AlignedVector<float, NUM_PER_THREADS> load_vec_float;
-  AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
-  for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const T *input_now = input + token_idx * hidden_size;
-    phi::dtype::float8_e4m3fn *quanted_res_now =
-        quanted_res + token_idx * hidden_size;
-    float *quanted_scale_now = quanted_scale + token_idx * hidden_size_scale;
-    // deal a block per warp
-    for (int iter = warp_id; iter < end_iter; iter += num_warp) {
-      const int start_offset = iter * 128;
-
-      const bool is_valid_data =
-          start_offset + lane_id * NUM_PER_THREADS < hidden_size;
-
-      if (is_valid_data) {
-        Load<T, NUM_PER_THREADS>(
-            input_now + start_offset + lane_id * NUM_PER_THREADS, &load_vec);
-      } else {
-#pragma unroll
-        for (int vid = 0; vid < NUM_PER_THREADS; vid++) load_vec[vid] = T(0.f);
-      }
-      // get max value per thread
-      float max_value_thread = -5e4;
-#pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        load_vec_float[vid] = static_cast<float>(load_vec[vid]);
-        max_value_thread = max(abs(load_vec_float[vid]), max_value_thread);
-      }
-      // get max value per warp
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 16),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 8),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 4),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 2),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 1),
-                             max_value_thread);
-      // broadcast max_value
-      max_value_thread = __shfl_sync(0xFFFFFFFF, max_value_thread, 0);
-      max_value_thread = max(max_value_thread, epsilon);
-
-      if (use_finegrained_range) {
-        max_value_thread *= 7.0f;
-      }
-
-      float scale_to_store = max_value_thread / MAX_VALUE;
-      // quant
-#pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-            load_vec_float[vid] * MAX_VALUE / max_value_thread);
-      }
-      // store
-      if (is_valid_data)
-        Store<phi::dtype::float8_e4m3fn, NUM_PER_THREADS>(
-            res_vec,
-            quanted_res_now + start_offset + lane_id * NUM_PER_THREADS);
-      if (lane_id == 0) {
-        quanted_scale_now[iter] = scale_to_store;
-      }
-    }
+__device__ __forceinline__ float ceil_to_ue8m0(float s) {
+  int exp;
+  frexpf(s, &exp);
+  float pow2 = ldexpf(1.0f, exp - 1);
+  if (pow2 < s) {
+    pow2 = ldexpf(1.0f, exp);
   }
+  return pow2;
 }
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
-                                          const int block_size) {
-  auto input_dim = input.dims();
-  const int token_num = input_dim[0];
-  const int hidden_size = input_dim[1];
-  // Note(ZKK) here we use ceil_dive to support 4.5T runing on 8 GPUS
-  // where moe_intermediate_size is 448, can not be divided by 128.
-  const int hidden_size_scale = (hidden_size + block_size - 1) / block_size;
-
-  auto quanted_x = GetEmptyTensor(
-      {token_num, hidden_size}, paddle::DataType::FLOAT8_E4M3FN, input.place());
-  auto quanted_scale = GetEmptyTensor(
-      {token_num, hidden_size_scale}, paddle::DataType::FLOAT32, input.place());
-  const int gridx = min(132 * 8, token_num);
-  const int blockx = min(1024, hidden_size / 128 * 32);
-
-  bool use_finegrained_range = false;
-  char *env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
-  if (env_var) {
-    use_finegrained_range = static_cast<bool>(std::stoi(env_var));
-  }
-
-  switch (input.dtype()) {
-    case paddle::DataType::BFLOAT16:
-      quant_per_token_per_block<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::bfloat16>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<float>(),
-          token_num,
-          hidden_size,
-          hidden_size_scale,
-          use_finegrained_range);
-      break;
-    case paddle::DataType::FLOAT16:
-      quant_per_token_per_block<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::float16>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<float>(),
-          token_num,
-          hidden_size,
-          hidden_size_scale,
-          use_finegrained_range);
-      break;
-    default:
-      PD_THROW("Unsupported data type for PerTokenQuant");
-  }
-  return {quanted_x, quanted_scale};
+__host__ __device__ __forceinline__ int ceil_div(int x, int y) {
+  return (x + y - 1) / y;
 }
 
-template <typename T>
+__host__ __device__ __forceinline__ int align(int x, int y) {
+  return ceil_div(x, y) * y;
+}
+
+template <typename T, typename ScaleT, bool UseUE8M0>
 __global__ void quant_per_token_per_block_padding(
     const T *input,
     phi::dtype::float8_e4m3fn *quanted_res,
-    float *quanted_scale,
+    ScaleT *quanted_scale,
     const int token_num,
     const int padded_token_num,
     const int hidden_size,
@@ -177,8 +61,6 @@ __global__ void quant_per_token_per_block_padding(
         quanted_res + token_idx * hidden_size;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
-      float *quanted_scale_now =
-          quanted_scale + iter * padded_token_num + token_idx;
       const int start_offset = iter * 128;
       Load<T, NUM_PER_THREADS>(
           input_now + start_offset + lane_id * NUM_PER_THREADS, &load_vec);
@@ -209,26 +91,55 @@ __global__ void quant_per_token_per_block_padding(
       }
 
       float scale_to_store = max_value_thread / MAX_VALUE;
+
       // quant
+      if constexpr (UseUE8M0) {
+        scale_to_store = ceil_to_ue8m0(scale_to_store);
 #pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-            load_vec_float[vid] * MAX_VALUE / max_value_thread);
+        for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
+          res_vec[vid] = load_vec_float[vid] / scale_to_store;
+        }
+      } else {
+#pragma unroll
+        for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
+          res_vec[vid] = load_vec_float[vid] * MAX_VALUE / max_value_thread;
+        }
       }
       // store
       Store<phi::dtype::float8_e4m3fn, NUM_PER_THREADS>(
           res_vec, quanted_res_now + start_offset + lane_id * NUM_PER_THREADS);
       if (lane_id == 0) {
-        *quanted_scale_now = scale_to_store;
+        if constexpr (UseUE8M0) {
+          // exp
+          int exp = (reinterpret_cast<int &>(scale_to_store) >> 23) & 0xFF;
+
+          const int pack_idx = iter >> 2;
+          const int byte_idx = iter & 3;
+
+          // pack
+          const int pack_num = align(hidden_size_scale, 4) >> 2;
+
+          // column-major base index
+          int32_t *scale_now = quanted_scale;
+          const int base_idx = token_idx + pack_idx * token_num;
+
+          // ---------------- store exp ----------------
+          reinterpret_cast<uint8_t *>(&scale_now[base_idx])[byte_idx] =
+              static_cast<uint8_t>(exp);
+        } else {
+          float *scale_now =
+              quanted_scale + iter * padded_token_num + token_idx;
+          *scale_now = scale_to_store;
+        }
       }
     }
   }
 }
 
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
-                                                 const int block_size) {
+                                                 const int block_size,
+                                                 const bool use_ue8m0) {
   using ScaleDtype = float;
-
   auto input_dim = input.dims();
   const int token_num = input_dim[0];
   const int hidden_size = input_dim[1];
@@ -243,13 +154,11 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
 
   const int tma_alignment_bytes = 16;
   const int tma_alignment_elements = tma_alignment_bytes / sizeof(ScaleDtype);
-  const int padded_token_num =
+
+  int padded_token_num =
       ((token_num + tma_alignment_elements - 1) / tma_alignment_elements) *
       tma_alignment_elements;
-  auto quanted_scale = GetEmptyTensor({padded_token_num, hidden_size_scale},
-                                      {1, padded_token_num},
-                                      paddle::DataType::FLOAT32,
-                                      input.place());
+
   const int gridx = min(132 * 8, token_num);
   const int blockx = min(1024, hidden_size / 128 * 32);
 
@@ -258,34 +167,76 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
   if (env_var) {
     use_finegrained_range = static_cast<bool>(std::stoi(env_var));
   }
-
-  switch (input.dtype()) {
-    case paddle::DataType::BFLOAT16:
-      quant_per_token_per_block_padding<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::bfloat16>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<ScaleDtype>(),
-          token_num,
-          padded_token_num,
-          hidden_size,
-          hidden_size_scale,
-          use_finegrained_range);
-      break;
-    case paddle::DataType::FLOAT16:
-      quant_per_token_per_block_padding<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::float16>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<ScaleDtype>(),
-          token_num,
-          padded_token_num,
-          hidden_size,
-          hidden_size_scale,
-          use_finegrained_range);
-      break;
-    default:
-      PD_THROW("Unsupported data type for PerTokenQuant");
+  if (use_ue8m0) {
+    auto quanted_scale =
+        GetEmptyTensor({padded_token_num, ceil_div(hidden_size_scale, 4)},
+                       {1, padded_token_num},
+                       paddle::DataType::INT32,
+                       input.place());
+    switch (input.dtype()) {
+      case paddle::DataType::BFLOAT16:
+        quant_per_token_per_block_padding<paddle::bfloat16, int32_t, true>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::bfloat16>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<int32_t>(),
+                token_num,
+                padded_token_num,
+                hidden_size,
+                hidden_size_scale,
+                use_finegrained_range);
+        break;
+      case paddle::DataType::FLOAT16:
+        quant_per_token_per_block_padding<paddle::float16, int32_t, true>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::float16>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<int32_t>(),
+                token_num,
+                padded_token_num,
+                hidden_size,
+                hidden_size_scale,
+                use_finegrained_range);
+        break;
+      default:
+        PD_THROW("Unsupported data type for PerTokenQuant");
+    }
+    return {quanted_x, quanted_scale};
+  } else {
+    auto quanted_scale = GetEmptyTensor({padded_token_num, hidden_size_scale},
+                                        {1, padded_token_num},
+                                        paddle::DataType::FLOAT32,
+                                        input.place());
+    switch (input.dtype()) {
+      case paddle::DataType::BFLOAT16:
+        quant_per_token_per_block_padding<paddle::bfloat16, float, false>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::bfloat16>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<float>(),
+                token_num,
+                padded_token_num,
+                hidden_size,
+                hidden_size_scale,
+                use_finegrained_range);
+        break;
+      case paddle::DataType::FLOAT16:
+        quant_per_token_per_block_padding<paddle::float16, float, false>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::float16>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<float>(),
+                token_num,
+                padded_token_num,
+                hidden_size,
+                hidden_size_scale,
+                use_finegrained_range);
+        break;
+      default:
+        PD_THROW("Unsupported data type for PerTokenQuant");
+    }
+    return {quanted_x, quanted_scale};
   }
-  return {quanted_x, quanted_scale};
 }
 
 std::vector<std::vector<int64_t>> PerTokenQuantPaddingInferShape(
@@ -310,12 +261,12 @@ std::vector<paddle::DataType> PerTokenQuantPaddingInferDtype(
   return {paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32};
 }
 
-template <typename T>
+template <typename T, typename ScaleT, bool UseUE8M0>
 __global__ void masked_quant_per_token_per_block(
     const T *input,
     const int *recv_expert_count,
     phi::dtype::float8_e4m3fn *quanted_res,
-    float *quanted_scale,
+    ScaleT *quanted_scale,
     const int token_num,
     const int hidden_size,
     const int hidden_size_scale,
@@ -348,10 +299,6 @@ __global__ void masked_quant_per_token_per_block(
         quanted_res + token_idx * hidden_size;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
-      float *quanted_scale_now =
-          quanted_scale +
-          expert_id * hidden_size_scale * num_max_tokens_per_expert +
-          iter * num_max_tokens_per_expert + token_idx_in_expert;
       const int start_offset = iter * 128;
       Load<T, NUM_PER_THREADS>(
           input_now + start_offset + lane_id * NUM_PER_THREADS, &load_vec);
@@ -383,16 +330,58 @@ __global__ void masked_quant_per_token_per_block(
 
       float scale_to_store = max_value_thread / MAX_VALUE;
       // quant
+      if constexpr (UseUE8M0) {
+        scale_to_store = ceil_to_ue8m0(scale_to_store);
 #pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-            load_vec_float[vid] * MAX_VALUE / max_value_thread);
+        for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
+          res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
+              load_vec_float[vid] / scale_to_store);
+        }
+      } else {
+#pragma unroll
+        for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
+          res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
+              load_vec_float[vid] * MAX_VALUE / max_value_thread);
+        }
       }
+
       // store
       Store<phi::dtype::float8_e4m3fn, NUM_PER_THREADS>(
           res_vec, quanted_res_now + start_offset + lane_id * NUM_PER_THREADS);
       if (lane_id == 0) {
-        *quanted_scale_now = scale_to_store;
+        if constexpr (UseUE8M0) {
+          // 1. extract exponent
+          const int exp = (__float_as_int(scale_to_store) >> 23) & 0xFF;
+
+          // 2. pack information
+          const int pack_idx = iter >> 2;  // iter / 4
+          const int byte_idx = iter & 3;   // iter % 4
+
+          // 3. layout parameters
+          const int pack_num = ceil_div(hidden_size_scale, 4);
+          const int token_stride = align(num_max_tokens_per_expert, 4);
+
+          // 4. base pointer (int32 pack)
+          auto *scale_pack = reinterpret_cast<int32_t *>(quanted_scale);
+
+          // 5. column-major offset:
+          //    [expert][pack][token]
+          const int base_idx = expert_id * pack_num * token_stride +
+                               pack_idx * token_stride + token_idx_in_expert;
+
+          // 6. write one byte into pack
+          reinterpret_cast<uint8_t *>(&scale_pack[base_idx])[byte_idx] =
+              static_cast<uint8_t>(exp);
+
+        } else {
+          // float scale path (no packing)
+          float *scale_ptr =
+              quanted_scale +
+              expert_id * hidden_size_scale * num_max_tokens_per_expert +
+              iter * num_max_tokens_per_expert + token_idx_in_expert;
+
+          *scale_ptr = scale_to_store;
+        }
       }
     }
   }
@@ -401,7 +390,8 @@ __global__ void masked_quant_per_token_per_block(
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor &input,
     paddle::Tensor &recv_expert_count,
-    const int block_size) {
+    const int block_size,
+    const bool use_ue8m0) {
   auto input_dim = input.dims();
   const int num_local_expert = input_dim[0];
   const int num_max_tokens_per_expert = input_dim[1];
@@ -412,13 +402,7 @@ std::vector<paddle::Tensor> MaskedPerTokenQuant(
       GetEmptyTensor({num_local_expert, num_max_tokens_per_expert, hidden_size},
                      paddle::DataType::FLOAT8_E4M3FN,
                      input.place());
-  auto quanted_scale = GetEmptyTensor(
-      {num_local_expert, num_max_tokens_per_expert, hidden_size_scale},
-      {hidden_size_scale * num_max_tokens_per_expert,
-       1,
-       num_max_tokens_per_expert},
-      paddle::DataType::FLOAT32,
-      input.place());
+
   const int gridx = min(132 * 2, token_num);
   const int blockx = min(1024, hidden_size / 128 * 32);
 
@@ -427,48 +411,93 @@ std::vector<paddle::Tensor> MaskedPerTokenQuant(
   if (env_var) {
     use_finegrained_range = static_cast<bool>(std::stoi(env_var));
   }
-
-  switch (input.dtype()) {
-    case paddle::DataType::BFLOAT16:
-      masked_quant_per_token_per_block<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::bfloat16>(),
-          recv_expert_count.data<int>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<float>(),
-          token_num,
-          hidden_size,
-          hidden_size_scale,
-          num_max_tokens_per_expert,
-          use_finegrained_range);
-      break;
-    case paddle::DataType::FLOAT16:
-      masked_quant_per_token_per_block<<<gridx, blockx, 0, input.stream()>>>(
-          input.data<paddle::float16>(),
-          recv_expert_count.data<int>(),
-          quanted_x.data<phi::dtype::float8_e4m3fn>(),
-          quanted_scale.data<float>(),
-          token_num,
-          hidden_size,
-          hidden_size_scale,
-          num_max_tokens_per_expert,
-          use_finegrained_range);
-      break;
-    default:
-      PD_THROW("Unsupported data type for PerTokenQuant");
+  if (use_ue8m0) {
+    auto quanted_scale = GetEmptyTensor(
+        {num_local_expert,
+         num_max_tokens_per_expert,
+         ceil_div(hidden_size_scale, 4)},
+        {ceil_div(hidden_size_scale, 4) * align(num_max_tokens_per_expert, 4),
+         1,
+         align(num_max_tokens_per_expert, 4)},
+        paddle::DataType::INT32,
+        input.place());
+    switch (input.dtype()) {
+      case paddle::DataType::BFLOAT16:
+        masked_quant_per_token_per_block<paddle::bfloat16, int32_t, true>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::bfloat16>(),
+                recv_expert_count.data<int>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<int32_t>(),
+                token_num,
+                hidden_size,
+                hidden_size_scale,
+                num_max_tokens_per_expert,
+                use_finegrained_range);
+        break;
+      case paddle::DataType::FLOAT16:
+        masked_quant_per_token_per_block<paddle::float16, int32_t, true>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::float16>(),
+                recv_expert_count.data<int>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<int32_t>(),
+                token_num,
+                hidden_size,
+                hidden_size_scale,
+                num_max_tokens_per_expert,
+                use_finegrained_range);
+        break;
+      default:
+        PD_THROW("Unsupported data type for PerTokenQuant");
+    }
+    return {quanted_x, quanted_scale};
+  } else {
+    auto quanted_scale = GetEmptyTensor(
+        {num_local_expert, num_max_tokens_per_expert, hidden_size_scale},
+        {hidden_size_scale * num_max_tokens_per_expert,
+         1,
+         num_max_tokens_per_expert},
+        paddle::DataType::FLOAT32,
+        input.place());
+    switch (input.dtype()) {
+      case paddle::DataType::BFLOAT16:
+        masked_quant_per_token_per_block<paddle::bfloat16, float, false>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::bfloat16>(),
+                recv_expert_count.data<int>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<float>(),
+                token_num,
+                hidden_size,
+                hidden_size_scale,
+                num_max_tokens_per_expert,
+                use_finegrained_range);
+        break;
+      case paddle::DataType::FLOAT16:
+        masked_quant_per_token_per_block<paddle::float16, float, false>
+            <<<gridx, blockx, 0, input.stream()>>>(
+                input.data<paddle::float16>(),
+                recv_expert_count.data<int>(),
+                quanted_x.data<phi::dtype::float8_e4m3fn>(),
+                quanted_scale.data<float>(),
+                token_num,
+                hidden_size,
+                hidden_size_scale,
+                num_max_tokens_per_expert,
+                use_finegrained_range);
+        break;
+      default:
+        PD_THROW("Unsupported data type for PerTokenQuant");
+    }
+    return {quanted_x, quanted_scale};
   }
-  return {quanted_x, quanted_scale};
 }
-
-PD_BUILD_STATIC_OP(per_token_quant)
-    .Inputs({"input"})
-    .Outputs({"output", "output_scale"})
-    .Attrs({"block_size: int"})
-    .SetKernelFn(PD_KERNEL(PerTokenQuant));
 
 PD_BUILD_STATIC_OP(per_token_quant_padding)
     .Inputs({"input"})
     .Outputs({"output", "output_scale"})
-    .Attrs({"block_size: int"})
+    .Attrs({"block_size: int", "use_ue8m0: bool", "is_padding: bool"})
     .SetKernelFn(PD_KERNEL(PerTokenQuantPadding))
     .SetInferShapeFn(PD_INFER_SHAPE(PerTokenQuantPaddingInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PerTokenQuantPaddingInferDtype));
@@ -476,5 +505,5 @@ PD_BUILD_STATIC_OP(per_token_quant_padding)
 PD_BUILD_STATIC_OP(masked_per_token_quant)
     .Inputs({"input", "recv_expert_count"})
     .Outputs({"output", "output_scale"})
-    .Attrs({"block_size: int"})
+    .Attrs({"block_size: int", "use_ue8m0: bool"})
     .SetKernelFn(PD_KERNEL(MaskedPerTokenQuant));

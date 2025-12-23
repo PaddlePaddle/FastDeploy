@@ -283,14 +283,14 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size);
+                                                 const int block_size,
+                                                 const bool use_ue8m0);
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor& input,
     paddle::Tensor& recv_expert_count,
-    const int block_size);
+    const int block_size,
+    const bool use_ue8m0);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
@@ -1230,16 +1230,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 
-  m.def("per_token_quant",
-        &PerTokenQuant,
-        py::arg("input"),
-        py::arg("block_size"),
-        "per token per block quant");
-
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
@@ -1247,6 +1242,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("recv_expert_count"),
         py::arg("block_size"),
+        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
 #ifdef ENABLE_MACHETE
