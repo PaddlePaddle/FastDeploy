@@ -31,6 +31,8 @@ if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
 
 import typing
 
+import paddle
+
 # first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
 # otherwise, the Prometheus package will be imported first,
 # which will prevent correct multi-process setup
@@ -40,11 +42,23 @@ from fastdeploy.metrics.prometheus_multiprocess_setup import (
 
 setup_multiprocess_prometheus()
 
+
 from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import current_package_version, envs
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
+# paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
+# specifically for the 'triton' module. This means `import torch` inside 'triton'
+# will actually import paddle's compatibility layer (acting as torch).
+#
+# 'scope' acts as an allowlist. To add other modules, you can do:
+# paddle.compat.enable_torch_proxy(scope={"triton", "new_module"})
+#
+# Note: Ensure that any torch APIs used in 'new_module' are already implemented in Paddle.
+
 
 if envs.FD_DEBUG != 1:
     import logging
