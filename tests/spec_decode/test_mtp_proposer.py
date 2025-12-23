@@ -620,6 +620,82 @@ class TestMTPProposer(unittest.TestCase):
         self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
         self.assertEqual(proposer.seq_lens_this_time_buffer[0].item(), 0)
 
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.pre_process")
+    @patch("fastdeploy.spec_decode.mtp.rebuild_padding")
+    @patch("fastdeploy.spec_decode.mtp.speculate_get_logits")
+    @patch("fastdeploy.spec_decode.mtp.speculate_save_output_topk")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_propose_cuda_path(
+        self,
+        mock_sampler_class,
+        mock_draft_update,
+        mock_spec_save,
+        mock_spec_get,
+        mock_rebuild,
+        mock_pre_process,
+        mock_rope,
+        mock_attn_backend,
+        mock_model_loader,
+    ):
+        """Exercise the main `_propose_cuda` loop with minimal, patched dependencies.
+
+        This test patches heavy/native kernels and the sampler so we can drive
+        the central control flow (pre_process -> model -> rebuild_padding ->
+        compute_logits -> sampler -> _post_process) without requiring GPU or
+        compiled ops.
+        """
+        # simple model that provides logits when asked
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+
+        # attention backend shape expectations
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # pre_process -> return shapes expected by the code (no-op tensors)
+        mock_pre_process.return_value = (
+            paddle.zeros([2], dtype="int64"),  # ids_remove_padding
+            paddle.zeros([2], dtype="int32"),  # batch_id_per_token
+            paddle.zeros([3], dtype="int32"),  # cu_seqlens_q
+            paddle.zeros([3], dtype="int32"),  # cu_seqlens_k
+            paddle.zeros([2], dtype="int32"),  # output_cum_offsets
+            paddle.zeros([2], dtype="int32"),  # output_padding_offset
+        )
+
+        # rebuild_padding -> return a small hidden state tensor
+        mock_rebuild.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+
+        # sampler: return sampled_token_ids and a sampler_output with no logprobs
+        sampler_obj = Mock()
+        sampler_output = Mock()
+        sampler_output.logprobs_tensors = None
+        sampler_output.sampled_token_ids = None
+        sampler_obj.__call__ = Mock(return_value=(paddle.ones([2, 1], dtype="int64"), sampler_output))
+        mock_sampler_class.return_value = sampler_obj
+
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+
+        # Ensure the CUDA path loop is taken; make not_need_stop True.
+        proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
+        # keep loop minimal
+        proposer.num_model_steps = 1
+
+        # Run the CUDA propose path with is_dummy_run True to avoid output-topk write branch
+        proposer._propose_cuda(is_dummy_run=True)
+
+        # sanity checks: model logits computed and draft update called in post-process
+        mock_model.compute_logits.assert_called()
+        mock_draft_update.assert_called()
+
 
 if __name__ == "__main__":
     unittest.main()
