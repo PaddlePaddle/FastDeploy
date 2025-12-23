@@ -215,10 +215,10 @@ class ZmqServerBase(ABC):
                 time.sleep(0.001)
                 continue
             except zmq.error.ZMQError as e:
-                llm_logger.error(f"recv_result_handle get zmq error: {e}")
+                llm_logger.error(f"recv_result_handle encountered zmq error: {e}")
                 break
             except Exception as e:
-                llm_logger.error(f"recv_result_handle get unknown exception: {e}")
+                llm_logger.error(f"recv_result_handle encountered unknown exception: {e}")
                 continue
 
     def _send_response_per_step(self, batch_id, data):

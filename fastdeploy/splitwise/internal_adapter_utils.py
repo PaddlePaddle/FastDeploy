@@ -103,7 +103,7 @@ class InternalAdapter:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
             except Exception as e:
-                logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
+                logger.error(f"handle_control_cmd encountered error: {e}, {traceback.format_exc()!s}")
 
     def _response_external_module_control_instruct(self):
         while True:
@@ -118,4 +118,4 @@ class InternalAdapter:
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
+                logger.error(f"_handle_connect_rdma_results encountered error: {e}, {traceback.format_exc() !s}")

@@ -292,5 +292,5 @@ class EngineCacheQueue:
         try:
             return len(self.transfer_task_queue) == 0
         except Exception as e:
-            logger.error(f"empty function meets error: {e}, {str(traceback.format_exc())}")
+            logger.error(f"empty function encountered error: {e}, {str(traceback.format_exc())}")
             raise e
