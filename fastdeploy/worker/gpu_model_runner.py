@@ -236,6 +236,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.async_output_copy_thread.start()
 
+        self.enable_entropy = self.model_config.enable_entropy
+
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
@@ -596,6 +598,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+            self.share_inputs["req_ids"][idx] = str(request.request_id)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -1265,6 +1268,9 @@ class GPUModelRunner(ModelRunnerBase):
             -1,
             dtype="int64",
         )
+        self.share_inputs["req_ids"] = [""] * max_num_seqs
+        self.share_inputs["entropy_list"] = [[] for _ in range(max_num_seqs)]
+
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
@@ -1781,6 +1787,7 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=pooler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
@@ -1882,12 +1889,14 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
+            enable_entropy=self.enable_entropy,
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -2323,11 +2332,13 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=pooler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
+                enable_entropy=self.enable_entropy,
             )
 
             return None
@@ -2448,6 +2459,7 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
@@ -2455,6 +2467,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
+                enable_entropy=self.enable_entropy,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
