@@ -51,7 +51,6 @@ class RequestFuncInput:
     ignore_eos: bool = False
     language: Optional[str] = None
     debug: bool = False
-    response_format: Optional[dict] = None
     pd_metrics: bool = False
     response_format: Optional[dict] = None
     random_flag: bool = False

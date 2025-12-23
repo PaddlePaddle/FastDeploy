@@ -1233,6 +1233,7 @@ if __name__ == "__main__":
         type=str,
         default="EBChat",
         choices=[
+            "EB",
             "EBChat",
             "random",
         ],
