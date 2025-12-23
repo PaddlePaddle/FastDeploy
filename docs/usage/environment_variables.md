@@ -88,9 +88,5 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
-   
-    # Max allocated KV cache blocks. Use this to limit how many KV cache blocks the engine is allowed to allocate.
-    # Set to -1 (default) for no limit, or a positive integer to cap the maximum number of blocks that can be allocated.
-    "FD_MAX_KVCACHE_BLOCKS": lambda: int(os.getenv("FD_MAX_KVCACHE_BLOCKS", "-1")),
 }
 ```
