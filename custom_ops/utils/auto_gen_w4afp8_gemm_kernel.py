@@ -14,7 +14,7 @@
 import os
 import re
 
-file_dir = "./gpu_ops/w4afp8_gemm/"
+file_dir = "/root/paddlejob/workspace/env_run/output/lizexu/FastDeploy/custom_ops/gpu_ops/w4afp8_gemm/"
 
 gemm_template_head = """
 #pragma once
@@ -85,7 +85,16 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
 """
 
 # [M, K, Number of experts, token Padding Size, weight K group size]
-gemm_case = [[256, 256, 2, 0, 128], [512, 256, 2, 0, 128], [256, 5120, 128, 0, 128]]
+gemm_case = [
+    [256, 256, 2, 0, 128],
+    [512, 256, 2, 0, 128],
+    [256, 5120, 128, 0, 128],
+    [1536, 2560, 64, 0, 128],
+    [2560, 768, 64, 0, 128],
+    [3072, 2560, 64, 0, 128],
+    [2560, 1536, 64, 0, 128],
+    [2560, 3072, 64, 0, 128],
+]
 
 dtype = ["BF16"]
 

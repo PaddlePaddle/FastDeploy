@@ -77,25 +77,35 @@ class W4AFP8LinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
+        # 原始形状: [out_features, in_features]
+        print("layer.weight_shape", layer.weight_shape)
         layer.weight_shape.reverse()
+        # 反转后: [in_features, out_features]
+        # 例如: [4096, 4096]
+
+        # INT4 量化后每2个元素打包成1个 int8
+        # 例如: [2048, 4096]
         layer.weight_shape[0] //= 2
+
+        # # 使用 int8 存储打包后的 int4 权重
         layer.weight_dtype = "int8"
 
         layer.weight = layer.create_parameter(
-            shape=layer.weight_shape,
+            shape=layer.weight_shape,  # [2048, 4096]
             dtype=layer.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+        print("layer.weight", layer.weight)
 
     def process_loaded_weights(self, layer, weights) -> None:
         (
-            quanted_weight_tensor,
-            weight_scale_tensor,
+            quanted_weight_tensor,  # 量化后的 int4 权重（打包为 int8）
+            weight_scale_tensor,  # 量化的 scale
         ) = fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16_weight_quantize(
-            paddle.cast(weights, "float32").cpu(),
-            groupsize=-1,
-            scale_dtype="float16",
+            paddle.cast(weights, "float32").cpu(),  # 转为 float32 进行量化
+            groupsize=-1,  # -1 表示 per-channel 量化
+            scale_dtype="float16",  # scale 的数据类型
         )
         weight_scale_tensor = paddle.view(weight_scale_tensor, layer._dtype)
         layer.weight.set_value(quanted_weight_tensor)

@@ -393,6 +393,11 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         else:
             expert_idx_per_token = expert_idx_per_token.cast("int64")
 
+        print("layer", layer)
+        print("permute_input", permute_input)
+        print("token_nums_per_expert", token_nums_per_expert)
+        print("expert_idx_per_token", expert_idx_per_token)
+        print("dequant_scale", dequant_scale)
         ffn_out = self.compute_ffn(
             layer, permute_input, token_nums_per_expert, expert_idx_per_token, False, -1, dequant_scale
         )
@@ -872,16 +877,19 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         Paddle cutlass create weight process.
         """
         self.weight_dtype = "int8"
+        # ffn1(up_gate_proj) shape = [num_local_experts, hidden_size/2, intermediate*2]
         self.ffn1_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size // 2,
             layer.moe_intermediate_size * 2,
         ]
+        # ffn2(down_proj) shape = [num_local_experts, intermediate/2, hidden_size]
         self.ffn2_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size // 2,
             layer.hidden_size,
         ]
+        # 创建量化权重参数 up_gate_proj_weight: INT8 [E, hidden/2, inter*2]
         setattr(
             layer,
             self.added_weight_attrs[0],
@@ -891,6 +899,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        # down_proj_weigh : INT8 [E, inter/2, hidden]
         setattr(
             layer,
             self.added_weight_attrs[1],
@@ -900,9 +909,10 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-
+        # Step 4: 创建 Scale 权重
         self.create_w4afp8_scale_weights(layer, layer.weight_key_map)
 
+        # Step 5: (可选) 创建 Bias
         if layer.with_bias:
             layer.up_gate_proj_bias = layer.create_parameter(
                 shape=[layer.num_experts, layer.moe_intermediate_size * 2],
@@ -929,6 +939,24 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass load weight process.
         """
+        logger.info("=== process_loaded_weights ===")
+        logger.info(f"layer.moe_tag: {getattr(layer, 'moe_tag', 'unknown')}")
+        logger.info(f"layer.expert_id_offset: {getattr(layer, 'expert_id_offset', 0)}")
+        logger.info(f"layer.num_local_experts: {layer.num_local_experts}")
+
+        print(layer)
+        # 检查目标 key 是否存在
+        # for key,value in state_dict.items():
+        #     print(f"hou key:{key}")
+        expert_id_offset = getattr(layer, "expert_id_offset", 0)
+        target_key = f"ernie.layers.{layer.layer_idx}.mlp.experts.{expert_id_offset}.down_proj.weight"
+        expert_id_offset_1 = 0
+        target_key2 = f"ernie.layers.{layer.layer_idx}.mlp.experts.{expert_id_offset_1}.down_proj.weight"
+        logger.info(f"Looking for key: {target_key}")
+        logger.info(f"Key exists: {target_key in state_dict}")
+
+        logger.info(f"Looking for key_1: {target_key2}")
+        logger.info(f"Key exists: {target_key2 in state_dict}")
         if not layer.is_quantized:
             prefix_layer_name = layer.fd_config.model_config.prefix_layer_name
             logger.info(

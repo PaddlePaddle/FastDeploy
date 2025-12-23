@@ -111,7 +111,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         ):
             weight_key_map = {
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
                 "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
                 "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
                 "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
@@ -122,8 +122,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
                 "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
                 "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
                 "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
@@ -146,6 +146,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             if moe_tag == "Text"
             else fd_config.model_config.moe_num_experts[1]
         )
+        print("export_id_offsetr", expert_id_offset)
         self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
@@ -184,6 +185,7 @@ class Ernie4_5_VLMoE(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
 
+        self.fd_config = fd_config
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         moe_layer_start_index = fd_config.model_config.moe_layer_start_index
         if isinstance(moe_layer_start_index, int):
@@ -235,6 +237,7 @@ class Ernie4_5_VLMoE(nn.Layer):
 
         assert image_moe_layer_start_index <= image_moe_layer_end_index
         if layer_id >= image_moe_layer_start_index and layer_id <= image_moe_layer_end_index:
+            print("export_id_offset的", fd_config.model_config.moe_num_experts[0])
             self.image_fused_moe = Ernie4_5_VLMoeBlock(
                 fd_config=fd_config,
                 layer_id=layer_id,
@@ -261,13 +264,27 @@ class Ernie4_5_VLMoE(nn.Layer):
             )
 
     def load_state_dict(self, state_dict):
+        # 🔍 添加调试信息
+        # layer_idx = self.text_fused_moe.experts.layer_idx if hasattr(self.text_fused_moe, "experts") else "unknown"
+        # logger.info(f"=== Ernie4_5_VLMoE.load_state_dict for layer {layer_idx} ===")
+
+        # logger.info(f"Before loading - Text expert key exists: {sample_text_key in state_dict}")
+        # logger.info(f"Before loading - Image expert key exists: {sample_image_key in state_dict}")
+
         if self.gate_correction_bias is not None:
             gate_correction_bias_tensor = state_dict.pop(self.text_fused_moe.experts.gate_correction_bias_key)
             if self.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
                 gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(self.gate_correction_bias.shape)
             self.gate_correction_bias.set_value(gate_correction_bias_tensor)
+
+        # logger.info(f"=== Loading text_fused_moe ===")
         self.text_fused_moe.load_state_dict(state_dict)
+
+        # logger.info(f"After text loading - Image expert key exists: {sample_image_key in state_dict}")
+
+        # logger.info(f"=== Loading image_fused_moe ===")
         self.image_fused_moe.load_state_dict(state_dict)
+
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
@@ -495,6 +512,9 @@ class Ernie4_5_VLModel(nn.Layer):
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
+            print("self.layer[i]", self.layers[i])
+            # print("xxx",state_dict.keys())
+            # print("ernie.layers.1.mlp.experts.0.down_proj.weight" in state_dict.keys())
             self.layers[i].load_state_dict(state_dict)
 
     def prepare_vl_moe_meta(

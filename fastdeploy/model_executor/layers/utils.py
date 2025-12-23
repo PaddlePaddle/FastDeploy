@@ -145,6 +145,7 @@ def rotate_model(
         # collect hadamard rotation matrix [moe_intermediate_size, moe_intermediate_size]
         Q_ffn2, moe_block_size = get_orthogonal_matrix(size=moe_intermediate_size, mode="hadamard_ffn2")
         # down_proj.weight: [moe_intermediate_size, hidden_size]
+        print("ernie.layers.1.mlp.experts.0.gate_proj.weight" in state_dict.keys())
         expert_list = [
             get_tensor(
                 state_dict[

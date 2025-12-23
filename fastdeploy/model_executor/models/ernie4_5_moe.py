@@ -114,8 +114,8 @@ class Ernie4_5_MoE(nn.Layer):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
                 "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
                 "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
                 "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
@@ -218,11 +218,14 @@ class Ernie4_5_MoE(nn.Layer):
         hidden_states: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
+        print(f"moe前的hidden_states:{hidden_states}")
+        print(f"self.gate:{self.gate}")
         out = self.experts(
             x=hidden_states,
             gate=self.gate,
             forward_meta=forward_meta,
         )
+        print("moe后的out:", out)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -425,6 +428,7 @@ class Ernie4_5_Model(nn.Layer):
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
             logger.info(f"Start load layer {i}")
+
             self.layers[i].load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
