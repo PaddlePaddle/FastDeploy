@@ -209,6 +209,44 @@ def test_deepep_buffer_decode_low_latency_buffer(monkeypatch):
     assert buffer.deepep_buffer.cleaned[0] == "single"
 
 
+def test_deepep_buffer_prefill_and_invalid_phase(monkeypatch):
+    _patch_deep_ep(monkeypatch)
+    group = SimpleNamespace(world_size=2)
+    buffer = ep.DeepEPBuffer(
+        group=group,
+        hidden_size=4,
+        num_experts=8,
+        ep_size=2,
+        num_max_dispatch_tokens_per_rank=2,
+        splitwise_role="prefill",
+        moe_phase=MoEPhase("prefill"),
+        use_internode_ll_two_stage=False,
+        top_k=2,
+    )
+
+    buffer.create_buffer()
+    assert buffer.deepep_buffer.low_latency_mode is True
+    assert buffer.deepep_buffer.num_qps_per_rank == 24
+
+    buffer.barrier_all()
+    assert buffer.deepep_buffer.barrier_called is True
+    assert buffer.get_buffer() is buffer.deepep_buffer
+
+    invalid_phase_buffer = ep.DeepEPBuffer(
+        group=group,
+        hidden_size=4,
+        num_experts=8,
+        ep_size=2,
+        num_max_dispatch_tokens_per_rank=2,
+        splitwise_role="prefill",
+        moe_phase=MoEPhase("unknown"),
+        use_internode_ll_two_stage=False,
+        top_k=2,
+    )
+    with pytest.raises(ValueError, match="Unknown generation phase"):
+        invalid_phase_buffer.create_buffer()
+
+
 def test_deepep_engine_combine_rewrites_handle_and_errors(monkeypatch):
     _patch_deep_ep(monkeypatch)
     group = SimpleNamespace(world_size=1)
@@ -229,8 +267,8 @@ def test_deepep_engine_combine_rewrites_handle_and_errors(monkeypatch):
     handle = ("src", "layout", 4, 2)
     engine.low_latency_combine(hidden_states, topk_idx, topk_weights, handle)
 
-    # DeepEPEngine forwards handle to the backend (rewrite, if any, is not guaranteed here).
-    assert engine.deepep_engine._combine_handle == handle
+    assert engine.deepep_engine._combine_handle[3] is None
+    assert engine.deepep_engine._combine_handle[4] == 2
 
     engine.buffer.deepep_buffer = None
     with pytest.raises(RuntimeError, match="DeepEP buffer not initialized"):
@@ -352,3 +390,108 @@ def test_decoder_runner_dispatch_and_combine_hooks(monkeypatch):
     combined = runner_two_stage.combine(x, topk_idx, topk_weights, handle, quant_group_size=64)
     assert combined == "combined"
     assert runner_two_stage.ep_engine.two_stage_combine_called is True
+
+
+def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
+    _patch_deep_ep(monkeypatch)
+
+    def fake_get_moe_scores(*_args, **_kwargs):
+        return "score", paddle.to_tensor([[0.5]]), paddle.to_tensor([[1]], dtype="int64")
+
+    from fastdeploy.model_executor.layers.moe import moe as moe_module
+
+    monkeypatch.setattr(moe_module, "get_moe_scores", fake_get_moe_scores, raising=True)
+
+    runner = ep.EPPrefillRunner(
+        top_k=2,
+        hidden_size=4,
+        num_experts=2,
+        splitwise_role="prefill",
+        num_max_dispatch_tokens_per_rank=1,
+    )
+
+    layer = SimpleNamespace(
+        redundant_table_manger=None,
+        topk_method="noaux_tc",
+        n_group=1,
+        topk_group=1,
+        top_k=2,
+        routed_scaling_factor=1.0,
+        gate_correction_bias=None,
+        renormalize=False,
+    )
+    gate_out = paddle.randn([1, 4], dtype="float32")
+
+    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    assert topk_idx.shape == [1, 1]
+    assert topk_weights.shape == [1, 1]
+
+
+def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
+    _patch_deep_ep(monkeypatch)
+
+    def fake_redundant_topk_select(**_kwargs):
+        return paddle.to_tensor([[2]], dtype="int64"), paddle.to_tensor([[0.25]])
+
+    from fastdeploy.model_executor.ops import gpu as gpu_ops
+
+    monkeypatch.setattr(gpu_ops, "moe_redundant_topk_select", fake_redundant_topk_select, raising=True)
+
+    runner = ep.EPPrefillRunner(
+        top_k=2,
+        hidden_size=4,
+        num_experts=2,
+        splitwise_role="prefill",
+        num_max_dispatch_tokens_per_rank=1,
+    )
+
+    class FakeRedundantTableManager:
+        def get_ep_rank_to_expert_id_list_by_layer(self, _layer_idx):
+            return [0], paddle.to_tensor([0], dtype="int64"), [1], [1]
+
+    layer = SimpleNamespace(
+        redundant_table_manger=FakeRedundantTableManager(),
+        layer_idx=0,
+        topk_method="aux",
+        n_group=1,
+        topk_group=1,
+        top_k=2,
+        routed_scaling_factor=1.0,
+        gate_correction_bias=None,
+        fd_config=SimpleNamespace(model_config=SimpleNamespace(redundant_experts_num=0)),
+    )
+    gate_out = paddle.randn([1, 4], dtype="float32")
+
+    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    assert topk_idx.shape == [1, 1]
+    assert topk_weights.shape == [1, 1]
+
+
+def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
+    _patch_deep_ep(monkeypatch)
+
+    def fake_topk_select(*_args, **_kwargs):
+        return paddle.to_tensor([[3]], dtype="int64"), paddle.to_tensor([[0.75]])
+
+    from fastdeploy.model_executor.ops import gpu as gpu_ops
+
+    monkeypatch.setattr(gpu_ops, "moe_topk_select", fake_topk_select, raising=True)
+
+    runner = ep.EPPrefillRunner(
+        top_k=2,
+        hidden_size=4,
+        num_experts=2,
+        splitwise_role="prefill",
+        num_max_dispatch_tokens_per_rank=1,
+    )
+
+    layer = SimpleNamespace(
+        redundant_table_manger=None,
+        topk_method="aux",
+        gate_correction_bias=None,
+    )
+    gate_out = paddle.randn([1, 4], dtype="float32")
+
+    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    assert topk_idx.shape == [1, 1]
+    assert topk_weights.shape == [1, 1]
