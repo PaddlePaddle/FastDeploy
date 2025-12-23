@@ -438,12 +438,12 @@ class EngineClient:
                 raise ParameterError("prompt_logprobs", err_msg)
 
             if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                err_msg = "prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."
+                err_msg = "prompt_logprobs is not supported when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."
                 api_server_logger.error(err_msg)
                 raise ParameterError("prompt_logprobs", err_msg)
 
             if self.enable_prefix_caching:
-                err_msg = "prompt_logprobs is not support when prefix caching is enabled."
+                err_msg = "prompt_logprobs is not supported when prefix caching is enabled."
                 api_server_logger.error(err_msg)
                 raise ParameterError("prompt_logprobs", err_msg)
 

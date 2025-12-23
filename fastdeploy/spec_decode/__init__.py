@@ -19,7 +19,7 @@ from fastdeploy.platforms import current_platform
 from .base import Proposer
 from .mtp import MTPProposer
 
-# XPU is not support ngram proposer now
+# XPU does not support ngram proposer now
 if not current_platform.is_xpu():
     from .ngram import NgramProposer
 __all__ = ["Proposer", "MTPProposer", "NgramProposer"]
