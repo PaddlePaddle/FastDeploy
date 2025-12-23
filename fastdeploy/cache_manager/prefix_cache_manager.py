@@ -1886,7 +1886,9 @@ class PrefixCacheManager:
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
                     logger.info(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
-                    saved_block_ids = self.storage_prefetch_block_ids.get(task_id, [])
+                    if task_id not in self.storage_prefetch_block_ids:
+                        self.storage_prefetch_block_ids[task_id] = []
+                    saved_block_ids = self.storage_prefetch_block_ids[task_id]
                     saved_block_ids.append(block_ids)
                     if len(saved_block_ids) == self.tensor_parallel_size:
                         self.storage_prefetch_block_ids[task_id] = min(saved_block_ids, key=len)

@@ -540,11 +540,13 @@ class CacheTransferManager:
 
             result = (CacheStatus.STORAGE2GPU, task_id, keys, valid_gpu_block_ids)
             self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
-            if self.rank == 0:
-                self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
-                self.cache_task_queue.put_transfer_done_signal(result)
-                logger.debug(f"read_storage_task: put_transfer_done_signal {result}")
-                logger.info(f"read_storage_task: put_transfer_done_signal for transfer_task_id {task_id}")
+            self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
+            self.cache_task_queue.put_transfer_done_signal(result)
+            logger.debug(f"read_storage_task: put_transfer_done_signal {result}")
+            logger.info(
+                f"read_storage_task: put_transfer_done_signal for transfer_task_id {task_id}, "
+                f"valid block num {len(valid_gpu_block_ids)}"
+            )
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in read_storage_task: "
