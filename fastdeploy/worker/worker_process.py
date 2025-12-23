@@ -17,6 +17,8 @@
 import argparse
 import json
 import os
+import signal
+import sys
 import time
 from typing import Tuple
 
@@ -1032,6 +1034,15 @@ def run_worker_proc() -> None:
     """
     start worker process
     """
+    # 设置信号处理器以优雅退出
+    def signal_handler(signum, frame):
+        sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+        logger.info(f"Worker process received {sig_name}, shutting down gracefully...")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     # Get args form Engine
     args = parse_args()
 

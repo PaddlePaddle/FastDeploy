@@ -15,6 +15,8 @@
 """
 
 import json
+import os
+import signal
 import traceback
 
 import uvicorn
@@ -32,6 +34,30 @@ from fastdeploy.utils import (
 app = FastAPI()
 
 llm_engine = None
+
+
+def cleanup_engine():
+    """清理引擎资源"""
+    global llm_engine
+    if llm_engine is not None:
+        try:
+            if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc is not None:
+                try:
+                    pgid = os.getpgid(llm_engine.worker_proc.pid)
+                    api_server_logger.info(f"Terminating worker process group {pgid}")
+                    os.killpg(pgid, signal.SIGTERM)
+                except Exception as e:
+                    api_server_logger.error(f"Error terminating worker process: {e}")
+        except Exception as e:
+            api_server_logger.error(f"Error during cleanup: {e}")
+
+
+def signal_handler(signum, frame):
+    """处理SIGINT和SIGTERM信号"""
+    sig_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+    api_server_logger.info(f"Received {sig_name}, initiating graceful shutdown...")
+    cleanup_engine()
+    # 让uvicorn处理实际的退出
 
 
 def init_app(args):
@@ -96,6 +122,10 @@ def launch_api_server(args) -> None:
     """
     启动http服务
     """
+    # 设置信号处理器
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     if not is_port_available(args.host, args.port):
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
 
@@ -116,6 +146,8 @@ def launch_api_server(args) -> None:
         )  # set log level to error to avoid log
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
+    finally:
+        cleanup_engine()
 
 
 def main():
