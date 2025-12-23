@@ -207,7 +207,7 @@ class GptOssModel(nn.Layer):
         )
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):

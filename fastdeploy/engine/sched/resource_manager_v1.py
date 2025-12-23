@@ -329,7 +329,7 @@ class ResourceManagerV1(ResourceManager):
                         token_st += h * w // 4
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
-        else:
+        elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
@@ -428,6 +428,10 @@ class ResourceManagerV1(ResourceManager):
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
                     from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                elif current_platform.is_iluvatar():
+                    from fastdeploy.model_executor.ops.iluvatar import (
+                        get_img_boundaries,
+                    )
                 else:
                     from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
@@ -484,9 +488,9 @@ class ResourceManagerV1(ResourceManager):
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
-                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
+                    cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                    cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
@@ -655,7 +659,7 @@ class ResourceManagerV1(ResourceManager):
 
                     request = self.waiting[0]
                     if (
-                        not envs.FD_ENABLE_MAX_PREFILL
+                        self.config.model_config.disable_mm_prefill_batch()
                         and self._is_mm_request(request)
                         and self.exist_mm_prefill(scheduled_reqs)
                     ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
@@ -816,7 +820,7 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
