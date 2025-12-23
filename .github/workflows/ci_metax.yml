@@ -29,5 +29,5 @@ jobs:
           job_name: paddle_fastdeploy_metax_smoketest
           username: fastdeploy_builder
           api_token: ${{ secrets.METAX_JENKINS_API_TOKEN }}
-          pr_num: ${{ github.event.pull_request.number }}
-          project_branch: ${{ github.event.pull_request.head.ref }}
+          pr_number: ${{ github.event.pull_request.number }}
+          project_branch: ${{ github.event.pull_request.base.ref }}
