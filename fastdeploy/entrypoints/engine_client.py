@@ -345,8 +345,6 @@ class EngineClient:
         self.valid_parameters(task)
         api_server_logger.debug(f"Receive task: {task}")
         n = task.sampling_params.n if task.sampling_params.n else 1
-        prompt_tokens = task.prompt_tokens
-        delattr(task, "prompt_tokens")
         try:
             request_id_idx = task.request_id
             parts = request_id_idx.rsplit("_", 1)
@@ -361,7 +359,6 @@ class EngineClient:
                     child_task = copy(task)
                     child_task.request_id = f"{request_id}_{i}"
                     self._send_task(child_task)
-            setattr(task, "prompt_tokens", prompt_tokens)
             tracing.trace_slice_end(
                 tracing.TraceSpanName.PREPROCESSING,
                 getattr(task, "request_id", "").split("_")[0],

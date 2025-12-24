@@ -54,7 +54,7 @@ class AsyncOutputProcessor:
 
     def _process_output(
         self,
-        response_item,
+        response_item: RequestOutput,
         stream: bool = True,
         enable_thinking: bool = False,
         include_stop_str_in_output: bool = False,
