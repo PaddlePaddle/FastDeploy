@@ -1,0 +1,23 @@
+server:
+  port: "8080"
+  host: "0.0.0.0"
+  mode: "debug" # debug, release, test
+  splitwise: true # true means pd mode, false means mixed mode
+
+scheduler:
+  policy: "power_of_two"
+  prefill-policy: "process_tokens"
+  decode-policy: "request_num"
+  interval-cleanup-secs: 60
+
+manager:
+  health-failure-threshold: 3
+  health-success-threshold: 2
+  health-check-timeout-secs: 5
+  health-check-interval-secs: 5
+  health-check-endpoint: /health
+
+log:
+  level: "info"  # debug, info, warn, error
+  output: "file" # stdout, file
+
