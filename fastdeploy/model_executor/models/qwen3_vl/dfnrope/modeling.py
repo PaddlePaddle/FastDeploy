@@ -68,7 +68,7 @@ class Qwen3VisionMLP(nn.Layer):
         self,
         dim: int,
         hidden_dim: int,
-        hidden_act: str = "silu",
+        hidden_act: str = "gelu",
         tensor_parallel_degree: int = 1,
         model_format: str = "",
     ) -> None:
@@ -76,23 +76,24 @@ class Qwen3VisionMLP(nn.Layer):
         self.tensor_parallel_degree = tensor_parallel_degree
 
         if tensor_parallel_degree > 1:
-            mp_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
             self.linear_fc1 = ColumnParallelLinear(
                 dim,
                 hidden_dim,
-                mp_group=mp_group,
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 gather_output=False,
                 has_bias=True,
             )
             self.linear_fc2 = RowParallelLinear(
                 hidden_dim,
                 dim,
-                mp_group=mp_group,
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 input_is_parallel=True,
                 has_bias=True,
             )
             set_weight_attrs(self.linear_fc1.weight, {"output_dim": True})
             set_weight_attrs(self.linear_fc2.weight, {"output_dim": False})
+
+            set_weight_attrs(self.linear_fc1.bias, {"output_dim": True})
         else:
             self.linear_fc1 = nn.Linear(dim, hidden_dim, bias_attr=True)
             self.linear_fc2 = nn.Linear(hidden_dim, dim, bias_attr=True)
@@ -128,23 +129,24 @@ class Qwen3VisionPatchMerger(nn.Layer):
         self.norm = nn.LayerNorm(context_dim, epsilon=norm_eps)
 
         if tensor_parallel_degree > 1:
-            mp_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
             self.linear_fc1 = ColumnParallelLinear(
                 self.hidden_size,
                 self.hidden_size,
-                mp_group=mp_group,
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 gather_output=False,
                 has_bias=True,
             )
             self.linear_fc2 = RowParallelLinear(
                 self.hidden_size,
                 d_model,
-                mp_group=mp_group,
+                mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 input_is_parallel=True,
                 has_bias=True,
             )
             set_weight_attrs(self.linear_fc1.weight, {"output_dim": True})  # Column segmentation
             set_weight_attrs(self.linear_fc2.weight, {"output_dim": False})
+
+            set_weight_attrs(self.linear_fc1.bias, {"output_dim": True})
         else:
             self.linear_fc1 = nn.Linear(self.hidden_size, self.hidden_size, bias_attr=True)
             self.linear_fc2 = nn.Linear(self.hidden_size, d_model, bias_attr=True)

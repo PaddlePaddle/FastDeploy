@@ -523,6 +523,7 @@ class QwenVlRotaryEmbedding3D:
         self.max_position = max_position
         self.freq_allocation = freq_allocation
         self.rope_scaling = rope_scaling
+        self.mrope_interleaved = None
         if "mrope_interleaved" in self.rope_scaling:
             self.mrope_interleaved = self.rope_scaling["mrope_interleaved"]
 

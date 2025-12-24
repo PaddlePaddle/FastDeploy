@@ -15,7 +15,6 @@
 # limitations under the License.
 """
 
-import math
 import pickle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -31,7 +30,14 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor
+from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
+
+VIDEO_MIN_PIXELS = 128 * 28 * 28
+VIDEO_MAX_PIXELS = 768 * 28 * 28
+FRAME_FACTOR = 2
+FPS = 2.0
+FPS_MIN_FRAMES = 4
+FPS_MAX_FRAMES = 768
 
 
 def sample_frames(
@@ -75,15 +81,30 @@ def sample_frames(
                 "Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. "
                 "Please pass in `VideoMetadata` object or use a fixed `num_frames` per input video"
             )
-        max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
+        # max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
+        min_frames = ceil_by_factor(min_frames, frame_factor)
+        max_frames = floor_by_factor(min(max_frames, total_num_frames), frame_factor)
+
         num_frames = total_num_frames / metadata["fps"] * fps
+
+        if num_frames > total_num_frames:
+            data_processor_logger.warning(f"smart_nframes: nframes[{num_frames}] > total_frames[{total_num_frames}]")
+
         num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
-        num_frames = math.floor(num_frames / frame_factor) * frame_factor
+        num_frames = floor_by_factor(num_frames, frame_factor)
+
     if num_frames > total_num_frames:
         raise ValueError(
             f"Video can't be sampled. The inferred `num_frames={num_frames}` exceeds `total_num_frames={total_num_frames}`. "
             "Decrease `num_frames` or `fps` for sampling."
         )
+
+    # Hack code ensures that num_frames can always be divided by 4
+    # due to sched/resource_manager_v1.py 中 grid_thw.extend([[2, h, w]] * (t // 2))
+    if num_frames > 2 and num_frames % 4 != 0:
+        num_frames = (num_frames // 4) * 4  # 向下取整到 4 的倍数
+        total_num_frames = (total_num_frames // 4) * 4
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
 
     # Calculate frame indices based on sampling strategy
     if num_frames > 0:
@@ -118,10 +139,10 @@ class DataProcessor:
         self,
         model_path: str,
         enable_processor_cache: bool = False,
-        video_min_frames: int = 4,
-        video_max_frames: int = 768,
+        video_min_frames: int = FPS_MIN_FRAMES,
+        video_max_frames: int = FPS_MAX_FRAMES,
         video_target_frames: int = -1,
-        video_fps: int = -1,
+        video_fps: int = FPS,
         tokens_per_second: int = 2,
         tokenizer=None,
         **kwargs,
@@ -140,6 +161,7 @@ class DataProcessor:
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
         self.fps = video_fps
+        self.frame_factor = FRAME_FACTOR
 
         # Initialize tokenizer with left padding and fast tokenizer
         if tokenizer is None:
@@ -467,13 +489,19 @@ class DataProcessor:
             - Handles temporal dimension in position embeddings
             - Uses video-specific token IDs and type markers
         """
-        ret = self.image_processor.preprocess(images=frames)
+        ret = self.image_processor.preprocess(
+            images=frames,
+            min_pixels=VIDEO_MIN_PIXELS,
+            max_pixels=VIDEO_MAX_PIXELS,
+        )
 
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        # Hack code. In order to adapt to the framework, only image_token can be passed
+        # The correct way should be to use [self.video_token_id] * num_tokens
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += int(num_tokens)
 
@@ -577,7 +605,7 @@ class DataProcessor:
 
             # Sample frames according to specifications
             frame_indices = sample_frames(
-                frame_factor=self.temporal_conv_size,  # Ensure divisible by temporal patch size
+                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,

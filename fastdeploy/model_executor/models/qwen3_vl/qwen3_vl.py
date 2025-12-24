@@ -362,7 +362,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         return hidden_states
 
 
-class Qwen3_VLPretrainedModel(PretrainedModel):
+class Qwen3VLPretrainedModel(PretrainedModel):
     """Utilities for tensor-parallel weight splitting."""
 
     config_class = FDConfig
