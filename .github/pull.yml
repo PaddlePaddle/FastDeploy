@@ -1,0 +1,7 @@
+version: "1"
+rules:
+  - base: develop
+    upstream: PaddlePaddle:develop
+    mergeMethod: merge
+    autoMerge: true
+    autoMergeHardReset: false
