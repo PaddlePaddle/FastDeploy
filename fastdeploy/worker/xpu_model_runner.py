@@ -118,7 +118,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         # used by SamplingMetadata
-        self.enable_logprob = False  # fd_config.model_config.enable_logprob
+        self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         #  Sampler
@@ -704,7 +704,9 @@ class XPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        # self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        # self.share_inputs["top_p"] default to 0.0 on XPU for consideration of the performance
+        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
@@ -822,10 +824,8 @@ class XPUModelRunner(ModelRunnerBase):
             head_dim = self.model_config.head_dim
             if "paddleocr" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
-                self.share_inputs["pos_emb_type"] = "NEOX"
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
-                self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
 
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=[
@@ -918,8 +918,6 @@ class XPUModelRunner(ModelRunnerBase):
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
-        if self.enable_mm:
-            self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
 
@@ -1010,7 +1008,7 @@ class XPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -1393,6 +1391,9 @@ class XPUModelRunner(ModelRunnerBase):
         # Reset block table and kv cache with global block num
         self.initialize_kv_cache()
 
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+
         # Reset free list
         free_list = list(
             range(
@@ -1523,12 +1524,6 @@ class XPUModelRunner(ModelRunnerBase):
         images = images / self.image_preprocess.image_std_tensor
         images = images.cast("bfloat16")
 
-        token_type_ids = inputs["token_type_ids"]
-        token_type_ids_w_video = token_type_ids
-        input_ids = inputs["input_ids"]
-        # convert to img patch id
-        image_mask = input_ids == self.model_config.im_patch_id
-        image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
@@ -1545,9 +1540,6 @@ class XPUModelRunner(ModelRunnerBase):
             # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
                 image_features,
-                image_mask,
-                token_type_ids_w_video,
-                image_type_ids,
                 grid_thw,
             )
         return image_features

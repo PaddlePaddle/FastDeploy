@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -38,12 +40,65 @@ class RDMACommManager:
         prefill_tp_idx,
     ):
         try:
+            import importlib
+            import os
+            import subprocess
+
+            from fastdeploy.platforms import current_platform
+
+            if os.getenv("KVCACHE_GDRCOPY_FLUSH_ENABLE", "") == "" and current_platform.is_cuda():
+                command = ["nvidia-smi", "-i", "0", "--query-gpu=compute_cap", "--format=csv,noheader"]
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                logger.info(f"nvidia-smi command: {command}")
+                logger.info(f"nvidia-smi output: {result.stdout}")
+                if result.returncode != 0:
+                    raise RuntimeError(f"Failed to get compute capability via nvidia-smi: {result.stderr.strip()}")
+
+                major, minor = result.stdout.strip().split(".")
+                if major == "8":  # for ampere arch
+                    os.environ["KVCACHE_GDRCOPY_FLUSH_ENABLE"] = "1"
+                    logger.info("Setting environment variable: export KVCACHE_GDRCOPY_FLUSH_ENABLE=1")
+
+            if os.getenv("KVCACHE_RDMA_NICS", "") == "" and current_platform.is_cuda():
+                res = importlib.resources.files("fastdeploy.cache_manager.transfer_factory") / "get_rdma_nics.sh"
+                get_rdma_nics = None
+                with importlib.resources.as_file(res) as path:
+                    get_rdma_nics = str(path)
+                nic_type = current_platform.device_name
+                command = ["bash", get_rdma_nics, nic_type]
+                result = subprocess.run(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                logger.info(f"get_rdma_nics command: {command}")
+                logger.info(f"get_rdma_nics output: {result.stdout}")
+                if result.returncode != 0:
+                    raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
+
+                env_name, env_value = result.stdout.strip().split("=")
+                assert env_name == "KVCACHE_RDMA_NICS"
+                os.environ[env_name] = env_value
+                logger.info(f"Setting environment variable: export {env_name}={env_value}")
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize RDMA environment! {e} {traceback.format_exc()}")
+
+        try:
             import rdma_comm
-        except:
+        except ImportError:
             raise RuntimeError(
-                "The installation of the RDMA library failed."
-                "Confirm whether your network card supports RDMA transmission."
+                "The installation of the RDMA library failed. Confirm whether your network card supports RDMA transmission."
             )
+
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
             gpu_id,

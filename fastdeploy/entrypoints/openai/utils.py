@@ -293,7 +293,7 @@ def with_cancellation(handler_func):
     @functools.wraps(handler_func)
     async def wrapper(*args, **kwargs):
         # The request is either the second positional arg or `raw_request`
-        request = args[1] if len(args) > 1 else kwargs["raw_request"]
+        request = args[1] if len(args) > 1 else kwargs["req"]
 
         handler_task = asyncio.create_task(handler_func(*args, **kwargs))
         cancellation_task = asyncio.create_task(listen_for_disconnect(request))

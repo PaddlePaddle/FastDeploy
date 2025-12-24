@@ -384,6 +384,7 @@ DLL_EXPORT int mtp_free_and_dispatch_block(Context* ctx,
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 DLL_EXPORT int speculate_verify(Context* ctx,
+                                const int64_t* sampled_token_ids,
                                 int64_t* accept_tokens,
                                 int* accept_num,
                                 int64_t* step_idx,
@@ -409,7 +410,9 @@ DLL_EXPORT int speculate_verify(Context* ctx,
                                 const int max_candidate_len,
                                 const int verify_window,
                                 const bool prefill_one_step_stop,
-                                const bool benchmark_mode);
+                                const bool benchmark_mode,
+                                const bool accept_all_drafts,
+                                const bool use_target_sampling);
 
 DLL_EXPORT int speculate_clear_accept_nums(Context* ctx,
                                            int* accept_num,
@@ -600,6 +603,19 @@ DLL_EXPORT int rebuild_self_hidden_states(api::Context* ctx,
                                           T* output,
                                           int dim_embed,
                                           int elem_cnt);
+
+DLL_EXPORT int speculate_get_logits(Context* ctx,
+                                    float* draft_logits,
+                                    int* next_token_num,
+                                    int* batch_token_num,
+                                    int* cu_next_token_offset,
+                                    int* cu_batch_token_offset,
+                                    const float* logits,
+                                    const float* first_token_logits,
+                                    const int* seq_lens_this_time,
+                                    const int* seq_lens_encoder,
+                                    const int real_bsz,
+                                    const int vocab_size);
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 
