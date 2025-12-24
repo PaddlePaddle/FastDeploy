@@ -453,7 +453,7 @@ def split_or_merge_func_v1(
         else:
             func = split_or_merge_func(
                 is_split=is_split,
-                tensor_parallel_degree=tensor_parallel_degree,
+                tensor_model_parallel_size=tensor_parallel_degree,
                 tensor_parallel_rank=tensor_parallel_rank,
                 num_attention_heads=num_attention_heads,
             )

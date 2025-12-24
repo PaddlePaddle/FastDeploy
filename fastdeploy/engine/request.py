@@ -158,6 +158,7 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        self.audio_output_token_ids = []
         # extend block tables
         self.use_extend_tables = False
         self.extend_block_tables = []
