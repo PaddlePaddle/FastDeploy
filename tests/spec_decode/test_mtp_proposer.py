@@ -785,6 +785,9 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
 
+        # Ensure seq_lens_this_time is properly set in model_inputs
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+
         # Test update_task_chunk_prefill with different chunk indices
         task = Mock()
         task.idx = 0
