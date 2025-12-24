@@ -209,6 +209,13 @@ class WeightsMapper:
         return self._map_name(weight_name)
 
 
+def remap_weight_keys(weights_iterator, mapper: dict):
+    return (
+        (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
+        for key, value in weights_iterator
+    )
+
+
 def process_weights_before_loading(
     *, skip_prefixes: Optional[List[str]] = None, mapper: Optional[WeightsMapper] = None
 ):
