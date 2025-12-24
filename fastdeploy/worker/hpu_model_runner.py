@@ -1544,6 +1544,9 @@ class HPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
+        if (self.parallel_config.use_ep) and (not self.not_need_stop()):
+            time.sleep(0.001)
+            return None
         # # 1. Prepare inputs of model and decoder.
         start_time = time.time()
         self._prepare_inputs()

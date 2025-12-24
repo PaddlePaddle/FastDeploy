@@ -53,6 +53,25 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         )
         self.down_proj_expert_act_scale_key = down_proj_expert_weight_key.replace("weight", "activation_scale")
 
+    def init_ep(self, layer: nn.Layer) -> None:
+        """
+        Initialize EP (Expert Parallel) related modules.
+        """
+        return
+
+    def apply(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        """
+        Paddle compute Fused MoE.
+        """
+        # for all layer.ep_size and layer.tp_size
+        return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
@@ -295,6 +314,24 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
 
             setattr(layer, weights_name, weights_list)
             setattr(layer, scales_name, scales_list)
+
+    def init_ep(self, layer: nn.Layer) -> None:
+        """
+        Initialize EP (Expert Parallel) related modules.
+        """
+        return
+
+    def apply(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        """
+        Paddle compute Fused MoE.
+        """
+        return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
 
     def apply_ep_prefill(
         self,
