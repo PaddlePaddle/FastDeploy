@@ -53,7 +53,7 @@ jobs:
               rm -rf ${REPO_NAME}*
             fi
             git config --global --add safe.directory '*'
-            wget -q --no-proxy ${fd_archive_url}
+            wget -q ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
