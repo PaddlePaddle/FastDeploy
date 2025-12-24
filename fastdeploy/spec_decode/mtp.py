@@ -176,9 +176,7 @@ class MTPProposer(Proposer):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        if not profile and (
-            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
-        ):
+        if not profile and self.scheduler_config.splitwise_role != "mixed":
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -515,6 +513,12 @@ class MTPProposer(Proposer):
                     self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
                         inputs["attention_mask_offset"][prefill_end_index - 1] + 1
                     )
+                if (
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
+                ):  # In PD, we continue to decode after P generates first token
+                    self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    # P-D split need rollback one step
+                    self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task

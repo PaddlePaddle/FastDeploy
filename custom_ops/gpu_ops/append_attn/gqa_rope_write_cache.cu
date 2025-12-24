@@ -24,6 +24,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const T *qkv,
     const float *cos_emb,
     const float *sin_emb,
+    const float *q_norm_weight,
+    const float *k_norm_weight,
     const int *batch_id_per_token,
     const int *cu_seqlens_q,
     const int *seq_lens,
@@ -38,37 +40,46 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int kv_num_head,
     const int seq_len,
     const int last_dim,
-    const bool rope_3d) {
+    const bool rope_3d,
+    const float rms_norm_eps) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
+  using LoadFloat = AlignedVector<float, VecSize>;
   LoadT src_vec;
   LoadEmbT cos_emb_vec;
   LoadEmbT sin_emb_vec;
-  int64_t global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
+  LoadFloat tmp_vec;
+  LoadFloat q_norm_vec, k_norm_vec;
+  int64_t global_warp_idx = blockDim.y * blockIdx.x + threadIdx.y;
+  int64_t all_warp_num = gridDim.x * blockDim.y;
   const int half_lastdim = last_dim / 2;
-  const int offset = (q_num_head + kv_num_head * 2) * last_dim;
-  for (int64_t linear_index = global_thread_idx * VecSize,
-               step = gridDim.x * blockDim.x * VecSize;
-       linear_index < elem_cnt;
-       linear_index += step) {
-    const int token_idx = linear_index / offset;
-    const int ori_bi = batch_id_per_token[token_idx];
+  const int offset =
+      (q_num_head + kv_num_head * 2) * last_dim;  // for all q,k,v
+  const int all_head_num = elem_cnt / last_dim;
+  for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_num;
+       gloabl_hi += all_warp_num) {
+    int64_t linear_index =
+        gloabl_hi * last_dim + threadIdx.x * VecSize;  // 全局index
+    const int token_idx =
+        linear_index / offset;  // token id(第几个token,不分qkv)
+    const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
     const int ori_seq_id =
-        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
-    const int kv_write_idx = cu_seqlens_k[ori_bi] + ori_seq_id;
-
-    const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
-    int64_t new_emb_idx =
-        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+        (token_idx - cu_seqlens_q[ori_bi]) +
+        seq_lens_decoder
+            [ori_bi];  // 在当前seq中的id(拼接了seq到一个batch的情况下有效)
+    const int64_t emb_idx =
+        ori_seq_id * half_lastdim + h_bias / 2;  // embedding的id
     const int64_t base_idx =
         token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
         h_bias;
+    Load<T, VecSize>(&qkv[base_idx], &src_vec);
+    const int kv_write_idx = cu_seqlens_k[ori_bi] + ori_seq_id;
     int64_t base_split_idx;
     T *out_p = nullptr;
     if (hi < q_num_head) {
@@ -84,21 +95,67 @@ __global__ void GQAVariableLengthRotarySplitKernel(
       base_split_idx = kv_write_idx * kv_num_head * last_dim +
                        (hi - q_num_head - kv_num_head) * last_dim + h_bias;
     }
-    Load<T, VecSize>(&qkv[base_idx], &src_vec);
-    // do rope
-    if (hi < q_num_head + kv_num_head) {
-      Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
-      Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+
+    // TODO check this correct or not
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    float thread_m2 = 0.0f;
+    float warp_m2 = 0.0f;
+
+    if (q_norm_weight && k_norm_weight) {
+      if (hi < q_num_head + kv_num_head) {  // only q and k need rope
+        Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+        Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
-      for (int i = 0; i < HalfVecSize; i++) {
-        const float input_left = static_cast<float>(src_vec[2 * i]);
-        const float input_right = static_cast<float>(src_vec[2 * i + 1]);
-        const float cos_tmp = cos_emb_vec[i];
-        const float sin_tmp = sin_emb_vec[i];
-        src_vec[2 * i] =
-            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        src_vec[2 * i + 1] =
-            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        for (int i = 0; i < HalfVecSize; i++) {
+          const float input_left = static_cast<float>(src_vec[2 * i]);
+          const float input_right = static_cast<float>(src_vec[2 * i + 1]);
+          const float cos_tmp = cos_emb_vec[i];
+          const float sin_tmp = sin_emb_vec[i];
+          float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
+          float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
+          tmp_vec[2 * i] = tmp1;
+          tmp_vec[2 * i + 1] = tmp2;
+          thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
+        }
+      }
+      WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);  // 单个head的标准差
+
+      if (hi < q_num_head + kv_num_head) {  // only q and k need norm
+        float row_variance = max(warp_m2 / last_dim, 0.0f);
+        float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
+        if (hi < q_num_head) {
+          Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize],
+                               &q_norm_vec);
+#pragma unroll
+          for (int i = 0; i < VecSize; i++) {
+            src_vec[i] =
+                static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
+          }
+        } else {
+          Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize],
+                               &k_norm_vec);
+          for (int i = 0; i < VecSize; i++) {
+            src_vec[i] =
+                static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
+          }
+        }
+      }
+    } else {
+      if (hi < q_num_head + kv_num_head) {
+        Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+        Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+#pragma unroll
+        for (int i = 0; i < HalfVecSize; i++) {
+          const float input_left = static_cast<float>(src_vec[2 * i]);
+          const float input_right = static_cast<float>(src_vec[2 * i + 1]);
+          const float cos_tmp = cos_emb_vec[i];
+          const float sin_tmp = sin_emb_vec[i];
+          src_vec[2 * i] =
+              static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+          src_vec[2 * i + 1] =
+              static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        }
       }
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
@@ -114,6 +171,8 @@ void gqa_rotary_qk_split_variable(
     T *v,
     const T *qkv_input,
     const float *rotary_emb,  // [2, 1, 1, seq_len, dim_head / 2]
+    const float *q_norm_weight,
+    const float *k_norm_weight,
     const int *batch_id_per_token,
     const int *seq_lens_encoder,
     const int *seq_lens_decoder,
@@ -126,24 +185,31 @@ void gqa_rotary_qk_split_variable(
     const int input_output_len,
     const int dim_head,
     const bool rope_3d,
+    const float rms_norm_eps,
     const cudaStream_t &stream) {
+  assert(dim_head == 128 && "dim_head must be 128");
   int64_t elem_nums = token_num * (num_heads + 2 * kv_num_heads) * dim_head;
-  constexpr int PackSize = 16 / sizeof(T);
+
+  constexpr int HEAD_DIM = 128;
+  constexpr int PackSize = HEAD_DIM / kWarpSize;
   const int pack_num = elem_nums / PackSize;
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
+  dim3 block_size(kWarpSize, blocksize / kWarpSize);
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
   launchWithPdlWhenEnabled(GQAVariableLengthRotarySplitKernel<T, PackSize>,
                            grid_size,
-                           blocksize,
+                           block_size,
                            0,
                            stream,
                            qkv_input,
                            cos_emb,
                            sin_emb,
+                           q_norm_weight,
+                           k_norm_weight,
                            batch_id_per_token,
                            cu_seqlens_q,
                            seq_lens_encoder,
@@ -158,7 +224,8 @@ void gqa_rotary_qk_split_variable(
                            kv_num_heads,
                            seq_len,
                            dim_head,
-                           rope_3d);
+                           rope_3d,
+                           rms_norm_eps);
 }
 
 template <typename T,
@@ -1054,6 +1121,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &cache_batch_ids,
     const paddle::Tensor &cache_tile_ids,
     const paddle::Tensor &cache_num_blocks,
+    const paddle::optional<paddle::Tensor> &q_norm_weight,
+    const paddle::optional<paddle::Tensor> &k_norm_weight,
     const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
     const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
     const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
@@ -1063,6 +1132,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const int kv_token_num,
     const int max_seq_len,
+    const float rms_norm_eps,
     const std::string &cache_quant_type,
     const bool rope_3d) {
   typedef PDTraits<paddle::DataType::BFLOAT16> traits_;
@@ -1113,6 +1183,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       v.data<data_t>(),
       qkv.data<data_t>(),
       rotary_embs.data<float>(),
+      q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
+      k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
       batch_id_per_token.data<int>(),
       seq_lens_encoder.data<int>(),
       seq_lens_decoder.data<int>(),
@@ -1125,6 +1197,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
       head_dim,
       rope_3d,
+      rms_norm_eps,
       stream);
 
   if (token_num < kv_token_num) {
@@ -1259,6 +1332,8 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
              "cache_batch_ids",
              "cache_tile_ids_per_batch",
              "cache_num_blocks",
+             paddle::Optional("q_norm_weight"),
+             paddle::Optional("k_norm_weight"),
              paddle::Optional("cache_k_quant_scales"),
              paddle::Optional("cache_v_quant_scales"),
              paddle::Optional("cache_k_dequant_scales"),
@@ -1271,5 +1346,7 @@ PD_BUILD_STATIC_OP(gqa_rope_write_cache)
                     {"value_cache", "value_cache_out"}})
     .Attrs({"kv_token_num: int",
             "max_seq_len: int",
-            "cache_quant_type: std::string"})
+            "rms_norm_eps: float",
+            "cache_quant_type: std::string",
+            "rope_3d: bool"})
     .SetKernelFn(PD_KERNEL(GQARopeWriteCacheKernel));

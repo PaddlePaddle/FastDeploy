@@ -125,6 +125,7 @@ class EngineService:
             split_connector=self.split_connector,
         )
         self.token_processor.set_resource_manager(self.resource_manager)
+        # self.token_processor.enable_monitor_hang()
 
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
@@ -319,9 +320,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -694,8 +692,16 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
+                # in the frequency domain due to insufficient blocks
+                if self.cfg.model_config.enable_mm:
+                    self.resource_manager.check_and_free_block_tables()
+                    available_blocks = self.resource_manager.available_block_num()
+                else:
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
                 tasks = self.scheduler.get_requests(
-                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
+                    available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=max_num_batched_tokens,
@@ -711,8 +717,11 @@ class EngineService:
                     is_fetching = False
                     return
 
-                self.llm_logger.debug(f"get tasks from {type(self.scheduler)}: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    if self.cfg.scheduler_config.splitwise_role == "prefill":
+                        for task in tasks:
+                            # start async preprocess
+                            self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
                         for task in tasks:
@@ -765,15 +774,36 @@ class EngineService:
                         self.split_connector.send_cache_info_to_messager(tasks, 0)
                         # ensure cache tasks has sent to cache_messager
                         need_check_req_ids = [task.request_id for task in tasks]
+                        finished_ids, delete_tasks_list = [], []
                         while need_check_req_ids:
-                            req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {req_ids}")
-                            if req_ids:
-                                for req_id in req_ids:
-                                    assert req_id in need_check_req_ids
-                                    need_check_req_ids.remove(req_id)
+                            finished_ids.extend(self.engine_worker_queue.get_finished_add_cache_task_req())
+                            self.llm_logger.info(f"get_finished_add_cache_task_req: {finished_ids}")
+                            if finished_ids:
+                                for task in tasks:
+                                    result = self.resource_manager.waiting_async_process(task)
+                                    if result is None:
+                                        self.scheduler.put_results(
+                                            [
+                                                RequestOutput(
+                                                    request_id=task.request_id,
+                                                    finished=True,
+                                                    error_code=task.error_code,
+                                                    error_msg=task.error_message,
+                                                )
+                                            ]
+                                        )
+                                        delete_tasks_list.append(task)
+                                    elif result is False:
+                                        if task.request_id in finished_ids:
+                                            need_check_req_ids.remove(task.request_id)
+                                            finished_ids.remove(task.request_id)
                             else:
                                 time.sleep(0.001)
+
+                        for tmp_task in delete_tasks_list:
+                            tasks.remove(tmp_task)
+                            # release resource in P
+                            self.resource_manager.pre_recycle_resource(tmp_task.request_id)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:

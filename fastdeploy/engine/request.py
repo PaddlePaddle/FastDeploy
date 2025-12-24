@@ -16,7 +16,9 @@
 
 from __future__ import annotations
 
+import copy
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -180,6 +182,23 @@ class Request:
         self.async_process_futures = []
         self.error_message = None
         self.error_code = None
+        self.last_recv_token_time = None
+
+    def __getstate__(self):
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+        # Create a filtered dictionary without problematic attributes
+        filtered_dict = {}
+        for key, value in self.__dict__.items():
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
+                filtered_dict[key] = []
+            else:
+                filtered_dict[key] = value
+
+        return filtered_dict
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -190,6 +209,22 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        if (
+            isinstance(d.get("multimodal_inputs"), dict)
+            and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
+            and len(d["multimodal_inputs"]["mm_positions"]) > 0
+        ):
+            # if mm_positions is not of type ImagePosition, convert to ImagePosition
+            try:
+                for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                )
+
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -252,6 +287,21 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
+        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
+        if (
+            isinstance(multimodal_inputs, dict)
+            and isinstance(multimodal_inputs.get("mm_positions"), list)
+            and len(multimodal_inputs["mm_positions"]) > 0
+        ):
+            # if mm_positions is ImagePosition, convert to dict
+            try:
+                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
+                    multimodal_inputs["mm_positions"][i] = (
+                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
+
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -265,7 +315,7 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
+            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -315,8 +365,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        """Safe string representation that ignores private and None fields."""
-        return ""
+        """Sanitized repr without private or None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<Request repr failed: {e}>"
 
 
 @dataclass(slots=True)

@@ -179,6 +179,9 @@ class GpuWorker(WorkerBase):
         """Get current model"""
         return self.model_runner.get_model()
 
+    def get_num_running_request(self):
+        return self.model_runner.get_num_running_request()
+
     def initialize_cache(self, num_gpu_blocks: int) -> None:
         """Initizlize the KV Cache with accurate num_gpu_blocks"""
         # accurate cache size

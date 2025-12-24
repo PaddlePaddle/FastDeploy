@@ -571,6 +571,7 @@ class OpenAIServingChat:
                             num_input_video_tokens=num_input_video_tokens,
                             num_image_tokens=num_image_tokens,
                             logprob_contents=logprob_contents,
+                            draft_logprob_contents=draft_logprob_contents,
                             response_processor=response_processor,
                             max_tokens=max_tokens,
                         )
@@ -622,6 +623,7 @@ class OpenAIServingChat:
         num_input_video_tokens: list,
         num_image_tokens: list,
         logprob_contents: list,
+        draft_logprob_contents: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
     ) -> ChatCompletionResponseChoice:
@@ -649,6 +651,9 @@ class OpenAIServingChat:
         logprobs_full_res = None
         if logprob_contents[idx]:
             logprobs_full_res = LogProbs(content=logprob_contents[idx])
+        draft_logprobs_full_res = None
+        if draft_logprob_contents[idx]:
+            draft_logprobs_full_res = LogProbs(content=draft_logprob_contents[idx])
 
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
@@ -669,6 +674,7 @@ class OpenAIServingChat:
             index=idx,
             message=message,
             logprobs=logprobs_full_res,
+            draft_logprobs=draft_logprobs_full_res,
             finish_reason=finish_reason,
         )
 
