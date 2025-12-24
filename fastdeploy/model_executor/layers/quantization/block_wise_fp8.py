@@ -83,11 +83,11 @@ class BlockWiseFP8Config(QuantConfigBase):
 
 
 def deep_gemm_fp8_fp8_bf16_nt_infer_meta(
-    x_meta: paddle.static.MetaTensor,
-    x_scale_tensor_meta: paddle.static.MetaTensor,
-    layer_weight_meta: paddle.static.MetaTensor,
-    layer_weight_scale_inv_meta: paddle.static.MetaTensor,
-    linear_out_meta: paddle.static.MetaTensor,
+    x_meta: "paddle.static.MetaTensor",
+    x_scale_tensor_meta: "paddle.static.MetaTensor",
+    layer_weight_meta: "paddle.static.MetaTensor",
+    layer_weight_scale_inv_meta: "paddle.static.MetaTensor",
+    linear_out_meta: "paddle.static.MetaTensor",
     layer_output_size: int,
 ):
     return paddle.static.MetaTensor(shape=[x_meta.shape[0], layer_output_size], dtype=paddle.bfloat16)

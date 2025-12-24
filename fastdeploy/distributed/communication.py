@@ -52,7 +52,7 @@ def custom_ar_clear_ipc_handles():
 
 try:
 
-    def tensor_model_parallel_all_reduce_infer_meta(x: paddle.static.MetaTensor, group_) -> paddle.static.MetaTensor:
+    def tensor_model_parallel_all_reduce_infer_meta(x: "paddle.static.MetaTensor", group_) -> paddle.static.MetaTensor:
         return paddle.static.MetaTensor(shape=x.shape, dtype=x.dtype)
 
     @register_custom_python_op(
