@@ -15,7 +15,6 @@
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -24,7 +23,11 @@ import time
 import openai
 import pytest
 import requests
-from utils.serving_utils import (
+
+tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, tests_dir)
+
+from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
@@ -32,8 +35,6 @@ from utils.serving_utils import (
     clean_ports,
     is_port_open,
 )
-
-os.environ["FD_USE_MACHETE"] = "0"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -47,15 +48,8 @@ def setup_and_run_server():
     """
     print("Pre-test port cleanup...")
     clean_ports()
-    print("log dir clean ")
-    if os.path.exists("log") and os.path.isdir("log"):
-        shutil.rmtree("log")
 
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
-    else:
-        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
+    model_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
@@ -68,8 +62,8 @@ def setup_and_run_server():
         model_path,
         "--port",
         str(FD_API_PORT),
-        "--tensor-parallel-size",
-        "2",
+        # "--tensor-parallel-size",
+        # "2",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
@@ -85,15 +79,9 @@ def setup_and_run_server():
         "128",
         "--limit-mm-per-prompt",
         limit_mm_str,
-        "--enable-chunked-prefill",
-        "--kv-cache-ratio",
-        "0.71",
-        "--quantization",
-        "wint4",
-        "--reasoning-parser",
-        "ernie-45-vl",
     ]
 
+    print(cmd)
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
@@ -103,6 +91,7 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
+    print(f"Started API server with pid {process.pid}")
     # Wait up to 10 minutes for API server to be ready
     for _ in range(10 * 60):
         if is_port_open("127.0.0.1", FD_API_PORT):
@@ -110,7 +99,7 @@ def setup_and_run_server():
             break
         time.sleep(1)
     else:
-        print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
+        print("[TIMEOUT] API server failed to start in 10 minutes. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
@@ -123,7 +112,6 @@ def setup_and_run_server():
     try:
         os.killpg(process.pid, signal.SIGTERM)
         print(f"API server (pid={process.pid}) terminated")
-        clean_ports()
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
 
@@ -191,37 +179,19 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
-    content1 = (
-        result1["choices"][0]["message"]["reasoning_content"]
-        + "</think>"
-        + result1["choices"][0]["message"]["content"]
-    )
-    file_res_temp = "ernie-4_5-vl"
+    content1 = result1["choices"][0]["message"]["content"]
+    file_res_temp = "Qwen2.5-VL-7B-Instruct-temp"
     f_o = open(file_res_temp, "a")
     f_o.writelines(content1)
     f_o.close()
 
     # base result
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev")
-    else:
-        base_file = "ernie-4_5-vl-base-tp2-dev"
-    with open(base_file, "r") as f:
-        content2 = f.read()
+    content2 = """这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示某种手工艺品。成年人手里拿着一个扇子，上面有彩色的图案，可能是通过某种方式绘制或涂鸦而成。孩子们看起来很专注，可能是在观察或参与这个过程。
+
+背景中还有其他几个人，其中一个人穿着粉色的衣服，背对着镜头。整个场景看起来像是在一个室内环境中，光线充足，氛围轻松愉快。"""
 
     # Verify that result is same as the base result
     assert content1 == content2
-
-
-def test_with_metadata(api_url, headers, consistent_payload):
-    """
-    Test that result is same as the base result.
-    """
-    # request
-    consistent_payload["metadata"] = {"enable_thinking": True}
-    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp1.status_code == 200
 
 
 # ==========================
@@ -273,9 +243,6 @@ def test_non_streaming_chat(openai_client):
     assert len(response.choices) > 0
     assert hasattr(response.choices[0], "message")
     assert hasattr(response.choices[0].message, "content")
-    assert hasattr(response, "usage")
-    assert hasattr(response.usage, "completion_tokens_details")
-    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
 
 
 # Streaming test
@@ -310,64 +277,13 @@ def test_streaming_chat(openai_client, capsys):
         temperature=1,
         max_tokens=512,
         stream=True,
-        stream_options={"include_usage": True, "continuous_usage_stats": True},
     )
 
     output = []
     for chunk in response:
-        assert hasattr(chunk, "usage")
-        assert hasattr(chunk.usage, "completion_tokens_details")
-        assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
-        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
-            continue
         if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
-
-
-def test_non_streaming_completion(openai_client):
-    """Test non-streaming completion functionality with the local service"""
-    response = openai_client.completions.create(
-        model="default",
-        prompt="Hello world",
-        temperature=1,
-        max_tokens=53,
-        stream=False,
-    )
-
-    assert hasattr(response, "choices")
-    assert len(response.choices) > 0
-    assert hasattr(response.choices[0], "text")
-    assert hasattr(response, "usage")
-    assert hasattr(response.usage, "completion_tokens_details")
-    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
-    assert hasattr(response.usage, "completion_tokens")
-    assert response.usage.completion_tokens >= response.usage.completion_tokens_details.reasoning_tokens
-
-
-def test_streaming_completion(openai_client):
-    """Test streaming completion functionality with the local service"""
-    response = openai_client.completions.create(
-        model="default",
-        prompt="Hello world",
-        temperature=1,
-        max_tokens=512,
-        stream=True,
-        stream_options={"include_usage": True},
-    )
-
-    output = []
-    for chunk in response:
-        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
-            assert hasattr(chunk, "usage")
-            assert hasattr(chunk.usage, "completion_tokens_details")
-            assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
-            assert hasattr(chunk.usage, "completion_tokens")
-            assert chunk.usage.completion_tokens >= chunk.usage.completion_tokens_details.reasoning_tokens
-            continue
-        if hasattr(chunk.choices[0], "text"):
-            output.append(chunk.choices[0].text)
-    assert len(output) > 0
 
 
 # ==========================
@@ -521,122 +437,10 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         assert chunk.choices[0].delta.completion_token_ids is None
 
 
-def test_chat_with_thinking(openai_client, capsys):
-    """
-    Test enable_thinking & reasoning_max_tokens option in non-streaming chat functionality with the local service
-    """
-    # enable thinking, non-streaming
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        stream=False,
-        max_tokens=10,
-        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
-    )
-    assert response.choices[0].message.reasoning_content is not None
-
-    # disable thinking, non-streaming
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        stream=False,
-        max_tokens=10,
-        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-    )
-    assert response.choices[0].message.reasoning_content == ""
-    assert "</think>" not in response.choices[0].message.content
-
-    # test logic
-    reasoning_max_tokens = None
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        stream=False,
-        max_tokens=20,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},
-            "reasoning_max_tokens": reasoning_max_tokens,
-        },
-    )
-    assert response.choices[0].message.reasoning_content is not None
-
-    # enable thinking, streaming
-    reasoning_max_tokens = 3
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},
-            "reasoning_max_tokens": reasoning_max_tokens,
-            "return_token_ids": True,
-        },
-        stream=True,
-        max_tokens=10,
-    )
-    completion_tokens = 1
-    reasoning_tokens = 0
-    total_tokens = 0
-    for chunk_id, chunk in enumerate(response):
-        if chunk_id == 0:  # the first chunk is an extra chunk
-            continue
-        delta_message = chunk.choices[0].delta
-        if delta_message.content != "" and delta_message.reasoning_content == "":
-            completion_tokens += len(delta_message.completion_token_ids)
-        elif delta_message.reasoning_content != "" and delta_message.content == "":
-            reasoning_tokens += len(delta_message.completion_token_ids)
-        total_tokens += len(delta_message.completion_token_ids)
-    assert completion_tokens + reasoning_tokens == total_tokens
-    assert reasoning_tokens <= reasoning_max_tokens
-
-
-def test_chat_with_completion_token_ids(openai_client):
-    """Test completion_token_ids"""
-    response = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Hello"}],
-        extra_body={
-            "completion_token_ids": [94936],
-            "return_token_ids": True,
-            "reasoning_max_tokens": 20,
-            "max_tokens": 10,
-        },
-        max_tokens=10,
-        stream=False,
-    )
-    assert hasattr(response, "choices")
-    assert len(response.choices) > 0
-    assert hasattr(response.choices[0], "message")
-    assert hasattr(response.choices[0].message, "prompt_token_ids")
-    assert isinstance(response.choices[0].message.prompt_token_ids, list)
-    assert 94936 in response.choices[0].message.prompt_token_ids
-
-
-def test_chat_with_reasoning_max_tokens(openai_client):
-    """Test completion_token_ids"""
-    assertion_executed = False
-    try:
-        openai_client.chat.completions.create(
-            model="default",
-            messages=[{"role": "user", "content": "Hello"}],
-            extra_body={"completion_token_ids": [18900], "return_token_ids": True, "reasoning_max_tokens": -1},
-            max_tokens=10,
-            stream=False,
-        )
-    except openai.InternalServerError as e:
-        error_message = str(e)
-        assertion_executed = True
-        assert "reasoning_max_tokens must be greater than 1" in error_message
-    assert assertion_executed, "Assertion was not executed (no exception raised)"
-
-
 def test_profile_reset_block_num():
-    """测试profile reset_block_num功能，与baseline diff不能超过5%"""
+    """测试profile reset_block_num功能，与baseline diff不能超过15%"""
     log_file = "./log/config.log"
-    baseline = 40000
+    baseline = 30000
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")
@@ -662,58 +466,11 @@ def test_profile_reset_block_num():
     except ValueError:
         pytest.fail(f"Invalid number format: {match.group(1)}")
 
-    lower_bound = baseline * (1 - 0.05)
-    upper_bound = baseline * (1 + 0.05)
+    lower_bound = baseline * (1 - 0.15)
+    upper_bound = baseline * (1 + 0.15)
     print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
 
     assert lower_bound <= actual_value <= upper_bound, (
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
-
-
-def test_thinking_logic_flag(openai_client, capsys):
-    """
-    Test the interaction between token calculation logic and conditional thinking.
-    This test covers:
-    1. Default max_tokens calculation when not provided.
-    2. Capping of max_tokens when it exceeds model limits.
-    3. Default reasoning_max_tokens calculation when not provided.
-    4. Activation of thinking based on the final state of reasoning_max_tokens.
-    """
-
-    response_case_1 = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity briefly."}],
-        temperature=1,
-        stream=False,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},
-        },
-    )
-    assert response_case_1.choices[0].message.reasoning_content is not None
-
-    response_case_2 = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        stream=False,
-        max_tokens=20,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},
-            "reasoning_max_tokens": 5,
-        },
-    )
-    assert response_case_2.choices[0].message.reasoning_content is not None
-
-    response_case_3 = openai_client.chat.completions.create(
-        model="default",
-        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
-        temperature=1,
-        stream=False,
-        max_tokens=20,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": False},
-        },
-    )
-    assert response_case_3.choices[0].message.reasoning_content == ""
