@@ -738,10 +738,11 @@ class TestMTPProposer(unittest.TestCase):
         # Verify caches were created
         self.assertIn("caches", proposer.model_inputs)
 
+    @patch("fastdeploy.spec_decode.mtp.share_external_data")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_splitwise_non_mixed_role(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_splitwise_non_mixed_role(self, mock_rope, mock_attn_backend, mock_model_loader, mock_share_external):
         """Test splitwise role != 'mixed' branch in initialize_kv_cache"""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
@@ -750,6 +751,9 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Mock share_external_data to avoid CUDA operations
+        mock_share_external.return_value = paddle.zeros([2, 12, 16, 64])
 
         # Test non-mixed splitwise role
         self.fd_config.scheduler_config.splitwise_role = "prefill"
@@ -786,10 +790,10 @@ class TestMTPProposer(unittest.TestCase):
         task.idx = 0
         task.prefill_chunk_info = [3, 2, 1]
         task.prompt_token_ids = [1, 2, 3, 4, 5, 6]
+        task.get = Mock(return_value=0)
 
         # Test chunk_idx == len(prefill_chunk_info) (last chunk)
         task.chunk_idx = 3
-        task.get = Mock(return_value=0)
         proposer.update_task_chunk_prefill(task)
 
         # Test chunk_idx < len - 1 (intermediate chunk)
@@ -822,11 +826,15 @@ class TestMTPProposer(unittest.TestCase):
         # Verify last_seq_lens_this_time was initialized
         self.assertIsNotNone(proposer.last_seq_lens_this_time)
 
+    @patch("paddle.device.cuda.empty_cache")
+    @patch("paddle.device.xpu.empty_cache")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
     @patch("fastdeploy.spec_decode.mtp.current_platform")
-    def test_empty_cache_branches(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_empty_cache_branches(
+        self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader, mock_xpu_empty, mock_cuda_empty
+    ):
         """Test _empty_cache method branches for CUDA, XPU, and unsupported platforms"""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
@@ -843,11 +851,16 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer._empty_cache()  # Should not raise exception
+        mock_cuda_empty.assert_called_once()
+
+        # Reset mock
+        mock_cuda_empty.reset_mock()
 
         # Test XPU branch
         mock_platform.is_cuda.return_value = False
         mock_platform.is_xpu.return_value = True
         proposer._empty_cache()  # Should not raise exception
+        mock_xpu_empty.assert_called_once()
 
         # Test unsupported platform branch
         mock_platform.is_cuda.return_value = False
