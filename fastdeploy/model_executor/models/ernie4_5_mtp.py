@@ -355,7 +355,6 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = fd_config.speculative_config.sharing_model.lm_head
-        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
 
     @classmethod
     def name(self):
@@ -373,11 +372,6 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
         self.ernie.load_state_dict(state_dict)
-        # if self.tie_word_embeddings:
-        #     self.lm_head.linear.weight.set_value(
-        #         self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
-        # else:
-        #     self.lm_head.load_state_dict(state_dict)
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
