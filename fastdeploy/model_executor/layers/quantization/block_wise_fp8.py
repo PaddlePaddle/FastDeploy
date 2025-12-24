@@ -31,6 +31,7 @@ from fastdeploy.model_executor.utils import (
     process_weight_transpose,
     set_weight_attrs,
 )
+from fastdeploy.utils import register_custom_python_op
 
 from ..utils import get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -79,6 +80,43 @@ class BlockWiseFP8Config(QuantConfigBase):
             return BlockWiseFP8MoEMethod(self)
         else:
             return BlockWiseFP8LinearMethod(self)
+
+
+def deep_gemm_fp8_fp8_bf16_nt_infer_meta(
+    x_meta: "paddle.static.MetaTensor",
+    x_scale_tensor_meta: "paddle.static.MetaTensor",
+    layer_weight_meta: "paddle.static.MetaTensor",
+    layer_weight_scale_inv_meta: "paddle.static.MetaTensor",
+    linear_out_meta: "paddle.static.MetaTensor",
+    layer_output_size: int,
+):
+    return paddle.static.MetaTensor(shape=[x_meta.shape[0], layer_output_size], dtype=paddle.bfloat16)
+
+
+@register_custom_python_op(
+    name="deep_gemm_fp8_fp8_bf16_nt",
+    infer_meta=deep_gemm_fp8_fp8_bf16_nt_infer_meta,
+    input_names=["x", "x_scale_tensor", "layer_weight", "layer_weight_scale_inv", "linear_out_empty"],
+    output_names=["linear_out"],
+    inplace_map={},
+)
+def deep_gemm_fp8_fp8_bf16_nt(
+    x: paddle.Tensor,
+    x_scale_tensor: paddle.Tensor,
+    layer_weight: paddle.Tensor,
+    layer_weight_scale_inv: paddle.Tensor,
+    linear_out: paddle.Tensor,
+    layer_output_size: int,
+):
+    from fastdeploy.model_executor.ops.gpu import deep_gemm
+
+    deep_gemm.gemm_fp8_fp8_bf16_nt(
+        (x, x_scale_tensor),
+        (layer_weight, layer_weight_scale_inv),
+        linear_out,
+    )
+
+    return linear_out
 
 
 class BlockWiseFP8LinearMethod(QuantMethodBase):
@@ -230,12 +268,8 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             x, self.quant_config.weight_block_size[0]
         )
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
-
-        deep_gemm.gemm_fp8_fp8_bf16_nt(
-            (x, x_scale_tensor),
-            (layer.weight, layer.weight_scale_inv),
-            linear_out,
+        linear_out = deep_gemm_fp8_fp8_bf16_nt(
+            x, x_scale_tensor, layer.weight, layer.weight_scale_inv, linear_out, layer.output_size
         )
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)

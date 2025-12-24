@@ -273,7 +273,8 @@ async def async_request_eb_openai_chat_completions(
                     # 新增metrics统计，计算首token过滤空包
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
-                    if output.generated_text.strip() == "":
+                    # 兼容思考内容超长截断的情况，此时回复内容为空
+                    if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
                         output.success = False
                         output.reasoning_tokens = output.output_tokens
                         output.error = "No generated text found!"
