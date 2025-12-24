@@ -28,7 +28,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
-from fastdeploy.utils import ceil_div
+from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
 
@@ -1141,6 +1141,196 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         return out
 
 
+def python_op_fused_moe_kernel_paddle_infer_meta(
+    x,
+    layer_added_weight_attrs_0,
+    layer_added_scale_attrs_0,
+    layer_added_weight_attrs1,
+    layer_added_scale_attrs1,
+    gate_out,
+    gate_correction_bias,
+    top_k: int,
+    N1: int,
+    N2: int,
+    num_local_experts: int,
+    moe_intermediate_size: int,
+    hidden_size: int,
+    config: dict,
+    quant_config,
+    topk_ids_hookfunc,
+):
+    token_num = x.shape[0]
+    return paddle.static.MetaTensor(shape=[token_num, hidden_size], dtype=x.dtype)
+
+
+@register_custom_python_op(
+    name="python_op_fused_moe_kernel_paddle",
+    infer_meta=python_op_fused_moe_kernel_paddle_infer_meta,
+    input_names=[
+        "x",
+        "layer_added_weight_attrs_0",
+        "layer_added_scale_attrs_0",
+        "layer_added_weight_attrs1",
+        "layer_added_scale_attrs1",
+        "gate_out",
+        "gate_correction_bias",
+    ],
+    output_names=["out"],
+    inplace_map={},
+)
+def python_op_fused_moe_kernel_paddle(
+    x: paddle.Tensor,
+    layer_added_weight_attrs_0: paddle.Tensor,
+    layer_added_scale_attrs_0: paddle.Tensor,
+    layer_added_weight_attrs1: paddle.Tensor,
+    layer_added_scale_attrs1: paddle.Tensor,
+    gate_out: paddle.Tensor,
+    gate_correction_bias: paddle.Tensor,
+    top_k: int,
+    N1: int,
+    N2: int,
+    num_local_experts: int,
+    moe_intermediate_size: int,
+    hidden_size: int,
+    config: dict,
+    quant_config,
+    topk_ids_hookfunc,
+):
+
+    token_num = x.shape[0]
+    if x.shape[0] == 0:
+        return paddle.zeros([token_num, hidden_size], dtype=x.dtype)
+
+    topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+        gate_out,
+        gate_correction_bias,
+        top_k,
+        True,  # apply_norm_weight
+        False,
+    )
+    if topk_ids_hookfunc is not None:
+        topk_ids_hookfunc(topk_ids=topk_ids)
+
+    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
+
+    sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
+        topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
+    )
+    # cache13 = create_empty_tensor(tuple([token_num * top_k * max(N1, N2)]), x.dtype)
+    cache13 = paddle.empty([token_num * top_k * max(N1, N2)], dtype=x.dtype)
+    intermediate_cache1 = cache13[: token_num * top_k * N1].view([token_num * top_k, N1])
+    max_num_tokens_padded = sorted_token_ids.shape[0]
+
+    grid = (
+        ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"])
+        * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
+    )
+
+    from .triton_moe_kernels import fused_moe_kernel_paddle
+
+    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0])
+
+    fused_moe_kernel_paddle[grid](
+        x_q,
+        layer_added_weight_attrs_0,
+        intermediate_cache1,
+        x_scale,
+        layer_added_scale_attrs_0,
+        None,
+        sorted_token_ids,
+        expert_ids,
+        num_tokens_post_padded,
+        max_num_tokens_padded,
+        token_num * top_k,
+        N=moe_intermediate_size * 2,
+        K=hidden_size,
+        stride_am=x_q.strides[0],
+        stride_ak=x_q.strides[1],
+        stride_be=layer_added_weight_attrs_0.strides[0],
+        stride_bk=layer_added_weight_attrs_0.strides[2],
+        stride_bn=layer_added_weight_attrs_0.strides[1],
+        stride_cm=intermediate_cache1.strides[0],
+        stride_cn=intermediate_cache1.strides[1],
+        #
+        stride_asm=x_scale.strides[0],  # only used in blockwise fp8
+        stride_ask=x_scale.strides[1],  # only used in blockwise fp8
+        stride_bse=layer_added_scale_attrs_0.strides[0],
+        stride_bsk=layer_added_scale_attrs_0.strides[2],
+        stride_bsn=layer_added_scale_attrs_0.strides[1],
+        group_n=quant_config.weight_block_size[1],
+        group_k=quant_config.weight_block_size[0],
+        # Meta-parameters
+        BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
+        BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
+        BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
+        GROUP_SIZE_M=config["GROUP_SIZE_M"],
+        MUL_ROUTED_WEIGHT=False,
+        top_k=top_k,
+        compute_type_enum=1,
+        use_fp8_w8a8=True,
+        use_int8_w8a16=False,
+        per_channel_quant=False,
+        even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
+    )
+
+    intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1)
+
+    intermediate_cache3 = cache13[: token_num * top_k * N2].view([token_num * top_k, N2])
+
+    grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),)
+
+    x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
+        intermediate_cache2, quant_config.weight_block_size[0]
+    )
+
+    fused_moe_kernel_paddle[grid](
+        x_q,
+        layer_added_weight_attrs1,
+        intermediate_cache3,
+        x_scale,
+        layer_added_scale_attrs1,
+        topk_weights,
+        sorted_token_ids,
+        expert_ids,
+        num_tokens_post_padded,
+        max_num_tokens_padded,
+        token_num * top_k,
+        N=hidden_size,
+        K=moe_intermediate_size,
+        stride_am=x_q.strides[0],
+        stride_ak=x_q.strides[1],
+        stride_be=layer_added_weight_attrs1.strides[0],
+        stride_bk=layer_added_weight_attrs1.strides[2],
+        stride_bn=layer_added_weight_attrs1.strides[1],
+        stride_cm=intermediate_cache3.strides[0],
+        stride_cn=intermediate_cache3.strides[1],
+        stride_asm=x_scale.strides[0],  # only used in blockwise fp8
+        stride_ask=x_scale.strides[1],  # only used in blockwise fp8
+        stride_bse=layer_added_scale_attrs1.strides[0],
+        stride_bsk=layer_added_scale_attrs1.strides[2],
+        stride_bsn=layer_added_scale_attrs1.strides[1],
+        group_n=quant_config.weight_block_size[1],
+        group_k=quant_config.weight_block_size[0],
+        # Meta-parameters
+        BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
+        BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
+        BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
+        GROUP_SIZE_M=config["GROUP_SIZE_M"],
+        MUL_ROUTED_WEIGHT=True,
+        top_k=1,
+        compute_type_enum=1,
+        use_fp8_w8a8=True,
+        use_int8_w8a16=False,
+        per_channel_quant=False,
+        even_Ks=moe_intermediate_size % config["BLOCK_SIZE_K"] == 0,
+    )
+
+    intermediate_cache3.reshape_([token_num, top_k, hidden_size])
+    out = intermediate_cache3.sum(axis=1)
+
+    return out
+
+
 class BlockWiseFP8MoEMethod(QuantMethodBase):
     """
     Use Triton Group Gemm to compute Fused BlockWise FP8 Quant MoE.
@@ -1479,9 +1669,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
-        token_num = x.shape[0]
-        if token_num == 0:
-            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
+
         gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -1490,15 +1678,12 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
         N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
 
-        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-            gate_out,
-            layer.gate_correction_bias,
-            layer.top_k,
-            True,  # apply_norm_weight
-            False,
-        )
-        if topk_ids_hookfunc is not None:
-            topk_ids_hookfunc(topk_ids=topk_ids)
+        gate_correction_bias = layer.gate_correction_bias
+        # for triton op input
+        layer_added_weight_attrs_0 = getattr(layer, self.added_weight_attrs[0])
+        layer_added_scale_attrs_0 = getattr(layer, self.added_scale_attrs[0])
+        layer_added_weight_attrs1 = getattr(layer, self.added_weight_attrs[1])
+        layer_added_scale_attrs1 = getattr(layer, self.added_scale_attrs[1])
 
         config = {
             "BLOCK_SIZE_M": 64,
@@ -1508,123 +1693,22 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             "num_warps": 4,
             "num_stages": 3,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
-            topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
+        return python_op_fused_moe_kernel_paddle(
+            x,
+            layer_added_weight_attrs_0,
+            layer_added_scale_attrs_0,
+            layer_added_weight_attrs1,
+            layer_added_scale_attrs1,
+            gate_out,
+            gate_correction_bias,
+            top_k,
+            N1,
+            N2,
+            num_local_experts,
+            moe_intermediate_size,
+            hidden_size,
+            config,
+            self.quant_config,
+            topk_ids_hookfunc,
         )
-        # cache13 = create_empty_tensor(tuple([token_num * top_k * max(N1, N2)]), x.dtype)
-        cache13 = paddle.empty([token_num * top_k * max(N1, N2)], dtype=x.dtype)
-        intermediate_cache1 = cache13[: token_num * top_k * N1].view([token_num * top_k, N1])
-        max_num_tokens_padded = sorted_token_ids.shape[0]
-
-        grid = (
-            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"])
-            * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
-        )
-
-        from .triton_moe_kernels import fused_moe_kernel_paddle
-
-        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, self.quant_config.weight_block_size[0])
-
-        fused_moe_kernel_paddle[grid](
-            x_q,
-            getattr(layer, self.added_weight_attrs[0]),
-            intermediate_cache1,
-            x_scale,
-            getattr(layer, self.added_scale_attrs[0]),
-            None,
-            sorted_token_ids,
-            expert_ids,
-            num_tokens_post_padded,
-            max_num_tokens_padded,
-            token_num * top_k,
-            N=moe_intermediate_size * 2,
-            K=hidden_size,
-            stride_am=x_q.strides[0],
-            stride_ak=x_q.strides[1],
-            stride_be=getattr(layer, self.added_weight_attrs[0]).strides[0],
-            stride_bk=getattr(layer, self.added_weight_attrs[0]).strides[2],
-            stride_bn=getattr(layer, self.added_weight_attrs[0]).strides[1],
-            stride_cm=intermediate_cache1.strides[0],
-            stride_cn=intermediate_cache1.strides[1],
-            #
-            stride_asm=x_scale.strides[0],  # only used in blockwise fp8
-            stride_ask=x_scale.strides[1],  # only used in blockwise fp8
-            stride_bse=getattr(layer, self.added_scale_attrs[0]).strides[0],
-            stride_bsk=getattr(layer, self.added_scale_attrs[0]).strides[2],
-            stride_bsn=getattr(layer, self.added_scale_attrs[0]).strides[1],
-            group_n=self.quant_config.weight_block_size[1],
-            group_k=self.quant_config.weight_block_size[0],
-            # Meta-parameters
-            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
-            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
-            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
-            GROUP_SIZE_M=config["GROUP_SIZE_M"],
-            MUL_ROUTED_WEIGHT=False,
-            top_k=top_k,
-            compute_type_enum=1,
-            use_fp8_w8a8=True,
-            use_int8_w8a16=False,
-            per_channel_quant=False,
-            even_Ks=hidden_size % config["BLOCK_SIZE_K"] == 0,
-        )
-
-        intermediate_cache2 = paddle.incubate.nn.functional.swiglu(intermediate_cache1)
-
-        intermediate_cache3 = cache13[: token_num * top_k * N2].view([token_num * top_k, N2])
-
-        grid = (
-            ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
-        )
-
-        x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
-            intermediate_cache2, self.quant_config.weight_block_size[0]
-        )
-
-        fused_moe_kernel_paddle[grid](
-            x_q,
-            getattr(layer, self.added_weight_attrs[1]),
-            intermediate_cache3,
-            x_scale,
-            getattr(layer, self.added_scale_attrs[1]),
-            topk_weights,
-            sorted_token_ids,
-            expert_ids,
-            num_tokens_post_padded,
-            max_num_tokens_padded,
-            token_num * top_k,
-            N=hidden_size,
-            K=moe_intermediate_size,
-            stride_am=x_q.strides[0],
-            stride_ak=x_q.strides[1],
-            stride_be=getattr(layer, self.added_weight_attrs[1]).strides[0],
-            stride_bk=getattr(layer, self.added_weight_attrs[1]).strides[2],
-            stride_bn=getattr(layer, self.added_weight_attrs[1]).strides[1],
-            stride_cm=intermediate_cache3.strides[0],
-            stride_cn=intermediate_cache3.strides[1],
-            stride_asm=x_scale.strides[0],  # only used in blockwise fp8
-            stride_ask=x_scale.strides[1],  # only used in blockwise fp8
-            stride_bse=getattr(layer, self.added_scale_attrs[1]).strides[0],
-            stride_bsk=getattr(layer, self.added_scale_attrs[1]).strides[2],
-            stride_bsn=getattr(layer, self.added_scale_attrs[1]).strides[1],
-            group_n=self.quant_config.weight_block_size[1],
-            group_k=self.quant_config.weight_block_size[0],
-            # Meta-parameters
-            BLOCK_SIZE_M=config["BLOCK_SIZE_M"],
-            BLOCK_SIZE_N=config["BLOCK_SIZE_N"],
-            BLOCK_SIZE_K=config["BLOCK_SIZE_K"],
-            GROUP_SIZE_M=config["GROUP_SIZE_M"],
-            MUL_ROUTED_WEIGHT=True,
-            top_k=1,
-            compute_type_enum=1,
-            use_fp8_w8a8=True,
-            use_int8_w8a16=False,
-            per_channel_quant=False,
-            even_Ks=moe_intermediate_size % config["BLOCK_SIZE_K"] == 0,
-        )
-
-        intermediate_cache3.reshape_([token_num, top_k, hidden_size])
-        out = intermediate_cache3.sum(axis=1)
-
-        return out
