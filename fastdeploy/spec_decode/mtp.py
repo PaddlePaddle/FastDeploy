@@ -493,6 +493,10 @@ class MTPProposer(Proposer):
             shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
         self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
+        self.model_inputs["recompute_token_num"] = paddle.full(
+            [self.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
+        )
+
         # attn_mask
         if self.enable_mm:
             self.model_inputs["attn_mask_offsets"] = paddle.full(
@@ -562,14 +566,10 @@ class MTPProposer(Proposer):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
-                    # -(self.speculative_config.num_model_steps - 1) :
-                    # 1. draft_model_preprocess will rollback (num_model_steps - 1) in each Step. But In P-D splitewise,
-                    # 2. P only generate one token, so we need to minus it
-                    self.model_inputs["mask_rollback"][idx : idx + 1] = 1 - (
-                        self.speculative_config.num_model_steps - 1
-                    )
+                    self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
@@ -765,6 +765,7 @@ class MTPProposer(Proposer):
             self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
             self.model_inputs["mask_rollback"],
+            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
             self.target_model_inputs["seq_lens_this_time"],

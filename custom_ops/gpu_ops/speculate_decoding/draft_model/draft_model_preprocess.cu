@@ -141,6 +141,7 @@ __global__ void draft_model_preprocess_kernel(
     bool* batch_drop,
     int64_t* pre_ids,
     int* mask_rollback,
+    int* recompute_token_num,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -230,9 +231,13 @@ __global__ void draft_model_preprocess_kernel(
               base_model_step_idx[tid] - base_model_seq_len_this_time;
         } else {
           // 2: Last base model generated token and first MTP token
-          seq_lens_decoder[tid] -= num_model_step - 1;
-          step_idx[tid] -= num_model_step - 1;
-          mask_rollback[tid] += num_model_step - 1;
+          const int recompute_token_num_now = recompute_token_num[tid];
+          seq_lens_decoder[tid] -= recompute_token_num_now;
+          step_idx[tid] -= recompute_token_num_now;
+          mask_rollback[tid] += recompute_token_num_now;
+          // NOTE(liuzichang): Used for PD-split mode and future dynamic
+          // strategies.
+          recompute_token_num[tid] = num_model_step - 1;
         }
         for (int i = 0; i < accept_num_now; i++) {
           draft_tokens_now[i] = accept_tokens_now[i];
@@ -270,6 +275,7 @@ void DispatchRunner(const cudaStream_t& stream,
                     bool* batch_drop,
                     int64_t* pre_ids,
                     int* mask_rollback,
+                    int* recompute_token_num,
                     const int64_t* accept_tokens,
                     const int* accept_num,
                     const int* base_model_seq_lens_this_time,
@@ -340,6 +346,7 @@ void DispatchRunner(const cudaStream_t& stream,
                                               batch_drop,
                                               pre_ids,
                                               mask_rollback,
+                                              recompute_token_num,
                                               accept_tokens,
                                               accept_num,
                                               base_model_seq_lens_this_time,
@@ -375,6 +382,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
                           const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -412,6 +420,7 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                  const_cast<bool*>(batch_drop.data<bool>()),
                  const_cast<int64_t*>(pre_ids.data<int64_t>()),
                  const_cast<int*>(mask_rollback.data<int>()),
+                 const_cast<int*>(recompute_token_num.data<int>()),
                  accept_tokens.data<int64_t>(),
                  accept_num.data<int>(),
                  base_model_seq_lens_this_time.data<int>(),
@@ -451,6 +460,7 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
              "batch_drop",
              "pre_ids",
              "mask_rollback",
+             "recompute_token_num",
              "accept_tokens",
              "accept_num",
              "base_model_seq_lens_this_time",
