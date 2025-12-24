@@ -76,7 +76,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
         def gqa_qkv_split_func(
             weight,
-            tensor_parallel_degree,
+            tensor_model_parallel_size,
             tensor_parallel_rank,
             num_attention_heads,
             num_key_value_heads,
@@ -109,9 +109,9 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
                 else:
                     return np.split(tensor, degree, axis=-1)
 
-            q_list = split_tensor(q, tensor_parallel_degree)
-            k_list = split_tensor(k, tensor_parallel_degree)
-            v_list = split_tensor(v, tensor_parallel_degree)
+            q_list = split_tensor(q, tensor_model_parallel_size)
+            k_list = split_tensor(k, tensor_model_parallel_size)
+            v_list = split_tensor(v, tensor_model_parallel_size)
 
             if tensor_parallel_rank is None:
                 return [np.concatenate([q_i, k_i, v_i], axis=-1) for q_i, k_i, v_i in zip(q_list, k_list, v_list)]
@@ -126,9 +126,9 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
                 )
 
         def gqa_qkv_merge_func(weight_list, num_attention_heads, num_key_value_heads, head_dim):
-            tensor_parallel_degree = len(weight_list)
-            num_attention_heads = num_attention_heads // tensor_parallel_degree
-            num_key_value_heads = num_key_value_heads // tensor_parallel_degree
+            tensor_model_parallel_size = len(weight_list)
+            num_attention_heads = num_attention_heads // tensor_model_parallel_size
+            num_key_value_heads = num_key_value_heads // tensor_model_parallel_size
 
             is_paddle_tensor = not isinstance(weight_list[0], np.ndarray)
 
@@ -170,7 +170,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             if is_split:
                 qkv_fn = partial(
                     gqa_qkv_split_func,
-                    tensor_parallel_degree=config.tensor_model_parallel_size,
+                    tensor_model_parallel_size=config.tensor_model_parallel_size,
                     tensor_parallel_rank=config.tensor_parallel_rank,
                     num_attention_heads=config.num_attention_heads,
                     num_key_value_heads=config.num_key_value_heads,
