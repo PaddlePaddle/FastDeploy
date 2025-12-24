@@ -16,7 +16,9 @@
 
 import paddle
 from paddle import nn
+from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
+from fastdeploy.worker.tbo import let_another_thread_run
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
@@ -143,12 +145,20 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Apply the EP prefill method.
         """
         gate_out = gate(x.cast("float32"))
+        # gate_out = paddle.randn(gate_out.shape, dtype="float32")
+
+        hidden_size = x.shape[1]
+
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0]
         )
+
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
         # 3. EP Dispatch
         (
             recv_x,
@@ -158,11 +168,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128,
+            previous_event=event
         )
+        #del x
+
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
-
+        
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 4. Compute ffn
@@ -192,13 +205,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # use_in_ep
                 token_all_num,
             )
+            #del recv_x
 
-            permute_scale = permute_scale.transpose([1, 0]).contiguous()
-            permute_scale = permute_scale.transpose([1, 0])
+            permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
 
             # up_gate_proj
             ffn_out = paddle.empty(
-                (permute_input.shape[0], getattr(layer, self.added_weight_attrs[0]).shape[1]),
+                (token_all_num, getattr(layer, self.added_weight_attrs[0]).shape[1]),
                 dtype=paddle.bfloat16,
             )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
@@ -207,6 +220,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
+            #del permute_input
+
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
@@ -217,8 +232,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
 
+            #del ffn_out
+
             ffn_out = paddle.empty(
-                (ffn_out.shape[0], getattr(layer, self.added_weight_attrs[1]).shape[1]),
+                (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
             )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
@@ -227,6 +244,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
+            #del ffn_in_x
+            
             # prmt back per rank
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
                 ffn_out,
@@ -237,12 +256,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # norm_topk_prob
                 1.0,
             )[0]
-
+            #del ffn_out
         else:
-            tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
+            tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
         # 5. EP combine
-        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
