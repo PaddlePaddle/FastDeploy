@@ -33,6 +33,7 @@ class TestMTPProposer(unittest.TestCase):
         self.fd_config.model_config.dtype = "bfloat16"
         self.fd_config.model_config.rope_theta = 10000.0
         self.fd_config.model_config.enable_logprob = False
+        self.fd_config.model_config.enable_mm = False
         self.fd_config.model_config.max_model_len = 2048
         self.fd_config.speculative_config = SpeculativeConfig({})
         self.fd_config.speculative_config.method = "mtp"
@@ -630,10 +631,12 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.speculate_get_logits")
     @patch("fastdeploy.spec_decode.mtp.speculate_save_output_topk")
     @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    @patch("fastdeploy.spec_decode.mtp.update_attn_mask_offsets")
     @patch("fastdeploy.spec_decode.mtp.MTPSampler")
     def test_propose_cuda_path(
         self,
         mock_sampler_class,
+        mock_attn_mask_offsets,
         mock_draft_update,
         mock_spec_save,
         mock_spec_get,
@@ -674,6 +677,9 @@ class TestMTPProposer(unittest.TestCase):
         # rebuild_padding -> return a small hidden state tensor
         mock_rebuild.return_value = paddle.zeros([2, 768], dtype="bfloat16")
 
+        # update_attn_mask_offsets -> return dummy offsets
+        mock_attn_mask_offsets.return_value = paddle.zeros([10], dtype="int32")
+
         # sampler: return sampled_token_ids and a sampler_output with no logprobs
         sampler_obj = Mock()
         sampler_output = Mock()
@@ -685,6 +691,9 @@ class TestMTPProposer(unittest.TestCase):
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
+
+        # Initialize KV cache to set up 'caches' key required by _initialize_forward_meta
+        proposer.initialize_kv_cache(main_model_num_blocks=10)
 
         # Ensure the CUDA path loop is taken; make not_need_stop True.
         proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
