@@ -238,7 +238,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
