@@ -44,7 +44,8 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
     async def test_text_only_mode(self):
         """不开启 multimodal 时，直接走 data_processor"""
         processor = ChatResponseProcessor(self.mock_data_processor)
-        request_outputs = [{"outputs": {"text": "hello"}}]
+        request_outputs = [{"request_id": "test_0", "outputs": {"text": "hello", "token_ids": [100]}}]
+        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
 
         results = [
             r
@@ -55,7 +56,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
 
         self.mock_data_processor.process_response_obj.assert_called_once()
         self.assertEqual(results[0]["processed"], True)
-        self.assertEqual(results[0]["raw"]["outputs"]["text"], "hello")
+        self.assertEqual(results[0]["raw"].outputs.text, "hello")
 
     async def test_audio_tts(self):
         """不开启 multimodal，直接走 data_processor"""
