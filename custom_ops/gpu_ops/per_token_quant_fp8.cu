@@ -497,7 +497,7 @@ std::vector<paddle::Tensor> MaskedPerTokenQuant(
 PD_BUILD_STATIC_OP(per_token_quant_padding)
     .Inputs({"input"})
     .Outputs({"output", "output_scale"})
-    .Attrs({"block_size: int", "use_ue8m0: bool", "is_padding: bool"})
+    .Attrs({"block_size: int", "use_ue8m0: bool"})
     .SetKernelFn(PD_KERNEL(PerTokenQuantPadding))
     .SetInferShapeFn(PD_INFER_SHAPE(PerTokenQuantPaddingInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PerTokenQuantPaddingInferDtype));
