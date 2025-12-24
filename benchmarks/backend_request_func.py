@@ -74,6 +74,8 @@ class RequestFuncOutput:
     tpot: float = 0.0  # avg next-token latencies
     prompt_len: int = 0
     prompt_tokens: int = 0  # 推理侧返回输入token数
+    reasoning_tokens: int = 0  # 思考长度
+    res_ttft: int = 0  # 包含思考首token时延
     error: str = ""
     metrics: dict = field(default_factory=dict)
 
@@ -198,11 +200,14 @@ async def async_request_eb_openai_chat_completions(
         request_id = "None"
 
         ttft = 0.0
+        res_ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
         token_timestamps = []
         try:
-            async with session.post(url=api_url, json=payload, headers=headers) as response:
+            async with session.post(
+                url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024
+            ) as response:
                 data = {}
                 if response.status == 200:
                     async for chunk_bytes in response.content:
@@ -242,6 +247,14 @@ async def async_request_eb_openai_chat_completions(
                                 else:
                                     output.itl.append(timestamp - most_recent_timestamp)
 
+                                # response首token
+                                if res_ttft == 0.0:
+                                    if content:
+                                        res_ttft = choices[0].get("arrival_time", timestamp)
+                                        output.res_ttft = res_ttft
+                                        usage = data.get("usage") or {}
+                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+
                                 output.generated_text += content or ""
                                 output.reasoning_content += reason_content or ""
                                 # print(f"####content:{data}")
@@ -260,8 +273,10 @@ async def async_request_eb_openai_chat_completions(
                     # 新增metrics统计，计算首token过滤空包
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
-                    if output.generated_text.strip() == "":
+                    # 兼容思考内容超长截断的情况，此时回复内容为空
+                    if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
                         output.success = False
+                        output.reasoning_tokens = output.output_tokens
                         output.error = "No generated text found!"
                     else:
                         output.success = True
@@ -284,7 +299,7 @@ async def async_request_eb_openai_chat_completions(
         output.request_id = request_id
 
         # 保存失败请求结果
-        if not output.success:
+        if not output.success or output.output_tokens == 0:
             with open("error_output.txt", "a") as f:
                 f.write(str(output) + "\n")
     if pbar:

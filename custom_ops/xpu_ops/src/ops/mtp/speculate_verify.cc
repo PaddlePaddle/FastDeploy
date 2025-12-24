@@ -26,7 +26,8 @@
 
 namespace api = baidu::xpu::api;
 
-void SpeculateVerify(const paddle::Tensor &accept_tokens,
+void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
+                     const paddle::Tensor &accept_tokens,
                      const paddle::Tensor &accept_num,
                      const paddle::Tensor &step_idx,
                      const paddle::Tensor &stop_flags,
@@ -48,16 +49,11 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
                      bool enable_topp,
                      bool benchmark_mode,
                      bool accept_all_drafts) {
-  // TODO(chenhuan09):support accept_all_drafts
   auto bsz = accept_tokens.shape()[0];
   int real_bsz = seq_lens_this_time.shape()[0];
   auto max_draft_tokens = draft_tokens.shape()[1];
   auto end_length = end_tokens.shape()[0];
   auto max_candidate_len = verify_tokens.shape()[1];
-
-  constexpr int BlockSize = 512;
-  // set topp_seed if needed
-  const paddle::optional<paddle::Tensor> &topp_seed = nullptr;
 
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
@@ -69,15 +65,15 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
     xpu_ctx_flag = false;
   }
 
-  // phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
-  // auto dev_ctx =
-  // paddle::experimental::DeviceContextPool::Instance().Get(place); auto
-  // xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
-
   bool use_topk = false;
   char *env_var = getenv("SPECULATE_VERIFY_USE_TOPK");
   if (env_var) {
     use_topk = static_cast<bool>(std::stoi(env_var));
+  }
+  bool use_target_sampling = false;
+  char *env_var_1 = getenv("SPECULATE_VERIFY_USE_TARGET_SAMPLING");
+  if (env_var_1) {
+    use_target_sampling = static_cast<bool>(std::stoi(env_var_1));
   }
   bool prefill_one_step_stop = false;
   if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
@@ -108,10 +104,12 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
 
   auto dev_curand_states =
       !xpu_ctx_flag ? dev_curand_states_cpu.data() : dev_curand_states_xpu;
+  int ret;
   if (use_topk) {
     if (enable_topp) {
-      baidu::xpu::api::plugin::speculate_verify<true, true>(
+      ret = baidu::xpu::api::plugin::speculate_verify<true, true>(
           ctx,
+          sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -137,10 +135,14 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_candidate_len,
           verify_window,
           prefill_one_step_stop,
-          benchmark_mode);
+          benchmark_mode,
+          accept_all_drafts,
+          use_target_sampling);
+      PD_CHECK(ret == 0, "speculate_verify failed.");
     } else {
-      baidu::xpu::api::plugin::speculate_verify<false, true>(
+      ret = baidu::xpu::api::plugin::speculate_verify<false, true>(
           ctx,
+          sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -166,12 +168,16 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_candidate_len,
           verify_window,
           prefill_one_step_stop,
-          benchmark_mode);
+          benchmark_mode,
+          accept_all_drafts,
+          use_target_sampling);
     }
+    PD_CHECK(ret == 0, "speculate_verify failed.");
   } else {
     if (enable_topp) {
-      baidu::xpu::api::plugin::speculate_verify<true, false>(
+      ret = baidu::xpu::api::plugin::speculate_verify<true, false>(
           ctx,
+          sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -197,10 +203,14 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_candidate_len,
           verify_window,
           prefill_one_step_stop,
-          benchmark_mode);
+          benchmark_mode,
+          accept_all_drafts,
+          use_target_sampling);
+      PD_CHECK(ret == 0, "speculate_verify failed.");
     } else {
-      baidu::xpu::api::plugin::speculate_verify<false, false>(
+      ret = baidu::xpu::api::plugin::speculate_verify<false, false>(
           ctx,
+          sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -226,18 +236,25 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_candidate_len,
           verify_window,
           prefill_one_step_stop,
-          benchmark_mode);
+          benchmark_mode,
+          accept_all_drafts,
+          use_target_sampling);
     }
+    PD_CHECK(ret == 0, "speculate_verify failed.");
+  }
+  if (draft_tokens.is_cpu()) {
+    delete ctx;
   }
 }
 
 PD_BUILD_STATIC_OP(speculate_verify)
-    .Inputs({"accept_tokens",
+    .Inputs({"sampled_token_ids",
+             "accept_tokens",
              "accept_num",
              "step_idx",
-             "stop_flags",
              "seq_lens_encoder",
              "seq_lens_decoder",
+             "stop_flags",
              "draft_tokens",
              "seq_lens_this_time",
              "verify_tokens",

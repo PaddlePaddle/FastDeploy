@@ -85,7 +85,7 @@ def parse_args():
         help="engine worker queue port",
     )
     parser.add_argument("--num_cpu_blocks", type=int, default=4, help="cpu cache block number")
-    parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
+    parser.add_argument("--ipc_suffix", type=str, default=None, help="engine pid")
     parser.add_argument(
         "--protocol",
         type=str,
@@ -140,7 +140,7 @@ class CacheTransferManager:
         self.n_ranks = args.mp_num
         self.rank = rank
         self.device = device
-        self.engine_pid = args.engine_pid
+        self.ipc_suffix = args.ipc_suffix
         self.cache_dtype = args.cache_dtype
 
         address = (args.pod_ip, args.cache_queue_port)
@@ -157,7 +157,7 @@ class CacheTransferManager:
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
         swap_space_ready_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
@@ -165,7 +165,7 @@ class CacheTransferManager:
             name="swap_space_ready_signal",
             array=swap_space_ready_data,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
 
@@ -180,7 +180,7 @@ class CacheTransferManager:
             name="cache_task_broadcast_signal",
             array=cache_task_broadcast_data,
             dtype=np.int32,
-            suffix=args.engine_pid,
+            suffix=args.ipc_suffix,
             create=False,
         )
 
@@ -653,7 +653,7 @@ class CacheTransferManager:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=self.engine_pid,
+            suffix=self.ipc_suffix,
             create=False,
         )
         while True:
