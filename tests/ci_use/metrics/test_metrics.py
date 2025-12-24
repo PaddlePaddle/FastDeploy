@@ -84,8 +84,6 @@ def setup_and_run_server():
         "32768",
         "--max-num-seqs",
         "1",
-        "--quantization",
-        "wint8",
         "--gpu-memory-utilization",
         "0.9",
         "--load-strategy",
