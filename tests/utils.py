@@ -29,6 +29,13 @@ from fastdeploy.config import (
 )
 
 
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
+
+
 class FakeModelConfig:
     def __init__(self):
         self.hidden_size = 768
@@ -53,6 +60,7 @@ class FakeModelConfig:
         self.model_format = "auto"
         self.enable_mm = False
         self.max_model_len = 512
+        self.logprobs_mode = "raw_logprobs"
 
 
 def get_default_test_fd_config():
@@ -85,7 +93,7 @@ class OpPerformanceTester:
     def _fake_model_run(self, x):
         for j in range(self.num_layers):
             if self.gate:
-                out = self.op_fn(x, self.gate)
+                out = self.op_fn(x, self.gate, forward_meta=MockForwardMeta())
             else:
                 out = self.op_fn(x)
         return out

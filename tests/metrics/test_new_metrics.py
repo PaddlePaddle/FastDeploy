@@ -59,13 +59,12 @@ class TestCoverageFix(unittest.TestCase):
         self.mock_split_connector = MagicMock()
         self.mock_resource_manager = MagicMock()
 
-        with patch("fastdeploy.output.token_processor.IPCSignal"):
-            self.processor = TokenProcessor(
-                cfg=self.mock_cfg,
-                cached_generated_tokens=self.mock_cached_generated_tokens,
-                engine_worker_queue=self.mock_engine_worker_queue,
-                split_connector=self.mock_split_connector,
-            )
+        self.processor = TokenProcessor(
+            cfg=self.mock_cfg,
+            cached_generated_tokens=self.mock_cached_generated_tokens,
+            engine_worker_queue=self.mock_engine_worker_queue,
+            split_connector=self.mock_split_connector,
+        )
         self.processor.resource_manager = self.mock_resource_manager
 
     # 使用 patch 来模拟 token_processor 模块中引用的 main_process_metrics

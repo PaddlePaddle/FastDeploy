@@ -59,7 +59,6 @@ class Qwen3Attention(nn.Layer):
         self.head_dim = fd_config.model_config.head_dim
 
         self.qkv_proj = QKVParallelLinear(fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
-        nranks = fd_config.parallel_config.tensor_parallel_size
 
         self.o_proj = RowParallelLinear(
             fd_config,
@@ -91,10 +90,10 @@ class Qwen3Attention(nn.Layer):
             begin_norm_axis=2,
         )
 
-        nranks = fd_config.parallel_config.tensor_parallel_size
-        num_kv_heads_replicas = max(1, nranks // fd_config.model_config.num_key_value_heads)
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
-        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // nranks
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+        num_kv_heads_replicas = max(1, tp_size // fd_config.model_config.num_key_value_heads)
+        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // tp_size
+        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // tp_size
 
     def load_state_dict(self, state_dict):
         """ """
@@ -210,7 +209,7 @@ class Qwen3Model(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
@@ -320,7 +319,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings and not is_pooling_model:
-            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight)
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
@@ -385,7 +386,7 @@ class Qwen3PretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
@@ -406,7 +407,7 @@ class Qwen3PretrainedModel(PretrainedModel):
             base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
             base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
             # if we have enough num_key_value_heads to split, then split it.
-            if config.num_key_value_heads % config.tensor_parallel_degree == 0:
+            if config.num_key_value_heads % config.tensor_model_parallel_size == 0:
                 base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
                 base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
 

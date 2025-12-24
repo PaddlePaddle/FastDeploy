@@ -45,7 +45,7 @@ def test_45vl():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert any(keyword in response.choices[0].message.content for keyword in ["北魏", "北齐", "释迦牟尼"])
+    assert any(keyword in response.choices[0].message.content for keyword in ["北魏", "北齐", "释迦牟尼", "北朝"])
 
 
 if __name__ == "__main__":

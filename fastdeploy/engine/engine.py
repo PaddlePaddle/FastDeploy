@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import multiprocessing
 import os
@@ -34,6 +35,7 @@ import numpy as np
 import paddle
 from tqdm import tqdm
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
@@ -84,6 +86,7 @@ class LLMEngine:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        self.cfg.print()
         self.running = True
         self.is_started = False
 
@@ -96,6 +99,8 @@ class LLMEngine:
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
         main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
+
+        tracing.trace_set_thread_info("engine")
 
     def start(self, api_server_pid=None):
         """
@@ -180,6 +185,10 @@ class LLMEngine:
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
+        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
+            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
             self.engine.start_zmq_service(api_server_pid)
@@ -252,13 +261,13 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
-        request.llm_engine_recv_req_timestamp = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
-        request.preprocess_start_time = time.time()
+        request.metrics.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
@@ -320,7 +329,8 @@ class LLMEngine:
                 llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
 
-        request.preprocess_end_time = time.time()
+        request.metrics.preprocess_end_time = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")
@@ -360,7 +370,7 @@ class LLMEngine:
             )
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+        if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
             )
@@ -403,8 +413,10 @@ class LLMEngine:
         llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
-            self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "shm_cache_task_flag_broadcast"):
+                self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "cache_ready_signal"):
+                self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
@@ -447,7 +459,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "OMP_NUM_THREADS": 3,
             "FD_ENABLE_PDL": envs.FD_ENABLE_PDL,
         }
         # environment variables needed by Dy2St
@@ -457,6 +469,7 @@ class LLMEngine:
                 "SOT_UNSAFE_CACHE_FASTPATH": os.getenv("SOT_UNSAFE_CACHE_FASTPATH", default="1"),
                 "SOT_ENABLE_0_SIZE_FALLBACK": os.getenv("SOT_ENABLE_0_SIZE_FALLBACK", default="0"),
                 "SOT_SPECIALIZED_DIM_NUMBERS": os.getenv("SOT_SPECIALIZED_DIM_NUMBERS", default="no"),
+                "SOT_ENABLE_COMPILE_TIME_LIMIT": os.getenv("SOT_ENABLE_COMPILE_TIME_LIMIT", default="0"),
                 "FLAGS_specialize_device_in_dy2st": os.getenv("FLAGS_specialize_device_in_dy2st", default="1"),
                 "FLAGS_enable_async_fast_gc": os.getenv("FLAGS_enable_async_fast_gc", default="0"),
                 "FLAGS_pir_interpreter_record_stream_for_gc_cache": os.getenv(
@@ -476,9 +489,6 @@ class LLMEngine:
             # TODO dynamic load environment variable
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
-
-        if self.cfg.model_config.enable_mm:
-            variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
         for k, v in variables.items():
@@ -516,7 +526,7 @@ class LLMEngine:
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
-        ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
+        ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
             ips = ",".join(self.cfg.ips)
@@ -538,6 +548,7 @@ class LLMEngine:
             f" --splitwise_role {self.cfg.scheduler_config.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --chunked_moe_size {self.cfg.parallel_config.chunked_moe_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
@@ -560,12 +571,15 @@ class LLMEngine:
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
+            f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
+            "enable_chunked_moe": self.cfg.parallel_config.enable_chunked_moe,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
@@ -576,6 +590,8 @@ class LLMEngine:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
+            "enable_entropy": self.cfg.model_config.enable_entropy,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -703,24 +719,24 @@ class LLMEngine:
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
-        disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
+        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
-            self.engine.scheduler.start(role, host_ip, disaggregate)
+            self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
+            result_queues_for_dp_ipc = []
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
+                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
                 request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
+                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
-            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            if self.cfg.parallel_config.data_parallel_size > 1:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
@@ -745,15 +761,17 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
+                    ctx = multiprocessing.get_context("fork")
+                    cfg = copy.deepcopy(self.cfg)
                     self.dp_processed.append(
-                        multiprocessing.Process(
+                        ctx.Process(
                             target=start_data_parallel_service,
                             args=(
-                                self.cfg,
+                                cfg,
                                 i,
                                 None,
                                 request_queues_for_dp_ipc,
-                                result_queue_for_dp_ipc,
+                                result_queues_for_dp_ipc,
                             ),
                         )
                     )
@@ -776,7 +794,7 @@ class LLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

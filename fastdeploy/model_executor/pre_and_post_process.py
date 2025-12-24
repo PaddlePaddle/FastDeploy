@@ -33,6 +33,7 @@ if current_platform.is_iluvatar():
         set_stop_value_multi_ends,
         step_paddle,
         update_inputs,
+        update_inputs_v1,
     )
 elif current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import (
@@ -79,6 +80,7 @@ else:
         speculate_step_paddle,
         speculate_step_system_cache,
         speculate_update,
+        speculate_set_stop_value_multi_seqs,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -91,6 +93,11 @@ else:
         speculate_limit_thinking_content_length_v2,
     )
 
+from fastdeploy.model_executor.entropy_utils import (
+    calculate_logits_entropy,
+    speculate_calculate_logits_entropy,
+)
+from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
@@ -143,7 +150,6 @@ def speculate_limit_thinking_content_length(
     step_idx: paddle.Tensor,
     limit_think_status: paddle.Tensor,
     accept_num: paddle.Tensor,
-    seq_lens_decoder: paddle.Tensor,
     stop_flags: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
     think_end_id: int,
@@ -157,7 +163,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
@@ -171,7 +176,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             think_end_id,
             line_break_id,
@@ -182,7 +186,7 @@ def speculate_limit_thinking_content_length(
 
 def pre_process(
     input_ids: paddle.Tensor,
-    seq_lens_this_time: int,
+    seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
@@ -203,15 +207,13 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num = paddle.sum(seq_lens_this_time)
-
+    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, token_num, seq_lens_this_time
+            input_ids, seq_lens_this_time, token_num_cpu
         )
-
         return (
             ids_remove_padding,
             batch_id_per_token,
@@ -220,7 +222,6 @@ def pre_process(
             None,
             None,
         )
-
     # Remove padding
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
@@ -233,12 +234,7 @@ def pre_process(
             cu_seqlens_q,
             cu_seqlens_k,
         ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
+            input_ids, draft_tokens, cum_offsets_now, seq_lens_this_time, seq_lens_encoder, token_num_cpu
         )
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
@@ -256,6 +252,7 @@ def pre_process(
             max_len,
         )
     else:
+        token_num = paddle.sum(seq_lens_this_time)
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -291,13 +288,14 @@ def _build_stream_transfer_data(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
             if logprobs:
-                logprobs = logprobs.slice_rows(bid, bid + 1)
-                stream_transfer_data.logprobs = logprobs
+                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output is None:
+                continue
             if pooler_output.dtype == paddle.bfloat16:
                 pooler_output = pooler_output.astype("float32")
 
@@ -314,12 +312,14 @@ def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata,
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -349,7 +349,12 @@ def post_process_normal(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
+    if (
+        current_platform.is_cuda()
+        or current_platform.is_iluvatar()
+        or current_platform.is_dcu()
+        or current_platform.is_maca()
+    ):
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
             model_output.stop_flags,
@@ -360,19 +365,7 @@ def post_process_normal(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
-            False,
-        )  # multi ends
-    elif current_platform.is_maca():
-        set_stop_value_multi_ends(
-            sampler_output.sampled_token_ids,
-            model_output.stop_flags,
-            model_output.seq_lens_this_time,
-            model_output.eos_token_id,
-            model_output.next_tokens,
-            model_output.pre_ids,
-            model_output.step_idx,
-            model_output.stop_token_ids,
-            model_output.stop_seqs_len,
+            model_output.min_tokens,
             False,
         )  # multi ends
     else:
@@ -384,6 +377,9 @@ def post_process_normal(
             model_output.next_tokens,
             False,
         )
+
+    if enable_entropy:
+        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
@@ -450,10 +446,12 @@ def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -463,10 +461,24 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
+    speculate_set_stop_value_multi_seqs(
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.pre_ids,
+        model_output.step_idx,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.stop_token_ids,
+        model_output.stop_seqs_len,
+        model_output.eos_token_id,
+        model_output.min_tokens,
+    )
+
+    if enable_entropy:
+        speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     speculate_update(
         model_output.seq_lens_encoder,
@@ -504,8 +516,11 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
+                model_output.seq_lens_decoder,
+                model_output.prompt_lens,
                 3,  # mtype
                 model_output.mp_rank,
+                save_each_rank,
             )
 
     # Update pre_ids through accept tokens
@@ -526,6 +541,7 @@ def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata = None,
     block_size: int = 64,
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
@@ -533,6 +549,7 @@ def post_process(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -552,22 +569,26 @@ def post_process(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 save_each_rank,
                 skip_save_output,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
         else:
             post_process_normal(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 block_size,
                 save_each_rank,
                 skip_save_output,
                 async_output_queue,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
 
 

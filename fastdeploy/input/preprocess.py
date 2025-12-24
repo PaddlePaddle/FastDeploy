@@ -154,5 +154,7 @@ class InputPreprocessor:
                         reasoning_parser_obj=reasoning_parser_obj,
                         enable_processor_cache=self.enable_processor_cache,
                     )
+                else:
+                    raise ValueError(f"Unsupported model processor architecture: {architecture}. ")
 
         return self.processor
