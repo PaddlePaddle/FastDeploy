@@ -1706,6 +1706,7 @@ class EngineService:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "enable_entropy": self.cfg.model_config.enable_entropy,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
