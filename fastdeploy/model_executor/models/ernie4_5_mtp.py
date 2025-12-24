@@ -69,7 +69,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
@@ -170,7 +170,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
             if is_split:
                 qkv_fn = partial(
                     gqa_qkv_split_func,
-                    tensor_parallel_degree=config.tensor_parallel_degree,
+                    tensor_parallel_degree=config.tensor_model_parallel_size,
                     tensor_parallel_rank=config.tensor_parallel_rank,
                     num_attention_heads=config.num_attention_heads,
                     num_key_value_heads=config.num_key_value_heads,

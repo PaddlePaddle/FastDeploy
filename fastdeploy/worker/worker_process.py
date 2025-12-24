@@ -421,8 +421,8 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                    if self.ranks > 1:
-                        self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                if self.ranks > 1:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -458,14 +458,18 @@ class PaddleDisWorkerProc:
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
+                        self.parallel_config.shutdown_comm_group_if_worker_idle,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
-                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                        time.sleep(0.01)
-                    continue
+
+                    # 只有不关闭通信组时，清理权重后需要额外等待（否则信号量会同步混乱）
+                    if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                        while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                            time.sleep(0.01)
+                        continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -811,8 +815,8 @@ def parse_args():
     parser.add_argument(
         "--load_choices",
         type=str,
-        default="default",
-        help="The format of the model weights to load. default/new_loader.",
+        default="default_v1",
+        help="The format of the model weights to load. default/default_v1.",
     )
 
     parser.add_argument(
@@ -883,6 +887,18 @@ def parse_args():
         help="Configation of Rollout Routing Replay.",
     )
 
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
+    )
+
+    parser.add_argument(
+        "--enable_entropy",
+        action="store_true",
+        help="Enable output of token-level entropy.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -942,7 +958,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
-    model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
+    model_config.pretrained_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
     model_config.pretrained_config.is_mtp = False
     model_config.pretrained_config.head_dim = model_config.head_dim
 

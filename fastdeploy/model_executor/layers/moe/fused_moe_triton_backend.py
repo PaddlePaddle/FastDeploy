@@ -1433,6 +1433,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 down_proj_attrs,
             )
         else:
+            # offline quant
             # 1.init shape
             extra_weight_attrs = {**extra_weight_attrs}
             if layer.fd_config.load_config.load_choices == "default_v1":
@@ -1448,17 +1449,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                     down_proj_scale_shape = self.down_proj_scale_shape[:1] + self.down_proj_scale_shape[1:][::-1]
                     up_gate_proj_attrs = {
                         **extra_weight_attrs,
-                        "tensor_track": TensorTracker(
-                            shape=up_gate_proj_weight_shape,
-                            output_dim=False,
-                        ),
                     }
                     down_proj_attrs = {
                         **extra_weight_attrs,
-                        "tensor_track": TensorTracker(
-                            shape=down_proj_weight_shape,
-                            output_dim=False,
-                        ),
                     }
                 else:
                     up_gate_proj_weight_shape = self.up_gate_proj_weight_shape
