@@ -58,7 +58,7 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
+from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -157,6 +157,7 @@ class EngineService:
 
     def start(self, async_llm_pid=None):
         self.running = True
+        console_logger.debug("Start engineService...")
 
         if self.use_async_llm:
             self.start_worker_service(async_llm_pid)
@@ -1352,6 +1353,7 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -1414,7 +1416,10 @@ class EngineService:
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
 
-        if self.cfg.router_config.router is not None:
+        if self.cfg.router_config.router is None:
+            self.llm_logger.info("Router is not enabled, skip registering to router")
+        else:
+            self.llm_logger.info("Start registering to router")
             register_thread = threading.Thread(target=_register, daemon=True)
             register_thread.start()
 
