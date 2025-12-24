@@ -200,6 +200,7 @@ class ModelConfig:
         self.revision = None
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
+        self.enable_entropy = False
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
