@@ -54,6 +54,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.platforms import current_platform
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -524,8 +525,10 @@ class Ernie4_5_VLModel(nn.Layer):
             num_image_patch_id=num_image_patch_id,
         )
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -537,6 +540,10 @@ class Ernie4_5_VLModel(nn.Layer):
         text_image_index_out(vl_moe_meta.token_type_ids, vl_moe_meta.text_index, vl_moe_meta.image_index)
 
         hidden_states = input_embeddings
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
 
         for i in range(self.num_layers):
@@ -548,6 +555,10 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
+
         return out
 
 
@@ -774,8 +785,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         ids_remove_padding: paddle.Tensor,
         image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.ernie.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         if image_token_num > 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
@@ -791,6 +805,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             image_token_num=vl_moe_meta.num_image_patch_id.item(),
+            forward_meta=forward_meta,
         )
 
         if forward_meta.step_use_cudagraph:
@@ -963,7 +978,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
@@ -971,7 +986,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         )
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.vision_config.get("num_heads"),
             num_key_value_heads=config.vision_config.get("num_heads"),

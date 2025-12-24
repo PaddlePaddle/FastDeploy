@@ -23,7 +23,7 @@ from fastdeploy.model_executor.ops.gpu import get_padding_offset
 class TestGetPaddingOffset(unittest.TestCase):
     def test_get_padding_offset(self):
         seq_lens = np.array([4, 3, 6], "int32").reshape(-1, 1)
-        token_num = np.sum(seq_lens)
+        token_num_cpu = np.sum(seq_lens)
         input_ids = np.array(
             [[8, 7, 8, 2, 0, 0, 0, 0, 0, 0], [4, 5, 5, 0, 0, 0, 0, 0, 0, 0], [7, 6, 1, 7, 2, 6, 0, 0, 0, 0]], "int64"
         )
@@ -32,11 +32,7 @@ class TestGetPaddingOffset(unittest.TestCase):
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(
-            paddle.to_tensor(input_ids),
-            paddle.to_tensor(token_num),
-            paddle.to_tensor(seq_lens),
-        )
+        ) = get_padding_offset(paddle.to_tensor(input_ids), paddle.to_tensor(seq_lens), token_num_cpu)
 
         ref_x_remove_padding = np.array([8, 7, 8, 2, 4, 5, 5, 7, 6, 1, 7, 2, 6], "int64")
         ref_batch_id_per_token = np.array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2], "int32")
