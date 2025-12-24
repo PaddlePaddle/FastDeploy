@@ -15,8 +15,9 @@ echo "pip requirements"
 python -m pip install -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
 # python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+#python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 python -m pip install https://paddle-whl.bj.bcebos.com/nightly/cpu/paddlepaddle/paddlepaddle-3.0.0.dev20241219-cp310-cp310-linux_x86_64.whl
-python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/ixuca/paddle-iluvatar-gpu/paddle_iluvatar_gpu-3.0.0.dev20251219-cp310-cp310-linux_x86_64.whl
 mkdir -p /model_data/
 cp -r /aistudio/paddle_ci/ERNIE_300B_4L/ /model_data/
 cp -r /aistudio/paddle_ci/ERNIE-4.5-VL-28B-A3B-Paddle /model_data/
