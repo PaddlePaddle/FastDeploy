@@ -493,6 +493,8 @@ class MTPProposer(Proposer):
             shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
         self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
+        # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
+        # using the target model's hidden states.
         self.model_inputs["recompute_token_num"] = paddle.full(
             [self.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
         )
