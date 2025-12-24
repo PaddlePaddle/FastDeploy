@@ -685,7 +685,7 @@ class TestMTPProposer(unittest.TestCase):
         sampler_output = Mock()
         sampler_output.logprobs_tensors = None
         sampler_output.sampled_token_ids = None
-        sampler_obj.__call__ = Mock(return_value=(paddle.ones([2, 1], dtype="int64"), sampler_output))
+        sampler_obj.return_value = (paddle.ones([2, 1], dtype="int64"), sampler_output)
         mock_sampler_class.return_value = sampler_obj
 
         proposer = MTPProposer(
