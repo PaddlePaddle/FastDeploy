@@ -587,6 +587,16 @@ class CompletionOutput:
             f"draft_top_logprobs={self.draft_top_logprobs}, "
         )
 
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+
 
 @dataclass(slots=True)
 class RequestMetrics:
@@ -874,6 +884,24 @@ class RequestOutput:
             "prompt_token_ids_len": self.prompt_token_ids_len,
             "trace_carrier": self.trace_carrier,
         }
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.outputs, key):
+            return getattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            return getattr(self.metrics, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        if hasattr(self.outputs, key):
+            setattr(self.outputs, key, value)
+        elif hasattr(self.metrics, key):
+            setattr(self.metrics, key, value)
+        else:
+            setattr(self, key, value)
 
 
 @dataclass

@@ -57,7 +57,7 @@ class ChatResponseProcessor:
         return self.enable_mm_output
 
     def accumulate_token_ids(self, request_output):
-        decode_type = getattr(request_output.outputs, "decode_type", 0)
+        decode_type = request_output.outputs.decode_type
 
         if not self._multipart_buffer:
             self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
@@ -65,9 +65,9 @@ class ChatResponseProcessor:
             last_part = self._multipart_buffer[-1]
 
             if last_part["decode_type"] == decode_type:
-                last_token_ids = getattr(last_part["request_output"].outputs, "token_ids")
-                last_token_ids.extend(getattr(request_output.outputs, "token_ids", None))
-                setattr(request_output.outputs, "token_ids", last_token_ids)
+                last_token_ids = last_part["request_output"].outputs.token_ids
+                last_token_ids.extend(request_output.outputs.token_ids)
+                request_output.outputs.token_ids = last_token_ids
                 last_part["request_output"] = request_output
             else:
                 self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
@@ -83,9 +83,9 @@ class ChatResponseProcessor:
         for request_output in request_outputs:
             api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
-                outputs = getattr(request_output, "outputs", None)
-                token_ids = getattr(outputs, "token_ids", None) if outputs is not None else None
-                req_id = getattr(request_output, "request_id", None)
+                outputs = request_output.outputs
+                token_ids = outputs.token_ids if outputs is not None else None
+                req_id = request_output.request_id
                 if outputs is not None and token_ids is not None and req_id is not None:
                     decode_type = getattr(outputs, "decode_type", 0) or 0
                     if decode_type == 0:  # text
@@ -127,9 +127,9 @@ class ChatResponseProcessor:
                         include_stop_str_in_output=include_stop_str_in_output,
                     )
             elif stream:
-                outputs = getattr(request_output, "outputs", None)
-                decode_type = getattr(outputs, "decode_type", 0) if outputs else 0
-                token_ids = getattr(outputs, "token_ids", None)
+                outputs = request_output.outputs
+                decode_type = outputs.decode_type if outputs else 0
+                token_ids = outputs.token_ids if outputs else None
                 if decode_type == 0:  # text
                     if self.eoi_token_id and self.eoi_token_id in token_ids:
                         if self._mm_buffer:
@@ -137,16 +137,16 @@ class ChatResponseProcessor:
                             self._mm_buffer = []
                             image = {"type": "image"}
                             if self.decoder_client:
-                                req_id = getattr(request_output, "request_id", None)
+                                req_id = request_output.request_id
                                 image_ret = await self.decoder_client.decode_image(
                                     request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
                                 if image_ret is not None:
                                     image["url"] = image_ret["http_url"]
                             image_output = self._end_image_code_request_output
-                            setattr(image_output.outputs, "multipart", [image])
-                            setattr(image_output.outputs, "token_ids", all_tokens)
-                            setattr(image_output.outputs, "num_image_tokens", count_tokens(all_tokens))
+                            image_output.outputs.multipart = [image]
+                            image_output.outputs.token_ids = all_tokens
+                            image_output.outputs.num_image_tokens = count_tokens(all_tokens)
                             yield image_output
 
                     if inspect.iscoroutinefunction(self.data_processor.process_response_obj):
@@ -161,8 +161,8 @@ class ChatResponseProcessor:
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                         )
-                    text = {"type": "text", "text": getattr(outputs, "text", None)}
-                    setattr(outputs, "multipart", [text])
+                    text = {"type": "text", "text": outputs.text}
+                    outputs.multipart = [text]
                     yield request_output
 
                 elif decode_type == 1:  # image
@@ -170,7 +170,7 @@ class ChatResponseProcessor:
                     self._end_image_code_request_output = request_output
             else:
                 self.accumulate_token_ids(request_output)
-                token_ids = getattr(request_output.outputs, "token_ids", None)
+                token_ids = request_output.outputs.token_ids if request_output.outputs else None
                 if token_ids[-1] == self.eos_token_id:
                     multipart = []
                     num_image_tokens = 0
@@ -188,13 +188,13 @@ class ChatResponseProcessor:
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                 )
-                            text = {"type": "text", "text": getattr(part["request_output"].outputs, "text", None)}
+                            text = {"type": "text", "text": part["request_output"].outputs.text}
                             multipart.append(text)
                         elif part["decode_type"] == 1:
                             image = {"type": "image"}
                             if self.decoder_client:
-                                req_id = getattr(part["request_output"], "request_id", None)
-                                all_tokens = getattr(part["request_output"].outputs, "token_ids", None)
+                                req_id = part["request_output"].request_id
+                                all_tokens = part["request_output"].outputs.token_ids
                                 num_image_tokens += count_tokens(all_tokens)
 
                                 image_ret = await self.decoder_client.decode_image(
@@ -206,6 +206,6 @@ class ChatResponseProcessor:
                             multipart.append(image)
 
                     lasrt_request_output = self._multipart_buffer[-1]["request_output"]
-                    setattr(lasrt_request_output.outputs, "multipart", multipart)
-                    setattr(lasrt_request_output.outputs, "num_image_tokens", num_image_tokens)
+                    lasrt_request_output.outputs.multipart = multipart
+                    lasrt_request_output.outputs.num_image_tokens = num_image_tokens
                     yield lasrt_request_output

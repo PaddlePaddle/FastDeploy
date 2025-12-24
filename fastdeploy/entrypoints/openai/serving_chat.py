@@ -284,29 +284,23 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = int(getattr(res, "request_id", "").split("_")[-1])
-                    if getattr(res, "error_code", 200) != 200:
-                        raise ValueError("{}".format(getattr(res, "error_msg", "")))
+                    idx = int(res.request_id.split("_")[-1])
+                    if res.error_code != 200:
+                        raise ValueError("{}".format(res.error_msg))
 
-                    if (
-                        inference_start_time[idx] == 0
-                        and getattr(res, "metrics", None)
-                        and getattr(res.metrics, "first_token_time", None)
-                    ):
+                    if inference_start_time[idx] == 0 and res.metrics and res.metrics.first_token_time:
                         arrival_time = res.metrics.first_token_time
                         inference_start_time[idx] = res.metrics.inference_start_time
                     else:
-                        arrival_time = (
-                            getattr(res.metrics, "engine_recv_latest_token_time") - inference_start_time[idx]
-                        )
+                        arrival_time = res.metrics.engine_recv_latest_token_time - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
-                        num_cached_tokens = getattr(res, "num_cached_tokens", 0)
-                        num_input_image_tokens = getattr(res, "num_input_image_tokens", 0)
-                        num_input_video_tokens = getattr(res, "num_input_video_tokens", 0)
+                        num_cached_tokens = res.get("num_cached_tokens", 0)
+                        num_input_image_tokens = res.get("num_input_image_tokens", 0)
+                        num_input_video_tokens = res.get("num_input_video_tokens", 0)
                         for i in range(num_choices):
                             prompt_logprobs_res: Optional[PromptLogprobs] = None
-                            prompt_logprobs_tensors = getattr(res, "prompt_logprobs", None)
+                            prompt_logprobs_tensors = res.get("prompt_logprobs", None)
                             if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                                 num_prompt_logprobs = (
                                     request.prompt_logprobs
@@ -337,8 +331,8 @@ class OpenAIServingChat:
                             else:
                                 choice.delta.content = ""
 
-                            if getattr(res.outputs, "audio_content", None) is not None:
-                                choice.delta.audio_content = getattr(res.outputs, "audio_content")
+                            if res.outputs.get("audio_content", None) is not None:
+                                choice.delta.audio_content = res.outputs.audio_content
 
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
@@ -367,13 +361,13 @@ class OpenAIServingChat:
                         first_iteration = False
 
                     output = res.outputs
-                    output_top_logprobs = getattr(output, "top_logprobs")
-                    output_draft_top_logprobs = getattr(output, "draft_top_logprobs")
-                    previous_num_tokens[idx] += len(getattr(output, "token_ids", []))
+                    output_top_logprobs = output.top_logprobs
+                    output_draft_top_logprobs = output.draft_top_logprobs
+                    previous_num_tokens[idx] += len(output.token_ids)
                     if getattr(output, "num_image_tokens", None):
-                        previous_num_tokens[idx] += getattr(output, "num_image_tokens")
-                        num_image_tokens[idx] += getattr(output, "num_image_tokens")
-                    reasoning_num_tokens[idx] += getattr(output, "reasoning_token_num") or 0
+                        previous_num_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
+                    reasoning_num_tokens[idx] += output.get("reasoning_token_num") or 0
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -395,7 +389,7 @@ class OpenAIServingChat:
                                 request.include_logprobs_decode_token,
                             )
 
-                    output_speculate_metrics = getattr(res.metrics, "speculate_metrics", None)
+                    output_speculate_metrics = res.metrics.speculate_metrics
 
                     delta_message = DeltaMessage(
                         reasoning_content="",
@@ -405,14 +399,14 @@ class OpenAIServingChat:
                     )
 
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = getattr(output, "multipart", None)
+                        delta_message.multimodal_content = output.multipart
                     else:
-                        delta_message.content = getattr(output, "text", "")
+                        delta_message.content = output.text
 
-                    if getattr(output, "audio_content", None) is not None:
-                        delta_message.audio_content = getattr(output, "audio_content")
+                    if output.get("audio_content", None) is not None:
+                        delta_message.audio_content = output.audio_content
 
-                    if not getattr(res, "finished", None) and getattr(output, "enable_parser"):
+                    if not res.finished and output.enable_parser:
                         delta_message_output = output.delta_message
                         if delta_message_output is None:
                             continue
@@ -430,11 +424,11 @@ class OpenAIServingChat:
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if getattr(res, "finished"):
-                        trace_carrier = getattr(res, "trace_carrier", {})
+                    if res.finished:
+                        trace_carrier = res.trace_carrier
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = getattr(res.metrics, "engine_recv_latest_token_time")
+                            start_time = res.metrics.engine_recv_latest_token_time
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -445,9 +439,7 @@ class OpenAIServingChat:
                             if hasattr(res, "trace_carrier"):
                                 delattr(res, "trace_carrier")
                         num_choices -= 1
-                        main_process_metrics.e2e_request_latency.observe(
-                            time.time() - getattr(res.metrics, "request_start_time")
-                        )
+                        main_process_metrics.e2e_request_latency.observe(time.time() - res.metrics.request_start_time)
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
                             if tool_called[idx]:
@@ -455,22 +447,20 @@ class OpenAIServingChat:
                         else:
                             choice.finish_reason = "length"
 
-                        if getattr(res, "error_msg", None) is not None and "Recover" in res.error_msg:
+                        if res.error_msg is not None and "Recover" in res.error_msg:
                             choice.finish_reason = "recover_stop"
 
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
-                        chunk.metrics = getattr(res, "metrics", None)
+                        chunk.metrics = res.metrics
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
-                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(
-                                getattr(output, "token_ids")
-                            )
+                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(output.token_ids)
                         else:
-                            choice.delta.completion_token_ids = list(getattr(output, "token_ids"))
-                        choice.delta.completion_tokens = getattr(output, "completion_tokens")
+                            choice.delta.completion_token_ids = list(output.token_ids)
+                        choice.delta.completion_tokens = output.get("completion_tokens")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -484,10 +474,10 @@ class OpenAIServingChat:
                         )
                     choices.append(choice)
 
-                    if len(choices) == max_streaming_response_tokens or getattr(res, "finished", None):
+                    if len(choices) == max_streaming_response_tokens or res.finished:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        if getattr(res, "finished", None):
+                        if res.finished:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
@@ -598,16 +588,16 @@ class OpenAIServingChat:
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
                 async for data in generator:
-                    if getattr(data, "error_code", 200) != 200:
-                        raise ValueError("{}".format(getattr(data, "error_msg", "")))
-                    idx = int(getattr(data, "request_id", "").split("_")[-1])
+                    if data.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(data.error_msg))
+                    idx = int(data.request_id.split("_")[-1])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
-                    previous_num_tokens[idx] += len(getattr(data.outputs, "token_ids", []))
-                    completion_token_ids[idx].extend(getattr(data.outputs, "token_ids", []))
+                    previous_num_tokens[idx] += len(data.outputs.token_ids)
+                    completion_token_ids[idx].extend(data.outputs.token_ids)
                     # The logprob for handling the response
                     output = data.outputs
-                    output_top_logprobs = getattr(output, "top_logprobs")
-                    output_draft_top_logprobs = getattr(output, "draft_top_logprobs")
+                    output_top_logprobs = output.top_logprobs
+                    output_draft_top_logprobs = output.draft_top_logprobs
                     if output_top_logprobs is not None:
                         num_top_logprobs = (
                             request.top_logprobs if request.top_logprobs != -1 else self.engine_client.ori_vocab_size
@@ -632,7 +622,7 @@ class OpenAIServingChat:
                             )
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
                                 draft_logprob_contents[idx].extend(draft_logprobs_res.content)
-                    prompt_logprobs_tensors = getattr(data, "prompt_logprobs", None)
+                    prompt_logprobs_tensors = data.get("prompt_logprobs", None)
                     if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                         num_prompt_logprobs = (
                             request.prompt_logprobs
@@ -645,11 +635,11 @@ class OpenAIServingChat:
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
                     speculate_metrics[idx] = getattr(data.metrics, "speculate_metrics", None)
-                    if getattr(data, "finished", None):
-                        trace_carrier = getattr(data, "trace_carrier", {})
+                    if data.finished:
+                        trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = getattr(data.metrics, "engine_recv_latest_token_time")
+                            start_time = data.metrics.engine_recv_latest_token_time
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -660,10 +650,10 @@ class OpenAIServingChat:
                             if hasattr(data, "trace_carrier"):
                                 delattr(data, "trace_carrier")
                         num_choices -= 1
-                        reasoning_num_tokens[idx] = getattr(data.outputs, "reasoning_token_num") or 0
-                        if getattr(data.outputs, "image_token_num", None):
-                            previous_num_tokens[idx] += getattr(data.outputs, "image_token_num", 0)
-                            num_image_tokens[idx] = getattr(data.outputs, "image_token_num", None) or 0
+                        reasoning_num_tokens[idx] = data.outputs.get("reasoning_token_num") or 0
+                        if data.outputs.get("image_token_num", None):
+                            previous_num_tokens[idx] += data.outputs.get("image_token_num", 0)
+                            num_image_tokens[idx] = data.outputs.get("image_token_num", None) or 0
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
@@ -737,33 +727,27 @@ class OpenAIServingChat:
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
-        idx = int(getattr(data, "request_id", "").split("_")[-1])
+        idx = int(data.request_id.split("_")[-1])
         output = data.outputs
 
-        if (
-            data is not None
-            and getattr(data, "metrics", None)
-            and getattr(getattr(data, "metrics"), "request_start_time", None)
-        ):
-            main_process_metrics.e2e_request_latency.observe(
-                time.time() - getattr(getattr(data, "metrics"), "request_start_time")
-            )
+        if data is not None and data.metrics and data.metrics.request_start_time:
+            main_process_metrics.e2e_request_latency.observe(time.time() - data.metrics.request_start_time)
         message = ChatMessage(
             role="assistant",
-            reasoning_content=getattr(output, "reasoning_content"),
-            tool_calls=getattr(output, "tool_calls"),
+            reasoning_content=output.get("reasoning_content"),
+            tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
-            completion_tokens=getattr(output, "completion_tokens") if request.return_token_ids else None,
+            completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
         )
         if response_processor.enable_multimodal_content():
-            message.multimodal_content = getattr(output, "multipart")
+            message.multimodal_content = output.get("multipart")
         else:
-            message.content = getattr(output, "text")
+            message.content = output.text
 
-        if getattr(output, "audio_content", None) is not None:
-            message.audio_content = getattr(output, "audio_content")
+        if output.get("audio_content", None) is not None:
+            message.audio_content = output.audio_content
 
         logprobs_full_res = None
         draft_logprobs_full_res = None
@@ -775,19 +759,19 @@ class OpenAIServingChat:
         if prompt_logprobs_res_list[idx]:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
 
-        num_cached_tokens[idx] = getattr(data, "num_cached_tokens", 0)
-        num_input_image_tokens[idx] = getattr(data, "num_input_image_tokens", 0)
-        num_input_video_tokens[idx] = getattr(data, "num_input_video_tokens", 0)
-        num_image_tokens[idx] = getattr(output, "num_image_tokens", 0) or 0
+        num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
+        num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
+        num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
+        num_image_tokens[idx] = output.get("num_image_tokens", 0) or 0
 
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if getattr(output, "tool_calls", None):
+            if output.get("tool_calls", None):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if getattr(data, "error_msg", None) is not None and "Recover" in data.error_msg:
+        if data.get("error_msg", None) is not None and "Recover" in data.error_msg:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
