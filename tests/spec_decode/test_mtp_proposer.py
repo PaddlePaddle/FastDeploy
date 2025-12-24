@@ -345,6 +345,8 @@ class TestMTPProposer(unittest.TestCase):
         )
         proposer.initialize_kv_cache(main_model_num_blocks=10)
         proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        # Ensure caches key exists to satisfy ForwardMeta initialization
+        proposer.model_inputs["caches"] = []
 
         # Test _initialize_forward_meta
         proposer._initialize_forward_meta(step_use_cudagraph=False)
