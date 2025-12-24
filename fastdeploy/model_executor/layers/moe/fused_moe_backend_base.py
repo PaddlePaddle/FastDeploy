@@ -141,6 +141,10 @@ class MoEMethodBase(QuantMethodBase):
         """
         check layer is valid for this method
         """
+        print("up_gate_proj_weights[0]", up_gate_proj_weights[0].shape)
+        print("layer.hidden_size", layer.hidden_size)
+        print("self.pack_num", self.pack_num)
+        print("layer.moe_intermediate_size *2", layer.moe_intermediate_size * 2)
         assert up_gate_proj_weights[0].shape == [
             layer.hidden_size // self.pack_num,
             layer.moe_intermediate_size * 2,
