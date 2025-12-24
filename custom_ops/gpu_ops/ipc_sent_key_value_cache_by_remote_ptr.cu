@@ -206,17 +206,17 @@ void sent_key_value_by_remote_ptr(
 #endif
   }
 }
-void SentKeyValueByRemotePtr(
-    const paddle::Tensor& local_key_tensor,
-    const paddle::Tensor& local_value_tensor,
-    const paddle::Tensor& local_block_ids,   // cpu
-    const paddle::Tensor& remote_block_ids,  // cpu
-    const paddle::Tensor& remote_key_tensor,
-    const paddle::Tensor& remote_value_tensor,
-    const int& block_num,
-    const int& local_device_id,
-    const int& remote_device_id,
-    const int64_t& cuda_stream_raw const bool& is_scale) {
+void SentKeyValueByRemotePtr(const paddle::Tensor& local_key_tensor,
+                             const paddle::Tensor& local_value_tensor,
+                             const paddle::Tensor& local_block_ids,   // cpu
+                             const paddle::Tensor& remote_block_ids,  // cpu
+                             const paddle::Tensor& remote_key_tensor,
+                             const paddle::Tensor& remote_value_tensor,
+                             const int& block_num,
+                             const int& local_device_id,
+                             const int& remote_device_id,
+                             const int64_t& cuda_stream_raw,
+                             const bool& is_scale) {
   std::vector<int64_t> cache_key_tensor_shape = local_key_tensor.shape();
   getNvidiaGPUMemoryUsage(__LINE__);
   // auto cuda_stream = local_key_tensor.stream();

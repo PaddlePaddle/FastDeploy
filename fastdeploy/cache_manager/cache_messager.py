@@ -481,7 +481,9 @@ class CacheMessagerV1:
         self.block_size = block_size
         transfer_protocol = transfer_protocol.split(",")
 
-        logger.info(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
+        logger.info(
+            f"splitwise role: {splitwise_role}, transfer_protocol: {transfer_protocol}, rank: {rank}, cache_dtype: {cache_dtype}"
+        )
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
         self.num_layers = num_layers
@@ -924,13 +926,13 @@ def main():
             f"key_caches_{i}_rank{rank}.device{device}",
         )
         if args.cache_dtype == "block_wise_fp8":
-            gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}.device{device}"] = paddle.full(
+            gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
                 shape=[num_gpu_blocks, key_cache_shape[1], key_cache_shape[2]],
                 fill_value=0,
                 dtype=paddle.get_default_dtype(),
             )
             set_data_ipc(
-                gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}.device{device}"],
+                gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"],
                 f"key_cache_scales_{i}_rank{rank}.device{device}",
             )
         if value_cache_shape_list:
@@ -946,13 +948,13 @@ def main():
                 f"value_caches_{i}_rank{rank}.device{device}",
             )
             if args.cache_dtype == "block_wise_fp8":
-                gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}.device{device}"] = paddle.full(
+                gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
                     shape=[num_gpu_blocks, value_cache_shape[1], value_cache_shape[2]],
                     fill_value=0,
                     dtype=paddle.get_default_dtype(),
                 )
                 set_data_ipc(
-                    gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}.device{device}"],
+                    gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"],
                     f"value_cache_scales_{i}_rank{rank}.device{device}",
                 )
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])

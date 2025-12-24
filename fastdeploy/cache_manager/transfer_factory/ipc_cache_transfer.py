@@ -56,8 +56,8 @@ class IPCConnector:
             self.remote_key_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_unique_name))
             self.remote_value_tensor_ptr_list.append(get_data_ptr_ipc(tmp, value_unique_name))
             if self.cache_dtype == "block_wise_fp8":
-                key_scale_name = f"key_cache_scales_{layer_id}_rank{self.rank_id}_device{self.remote_gpu_id}"
-                val_scale_name = f"value_cache_scales_{layer_id}_rank{self.rank_id}_device{self.remote_gpu_id}"
+                key_scale_name = f"key_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+                val_scale_name = f"value_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
                 self.remote_key_scale_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_scale_name))
                 self.remote_value_scale_tensor_ptr_list.append(get_data_ptr_ipc(tmp, val_scale_name))
         self.write_stream = paddle.device.Stream(f"gpu:{self.local_gpu_id}")
@@ -135,6 +135,7 @@ class IPCCommManager:
                 False,
             )
             if self.cache_dtype == "block_wise_fp8":
+                logger.info(f"IPC write cache scales for layer: {layer_idx}")
                 ipc_sent_key_value_cache_by_remote_ptr(
                     self.local_key_cache_scale_list[layer_idx],
                     self.local_value_cache_scale_list[layer_idx],
