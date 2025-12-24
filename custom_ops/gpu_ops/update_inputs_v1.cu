@@ -50,6 +50,11 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
   }
   if (thread_idx < bsz) {
     if (stop_flag_now) {
+      // chuned when max_tokens=1
+      if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] <
+          prompt_lens[thread_idx]) {
+        topk_ids[thread_idx] = -1;
+      }
       seq_lens_this_time[thread_idx] = 0;  // stop at next step
       seq_lens_decoder[thread_idx] = 0;
       seq_lens_encoder[thread_idx] = 0;
