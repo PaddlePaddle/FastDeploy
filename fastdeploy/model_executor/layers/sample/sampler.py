@@ -546,6 +546,7 @@ class Sampler(nn.Layer):
             # token per request.
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
+            logits=logits,
         )
 
         return sampler_output
@@ -845,6 +846,7 @@ class SpeculativeSampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+            logits=logits,
         )
 
         return sampler_output

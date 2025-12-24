@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-from functools import partial
 from typing import Optional
 
 import numpy as np
@@ -543,7 +542,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             [
                 DFNRopeVisionBlock(
                     config.vision_config,
-                    config.pretrained_config.tensor_parallel_degree,
+                    config.pretrained_config.tensor_model_parallel_size,
                     config.pretrained_config.tensor_parallel_rank,
                     model_format=model_format,
                 )
@@ -663,63 +662,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             paddle.Tensor: _description_
         """
         return self.forward(hidden_states, grid_thw)
-
-    @classmethod
-    def _get_tensor_parallel_mappings(cls, config, is_split=True):
-        """
-        dummy
-        """
-
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
-
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-        )
-        vision_config = config.vision_config
-
-        def split_qkv_weight(x):
-            head_dim = vision_config.hidden_size // vision_config.num_heads
-            x = x.reshape(
-                [
-                    vision_config.hidden_size,
-                    3,
-                    vision_config.num_heads,
-                    head_dim,
-                ]
-            )
-            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
-            x = x.reshape([vision_config.hidden_size, -1])
-            return x
-
-        def split_qkv_bias(x):
-            head_dim = vision_config.hidden_size // vision_config.num_heads
-            x = x.reshape([3, vision_config.num_heads, head_dim])
-            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
-            x = x.reshape([-1])
-            return x
-
-        def get_tensor_parallel_split_mappings(depth):
-            final_actions = {}
-            base_actions = {
-                "vision_model.blocks.0.attn.proj.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.fc1.weight": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc1.bias": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc2.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.qkv.weight": split_qkv_weight,
-                "vision_model.blocks.0.qkv.bias": split_qkv_bias,
-            }
-
-            for key, action in base_actions.items():
-                if "blocks.0." in key:
-                    for i in range(depth):
-                        newkey = key.replace("blocks.0.", f"blocks.{i}.")
-                        final_actions[newkey] = action
-            return final_actions
-
-        mappings = get_tensor_parallel_split_mappings(vision_config.depth)
-        return mappings
 
     def load_state_dict(self, state_dict):
         params_dict = dict(self.named_parameters())
