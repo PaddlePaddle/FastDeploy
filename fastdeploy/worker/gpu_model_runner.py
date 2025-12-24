@@ -235,6 +235,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.async_output_copy_thread.start()
 
+        self.enable_entropy = self.model_config.enable_entropy
+
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
@@ -643,6 +645,7 @@ class GPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             # assert isinstance(request, Request)
             idx = request.idx
+            self.share_inputs["req_ids"][idx] = str(request.request_id)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -1309,6 +1312,9 @@ class GPUModelRunner(ModelRunnerBase):
             -1,
             dtype="int64",
         )
+        self.share_inputs["req_ids"] = [""] * max_num_seqs
+        self.share_inputs["entropy_list"] = [[] for _ in range(max_num_seqs)]
+
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
@@ -1830,6 +1836,7 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=pooler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
@@ -1932,12 +1939,14 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
+            enable_entropy=self.enable_entropy,
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -2135,25 +2144,21 @@ class GPUModelRunner(ModelRunnerBase):
                     )
             elif self.speculative_decoding and self.speculative_method == "mtp":
                 # Capture Target Model without bsz 1
-                for batch_size in sorted(capture_sizes, reverse=True):
-                    if batch_size == 1:
-                        logger.info("Skip token_num = 1, when capture target model for mtp")
-                    else:
-                        assert batch_size % 2 == 0
-                        self._dummy_run(
-                            num_tokens=(
-                                self.scheduler_config.max_num_seqs
-                                * (self.speculative_config.num_speculative_tokens + 1)
-                                if self.scheduler_config.splitwise_role == "decode"
-                                else self.scheduler_config.max_num_batched_tokens
-                            ),
-                            batch_size=int(batch_size / 2),
-                            in_capturing=True,
-                            expected_decode_len=1,
-                        )
-                        logger.info(
-                            f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}"
-                        )
+                for capture_size in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=(
+                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
+                            if self.scheduler_config.splitwise_role == "decode"
+                            else self.scheduler_config.max_num_batched_tokens
+                        ),
+                        batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
+                        in_capturing=True,
+                        expected_decode_len=self.speculative_config.num_speculative_tokens,
+                        accept_all_drafts=True,
+                    )
+                    logger.info(
+                        f"Warm up the Target model with the num_tokens:{capture_size}, expected_decode_len:{self.speculative_config.num_speculative_tokens}"
+                    )
                 if self.graph_opt_config.draft_model_use_cudagraph:
                     # Capture Draft Model without bsz 1
                     # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
@@ -2402,11 +2407,13 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=pooler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
+                enable_entropy=self.enable_entropy,
             )
 
             return None
@@ -2528,6 +2535,7 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
@@ -2535,6 +2543,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
+                enable_entropy=self.enable_entropy,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
@@ -2770,7 +2779,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
         # Clear parameters and Send single
-        self.dynamic_weight_manager.clear_parameters(pid)
+        self.dynamic_weight_manager.clear_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
@@ -2787,7 +2798,9 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(pid)
+        self.dynamic_weight_manager.update_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:

@@ -40,6 +40,7 @@ class MixQuantConfig(QuantConfigBase):
         is_quantized: bool = False,
         hadamard_block_size: int = 128,
         moe_dynamic_quant: bool = False,
+        is_moe_quantized: bool = False,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -59,6 +60,7 @@ class MixQuantConfig(QuantConfigBase):
         self.is_quantized = is_quantized
         self.hadamard_block_size = hadamard_block_size
         self.moe_dynamic_quant = moe_dynamic_quant
+        self.is_moe_quantized = is_moe_quantized
 
     def name(self) -> str:
         return "mix_quant"
@@ -76,6 +78,7 @@ class MixQuantConfig(QuantConfigBase):
             config.get("is_quantized", False),
             config.get("hadamard_block_size", 128),
             config.get("moe_dynamic_quant", False),
+            config.get("is_moe_quantized", False),
         )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
@@ -102,7 +105,7 @@ class MixQuantConfig(QuantConfigBase):
                         .from_config(
                             {
                                 "is_permuted": self.is_permuted,
-                                "is_quantized": not self.is_checkpoint_bf16,
+                                "is_quantized": not self.is_checkpoint_bf16 or self.is_moe_quantized,
                                 "hadamard_block_size": self.hadamard_block_size,
                             }
                         )

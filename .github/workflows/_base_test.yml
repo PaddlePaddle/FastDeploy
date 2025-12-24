@@ -39,29 +39,54 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
         run: |
-            set -x
-            REPO="https://github.com/${{ github.repository }}.git"
-            FULL_REPO="${{ github.repository }}"
-            REPO_NAME="${FULL_REPO##*/}"
-            BASE_BRANCH="${{ github.base_ref }}"
-            docker pull ${docker_image}
-            # Clean the repository directory before starting
-            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-            -e "REPO_NAME=${REPO_NAME}" \
-            ${docker_image} /bin/bash -c '
-              if [ -d ${REPO_NAME} ]; then
-                echo "Directory ${REPO_NAME} exists, removing it..."
-                rm -rf ${REPO_NAME}*
-              fi
-            '
+          set -x
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          docker pull ${docker_image}
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}*
+            fi
+          '
 
-            wget -q --no-proxy ${fd_archive_url}
-            tar -xf FastDeploy.tar.gz
-            rm -rf FastDeploy.tar.gz
-            cd FastDeploy
-            git config --global user.name "FastDeployCI"
-            git config --global user.email "fastdeploy_ci@example.com"
-            git log -n 3 --oneline
+          # Download with retry and validation
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if wget -q --no-proxy ${fd_archive_url} && [ -f FastDeploy.tar.gz ] && [ -s FastDeploy.tar.gz ]; then
+              echo "Download successful, file size: $(stat -c%s FastDeploy.tar.gz) bytes"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "Download failed or file is empty, retry $RETRY_COUNT/$MAX_RETRIES..."
+              rm -f FastDeploy.tar.gz
+              sleep 2
+            fi
+          done
+
+          if [ ! -f FastDeploy.tar.gz ] || [ ! -s FastDeploy.tar.gz ]; then
+            echo "ERROR: Failed to download FastDeploy.tar.gz after $MAX_RETRIES attempts"
+            exit 1
+          fi
+
+          # Verify tar.gz integrity before extraction
+          if ! tar -tzf FastDeploy.tar.gz > /dev/null 2>&1; then
+            echo "ERROR: FastDeploy.tar.gz is corrupted or incomplete"
+            exit 1
+          fi
+
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
 
       - name: Run FastDeploy Base Tests
         shell: bash
@@ -208,14 +233,28 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot.yaml\", \"--enable-logprob\": \"False\"}"
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot_wint4.yaml\", \"--enable-logprob\": \"False\"}"
           check_service 360
           export TEMPLATE=TOKEN_NORMAL
           python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn.yaml\", \"--enable-logprob\": \"False\"}"
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn_wint4.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 360
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot_fp8.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 360
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn_fp8.yaml\", \"--enable-logprob\": \"False\"}"
           check_service 360
           export TEMPLATE=TOKEN_NORMAL
           python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1

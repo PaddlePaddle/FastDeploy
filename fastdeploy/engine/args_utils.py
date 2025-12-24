@@ -268,6 +268,11 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
+    """
+
     engine_worker_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for worker queue communication.
@@ -504,6 +509,11 @@ class EngineArgs:
     Whether to skip port availability check. Default is False (not skip).
     """
 
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -540,6 +550,7 @@ class EngineArgs:
             or current_platform.is_xpu()
             or current_platform.is_maca()
             or current_platform.is_iluvatar()
+            or current_platform.is_intel_hpu()
         ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
@@ -848,6 +859,12 @@ class EngineArgs:
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -949,6 +966,12 @@ class EngineArgs:
             type=int,
             default=EngineArgs.chunked_moe_size,
             help="Chunked size of moe input.",
+        )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
         )
 
         # Load group

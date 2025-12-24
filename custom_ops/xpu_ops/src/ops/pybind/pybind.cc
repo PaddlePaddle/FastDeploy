@@ -248,7 +248,8 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
@@ -1013,6 +1014,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",
         &SpeculateVerify,
+        py::arg("sampled_token_ids"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("step_idx"),
