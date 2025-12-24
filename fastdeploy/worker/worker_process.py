@@ -129,7 +129,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
-        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
