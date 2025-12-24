@@ -696,11 +696,10 @@ class ResourceManagerV1(ResourceManager):
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threashold = (
-                            (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
-                            // self.config.cache_config.block_size
-                            + self.config.cache_config.enc_dec_block_num
-                            + len(self.running) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
-                        )
+                            request.need_prefill_tokens + self.config.cache_config.block_size - 1
+                        ) // self.config.cache_config.block_size + len(
+                            self.running
+                        ) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threashold):
                             if not request.get("skip_allocate", False):
@@ -746,11 +745,10 @@ class ResourceManagerV1(ResourceManager):
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threashold = (
-                            (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
-                            // self.config.cache_config.block_size
-                            + self.config.cache_config.enc_dec_block_num
-                            + len(self.running) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
-                        )
+                            request.need_prefill_tokens + self.config.cache_config.block_size - 1
+                        ) // self.config.cache_config.block_size + len(
+                            self.running
+                        ) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threashold):
                             if not request.get("skip_allocate", False):
