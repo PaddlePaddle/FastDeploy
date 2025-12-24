@@ -553,6 +553,7 @@ class XPUMoEMethod(MoEMethodBase):
             recv_x_scale,
             token_nums_per_expert,
             handle,
+            valid_token_num,
         ) = self.ep_decoder_runner.dispatch(
             x,
             topk_idx,
@@ -567,6 +568,7 @@ class XPUMoEMethod(MoEMethodBase):
             recv_x,
             recv_x_scale,
             token_nums_per_expert,
+            valid_token_num,
         )
         print("===========after compute ffn")
         # 4. EP combine

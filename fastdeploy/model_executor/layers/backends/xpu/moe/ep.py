@@ -199,6 +199,11 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
         try:
+            # 将 topk_idx 转换为 int64 类型
+            if topk_idx.dtype != paddle.int64:
+                print(f"[DeepEP] Converting topk_idx from {topk_idx.dtype} to int64")
+                topk_idx = topk_idx.astype(paddle.int64)
+
             # 调试信息输入
             print("[DeepEP] Starting low_latency_dispatch...")
             print(f"[DeepEP] hidden_states: shape={hidden_states.shape}, dtype={hidden_states.dtype}")
@@ -220,8 +225,8 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
                 packed_recv_x,
                 recv_expert_count,
                 handle,
+                _,
                 dispatch_hook,
-                valid_token_num,
             ) = self.deepep_engine.low_latency_dispatch(
                 hidden_states,
                 topk_idx,
@@ -233,17 +238,17 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
                 return_recv_hook=True,
                 num_per_channel=quant_group_size,
             )
+
             print("==========after engine low_latency_dispatch")
 
             print("[DeepEP] low_latency_dispatch completed successfully")
             print(f"[DeepEP] packed_recv_x: shape={packed_recv_x.shape}, dtype={packed_recv_x.dtype}")
             print(f"[DeepEP] recv_expert_count: shape={recv_expert_count.shape}, dtype={recv_expert_count.dtype}")
-            print(f"[DeepEP] recv_expert_count values: {recv_expert_count.numpy()}")
+            # print(f"[DeepEP] recv_expert_count values: {recv_expert_count.numpy()}")
             print(f"[DeepEP] dispatch_hook type: {type(dispatch_hook)}")
-            print(f"[DeepEP] valid_token_num: {valid_token_num}")
             print(f"[DeepEP] handle type: {type(handle)}")
 
-            return packed_recv_x, recv_expert_count, handle, dispatch_hook, valid_token_num
+            return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
         except Exception as e:
             print("[DeepEP] ERROR in low_latency_dispatch!")
@@ -271,7 +276,16 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
-        combined_hidden_states, combine_hook = self.deepep_engine.low_latency_combine(
+        print("============enter low_latency_combine")
+        if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":
+            # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
+            # and when the default recommended version of PaddlePaddle is greater than 3.1.0
+            src_info, layout_range, num_max_dispatch_tokens_per_rank, num_experts = handle
+            handle = (src_info, layout_range, num_max_dispatch_tokens_per_rank, None, num_experts)
+
+        if self.deepep_engine is None:
+            raise RuntimeError("DeepEP buffer not initialized!")
+        combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
@@ -279,6 +293,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             async_finish=False,
             return_recv_hook=True,
         )
+        print("============after low_latency_combine")
         return combined_hidden_states, combine_hook
 
     def clean_low_latency_buffer(self):
@@ -543,7 +558,6 @@ class XPUEPDecoderRunner(XPUEPRunner):
             recv_expert_count,
             handle,
             dispatch_hook,
-            valid_token_num,
         ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8, quant_group_size)
         # valid_token_num is optional:
         # - if valid_token_num is None, it means that we CANNOT accurately know
@@ -552,6 +566,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # - if valid_token_num is NOT None, it means that we CAN accurately know
         #   the size of the tensor, but the disadvantage is that it will interrupt
         #   the process of kernel launch.
+        valid_token_num = paddle.sum(recv_expert_count)
         if valid_token_num is None and dispatch_hook is not None:
             dispatch_hook()
 
