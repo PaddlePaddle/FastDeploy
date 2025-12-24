@@ -17,7 +17,6 @@
 from typing import Optional
 
 import paddle
-from paddle.static import MetaTensor, register_op
 
 import fastdeploy
 from fastdeploy import envs
@@ -32,6 +31,7 @@ from fastdeploy.model_executor.utils import (
     process_weight_transpose,
     set_weight_attrs,
 )
+from fastdeploy.utils import register_custom_python_op
 
 from ..utils import get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -83,17 +83,17 @@ class BlockWiseFP8Config(QuantConfigBase):
 
 
 def deep_gemm_fp8_fp8_bf16_nt_infer_meta(
-    x_meta: MetaTensor,
-    x_scale_tensor_meta: MetaTensor,
-    layer_weight_meta: MetaTensor,
-    layer_weight_scale_inv_meta: MetaTensor,
-    linear_out_meta: MetaTensor,
+    x_meta: paddle.static.MetaTensor,
+    x_scale_tensor_meta: paddle.static.MetaTensor,
+    layer_weight_meta: paddle.static.MetaTensor,
+    layer_weight_scale_inv_meta: paddle.static.MetaTensor,
+    linear_out_meta: paddle.static.MetaTensor,
     layer_output_size: int,
 ):
-    return MetaTensor(shape=[x_meta.shape[0], layer_output_size], dtype=paddle.bfloat16)
+    return paddle.static.MetaTensor(shape=[x_meta.shape[0], layer_output_size], dtype=paddle.bfloat16)
 
 
-@register_op(
+@register_custom_python_op(
     name="deep_gemm_fp8_fp8_bf16_nt",
     infer_meta=deep_gemm_fp8_fp8_bf16_nt_infer_meta,
     input_names=["x", "x_scale_tensor", "layer_weight", "layer_weight_scale_inv", "linear_out_empty"],

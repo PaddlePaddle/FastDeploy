@@ -18,7 +18,6 @@ from typing import Callable
 
 import paddle
 from paddle import nn
-from paddle.static import MetaTensor, register_op
 
 import fastdeploy
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -29,7 +28,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
-from fastdeploy.utils import ceil_div
+from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
 
@@ -1161,10 +1160,10 @@ def python_op_fused_moe_kernel_paddle_infer_meta(
     topk_ids_hookfunc,
 ):
     token_num = x.shape[0]
-    return MetaTensor(shape=[token_num, hidden_size], dtype=x.dtype)
+    return paddle.static.MetaTensor(shape=[token_num, hidden_size], dtype=x.dtype)
 
 
-@register_op(
+@register_custom_python_op(
     name="python_op_fused_moe_kernel_paddle",
     infer_meta=python_op_fused_moe_kernel_paddle_infer_meta,
     input_names=[

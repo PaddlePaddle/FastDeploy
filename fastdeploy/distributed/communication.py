@@ -20,6 +20,8 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy.utils import register_custom_python_op
+
 _TP_AR = None
 
 
@@ -53,7 +55,7 @@ try:
     def tensor_model_parallel_all_reduce_infer_meta(x: paddle.static.MetaTensor, group_) -> paddle.static.MetaTensor:
         return paddle.static.MetaTensor(shape=x.shape, dtype=x.dtype)
 
-    @paddle.static.register_op(
+    @register_custom_python_op(
         name="tensor_model_parallel_all_reduce",
         infer_meta=tensor_model_parallel_all_reduce_infer_meta,
         input_names=[
