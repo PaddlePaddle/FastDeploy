@@ -575,7 +575,6 @@ __global__ void group_idx_and_topk_idx_kernel(
     // but we only accept some of them!
     num_equalto_topkth_group = want_neg_inf_num - last_neg_inf_num;
   }
-  __syncthreads();
 
   warp_topk::WarpSelect</*capability*/ WARP_SIZE,
                         /*greater*/ true,
@@ -630,7 +629,6 @@ __global__ void group_idx_and_topk_idx_kernel(
     }
   }
 
-  __syncthreads();
   // Note(ZKK): a little trick.
   if (case_id < num_tokens && if_proceed_next_topk) {
     for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
