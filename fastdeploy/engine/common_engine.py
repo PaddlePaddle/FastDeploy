@@ -1517,7 +1517,7 @@ class EngineService:
             self.recv_control_cmd_server.close()
         if hasattr(self, "fmq_a2e_consumer") and self.fmq_a2e_consumer is not None:
             try:
-                if hasattr(self.fmq_a2e_consumer, "socket") and self.fmq_consumer.socket is not None:
+                if hasattr(self.fmq_a2e_consumer, "socket") and self.fmq_a2e_consumer.socket is not None:
                     self.fmq_a2e_consumer.socket.close()
                     llm_logger.info("FMQ consumer socket closed successfully.")
             except Exception as e:

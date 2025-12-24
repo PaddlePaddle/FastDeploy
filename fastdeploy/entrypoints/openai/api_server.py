@@ -232,6 +232,18 @@ async def lifespan(app: FastAPI):
     # close zmq
     try:
         await engine_client.connection_manager.close()
+        if hasattr(engine_client, "fmq_a2e_producer") and engine_client.fmq_a2e_producer is not None:
+            try:
+                if (
+                    hasattr(engine_client.fmq_a2e_producer, "socket")
+                    and engine_client.fmq_a2e_producer.socket is not None
+                ):
+                    engine_client.fmq_a2e_producer.socket.close()
+                    api_server_logger.info("FMQ producer socket closed successfully.")
+            except Exception as e:
+                api_server_logger.error(f"Error closing fmq_producer: {e}")
+            finally:
+                engine_client.fmq_a2e_producer = None
         from prometheus_client import multiprocess
 
         multiprocess.mark_process_dead(os.getpid())
