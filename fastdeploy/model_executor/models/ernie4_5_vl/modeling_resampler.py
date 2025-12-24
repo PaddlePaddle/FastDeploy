@@ -155,7 +155,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.temporal_conv_size = temporal_conv_size
         self.use_recompute_resampler = False
         self.use_temporal_conv = True
-        self.tensor_parallel_degree = config.pretrained_config.tensor_model_parallel_size
+        self.tensor_model_parallel_size = config.pretrained_config.tensor_model_parallel_size
         self.prefix_name = prefix_name
 
         # for 空间四合一
@@ -174,7 +174,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                         has_bias=True,
                         fuse_matmul_bias=use_fuse_matmul_bias,
                     )
-                    if self.tensor_parallel_degree > 1
+                    if self.tensor_model_parallel_size > 1
                     else nn.Linear(self.spatial_dim, self.spatial_dim)
                 ),
                 nn.GELU(),
@@ -206,7 +206,7 @@ class VariableResolutionResamplerModel(nn.Layer):
             out_config.hidden_size = out_dim
             self.after_norm = RMSNorm(out_config)
 
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 set_weight_attrs(self.spatial_linear[0].weight, {"output_dim": False})
 
     def spatial_conv_reshape(self, x, spatial_conv_size):
@@ -232,17 +232,17 @@ class VariableResolutionResamplerModel(nn.Layer):
             x = self.spatial_conv_reshape(x, self.spatial_conv_size)
 
             num_pad = 0
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 num_pad = (
-                    x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
+                    x.shape[0] + self.tensor_model_parallel_size - 1
+                ) // self.tensor_model_parallel_size * self.tensor_model_parallel_size - x.shape[0]
 
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
 
             x = self.spatial_linear(x)
 
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = AllGatherOp.apply(x)
 
             if num_pad > 0:
@@ -298,13 +298,13 @@ class VariableResolutionResamplerModel(nn.Layer):
 
         def fwd_temporal(x):
             num_pad = 0
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 num_pad = (
-                    x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
+                    x.shape[0] + self.tensor_model_parallel_size - 1
+                ) // self.tensor_model_parallel_size * self.tensor_model_parallel_size - x.shape[0]
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = ScatterOp.apply(x, axis=0)
             x = self.temporal_linear(x)
 
@@ -316,7 +316,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         def fwd_mlp(x):
             x = self.mlp(x)
             x = self.after_norm(x)
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = AllGatherOp.apply(x)
             return x
 

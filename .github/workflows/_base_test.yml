@@ -233,14 +233,28 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot.yaml\", \"--enable-logprob\": \"False\"}"
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot_wint4.yaml\", \"--enable-logprob\": \"False\"}"
           check_service 360
           export TEMPLATE=TOKEN_NORMAL
           python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn.yaml\", \"--enable-logprob\": \"False\"}"
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn_wint4.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 360
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_sot_fp8.yaml\", \"--enable-logprob\": \"False\"}"
+          check_service 360
+          export TEMPLATE=TOKEN_NORMAL
+          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
+
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"ernie45t_21b_cinn_fp8.yaml\", \"--enable-logprob\": \"False\"}"
           check_service 360
           export TEMPLATE=TOKEN_NORMAL
           python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
