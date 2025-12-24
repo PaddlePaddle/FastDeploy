@@ -501,18 +501,3 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
-
-
-def do_nothing(*args, **kwargs):
-    def decorator(func):
-        return func
-
-    return decorator
-
-
-if hasattr(paddle.static, "register_op"):
-    from paddle.static import register_op
-else:
-    register_op = do_nothing
-
-register_custom_python_op = register_op
