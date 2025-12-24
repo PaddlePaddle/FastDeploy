@@ -1381,17 +1381,25 @@ class EngineService:
             return False
 
     def _register_to_router(self):
-        """If use router, register this server to router"""
-        timeout = 5
-        sleep_seconds = 10
+        """
+        Periodically send registration information to the registration
+        center as a heartbeat signal.
+        """
 
         def _register():
+            timeout = 5
+            sleep_seconds = 10
+            is_registered = False
+
             while True:
                 try:
                     api_server_host = self.cfg.router_config.api_server_host
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
+                        self.llm_logger.warning(
+                            f"API server ({api_server_url}) is not healthy, " f"skip sending server info to register"
+                        )
                         time.sleep(sleep_seconds)
                         continue
 
@@ -1403,16 +1411,15 @@ class EngineService:
                     )
 
                     if resp.ok:
-                        self.llm_logger.info("Successfully registered to the router!")
-                        break
+                        if not is_registered:
+                            is_registered = True
+                            self.llm_logger.info("Successfully registered to the router!")
                     else:
                         self.llm_logger.error(
-                            f"Router registration failed: {resp.status_code}, "
+                            f"Send server info to register failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
                         time.sleep(sleep_seconds)
-                except requests.exceptions.RequestException as e:
-                    self.llm_logger.error(f"Register to router request error: {e}")
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
 
