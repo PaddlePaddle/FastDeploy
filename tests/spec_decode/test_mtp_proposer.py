@@ -1023,6 +1023,297 @@ class TestMTPProposer(unittest.TestCase):
         mock_spec_get.assert_called()
         mock_spec_save.assert_called()
 
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    def test_xpu_platform_initialization(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
+        """Test XPU platform initialization branches"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Test XPU platform - should set role to "mixed"
+        mock_platform.is_xpu.return_value = True
+        mock_platform.is_cuda.return_value = False
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+
+        # Verify XPU platform settings
+        self.assertEqual(proposer.role, "mixed")
+        self.assertEqual(proposer._propose, proposer._propose_xpu)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.current_platform")
+    def test_unsupported_platform_error(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
+        """Test unsupported platform raises RuntimeError"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Test unsupported platform
+        mock_platform.is_xpu.return_value = False
+        mock_platform.is_cuda.return_value = False
+
+        with self.assertRaises(RuntimeError) as context:
+            MTPProposer(self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs)
+
+        self.assertIn("Unsupported platform", str(context.exception))
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    def test_quantization_cache_initialization(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Test quantization cache initialization with different kv_cache_quant_type values"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Test with block_wise_fp8 quantization
+        self.fd_config.quant_config = Mock()
+        self.fd_config.quant_config.kv_cache_quant_type = "block_wise_fp8"
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+
+        proposer.initialize_kv_cache(main_model_num_blocks=10, profile=False)
+
+        # Verify cache was created
+        self.assertIn("caches", proposer.model_inputs)
+        # Verify scales were created for fp8 quantization
+        self.assertIn("key_cache_scales_0", proposer.cache_kvs)
+        self.assertIn("value_cache_scales_0", proposer.cache_kvs)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.pre_process")
+    @patch("fastdeploy.spec_decode.mtp.rebuild_padding")
+    @patch("fastdeploy.spec_decode.mtp.speculate_get_logits")
+    @patch("fastdeploy.spec_decode.mtp.speculate_save_output_topk")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    @patch("fastdeploy.spec_decode.mtp.update_attn_mask_offsets")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.xpu_pre_process")
+    @patch("fastdeploy.spec_decode.mtp.xpu_process_output")
+    def test_xpu_propose_path(
+        self,
+        mock_xpu_process,
+        mock_xpu_pre_process,
+        mock_sampler_class,
+        mock_attn_mask_offsets,
+        mock_draft_update,
+        mock_spec_save,
+        mock_spec_get,
+        mock_rebuild,
+        mock_pre_process,
+        mock_rope,
+        mock_attn_backend,
+        mock_model_loader,
+    ):
+        """Test XPU propose path (_propose_xpu method)"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Mock XPU functions
+        mock_xpu_pre_process.return_value = {
+            "ids_remove_padding": paddle.zeros([2], dtype="int64"),
+            "batch_id_per_token": paddle.zeros([2], dtype="int32"),
+            "cu_seqlens_q": paddle.zeros([3], dtype="int32"),
+            "cu_seqlens_k": paddle.zeros([3], dtype="int32"),
+            "output_cum_offsets": paddle.zeros([2], dtype="int32"),
+            "output_padding_offset": paddle.zeros([2], dtype="int32"),
+            "cum_offsets": paddle.zeros([3], dtype="int32"),
+        }
+        mock_xpu_process.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+
+        # Mock sampler
+        sampler_obj = Mock()
+        sampler_output = Mock()
+        sampler_output.logprobs_tensors = None
+        sampler_obj.return_value = (paddle.ones([2, 1], dtype="int64"), sampler_output)
+        mock_sampler_class.return_value = sampler_obj
+
+        # Force XPU platform
+        with patch("fastdeploy.spec_decode.mtp.current_platform") as mock_platform:
+            mock_platform.is_xpu.return_value = True
+            mock_platform.is_cuda.return_value = False
+            proposer = MTPProposer(
+                self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+            )
+
+        proposer.initialize_kv_cache(main_model_num_blocks=10)
+        proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.num_model_steps = 1
+
+        # Run XPU propose path
+        proposer._propose_xpu(is_dummy_run=True)
+
+        # Verify XPU functions were called
+        mock_xpu_pre_process.assert_called()
+        mock_xpu_process.assert_called()
+        mock_model.compute_logits.assert_called()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_postprocess")
+    @patch("fastdeploy.spec_decode.mtp.mtp_step_paddle")
+    def test_update_status_with_v1_cache_scheduler(
+        self, mock_mtp_step, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader
+    ):
+        """Test _update_status with ENABLE_V1_KVCACHE_SCHEDULER=True"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        mock_postprocess.return_value = None
+        mock_mtp_step.return_value = None
+
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+
+        # Test with ENABLE_V1_KVCACHE_SCHEDULER=True - should skip mtp_step_paddle
+        with patch("fastdeploy.spec_decode.mtp.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
+            proposer._update_status()
+
+        # Only draft_model_postprocess should be called, not mtp_step_paddle
+        mock_postprocess.assert_called_once()
+        mock_mtp_step.assert_not_called()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    def test_extend_draft_token_with_ngram_enabled(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Test _extend_draft_token_with_ngram_match when hybrid_mode is enabled"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+
+        # Enable hybrid mode
+        proposer.hybrid_mode = True
+        proposer.max_ngram_size = 5
+        proposer.min_ngram_size = 2
+
+        # Mock the required inputs for ngram matching
+        proposer.model_inputs["input_ids_cpu"] = paddle.zeros([2, 2048], dtype="int64")
+        proposer.input_ids_len = paddle.zeros([2, 1], dtype="int64")
+        proposer.model_inputs["pre_ids"] = paddle.zeros([2, 2048], dtype="int64")
+        proposer.model_inputs["step_idx"] = paddle.zeros([2, 1], dtype="int64")
+        proposer.target_model_inputs["actual_draft_token_num"] = paddle.zeros([2], dtype="int32")
+        proposer.target_model_inputs["draft_tokens"] = paddle.zeros([2, 2], dtype="int64")
+        proposer.model_inputs["max_dec_len"] = paddle.ones([2, 1], dtype="int64") * 512
+
+        # Run ngram extension
+        proposer._extend_draft_token_with_ngram_match()
+
+        # The function should execute without error (ngram logic is complex to fully mock)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.pre_process")
+    @patch("fastdeploy.spec_decode.mtp.rebuild_padding")
+    @patch("fastdeploy.spec_decode.mtp.speculate_get_logits")
+    @patch("fastdeploy.spec_decode.mtp.speculate_save_output_topk")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    @patch("fastdeploy.spec_decode.mtp.update_attn_mask_offsets")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_propose_cuda_with_logprobs_disabled(
+        self,
+        mock_sampler_class,
+        mock_attn_mask_offsets,
+        mock_draft_update,
+        mock_spec_save,
+        mock_spec_get,
+        mock_rebuild,
+        mock_pre_process,
+        mock_rope,
+        mock_attn_backend,
+        mock_model_loader,
+    ):
+        """Test _propose_cuda with enable_logprob=False (should skip logprob computations)"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        # Setup mocks
+        mock_pre_process.return_value = (
+            paddle.zeros([2], dtype="int64"),
+            paddle.zeros([2], dtype="int32"),
+            paddle.zeros([3], dtype="int32"),
+            paddle.zeros([3], dtype="int32"),
+            paddle.zeros([2], dtype="int32"),
+            paddle.zeros([2], dtype="int32"),
+        )
+        mock_rebuild.return_value = paddle.zeros([2, 768], dtype="bfloat16")
+        mock_attn_mask_offsets.return_value = paddle.zeros([10], dtype="int32")
+
+        # Setup sampler
+        sampler_obj = Mock()
+        sampler_output = Mock()
+        sampler_output.logprobs_tensors = None
+        sampler_obj.return_value = (paddle.ones([2, 1], dtype="int64"), sampler_output)
+        mock_sampler_class.return_value = sampler_obj
+
+        # Disable logprobs
+        self.fd_config.model_config.enable_logprob = False
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+
+        proposer.initialize_kv_cache(main_model_num_blocks=10)
+        proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
+        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.num_model_steps = 1
+
+        # Run propose_cuda - should skip logprob computations
+        proposer._propose_cuda(is_dummy_run=True)
+
+        # Verify logprob functions were NOT called
+        mock_spec_get.assert_not_called()
+        mock_spec_save.assert_not_called()
+        mock_model.compute_logits.assert_called()  # But basic logits computation should still happen
+
 
 if __name__ == "__main__":
     unittest.main()
