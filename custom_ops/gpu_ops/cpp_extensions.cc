@@ -1171,9 +1171,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &AppendAttentionWithOutput,
         "append attention with output function");
 
-  m.def("flash_mask_attention",
-        &FlashAttentionMask,
-        "flash_mask_attention");
+  m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
 
   /**
    * gqa_rope_write_cache.cu
