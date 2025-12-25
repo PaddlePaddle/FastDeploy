@@ -2025,7 +2025,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self._dummy_pooler_run(model_output, model_output)
                 break
             else:
-                logger.info(f"model_output shape: {model_output.shape}")
                 hidden_states = rebuild_padding(
                     model_output,
                     self.share_inputs["cu_seqlens_q"],

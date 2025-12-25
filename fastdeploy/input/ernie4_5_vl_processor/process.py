@@ -163,9 +163,13 @@ class DataProcessor(MMBaseDataProcessor):
             return 0
         if isinstance(grid_thw[0], list):
             for i in range(len(grid_thw)):
-                num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2
+                if grid_thw[i][0] == 1:
+                    num_tokens += grid_thw[i][1] * grid_thw[i][2] // 2 // 2
+                else:  # have time dimension
+                    num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2
             return num_tokens
-
+        if grid_thw[0] == 1:
+            return grid_thw[1] * grid_thw[2] // 2 // 2
         return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2 // 2
 
     def _build_token_type_mapping(self) -> Dict[Any, int]:
