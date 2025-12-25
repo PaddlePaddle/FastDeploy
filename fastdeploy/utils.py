@@ -945,7 +945,7 @@ def get_version_info():
             elif line.startswith("fastdeploy version:"):
                 version_info["fastdeploy_version"] = line.split("fastdeploy version:")[1].strip()
     except Exception as e:
-        llm_logger.error(f"Failed to parse version info from version.txt: {e}")
+        console_logger.error(f"Failed to parse version info from version.txt: {e}")
         return None
 
     return version_info if version_info else None

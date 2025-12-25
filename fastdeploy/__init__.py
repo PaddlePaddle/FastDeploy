@@ -91,6 +91,7 @@ try:
             )
 except Exception as e:
     # 版本检查失败不应该影响FastDeploy的正常使用
+    console_logger.debug(f"Version check failed: {e}")
     pass
 
 
