@@ -434,3 +434,27 @@ def restore_pd_env(original_values):
             else:
                 os.environ[key] = original_values[key]
                 print(f"恢复环境变量: {key}={original_values[key]}")
+
+
+def setup_pd_ep_env():
+    """
+    设置PD分离+EP相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    original_values_pd = setup_pd_env()
+    original_values_ep = setup_ep_env()
+    original_values = {**original_values_pd, **original_values_ep}
+    return original_values
+
+
+def restore_pd_ep_env(original_values):
+    """
+    恢复PD分离相关环境变量
+
+    Args:
+        original_values: setup_ep_env()返回的原始环境变量值
+    """
+    restore_env(original_values)
+    restore_pd_env(original_values)
