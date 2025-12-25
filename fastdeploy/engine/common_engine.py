@@ -984,11 +984,11 @@ class EngineService:
                 # Count req num of each DP instance
                 dp_size = len(last_sched_batch_cnt)
                 req_num_count = [0] * dp_size
-                for local_info in all_buffered_req_info:
-                    for req_id, sched_info in local_info.items():
+                for i, local_info in enumerate(all_buffered_req_info):
+                    for _, sched_info in local_info.items():
                         if sched_info["sched_batch_id"] == last_sched_batch_id:
-                            req_num_count[sched_info["sched_batch_local_id"]] += 1
-                            last_received_request_ids.append(req_id)
+                            req_num_count[i] += 1
+                            last_received_request_ids.append(sched_info["sched_batch_local_id"])
                 
                 flag = True
                 for i in range(dp_size):
@@ -1119,7 +1119,6 @@ class EngineService:
                         # Wait for current forward to finish
                         time.sleep(0.01)
                     execute_time = int((time.time() - start_execute_time) * 1000)
-                    print(f"execute time: {execute_time}")
 
                     # Report to IM
                     if last_sched_batch_id != -1:
@@ -1564,21 +1563,34 @@ class EngineService:
         if self.cfg.node_rank == 0 and self.cfg.parallel_config.local_data_parallel_id == 0:
             # Report by DP0
             report_info = paddle.to_tensor(report_info_list)
+            local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
+            global_data_parallel_id = self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
             payload = {
                 "last_sched_batch_id": last_sched_batch_id,
                 "last_received_request_ids": last_received_request_ids,
                 "last_run_batch_duration": report_info[:, 0].max().item(),
                 "remain_token_num_per_dp": report_info[:, 1].tolist(),
-                "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                # "fed_instance_name": os.getenv("FED_INSTANCE_NAME"),
+                "fed_instance_name": (
+                    os.getenv("POD_NAMESPACE", "None")
+                    + "_"
+                    + os.getenv("FD_POD_NAME", "None")
+                    + "_"
+                    + os.getenv("HOST_IP", "None")
+                    + "_"
+                    + os.getenv("SPLITWISE_ROLE", "None")
+                    + "_"
+                    + str(global_data_parallel_id)
+                ),
                 "model_id": os.getenv("MODEL_ID"),
             }
             llm_logger.info(f"report info: {payload}")
 
             try:
-                url = f"http://0.0.0.0:{envs.FD_REPORT_IM_PORT}/end_forward"
+                url = f"http://10.25.77.31:{envs.FD_REPORT_IM_PORT}/end_forward"
                 response = requests.post(url, json=payload)
                 response.raise_for_status()
-                llm_logger.info(f"report IM successful: {response.json()}")
+                llm_logger.info(f"report IM successful: {response}")
             except Exception as e:
                 llm_logger.info(f"report IM failed: {e}")
 
