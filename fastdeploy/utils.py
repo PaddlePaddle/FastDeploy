@@ -1229,3 +1229,18 @@ def to_tensor(tasks: List[Any]):
                     multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
     except Exception as e:
         llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
+
+
+def do_nothing(*args, **kwargs):
+    def decorator(func):
+        return func
+
+    return decorator
+
+
+if hasattr(paddle.static, "register_op"):
+    from paddle.static import register_op
+else:
+    register_op = do_nothing
+
+register_custom_python_op = register_op

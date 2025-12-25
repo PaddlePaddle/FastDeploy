@@ -1,9 +1,9 @@
 #!/bin/bash
 MODEL_PATH="${1}/TP2"
-FD_API_PORT=${FD_API_PORT:-8000}
-FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT:-8001}
-FD_METRICS_PORT=${FD_METRICS_PORT:-8002}
-FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT:-8003}
+FD_API_PORT=${FD_API_PORT:-8180}
+FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT:-8181}
+FD_METRICS_PORT=${FD_METRICS_PORT:-8182}
+FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT:-8183}
 
 
 
@@ -36,7 +36,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port ${FD_ENGINE_QUEUE_PORT} \
        --metrics-port ${FD_METRICS_PORT} \
        --cache-queue-port ${FD_CACHE_QUEUE_PORT} \
-       --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 1 \
        --gpu-memory-utilization 0.9 \
