@@ -960,6 +960,10 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
             layer.extract_moe_ffn_weights(state_dict)
         )
+        print("up_gate_proj_weights", up_gate_proj_weights)
+        print("down_proj_weights", down_proj_weights)
+        print("logical_experts_ids", logical_expert_ids)
+        print("ep_rank_to_expert_id_list", ep_rank_to_expert_id_list)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
         up_gate_proj_weight_scales = []

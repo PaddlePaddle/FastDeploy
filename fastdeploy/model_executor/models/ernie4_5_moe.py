@@ -110,17 +110,31 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
+        is_quantized = getattr(fd_config.quant_config, "is_quantized", True)
+
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
-            weight_key_map = {
-                "gate_weight_key": f"{prefix}.gate.weight",
-                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
-            }
+            if moe_quant_type == "w4afp8" and not is_quantized:
+                weight_key_map = {
+                    "gate_weight_key": f"{prefix}.gate.weight",
+                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
+                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
+                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                }
+            else:
+                weight_key_map = {
+                    "gate_weight_key": f"{prefix}.gate.weight",
+                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+                }
         elif moe_quant_type == "w4w2":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -218,11 +232,16 @@ class Ernie4_5_MoE(nn.Layer):
         hidden_states: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
+        print("hidden_states", hidden_states)
+        print("self.gate", self.gate)
+        for name, param in self.experts.named_parameters():
+            print(f"  name:{name}: {param}")
         out = self.experts(
             x=hidden_states,
             gate=self.gate,
             forward_meta=forward_meta,
         )
+        print("out", out)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -759,11 +778,6 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.quant_weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight_scale",
             True,
             tsm.PairFused,
         ),
