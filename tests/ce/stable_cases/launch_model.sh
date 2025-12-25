@@ -26,11 +26,6 @@ export CUDA_VISIBLE_DEVICES=0,1
 export INFERENCE_MSG_QUEUE_ID=${FD_INFERENCE_MSG_QUEUE_ID:-7679}
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 
-echo "Cleaning GPU memory (CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES})"
-
-fuser -k /dev/nvidia* 2>/dev/null || true
-sleep 2
-
 echo "Starting API server"
 python -m fastdeploy.entrypoints.openai.api_server \
        --tensor-parallel-size 2 \
