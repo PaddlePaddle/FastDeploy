@@ -1,0 +1,44 @@
+{
+  "multiquery_attention_c8": {
+    "name": "decode_append_attention_c8_kernel",
+    "function_name": "decode_append_attention_c8_kernel",
+    "impl_file": "decode_append_attention_c8_impl.cuh",
+    "template_params": [
+      "T",
+      "CacheT",
+      "GROUP_SIZE",
+      "CAUSAL",
+      "NUM_WARPS",
+      "NUM_WARP_Q",
+      "NUM_WARP_KV",
+      "HEAD_DIM",
+      "BLOCK_SIZE",
+      "num_frags_x",
+      "num_frags_y",
+      "num_frags_z",
+      "is_scale_channel_wise",
+      "IsFP8",
+      "IsDynamicC8"
+    ],
+    "dispatch_params": {
+      "T": ["half", "__nv_bfloat16"],
+      "CacheT": ["uint8_t"],
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
+      "CAUSAL": [0, 1],
+      "NUM_WARPS": [4],
+      "NUM_WARP_Q": [1],
+      "NUM_WARP_KV": [4],
+      "HEAD_DIM": [128],
+      "BLOCK_SIZE": [64],
+      "num_frags_x": [1, 2],
+      "num_frags_y": [8],
+      "num_frags_z": [1],
+      "is_scale_channel_wise": [0, 1],
+      "IsFP8": [0, 1],
+      "IsDynamicC8": [0, 1]
+    },
+    "max_instances_per_file": 80,
+    "file_prefix": "decode_append_attention_c",
+    "function_signature": "template __global__ void {function_name}{template_args}(const __grid_constant__ AttentionParams{params_template_args} params);\n\n"
+  }
+}
