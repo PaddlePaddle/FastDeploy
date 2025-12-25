@@ -566,7 +566,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # - if valid_token_num is NOT None, it means that we CAN accurately know
         #   the size of the tensor, but the disadvantage is that it will interrupt
         #   the process of kernel launch.
-        valid_token_num = paddle.sum(recv_expert_count)
+        valid_token_num = int(paddle.sum(recv_expert_count).numpy())
         if valid_token_num is None and dispatch_hook is not None:
             dispatch_hook()
 
