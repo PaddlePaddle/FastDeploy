@@ -315,7 +315,7 @@ class OpenAIServingCompletion:
                         aggregated_prompt_logprobs_tensors[rid] = output_prompt_logprobs_tensors
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
-                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                    if inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict):
                         await self.engine_client.data_processor.process_response_dict(
                             data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
                         )
@@ -510,7 +510,7 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                    if inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict):
                         await self.engine_client.data_processor.process_response_dict(
                             res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
                         )
