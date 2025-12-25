@@ -3,16 +3,11 @@ Unit tests for usage_lib.py
 """
 
 import json
-import os
-import sys
 import time
 import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
 from requests.exceptions import RequestException
-
-# Add the fastdeploy path to sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastdeploy.usage.usage_lib import (
     _GLOBAL_RUNTIME_DATA,
