@@ -93,7 +93,6 @@ try:
 except Exception as e:
     # Version check failure should not affect FastDeploy's normal operation
     console_logger.debug(f"Version check failed: {e}")
-    pass
 
 
 MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}
