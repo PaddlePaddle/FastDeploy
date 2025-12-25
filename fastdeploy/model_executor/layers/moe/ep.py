@@ -501,8 +501,7 @@ class EPRunner:
 
 
 class EPPrefillRunner(EPRunner):
-    
-    
+
     allocate_on_comm_stream = False
 
     """
@@ -565,11 +564,12 @@ class EPPrefillRunner(EPRunner):
             is_token_in_rank,
             event,
         ) = buffer.get_dispatch_layout(
-            topk_idx, 
-            self.num_experts, 
+            topk_idx,
+            self.num_experts,
             previous_event=kwargs.get("previous_event", None),
             allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
-            async_finish=self.ep_engine.async_finish)
+            async_finish=self.ep_engine.async_finish,
+        )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {

@@ -205,7 +205,7 @@ class RMSNorm(nn.Layer):
         """
 
         if x.shape[0] == 0:
-            return x,residual_input
+            return x, residual_input
 
         x_dtype = x.dtype
         x = x.astype(self.weight.dtype)
