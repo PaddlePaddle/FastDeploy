@@ -16,7 +16,6 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
@@ -229,8 +228,9 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            weight_tensor = get_tensor(self.model.embed_tokens.embeddings.weight)
-            self.lm_head.linear.weight.set_value(weight_tensor)
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]) -> None:
@@ -420,7 +420,7 @@ class Qwen3VLPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
@@ -432,7 +432,7 @@ class Qwen3VLPretrainedModel(PretrainedModel):
         vision_head_dim = vision_hidden // vision_num_heads
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=vision_num_heads,
             num_key_value_heads=vision_num_heads,

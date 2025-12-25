@@ -69,13 +69,13 @@ class Qwen3VisionMLP(nn.Layer):
         dim: int,
         hidden_dim: int,
         hidden_act: str = "gelu",
-        tensor_parallel_degree: int = 1,
+        tensor_model_parallel_size: int = 1,
         model_format: str = "",
     ) -> None:
         super().__init__()
-        self.tensor_parallel_degree = tensor_parallel_degree
+        self.tensor_model_parallel_size = tensor_model_parallel_size
 
-        if tensor_parallel_degree > 1:
+        if tensor_model_parallel_size > 1:
             self.linear_fc1 = ColumnParallelLinear(
                 dim,
                 hidden_dim,
@@ -113,13 +113,13 @@ class Qwen3VisionPatchMerger(nn.Layer):
         d_model: int,
         context_dim: int,
         spatial_merge_size: int,
-        tensor_parallel_degree: int,
+        tensor_model_parallel_size: int,
         use_postshuffle_norm: bool = False,
         norm_eps: float = 1e-6,
         model_format: str = "",
     ) -> None:
         super().__init__()
-        self.tensor_parallel_degree = tensor_parallel_degree
+        self.tensor_model_parallel_size = tensor_model_parallel_size
         self.spatial_merge_size = spatial_merge_size
         self.hidden_size = context_dim * (spatial_merge_size**2)
         self.use_postshuffle_norm = use_postshuffle_norm
@@ -128,7 +128,7 @@ class Qwen3VisionPatchMerger(nn.Layer):
             context_dim = self.hidden_size
         self.norm = nn.LayerNorm(context_dim, epsilon=norm_eps)
 
-        if tensor_parallel_degree > 1:
+        if tensor_model_parallel_size > 1:
             self.linear_fc1 = ColumnParallelLinear(
                 self.hidden_size,
                 self.hidden_size,
@@ -175,7 +175,7 @@ class Qwen3VisionBlock(nn.Layer):
         num_heads: int,
         mlp_hidden_dim: int,
         hidden_act: str = "gelu",
-        tensor_parallel_degree: int = 1,
+        tensor_model_parallel_size: int = 1,
         tensor_parallel_rank: int = 0,
         model_format: str = "",
     ) -> None:
@@ -185,7 +185,7 @@ class Qwen3VisionBlock(nn.Layer):
         self.attn = VisionFlashAttention2(
             dim=dim,
             num_heads=num_heads,
-            tensor_parallel_degree=tensor_parallel_degree,
+            tensor_model_parallel_size=tensor_model_parallel_size,
             tensor_parallel_rank=tensor_parallel_rank,
             model_format=model_format,
         )
@@ -193,7 +193,7 @@ class Qwen3VisionBlock(nn.Layer):
             dim=dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=hidden_act,
-            tensor_parallel_degree=tensor_parallel_degree,
+            tensor_model_parallel_size=tensor_model_parallel_size,
             model_format=model_format,
         )
 
@@ -245,7 +245,7 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
             d_model=vision_config.out_hidden_size,
             context_dim=vision_config.hidden_size,
             spatial_merge_size=self.spatial_merge_size,
-            tensor_parallel_degree=config.pretrained_config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.pretrained_config.tensor_model_parallel_size,
             use_postshuffle_norm=False,
             norm_eps=1e-6,
             model_format=model_format,
@@ -257,7 +257,7 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
                     d_model=vision_config.out_hidden_size,
                     context_dim=vision_config.hidden_size,
                     spatial_merge_size=self.spatial_merge_size,
-                    tensor_parallel_degree=config.pretrained_config.tensor_parallel_degree,
+                    tensor_model_parallel_size=config.pretrained_config.tensor_model_parallel_size,
                     use_postshuffle_norm=True,
                     norm_eps=1e-6,
                     model_format=model_format,
@@ -273,7 +273,7 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
                     num_heads=vision_config.num_heads,
                     mlp_hidden_dim=vision_config.intermediate_size,
                     hidden_act=vision_config.hidden_act,
-                    tensor_parallel_degree=config.pretrained_config.tensor_parallel_degree,
+                    tensor_model_parallel_size=config.pretrained_config.tensor_model_parallel_size,
                     tensor_parallel_rank=config.pretrained_config.tensor_parallel_rank,
                     model_format=model_format,
                 )
@@ -424,12 +424,12 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
         )
 
         vision_config = config.vision_config
-        tp_degree = getattr(config, "tensor_parallel_degree", 1)
+        tp_degree = getattr(config, "tensor_model_parallel_size", 1)
         tp_rank = getattr(config, "tensor_parallel_rank", 0)
 
         def split_qkv_weight(weight):
