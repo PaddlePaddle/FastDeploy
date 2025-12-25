@@ -1109,8 +1109,8 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.draft_model_update")
     @patch("fastdeploy.spec_decode.mtp.update_attn_mask_offsets")
     @patch("fastdeploy.spec_decode.mtp.MTPSampler")
-    @patch("fastdeploy.spec_decode.mtp.xpu_pre_process")
-    @patch("fastdeploy.spec_decode.mtp.xpu_process_output")
+    @patch("fastdeploy.model_executor.xpu_pre_and_post_process.xpu_pre_process")
+    @patch("fastdeploy.model_executor.xpu_pre_and_post_process.xpu_process_output")
     def test_xpu_propose_path(
         self,
         mock_xpu_process,
@@ -1136,15 +1136,18 @@ class TestMTPProposer(unittest.TestCase):
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
         # Mock XPU functions
-        mock_xpu_pre_process.return_value = {
-            "ids_remove_padding": paddle.zeros([2], dtype="int64"),
-            "batch_id_per_token": paddle.zeros([2], dtype="int32"),
-            "cu_seqlens_q": paddle.zeros([3], dtype="int32"),
-            "cu_seqlens_k": paddle.zeros([3], dtype="int32"),
-            "output_cum_offsets": paddle.zeros([2], dtype="int32"),
-            "output_padding_offset": paddle.zeros([2], dtype="int32"),
-            "cum_offsets": paddle.zeros([3], dtype="int32"),
-        }
+        xpu_meta_mock = Mock()
+        xpu_meta_mock.encoder_seq_lod = paddle.zeros([3], dtype="int32")
+        xpu_meta_mock.decoder_seq_lod = paddle.zeros([3], dtype="int32")
+        xpu_meta_mock.encoder_batch_map = paddle.zeros([2], dtype="int32")
+        xpu_meta_mock.decoder_batch_map = paddle.zeros([2], dtype="int32")
+        xpu_meta_mock.encoder_seq_lod_cpu = paddle.zeros([3], dtype="int32").cpu()
+        xpu_meta_mock.decoder_seq_lod_cpu = paddle.zeros([3], dtype="int32").cpu()
+        xpu_meta_mock.encoder_batch_map_cpu = paddle.zeros([2], dtype="int32").cpu()
+        xpu_meta_mock.decoder_batch_map_cpu = paddle.zeros([2], dtype="int32").cpu()
+        xpu_meta_mock.len_info_cpu = paddle.zeros([5], dtype="int32").cpu()
+
+        mock_xpu_pre_process.return_value = xpu_meta_mock
         mock_xpu_process.return_value = paddle.zeros([2, 768], dtype="bfloat16")
 
         # Mock sampler
