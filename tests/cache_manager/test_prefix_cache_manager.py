@@ -27,6 +27,7 @@ import pytest
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.inter_communicator.ipc_signal_const import PrefixTreeStatus
+from fastdeploy.utils import get_hash_str
 
 
 # Metric test double used to track metric updates.
@@ -179,6 +180,8 @@ def _create_manager(
         rdma_comm_ports=None,
         local_cache_queue_port=9000,
         local_rdma_comm_ports=None,
+        kvcache_storage_backend=None,
+        write_policy="write_through",
     )
     model_config = SimpleNamespace(
         num_attention_heads=1,
@@ -186,6 +189,7 @@ def _create_manager(
         head_dim=1,
         _architecture="",
         dtype="float16",
+        max_model_len=128,
     )
     config = SimpleNamespace(
         cache_config=cache_config,
@@ -199,7 +203,7 @@ def _create_manager(
 
 def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, cache_status=CacheStatus.GPU):
     parent = parent or manager.radix_tree_root
-    block_hash = manager.cal_block_hash(input_ids)
+    block_hash = get_hash_str(input_ids)
     node = BlockNode(
         node_id,
         input_ids,
@@ -878,10 +882,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=4)
         block_size = 2
         root = manager.radix_tree_root
-        gpu_hash = manager.cal_block_hash([1, 2])
+        gpu_hash = get_hash_str([1, 2])
         gpu_node = BlockNode(1, [], 0, 1, 0, block_size, gpu_hash, 0, parent=root)
         root.children[gpu_hash] = gpu_node
-        cpu_hash = manager.cal_block_hash([3, 4])
+        cpu_hash = get_hash_str([3, 4], extra_keys=[gpu_hash])
         cpu_node = BlockNode(2, [], 0, 2, 1, block_size, cpu_hash, 0, parent=gpu_node, cache_status=CacheStatus.CPU)
         gpu_node.children[cpu_hash] = cpu_node
         manager.gpu_lru_leaf_set.add(gpu_node)
@@ -917,7 +921,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_free_block_ids_async_recycles_gpu_nodes(self):
         manager = _create_manager(num_gpu_blocks=4)
-        node_hash = manager.cal_block_hash([1, 2])
+        node_hash = get_hash_str([1, 2])
         node = BlockNode(10, [1, 2], node_hash, 1, 0, 2, node_hash, 0, parent=manager.radix_tree_root)
         node.shared_count = 0
         manager.radix_tree_root.children[node_hash] = node
@@ -941,7 +945,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
         manager.issue_swap_task = _fake_issue
 
-        node_hash = manager.cal_block_hash([3, 4])
+        node_hash = get_hash_str([3, 4])
         node = BlockNode(11, [3, 4], node_hash, 1, 1, 2, node_hash, 0, parent=manager.radix_tree_root)
         node.shared_count = 0
         manager.radix_tree_root.children[node_hash] = node
@@ -957,9 +961,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         block_size = 2
         manager.cache_config.disable_chunked_mm_input = False
         input_ids = [1, 2, 3, 4]
-        hash_input = manager.hash_block_features(input_ids)
-        hash_first = manager.hash_block_features([1, 2])
-        hash_second = manager.hash_block_features([3, 4], ["img"])
+        hash_input = get_hash_str(input_ids)
+        hash_first = get_hash_str([1, 2])
+        hash_second = get_hash_str([3, 4], [hash_first, "img"])
 
         node1 = BlockNode(30, input_ids, hash_input, 1, 0, block_size, hash_first, 0, parent=manager.radix_tree_root)
         manager.radix_tree_root.children[hash_first] = node1
@@ -1004,9 +1008,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager.cache_config.disable_chunked_mm_input = False
         block_size = 2
         input_ids = [1, 2, 3, 4]
-        hash_input = manager.hash_block_features(input_ids)
-        hash_first = manager.hash_block_features([1, 2])
-        hash_second = manager.hash_block_features([3, 4], ["img"])
+        hash_input = get_hash_str(input_ids)
+        hash_first = get_hash_str([1, 2])
+        hash_second = get_hash_str([3, 4], [hash_first, "img"])
         node1 = BlockNode(40, input_ids, hash_input, 1, 0, block_size, hash_first, 0, parent=manager.radix_tree_root)
         node2 = BlockNode(
             41,
@@ -1045,7 +1049,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_release_block_ids_cleans_request_state(self):
         manager = _create_manager(num_gpu_blocks=4)
-        node = BlockNode(50, [1, 2], 0, 1, 0, 2, manager.cal_block_hash([1, 2]), 0, parent=manager.radix_tree_root)
+        node = BlockNode(50, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
         node.cache_status = CacheStatus.GPU
         manager.radix_tree_root.children[node.hash_value] = node
         req_id = "release-req"
@@ -1061,7 +1065,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_free_cpu_block_ids_eviction(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=2)
-        cpu_node = BlockNode(60, [3, 4], 0, 1, 0, 2, manager.cal_block_hash([3, 4]), 0, parent=manager.radix_tree_root)
+        cpu_node = BlockNode(60, [3, 4], 0, 1, 0, 2, get_hash_str([3, 4]), 0, parent=manager.radix_tree_root)
         cpu_node.cache_status = CacheStatus.CPU
         manager.cpu_lru_leaf_heap.append(cpu_node)
         manager.cpu_lru_leaf_set.add(cpu_node)
@@ -1070,8 +1074,8 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_free_nodes_directly_recovers_chain(self):
         manager = _create_manager(num_gpu_blocks=4)
-        parent = BlockNode(70, [1, 2], 0, 1, 0, 2, manager.cal_block_hash([1, 2]), 0, parent=manager.radix_tree_root)
-        child_hash = manager.cal_block_hash([3, 4])
+        parent = BlockNode(70, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
+        child_hash = get_hash_str([3, 4])
         child = BlockNode(71, [1, 2, 3, 4], 0, 2, 1, 2, child_hash, 0, parent=parent)
         parent.children[child_hash] = child
         parent.shared_count = 0
@@ -1102,9 +1106,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager.cache_config.disable_chunked_mm_input = True
         block_size = 2
         input_ids = [1, 2, 3, 4]
-        hash_input = manager.hash_block_features(input_ids)
-        hash_first = manager.hash_block_features([1, 2])
-        hash_second = manager.hash_block_features([3, 4], ["img"])
+        hash_input = get_hash_str(input_ids)
+        hash_first = get_hash_str([1, 2])
+        hash_second = get_hash_str([3, 4], ["img"])
         node1 = BlockNode(80, input_ids, hash_input, 1, 0, block_size, hash_first, 0, parent=manager.radix_tree_root)
         node2 = BlockNode(81, input_ids, hash_input, 2, 1, block_size, hash_second, 0, parent=node1)
         manager.radix_tree_root.children[hash_first] = node1
@@ -1144,7 +1148,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_handle_swap_result_updates_status(self):
         manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=2)
-        node = BlockNode(90, [1], 0, 1, 0, 1, manager.cal_block_hash([1]), 0, parent=manager.radix_tree_root)
+        node = BlockNode(90, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         node.cache_status = CacheStatus.SWAP2CPU
         manager.node_map[node.node_id] = node
         manager._handle_swap_result(node.node_id, 2, 3, CacheStatus.SWAP2CPU)
@@ -1156,7 +1160,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_reset_clears_internal_state(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=1)
-        node = BlockNode(100, [1], 0, 1, 0, 1, manager.cal_block_hash([1]), 0, parent=manager.radix_tree_root)
+        node = BlockNode(100, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         manager.node_map[node.node_id] = node
         manager.task_swapping_event["evt"] = threading.Event()
         manager.task_swapping_event["evt"].set()
@@ -1166,9 +1170,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_recv_data_transfer_result_processes_queue(self):
         manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=1)
-        node = BlockNode(110, [1], 0, 1, 0, 1, manager.cal_block_hash([1]), 0, parent=manager.radix_tree_root)
+        node = BlockNode(110, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         manager.node_map[node.node_id] = node
-        payload = [([node.node_id], [2], [3], CacheStatus.SWAP2GPU, "task")]
+        payload = [(CacheStatus.SWAP2GPU, "task", [node.node_id], [2], [3])]
         manager.cache_task_queue = _FakeTransferQueue(payload, include_none=True)
         manager.task_swapping_event["task"] = threading.Event()
         with self.assertRaises(SystemExit):
@@ -1196,7 +1200,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             request_id="revert",
             multimodal_inputs={"mm_positions": [SimpleNamespace(offset=2, length=2)]},
         )
-        node = BlockNode(120, [1, 2], 0, 1, 0, 2, manager.cal_block_hash([1, 2]), 0, parent=manager.radix_tree_root)
+        node = BlockNode(120, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
         matche_nodes = [node]
         match_gpu = [0]
         match_node_ids = [node.node_id]
