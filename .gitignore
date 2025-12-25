@@ -2,6 +2,10 @@
 /.venv/
 /venv/
 
+tests/log_*
+benchmarks/openai-chat-infqps*
+splitwise/log*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
