@@ -15,6 +15,7 @@
 """
 
 import threading
+
 import paddle
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -46,6 +47,7 @@ def is_last_thread():
 
     return thread_name == "thread1"
 
+
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
     res = [forward_meta] * split_num
@@ -56,7 +58,7 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
 
     if total_token_num < split_num:
         return res
-    
+
     print("total_token_num", total_token_num)
     chunk_token_num = (total_token_num + split_num - 1) // split_num
 
@@ -71,10 +73,10 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             attn_backend=forward_meta.attn_backend,
             caches=forward_meta.caches,
         )
-        
+
         # 我们需要处理的这一段token位于[start_bs, end_bs)里面！
         start_bs = forward_meta.batch_id_per_token[start_token_id]
-        end_bs = forward_meta.batch_id_per_token[end_token_id-1]
+        end_bs = forward_meta.batch_id_per_token[end_token_id - 1]
         end_bs += 1
 
         if len(forward_meta.rotary_embs.shape) == 6:
@@ -91,24 +93,24 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
         # 我需要记录下  start_bs 他被left chunk 瓜分了多少了！
         # 我需要记录下  (end_bs-1) 他被 right chunk 瓜分了多少了！
         start_bs_s_token_by_left_chunk = start_token_id - forward_meta.cu_seqlens_q[start_bs].item()
-        end_bs_s_token_by_right_chunk = forward_meta.cu_seqlens_q[end_bs].item() - end_token_id 
+        end_bs_s_token_by_right_chunk = forward_meta.cu_seqlens_q[end_bs].item() - end_token_id
 
         res[i].seq_lens_this_time = forward_meta.seq_lens_this_time[start_bs:end_bs] + 0
         res[i].seq_lens_this_time[0] -= start_bs_s_token_by_left_chunk
         res[i].seq_lens_this_time[-1] -= end_bs_s_token_by_right_chunk
-        
+
         res[i].seq_lens_encoder = forward_meta.seq_lens_encoder[start_bs:end_bs] + 0
         if res[i].seq_lens_encoder[0].item() > 0:
             res[i].seq_lens_encoder[0] -= start_bs_s_token_by_left_chunk
         if res[i].seq_lens_encoder[-1].item() > 0:
-            res[i].seq_lens_encoder[-1] -= end_bs_s_token_by_right_chunk        
-        
+            res[i].seq_lens_encoder[-1] -= end_bs_s_token_by_right_chunk
+
         res[i].seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
         res[i].seq_lens_decoder[0] += start_bs_s_token_by_left_chunk
 
         cu_seqlens_q = [0] + paddle.cumsum(res[i].seq_lens_this_time).numpy().tolist()
         res[i].cu_seqlens_q = paddle.to_tensor(cu_seqlens_q).cast("int32")
-        
+
         # res[i].cu_seqlens_k = res[i].cu_seqlens_q
 
         for key in GLOBAL_ATTN_BUFFERS[i]:
