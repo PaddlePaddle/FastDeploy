@@ -13,7 +13,7 @@ LLM大模型推理分为Prefill和Decode两个阶段，分别为计算密集型�
   <img src="images/mix_pd.png" width="50%">
 </p>
 
-分离式部署实现的核心点在于：KV Cache传输和请求调度。
+分离式部署相比集中式部署，实现的核心差异在于KV Cache传输和请求调度。
 
 ## KV Cache 传输
 
@@ -25,7 +25,7 @@ LLM大模型推理分为Prefill和Decode两个阶段，分别为计算密集型�
 
 ## PD 分离请求调度
 
-针对PD分离式部署，FastDeploy提供Python版本[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/router)来实现请求收发和请求调度。具体而言：
+针对PD分离式部署，FastDeploy提供Python版本[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/router)来实现请求收发和请求调度。使用方式和调度流程如下：
 * 启动Router
 * 启动PD实例，PD实例会注册到Router
 * 用户请求发送到Router
@@ -60,7 +60,9 @@ bash build.sh
 
 #### 部署服务
 
-启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式。
+**快速上手**
+
+启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式，日志信息输出在`log_router/router.log`。
 ```
 export FD_LOG_DIR="log_router"
 python -m fastdeploy.router.launch \
@@ -103,6 +105,17 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
   "stream": false
 }'
 ```
+
+**参数说明**
+
+分离式部署启动Prefill/Decode实例的参数说明：
+* `--splitwise-role`: 指定实例角色，可选值为`prefill`，`decode`和`mixed`，默认是`mixed`
+* `--cache-transfer-protocol`: 指定KV Cache传输协议，可选值为`rdma`和`ipc`，默认是`rdma`和`ipc`，如果PD实例是在同一台机器，优先使用`ipc`传输
+* `--rdma-comm-ports`: 指定RDMA通信端口，多个端口用逗号隔开，端口数量需要和dp_size*tp_size相同；可以不指定，FD内部会找空闲的端口
+* `--pd-comm-port`: 指定PD实例的交互接口，多个端口用逗号隔开，端口数量需要和dp_size相同；如果不指定，FD内部会找空闲的端口
+* `--router`：指定Router的接口
+
+**Examples示例**
 
 PD分离式部署支持前缀缓存、TP并行、DP并行等特性，具体examples可以参考[examples/splitwise](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/splitwise)。
 
