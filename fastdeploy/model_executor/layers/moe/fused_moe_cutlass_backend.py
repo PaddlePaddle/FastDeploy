@@ -886,10 +886,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         """
         self.model_format = extra_weight_attrs.get("model_format")
 
-        # ========== 定义形状变量（check 方法会用到）==========
-        # 【重要】保持原有变量名，check 方法依赖它们！
-
-        # 量化后的权重形状 (4-bit packed into int8)
         self.ffn1_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size // 2,  # 4-bit packing
@@ -901,10 +897,8 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             layer.hidden_size,
         ]
 
-        # ========== 在线量化 + default_v1 分支 ==========
         if not self.quant_config.is_quantized and layer.fd_config.load_config.load_choices == "default_v1":
             if self.model_format != "torch":
-                # Paddle 模型格式 - 未量化形状
                 up_gate_proj_weight_shape = [
                     layer.num_local_experts,
                     layer.hidden_size,
@@ -924,7 +918,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                     "tensor_track": TensorTracker(shape=down_proj_weight_shape, output_dim=False),
                 }
             else:
-                # Torch 模型格式 - 未量化形状
                 up_gate_proj_weight_shape = [
                     layer.num_local_experts,
                     layer.moe_intermediate_size * 2,
@@ -946,7 +939,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                     "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "up": 0, "down": 1},
                 }
 
-            # 创建未量化的权重 (BF16/FP16)
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=up_gate_proj_weight_shape,
                 dtype=layer.weight_dtype,
@@ -959,20 +951,13 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             )
             set_weight_attrs(layer.up_gate_proj_weight, up_gate_proj_attrs)
             set_weight_attrs(layer.down_proj_weight, down_proj_attrs)
-
-        # ========== 旧加载方式 (v0 loader) 或 离线量化 ==========
         else:
             self.weight_dtype = "int8"
-
-            print("self.added_weight_attrs[0]", self.added_weight_attrs[0])
-            print("self.ffn1_weight_shape", self.ffn1_weight_shape)
-            print("self.add_weight_attrs[1]", self.added_weight_attrs[1])
-            print("self.ffn2_weight_shape", self.ffn2_weight_shape)
             setattr(
                 layer,
                 self.added_weight_attrs[0],  # "up_gate_proj_weight"
                 layer.create_parameter(
-                    shape=self.ffn1_weight_shape,  # ← 使用原有变量名
+                    shape=self.ffn1_weight_shape,
                     dtype=self.weight_dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
@@ -981,16 +966,14 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 layer,
                 self.added_weight_attrs[1],  # "down_proj_weight"
                 layer.create_parameter(
-                    shape=self.ffn2_weight_shape,  # ← 使用原有变量名
+                    shape=self.ffn2_weight_shape,
                     dtype=self.weight_dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
 
-        # ========== 创建 Scale 权重 ==========
         self.create_w4afp8_scale_weights(layer, layer.weight_key_map)
 
-        # ========== 创建 Bias（可选）==========
         if layer.with_bias:
             layer.up_gate_proj_bias = layer.create_parameter(
                 shape=[layer.num_experts, layer.moe_intermediate_size * 2],
@@ -1006,18 +989,11 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             set_weight_attrs(layer.down_proj_bias, extra_weight_attrs)
 
     def process_weights_after_loading(self, layer: nn.Layer) -> None:
-        """
-        v1 loader 权重加载完成后的处理
-
-        处理场景：
-        1. 在线量化: Torch 格式需要转置 → Hadamard 旋转(down_proj) → INT4 量化
-        2. 离线量化: Paddle 格式需要转置 → CUTLASS 格式转换
-        """
         from ..utils import get_orthogonal_matrix
 
         def _rotate_down_proj_weight():
             """
-            对 down_proj 权重应用 Hadamard 旋转
+            Apply Hadamard rotation to down_proj weight
             """
             Q_ffn2, moe_block_size = get_orthogonal_matrix(size=layer.moe_intermediate_size, mode="hadamard_ffn2")
             down_proj_weight = layer.down_proj_weight
@@ -1302,10 +1278,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
             layer.extract_moe_ffn_weights(state_dict)
         )
-        print("up_gate_proj_weight", up_gate_proj_weights)
-        print("down_proj_weights", down_proj_weights)
-        print("logical_expert_ids", logical_expert_ids)
-        print("ep_rank_to_export_id_list", ep_rank_to_expert_id_list)
+
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
         up_gate_proj_weight_scales = []

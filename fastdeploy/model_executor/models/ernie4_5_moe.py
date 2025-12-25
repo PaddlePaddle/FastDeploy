@@ -109,33 +109,35 @@ class Ernie4_5_MoE(nn.Layer):
         moe_quant_type = ""
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
-        print("moe_quant_type", moe_quant_type)
-        is_quantized = getattr(fd_config.quant_config, "is_quantized", False)
-        print("is_quantized", is_quantized)
 
-        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
-            if moe_quant_type == "w4afp8" and not is_quantized:
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
-                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
-                }
-            else:
-                weight_key_map = {
-                    "gate_weight_key": f"{prefix}.gate.weight",
-                    "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
-                    "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
-                    "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
-                    "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
-                    "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
-                    "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
-                    "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
-                }
+        if moe_quant_type == "w4a8" or (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and not fd_config.quant_config.moe_dynamic_quant
+        ):
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+                "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
+                "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and fd_config.quant_config.moe_dynamic_quant
+        ):
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
+            }
         elif moe_quant_type == "w4w2":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
