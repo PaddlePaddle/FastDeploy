@@ -134,6 +134,7 @@ class CacheMessager:
         num_layers,
         gpu_id=0,
         rdma_port=None,
+        cache_dtype="bfloat16",
     ):
         """
         Initialize the CacheMessager object.
@@ -177,6 +178,8 @@ class CacheMessager:
         cache_v_ptr_list = []
         cache_k = []
         cache_v = []
+        k_scale_ptr_list, v_scale_ptr_list = [], []
+        k_cache_scale, v_cache_scale = [], []
         self.messager = {}
         for layer_idx in range(self.num_layers):
             # value cache
@@ -188,6 +191,11 @@ class CacheMessager:
                     cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
                 else:
                     cache_v_ptr_list.append(val_cache.data_ptr())
+                if cache_dtype == "block_wise_fp8":
+                    val_scale_key = f"value_cache_scales_{layer_idx}_rank{self.rank}_device{gpu_id}"
+                    val_cache_scale = self.gpu_cache_kvs[val_scale_key]
+                    v_cache_scale.append(val_cache_scale)
+                    v_scale_ptr_list.append(val_cache_scale.data_ptr())
             # key cache
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
@@ -195,6 +203,11 @@ class CacheMessager:
                 cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
             else:
                 cache_k_ptr_list.append(key_cache.data_ptr())
+            if cache_dtype == "block_wise_fp8":
+                key_scale_key = f"key_cache_scales_{layer_idx}_rank{self.rank}_device{gpu_id}"
+                key_cache_scale = self.gpu_cache_kvs[key_scale_key]
+                k_cache_scale.append(key_cache_scale)
+                k_scale_ptr_list.append(key_cache_scale.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -218,6 +231,9 @@ class CacheMessager:
                     gpu_id,
                     cache_k,
                     cache_v,
+                    k_cache_scale,
+                    v_cache_scale,
+                    cache_dtype,
                 )
                 local_device_id = int(str(cache_k[0].place)[-2])
                 logger.info(f"done create ipc_comm with local_device_id:{local_device_id}, ")
@@ -990,6 +1006,7 @@ def main():
             num_layers=args.num_layers + num_extra_layers,
             gpu_id=device,
             rdma_port=args.rdma_port,
+            cache_dtype=args.cache_dtype,
         )
 
     cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
