@@ -673,6 +673,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("batch_drop"),
         py::arg("pre_ids"),
+        py::arg("mask_rollback"),
+        py::arg("recompute_token_num"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("base_model_seq_lens_this_time"),
