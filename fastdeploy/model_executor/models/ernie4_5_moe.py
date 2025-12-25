@@ -625,7 +625,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
 
     def compute_logits(self, hidden_states: paddle.Tensor):
