@@ -172,7 +172,6 @@ class VocabParallelEmbedding(nn.Layer):
                     initializer=nn.initializer.Normal(mean=0.0, std=self.initializer_range),
                 ),
             )
-            print("self.embeddings", self.embeddings)
             set_weight_attrs(self.embeddings.weight, {"output_dim": False})
             set_weight_attrs(self.embeddings.weight, {"weight_loader": self.weight_loader})
         else:
@@ -202,7 +201,6 @@ class VocabParallelEmbedding(nn.Layer):
         else:
             weight_tensor = get_tensor(state_dict.pop(self.prefix + ".weight")).astype(paddle.get_default_dtype())
 
-        print("weight_tensor", weight_tensor)
         self.embeddings.weight.set_value(weight_tensor)
 
     @classmethod

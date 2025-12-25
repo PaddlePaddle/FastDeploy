@@ -1599,11 +1599,6 @@ def test_structured_outputs_grammar(openai_client):
 
 
 def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payload_w4afp8):
-    """
-    测试 W4AFP8 量化的输出一致性：
-    同一请求发送两次，对比输出差异率
-    """
-    # 第一次请求
     resp1 = openai_client_w4afp8.chat.completions.create(
         model="default",
         stream=False,
@@ -1612,7 +1607,6 @@ def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payloa
     )
     content1 = resp1.choices[0].message.content
 
-    # 第二次请求
     resp2 = openai_client_w4afp8.chat.completions.create(
         model="default",
         stream=False,
@@ -1623,12 +1617,8 @@ def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payloa
 
     required_keywords = ["北京", "天安门"]
     for keyword in required_keywords:
-        assert keyword in content1, f"第一次响应缺少关键词 '{keyword}'，响应内容: {content1}"
-        assert keyword in content2, f"第二次响应缺少关键词 '{keyword}'，响应内容: {content2}"
-
-    # 计算差异率
+        assert keyword in content1, f"First response missing keyword '{keyword}', response content: {content1}"
+        assert keyword in content2, f"Second response missing keyword '{keyword}', response content: {content2}"
     diff_rate = calculate_diff_rate(content1, content2)
-    print(f"差异率: {diff_rate:.2%}")
 
-    # 验证差异率在阈值以内
-    assert diff_rate < 0.05, f"W4AFP8 输出差异过大 ({diff_rate:.2%})"
+    assert diff_rate < 0.05, f"Output difference too large ({diff_rate:.4%})"
