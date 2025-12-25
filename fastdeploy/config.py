@@ -456,6 +456,12 @@ class ModelConfig:
         # TODO:Temporarily does not support transcription.
         return supported_tasks
 
+    def is_ernie5_model(self):
+        """
+        check if the model architecture is Ernie5
+        """
+        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
+
     def _get_default_pooling_task(
         self,
         architectures: list[str],
@@ -1781,6 +1787,10 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+        if self.model_config.is_ernie5_model():
+            # ernie5 model not support chunked_mm_input
+            self.cache_config.disable_chunked_mm_input = True
 
     def check(self):
         """
