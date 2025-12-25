@@ -214,6 +214,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         # processing stop_sequences and stop_token_ids
         process_stop_token_ids(request, self.update_stop_seq)
 
+        processor_kwargs = self._parse_processor_kwargs(request.get("mm_processor_kwargs"))
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
@@ -221,13 +222,11 @@ class PaddleOCRVLProcessor(TextProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
-
+            outputs = self.processor.text2ids(request["prompt"], images, videos, **processor_kwargs)
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
-            outputs = self.processor.request2ids(request)
-
+            outputs = self.processor.request2ids(reques, **processor_kwargs)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 

@@ -219,6 +219,7 @@ class QwenVLProcessor(TextProcessor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        processor_kwargs = self._parse_processor_kwargs(request.get("mm_processor_kwargs"))
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
@@ -226,8 +227,7 @@ class QwenVLProcessor(TextProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
-
+            outputs = self.processor.text2ids(request["prompt"], images, videos, **processor_kwargs)
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
@@ -240,7 +240,7 @@ class QwenVLProcessor(TextProcessor):
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             request.setdefault("enable_thinking", False)
-            outputs = self.processor.request2ids(request)
+            outputs = self.processor.request2ids(request, **processor_kwargs)
 
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")

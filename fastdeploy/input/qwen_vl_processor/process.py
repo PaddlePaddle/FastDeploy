@@ -28,6 +28,7 @@ from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
+from fastdeploy.multimodal.utils import set_processor_kwargs
 from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
@@ -111,7 +112,8 @@ class DataProcessor:
             "assistant": "Assistant: ",
         }
 
-    def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
+    @set_processor_kwargs
+    def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None, **kwargs):
         """
         Convert text with image/video placeholders into model inputs.
 
@@ -195,8 +197,9 @@ class DataProcessor:
 
         return outputs
 
+    @set_processor_kwargs
     def request2ids(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Dict[str, Any], tgts: List[str] = None, **kwargs
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat request with multimodal messages into model inputs.

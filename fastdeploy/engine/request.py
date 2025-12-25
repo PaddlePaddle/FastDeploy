@@ -75,6 +75,7 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
+        mm_processor_kwargs: Optional[dict] = None,
         disable_chat_template: bool = False,
         disaggregate_info: Optional[dict] = None,
         draft_token_ids: Optional[list[int]] = None,
@@ -132,6 +133,7 @@ class Request:
         # Multi-modal related
         self.multimodal_inputs = multimodal_inputs
         self.multimodal_data = multimodal_data
+        self.mm_processor_kwargs = mm_processor_kwargs
         self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
@@ -224,6 +226,7 @@ class Request:
             eos_token_ids=d.get("eos_token_ids"),
             multimodal_inputs=d.get("multimodal_inputs"),
             multimodal_data=d.get("multimodal_data"),
+            mm_processor_kwargs=d.get("mm_processor_kwargs"),
             disable_chat_template=d.get("disable_chat_template"),
             disaggregate_info=d.get("disaggregate_info"),
             draft_token_ids=d.get("draft_token_ids"),
@@ -296,6 +299,7 @@ class Request:
             "tools": self.tools,
             "eos_token_ids": self.eos_token_ids,
             "multimodal_data": self.multimodal_data,
+            "mm_processor_kwargs": self.mm_processor_kwargs,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,

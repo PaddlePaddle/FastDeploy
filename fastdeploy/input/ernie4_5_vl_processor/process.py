@@ -173,7 +173,8 @@ class DataProcessor:
         """Enable evaluation mode (doesn't produce labels)."""
         self.is_training = False
 
-    def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
+    @set_processor_kwargs
+    def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None, **kwargs):
         """
         Convert chat text into model inputs.
 
@@ -303,7 +304,6 @@ class DataProcessor:
         Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
         """
         images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.extract_mm_items(request)
-        print(f"video_max_frames: {self.max_frames} video_min_frames: {self.min_frames}")
         
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
@@ -338,8 +338,9 @@ class DataProcessor:
 
         return outputs
 
+    @set_processor_kwargs
     def prompt_token_ids2outputs(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Dict[str, Any], tgts: List[str] = None, **kwargs
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         outputs = {
             "input_ids": [],
