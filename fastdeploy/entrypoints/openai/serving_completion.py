@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import inspect
 import itertools
 import time
 import traceback
@@ -314,10 +315,14 @@ class OpenAIServingCompletion:
                         aggregated_prompt_logprobs_tensors[rid] = output_prompt_logprobs_tensors
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
-
-                    self.engine_client.data_processor.process_response_dict(
-                        data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                        await self.engine_client.data_processor.process_response_dict(
+                            data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
+                        )
+                    else:
+                        self.engine_client.data_processor.process_response_dict(
+                            data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
+                        )
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
 
@@ -505,9 +510,14 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(
-                        res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                        await self.engine_client.data_processor.process_response_dict(
+                            res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
+                        )
+                    else:
+                        self.engine_client.data_processor.process_response_dict(
+                            res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
+                        )
                     if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
