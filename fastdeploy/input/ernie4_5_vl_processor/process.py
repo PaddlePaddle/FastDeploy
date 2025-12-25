@@ -154,22 +154,22 @@ class DataProcessor(MMBaseDataProcessor):
         }
 
     @staticmethod
-    def mm_num_tokens(grid_thw: list) -> int:
+    def mm_num_tokens(grid_thw: list | list[list[int]]) -> int | list[int]:
         """
         Calculate the number of tokens in the multimodal input.
         """
-        num_tokens = 0
         if len(grid_thw) == 0:
             return 0
         if isinstance(grid_thw[0], list):
+            num_tokens = []
             for i in range(len(grid_thw)):
                 if grid_thw[i][0] == 1:
-                    num_tokens += grid_thw[i][1] * grid_thw[i][2] // 2 // 2
+                    num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2)
                 else:  # have time dimension
-                    num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2
+                    num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2)
             return num_tokens
         if grid_thw[0] == 1:
-            return grid_thw[1] * grid_thw[2] // 2 // 2
+            return grid_thw[i][0] * grid_thw[1] * grid_thw[2] // 2 // 2
         return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2 // 2
 
     def _build_token_type_mapping(self) -> Dict[Any, int]:

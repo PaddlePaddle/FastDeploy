@@ -28,18 +28,16 @@ def test_rollout_model_with_distributed_launch():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path = os.path.join(base_path, "ernie-4_5-vl-28b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "Qwen3-VL-4B-Instruct")
     else:
-        model_path = "./ernie-4_5-vl-28b-a3b-bf16-paddle"
-
-    model_path = "/root/paddlejob/workspace/env_run/output/wangyafeng/models/Qwen3-VL-4B-Thinking"
+        model_path = "./Qwen3-VL-4B-Instruct"
 
     command = [
         sys.executable,
         "-m",
         "paddle.distributed.launch",
         "--gpus",
-        "4,6",
+        "0,1",
         rollout_script,
         "--model_path",
         model_path,

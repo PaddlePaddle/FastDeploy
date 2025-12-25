@@ -68,7 +68,7 @@ class QwenVLProcessor(TextProcessor):
         self.processor = DataProcessor(
             model_path=model_name_or_path,
             enable_processor_cache=enable_processor_cache,
-            # tokens_per_second=config.vision_config.tokens_per_second,
+            tokens_per_second=config.vision_config.tokens_per_second,
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )

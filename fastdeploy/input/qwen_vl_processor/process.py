@@ -119,16 +119,16 @@ class DataProcessor(MMBaseDataProcessor):
         }
 
     @staticmethod
-    def mm_num_tokens(grid_thw: list) -> int:
+    def mm_num_tokens(grid_thw: list | list[list[int]]) -> int | list[int]:
         """
         Calculate the number of tokens in the multimodal input.
         """
-        num_tokens = 0
         if len(grid_thw) == 0:
             return 0
         if isinstance(grid_thw[0], list):
+            num_tokens = []
             for i in range(len(grid_thw)):
-                num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2
+                num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2)
             return num_tokens
 
         return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2
@@ -538,7 +538,7 @@ class DataProcessor(MMBaseDataProcessor):
 
             # Sample frames according to specifications
             frame_indices = sample_frames(
-                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size,  # Ensure divisible by temporal patch size
+                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,

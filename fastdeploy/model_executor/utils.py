@@ -284,7 +284,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
-            logger.info(f"[Torch] {param.name}.weight need transpose, from {loaded_weight.shape} to {param.shape}")
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
@@ -306,7 +305,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:
             # for e_score_correction_bias
-            logger.info(f"[Torch] {param.name} weight reshaped")
             loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
