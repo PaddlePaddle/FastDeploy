@@ -10,7 +10,7 @@ Large Language Model (LLM) inference is divided into two phases: **Prefill** and
 Disaggregated deployment involves deploying Prefill and Decode on distinct computing resources, each using optimal configurations. This approach improves hardware utilization, increases throughput, and reduces end-to-end latency.
 
 <p align="center">
-<img src="images/mix_pd.png" width="50%">
+<img src="../zh/features/images/mix_pd.png" width="50%">
 </p>
 
 Compared to mixed deployment, the core implementation differences of disaggregated deployment lie in **KV Cache transmission** and **request scheduling**.
