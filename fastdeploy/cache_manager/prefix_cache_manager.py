@@ -380,6 +380,7 @@ class PrefixCacheManager:
                 + f" --key_cache_shape {key_cache_shape}"
                 + val_cache_arg_str
                 + f" --pod_ip {pod_ip}"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + f" --cache_queue_port {cache_config.local_cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
