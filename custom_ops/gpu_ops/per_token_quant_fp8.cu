@@ -97,12 +97,14 @@ __global__ void quant_per_token_per_block_padding(
         scale_to_store = ceil_to_ue8m0(scale_to_store);
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-          res_vec[vid] = load_vec_float[vid] / scale_to_store;
+          res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
+              load_vec_float[vid] / scale_to_store);
         }
       } else {
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-          res_vec[vid] = load_vec_float[vid] * MAX_VALUE / max_value_thread;
+          res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
+              load_vec_float[vid] * MAX_VALUE / max_value_thread);
         }
       }
       // store
@@ -155,7 +157,7 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
   const int tma_alignment_bytes = 16;
   const int tma_alignment_elements = tma_alignment_bytes / sizeof(ScaleDtype);
 
-  int padded_token_num =
+  const int padded_token_num =
       ((token_num + tma_alignment_elements - 1) / tma_alignment_elements) *
       tma_alignment_elements;
 
