@@ -44,8 +44,7 @@ __device__ __forceinline__ void ldmatrix_m8n8x4_trans_impl(uint32_t* R,
 
 __device__ __forceinline__ void commit_group() {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  {
-  }
+  {}
 #else
   asm volatile("cp.async.commit_group;\n" ::);
 #endif
