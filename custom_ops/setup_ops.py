@@ -492,7 +492,6 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
-        sources += ["gpu_ops/rms_norm_cuda.cu"]
         sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
