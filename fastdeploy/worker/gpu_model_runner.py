@@ -1516,38 +1516,45 @@ class GPUModelRunner(ModelRunnerBase):
         """
         assert len(self.attn_backends) == 0
 
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
-        head_dim = self.model_config.head_dim
-
-        encoder_block_shape_q = 64
-        decoder_block_shape_q = 16
-
-        res_buffer = allocate_launch_related_buffer(
-            max_batch_size=self.scheduler_config.max_num_seqs,
-            max_model_len=self.model_config.max_model_len,
-            encoder_block_shape_q=encoder_block_shape_q,
-            decoder_block_shape_q=decoder_block_shape_q,
-            decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
-            num_heads=num_heads,
-            kv_num_heads=self.model_config.kv_num_heads,
-            block_size=self.fd_config.cache_config.block_size,
-        )
-        self.share_inputs.update(res_buffer)
-
-        # Get the attention backend
         attn_cls = get_attention_backend()
-        attn_backend = attn_cls(
-            self.fd_config,
-            kv_num_heads=self.model_config.kv_num_heads,
-            num_heads=num_heads,
-            head_dim=head_dim,
-            encoder_block_shape_q=encoder_block_shape_q,
-            decoder_block_shape_q=decoder_block_shape_q,
-        )
+
+        if envs.FD_ATTENTION_BACKEND == "DECODE_APPEND_ATTN":
+            attn_backend = attn_cls(
+                self.fd_config,
+                max_batch_size=self.scheduler_config.max_num_seqs,
+            )
+        else:
+            num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
+            self.model_config.kv_num_heads = max(
+                1,
+                int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+            )
+            head_dim = self.model_config.head_dim
+            encoder_block_shape_q = 64
+            decoder_block_shape_q = 16
+
+            res_buffer = allocate_launch_related_buffer(
+                max_batch_size=self.scheduler_config.max_num_seqs,
+                max_model_len=self.model_config.max_model_len,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+                decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
+                num_heads=num_heads,
+                kv_num_heads=self.model_config.kv_num_heads,
+                block_size=self.fd_config.cache_config.block_size,
+            )
+            self.share_inputs.update(res_buffer)
+
+            # Get the attention backend
+
+            attn_backend = attn_cls(
+                self.fd_config,
+                kv_num_heads=self.model_config.kv_num_heads,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+            )
 
         self.attn_backends.append(attn_backend)
 

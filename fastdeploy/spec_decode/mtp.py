@@ -228,63 +228,80 @@ class MTPProposer(Proposer):
         """
         assert len(self.attn_backends) == 0
 
-        num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
-        head_dim = self.model_config.head_dim
-
-        # Initialize AttentionBackend buffers
-        encoder_block_shape_q = 64
-        decoder_block_shape_q = 16
-
-        self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_num_blocks_cpu"]
-        ).pin_memory()
-        self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_num_blocks_device"]
-        )
-        self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_chunk_size_device"]
-        )
-        self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["max_len_tensor_cpu"]
-        ).cpu()
-
-        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
-        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_num_blocks_x_cpu"]
-        ).cpu()
-        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
-        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["kv_tile_ids_per_batch"]
-        )
-        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["kv_num_blocks_x_cpu"]
-        ).cpu()
-
-        # Get the attention backend
         attn_cls = get_attention_backend()
-        attn_backend = attn_cls(
-            self.fd_config,
-            kv_num_heads=self.model_config.kv_num_heads,
-            num_heads=num_heads,
-            head_dim=head_dim,
-            encoder_block_shape_q=encoder_block_shape_q,
-            decoder_block_shape_q=decoder_block_shape_q,
-        )
-        if attn_backend is None:
-            raise NotImplementedError(
-                "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
+
+        if envs.FD_ATTENTION_BACKEND == "DECODE_APPEND_ATTN":
+            attn_backend = attn_cls(
+                self.fd_config,
+                max_batch_size=self.scheduler_config.max_num_seqs,
             )
+            if attn_backend is None:
+                raise NotImplementedError(
+                    "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
+                )
+        else:
+            num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
+            self.model_config.kv_num_heads = max(
+                1,
+                int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+            )
+            head_dim = self.model_config.head_dim
+
+            # Initialize AttentionBackend buffers
+            encoder_block_shape_q = 64
+            decoder_block_shape_q = 16
+
+            self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
+            self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_tile_ids_per_batch"]
+            )
+            if current_platform.is_xpu():
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).cpu()
+            else:
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).pin_memory()
+            self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_num_blocks_device"]
+            )
+            self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_chunk_size_device"]
+            )
+            self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["max_len_tensor_cpu"]
+            ).cpu()
+
+            self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
+            self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_tile_ids_per_batch"]
+            )
+            self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_num_blocks_x_cpu"]
+            ).cpu()
+            self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
+            self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["kv_tile_ids_per_batch"]
+            )
+            self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["kv_num_blocks_x_cpu"]
+            ).cpu()
+
+            # Get the attention backend
+
+            attn_backend = attn_cls(
+                self.fd_config,
+                kv_num_heads=self.model_config.kv_num_heads,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+            )
+            if attn_backend is None:
+                raise NotImplementedError(
+                    "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
+                )
         self.attn_backends.append(attn_backend)
 
     def clear_mtp_cache(self):
