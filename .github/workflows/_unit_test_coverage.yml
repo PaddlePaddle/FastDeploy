@@ -40,7 +40,7 @@ jobs:
       workflow-name: coverage
 
   run_tests_with_coverage:
-    runs-on: [self-hosted, GPU-h1z1-2Cards]
+    runs-on: [self-hosted, h20-1567421-01]
     timeout-minutes: 90
     needs: check_cov_skip
     if: needs.check_cov_skip.outputs.can-skip != 'true'
