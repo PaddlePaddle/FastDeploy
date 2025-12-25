@@ -673,14 +673,14 @@ class PrefixCacheManager:
                 break
         return False, 0
 
-    def request_match_blocks(self, task, block_size, *args):
+    def request_match_blocks(self, task: Request, block_size, *args):
         """
-        get match blocks info for a task.
+        Match and fetch cache for a task.
         This is a synchronous interface. If CPU-to-GPU data transfer occurs,
         it will block until synchronization completes.
         Callers requiring asynchronous behavior should invoke this via a thread pool.
 
-        Note: This function may allocate GPU blocks for matched CPU Cache
+        Note: This function may allocate GPU blocks for matched CPU Cache and Storage Cache
 
         Parameters:
         - task: Task dictionary
@@ -692,11 +692,12 @@ class PrefixCacheManager:
         """
         with self.request_release_lock:
             try:
-                hit_info = {
-                    "gpu_cache_blocks": 0,
-                    "cpu_cache_blocks": 0,
+                metrics = {
                     "gpu_match_token_num": 0,
                     "cpu_match_token_num": 0,
+                    "storage_match_token_num": 0,
+                    "cpu_cache_prepare_time": 0,
+                    "storage_cache_prepare_time": 0,
                 }
                 self.metrics.req_count += 1
                 if isinstance(task.prompt_token_ids, np.ndarray):
@@ -720,7 +721,7 @@ class PrefixCacheManager:
                 #  update matched node info
                 self._update_matched_node_info(req_id, match_block_node, current_time=time.time())
 
-                # 2. prepare cache: allocate gpu cache for matched cpu blocks, wait for data transfer to complete
+                # 2. prepare cpu cache: allocate gpu cache for matched cpu blocks, wait for data transfer to complete
                 gpu_recv_block_ids = []
                 match_cpu_blocks_num = len(match_cpu_block_ids)
                 if self.can_allocate_gpu_blocks(num_blocks=match_cpu_blocks_num):
@@ -730,6 +731,7 @@ class PrefixCacheManager:
                         )
                         gpu_recv_block_ids = self.allocate_gpu_blocks(match_cpu_blocks_num)
                         if len(gpu_recv_block_ids) > 0:
+                            start_time = time.time()
                             self._prepare_cpu_cache(
                                 req_id=req_id,
                                 swap_node_ids=swap_node_ids,
@@ -737,37 +739,88 @@ class PrefixCacheManager:
                                 match_cpu_block_ids=match_cpu_block_ids,
                                 cpu_recv_block_ids=[],
                             )
+                            cost_time = time.time() - start_time
+                            metrics["cpu_cache_prepare_time"] = cost_time
                 else:
                     raise Exception(
                         "request_match_blocks: Not enough GPU memory to allocate cache for matched CPU Cache"
                     )
 
-                # 3. update metrics
-                matched_token_num = gpu_match_token_num + cpu_match_token_num
-                common_block_ids = match_gpu_block_ids + gpu_recv_block_ids
-                if matched_token_num > 0:
+                # 3. match and prefetch cache from storage
+                match_token_num = gpu_match_token_num + cpu_match_token_num
+                no_match_token_num = input_token_num - match_token_num
+                no_match_block_num = (no_match_token_num + block_size - 1) // block_size
+                gpu_recv_storage_block_ids = []
+                storage_match_token_num = 0
+                match_storage_block_ids = []
+
+                if self.kvcache_storage_backend and no_match_block_num > 0:
+                    if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num):
+                        raise Exception(
+                            "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
+                        )
+
+                    logger.debug(
+                        f"request_match_blocks: req_id {req_id}, allocate {no_match_block_num} block to receive storage cache"
+                    )
+                    gpu_recv_storage_block_ids = self.allocate_gpu_blocks(no_match_block_num)
+
+                    prefix_block_key = [] if match_block_node.hash_value is None else [match_block_node.hash_value]
+                    cur_token_idx = match_token_num
+                    no_match_block_keys = []
+                    while cur_token_idx <= input_token_num - block_size:
+                        cur_block_token_ids = task.prompt_token_ids[cur_token_idx : cur_token_idx + block_size]
+                        cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
+                        no_match_block_keys.append(cur_block_key)
+                        cur_token_idx += block_size
+                        prefix_block_key = [cur_block_key]
+
+                    logger.info(
+                        f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
+                    )
+                    start_time = time.time()
+                    storage_matched_block_num = self.issue_prefetch_storage_task(
+                        req_id, no_match_block_keys, gpu_recv_storage_block_ids
+                    )
+                    storage_match_token_num = storage_matched_block_num * block_size
+                    cost_time = time.time() - start_time
+                    metrics["storage_cache_prepare_time"] = cost_time
+                    logger.info(
+                        f"finish prefetch cache from storage, req_id: {req_id}, "
+                        f"matched block num: {storage_matched_block_num}, cost_time:{cost_time:.6f}s"
+                    )
+
+                    match_storage_block_ids = gpu_recv_storage_block_ids[:storage_matched_block_num]
+                    self.recycle_gpu_blocks(gpu_recv_storage_block_ids[storage_matched_block_num:])
+
+                # 4. update metrics
+                match_token_num = gpu_match_token_num + cpu_match_token_num + storage_match_token_num
+                common_block_ids = match_gpu_block_ids + gpu_recv_block_ids + match_storage_block_ids
+                if match_token_num > 0:
                     self.metrics.hit_req_count += 1
                 self.metrics.calculate_hit_metrics(
                     req_id,
                     cpu_match_token_num,
                     gpu_match_token_num,
+                    storage_match_token_num,
                     input_token_num,
                 )
-                hit_info["gpu_cache_blocks"] = len(match_gpu_block_ids)
-                hit_info["cpu_cache_blocks"] = len(match_cpu_block_ids)
-                hit_info["gpu_match_token_num"] = gpu_match_token_num
-                hit_info["cpu_match_token_num"] = cpu_match_token_num
+                metrics["gpu_match_token_num"] = gpu_match_token_num
+                metrics["cpu_match_token_num"] = cpu_match_token_num
+                metrics["storage_match_token_num"] = storage_match_token_num
                 self.metrics._update_history_hit_metrics()
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
-                logger.info(f"request_match_blocks: req_id {req_id}, matched_block_ids {common_block_ids}")
+                logger.debug(f"request_match_blocks: req_id {req_id}, matched_block_ids_num {len(common_block_ids)}")
+                logger.debug(f"request_match_blocks: req_id {req_id}, matched_block_ids {common_block_ids}")
+
                 # set leaf node temporarily, then update it in update_cache_blocks
                 self.req_leaf_map[req_id] = match_block_node
                 self.leaf_req_map[match_block_node].add(req_id)
                 #  record request cache info
                 self.cache_info[req_id] = [match_block_node, len(common_block_ids) * block_size]
                 task.cached_block_num = len(common_block_ids)
-                return common_block_ids, matched_token_num, hit_info
+                return common_block_ids, match_token_num, metrics
             except Exception as e:
                 logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
                 raise e
@@ -1026,7 +1079,7 @@ class PrefixCacheManager:
         self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
         if is_sync:
             storage_block_ids = self.wait_prefetch_storage_task(req_id)
-        return storage_block_ids
+        return len(storage_block_ids)
 
     def wait_prefetch_storage_task(self, req_id):
         """

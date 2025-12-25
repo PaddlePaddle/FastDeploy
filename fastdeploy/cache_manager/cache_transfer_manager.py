@@ -456,8 +456,9 @@ class CacheTransferManager:
     def _run_read_storage(self, k_cache_keys, v_cache_keys, gpu_block_ids, cpu_block_ids):
         try:
             logger.debug(
-                f"_run_read_storage, key_hash_keys: {k_cache_keys}, "
-                f"value_hash_keys: {v_cache_keys}, gpu_block_ids: {gpu_block_ids}"
+                f"_run_read_storage, key_hash_keys_num: {len(k_cache_keys)}, "
+                f"value_hash_keys_num: {len(v_cache_keys)}, gpu_block_ids_num: {len(gpu_block_ids)}, "
+                f"cpu_block_ids_num: {len(cpu_block_ids)}"
             )
 
             block_num = len(gpu_block_ids)
@@ -511,8 +512,8 @@ class CacheTransferManager:
         """Read cache from the storage backend to the GPU memory."""
         try:
             logger.debug(
-                f"read_storage_task, task id: {task_id}, hash_keys: {keys}, "
-                f"gpu_block_ids: {gpu_block_ids}, timeout: {timeout}"
+                f"read_storage_task, task id: {task_id}, hash_keys_num: {len(keys)}, "
+                f"gpu_block_ids_num: {len(gpu_block_ids)}, timeout: {timeout}"
             )
             k_cache_keys = [f"{key}_key_{self.rank}" for key in keys]
             v_cache_keys = [f"{key}_value_{self.rank}" for key in keys]

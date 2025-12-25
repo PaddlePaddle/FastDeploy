@@ -157,7 +157,7 @@ def metrics_summary(metrics, token_timestamps):
     summary["gpu_cache_token_num"] = m0.get("gpu_cache_token_num")
     summary["cpu_cache_token_num"] = m0.get("cpu_cache_token_num")
     summary["storage_cache_token_num"] = m0.get("storage_cache_token_num")
-    summary["gpu_cpu_cache_prepare_time"] = m0.get("gpu_cpu_cache_prepare_time")
+    summary["cpu_cache_prepare_time"] = m0.get("cpu_cache_prepare_time")
     summary["storage_cache_prepare_time"] = m0.get("storage_cache_prepare_time")
 
     return summary
