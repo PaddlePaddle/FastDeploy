@@ -907,11 +907,11 @@ def version():
 
 def get_version_info():
     """
-    读取version.txt文件,解析并返回dict结构的版本信息
+    Read version.txt file and parse version information, returning as a dict structure.
 
     Returns:
-        dict: 包含版本信息的字典，如果文件不存在则返回None
-        字典包含以下键值:
+        dict: A dictionary containing version information, or None if the file does not exist
+        The dictionary contains the following keys:
         - 'fastdeploy_commit': FastDeploy GIT COMMIT ID
         - 'paddle_version': Paddle version
         - 'paddle_commit': Paddle GIT COMMIT ID
@@ -953,11 +953,11 @@ def get_version_info():
 
 def current_package_version():
     """
-    读取version.txt文件,解析出fastdeploy version对应的版本号
+    Read version.txt file and parse the fastdeploy version number.
 
     Args:
     Returns:
-        str: fastdeploy版本号,如果解析失败返回Unknown
+        str: fastdeploy version number, or "Unknown" if parsing fails
     """
     version_info = get_version_info()
     if version_info is None:

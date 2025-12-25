@@ -75,7 +75,7 @@ except ImportError:
 
 __version__ = current_package_version()
 
-# 版本检查机制：检查FastDeploy编译时的Paddle版本与运行环境中的Paddle版本是否一致
+# Version check mechanism: Check if the Paddle version used at runtime matches the one used during FastDeploy compilation
 try:
     version_info = get_version_info()
     if version_info is not None and "paddle_commit" in version_info:
@@ -84,13 +84,14 @@ try:
         
         if build_paddle_commit != runtime_paddle_commit:
             console_logger.warning(
-                f"当前运行环境Paddle版本与FastDeploy编译时用的Paddle代码版本不一致，"
-                f"这可能会导致使用出错，建议安装对应版本的Paddle进行使用。\n"
-                f"  编译时Paddle commit: {build_paddle_commit}\n"
-                f"  运行时Paddle commit: {runtime_paddle_commit}"
+                f"The Paddle version in the current runtime environment is inconsistent with the Paddle code version "
+                f"used during FastDeploy compilation. This may cause errors. "
+                f"It is recommended to install the corresponding Paddle version.\n"
+                f"  Build-time Paddle commit: {build_paddle_commit}\n"
+                f"  Runtime Paddle commit: {runtime_paddle_commit}"
             )
 except Exception as e:
-    # 版本检查失败不应该影响FastDeploy的正常使用
+    # Version check failure should not affect FastDeploy's normal operation
     console_logger.debug(f"Version check failed: {e}")
     pass
 
