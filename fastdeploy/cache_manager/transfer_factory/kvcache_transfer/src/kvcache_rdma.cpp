@@ -435,7 +435,7 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
           continue;
         }
 
-        server_exchange_mr(ctx, has_value_cache_);
+        server_exchange_mr(ctx);
         INFO("connect successfully");
       } else {
         auto ctx_iter = connectionContexts.find(event_fd);

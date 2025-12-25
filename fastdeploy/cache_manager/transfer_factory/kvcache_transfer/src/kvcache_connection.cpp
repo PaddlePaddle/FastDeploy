@@ -810,8 +810,8 @@ bool client_exchange_mr(struct RdmaContext *ctx) {
  * @param ctx The RDMA context
  * @return true on success, false on failure
  */
-bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
-  LOGD("verbs server exchange mr: start. has_value_cache=%d", has_value_cache);
+bool server_exchange_mr(struct RdmaContext *ctx) {
+  LOGD("verbs server exchange mr: start.");
 
   if (ctx->conn.layer_number <= 0) {
     ERR("Invalid layer number: %d", ctx->conn.layer_number);
@@ -831,7 +831,7 @@ bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
         layer_num);
     return false;
   }
-  if (has_value_cache && val_mrs.size() != layer_num) {
+  if (!val_mrs.empty() && val_mrs.size() != layer_num) {
     ERR("server write cache VALUE memory region size error: %zu vs %d",
         val_mrs.size(),
         layer_num);
@@ -862,7 +862,7 @@ bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
 
   send_key_ptrs.reserve(layer_num);
   send_key_rkeys.reserve(layer_num);
-  if (has_value_cache) {
+  if (!val_mrs.empty()) {
     send_val_ptrs.reserve(layer_num);
     send_val_rkeys.reserve(layer_num);
   }
@@ -880,7 +880,7 @@ bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
     send_key_ptrs.push_back(reinterpret_cast<uint64_t>(key_mrs[i]->addr));
     send_key_rkeys.push_back(key_mrs[i]->rkey);
 
-    if (has_value_cache) {
+    if (!val_mrs.empty()) {
       send_val_ptrs.push_back(reinterpret_cast<uint64_t>(val_mrs[i]->addr));
       send_val_rkeys.push_back(val_mrs[i]->rkey);
     }
@@ -903,7 +903,7 @@ bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
   if (!exchange_mr_vector(ctx, send_key_ptrs, false)) return false;
   if (!exchange_mr_vector(ctx, send_key_rkeys, false)) return false;
 
-  if (has_value_cache) {
+  if (!val_mrs.empty()) {
     LOGD("Exchange mr information for value...");
     if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
     if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
