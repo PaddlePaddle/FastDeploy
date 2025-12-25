@@ -336,7 +336,7 @@ async def async_request_eb_openai_completions(
         ("completions", "profile")
     ), "OpenAI Completions API URL must end with 'completions' or 'profile'."
 
-    async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(trust_env=True, read_bufsize=4 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT) as session:
         payload = {
             "model": request_func_input.model,
             "prompt": request_func_input.prompt,
