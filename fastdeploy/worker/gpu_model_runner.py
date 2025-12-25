@@ -31,7 +31,6 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
-    GPUMemoryChecker,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -58,11 +57,11 @@ from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
     )
 
-    recover_decode_task = None
     share_external_data = None
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
@@ -188,13 +187,15 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
-        self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
 
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
+        increment_value = (
+            4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
+        )
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
-            fill_value=4,
+            fill_value=increment_value,
             dtype="int64",
         ).cpu()
 
@@ -211,8 +212,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         # Postprocess Env params
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
-        logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
 
         # Rollout routing replay config
         self.routing_replay_manager = None
@@ -233,6 +234,8 @@ class GPUModelRunner(ModelRunnerBase):
                 name="WorkerAsyncOutputCopy",
             )
             self.async_output_copy_thread.start()
+
+        self.enable_entropy = self.model_config.enable_entropy
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -466,7 +469,7 @@ class GPUModelRunner(ModelRunnerBase):
                         multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
-                                inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
+                                inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
                             )
                             multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
                             multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
@@ -485,7 +488,7 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         multi_vision_inputs["images_lst"].append(
-                            inputs["images"][request.image_start : request.image_end].cuda()
+                            inputs["images"][request.image_start : request.image_end].to(self.device)
                         )
                         multi_vision_inputs["grid_thw_lst"].extend(
                             paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
@@ -534,7 +537,8 @@ class GPUModelRunner(ModelRunnerBase):
                         assert (
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                        grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                        mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
@@ -558,7 +562,8 @@ class GPUModelRunner(ModelRunnerBase):
             merge_image_features, feature_idx, thw_idx = [], 0, 0
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
-                mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
+                mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
                 mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                 feature_start = feature_position.offset
@@ -641,6 +646,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
+            self.share_inputs["req_ids"][idx] = str(request.request_id)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -658,14 +664,14 @@ class GPUModelRunner(ModelRunnerBase):
                     logits_info, schemata_key = self._init_logits_processor(request)
                     request.schemata_key = schemata_key
 
-                    if self.scheduler_config.splitwise_role == "decode":
-                        if (
-                            hasattr(request, "prefill_end_index")
-                            and hasattr(request, "prompt_token_ids")
-                            and request.prefill_end_index > len(request.prompt_token_ids)
-                        ):
-                            if hasattr(request, "output_token_ids"):
-                                prefill_tokens.extend(request.output_token_ids)
+                    if (
+                        self.scheduler_config.splitwise_role == "decode"
+                        and hasattr(request, "prefill_end_index")
+                        and hasattr(request, "prompt_token_ids")
+                        and request.prefill_end_index > len(request.prompt_token_ids)
+                        and hasattr(request, "output_token_ids")
+                    ):
+                        prefill_tokens.extend(request.output_token_ids)
 
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
@@ -751,6 +757,11 @@ class GPUModelRunner(ModelRunnerBase):
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 self.forward_batch_reqs_list[idx] = None
+
+                # Routing Replay
+                if self.fd_config.routing_replay_config.enable_routing_replay:
+                    self.routing_replay_manager.clear_request(batch_id=idx)
+
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -782,12 +793,12 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -1006,12 +1017,12 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -1218,7 +1229,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
+        max_bad_tokens_len = max(self.share_inputs["bad_tokens_len"])
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
@@ -1380,7 +1391,7 @@ class GPUModelRunner(ModelRunnerBase):
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -1462,6 +1473,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
+        logger.info("kv cache is initialized!")
 
     def _initialize_attn_backend(self) -> None:
         """
@@ -1596,6 +1608,7 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=pooler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
@@ -1699,12 +1712,14 @@ class GPUModelRunner(ModelRunnerBase):
             sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
+            sampling_metadata=self.sampling_metadata,
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
+            enable_entropy=self.enable_entropy,
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -1905,25 +1920,21 @@ class GPUModelRunner(ModelRunnerBase):
                     )
             elif self.speculative_decoding and self.speculative_method == "mtp":
                 # Capture Target Model without bsz 1
-                for batch_size in sorted(capture_sizes, reverse=True):
-                    if batch_size == 1:
-                        logger.info("Skip token_num = 1, when capture target model for mtp")
-                    else:
-                        assert batch_size % 2 == 0
-                        self._dummy_run(
-                            num_tokens=(
-                                self.scheduler_config.max_num_seqs
-                                * (self.speculative_config.num_speculative_tokens + 1)
-                                if self.scheduler_config.splitwise_role == "decode"
-                                else self.scheduler_config.max_num_batched_tokens
-                            ),
-                            batch_size=int(batch_size / 2),
-                            in_capturing=True,
-                            expected_decode_len=1,
-                        )
-                        logger.info(
-                            f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}"
-                        )
+                for capture_size in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=(
+                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
+                            if self.scheduler_config.splitwise_role == "decode"
+                            else self.scheduler_config.max_num_batched_tokens
+                        ),
+                        batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
+                        in_capturing=True,
+                        expected_decode_len=self.speculative_config.num_speculative_tokens,
+                        accept_all_drafts=True,
+                    )
+                    logger.info(
+                        f"Warm up the Target model with the num_tokens:{capture_size}, expected_decode_len:{self.speculative_config.num_speculative_tokens}"
+                    )
                 if self.graph_opt_config.draft_model_use_cudagraph:
                     # Capture Draft Model without bsz 1
                     # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
@@ -2184,11 +2195,13 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=pooler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
+                enable_entropy=self.enable_entropy,
             )
 
             return None
@@ -2311,6 +2324,7 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_or_pooler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                sampling_metadata=self.sampling_metadata,
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
@@ -2318,6 +2332,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
+                enable_entropy=self.enable_entropy,
             )
 
             if self.guided_backend is not None and sampler_output is not None:
@@ -2553,7 +2568,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
         # Clear parameters and Send single
-        self.dynamic_weight_manager.clear_parameters(pid)
+        self.dynamic_weight_manager.clear_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
@@ -2570,7 +2587,9 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(pid)
+        self.dynamic_weight_manager.update_parameters(
+            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+        )
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:

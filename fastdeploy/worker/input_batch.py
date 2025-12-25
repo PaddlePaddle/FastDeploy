@@ -226,6 +226,8 @@ class InputBatch:
             -1,
             dtype="int64",
         )
+        self.req_ids = [""] * max_num_seqs
+        self.entropy_list = [[] for _ in range(max_num_seqs)]
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.input_ids_cpu = paddle.full(
@@ -277,6 +279,7 @@ class InputBatch:
             self.batch_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.next_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.cu_next_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
+            self.recompute_token_num = paddle.full([max_num_seqs, 1], self.num_model_steps - 1, dtype="int32")
 
             # attn_mask
             if self.enable_mm:
@@ -357,6 +360,7 @@ class InputBatch:
         swap_data(self.prompt_lens, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.stop_flags, i1, i2)
+        swap_data(self.recompute_token_num, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]

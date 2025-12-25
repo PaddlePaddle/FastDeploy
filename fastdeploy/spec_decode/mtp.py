@@ -529,7 +529,9 @@ class MTPProposer(Proposer):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                    # P-D split need rollback one step
+                    self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
+                    # NOTE(liuzichang):
+                    # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
@@ -699,14 +701,6 @@ class MTPProposer(Proposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        # Mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            only_decode_batch_list = []
-            prefill_exists = self.exist_prefill()
-            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
-            only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
-
     def exist_prefill(self):
         """
         check whether prefill stage exist
@@ -733,6 +727,8 @@ class MTPProposer(Proposer):
             self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
+            self.model_inputs["mask_rollback"],
+            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
             self.target_model_inputs["seq_lens_this_time"],
