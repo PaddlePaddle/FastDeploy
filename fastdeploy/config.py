@@ -127,6 +127,11 @@ class ErnieArchitectures:
         "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
+    ERNIE5_MODELS = {
+        "Ernie5ForCausalLM",
+        "Ernie5MoeForCausalLM",
+    }
+
     @classmethod
     def register_ernie_model_arch(cls, model_class):
         if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
@@ -141,6 +146,11 @@ class ErnieArchitectures:
     def is_ernie_arch(cls, architecture):
         """Check if the given architecture is an ERNIE architecture."""
         return architecture in cls.ARCHITECTURES
+
+    @classmethod
+    def is_ernie5_arch(cls, architectures):
+        """Check if the given architecture is an ERNIE5 architecture."""
+        return any(arch in architectures for arch in cls.ERNIE5_MODELS)
 
 
 PRETRAINED_INIT_CONFIGURATION = {
@@ -455,12 +465,6 @@ class ModelConfig:
 
         # TODO:Temporarily does not support transcription.
         return supported_tasks
-
-    def is_ernie5_model(self):
-        """
-        check if the model architecture is Ernie5
-        """
-        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _get_default_pooling_task(
         self,
@@ -1788,7 +1792,7 @@ class FDConfig:
         else:
             raise NotImplementedError
 
-        if self.model_config.is_ernie5_model():
+        if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
             # ernie5 model not support chunked_mm_input
             self.cache_config.disable_chunked_mm_input = True
 
