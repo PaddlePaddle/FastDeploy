@@ -177,7 +177,54 @@ def _install_stub_modules() -> None:
                 inference_start_time=data.get("inference_start_time"),
             )
 
-    from fastdeploy.engine.request import Request
+    class Request:
+        def __init__(
+            self,
+            request_id: str,
+            prompt: Optional[str] = None,
+            prompt_token_ids: Optional[List[int]] = None,
+            prompt_token_ids_len: int = 0,
+            arrival_time: Optional[float] = None,
+            disaggregate_info: Optional[Dict[str, Any]] = None,
+        ) -> None:
+            self.request_id = request_id
+            self.prompt = prompt or ""
+            self.prompt_token_ids = prompt_token_ids or []
+            self.prompt_token_ids_len = prompt_token_ids_len
+            self.arrival_time = arrival_time if arrival_time is not None else time.time()
+            self.metrics = RequestMetrics(arrival_time=self.arrival_time)
+            self.disaggregate_info = disaggregate_info
+
+        def to_dict(self) -> Dict[str, Any]:
+            return {
+                "request_id": self.request_id,
+                "prompt": self.prompt,
+                "prompt_token_ids": list(self.prompt_token_ids),
+                "prompt_token_ids_len": self.prompt_token_ids_len,
+                "arrival_time": self.arrival_time,
+                "metrics": self.metrics.to_dict(),
+                "disaggregate_info": self.disaggregate_info,
+            }
+
+        @classmethod
+        def from_dict(cls, data: Dict[str, Any]) -> "Request":
+            req = cls(
+                request_id=data["request_id"],
+                prompt=data.get("prompt"),
+                prompt_token_ids=data.get("prompt_token_ids"),
+                prompt_token_ids_len=data.get("prompt_token_ids_len", 0),
+                arrival_time=data.get("arrival_time", time.time()),
+                disaggregate_info=data.get("disaggregate_info"),
+            )
+            metrics_dict = data.get("metrics")
+            if metrics_dict:
+                req.metrics = RequestMetrics.from_dict(metrics_dict)
+            else:
+                req.refresh_metrics()
+            return req
+
+        def refresh_metrics(self) -> None:
+            self.metrics = RequestMetrics.from_dict({"arrival_time": self.arrival_time})
 
     class RequestOutput:
         def __init__(
