@@ -238,9 +238,7 @@ class RMSNorm(nn.Layer):
         else:
             if residual_input is not None:
                 x = x + residual_input
-            zkk = x + 0
-            res = external_rmsnorm(zkk, self.weight, self.eps)
-            norm_out = res[0], x
+            norm_out = external_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
