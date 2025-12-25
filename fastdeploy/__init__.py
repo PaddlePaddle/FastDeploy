@@ -47,7 +47,7 @@ from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import current_package_version, envs
+from fastdeploy.utils import console_logger, current_package_version, envs, get_version_info
 
 paddle.compat.enable_torch_proxy(scope={"triton"})
 # paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
@@ -74,6 +74,24 @@ except ImportError:
 # TODO(tangbinhan): remove this code
 
 __version__ = current_package_version()
+
+# 版本检查机制：检查FastDeploy编译时的Paddle版本与运行环境中的Paddle版本是否一致
+try:
+    version_info = get_version_info()
+    if version_info is not None and "paddle_commit" in version_info:
+        build_paddle_commit = version_info["paddle_commit"]
+        runtime_paddle_commit = paddle.version.commit
+        
+        if build_paddle_commit != runtime_paddle_commit:
+            console_logger.warning(
+                f"当前运行环境Paddle版本与FastDeploy编译时用的Paddle代码版本不一致，"
+                f"这可能会导致使用出错，建议安装对应版本的Paddle进行使用。\n"
+                f"  编译时Paddle commit: {build_paddle_commit}\n"
+                f"  运行时Paddle commit: {runtime_paddle_commit}"
+            )
+except Exception as e:
+    # 版本检查失败不应该影响FastDeploy的正常使用
+    pass
 
 
 MODULE_ATTRS = {"ModelRegistry": ".model_executor.models.model_base:ModelRegistry", "version": ".utils:version"}
