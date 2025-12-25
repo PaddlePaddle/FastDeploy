@@ -574,11 +574,9 @@ class DataProcessor(BaseDataProcessor):
             List[int]: ID sequences
         """
         message_dict = {
-            "messages": getattr(request, "messages", None),
-            "tools": getattr(request, "tools", None),
-            "documents": getattr(request, "documents", None),
-            "system": getattr(request, "system", None),
-            "enable_thinking": getattr(request, "enable_thinking", None),
+            key: getattr(request, key, None)
+            for key in ["messages", "tools", "documents", "enable_thinking", "system"]
+            if getattr(request, key, None) is not None
         }
         if "add_generation_prompt" not in kwargs:
             kwargs["add_generation_prompt"] = (

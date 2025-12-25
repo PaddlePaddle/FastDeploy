@@ -383,6 +383,15 @@ class Ernie4_5Processor(BaseDataProcessor):
             reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
             response_obj.outputs.reasoning_token_num = len(reasoning_tokens)
+            response_obj.outputs.reasoning_token_num = len(reasoning_tokens)
+            response_obj.outputs.reasoning_content = reasoning_content
+            response_obj.outputs.text = (
+                reasoning_delta_message.content or ""
+                if reasoning_delta_message and hasattr(reasoning_delta_message, "content")
+                else ""
+            )
+        else:
+            response_obj.outputs.text = delta_text
         if self.tool_parser_obj:
             response_obj.outputs.enable_parser = True
             if req_id not in self.tool_parser_dict:
@@ -399,7 +408,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
                 response_obj.outputs.delta_message = tool_call_delta_message
-        response_obj.outputs.text = delta_text
+
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -423,11 +432,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat_template.")
         message_dict = {
-            "messages": getattr(request_or_messages, "messages", None),
-            "tools": getattr(request_or_messages, "tools", None),
-            "documents": getattr(request_or_messages, "documents", None),
-            "system": getattr(request_or_messages, "system", None),
-            "enable_thinking": getattr(request_or_messages, "enable_thinking", None),
+            key: getattr(request_or_messages, key, None)
+            for key in ["messages", "tools", "documents", "enable_thinking", "system"]
+            if getattr(request_or_messages, key, None) is not None
         }
         spliced_message = self.tokenizer.apply_chat_template(
             message_dict,

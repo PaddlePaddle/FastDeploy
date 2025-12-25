@@ -114,7 +114,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         """
         Create embeddings for the input texts using the pipeline pattern
         """
-        request_id = self._generate_request_id(getattr(request, "user", None))
+        request_id = self._generate_request_id(request)
 
         ctx = ServeContext[EmbeddingRequest](
             request=request,
@@ -138,12 +138,11 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         return response
 
     @override
-    def _build_response(self, ctx: ServeContext):
+    def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final embedding response"""
-        api_server_logger.info(f"[{ctx.request_id}] Embedding RequestOutput received:{ctx.request_output}")
+        api_server_logger.info(f"[{ctx.request_id}] Embedding RequestOutput received:{request_output}")
 
-        # base = PoolingRequestOutput.from_dict(ctx.request_output)
-        base = ctx.request_output
+        base = request_output
         embedding_res = EmbeddingRequestOutput.from_base(base)
 
         data = EmbeddingResponseData(

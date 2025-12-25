@@ -170,7 +170,7 @@ class EngineServiceClient:
 
     def _wait_engine_ready(self) -> bool:
         """Wait for engine and workers to be fully ready"""
-        max_wait_time = 180  # seconds
+        max_wait_time = 500  # seconds
         wait_interval = 1
         elapsed_time = 0
 

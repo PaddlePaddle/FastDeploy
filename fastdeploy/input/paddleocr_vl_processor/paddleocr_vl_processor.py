@@ -87,11 +87,8 @@ class PaddleOCRVLProcessor(TextProcessor):
         Returns:
             Request: Processed request with model inputs
         """
-        # task = request.to_dict()
-        # task["enable_thinking"] = kwargs.get("enable_thinking", False)
         setattr(request, "enable_thinking", kwargs.get("enable_thinking", False))
         self.process_request_obj(request, max_model_len)
-        # request = Request.from_dict(task)
         request = self._apply_default_parameters(request)
         return request
 

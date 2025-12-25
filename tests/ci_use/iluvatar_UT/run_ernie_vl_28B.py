@@ -33,7 +33,7 @@ from ci_use.iluvatar_UT.utils import TIMEOUT_MSG, timeout
 def offline_infer_check():
     set_random_seed(123)
 
-    PATH = "/data1/fastdeploy/ERNIE-4.5-VL-28B-A3B-Paddle"
+    PATH = "/model_data/ERNIE-4.5-VL-28B-A3B-Paddle"
     tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)
 
     messages = [
