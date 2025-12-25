@@ -17,6 +17,7 @@
 import copy
 import hashlib
 import math
+import pickle
 import random
 import threading
 import time
@@ -412,8 +413,7 @@ class ResultReader:
             for result in results:
                 try:
                     # logger.info(f"Scheduler Get Results: {result.request_id}")
-                    data = orjson.loads(result)
-                    result = RequestOutput.from_dict(data)
+                    result = pickle.loads(result)
                     self.data.appendleft(result)
                 except Exception as e:
                     logger.error(f"Parse Result Error:{e}, {str(traceback.format_exc())}, {result}")
@@ -892,7 +892,7 @@ class InferScheduler:
             if self.role == "prefill" and result.outputs.send_idx == 0:
                 result.finished = False
 
-            result_str = orjson.dumps(result.to_dict())
+            result_str = pickle.dumps(result, protocol=5)
             # if self.role == "prefill" or result.error_code != 200 or result.finished:
             #    logger.info(f"Infer Put Finish Result: {result_str}")
             groups[key].append(result_str)
