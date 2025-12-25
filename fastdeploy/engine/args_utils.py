@@ -230,6 +230,14 @@ class EngineArgs:
     """
     Port for cache queue.
     """
+    kvcache_storage_backend: str = None
+    """
+    The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
+    """
+    write_policy: str = "write_through"
+    """
+    The policy of write cache to storage.
+    """
 
     # System configuration parameters
     use_warmup: int = 0
@@ -240,7 +248,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -266,6 +274,11 @@ class EngineArgs:
     # to avoid the excess work.
     #
     # This optimization is enabled by default, and can be disabled by using this flag.
+    """
+
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
     """
 
     engine_worker_queue_port: Optional[Union[int, str, list]] = None
@@ -504,6 +517,11 @@ class EngineArgs:
     Whether to skip port availability check. Default is False (not skip).
     """
 
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -540,11 +558,20 @@ class EngineArgs:
             or current_platform.is_xpu()
             or current_platform.is_maca()
             or current_platform.is_iluvatar()
+            or current_platform.is_intel_hpu()
         ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
+
+        if self.kvcache_storage_backend is not None:
+            if not self.enable_prefix_caching:
+                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         self.post_init_all_ports()
 
@@ -848,6 +875,12 @@ class EngineArgs:
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -950,6 +983,12 @@ class EngineArgs:
             default=EngineArgs.chunked_moe_size,
             help="Chunked size of moe input.",
         )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -993,6 +1032,22 @@ class EngineArgs:
             type=int,
             default=EngineArgs.static_decode_blocks,
             help="Static decoding blocks num.",
+        )
+
+        cache_group.add_argument(
+            "--kvcache-storage-backend",
+            type=nullable_str,
+            choices=["mooncake"],
+            default=EngineArgs.kvcache_storage_backend,
+            help="The storage backend for kvcache storage. Leave empty to disable.",
+        )
+
+        cache_group.add_argument(
+            "--write-policy",
+            type=str,
+            choices=["write_through"],
+            default=EngineArgs.write_policy,
+            help="KVCache write policy",
         )
 
         # Cluster system parameters group

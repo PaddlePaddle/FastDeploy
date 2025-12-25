@@ -412,8 +412,7 @@ class ResultReader:
             for result in results:
                 try:
                     # logger.info(f"Scheduler Get Results: {result.request_id}")
-                    data = orjson.loads(result)
-                    result = RequestOutput.from_dict(data)
+                    result = pickle.loads(result)
                     self.data.appendleft(result)
                 except Exception as e:
                     logger.error(f"Parse Result Error:{e}, {str(traceback.format_exc())}, {result}")
@@ -523,9 +522,8 @@ class APIScheduler:
         pnode = self.select_pd(req, pnodes, "prefill")
         if pnode.role == "mixed":
             req.disaggregate_info = None
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = pickle.dumps(req_dict, protocol=5)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             pkey = f"ReqQ_{pnode.nodeid}"
             # logger.info(f"Schedule Req {req_str} to Mixed")
             self.client.lpush(pkey, req_str)
@@ -553,9 +551,8 @@ class APIScheduler:
 
             req.disaggregate_info = disaggregate_info
             pkey, dkey = f"ReqQ_{pnode.nodeid}", f"ReqQ_{dnode.nodeid}"
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = pickle.dumps(req_dict, protocol=5)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             # logger.info(f"Schedule Req {req_str}")
             self.client.lpush(dkey, req_str)
             self.client.lpush(pkey, req_str)
@@ -807,7 +804,6 @@ class InferScheduler:
                 for req_str in reqs:
                     req = pickle.loads(req_str)
                     group = req.get("group", "")
-                    req = Request.from_dict(req)
                     writer_idx = select_writer(req)
                     logger.info(f"Infer Scheduler Get Req: {req.request_id} writer idx {writer_idx}")
                     req.request_id = f"{req.request_id}#{writer_idx}#{group}"
@@ -902,7 +898,7 @@ class InferScheduler:
             if self.role == "prefill" and result.outputs.send_idx == 0:
                 result.finished = False
 
-            result_str = orjson.dumps(result.to_dict())
+            result_str = pickle.dumps(result, protocol=5)
             # if self.role == "prefill" or result.error_code != 200 or result.finished:
             #    logger.info(f"Infer Put Finish Result: {result_str}")
             groups[key].append(result_str)
