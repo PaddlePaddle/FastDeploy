@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.propagate import extract, inject
+from opentelemetry.sdk._logs import LoggingHandler
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -118,12 +120,38 @@ def instrument(app: FastAPI):
             llm_logger.info("Applying instrumentors...")
             FastAPIInstrumentor.instrument_app(app)
             try:
-                LoggingInstrumentor().instrument(set_logging_format=True)
-            except Exception:
+                global_instrument = envs.GLOBAL_LOGGING_INSTRUMENT
+                if global_instrument:
+                    LoggingInstrumentor().instrument()
+                else:
+                    target_logger = logging.getLogger("legacy.trace")
+                    custom_handler = CustomLoggingHandler(level=logging.NOTSET)
+                    target_logger.handlers.insert(0, custom_handler)
+            except Exception as e:
+                llm_logger.warning(f"Logging instrument failed: {e}")
                 pass
     except:
         llm_logger.info("instrument failed")
         pass
+
+
+class CustomLoggingHandler(LoggingHandler):
+    def emit(self, record):
+        try:
+            current_span = trace.get_current_span()
+            trace_id = 0
+            span_id = 0
+            if current_span and current_span.is_recording():
+                span_context = current_span.get_span_context()
+                if span_context.trace_id != 0:
+                    trace_id = span_context.trace_id
+                if span_context.span_id != 0:
+                    span_id = span_context.span_id
+            record.otelTraceID = "0" if trace_id == 0 else format(trace_id, "032x")
+            record.otelSpanID = "0" if span_id == 0 else format(span_id, "016x")
+        except:
+            record.otelTraceID = "0"
+            record.otelSpanID = "0"
 
 
 def inject_to_metadata(request, metadata_attr="metadata"):

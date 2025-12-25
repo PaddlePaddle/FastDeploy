@@ -151,6 +151,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "GLOBAL_LOGGING_INSTRUMENT": lambda: int(os.getenv("GLOBAL_LOGGING_INSTRUMENT", "0")),
 }
 
 
