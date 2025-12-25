@@ -106,7 +106,7 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 }'
 ```
 
-**参数说明**
+**具体说明**
 
 分离式部署启动Prefill/Decode实例的参数说明：
 * `--splitwise-role`: 指定实例角色，可选值为`prefill`，`decode`和`mixed`，默认是`mixed`
@@ -114,6 +114,10 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 * `--rdma-comm-ports`: 指定RDMA通信端口，多个端口用逗号隔开，端口数量需要和dp_size*tp_size相同；可以不指定，FD内部会找空闲的端口
 * `--pd-comm-port`: 指定PD实例的交互接口，多个端口用逗号隔开，端口数量需要和dp_size相同；如果不指定，FD内部会找空闲的端口
 * `--router`：指定Router的接口
+
+如果Prefill和Decode实例部署在不同机器上，需要确保多台机器的RDMA网络互通。
+如果想手动指定RDMA网卡，可以设置`KVCACHE_RDMA_NICS`环境变量，多个网卡名用逗号隔开，Fastdeploy提供了检测RDMA网卡的脚本`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
+如果不设置`KVCACHE_RDMA_NICS`环境变量, Fastdeploy内部会自动检测可用的RDMA网卡。
 
 **Examples示例**
 

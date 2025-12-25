@@ -119,7 +119,7 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 
 ```
 
-**Parameter Description**
+**Details Description**
 
 Parameter description for starting Prefill/Decode instances in disaggregated deployment:
 
@@ -128,6 +128,11 @@ Parameter description for starting Prefill/Decode instances in disaggregated dep
 * `--rdma-comm-ports`: Specifies RDMA communication ports, separated by commas. The number of ports must equal `dp_size * tp_size`. If unspecified, FD will internally find free ports.
 * `--pd-comm-port`: Specifies the interaction interface for PD instances, separated by commas. The number of ports must equal `dp_size`. If unspecified, FD will internally find free ports.
 * `--router`: Specifies the Router interface.
+
+If the Prefill and Decode instances are deployed on different machines, RDMA network connectivity between the machines must be ensured.
+To manually specify RDMA network interfaces, you can set the `KVCACHE_RDMA_NICS` environment variable. Multiple NICs should be separated by commas. FastDeploy provides a script to detect RDMA NICs automatically:
+`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, where `<device>` can be either `cpu` or `gpu`.
+If the `KVCACHE_RDMA_NICS` environment variable is not set, FastDeploy will automatically detect available RDMA NICs internally.
 
 **Examples**
 
