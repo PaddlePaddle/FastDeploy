@@ -1157,21 +1157,28 @@ class TestMTPProposer(unittest.TestCase):
         sampler_obj.return_value = (paddle.ones([2, 1], dtype="int64"), sampler_output)
         mock_sampler_class.return_value = sampler_obj
 
-        # Force XPU platform
+        # Force XPU platform and ensure XPU functions are available
         with patch("fastdeploy.spec_decode.mtp.current_platform") as mock_platform:
             mock_platform.is_xpu.return_value = True
             mock_platform.is_cuda.return_value = False
-            proposer = MTPProposer(
-                self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-            )
 
-        proposer.initialize_kv_cache(main_model_num_blocks=10)
-        proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
-        proposer.num_model_steps = 1
+            # Mock XPU functions directly in the mtp module to make them available
+            with (
+                patch("fastdeploy.spec_decode.mtp.xpu_pre_process", mock_xpu_pre_process),
+                patch("fastdeploy.spec_decode.mtp.xpu_process_output", mock_xpu_process),
+            ):
 
-        # Run XPU propose path
-        proposer._propose_xpu(is_dummy_run=True)
+                proposer = MTPProposer(
+                    self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+                )
+
+                proposer.initialize_kv_cache(main_model_num_blocks=10)
+                proposer.model_inputs["not_need_stop"] = paddle.to_tensor([True], dtype="bool")
+                proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+                proposer.num_model_steps = 1
+
+                # Run XPU propose path
+                proposer._propose_xpu(is_dummy_run=True)
 
         # Verify XPU functions were called
         mock_xpu_pre_process.assert_called()
