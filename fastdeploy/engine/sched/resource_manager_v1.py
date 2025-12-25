@@ -680,7 +680,7 @@ class ResourceManagerV1(ResourceManager):
 
                     request = self.waiting[0]
                     if (
-                        self.config.model_config.disable_mm_prefill_batch()
+                        self.config.model_config.is_ernie5_model()
                         and self._is_mm_request(request)
                         and self.exist_mm_prefill(scheduled_reqs)
                     ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):

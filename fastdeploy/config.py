@@ -248,9 +248,9 @@ class ModelConfig:
 
         self._post_init()
 
-    def disable_mm_prefill_batch(self):
+    def is_ernie5_model(self):
         """
-        check if the model architecture disable for mm prefill
+        check if the model architecture is Ernie5
         """
         return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
@@ -1804,6 +1804,10 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
+
+        if self.model_config.is_ernie5_model():
+            # ernie5 model not support chunked_mm_input
+            self.cache_config.disable_chunked_mm_input = True
 
         self.postprocess_devices_and_ports()
 
