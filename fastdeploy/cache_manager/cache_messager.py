@@ -88,8 +88,8 @@ def parse_args():
         "--default_dtype",
         type=str,
         default="bfloat16",
-        choices=["float16", "bfloat16", "uint8"],
-        help="paddle default dtype, cache manager only support float16、bfloat16 and uint8 now",
+        choices=["float16", "bfloat16", "uint8", "int8"],
+        help="paddle default dtype, cache manager only support float16、bfloat16、int8 and uint8 now",
     )
     parser.add_argument(
         "--speculative_config",
