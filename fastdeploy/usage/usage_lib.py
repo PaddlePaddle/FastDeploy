@@ -164,7 +164,7 @@ def xpu_device_count() -> int:
 
 
 def detect_cloud_provider() -> str:
-    if os.getenv("SYS_JOB_NAME"):
+    if os.environ.get("SYS_JOB_NAME"):
         return "PDC"
     # Try detecting through vendor file
     vendor_files = [
