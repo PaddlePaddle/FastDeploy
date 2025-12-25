@@ -110,7 +110,7 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
         print("moe_quant_type", moe_quant_type)
-        is_quantized = getattr(fd_config.quant_config, "is_quantized", True)
+        is_quantized = getattr(fd_config.quant_config, "is_quantized", False)
         print("is_quantized", is_quantized)
 
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":

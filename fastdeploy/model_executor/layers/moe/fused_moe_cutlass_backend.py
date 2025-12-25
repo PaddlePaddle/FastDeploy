@@ -964,7 +964,10 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         else:
             self.weight_dtype = "int8"
 
-            # 创建量化后的权重 (INT8, 实际存储 packed INT4)
+            print("self.added_weight_attrs[0]", self.added_weight_attrs[0])
+            print("self.ffn1_weight_shape", self.ffn1_weight_shape)
+            print("self.add_weight_attrs[1]", self.added_weight_attrs[1])
+            print("self.ffn2_weight_shape", self.ffn2_weight_shape)
             setattr(
                 layer,
                 self.added_weight_attrs[0],  # "up_gate_proj_weight"
