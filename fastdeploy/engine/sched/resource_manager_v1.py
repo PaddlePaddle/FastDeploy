@@ -322,13 +322,14 @@ class ResourceManagerV1(ResourceManager):
                     grid_thw.extend([[2, h, w]] * (t // 2))
                     token_st = inputs["mm_positions"][idx].offset
                     for _ in range(t // 2):
-                        new_mm_positions.append(ImagePosition(token_st, h * w // 4))
+                        mm_num_token = inputs["mm_num_token_func"](grid_thw=[2, h, w])
+                        new_mm_positions.append(ImagePosition(token_st, mm_num_token))
                         # videos are split into patches every 2 frames, need to rehash
                         new_mm_hashes.append(
                             MultimodalHasher.hash_features(inputs["images"][image_st : image_st + 2 * h * w])
                         )
                         image_st += 2 * h * w
-                        token_st += h * w // 4
+                        token_st += mm_num_token
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
         elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:

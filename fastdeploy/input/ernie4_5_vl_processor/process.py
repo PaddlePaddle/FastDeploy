@@ -30,6 +30,7 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -70,7 +71,7 @@ def fancy_print(input_ids, tokenizer, image_patch_id=None):
     return res
 
 
-class DataProcessor:
+class DataProcessor(MMBaseDataProcessor):
     """
     Processes multimodal chat messages into model-ready inputs,
     handling text, images, and videos with 3D positional embeddings.
@@ -151,6 +152,21 @@ class DataProcessor:
             "assistant": "Assistant: ",
             "tool": "Tool: ",
         }
+
+    @staticmethod
+    def mm_num_tokens(grid_thw: list) -> int:
+        """
+        Calculate the number of tokens in the multimodal input.
+        """
+        num_tokens = 0
+        if len(grid_thw) == 0:
+            return 0
+        if isinstance(grid_thw[0], list):
+            for i in range(len(grid_thw)):
+                num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2
+            return num_tokens
+
+        return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2 // 2
 
     def _build_token_type_mapping(self) -> Dict[Any, int]:
         mapping = defaultdict(lambda: IDS_TYPE_FLAG["text"])

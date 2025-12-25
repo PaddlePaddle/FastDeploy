@@ -26,6 +26,7 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
+from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -34,7 +35,7 @@ from .image_processor import ImageProcessor
 from .process_video import sample_frames
 
 
-class DataProcessor:
+class DataProcessor(MMBaseDataProcessor):
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
 
@@ -111,6 +112,21 @@ class DataProcessor:
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
+
+    @staticmethod
+    def mm_num_tokens(grid_thw: list) -> int:
+        """
+        Calculate the number of tokens in the multimodal input.
+        """
+        num_tokens = 0
+        if len(grid_thw) == 0:
+            return 0
+        if isinstance(grid_thw[0], list):
+            for i in range(len(grid_thw)):
+                num_tokens += grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2
+            return num_tokens
+
+        return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
