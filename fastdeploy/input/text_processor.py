@@ -169,7 +169,7 @@ class DataProcessor(BaseDataProcessor):
                     ).tolist()
                     req_id = request.get("request_id", None)
                     data_processor_logger.info(
-                        f"req_id:{req_id}, tokens:{prompt}, token_ids: {request["prompt_token_ids"]}"
+                        f"req_id:{req_id}, tokens:{prompt}, token_ids: {request['prompt_token_ids']}"
                     )
             elif request.get("messages"):
                 chat_template_kwargs = request.get("chat_template_kwargs", {})
