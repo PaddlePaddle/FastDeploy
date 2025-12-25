@@ -64,8 +64,8 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int q_token_num,
                         const int k_token_num);
 
-std::vector<paddle::Tensor> RMSLnFwd(const paddle::Tensor &x,
-                                     const paddle::Tensor &scale,
+std::vector<paddle::Tensor> RMSLnFwd(const paddle::Tensor& x,
+                                     const paddle::Tensor& scale,
                                      float epsilon);
 
 std::vector<paddle::Tensor> AppendAttention(
@@ -1179,11 +1179,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &FlashAttentionMask,
         "append attention with output function");
 
-  m.def("rms_norm_func",
-        &RMSLnFwd,
-        "append attention with output function");
-
-
+  m.def("rms_norm_func", &RMSLnFwd, "append attention with output function");
 
   /**
    * gqa_rope_write_cache.cu

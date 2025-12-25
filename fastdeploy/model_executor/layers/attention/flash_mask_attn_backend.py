@@ -56,13 +56,13 @@ class FlashMaskAttentionMetadata(AttentionMetadata):
     """
     FlashAttentionMetadata
     """
+
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
     kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
 
     _fuse_kernel_compute_dtype: str = "bf16"
     _dtype: paddle.dtype = paddle.bfloat16
-
 
 
 class FlashMaskAttentionBackend(AttentionBackend):
