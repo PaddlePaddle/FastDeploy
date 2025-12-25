@@ -15,10 +15,10 @@
 """
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 import fastdeploy
-from fastdeploy.utils import current_package_version
+from fastdeploy.utils import current_package_version, get_version_info
 
 
 class TestVersion(unittest.TestCase):
@@ -26,23 +26,49 @@ class TestVersion(unittest.TestCase):
         ver = fastdeploy.version()
         assert ver.count("COMMIT") > 0
 
-    @patch("fastdeploy.utils.version")
-    def test_normal_version(self, mock_version):
+    @patch("builtins.open", new_callable=mock_open, read_data="fastdeploy version: 1.0.0\nother info")
+    def test_normal_version(self, mock_file):
         """测试正常版本号解析"""
-        mock_version.return_value = "fastdeploy version: 1.0.0\nother info"
         self.assertEqual(current_package_version(), "1.0.0")
 
-    @patch("fastdeploy.utils.version")
-    def test_unknown_version(self, mock_version):
-        """测试version返回Unknown的情况"""
-        mock_version.return_value = "Unknown"
+    @patch("builtins.open", side_effect=FileNotFoundError)
+    def test_file_not_found(self, mock_file):
+        """测试文件不存在的情况"""
         self.assertEqual(current_package_version(), "Unknown")
 
-    @patch("fastdeploy.utils.version")
-    def test_no_version_line(self, mock_version):
+    @patch("builtins.open", new_callable=mock_open, read_data="some other content")
+    def test_no_version_line(self, mock_file):
         """测试找不到版本行的情况"""
-        mock_version.return_value = "some other content"
         self.assertEqual(current_package_version(), "Unknown")
+
+    @patch("builtins.open", new_callable=mock_open, read_data="""fastdeploy GIT COMMIT ID: 23d488c488779fdda73b427b49f6be40cf4408ba
+Paddle version: 3.3.0.dev20251222
+Paddle GIT COMMIT ID: f68bb752a51aacd333d74336e6ee62b7b3b21231
+CUDA version: 12.6
+CXX compiler version: 11.2.1
+fastdeploy version: 2.4.0.dev20251223""")
+    def test_get_version_info(self, mock_file):
+        """测试get_version_info函数"""
+        version_info = get_version_info()
+        self.assertIsNotNone(version_info)
+        self.assertEqual(version_info["fastdeploy_commit"], "23d488c488779fdda73b427b49f6be40cf4408ba")
+        self.assertEqual(version_info["paddle_version"], "3.3.0.dev20251222")
+        self.assertEqual(version_info["paddle_commit"], "f68bb752a51aacd333d74336e6ee62b7b3b21231")
+        self.assertEqual(version_info["cuda_version"], "12.6")
+        self.assertEqual(version_info["cxx_version"], "11.2.1")
+        self.assertEqual(version_info["fastdeploy_version"], "2.4.0.dev20251223")
+
+    @patch("builtins.open", side_effect=FileNotFoundError)
+    def test_get_version_info_file_not_found(self, mock_file):
+        """测试get_version_info在文件不存在时返回None"""
+        version_info = get_version_info()
+        self.assertIsNone(version_info)
+
+    @patch("builtins.open", new_callable=mock_open, read_data="invalid content")
+    def test_get_version_info_empty_dict(self, mock_file):
+        """测试get_version_info在内容无效时返回None"""
+        version_info = get_version_info()
+        self.assertIsNone(version_info)
 
 
 if __name__ == "__main__":
