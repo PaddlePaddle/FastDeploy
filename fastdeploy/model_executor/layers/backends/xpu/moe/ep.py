@@ -199,11 +199,6 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
         try:
-            # 将 topk_idx 转换为 int64 类型
-            if topk_idx.dtype != paddle.int64:
-                print(f"[DeepEP] Converting topk_idx from {topk_idx.dtype} to int64")
-                topk_idx = topk_idx.astype(paddle.int64)
-
             # 调试信息输入
             print("[DeepEP] Starting low_latency_dispatch...")
             print(f"[DeepEP] hidden_states: shape={hidden_states.shape}, dtype={hidden_states.dtype}")
