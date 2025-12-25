@@ -1,9 +1,9 @@
 """
-CacheMessager 测试：
-* prefill从decode获取block ids
-* prefill设置cache的数值
-* prefill将cache发送给decode
-* decode接收cache，校验cache的数值
+CacheMessager test:
+* prefill gets block ids from decode
+* prefill sets cache values
+* prefill sends cache to decode
+* decode receives cache and validates cache values
 """
 
 import argparse
@@ -270,7 +270,7 @@ if __name__ == "__main__":
                         print(f"i: {i}, success_num: {success_num}, fail_num: {fail_num}")
                     server_socket.send_pyobj({"result": "done"})
             except Exception as e:
-                print(f"decode zmq server has exception: {e}")
+                print(f"Decode ZMQ server encountered exception: {e}")
         print(f"test_num: {test_num}, success_num: {success_num}")
     else:
         context = zmq.Context()

@@ -709,7 +709,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   ctx->conn.connected = 1;
   conn_map[url] = ctx;
 
-  WARN("connect successfully");
+  INFO("connect successfully");
   return static_cast<int>(ConnStatus::kConnected);
 }
 
@@ -993,7 +993,6 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
           ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
       if (!value_mr) {
         ERR("Failed to register value MR at layer %d", i);
-        ibv_dereg_mr(key_mr);
         goto fail;
       }
       write_cache_value_server_mr_list.push_back(value_mr);
@@ -1012,8 +1011,6 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
                                             access_flags);
       if (!key_scale_mr) {
         ERR("Failed to register key scale MR at layer %d", i);
-        if (!key_mr) ibv_dereg_mr(key_mr);
-        if (!value_mr) ibv_dereg_mr(value_mr);
         goto fail;
       }
       write_cache_key_scale_server_mr_list.push_back(key_scale_mr);
@@ -1033,9 +1030,6 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
                                  access_flags);
       if (!value_scale_mr) {
         ERR("Failed to register value scale MR at layer %d", i);
-        if (!key_mr) ibv_dereg_mr(key_mr);
-        if (!value_mr) ibv_dereg_mr(value_mr);
-        if (!key_scale_mr) ibv_dereg_mr(key_scale_mr);
         goto fail;
       }
       write_cache_value_scale_server_mr_list.push_back(value_scale_mr);

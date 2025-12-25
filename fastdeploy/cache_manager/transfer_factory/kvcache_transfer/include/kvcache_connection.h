@@ -127,7 +127,7 @@ struct Connection {
   std::vector<std::vector<ibv_mr*>> write_mr_key_scale_list;
   std::vector<std::vector<ibv_mr*>> write_mr_value_scale_list;
 
-  // Remote access information of eatch layer in client(prefill)
+  // Remote access information of each layer in client(prefill)
   std::vector<void*> write_cache_key_remote_ptr_list;
   std::vector<uint32_t> write_cache_key_remote_rkey_list;
 
@@ -139,32 +139,6 @@ struct Connection {
 
   std::vector<void*> write_cache_value_scale_remote_ptr_list;
   std::vector<uint32_t> write_cache_value_scale_remote_rkey_list;
-
-  // // Received remote memory information
-  // std::vector<void*> receive_write_cache_key_remote_ptr_list;
-  // std::vector<uint32_t> receive_write_cache_key_remote_rkey_list;
-
-  // std::vector<void*> receive_write_cache_key_scale_remote_ptr_list;
-  // std::vector<uint32_t> receive_write_cache_key_scale_remote_rkey_list;
-
-  // std::vector<void*> receive_write_cache_value_remote_ptr_list;
-  // std::vector<uint32_t> receive_write_cache_value_remote_rkey_list;
-
-  // std::vector<void*> receive_write_cache_value_scale_remote_ptr_list;
-  // std::vector<uint32_t> receive_write_cache_value_scale_remote_rkey_list;
-
-  // // send_write_cache
-  // std::vector<void*> send_write_cache_key_remote_ptr_list;
-  // std::vector<uint32_t> send_write_cache_key_remote_rkey_list;
-
-  // std::vector<void*> send_write_cache_key_scale_remote_ptr_list;
-  // std::vector<uint32_t> send_write_cache_key_scale_remote_rkey_list;
-
-  // std::vector<void*> send_write_cache_value_remote_ptr_list;
-  // std::vector<uint32_t> send_write_cache_value_remote_rkey_list;
-
-  // std::vector<void*> send_write_cache_value_scale_remote_ptr_list;
-  // std::vector<uint32_t> send_write_cache_value_scale_remote_rkey_list;
 
   // For rdma read operations
   std::vector<void*> read_bufs;
