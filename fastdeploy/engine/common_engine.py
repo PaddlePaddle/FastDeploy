@@ -1382,8 +1382,8 @@ class EngineService:
 
     def _register_to_router(self):
         """
-        Periodically send registration information to the registration
-        center as a heartbeat signal.
+        Periodically send server information to the router for registeration, and it used
+        as a heartbeat signal.
         """
 
         def _register():
@@ -1397,9 +1397,6 @@ class EngineService:
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
-                        self.llm_logger.warning(
-                            f"API server ({api_server_url}) is not healthy, " f"skip sending server info to register"
-                        )
                         time.sleep(sleep_seconds)
                         continue
 
@@ -1413,10 +1410,10 @@ class EngineService:
                     if resp.ok:
                         if not is_registered:
                             is_registered = True
-                            self.llm_logger.info("Successfully registered to the router!")
+                            self.llm_logger.info("Register to router successfully")
                     else:
                         self.llm_logger.error(
-                            f"Send server info to register failed: {resp.status_code}, "
+                            f"Send server info to router failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
                         time.sleep(sleep_seconds)
