@@ -64,7 +64,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         """
         Create embeddings for the input texts using the pipeline pattern
         """
-        request_id = self._generate_request_id(getattr(request, "user", None))
+        request_id = self._generate_request_id(request)
 
         ctx = ServeContext[ChatRewardRequest](
             request=request,
@@ -87,11 +87,11 @@ class OpenAIServingReward(ZmqOpenAIServing):
         return response
 
     @override
-    def _build_response(self, ctx: ServeContext):
+    def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final reward response"""
-        api_server_logger.info(f"[{ctx.request_id}] Reward RequestOutput received:{ctx.request_output}")
+        api_server_logger.info(f"[{ctx.request_id}] Reward RequestOutput received:{request_output}")
 
-        base = PoolingRequestOutput.from_dict(ctx.request_output)
+        base = PoolingRequestOutput.from_dict(request_output)
         reward_res = RewardRequestOutput.from_base(base)
 
         data = ChatRewardData(
