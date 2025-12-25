@@ -72,7 +72,7 @@ static __device__ inline unsigned int xorwow(unsigned int &state) {
   state ^= state >> 13;
   return state;
 }
-typedef uint32_t curandStatePhilox4_32_10_t;
+
 __device__ int64_t
 topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
                      __global_ptr__ const float *candidate_scores,
@@ -91,9 +91,10 @@ topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
   }
   return candidate_ids[0];
 }
-#define sm_size 1024
+
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __global__ void speculate_verify(
+    const int64_t *sampled_token_ids,
     int64_t *accept_tokens,  // out [real_bsz, max_draft_tokens], 输出最终接收的
                              // token（通过验证或采样）
     int *accept_num,  // out [real_bsz], 每个序列最终接受的 token
@@ -139,9 +140,10 @@ __global__ void speculate_verify(
                                   // 的最大候选数（用于验证或采样）
     const int verify_window,  // scalar, TopK 验证窗口（允许连续 top1 匹配次数）
     const bool prefill_one_step_stop,
-    const bool benchmark_mode) {
-  const int cid = core_id();
-  const int64_t tid = cluster_id() * core_num() + core_id();
+    const bool benchmark_mode,
+    const bool accept_all_drafts,
+    const bool use_target_sampling) {
+  const int64_t tid = core_id() * cluster_num() + cluster_id();
   const int64_t nthreads = cluster_num() * core_num();
   for (int64_t bid = tid; bid < real_bsz; bid += nthreads) {
     int stop_flag_now_int = 0;
@@ -158,6 +160,7 @@ __global__ void speculate_verify(
           verify_tokens + start_token_id * max_candidate_len;
       auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
       auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+      auto *sampled_token_id_now = sampled_token_ids + start_token_id;
       int i = 0;
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
       // seq_lens_this_time[bid]-1);
@@ -168,7 +171,43 @@ __global__ void speculate_verify(
         if (seq_lens_encoder[bid] != 0) {
           break;
         }
-        if (USE_TOPK) {
+        if (accept_all_drafts) {
+          // accept all draft tokens
+          step_idx[bid]++;
+          auto accept_token = draft_tokens_now[i + 1];
+          accept_tokens[bid * max_draft_tokens + i] = accept_token;
+
+          if (is_in_end(accept_token, end_tokens, end_length) ||
+              step_idx[bid] >= max_dec_len[bid]) {
+            stop_flags[bid] = true;
+            stop_flag_now_int = 1;
+            if (step_idx[bid] >= max_dec_len[bid])
+              accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+            break;
+          } else {
+            accept_num_now++;
+          }
+          continue;
+        }
+        if (use_target_sampling) {
+          if (sampled_token_id_now[i] == draft_tokens_now[i + 1]) {
+            step_idx[bid]++;
+            auto accept_token = draft_tokens_now[i + 1];
+            accept_tokens[bid * max_draft_tokens + i] = accept_token;
+            if (is_in_end(accept_token, end_tokens, end_length) ||
+                step_idx[bid] >= max_dec_len[bid]) {
+              stop_flags[bid] = true;
+              stop_flag_now_int = 1;
+              if (step_idx[bid] >= max_dec_len[bid])
+                accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+              break;
+            } else {
+              accept_num_now++;
+            }
+          } else {
+            break;
+          }
+        } else if (USE_TOPK) {
           if (verify_tokens_now[i * max_candidate_len] ==
               draft_tokens_now[i + 1]) {
             // accept_num_now++;
@@ -274,7 +313,9 @@ __global__ void speculate_verify(
         __global_ptr__ const float *verify_scores_now =
             verify_scores + start_token_id * max_candidate_len;
         step_idx[bid]++;
-        if (ENABLE_TOPP) {
+        if (use_target_sampling) {
+          accept_token = sampled_token_id_now[i];
+        } else if (ENABLE_TOPP) {
           auto actual_candidate_len_value =
               actual_candidate_len_now[i] > max_candidate_len
                   ? max_candidate_len
@@ -306,7 +347,8 @@ __global__ void speculate_verify(
 }
 #define SPECULATE_VERIFY_INSTANTIATE(ENABLE_TOPP, USE_TOPK)         \
   template __global__ void speculate_verify<ENABLE_TOPP, USE_TOPK>( \
-      int64_t * accept_tokens,                                      \
+      const int64_t *sampled_token_ids,                             \
+      int64_t *accept_tokens,                                       \
       int *accept_num,                                              \
       int64_t *step_idx,                                            \
       bool *stop_flags,                                             \
@@ -331,7 +373,9 @@ __global__ void speculate_verify(
       int max_candidate_len,                                        \
       int verify_window,                                            \
       bool prefill_one_step_stop,                                   \
-      bool benchmark_mode);
+      bool benchmark_mode,                                          \
+      bool accept_all_drafts,                                       \
+      bool use_target_sampling);
 SPECULATE_VERIFY_INSTANTIATE(true, true)
 SPECULATE_VERIFY_INSTANTIATE(true, false)
 SPECULATE_VERIFY_INSTANTIATE(false, true)

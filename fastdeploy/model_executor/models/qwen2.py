@@ -445,7 +445,7 @@ class Qwen2PretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
@@ -468,7 +468,7 @@ class Qwen2PretrainedModel(PretrainedModel):
                 base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
                 base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
                 # if we have enough num_key_value_heads to split, then split it.
-                if config.num_key_value_heads % config.tensor_parallel_degree == 0:
+                if config.num_key_value_heads % config.tensor_model_parallel_size == 0:
                     base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
