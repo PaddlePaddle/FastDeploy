@@ -97,7 +97,7 @@ class ErnieX1ReasoningParser:
             def __init__(self, content):
                 self.reasoning_content = content
 
-        return ReasoningDelta("REASON")
+        return ReasoningDelta(delta_text)
 
 
 class MockToolParser:
@@ -238,7 +238,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertIn("completion_tokens", outputs)
         self.assertIn("text", outputs)
-        self.assertEqual(outputs["completion_tokens"], outputs["text"])
+        self.assertEqual(outputs["completion_tokens"], outputs["reasoning_content"])
 
         self.assertIn("reasoning_token_num", outputs)
         self.assertGreaterEqual(outputs["reasoning_token_num"], 0)

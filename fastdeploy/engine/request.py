@@ -401,6 +401,7 @@ class CompletionOutput:
     reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
+    completion_tokens: Optional[str] = None
 
     def to_dict(self):
         """
@@ -648,11 +649,17 @@ class RequestOutput:
             self.prompt_token_ids = []
         elif isinstance(self.prompt_token_ids, np.ndarray):
             self.prompt_token_ids = self.prompt_token_ids.tolist()
+        if self.outputs and self.outputs.tool_calls:
+            self.accumulate_tool_calls: Optional[list[ToolCall]] = [self.outputs.tool_calls]
+        else:
+            self.accumulate_tool_calls = None
 
     def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
-        self.prompt = next_output.prompt
-        self.prompt_token_ids = next_output.prompt_token_ids
+        if next_output.prompt is not None:
+            self.prompt = next_output.prompt
+        if next_output.prompt_token_ids is not None:
+            self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
@@ -677,6 +684,28 @@ class RequestOutput:
             )
         if next_output.metrics.speculate_metrics is not None:
             self.outputs.speculate_metrics = next_output.metrics.speculate_metrics
+
+    def accumulate(self, next_output: RequestOutput) -> None:
+        """Accumulate RequestOutput"""
+        if self.outputs.text is None:
+            self.outputs.text = next_output.outputs.text
+        elif next_output.outputs.text:
+            self.outputs.text += next_output.outputs.text
+        if self.outputs.reasoning_content is None:
+            self.outputs.reasoning_content = next_output.outputs.reasoning_content
+        elif next_output.outputs.reasoning_content:
+            self.outputs.reasoning_content += next_output.outputs.reasoning_content
+
+        if self.outputs.completion_tokens is None:
+            self.outputs.completion_tokens = next_output.outputs.completion_tokens
+        elif next_output.outputs.completion_tokens:
+            self.outputs.completion_tokens += next_output.outputs.completion_tokens
+
+        if next_output.outputs.tool_calls:
+            if self.accumulate_tool_calls is None:
+                self.accumulate_tool_calls = []
+            self.accumulate_tool_calls.append(next_output.outputs.tool_calls)
+        self.add(next_output)
 
     def __repr__(self) -> str:
         return (
