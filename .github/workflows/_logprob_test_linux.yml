@@ -40,21 +40,43 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           paddletest_archive_url: ${{ inputs.PADDLETEST_ARCHIVE_URL }}
         run: |
-            docker pull ${docker_image}
-            # Clean the repository directory before starting
-            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-            -e "REPO_NAME=${REPO_NAME}" \
-            -e "BASE_BRANCH=${BASE_BRANCH}" \
-            ${docker_image} /bin/bash -c '
-            rm -rf /workspace/*
-            '
-            wget -q --no-proxy ${paddletest_archive_url}
-            tar -xf PaddleTest.tar.gz
-            rm -rf PaddleTest.tar.gz
-            cd PaddleTest
-            git config --global user.name "FastDeployCI"
-            git config --global user.email "fastdeploy_ci@example.com"
-            git log -n 3 --oneline
+          docker pull ${docker_image}
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "BASE_BRANCH=${BASE_BRANCH}" \
+          ${docker_image} /bin/bash -c '
+            CLEAN_RETRIES=3
+            CLEAN_COUNT=0
+
+            while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
+              echo "Attempt $((CLEAN_COUNT+1)) to remove /workspace/* ..."
+              rm -rf "${REPO_NAME}"* || true
+              sleep 2
+
+              # Check if anything matching /workspace/* still exists
+              if ! ls /workspace/* >/dev/null 2>&1; then
+                echo "All /workspace/* removed successfully"
+                break
+              fi
+
+              CLEAN_COUNT=$((CLEAN_COUNT + 1))
+            done
+
+            if ls /workspace/* >/dev/null 2>&1; then
+              echo "ERROR: Failed to clean /workspace/* after multiple attempts"
+              ls -ld /workspace/*
+              exit 1
+            fi
+          '
+          wget -q --no-proxy ${paddletest_archive_url}
+          tar -xf PaddleTest.tar.gz
+          rm -rf PaddleTest.tar.gz
+          cd PaddleTest
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
+
       - name: logprob test
         shell: bash
         env:
@@ -140,7 +162,7 @@ jobs:
 
           python -m pip install ${fastdeploy_wheel_url}
 
-          wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
+          wget --no-proxy https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \

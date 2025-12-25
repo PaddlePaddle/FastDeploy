@@ -102,7 +102,7 @@ def metrics_summary(metrics, token_timestamps):
 
     # prefill 总耗时
     summary["prefill_cost_time"] = safe_cost(m0.get("send_request_output_to_decode_time"), arrival_time)
-    # prefill准备耗时
+    # prefill准备总耗时
     summary["prefill_prepare_cost_time"] = safe_cost(inference_start_time, arrival_time)
     # 预处理耗时
     summary["preprocess_cost_time"] = safe_cost(m0.get("scheduler_recv_req_time"), arrival_time)
@@ -113,6 +113,10 @@ def metrics_summary(metrics, token_timestamps):
     # 申请 decode资源耗时
     summary["ask_decode_resource_cost_time"] = safe_cost(
         m0.get("ask_decode_resource_finish_time"), m0.get("ask_decode_resource_start_time")
+    )
+    # scheduler调度耗时
+    summary["schedule_cost_time"] = safe_cost(
+        m0.get("inference_start_time"), m0.get("ask_decode_resource_finish_time")
     )
     # prefill 的首 token 推理耗时
     summary["prefill_first_token_infer_cost_time"] = safe_cost(
@@ -142,6 +146,19 @@ def metrics_summary(metrics, token_timestamps):
     summary["second_token_transmission_cost_time"] = safe_cost(
         token_timestamps[1], m_last.get("decode_recv_second_token_time")
     )
+
+    # MIX 模式下，scheduler调度耗时
+    summary["mixed_schedule_cost_time"] = safe_cost(m0.get("inference_start_time"), m0.get("engine_get_req_time"))
+    # MIX 模式下，返回首 token 链路耗时
+    summary["mixed_first_token_transmission_cost_time"] = safe_cost(
+        token_timestamps[0], m0.get("engine_recv_first_token_time")
+    )
+
+    summary["gpu_cache_token_num"] = m0.get("gpu_cache_token_num")
+    summary["cpu_cache_token_num"] = m0.get("cpu_cache_token_num")
+    summary["storage_cache_token_num"] = m0.get("storage_cache_token_num")
+    summary["gpu_cpu_cache_prepare_time"] = m0.get("gpu_cpu_cache_prepare_time")
+    summary["storage_cache_prepare_time"] = m0.get("storage_cache_prepare_time")
 
     return summary
 

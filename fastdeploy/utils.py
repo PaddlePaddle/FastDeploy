@@ -17,6 +17,7 @@
 import argparse
 import asyncio
 import codecs
+import hashlib
 import importlib
 import json
 import logging
@@ -824,6 +825,18 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
     return model_name_or_path
 
 
+def get_hash_str(token_ids: List[int], extra_keys: Optional[Any] = []) -> str:
+    """
+    calculate hash value of a block with additional keys
+
+    Args:
+        token_ids: Input token IDs
+        extra_keys: Additional keys for block identification
+    """
+    value = (token_ids, extra_keys)
+    return hashlib.sha256(pickle.dumps(value)).hexdigest()
+
+
 def is_list_of(
     value: object,
     typ: Union[type[T], tuple[type[T], ...]],
@@ -1229,3 +1242,18 @@ def to_tensor(tasks: List[Any]):
                     multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
     except Exception as e:
         llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
+
+
+def do_nothing(*args, **kwargs):
+    def decorator(func):
+        return func
+
+    return decorator
+
+
+if hasattr(paddle.static, "register_op"):
+    from paddle.static import register_op
+else:
+    register_op = do_nothing
+
+register_custom_python_op = register_op
