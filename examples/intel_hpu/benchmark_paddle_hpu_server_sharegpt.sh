@@ -27,7 +27,7 @@ else
 fi
 
 rm -rf log 2>/dev/null
-FD_ENC_DEC_BLOCK_NUM=8 HPU_PERF_BREAKDOWN_SYNC_MODE=1 HPU_WARMUP_BUCKET=0 FD_ATTENTION_BACKEND=HPU_ATTN ENABLE_V1_KVCACHE_SCHEDULER=0 \
+ENABLE_V1_KVCACHE_SCHEDULER=1 FD_ENC_DEC_BLOCK_NUM=8 HPU_PERF_BREAKDOWN_SYNC_MODE=1 HPU_WARMUP_BUCKET=0 FD_ATTENTION_BACKEND=HPU_ATTN ENABLE_V1_KVCACHE_SCHEDULER=0 \
     python -m fastdeploy.entrypoints.openai.api_server --model ${MODEL} --port ${SERVER_PORT} \
     --engine-worker-queue-port ${ENGINE_WORKER_QUEUE_PORT} --metrics-port ${METRICS_PORT} \
     --cache-queue-port ${CACHE_QUEUE_PORT} --tensor-parallel-size ${CARD_NUM} --max-model-len 16384 \

@@ -200,14 +200,26 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
     and to drive specific code paths that were previously uncovered.
     """
 
+    def setUp(self):
+        patch("fastdeploy.engine.common_engine.EngineCacheQueue").start()
+
     def _make_cfg(self, **kwargs):
+        # If DP > 1, we must provide enough engine_worker_queue_port for each dp index
+        dp = kwargs.get("data_parallel_size", 1)
+        nnode = len(kwargs.get("ips", ["127.0.0.1"]))
+        engine_worker_queue_port = int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778"))
+        cache_queue_port = int(os.getenv("FD_CACHE_QUEUE_PORT", "6779"))
+        if dp and dp > 1:
+            engine_worker_queue_port = [engine_worker_queue_port + 20 + i for i in range(dp // nnode)]
+            cache_queue_port = [cache_queue_port + 20 + i for i in range(dp // nnode)]
+
         args = EngineArgs(
             model=MODEL_NAME,
             max_model_len=128,
             tensor_parallel_size=1,
             # give unique ports to avoid collision with other tests
-            engine_worker_queue_port=str(int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 20),
-            cache_queue_port=str(int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 20),
+            engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
             enable_prefix_caching=True,
             **kwargs,
         )
@@ -218,14 +230,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         # Always enable chunked prefill in tests to avoid another strict check
         args.enable_chunked_prefill = True
 
-        # If DP > 1, we must provide enough engine_worker_queue_port for each dp index
-        dp = kwargs.get("data_parallel_size", args.data_parallel_size)
-        base = int(args.engine_worker_queue_port.split(",")[0])
-        if dp and dp > 1:
-            ports = ",".join(str(base + i) for i in range(dp))
-            args.engine_worker_queue_port = ports
-
-        return args.create_engine_config(port_availability_check=False)
+        return args.create_engine_config()
 
     def _stub_processor(self):
         class _Tok:
@@ -574,7 +579,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
     def test_start_worker_service_cmd_build(self):
         """Cover 1517, 1526, 1568, 1592, 1595 by building the worker command with mocks."""
         with patch("fastdeploy.config.get_host_ip", return_value="127.0.0.1"):
-            cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4, ips=["127.0.0.1", "127.0.0.2"])
+            cfg = self._make_cfg(
+                splitwise_role="mixed", num_gpu_blocks_override=4, ips=["127.0.0.1", "127.0.0.2"], data_parallel_size=2
+            )
         # Make model multi-modal so env var branch already covered above; here not required
         cfg.structured_outputs_config.logits_processors = ["A", "B"]
 

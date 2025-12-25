@@ -94,7 +94,6 @@ def test_vl_model(xpu_env):
             ],
             temperature=1,
             top_p=0,
-            max_tokens=70,
             stream=False,
         )
 

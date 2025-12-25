@@ -37,7 +37,7 @@ class TestSetupMultiprocessPrometheus:
 
         with (
             patch("uuid.uuid4", return_value="test-uuid"),
-            patch("fastdeploy.utils.console_logger.info") as mock_logger,
+            patch("fastdeploy.utils.llm_logger.info") as mock_logger,
         ):
 
             result = setup_multiprocess_prometheus()
@@ -51,7 +51,7 @@ class TestSetupMultiprocessPrometheus:
         test_dir = "/tmp/existing_dir"
         os.environ["PROMETHEUS_MULTIPROC_DIR"] = test_dir
 
-        with patch("fastdeploy.utils.console_logger.warning") as mock_logger:
+        with patch("fastdeploy.utils.llm_logger.warning") as mock_logger:
             result = setup_multiprocess_prometheus()
 
             assert result == test_dir
@@ -69,7 +69,7 @@ class TestSetupMultiprocessPrometheus:
         with (
             patch("os.path.exists", return_value=True),
             patch("uuid.uuid4", return_value="test-uuid"),
-            patch("fastdeploy.utils.console_logger.info") as mock_logger,
+            patch("fastdeploy.utils.llm_logger.info") as mock_logger,
         ):
 
             # 模拟 rmtree 但确保 ignore_errors=True 生效

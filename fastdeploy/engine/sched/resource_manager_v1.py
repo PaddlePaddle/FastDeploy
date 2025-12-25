@@ -224,10 +224,12 @@ class ResourceManagerV1(ResourceManager):
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
 
-    def reschedule_preempt_task(self, request_id):
+    def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
+                if process_func is not None:
+                    process_func(request)
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
@@ -329,7 +331,7 @@ class ResourceManagerV1(ResourceManager):
                         token_st += h * w // 4
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
-        else:
+        elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
@@ -368,7 +370,25 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
-            assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
+            if not inputs.get("tts", False):
+                assert prompt_token_ids_len == len(inputs["patch_idx"]), (
+                    prompt_token_ids_len,
+                    len(inputs["patch_idx"]),
+                )
+
+            def _compute_audio_prefix_count(end_idx, end_patch_idx):
+                audio_prefix_count = 0
+                pre_patch_end_idx = 0
+                for patch_idx in range(end_patch_idx + 1):
+                    patch_map = inputs["patch_map"][patch_idx]
+                    modal_id = patch_map["modal_id"]
+                    if modal_id == IDS_TYPE_FLAG["audio"]:
+                        if patch_idx != end_patch_idx:
+                            audio_prefix_count += patch_map["end_idx"] - pre_patch_end_idx
+                        else:
+                            audio_prefix_count += end_idx - pre_patch_end_idx
+                    pre_patch_end_idx = patch_map["end_idx"]
+                return audio_prefix_count
 
             # start
             if pre_end_idx >= prompt_token_ids_len:
@@ -378,7 +398,7 @@ class ResourceManagerV1(ResourceManager):
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
-            request.audio_start = start_patch_map["audio_num"]
+            request.audio_start = _compute_audio_prefix_count(pre_end_idx, start_patch_idx)
 
             # end
             if new_end_idx >= prompt_token_ids_len:
@@ -393,7 +413,7 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
+            if end_modal_id == IDS_TYPE_FLAG["image"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
 
             if end_modal_id == IDS_TYPE_FLAG["video"] and "can_split_idx_list" in inputs:
@@ -406,7 +426,7 @@ class ResourceManagerV1(ResourceManager):
 
             request.image_end = end_patch_map["image_num"]
             request.video_end = end_patch_map["video_num"]
-            request.audio_end = end_patch_map["audio_num"]
+            request.audio_end = _compute_audio_prefix_count(new_end_idx, end_patch_idx)
         elif (
             inputs.get("images", None) is not None
             and inputs.get("image_patch_id", None) is not None
@@ -428,6 +448,10 @@ class ResourceManagerV1(ResourceManager):
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
                     from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                elif current_platform.is_iluvatar():
+                    from fastdeploy.model_executor.ops.iluvatar import (
+                        get_img_boundaries,
+                    )
                 else:
                     from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
@@ -646,7 +670,8 @@ class ResourceManagerV1(ResourceManager):
                             request, self.config.cache_config.block_size, request.num_computed_tokens
                         )
                 req_index += 1
-            # schedule the WAITING requests.
+
+            # Second, schedule the WAITING requests.
             if not preempted_reqs:
                 skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
@@ -675,10 +700,7 @@ class ResourceManagerV1(ResourceManager):
                         self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
-                            if (
-                                self.config.cache_config.enable_hierarchical_cache
-                                and self.cache_manager.num_cpu_blocks > 0
-                            ):
+                            if self.cache_manager.num_cpu_blocks > 0:
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
@@ -689,12 +711,21 @@ class ResourceManagerV1(ResourceManager):
                                 self._free_blocks(request)
                                 break
 
+                        # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                        # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
-                                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
+                                request.block_tables.extend(extra_gpu_block_ids)
+                                if (
+                                    self.config.cache_config.enable_prefix_caching
+                                    and self.config.cache_config.kvcache_storage_backend
+                                    and num_new_tokens >= self.config.cache_config.block_size
+                                ):
+                                    matched_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
+                                    num_new_tokens -= len(matched_block_ids) * self.config.cache_config.block_size
+
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -720,10 +751,7 @@ class ResourceManagerV1(ResourceManager):
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         if self.config.cache_config.enable_prefix_caching:
-                            if (
-                                self.config.cache_config.enable_hierarchical_cache
-                                and self.cache_manager.num_cpu_blocks > 0
-                            ):
+                            if self.cache_manager.num_cpu_blocks > 0:
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
@@ -733,12 +761,22 @@ class ResourceManagerV1(ResourceManager):
                             if not success:
                                 self._free_blocks(request)
                                 break
+
+                        # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                        # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
                             if not request.get("skip_allocate", False):
-                                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
+                                request.block_tables.extend(extra_gpu_block_ids)
+                                if (
+                                    self.config.cache_config.enable_prefix_caching
+                                    and self.config.cache_config.kvcache_storage_backend
+                                    and num_new_tokens >= self.config.cache_config.block_size
+                                ):
+                                    matched_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
+                                    num_new_tokens -= len(matched_block_ids) * self.config.cache_config.block_size
+
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -816,7 +854,7 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
@@ -892,27 +930,60 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
-            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
-            request.cache_info = (matched_block_num, no_cache_block_num)
+            request.metrics.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.metrics.cpu_cache_token_num = hit_info["cpu_match_token_num"]
+            request.cache_info = [matched_block_num, no_cache_block_num]
             request.block_tables = common_block_ids
             request.skip_allocate = False
 
             # Report the number of cached tokens to Prometheus metrics
             main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
+            main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
 
             if matched_token_num == request.need_prefill_tokens:
                 request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
                 request.skip_allocate = True
             else:
                 request.num_computed_tokens = matched_token_num
-            request.cache_prepare_time = time.time() - cache_prepare_time
+            request.metrics.gpu_cpu_cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
+
+    def get_storage_cached_blocks(self, request: Request, extra_gpu_block_ids: list = []):
+        """
+        Match and prefetch the cached blocks from the storage backend.
+        TODO: merge this function into get_prefix_cached_blocks
+        """
+        try:
+            tic = time.time()
+            req_id = request.request_id
+            llm_logger.debug(f"get_storage_cached_blocks start process req {req_id}")
+            matched_block_ids = self.cache_manager.request_match_storage_blocks(request, extra_gpu_block_ids)
+            llm_logger.debug(
+                f"matched {len(matched_block_ids)} blocks from storage for req_id:{req_id}, "
+                f"cost_time: {time.time() - tic:.6f}s"
+            )
+
+            matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
+            request.metrics.storage_cache_token_num = matched_token_num
+            request.num_computed_tokens += matched_token_num
+            if request.num_computed_tokens == request.need_prefill_tokens:
+                request.num_computed_tokens = request.num_computed_tokens - self.config.cache_config.block_size
+            request.metrics.storage_cache_prepare_time = time.time() - tic
+            request.cache_info[0] += len(matched_block_ids)  # matched_block_num
+            request.cache_info[1] -= len(matched_block_ids)  # no_cache_block_num
+
+            main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
+            # TODO: main_process_metrics.prefix_storage_cache_token_num.inc(matched_token_num)
+            return matched_block_ids
+        except Exception as e:
+            llm_logger.error(
+                f"get_storage_cached_blocks process req {req_id}, error: {e}, {str(traceback.format_exc())} "
+            )
+            return []
 
     def add_request(self, request: Request) -> None:
         with self.lock:
@@ -956,7 +1027,7 @@ class ResourceManagerV1(ResourceManager):
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
             if self.config.cache_config.enable_prefix_caching:
                 # Enable prefix caching
-                if self.config.cache_config.enable_hierarchical_cache and self.cache_manager.num_cpu_blocks > 0:
+                if self.cache_manager.num_cpu_blocks > 0:
                     if not self.cache_manager.can_allocate_gpu_blocks(
                         need_prealloc_prefill_blocks
                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
@@ -968,7 +1039,10 @@ class ResourceManagerV1(ResourceManager):
 
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
-                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks))
+                    extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks)
+                    if self.config.cache_config.enable_prefix_caching:
+                        self.get_storage_cached_blocks(request, extra_gpu_block_ids)
+                    request.block_tables.extend(extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
                     self.tasks_list[request.idx] = request
@@ -1089,39 +1163,45 @@ class ResourceManagerV1(ResourceManager):
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
         try:
+            if isinstance(request_ids, str):
+                request_ids = (request_ids,)
+            else:
+                request_ids = set(request_ids)
+
+            need_postprocess_reqs = []
             with self.lock:
-                if isinstance(request_ids, str):
-                    request_ids = (request_ids,)
-                else:
-                    request_ids = set(request_ids)
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
-                        # Invalid request ID.
                         continue
-                    if request in self.running:  # normally run and finished
+                    if request in self.waiting:
+                        llm_logger.error(f"request {request.request_id} scheduled into waiting list, after finished")
+                        continue
+                    if request in self.running:
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        try:
-                            self._free_blocks(request)
-                        except Exception as e:
-                            llm_logger.warning(f"release block failed {req_id}: {e}")
-                    if (
-                        request.request_id in self.to_be_rescheduled_request_id_set
-                    ):  # finished after preempted, blocks have been recycled.
-                        self.to_be_rescheduled_request_id_set.remove(
-                            request.request_id
-                        )  # just remove from to_be_rescheduled_request_id_set
-                    if (
-                        request in self.waiting
-                    ):  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
-                        raise RuntimeError(f"request {request.request_id} scheduled into waiting list, after finished")
+                        need_postprocess_reqs.append(request)
+                    if request.request_id in self.to_be_rescheduled_request_id_set:
+                        # finished after preempted, blocks have been recycled.
+                        self.to_be_rescheduled_request_id_set.remove(request.request_id)
 
                     self.tasks_list[request.idx] = None
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+
+            # Do not block the main thread here
+            for req in need_postprocess_reqs:
+                self.cache_manager.write_cache_to_storage(req)
+
+            with self.lock:
+                for req in need_postprocess_reqs:
+                    try:
+                        self._free_blocks(req)
+                    except Exception as e:
+                        llm_logger.warning(f"release block failed {req.request_id}: {e}")
+
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:

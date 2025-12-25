@@ -39,6 +39,8 @@ void PagedAttnKernel(const paddle::Tensor& q,
                      bool enable_cuda_graph,
                      bool use_sqrt_alibi,
                      bool merged_qkv,
+                     int rope_batch_stride,
+                     bool is_interleaved_rope_mode,
                      paddle::Tensor& out) {
   if (alibi_slopes) {
     PADDLE_ENFORCE_EQ(alibi_slopes.get().dtype(),
@@ -186,6 +188,9 @@ void PagedAttnKernel(const paddle::Tensor& q,
       allocator->Allocate(workspace_size);
   void* workspace_ptr = tmp_workspace->ptr();
 
+  cuinferAttentionRopeMode_t rope_mode =
+      is_interleaved_rope_mode ? CUINFER_ATTEN_NORMAL : CUINFER_ATTEN_OCRV1;
+
   PageAttentionWithKVCacheArguments args{static_cast<float>(scale),
                                          1.0,
                                          1.0,
@@ -202,7 +207,17 @@ void PagedAttnKernel(const paddle::Tensor& q,
                                          workspace_ptr,
                                          merged_qkv,
                                          rope_sin_ptr,
-                                         rope_cos_ptr};
+                                         rope_cos_ptr,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         1,
+                                         0,
+                                         0,
+                                         nullptr,
+                                         static_cast<size_t>(rope_batch_stride),
+                                         rope_mode};
   CUINFER_CHECK(cuInferPageAttentionV7(cuinfer_handle,
                                        out.data(),
                                        data_type,
@@ -250,7 +265,9 @@ std::vector<paddle::Tensor> PagedAttn(
     float softcap,
     bool enable_cuda_graph,
     bool use_sqrt_alibi,
-    bool merged_qkv) {
+    bool merged_qkv,
+    int rope_batch_stride,
+    bool is_interleaved_rope_mode) {
   const auto dtype = q.dtype();
   auto out =
       paddle::empty({q.shape()[0], num_heads * head_dim}, dtype, q.place());
@@ -280,6 +297,8 @@ std::vector<paddle::Tensor> PagedAttn(
                                                   enable_cuda_graph,
                                                   use_sqrt_alibi,
                                                   merged_qkv,
+                                                  rope_batch_stride,
+                                                  is_interleaved_rope_mode,
                                                   out);
       break;
     case paddle::DataType::FLOAT16:
@@ -306,6 +325,8 @@ std::vector<paddle::Tensor> PagedAttn(
                                                  enable_cuda_graph,
                                                  use_sqrt_alibi,
                                                  merged_qkv,
+                                                 rope_batch_stride,
+                                                 is_interleaved_rope_mode,
                                                  out);
       break;
     default:
@@ -374,7 +395,9 @@ PD_BUILD_STATIC_OP(paged_attn)
             "softcap:float",
             "enable_cuda_graph:bool",
             "use_sqrt_alibi:bool",
-            "merged_qkv:bool"})
+            "merged_qkv:bool",
+            "rope_batch_stride:int",
+            "is_interleaved_rope_mode:bool"})
     .SetKernelFn(PD_KERNEL(PagedAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(PagedAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PagedAttnInferDtype));

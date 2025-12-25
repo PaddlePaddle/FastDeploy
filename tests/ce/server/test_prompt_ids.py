@@ -24,9 +24,9 @@ def test_incremental_image_reasoning_consistency():
                         "type": "image_url",
                         "image_url": {
                             "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
-                        }
+                        },
                     },
-                    {"type": "text", "text": "图中的文物属于哪个年代？"}
+                    {"type": "text", "text": "图中的文物属于哪个年代？"},
                 ],
             }
         ],
@@ -69,10 +69,9 @@ def test_incremental_image_reasoning_consistency():
                         "type": "image_url",
                         "image_url": {
                             "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
-                        }
+                        },
                     },
                 ],
-
             }
         ],
         "prompt_token_ids": tokens1,

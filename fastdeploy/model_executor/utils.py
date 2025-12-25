@@ -140,7 +140,7 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
-    if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
+    if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)
         return
@@ -207,6 +207,13 @@ class WeightsMapper:
 
     def apply(self, weight_name):
         return self._map_name(weight_name)
+
+
+def remap_weight_keys(weights_iterator, mapper: dict):
+    return (
+        (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
+        for key, value in weights_iterator
+    )
 
 
 def process_weights_before_loading(
@@ -351,6 +358,9 @@ def is_paddle_support_new_h2d():
 
     code = """
 import paddle
+import resource
+
+resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 try:
     dst = paddle.zeros([2, 4], dtype='bfloat16')
     src = paddle.ones([2, 2], dtype='bfloat16', device='cpu')
