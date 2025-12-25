@@ -524,6 +524,13 @@ class RequestMetrics:
 
     speculate_metrics: Optional[SpeculateMetrics] = None
 
+    # cache related
+    gpu_cache_token_num: Optional[int] = 0
+    cpu_cache_token_num: Optional[int] = 0
+    storage_cache_token_num: Optional[int] = 0
+    gpu_cpu_cache_prepare_time: Optional[float] = None
+    storage_cache_prepare_time: Optional[float] = None
+
     def __post_init__(self):
         if self.arrival_time is None:
             self.arrival_time = time.time()

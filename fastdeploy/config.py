@@ -1296,6 +1296,9 @@ class CacheConfig:
         self.max_processor_cache = None
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
+        self.kvcache_storage_backend = None
+        self.write_policy = None
+
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1303,11 +1306,6 @@ class CacheConfig:
         self.cache_queue_port = parse_ports(self.cache_queue_port)
         self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
         self.pd_comm_port = parse_ports(self.pd_comm_port)
-
-        if self.swap_space is None:
-            self.enable_hierarchical_cache = False
-        else:
-            self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
