@@ -38,7 +38,7 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Xpu-P800-SelfBuiltPypiUse/latest/paddlepaddle_xpu-0.0.0-cp310-cp310-linux_x86_64.whl
+python -m pip install paddlepaddle-xpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh stable
