@@ -1779,15 +1779,6 @@ class FDConfig:
         if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
-        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
-            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
-                self.parallel_config.use_sequence_parallel_moe = False
-                logger.info(
-                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
-                )
-            else:
-                # It will hang when real batch_size < tp_size
-                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
 
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
@@ -1805,6 +1796,16 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
 
         self.postprocess_devices_and_ports()
 
