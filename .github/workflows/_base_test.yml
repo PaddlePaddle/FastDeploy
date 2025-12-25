@@ -39,29 +39,54 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
         run: |
-            set -x
-            REPO="https://github.com/${{ github.repository }}.git"
-            FULL_REPO="${{ github.repository }}"
-            REPO_NAME="${FULL_REPO##*/}"
-            BASE_BRANCH="${{ github.base_ref }}"
-            docker pull ${docker_image}
-            # Clean the repository directory before starting
-            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-            -e "REPO_NAME=${REPO_NAME}" \
-            ${docker_image} /bin/bash -c '
-              if [ -d ${REPO_NAME} ]; then
-                echo "Directory ${REPO_NAME} exists, removing it..."
-                rm -rf ${REPO_NAME}*
-              fi
-            '
+          set -x
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          docker pull ${docker_image}
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}*
+            fi
+          '
 
-            wget -q --no-proxy ${fd_archive_url}
-            tar -xf FastDeploy.tar.gz
-            rm -rf FastDeploy.tar.gz
-            cd FastDeploy
-            git config --global user.name "FastDeployCI"
-            git config --global user.email "fastdeploy_ci@example.com"
-            git log -n 3 --oneline
+          # Download with retry and validation
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if wget -q --no-proxy ${fd_archive_url} && [ -f FastDeploy.tar.gz ] && [ -s FastDeploy.tar.gz ]; then
+              echo "Download successful, file size: $(stat -c%s FastDeploy.tar.gz) bytes"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "Download failed or file is empty, retry $RETRY_COUNT/$MAX_RETRIES..."
+              rm -f FastDeploy.tar.gz
+              sleep 2
+            fi
+          done
+
+          if [ ! -f FastDeploy.tar.gz ] || [ ! -s FastDeploy.tar.gz ]; then
+            echo "ERROR: Failed to download FastDeploy.tar.gz after $MAX_RETRIES attempts"
+            exit 1
+          fi
+
+          # Verify tar.gz integrity before extraction
+          if ! tar -tzf FastDeploy.tar.gz > /dev/null 2>&1; then
+            echo "ERROR: FastDeploy.tar.gz is corrupted or incomplete"
+            exit 1
+          fi
+
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
 
       - name: Run FastDeploy Base Tests
         shell: bash
