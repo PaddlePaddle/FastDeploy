@@ -182,7 +182,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        # return qkv[:,:self.num_heads * self.head_dim].contiguous()
         if int(os.getenv("USE_TBO", "0")) == 1:
             if hasattr(forward_meta, "tbo_microbatch_id"):
                 # 这里只能让后一个microbatch 触发 cache kv 传输！
