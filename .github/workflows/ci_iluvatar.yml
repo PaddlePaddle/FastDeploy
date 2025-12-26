@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   clone:
-    name: FD-Clone-Linux
+    name: FD-Clone-Linux-ILUVATAR
     uses: ./.github/workflows/_clone_linux.yml
 
   iluvatar_test:
