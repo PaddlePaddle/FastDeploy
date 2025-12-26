@@ -430,8 +430,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_ids)
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
-
-        if self.quant_config.deepgemm_scale_ue8m0:
+        if not self.quant_config.deepgemm_scale_ue8m0:
             recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
         else:
             recv_x, recv_x_scale = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
@@ -475,7 +474,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
-
         # swiglu
         ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
@@ -501,7 +499,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
-
         # prmt back per rank
         tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
             ffn_out,
