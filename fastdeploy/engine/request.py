@@ -30,7 +30,12 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    PromptLogprobs,
+    SampleLogprobs,
+    SpeculateMetrics,
+)
 
 
 class RequestStatus(Enum):
@@ -153,6 +158,7 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
+        self.audio_output_token_ids = []
         # extend block tables
         self.use_extend_tables = False
         self.extend_block_tables = []
@@ -394,6 +400,8 @@ class CompletionOutput:
     reasoning_content: Optional[str] = None
     reasoning_token_num: Optional[int] = 0
     tool_calls: Optional[ToolCall] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
+    completion_tokens: Optional[str] = None
 
     def to_dict(self):
         """
@@ -514,6 +522,15 @@ class RequestMetrics:
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
 
+    speculate_metrics: Optional[SpeculateMetrics] = None
+
+    # cache related
+    gpu_cache_token_num: Optional[int] = 0
+    cpu_cache_token_num: Optional[int] = 0
+    storage_cache_token_num: Optional[int] = 0
+    gpu_cpu_cache_prepare_time: Optional[float] = None
+    storage_cache_prepare_time: Optional[float] = None
+
     def __post_init__(self):
         if self.arrival_time is None:
             self.arrival_time = time.time()
@@ -616,6 +633,7 @@ class RequestOutput:
         # for internal adapter
         ic_req_data: Optional[dict] = None,
         prompt_token_ids_len: Optional[int] = 0,
+        trace_carrier: dict = dict(),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -632,16 +650,23 @@ class RequestOutput:
         self.error_msg = error_msg
         self.ic_req_data = ic_req_data
         self.prompt_token_ids_len = prompt_token_ids_len
+        self.trace_carrier = trace_carrier
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
         elif isinstance(self.prompt_token_ids, np.ndarray):
             self.prompt_token_ids = self.prompt_token_ids.tolist()
+        if self.outputs and self.outputs.tool_calls:
+            self.accumulate_tool_calls: Optional[list[ToolCall]] = [self.outputs.tool_calls]
+        else:
+            self.accumulate_tool_calls = None
 
     def add(self, next_output: RequestOutput) -> None:
         """Merge RequestOutput into this one"""
-        self.prompt = next_output.prompt
-        self.prompt_token_ids = next_output.prompt_token_ids
+        if next_output.prompt is not None:
+            self.prompt = next_output.prompt
+        if next_output.prompt_token_ids is not None:
+            self.prompt_token_ids = next_output.prompt_token_ids
         self.finished |= next_output.finished
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
@@ -664,6 +689,30 @@ class RequestOutput:
             self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
                 next_output.outputs.draft_top_logprobs.sampled_token_ranks
             )
+        if next_output.metrics.speculate_metrics is not None:
+            self.outputs.speculate_metrics = next_output.metrics.speculate_metrics
+
+    def accumulate(self, next_output: RequestOutput) -> None:
+        """Accumulate RequestOutput"""
+        if self.outputs.text is None:
+            self.outputs.text = next_output.outputs.text
+        elif next_output.outputs.text:
+            self.outputs.text += next_output.outputs.text
+        if self.outputs.reasoning_content is None:
+            self.outputs.reasoning_content = next_output.outputs.reasoning_content
+        elif next_output.outputs.reasoning_content:
+            self.outputs.reasoning_content += next_output.outputs.reasoning_content
+
+        if self.outputs.completion_tokens is None:
+            self.outputs.completion_tokens = next_output.outputs.completion_tokens
+        elif next_output.outputs.completion_tokens:
+            self.outputs.completion_tokens += next_output.outputs.completion_tokens
+
+        if next_output.outputs.tool_calls:
+            if self.accumulate_tool_calls is None:
+                self.accumulate_tool_calls = []
+            self.accumulate_tool_calls.append(next_output.outputs.tool_calls)
+        self.add(next_output)
 
     def __repr__(self) -> str:
         return (
@@ -680,6 +729,7 @@ class RequestOutput:
             f"metrics={self.metrics}, "
             f"error_code={self.error_code}, "
             f"error_msg={self.error_msg},"
+            f"trace_carrier={self.trace_carrier}"
         )
 
     @classmethod
@@ -695,7 +745,8 @@ class RequestOutput:
         else:
             d.pop("metrics", None)
             metrics = None
-        return RequestOutput(**d, outputs=completion_output, metrics=metrics)
+        trace_carrier = d.pop("trace_carrier", {})
+        return RequestOutput(**d, outputs=completion_output, metrics=metrics, trace_carrier=trace_carrier)
 
     def to_dict(self):
         """convert RequestOutput into a serializable dict"""
@@ -716,6 +767,7 @@ class RequestOutput:
             "error_msg": self.error_msg,
             "ic_req_data": self.ic_req_data,
             "prompt_token_ids_len": self.prompt_token_ids_len,
+            "trace_carrier": self.trace_carrier,
         }
 
 

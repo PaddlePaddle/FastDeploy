@@ -493,6 +493,12 @@ class MTPProposer(Proposer):
             shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
         self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
+        # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
+        # using the target model's hidden states.
+        self.model_inputs["recompute_token_num"] = paddle.full(
+            [self.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
+        )
+
         # attn_mask
         if self.enable_mm:
             self.model_inputs["attn_mask_offsets"] = paddle.full(
@@ -562,7 +568,9 @@ class MTPProposer(Proposer):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                    # P-D split need rollback one step
+                    self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
+                    # NOTE(liuzichang):
+                    # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
@@ -726,20 +734,11 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_batch_ids = (self.model_inputs["kv_batch_ids"],)
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
-        self.forward_meta.pos_emb_type = "NORMAL"
         self.forward_meta.attn_backend = self.attn_backends[0]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
-
-        # Mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            only_decode_batch_list = []
-            prefill_exists = self.exist_prefill()
-            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
-            only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
     def exist_prefill(self):
         """
@@ -767,6 +766,8 @@ class MTPProposer(Proposer):
             self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
+            self.model_inputs["mask_rollback"],
+            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
             self.target_model_inputs["seq_lens_this_time"],

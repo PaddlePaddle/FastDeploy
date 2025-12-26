@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -57,6 +58,7 @@ from fastdeploy.worker.output import (
     LogprobsLists,
     LogprobsTensors,
     PromptLogprobs,
+    SpeculateMetrics,
 )
 
 NONES = itertools.repeat(None)
@@ -103,6 +105,7 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -134,6 +137,8 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
+            tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+            del request.trace_context
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
             max_tokens = None
@@ -384,6 +389,8 @@ class OpenAIServingChat:
                                 request.include_logprobs_decode_token,
                             )
 
+                    output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
+
                     delta_message = DeltaMessage(
                         reasoning_content="",
                         prompt_token_ids=None,
@@ -415,8 +422,22 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
+                        speculate_metrics=output_speculate_metrics,
                     )
                     if res["finished"]:
+                        trace_carrier = res.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = res["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in res:
+                                del res["trace_carrier"]
                         num_choices -= 1
                         main_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
@@ -490,6 +511,7 @@ class OpenAIServingChat:
             )
             yield f"data: {error_data}\n\n"
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
@@ -537,6 +559,7 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
+            speculate_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -613,7 +636,21 @@ class OpenAIServingChat:
                         )
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
+                    speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
                     if data["finished"]:
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = data["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in data:
+                                del data["trace_carrier"]
                         num_choices -= 1
                         reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
                         if data["outputs"].get("image_token_num"):
@@ -635,9 +672,11 @@ class OpenAIServingChat:
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
                             max_tokens=max_tokens,
+                            speculate_metrics=speculate_metrics[idx],
                         )
                         choices.append(choice)
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
@@ -688,6 +727,7 @@ class OpenAIServingChat:
         prompt_logprobs_res_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
+        speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
         idx = int(data["request_id"].split("_")[-1])
         output = data["outputs"]
@@ -745,6 +785,7 @@ class OpenAIServingChat:
             draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
             finish_reason=finish_reason,
+            speculate_metrics=speculate_metrics,
         )
 
     def _create_chat_logprobs(

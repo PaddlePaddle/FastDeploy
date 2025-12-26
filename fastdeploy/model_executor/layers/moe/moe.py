@@ -42,7 +42,7 @@ except:
 import numpy as np
 
 
-def get_moe_method():
+def get_moe_method(layer=None):
     """
     return moe method based on device platform
     """
@@ -54,7 +54,7 @@ def get_moe_method():
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
-        return XPUMoEMethod(None)
+        return XPUMoEMethod(None, layer)
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
@@ -64,7 +64,6 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import HpuMoEMethod
 
         return HpuMoEMethod(None)
-        # return HpuTensorWiseFP8MoEMethod(None)
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
@@ -213,8 +212,10 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
-        self.is_quantized = fd_config.model_config.is_quantized and not (
-            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        self.is_moe_quantized = getattr(self.fd_config.model_config, "is_moe_quantized", False)
+        self.is_quantized = self.is_moe_quantized or (
+            fd_config.model_config.is_quantized
+            and not (fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None)
         )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
@@ -224,7 +225,7 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # unquantized quant_method
-            self.quant_method = get_moe_method()
+            self.quant_method = get_moe_method(self)
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         self.is_rearrange = False
@@ -274,10 +275,13 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+
+        if self.ep_size > 1 or weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
@@ -293,7 +297,6 @@ class FusedMoE(nn.Layer):
                 self.weight_loader(param, loaded_weight_shard, expert_id, shard_id, "fused")
         else:
             if weight_need_transpose and source != "fused":
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # 2.gate up splited in disk
             assert shard_id in ["gate", "down", "up"]

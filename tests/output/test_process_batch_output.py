@@ -66,6 +66,7 @@ class MockTask:
         self.llm_engine_recv_req_timestamp = time.time()
         self.ic_req_data = {}
         self.prompt_token_ids_len = 0
+        self.trace_carrier = {}
 
         now = time.time()
         self.metrics = RequestMetrics(
@@ -142,13 +143,10 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.num_accepted_tokens = 0
         processor.num_emitted_tokens = 0
         processor.max_num_emitted_tokens = 0
-        processor.num_rest_requests_per_head = [
-            0,
-        ] * MAX_DRAFT_TOKENS
-        processor.num_accept_requests_per_head = [
-            0,
-        ] * MAX_DRAFT_TOKENS
         processor.speculative_stats_step = 0
+        processor.total_step_per_request = {}
+        processor.accept_token_num_per_head_per_request = {}
+        processor.accept_token_num_per_head = [0] * MAX_DRAFT_TOKENS
 
         # processor._recycle_resources = Mock()
 
