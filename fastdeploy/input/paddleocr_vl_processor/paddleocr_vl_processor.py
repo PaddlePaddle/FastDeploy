@@ -226,7 +226,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
-            outputs = self.processor.request2ids(reques, **processor_kwargs)
+            outputs = self.processor.request2ids(request, **processor_kwargs)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
