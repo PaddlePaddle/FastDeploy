@@ -280,7 +280,6 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     preempted_req.cached_block_num = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
-                    main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
