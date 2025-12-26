@@ -142,7 +142,7 @@ class MetricsManager:
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
     request_success_total: "Counter"
-    request_preempted_total: "Counter"
+    request_swapped_total: "Counter"
     spec_decode_draft_acceptance_rate: "Gauge"
     spec_decode_efficiency: "Gauge"
     spec_decode_num_accepted_tokens_total: "Gauge"
@@ -380,7 +380,7 @@ class MetricsManager:
             "description": "Total number of successfully processed requests",
             "kwargs": {},
         },
-        "request_preempted_total": {
+        "request_swapped_total": {
             "type": Counter,
             "name": "fastdeploy:request_rescheduled_total",
             "description": "Total number of preempted requests",

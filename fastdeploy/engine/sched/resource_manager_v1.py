@@ -281,7 +281,7 @@ class ResourceManagerV1(ResourceManager):
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
                 main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
-                main_process_metrics.request_preempted_total.inc(1)
+                main_process_metrics.request_swapped_total.inc(1)
 
                 llm_logger.debug(
                     f"preempt {preempted_req.request_id} in idx {preempted_req.idx} with generated ids {preempted_req.output_token_ids}"
