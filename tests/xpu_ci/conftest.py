@@ -75,6 +75,8 @@ def stop_processes():
     commands = [
         "ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'multiprocessing' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'fastdeploy' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
     ]
