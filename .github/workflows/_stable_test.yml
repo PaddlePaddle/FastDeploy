@@ -39,29 +39,47 @@ jobs:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
           fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
         run: |
-            set -x
-            REPO="https://github.com/${{ github.repository }}.git"
-            FULL_REPO="${{ github.repository }}"
-            REPO_NAME="${FULL_REPO##*/}"
-            BASE_BRANCH="${{ github.base_ref }}"
-            docker pull ${docker_image}
-            # Clean the repository directory before starting
-            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-            -e "REPO_NAME=${REPO_NAME}" \
-            ${docker_image} /bin/bash -c '
-              if [ -d ${REPO_NAME} ]; then
-                echo "Directory ${REPO_NAME} exists, removing it..."
-                rm -rf ${REPO_NAME}*
-              fi
-            '
+          set -x
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          docker pull ${docker_image}
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            CLEAN_RETRIES=3
+            CLEAN_COUNT=0
 
-            wget -q --no-proxy ${fd_archive_url}
-            tar -xf FastDeploy.tar.gz
-            rm -rf FastDeploy.tar.gz
-            cd FastDeploy
-            git config --global user.name "FastDeployCI"
-            git config --global user.email "fastdeploy_ci@example.com"
-            git log -n 3 --oneline
+            while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
+              echo "Attempt $((CLEAN_COUNT+1)) to remove ${REPO_NAME}* ..."
+              rm -rf "${REPO_NAME}"* || true
+              sleep 2
+
+              # Check if anything matching ${REPO_NAME}* still exists
+              if ! ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "All ${REPO_NAME}* removed successfully"
+                break
+              fi
+
+              CLEAN_COUNT=$((CLEAN_COUNT + 1))
+            done
+
+            if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+              echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
+              ls -ld "${REPO_NAME}"*
+              exit 1
+            fi
+          '
+
+          wget -q --no-proxy ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
 
       - name: Run FastDeploy Stable Tests
         shell: bash
