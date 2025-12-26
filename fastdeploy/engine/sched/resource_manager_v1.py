@@ -172,6 +172,7 @@ class ResourceManagerV1(ResourceManager):
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
         main_process_metrics.max_batch_size.set(max_num_seqs)
+        main_process_metrics.num_requests_swapped.set(0)
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
@@ -230,6 +231,7 @@ class ResourceManagerV1(ResourceManager):
                 request = self.requests[request_id]
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
+                main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
 
     def _info_each_block(self):
         """
@@ -275,9 +277,12 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     preempted_req.cached_block_num = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+                main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
+                main_process_metrics.request_preempted_total.inc(1)
 
                 llm_logger.debug(
                     f"preempt {preempted_req.request_id} in idx {preempted_req.idx} with generated ids {preempted_req.output_token_ids}"
@@ -1112,6 +1117,7 @@ class ResourceManagerV1(ResourceManager):
                         self.to_be_rescheduled_request_id_set.remove(
                             request.request_id
                         )  # just remove from to_be_rescheduled_request_id_set
+                        main_process_metrics.num_requests_swapped.set(len(self.to_be_rescheduled_request_id_set))
                     if (
                         request in self.waiting
                     ):  # after finished, this request still scheduled from preempted to waiting, unexpected error, should not be here
@@ -1130,6 +1136,7 @@ class ResourceManagerV1(ResourceManager):
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+        main_process_metrics.num_requests_swapped.set(0)
 
     def update_metrics(self):
         # Update metrics

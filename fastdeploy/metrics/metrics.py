@@ -131,6 +131,7 @@ class MetricsManager:
 
     num_requests_running: "Gauge"
     num_requests_waiting: "Gauge"
+    num_requests_swapped: "Gauge"
     time_to_first_token: "Histogram"
     time_per_output_token: "Histogram"
     request_inference_time: "Histogram"
@@ -141,6 +142,7 @@ class MetricsManager:
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
     request_success_total: "Counter"
+    request_preempted_total: "Counter"
     spec_decode_draft_acceptance_rate: "Gauge"
     spec_decode_efficiency: "Gauge"
     spec_decode_num_accepted_tokens_total: "Gauge"
@@ -199,6 +201,12 @@ class MetricsManager:
             "type": Gauge,
             "name": "fastdeploy:num_requests_waiting",
             "description": "Number of requests currently waiting",
+            "kwargs": {},
+        },
+        "num_requests_swapped": {
+            "type": Gauge,
+            "name": "fastdeploy:request_rescheduled_total",
+            "description": "Total number of preempted requests",
             "kwargs": {},
         },
         "gpu_cache_usage_perc": {
@@ -370,6 +378,12 @@ class MetricsManager:
             "type": Counter,
             "name": "fastdeploy:request_success_total",
             "description": "Total number of successfully processed requests",
+            "kwargs": {},
+        },
+        "request_preempted_total": {
+            "type": Counter,
+            "name": "fastdeploy:request_rescheduled_total",
+            "description": "Total number of preempted requests",
             "kwargs": {},
         },
         # for YIYAN Adapter
