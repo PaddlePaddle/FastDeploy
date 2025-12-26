@@ -254,17 +254,18 @@ std::vector<std::vector<int64_t>> PerTokenQuantPaddingInferShape(
   const int padded_token_num =
       ((token_num + tma_alignment_elements - 1) / tma_alignment_elements) *
       tma_alignment_elements;
-  if (GetSMVersion() >= 100){
-    return {{token_num, hidden_size}, {padded_token_num, ceil_div(hidden_size_scale, 4)}};
+  if (GetSMVersion() >= 100) {
+    return {{token_num, hidden_size},
+            {padded_token_num, ceil_div(hidden_size_scale, 4)}};
   }
   return {{token_num, hidden_size}, {padded_token_num, hidden_size_scale}};
 }
 
 std::vector<paddle::DataType> PerTokenQuantPaddingInferDtype(
     paddle::DataType input_dtype) {
-  if (GetSMVersion() >= 100){
+  if (GetSMVersion() >= 100) {
     return {paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::INT32};
-  } 
+  }
   return {paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32};
 }
 
