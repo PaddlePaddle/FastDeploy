@@ -74,6 +74,8 @@ class RequestFuncOutput:
     tpot: float = 0.0  # avg next-token latencies
     prompt_len: int = 0
     prompt_tokens: int = 0  # 推理侧返回输入token数
+    reasoning_tokens: int = 0  # 思考长度
+    res_ttft: int = 0  # 包含思考首token时延
     error: str = ""
     metrics: dict = field(default_factory=dict)
 
@@ -100,7 +102,7 @@ def metrics_summary(metrics, token_timestamps):
 
     # prefill 总耗时
     summary["prefill_cost_time"] = safe_cost(m0.get("send_request_output_to_decode_time"), arrival_time)
-    # prefill准备耗时
+    # prefill准备总耗时
     summary["prefill_prepare_cost_time"] = safe_cost(inference_start_time, arrival_time)
     # 预处理耗时
     summary["preprocess_cost_time"] = safe_cost(m0.get("scheduler_recv_req_time"), arrival_time)
@@ -111,6 +113,10 @@ def metrics_summary(metrics, token_timestamps):
     # 申请 decode资源耗时
     summary["ask_decode_resource_cost_time"] = safe_cost(
         m0.get("ask_decode_resource_finish_time"), m0.get("ask_decode_resource_start_time")
+    )
+    # scheduler调度耗时
+    summary["schedule_cost_time"] = safe_cost(
+        m0.get("inference_start_time"), m0.get("ask_decode_resource_finish_time")
     )
     # prefill 的首 token 推理耗时
     summary["prefill_first_token_infer_cost_time"] = safe_cost(
@@ -141,6 +147,19 @@ def metrics_summary(metrics, token_timestamps):
         token_timestamps[1], m_last.get("decode_recv_second_token_time")
     )
 
+    # MIX 模式下，scheduler调度耗时
+    summary["mixed_schedule_cost_time"] = safe_cost(m0.get("inference_start_time"), m0.get("engine_get_req_time"))
+    # MIX 模式下，返回首 token 链路耗时
+    summary["mixed_first_token_transmission_cost_time"] = safe_cost(
+        token_timestamps[0], m0.get("engine_recv_first_token_time")
+    )
+
+    summary["gpu_cache_token_num"] = m0.get("gpu_cache_token_num")
+    summary["cpu_cache_token_num"] = m0.get("cpu_cache_token_num")
+    summary["storage_cache_token_num"] = m0.get("storage_cache_token_num")
+    summary["gpu_cpu_cache_prepare_time"] = m0.get("gpu_cpu_cache_prepare_time")
+    summary["storage_cache_prepare_time"] = m0.get("storage_cache_prepare_time")
+
     return summary
 
 
@@ -152,7 +171,9 @@ async def async_request_eb_openai_chat_completions(
     api_url = request_func_input.api_url
     assert api_url.endswith(("completions", "profile")), "OpenAI Chat Completions API URL must end with 'completions'."
 
-    async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(
+        trust_env=True, read_bufsize=10 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT
+    ) as session:
         content = [{"type": "text", "text": request_func_input.prompt}]
         if request_func_input.multi_modal_content:
             content.append(request_func_input.multi_modal_content)
@@ -198,11 +219,14 @@ async def async_request_eb_openai_chat_completions(
         request_id = "None"
 
         ttft = 0.0
+        res_ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
         token_timestamps = []
         try:
-            async with session.post(url=api_url, json=payload, headers=headers) as response:
+            async with session.post(
+                url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024
+            ) as response:
                 data = {}
                 if response.status == 200:
                     async for chunk_bytes in response.content:
@@ -242,6 +266,14 @@ async def async_request_eb_openai_chat_completions(
                                 else:
                                     output.itl.append(timestamp - most_recent_timestamp)
 
+                                # response首token
+                                if res_ttft == 0.0:
+                                    if content:
+                                        res_ttft = choices[0].get("arrival_time", timestamp)
+                                        output.res_ttft = res_ttft
+                                        usage = data.get("usage") or {}
+                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+
                                 output.generated_text += content or ""
                                 output.reasoning_content += reason_content or ""
                                 # print(f"####content:{data}")
@@ -260,8 +292,10 @@ async def async_request_eb_openai_chat_completions(
                     # 新增metrics统计，计算首token过滤空包
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
-                    if output.generated_text.strip() == "":
+                    # 兼容思考内容超长截断的情况，此时回复内容为空
+                    if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
                         output.success = False
+                        output.reasoning_tokens = output.output_tokens
                         output.error = "No generated text found!"
                     else:
                         output.success = True
@@ -284,7 +318,7 @@ async def async_request_eb_openai_chat_completions(
         output.request_id = request_id
 
         # 保存失败请求结果
-        if not output.success:
+        if not output.success or output.output_tokens == 0:
             with open("error_output.txt", "a") as f:
                 f.write(str(output) + "\n")
     if pbar:
@@ -304,7 +338,9 @@ async def async_request_eb_openai_completions(
         ("completions", "profile")
     ), "OpenAI Completions API URL must end with 'completions' or 'profile'."
 
-    async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(
+        trust_env=True, read_bufsize=10 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT
+    ) as session:
         payload = {
             "model": request_func_input.model,
             "prompt": request_func_input.prompt,

@@ -609,8 +609,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
-
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.linear.weight.set_value(
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
@@ -763,6 +762,11 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
             tsm.PairFused,
         ),
         WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight_scale",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.quant_weight",
             False,
         ),
@@ -791,7 +795,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
