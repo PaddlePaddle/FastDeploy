@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import inspect
 import itertools
 import time
 import traceback
@@ -74,6 +75,7 @@ class OpenAIServingCompletion:
         else:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
+        self._is_process_response_obj_async = None
         api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
@@ -314,9 +316,7 @@ class OpenAIServingCompletion:
 
                     aggregated_token_ids[rid].extend(output.token_ids)
 
-                    self.engine_client.data_processor.process_response_obj(
-                        data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    await self._call_process_response_obj(data, request, stream=False)
                     output_tokens[rid] += len(output.token_ids)
                     completion_batched_token_ids[rid].extend(output.token_ids)
                     output_speculate_metrics = getattr(data.metrics, "speculate_metrics", None)
@@ -501,9 +501,7 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_obj(
-                        res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    await self._call_process_response_obj(res, request, stream=True)
                     if inference_start_time[idx] == 0 and res.metrics and res.metrics.first_token_time is not None:
                         arrival_time = res.metrics.first_token_time
                         inference_start_time[idx] = res.metrics.inference_start_time
@@ -757,6 +755,20 @@ class OpenAIServingCompletion:
             choices=choices,
             usage=usage,
         )
+
+    async def _call_process_response_obj(self, res, request, stream):
+        if self._is_process_response_obj_async is None:
+            self._is_process_response_obj_async = inspect.iscoroutinefunction(
+                self.engine_client.data_processor.process_response_obj
+            )
+        if self._is_process_response_obj_async:
+            await self.engine_client.data_processor.process_response_obj(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
+        else:
+            self.engine_client.data_processor.process_response_obj(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
 
     def _create_completion_logprobs(
         self,
