@@ -106,13 +106,13 @@ def _install_dependency_stubs():
 
     conversion_utils = types.ModuleType("paddleformers.transformers.conversion_utils")
 
-    def _split_or_merge_func(is_split, tensor_parallel_degree, tensor_parallel_rank, **_kwargs):
+    def _split_or_merge_func(is_split, tensor_model_parallel_size, tensor_parallel_rank, **_kwargs):
         axis = -1
 
         def _fn(weight, *, is_column=True, **_kwargs):
             current_axis = axis if is_column else 0
             if is_split:
-                chunks = np.array_split(weight, tensor_parallel_degree, axis=current_axis)
+                chunks = np.array_split(weight, tensor_model_parallel_size, axis=current_axis)
                 if tensor_parallel_rank is None:
                     return chunks
                 return chunks[tensor_parallel_rank]
@@ -396,7 +396,7 @@ class BuildExpandedKeysTest(unittest.TestCase):
 class GQATensorOpsTest(unittest.TestCase):
     def test_gqa_split_returns_all_partitions(self):
         func = _tp_utils.gqa_qkv_split_func(
-            tensor_parallel_degree=2,
+            tensor_model_parallel_size=2,
             tensor_parallel_rank=None,
             num_attention_heads=4,
             num_key_value_heads=2,
@@ -411,7 +411,7 @@ class GQATensorOpsTest(unittest.TestCase):
 
     def test_gqa_split_with_rank_and_repeat_kv(self):
         func = _tp_utils.gqa_qkv_split_func(
-            tensor_parallel_degree=2,
+            tensor_model_parallel_size=2,
             tensor_parallel_rank=1,
             num_attention_heads=2,
             num_key_value_heads=1,
@@ -423,7 +423,7 @@ class GQATensorOpsTest(unittest.TestCase):
 
     def test_gqa_split_on_matrix_rows(self):
         func = _tp_utils.gqa_qkv_split_func(
-            tensor_parallel_degree=2,
+            tensor_model_parallel_size=2,
             tensor_parallel_rank=None,
             num_attention_heads=4,
             num_key_value_heads=2,
@@ -454,7 +454,7 @@ class GQATensorOpsTest(unittest.TestCase):
     def test_split_or_merge_func_v1_row_bias(self):
         fn = _tp_utils.split_or_merge_func_v1(
             is_split=True,
-            tensor_parallel_degree=4,
+            tensor_model_parallel_size=4,
             tensor_parallel_rank=0,
         )
         bias = np.ones(4, dtype=np.float32)
@@ -464,7 +464,7 @@ class GQATensorOpsTest(unittest.TestCase):
     def test_split_or_merge_func_v1_gqa_path(self):
         fn = _tp_utils.split_or_merge_func_v1(
             is_split=True,
-            tensor_parallel_degree=2,
+            tensor_model_parallel_size=2,
             tensor_parallel_rank=None,
             num_attention_heads=4,
             num_key_value_heads=2,
@@ -477,7 +477,7 @@ class GQATensorOpsTest(unittest.TestCase):
     def test_split_or_merge_func_v1_default_path(self):
         fn = _tp_utils.split_or_merge_func_v1(
             is_split=False,
-            tensor_parallel_degree=2,
+            tensor_model_parallel_size=2,
             tensor_parallel_rank=None,
             num_attention_heads=4,
         )

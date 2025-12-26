@@ -14,8 +14,13 @@ ln -sf /usr/local/bin/python3 /usr/local/bin/python
 echo "pip requirements"
 python -m pip install -r requirements_iluvatar.txt
 echo "install paddle cpu and custom device"
-python -m pip install paddlepaddle==3.3.0.dev20251103 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-python -m pip install paddle-iluvatar-gpu==3.0.0.dev20251107 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+python -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+python -m pip install --pre paddle-iluvatar-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+#python -m pip install paddlepaddle==3.3.0.dev20251219 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+#python -m pip install paddle-iluvatar-gpu==3.0.0.dev20251223 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+mkdir -p /model_data/
+cp -r /aistudio/paddle_ci/ERNIE_300B_4L/ /model_data/
+cp -r /aistudio/paddle_ci/ERNIE-4.5-VL-28B-A3B-Paddle /model_data/
 echo "build whl"
 bash build.sh || exit 1
 
