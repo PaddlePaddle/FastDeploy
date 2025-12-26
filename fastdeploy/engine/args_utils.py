@@ -238,7 +238,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -264,6 +264,11 @@ class EngineArgs:
     # to avoid the excess work.
     #
     # This optimization is enabled by default, and can be disabled by using this flag.
+    """
+
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
     """
 
     engine_worker_queue_port: str = "0"
@@ -495,6 +500,11 @@ class EngineArgs:
     routing_replay_config: Optional[Dict[str, Any]] = None
     """
     Flag to rollout routing replay(r3)
+    """
+
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
     """
 
     def __post_init__(self):
@@ -804,6 +814,12 @@ class EngineArgs:
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -905,6 +921,12 @@ class EngineArgs:
             type=int,
             default=EngineArgs.chunked_moe_size,
             help="Chunked size of moe input.",
+        )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
         )
 
         # Load group

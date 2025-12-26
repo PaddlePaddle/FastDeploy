@@ -92,6 +92,11 @@ else:
         speculate_limit_thinking_content_length_v2,
     )
 
+from fastdeploy.model_executor.entropy_utils import (
+    calculate_logits_entropy,
+    speculate_calculate_logits_entropy,
+)
+from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
@@ -144,7 +149,6 @@ def speculate_limit_thinking_content_length(
     step_idx: paddle.Tensor,
     limit_think_status: paddle.Tensor,
     accept_num: paddle.Tensor,
-    seq_lens_decoder: paddle.Tensor,
     stop_flags: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
     think_end_id: int,
@@ -158,7 +162,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
@@ -172,7 +175,6 @@ def speculate_limit_thinking_content_length(
             step_idx,
             limit_think_status,
             accept_num,
-            seq_lens_decoder,
             stop_flags,
             think_end_id,
             line_break_id,
@@ -316,12 +318,14 @@ def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata,
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -386,6 +390,9 @@ def post_process_normal(
             model_output.next_tokens,
             False,
         )
+
+    if enable_entropy:
+        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
@@ -452,10 +459,12 @@ def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -465,7 +474,6 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
@@ -480,6 +488,10 @@ def post_process_specualate(
         model_output.stop_seqs_len,
         model_output.eos_token_id,
     )
+
+    if enable_entropy:
+        speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+
     speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
@@ -541,6 +553,7 @@ def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata = None,
     block_size: int = 64,
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
@@ -548,6 +561,7 @@ def post_process(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -567,22 +581,26 @@ def post_process(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 save_each_rank,
                 skip_save_output,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
         else:
             post_process_normal(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 block_size,
                 save_each_rank,
                 skip_save_output,
                 async_output_queue,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
 
 

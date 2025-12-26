@@ -80,6 +80,7 @@ def setup_and_run_server():
         '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
         "--routing-replay-config",
         '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./routing_replay_output"}',
+        "--no-enable-prefix-caching",
     ]
 
     # Start subprocess in new process group

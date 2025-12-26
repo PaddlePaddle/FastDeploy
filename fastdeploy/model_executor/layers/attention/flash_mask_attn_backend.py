@@ -57,13 +57,7 @@ class FlashMaskAttentionMetadata(AttentionMetadata):
     FlashAttentionMetadata
     """
 
-    rotary_embs: Optional[paddle.Tensor] = None
-    block_tables: Optional[paddle.Tensor] = None
-
-    cu_seqlens_q: paddle.Tensor = None
     cu_seqlens_k: paddle.Tensor = None
-    max_seqlen_q: int = 0
-    max_seqlen_k: int = 0
 
     pre_cache_batch_ids = None
     pre_cache_tile_ids_per_batch = None
@@ -173,9 +167,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashMaskAttentionMetadata()
-        metadata.cu_seqlens_q = forward_meta.cu_seqlens_q
-        metadata.rotary_embs = forward_meta.rotary_embs
-        metadata.block_tables = forward_meta.block_tables
         get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
@@ -265,14 +256,14 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
-                metadata.rotary_embs,
+                forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.batch_id_per_token,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.kv_batch_ids,
                 forward_meta.kv_tile_ids_per_batch,
                 forward_meta.kv_num_blocks_x_cpu,
@@ -291,6 +282,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
+                layer.use_neox_rotary_style,
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )
@@ -299,7 +291,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 q,
                 k,
                 v,
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
                 forward_meta.seq_lens_encoder,
                 res_encoder,

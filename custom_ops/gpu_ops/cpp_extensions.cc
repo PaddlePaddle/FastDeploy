@@ -190,10 +190,12 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const int kv_token_num,
     const int max_seq_len,
     const float rms_norm_eps,
+    const bool use_neox_rotary_style,
     const std::string& cache_quant_type,
     const bool rope_3d);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
+    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const int max_dec_len,
@@ -1022,7 +1024,6 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id);
@@ -1033,7 +1034,6 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);
