@@ -61,6 +61,13 @@ def clean_ports_for_config(config):
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
+    """
+    Pytest fixture that runs once per test session:
+    - Cleans ports before tests
+    - Starts the API server as a subprocess
+    - Waits for server port to open (up to 30 seconds)
+    - Tears down server after all tests finish
+    """
     print("Pre-test port cleanup...")
     clean_ports()
 
@@ -99,6 +106,8 @@ def setup_and_run_server():
         "auto",
     ]
 
+    # Start subprocess in new process group
+    # 清除log目录
     if os.path.exists("log"):
         shutil.rmtree("log")
     with open(log_path, "w") as logfile:
@@ -109,6 +118,7 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
+    # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
