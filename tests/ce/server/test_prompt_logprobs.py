@@ -4,7 +4,7 @@
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
 """
-Checking for /v1/completions parameters
+Checking for prompt_logprobs
 """
 
 import json
@@ -258,7 +258,6 @@ def test_unstream_with_prompt_logprobs_chunk():
     # 构建请求并发送
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(COMPLETIONS_URL, payload)
-    print(json.dumps(response.json(), indent=2, ensure_ascii=False))
     resp_json = response.json()
 
     # 校验返回内容与概率信息
@@ -456,6 +455,30 @@ def test_unstream_with_prompt_logprobs_no_decode():
         assert logprobs["logprob"] < 0
 
 
+def test_error_with_prompt_logprobs():
+    """
+    测试prompt_logprobs的校验信息
+    """
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "牛顿的三大运动定律是什么？"},
+        ],
+        "max_tokens": 3,
+        "prompt_logprobs": 15,
+    }
+
+    # 构建请求并发送
+    payload = build_request_payload(TEMPLATE, data)
+    response = send_request(URL, payload)
+    resp_json = response.json()
+
+    assert (
+        "Number of prompt_logprobs requested (15) exceeds maximum allowed value (10)" in resp_json["error"]["message"]
+    )
+
+
 if __name__ == "__main__":
     # chat接口返回
     test_unstream_with_prompt_logprobs()
@@ -476,3 +499,4 @@ if __name__ == "__main__":
     # 关闭decode
     test_unstream_with_prompt_logprobs_no_decode_completions()
     test_unstream_with_prompt_logprobs_no_decode()
+    test_error_with_prompt_logprobs()
