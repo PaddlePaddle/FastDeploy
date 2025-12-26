@@ -781,9 +781,10 @@ class PrefixCacheManager:
                         f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
                     )
                     start_time = time.time()
-                    storage_matched_block_num = self.issue_prefetch_storage_task(
+                    storage_matched_block_ids = self.issue_prefetch_storage_task(
                         req_id, no_match_block_keys, gpu_recv_storage_block_ids
                     )
+                    storage_matched_block_num = len(storage_matched_block_ids)
                     storage_match_token_num = storage_matched_block_num * block_size
                     cost_time = time.time() - start_time
                     metrics["storage_cache_prepare_time"] = cost_time
@@ -1041,7 +1042,7 @@ class PrefixCacheManager:
         self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
         if is_sync:
             storage_block_ids = self.wait_prefetch_storage_task(req_id)
-        return len(storage_block_ids)
+        return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):
         """
@@ -1054,7 +1055,7 @@ class PrefixCacheManager:
         storage_block_ids = self.storage_prefetch_block_ids[req_id]
         del self.task_prefetch_event[req_id]
         del self.storage_prefetch_block_ids[req_id]
-        return len(storage_block_ids)
+        return storage_block_ids
 
     def free_nodes_directly(self, node):
         with self.request_release_lock:
