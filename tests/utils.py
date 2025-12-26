@@ -61,6 +61,7 @@ class FakeModelConfig:
         self.enable_mm = False
         self.max_model_len = 512
         self.logprobs_mode = "raw_logprobs"
+        self.architectures = ["test_model"]
 
 
 def get_default_test_fd_config():
@@ -71,7 +72,6 @@ def get_default_test_fd_config():
     parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
     model_config = FakeModelConfig()
-    model_config.architectures = ["test_model"]
     fd_config = FDConfig(
         graph_opt_config=graph_opt_config,
         parallel_config=parallel_config,
