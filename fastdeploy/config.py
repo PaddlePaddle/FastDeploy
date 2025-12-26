@@ -1705,6 +1705,12 @@ class FDConfig:
             self.cache_config.enable_prefix_caching = False
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
+        # adjust speculative config
+        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+            if self.scheduler_config.splitwise_role == "prefill":
+                self.speculative_config.num_speculative_tokens = 1
+                self.speculative_config.num_model_steps = 1
+
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
