@@ -145,6 +145,7 @@ class TestGraphOptBackend(unittest.TestCase):
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
 
         # Create FD config
         return FDConfig(
