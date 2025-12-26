@@ -241,7 +241,11 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         # Align external multimodal rope_3d configuration
-        if hasattr(self, "rope_scaling") and "mrope_section" in self.rope_scaling:
+        if (
+            hasattr(self, "rope_scaling")
+            and isinstance(self.rope_scaling, dict)
+            and "mrope_section" in self.rope_scaling
+        ):
             setattr(self, "rope_3d", True)
             setattr(self, "freq_allocation", self.rope_scaling["mrope_section"][0])
 
