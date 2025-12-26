@@ -67,7 +67,6 @@ class GptOssAttention(nn.Layer):
             input_size=self.num_attention_heads * self.head_dim,
             output_size=self.hidden_size,
             with_bias=True,
-            add_bias=True,
         )
 
         self.attn = Attention(
@@ -121,10 +120,11 @@ class GptOssMoe(nn.Layer):
             weight_key_map=weight_key_map,
             with_bias=True,
             activation="swigluoai",
+            model_format="",
         )
 
-    def forward(self, hidden_states: paddle.Tensor):
-        expert_output = self.experts(hidden_states, self.router)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        expert_output = self.experts(hidden_states, self.router, forward_meta)
         return expert_output
 
 
@@ -150,6 +150,7 @@ class GptOssDecoderLayer(nn.Layer):
             hidden_size=hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
         self.mlp = GptOssMoe(fd_config, layer_id, prefix=f"{prefix}.mlp")
 
@@ -159,11 +160,9 @@ class GptOssDecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -173,7 +172,7 @@ class GptOssDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
@@ -208,14 +207,13 @@ class GptOssModel(nn.Layer):
         )
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        hidden_states = self.norm(hidden_states)
+        hidden_states = self.norm(hidden_states, residual)[0]
         return hidden_states
 
 
@@ -272,7 +270,7 @@ class GptOssForCausalLM(ModelForCasualLM):
             ("down_proj_bias", "down_proj_bias", None, None),
         ]
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

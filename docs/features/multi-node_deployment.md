@@ -26,6 +26,7 @@ We recommend using mpirun for one-command startup without manually starting each
 4. Ensure all nodes can resolve each other's hostnames
 
 * Online inference startup example:
+
     ```shell
     python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -35,10 +36,16 @@ We recommend using mpirun for one-command startup without manually starting each
     --max-model-len 32768 \
     --max-num-seqs 32 \
     --tensor-parallel-size 16 \
+    --graph-optimization-config '{"use_cudagraph":false}' \
+    --no-enable-prefix-caching \
+    --disable-custom-all-reduce \
     --ips 192.168.1.101,192.168.1.102
     ```
 
+> :bulb: Multi-node tensor parallel deployment currently does not support CUDA Graphs, Prefix Caching, or Custom AllReduce, and these features must be explicitly disabled in the deployment command.
+
 * Offline startup example:
+
     ```python
     from fastdeploy.engine.sampling_params import SamplingParams
     from fastdeploy.entrypoints.llm import LLM

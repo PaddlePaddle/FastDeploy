@@ -22,6 +22,9 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+from fastdeploy.input.utils import process_stop_token_ids
+
 
 class PaddleOCRVLProcessor(TextProcessor):
     """
@@ -47,6 +50,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         """
         Initialize PaddleOCRVLProcessor instance.
@@ -60,11 +64,11 @@ class PaddleOCRVLProcessor(TextProcessor):
             tool_parser_obj: Tool parser instance
         """
         super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
-
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self.processor = DataProcessor(
             model_path=model_name_or_path,
+            enable_processor_cache=enable_processor_cache,
             tokens_per_second=config.vision_config.tokens_per_second,
             tokenizer=self.tokenizer,
             **processor_kwargs,
@@ -207,11 +211,8 @@ class PaddleOCRVLProcessor(TextProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        stop_sequences = request.get("stop", [])
-        if stop_sequences:
-            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
 
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
@@ -250,9 +251,25 @@ class PaddleOCRVLProcessor(TextProcessor):
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
 
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
+
+        if self.reasoning_parser:
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            parts = request["request_id"].split("_")
+            if len(parts) > 1:
+                real_req_id = parts[0]
+                index = int(parts[1])
+                n = request.get("n", 1)
+                for idx in range(index * n, (index + 1) * n):
+                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+            else:
+                self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
+
         return request
 
-    def append_generated_tokens(self, outputs, generated_token_ids):
+    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
         """
         Append generated tokens to existing outputs.
 
@@ -260,19 +277,13 @@ class PaddleOCRVLProcessor(TextProcessor):
             outputs: Current model outputs
             generated_token_ids: Generated tokens to append
         """
-        out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(generated_token_ids, out)
+        num_tokens = len(generated_token_ids)
+        multimodal_inputs["input_ids"].extend(generated_token_ids)
+        multimodal_inputs["token_type_ids"].extend([0] * num_tokens)
 
-        outputs["input_ids"] = np.concatenate(
-            [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["token_type_ids"] = np.concatenate(
-            [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["position_ids"] = np.concatenate(
-            [outputs["position_ids"], out["position_ids"][0]], axis=1, dtype=np.int64
-        )
-        outputs["cur_position"] = out["cur_position"]
+        pos_ids = self.processor._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
+        multimodal_inputs["position_ids"].append(pos_ids)
+        multimodal_inputs["cur_position"] += num_tokens
 
     def pack_outputs(self, outputs):
         """
@@ -284,6 +295,22 @@ class PaddleOCRVLProcessor(TextProcessor):
         Returns:
             dict: Packed output dictionary with all required fields
         """
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position ID
+
         outputs["image_patch_id"] = self.processor.image_token_id
         outputs["video_patch_id"] = self.processor.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)

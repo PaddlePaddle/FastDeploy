@@ -24,6 +24,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.quantization.kv_cache import (
+    KvCacheQuantzationTypes,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 
 if TYPE_CHECKING:
@@ -107,6 +110,12 @@ class Attention(nn.Layer):
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
+
+            # set for RL model, as RL do not need load state dict
+            if fd_config.quant_config.kv_cache_quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
+                self.cache_quant_type_str = "block_wise_fp8"
+                self.quant_max_bound = 448.0
+                self.quant_min_bound = -448.0
         else:
             self.quant_method = None
 
@@ -220,6 +229,11 @@ class Attention(nn.Layer):
             self.sinks.set_value(sinks_tensor)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        if self.use_qk_norm and ("q_norm" in param.name or "k_norm" in param.name):
+            loaded_weight = get_tensor(loaded_weight).astype("float32")
+            param.copy_(loaded_weight, False)
+            return
+
         loaded_weight = get_tensor(loaded_weight).cast(paddle.get_default_dtype())
         if self.quant_method.cache_quant_config.has_zero_point:  # cache_int4_zp
             loaded_weight = 1.0 / loaded_weight

@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from unittest.mock import Mock
 
@@ -27,13 +43,13 @@ class TestCase1SubLayer1(paddle.nn.Layer):
     def forward(self, ids_remove_padding, forward_meta: ForwardMeta):
         """Sub layer1 forward pass"""
 
-        output = paddle.add(forward_meta.input_ids, forward_meta.input_ids)
+        output = paddle.add(forward_meta.ids_remove_padding, forward_meta.ids_remove_padding)
         return output
 
     def forward_correct(self, ids_remove_padding, forward_meta: ForwardMeta):
         """Sub layer1 Correct forward pass"""
 
-        output = paddle.add(forward_meta.input_ids, forward_meta.input_ids)
+        output = paddle.add(forward_meta.ids_remove_padding, forward_meta.ids_remove_padding)
         return output
 
 
@@ -55,9 +71,7 @@ class TestModel1(paddle.nn.Layer):
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
 
         # sublayer2 use cuda graph
-        sub_meta2 = ForwardMeta(
-            input_ids=sublayer1_output, ids_remove_padding=sublayer1_output, step_use_cudagraph=True
-        )
+        sub_meta2 = ForwardMeta(ids_remove_padding=sublayer1_output, step_use_cudagraph=True)
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
 
         return sublayer2_output
@@ -71,7 +85,7 @@ class TestModel1(paddle.nn.Layer):
         )
 
         # sublayer2 not use cuda graph
-        sub_meta2 = ForwardMeta(input_ids=sublayer1_output, ids_remove_padding=sublayer1_output)
+        sub_meta2 = ForwardMeta(ids_remove_padding=sublayer1_output)
         sublayer2_output = self.sublayer2.forward_correct(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
 
         return sublayer2_output
@@ -109,7 +123,7 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         # Run Test Case1
         self.test_model1 = TestModel1(fd_config=fd_config)
         input_tensor1 = paddle.ones([1, 32768])
-        forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
+        forward_meta1 = ForwardMeta(ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
         # Correct output
         self.output_correct = self.test_model1.forward_correct(

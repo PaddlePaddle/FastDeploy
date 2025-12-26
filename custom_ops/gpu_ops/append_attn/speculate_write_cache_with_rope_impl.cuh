@@ -31,6 +31,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -74,8 +75,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int token_id = linear_index / hidden_size;
 
     const int ori_bi = batch_id_per_token[token_id];
-    if (ori_bi == -1) return;  // NOTE(gongshaotian): For CUDAGraph padding
-    if (seq_lens_decoder[ori_bi] == 0) continue;
+    if (ori_bi == -1) continue;  // NOTE(gongshaotian): For CUDAGraph padding
+    if (seq_lens_encoder[ori_bi] > 0) continue;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
     const int h_bias = bias % head_size;
@@ -87,7 +88,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -343,6 +344,7 @@ __global__ void append_speculate_cache_rope_kernel(
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -378,9 +380,9 @@ __global__ void append_speculate_cache_rope_kernel(
        linear_index += step) {
     const int token_id = linear_index / hidden_size;
     const int ori_bi = batch_id_per_token[token_id];
-    if (ori_bi == -1) return;  // NOTE(gongshaotian): For CUDAGraph padding
+    if (ori_bi == -1) continue;  // NOTE(gongshaotian): For CUDAGraph padding
 
-    if (seq_lens_decoder[ori_bi] == 0) continue;
+    if (seq_lens_encoder[ori_bi] > 0) continue;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
     const int h_bias = bias % head_size;
@@ -392,7 +394,7 @@ __global__ void append_speculate_cache_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -473,6 +475,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
     const float* __restrict__ cos_emb,
     const float* __restrict__ sin_emb,
     const float*
@@ -508,8 +511,8 @@ __global__ void append_speculate_cache_neox_rope_kernel(
        linear_index += step) {
     const int token_id = linear_index / half_hidden_size;
     const int ori_bi = batch_id_per_token[token_id];
-    if (ori_bi == -1) return;  // NOTE(gongshaotian): For CUDAGraph padding
-    if (seq_lens_decoder[ori_bi] == 0) continue;
+    if (ori_bi == -1) continue;  // NOTE(gongshaotian): For CUDAGraph padding
+    if (seq_lens_encoder[ori_bi] > 0) continue;
     const int bias = linear_index % half_hidden_size;
     const int hi = bias / half_head_size;  // q + k + v
     const int h_bias = bias % half_head_size;
@@ -521,7 +524,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return;  // NOTE(gongshaotian): For CUDAGraph padding
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -602,7 +605,8 @@ template <typename T,
           int VecSize = 4,
           int RoundType = 0,
           int HeadDim = 128,
-          bool IsFP8 = false>
+          bool IsFP8 = false,
+          bool IsDynamic = true>
 __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     const T* __restrict__ quant_qkv,    // [num_head, num_heads + 2 *
                                         // gqa_group_size, head_size]
@@ -662,8 +666,6 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
                    (head_idx - num_heads) % gqa_group_size * block_size +
                    block_offset;
   }
-  T* cache_k_scale_now = cache_k_scale + cache_offset;
-  T* cache_v_scale_now = cache_v_scale + cache_offset;
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
@@ -811,25 +813,34 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
       }
     }
     // reduce max, 1 head per warp
-    T local_max = -INFINITY;
+    if constexpr (IsDynamic) {
+      T local_max = -INFINITY;
 #pragma unroll
-    for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
-      local_max = __hmax(local_max, __habs(bias_vec1[i]));
-      local_max = __hmax(local_max, __habs(bias_vec2[i]));
-    }
+      for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
+        local_max = __hmax(local_max, __habs(bias_vec1[i]));
+        local_max = __hmax(local_max, __habs(bias_vec2[i]));
+      }
 #pragma unroll
-    for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
-      local_max =
-          __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
-    }
+      for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
+        local_max =
+            __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
+      }
 
-    scale = __hdiv(448, local_max);
-
-    if (lane_id == 0) {
+      scale = __hdiv(448, local_max);
+      T* cache_k_scale_now = cache_k_scale + cache_offset;
+      T* cache_v_scale_now = cache_v_scale + cache_offset;
+      if (lane_id == 0) {
+        if (head_idx < num_heads + gqa_group_size) {
+          cache_k_scale_now[0] = __hdiv(1, scale);
+        } else {
+          cache_v_scale_now[0] = __hdiv(1, scale);
+        }
+      }
+    } else {
       if (head_idx < num_heads + gqa_group_size) {
-        cache_k_scale_now[0] = __hdiv(1, scale);
+        scale = __ldg(&cache_k_scale[kv_head_idx]);
       } else {
-        cache_v_scale_now[0] = __hdiv(1, scale);
+        scale = __ldg(&cache_v_scale[kv_head_idx]);
       }
     }
 

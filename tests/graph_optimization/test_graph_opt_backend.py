@@ -108,9 +108,7 @@ class TestGraphOptBackend(unittest.TestCase):
 
         # Create input data
         self.input_tensor = paddle.randint(32, shape=self.input_shape, dtype=self.dtype)
-        self.forward_meta = ForwardMeta(
-            input_ids=self.input_tensor, ids_remove_padding=self.input_tensor, step_use_cudagraph=True
-        )
+        self.forward_meta = ForwardMeta(ids_remove_padding=self.input_tensor, step_use_cudagraph=True)
 
         # Compute baseline result once
         baseline_model = Attention(fd_config=self.baseline_fd_config, **self.model_config)

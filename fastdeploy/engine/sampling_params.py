@@ -21,6 +21,8 @@ from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Any, List, Optional, Union
 
+from fastdeploy import envs
+
 
 @dataclass
 class SamplingParams:
@@ -97,12 +99,14 @@ class SamplingParams:
     reasoning_max_tokens: Optional[int] = None
     min_tokens: int = 1
     logprobs: Optional[int] = None
+    prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
     bad_words: Optional[List[str]] = None
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
+    logits_processors_args: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -133,9 +137,11 @@ class SamplingParams:
         reasoning_max_tokens=None,
         min_tokens=1,
         logprobs=None,
+        prompt_logprobs=None,
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
+        logits_processors_args=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -155,9 +161,11 @@ class SamplingParams:
             reasoning_max_tokens=reasoning_max_tokens,
             min_tokens=min_tokens,
             logprobs=logprobs,
+            prompt_logprobs=prompt_logprobs,
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,
+            logits_processors_args=logits_processors_args,
         )
 
     def __post_init__(self):
@@ -200,13 +208,38 @@ class SamplingParams:
             raise ValueError(
                 f"min_tokens must be less than or equal to " f"max_tokens={self.max_tokens}, got {self.min_tokens}."
             )
-        if self.logprobs is not None and self.logprobs < 0:
-            raise ValueError(f"logprobs must be non-negative, got {self.logprobs}.")
-        if self.logprobs is not None and self.logprobs > 20:
-            raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
+
+        if not envs.FD_USE_GET_SAVE_OUTPUT_V1:  # False (0)
+            if self.logprobs is not None and (self.logprobs < 0 or self.logprobs > 20):
+                raise ValueError("Invalid value for 'top_logprobs': must be between 0 and 20.")
+            if self.prompt_logprobs is not None:
+                raise ValueError("prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled.")
+        else:  # True (1)
+            if self.logprobs is not None and self.logprobs < -1:
+                raise ValueError(f"logprobs must be a non-negative value or -1, got {self.logprobs}.")
+            if self.prompt_logprobs is not None and self.prompt_logprobs < -1:
+                raise ValueError(f"prompt_logprobs a must be non-negative value or -1, got {self.prompt_logprobs}.")
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
+
+        # Verify logits processors arguments
+        if self.logits_processors_args is not None:
+            if self.logits_processors_args.get("logit_bias") is not None:
+                logit_bias = self.logits_processors_args.get("logit_bias")
+                if not isinstance(logit_bias, dict):
+                    raise TypeError(f"logit_bias must be a dict, but got {type(logit_bias)}")
+                elif not all(isinstance(k, int) and isinstance(v, float) for k, v in logit_bias.items()):
+                    # try to cast the dict to the correct type first
+                    try:
+                        cast_logit_bias = {}
+                        for k, v in logit_bias.items():
+                            cast_logit_bias[int(k)] = float(v)
+                        self.logits_processors_args["logit_bias"] = cast_logit_bias
+                    except:
+                        raise TypeError(
+                            "failed to cast logit_bias to the correct {key -> value} type, expected {int -> float}"
+                        )
 
 
 @dataclass

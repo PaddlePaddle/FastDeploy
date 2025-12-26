@@ -17,7 +17,7 @@
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 
-class PPOCRVisionConfig(PretrainedConfig):
+class PaddleOCRVisionConfig(PretrainedConfig):
     model_type = "paddleocr_vl"
     base_config_key = "vision_config"
 
@@ -58,7 +58,7 @@ class PPOCRVisionConfig(PretrainedConfig):
 class PaddleOCRConfig(PretrainedConfig):
     model_type = "paddleocr_vl"
     keys_to_ignore_at_inference = ["past_key_values"]
-    sub_configs = {"vision_config": PPOCRVisionConfig}
+    sub_configs = {"vision_config": PaddleOCRVisionConfig}
 
     base_model_tp_plan = {
         "layers.*.self_attn.q_proj": "colwise",

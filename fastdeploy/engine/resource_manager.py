@@ -291,7 +291,6 @@ class ResourceManager:
 
                 processed_tasks.append(task)  # add current task
                 self.stop_flags[allocated_position] = False  # mark the slot as occupied
-                task.inference_start_time = time.time()
                 task.inference_time_cost = -1.0
                 task.tokens_all_num = 0
                 self.tasks_list[allocated_position] = task

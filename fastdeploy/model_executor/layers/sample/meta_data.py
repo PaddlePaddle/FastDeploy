@@ -19,6 +19,8 @@ from typing import Dict, Optional
 
 import paddle
 
+from fastdeploy.model_executor.logits_processor import LogitsProcessor
+
 
 @dataclass
 class SamplingMetadata:
@@ -51,9 +53,12 @@ class SamplingMetadata:
     stop_flags: Optional[paddle.Tensor] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    temp_scaled_logprobs_flag: Optional[bool] = None
+    top_p_normalized_logprobs_flag: Optional[bool] = None
     temp_scaled_logprobs: Optional[paddle.Tensor] = None
     top_p_normalized_logprobs: Optional[paddle.Tensor] = None
     share_inputs: Optional[Dict[str, paddle.Tensor]] = None
+    logits_processors: Optional[list[LogitsProcessor]] = None
     # Add for HPU post-processing
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None

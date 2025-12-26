@@ -14,69 +14,65 @@
 # limitations under the License.
 """
 
+import os
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.nn.functional.flash_attention import flash_attn_unpadded
-from paddleformers.transformers.activations import ACT2FN
 from paddleformers.transformers.model_utils import PretrainedModel
 
-from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import slice_fn
+from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 
-try:
-    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
-    flash_attention_v3_varlen = None
-
-from .config import PPOCRVisionConfig
+from .config import PaddleOCRVisionConfig
+from .siglip_ops import get_activation_fn, neox_rope_embedding
 
 
-def rotate_half(x):
-    Dh = x.shape[-1]
-    x1 = x[..., : Dh // 2]
-    x2 = x[..., Dh // 2 :]
-    return paddle.concat([-x2, x1], axis=-1)
-
-
-def _ensure_cos_sin_dim(cos, sin, dim_needed):
-    last = cos.shape[-1]
-    if last == dim_needed:
-        return cos, sin
-    elif last * 2 == dim_needed:
-        cos = paddle.concat([cos, cos], axis=-1)
-        sin = paddle.concat([sin, sin], axis=-1)
-        return cos, sin
-    else:
-        raise ValueError(f"Unexpected cos/sin last-dim: {last}, expected {dim_needed} or {dim_needed//2}")
-
-
-def apply_rotary_pos_emb_vision(x, cos, sin):
-    orig_dtype = x.dtype
-    x = x.astype("float32")
-    x_embed = (x * cos) + (rotate_half(x) * sin)
-    return x_embed.astype(orig_dtype)
-
-
-class QKVLinear(nn.Linear):
-    def __init__(self, config, in_features, out_features, weight_attr=None, bias_attr=None):
-        super().__init__(in_features, out_features, weight_attr, bias_attr)
+class SiglipAttention(nn.Layer):
+    def __init__(self, config):
+        super().__init__()
         self.config = config
-        self.in_features = in_features
-        self.out_features = out_features
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         assert self.head_dim * self.num_heads == self.embed_dim
-        self.weight.weight_loader = self.weight_loader
-        self.bias.weight_loader = self.weight_loader
+        self.scale = self.head_dim**-0.5
 
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        # qkv_linear
+        self.qkv_proj = nn.Linear(self.embed_dim, self.embed_dim * 3, bias_attr=True)
+        self.qkv_proj.weight.weight_loader = self.qkv_weight_loader
+        self.qkv_proj.bias.weight_loader = self.qkv_weight_loader
+
+        # out_linear
+        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.out_proj.weight.weight_loader = self.out_proj_weight_loader
+
+        enable_fa3 = False
+        flash_attn_version = int(os.environ.get("FLAGS_flash_attn_version", "2"))
+        if flash_attn_version == 3:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            is_current_sm_supported = cc >= 90
+            is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
+            enable_fa3 = is_current_sm_supported and is_paddle_supported
+
+        if enable_fa3:
+            from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+
+            self.flash_attn_func = flash_attention_v3_varlen
+            self.flash_attn_kwargs = {}
+        else:
+            from paddle.nn.functional.flash_attention import flash_attn_unpadded
+
+            self.flash_attn_func = flash_attn_unpadded
+            self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+
+    def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # Tensor parallelism splits the weight along the output_dim
-        loaded_weight = get_tensor(loaded_weight)
+        if loaded_weight.dim() == 2:
+            loaded_weight = loaded_weight.transpose([1, 0])
+
         if not param._is_initialized():
             param.initialize()
         if loaded_shard_id == "q":
@@ -90,7 +86,7 @@ class QKVLinear(nn.Linear):
             param_shard_offset = self.num_heads * self.head_dim * 2
             param_shard_size = self.num_heads * self.head_dim
 
-        param = slice_fn(param, self.out_features, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        param = slice_fn(param, -1, start=param_shard_offset, end=param_shard_offset + param_shard_size)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -100,32 +96,22 @@ class QKVLinear(nn.Linear):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
 
-
-class SiglipAttention(nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.embed_dim = config.hidden_size
-        self.num_heads = config.num_attention_heads
-        self.head_dim = self.embed_dim // self.num_heads
-        assert self.head_dim * self.num_heads == self.embed_dim
-        self.scale = self.head_dim**-0.5
-
-        self.qkv_proj = QKVLinear(config, self.embed_dim, self.embed_dim * 3, bias_attr=True)
-        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
-
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        is_current_sm_supported = cc >= 90
-        is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
-        if is_current_sm_supported and is_paddle_supported:
-            self.flash_attn_func = flash_attention_v3_varlen
-            self.flash_attn_kwargs = {}
-        else:
-            self.flash_attn_func = flash_attn_unpadded
-            self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+    def out_proj_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
+        h2d_copy(param, loaded_weight)
 
     def forward(
         self,
@@ -134,29 +120,12 @@ class SiglipAttention(nn.Layer):
         output_attentions: Optional[bool] = False,
         cu_seqlens: Optional[List[paddle.Tensor]] = None,
         max_seqlen: Optional[paddle.Tensor] = None,
-        rope_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # (cos, sin)
+        cos_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
+        sin_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
     ):
         B, seq_length, D = hidden_states.shape
-
-        qkv = (
-            self.qkv_proj(hidden_states)
-            .reshape(
-                [
-                    seq_length,
-                    3,
-                    self.num_heads,
-                    -1,
-                ]
-            )
-            .transpose(perm=[1, 0, 2, 3])
-        )
-        q, k, v = qkv.unbind(axis=0)
-        cos, sin = rope_emb
-
-        # --------
-        q = apply_rotary_pos_emb_vision(q, cos, sin)
-        k = apply_rotary_pos_emb_vision(k, cos, sin)
-
+        qkv = self.qkv_proj(hidden_states)
+        q, k, v = neox_rope_embedding(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
         attn_output = self.flash_attn_func(
             q,
             k,
@@ -168,11 +137,9 @@ class SiglipAttention(nn.Layer):
             causal=False,
             **self.flash_attn_kwargs,
         )[0]
-        # --------
 
-        attn_output = attn_output.reshape(seq_length, -1)
+        attn_output = attn_output.reshape((seq_length, -1))
         attn_output = self.out_proj(attn_output)
-
         return attn_output
 
 
@@ -314,16 +281,29 @@ class SiglipMLP(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        if config.hidden_act == "gelu_pytorch_tanh":
-            config.hidden_act = "silu"
-        self.activation_fn = ACT2FN[config.hidden_act]
-
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.fc1.weight.weight_loader = self.weight_loader
         self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.fc2.weight.weight_loader = self.weight_loader
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
+        h2d_copy(param, loaded_weight)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = self.activation_fn(hidden_states)
+        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states[0])
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
@@ -337,7 +317,6 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         self.layer_norm2 = paddle.nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
-    # @paddle.jit.to_static
     def forward(
         self,
         hidden_states,
@@ -345,7 +324,8 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         output_attentions=False,
         cu_seqlens=None,
         max_seqlen=None,
-        rope_emb=None,
+        cos_emb=None,
+        sin_emb=None,
     ):
 
         residual = hidden_states
@@ -358,7 +338,8 @@ class SiglipEncoderLayer(paddle.nn.Layer):
             output_attentions=output_attentions,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            rope_emb=rope_emb,
+            cos_emb=cos_emb,
+            sin_emb=sin_emb,
         )
 
         hs_post_attn = residual + x
@@ -515,13 +496,13 @@ class SiglipEncoder(nn.Layer):
 
             rope_emb = rope_emb_max_grid[pids].flatten(1)
             rope_emb = rope_emb.tile((1, 2))
-            cos = rope_emb.cos().astype("float32")
-            sin = rope_emb.sin().astype("float32")
-            cos = cos.unsqueeze(-2)
-            sin = sin.unsqueeze(-2)
-            rope_emb = (cos, sin)
+            cos_emb = rope_emb.cos().astype("float32")
+            sin_emb = rope_emb.sin().astype("float32")
+            cos_emb = cos_emb.unsqueeze(-2)
+            sin_emb = sin_emb.unsqueeze(-2)
         else:
-            rope_emb = None
+            cos_emb = None
+            sin_emb = None
 
             window_indices, cu_seqlens_within_windows = None, None
 
@@ -544,7 +525,37 @@ class SiglipEncoder(nn.Layer):
         else:
             attn_cu_seqlens = cu_seqlens
 
-        max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max().item()
+        return self._run_encoder_layer(
+            encoder_states=encoder_states,
+            all_attentions=all_attentions,
+            attn_cu_seqlens=attn_cu_seqlens,
+            output_hidden_states=output_hidden_states,
+            reversed_window_indices=reversed_window_indices if output_hidden_states else None,
+            use_window_attn=use_window_attn,
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions,
+            cos_emb=cos_emb,
+            sin_emb=sin_emb,
+        )
+
+    # This function will be compiled with CINN when graph_opt_level >= 2
+    # TODO(SigureMo): Use a new decorator to mark the function for CINN compilation
+    def _run_encoder_layer(
+        self,
+        encoder_states: Optional[Tuple[()]],
+        all_attentions: Optional[Tuple[()]],
+        attn_cu_seqlens: Optional[paddle.Tensor],
+        output_hidden_states: Optional[bool],
+        reversed_window_indices: paddle.Tensor,
+        use_window_attn: bool,
+        hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor],
+        output_attentions: bool,
+        cos_emb: Optional[paddle.Tensor],
+        sin_emb: Optional[paddle.Tensor],
+    ) -> paddle.Tensor:
+        max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max().cpu()
 
         for encoder_layer in self.layers:
             if output_hidden_states:
@@ -558,7 +569,8 @@ class SiglipEncoder(nn.Layer):
                 output_attentions=output_attentions,
                 cu_seqlens=attn_cu_seqlens,
                 max_seqlen=max_seqlen,
-                rope_emb=rope_emb,
+                cos_emb=cos_emb,
+                sin_emb=sin_emb,
             )
             hidden_states = layer_outputs[0]
 
@@ -576,7 +588,7 @@ class SiglipEncoder(nn.Layer):
 class SiglipMultiheadAttentionPoolingHead(nn.Layer):
     """Multihead Attention Pooling."""
 
-    def __init__(self, config: PPOCRVisionConfig):
+    def __init__(self, config: PaddleOCRVisionConfig):
         super().__init__()
 
         self.probe = self.create_parameter(
@@ -601,7 +613,7 @@ class SiglipMultiheadAttentionPoolingHead(nn.Layer):
 
 
 class SiglipVisionTransformer(nn.Layer):
-    def __init__(self, config: PPOCRVisionConfig):
+    def __init__(self, config: PaddleOCRVisionConfig):
         super().__init__()
         self.config = config
         embed_dim = config.hidden_size
@@ -666,10 +678,10 @@ class SiglipVisionTransformer(nn.Layer):
 
 
 class SiglipVisionModel(PretrainedModel):
-    config_class = PPOCRVisionConfig
+    config_class = PaddleOCRVisionConfig
     main_input_name = "pixel_values"
 
-    def __init__(self, config: PPOCRVisionConfig, prefix=""):
+    def __init__(self, config: PaddleOCRVisionConfig, prefix=""):
         super().__init__(config)
         self.prefix_name = prefix
         self.vision_model = SiglipVisionTransformer(config)
@@ -706,35 +718,3 @@ class SiglipVisionModel(PretrainedModel):
             use_rope=use_rope,
             window_size=window_size,
         )
-
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                if "self_attn.qkv_proj.weight" in state_dict_key:
-                    q_weight_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_weight_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_weight_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_tensor = get_tensor(state_dict.pop(q_weight_key))
-                    k_tensor = get_tensor(state_dict.pop(k_weight_key))
-                    v_tensor = get_tensor(state_dict.pop(v_weight_key))
-                    weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor], axis=-1).transpose([1, 0])
-                    tensor = paddle.transpose(weight_tensor, perm=[1, 0])
-                elif "self_attn.qkv_proj.bias" in state_dict_key:
-                    q_bias_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_bias_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_bias_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_bias = get_tensor(state_dict.pop(q_bias_key))
-                    k_bias = get_tensor(state_dict.pop(k_bias_key))
-                    v_bias = get_tensor(state_dict.pop(v_bias_key))
-                    qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-                    tensor = qkv_bias
-                else:
-                    raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            else:
-                tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
-            else:
-                param.copy_(tensor, False)

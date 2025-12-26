@@ -14,9 +14,9 @@
 # limitations under the License.
 """
 
-import copy
 import hashlib
 import math
+import pickle
 import random
 import threading
 import time
@@ -302,7 +302,7 @@ class ResultReader:
         add a req to reader, reader will async fetch infer result from redis
         """
         with self.lock:
-            self.reqs[req.request_id] = {"arrival_time": req.arrival_time}
+            self.reqs[req.request_id] = {"arrival_time": req.metrics.arrival_time}
             self.out_buffer[req.request_id] = []
 
     def read(self):
@@ -412,8 +412,7 @@ class ResultReader:
             for result in results:
                 try:
                     # logger.info(f"Scheduler Get Results: {result.request_id}")
-                    data = orjson.loads(result)
-                    result = RequestOutput.from_dict(data)
+                    result = pickle.loads(result)
                     self.data.appendleft(result)
                 except Exception as e:
                     logger.error(f"Parse Result Error:{e}, {str(traceback.format_exc())}, {result}")
@@ -523,29 +522,37 @@ class APIScheduler:
         pnode = self.select_pd(req, pnodes, "prefill")
         if pnode.role == "mixed":
             req.disaggregate_info = None
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = orjson.dumps(req_dict)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             pkey = f"ReqQ_{pnode.nodeid}"
             # logger.info(f"Schedule Req {req_str} to Mixed")
             self.client.lpush(pkey, req_str)
         else:
             dnodes.sort()
             dnode = self.select_pd(req, dnodes, "decode")
-            disaggregated = copy.deepcopy(dnode.disaggregated)
-            transfer_protocol = disaggregated["transfer_protocol"]
-            if len(transfer_protocol) > 1 and "ipc" in transfer_protocol and "rdma" in transfer_protocol:
-                if pnode.host == dnode.host:
-                    disaggregated["transfer_protocol"] = "ipc"
-                else:
-                    disaggregated["transfer_protocol"] = "rdma"
-            else:
-                disaggregated["transfer_protocol"] = transfer_protocol[0]
-            req.disaggregate_info = disaggregated
+
+            is_same_node = pnode.disaggregated["host_ip"] == dnode.disaggregated["host_ip"]
+            is_support_ipc = (
+                "ipc" in pnode.disaggregated["transfer_protocol"] and "ipc" in dnode.disaggregated["transfer_protocol"]
+            )
+            is_same_tp_size = pnode.disaggregated["tp_size"] == dnode.disaggregated["tp_size"]
+            use_ipc = is_same_node and is_support_ipc and is_same_tp_size
+
+            disaggregate_info = {
+                "prefill_ip": pnode.disaggregated["host_ip"],
+                "decode_ip": dnode.disaggregated["host_ip"],
+                "prefill_connector_port": pnode.disaggregated["connector_port"],
+                "decode_connector_port": dnode.disaggregated["connector_port"],
+                "decode_device_ids": dnode.disaggregated["device_ids"],
+                "decode_rdma_ports": dnode.disaggregated["rdma_ports"],
+                "transfer_protocol": "ipc" if use_ipc else "rdma",
+                "decode_tp_size": dnode.disaggregated["tp_size"],
+            }
+
+            req.disaggregate_info = disaggregate_info
             pkey, dkey = f"ReqQ_{pnode.nodeid}", f"ReqQ_{dnode.nodeid}"
-            req_dict = req.to_dict()
-            req_dict["group"] = group
-            req_str = orjson.dumps(req_dict)
+            req.set("group", group)
+            req_str = pickle.dumps(req, protocol=5)
             # logger.info(f"Schedule Req {req_str}")
             self.client.lpush(dkey, req_str)
             self.client.lpush(pkey, req_str)
@@ -706,10 +713,30 @@ class InferScheduler:
         self.reqs_queue = deque()
         self.writers = []
 
+    def check_redis_version(self):
+        # Get Redis version information
+        redis_info = self.client.info()
+        redis_version = redis_info.get("redis_version", "")
+        version_parts = [int(x) for x in redis_version.split(".")]
+
+        # Redis 6.2 and above versions support RPOP with count parameter
+        assert (
+            version_parts[0] >= 6
+        ), f"Redis major version too low: {version_parts[0]}. Please upgrade to Redis 6.2+ to support batch RPOP operations."
+        assert (
+            version_parts[1] >= 2 if version_parts[0] == 6 else True
+        ), f"Redis version {redis_version} too low. Please upgrade to Redis 6.2+ to support batch RPOP operations."
+
+        logger.info(f"Redis version {redis_version} detected. Using native batch RPOP.")
+
     def start(self, role, host, disaggregated):
         """
         start backup threads
         """
+
+        # Check Redis version first
+        self.check_redis_version()
+
         for i in range(self.writer_parallel):
             writer = ResultWriter(self.client, i, self.writer_batch_size, self.ttl)
             writer.start()
@@ -775,9 +802,8 @@ class InferScheduler:
                     reqs = [ret[1]]
 
                 for req_str in reqs:
-                    req = orjson.loads(req_str)
+                    req = pickle.loads(req_str)
                     group = req.get("group", "")
-                    req = Request.from_dict(req)
                     writer_idx = select_writer(req)
                     logger.info(f"Infer Scheduler Get Req: {req.request_id} writer idx {writer_idx}")
                     req.request_id = f"{req.request_id}#{writer_idx}#{group}"
@@ -814,7 +840,7 @@ class InferScheduler:
                     break
 
                 req = self.reqs_queue.popleft()
-                if cur_time - req.arrival_time > self.ttl:
+                if cur_time - req.metrics.arrival_time > self.ttl:
                     logger.error(f"req({req.request_id}) is expired({self.ttl}) when InferScheduler Get Requests")
                     self.node.finish_req(req.request_id)
                     continue
@@ -839,7 +865,7 @@ class InferScheduler:
                         self.reqs_queue.appendleft(req)
                         break
                 else:
-                    if current_prefill_tokens > max_num_batched_tokens:
+                    if current_prefill_tokens > max_num_batched_tokens and len(reqs) > 0:
                         self.reqs_queue.appendleft(req)
                         break
                 # logger.info(f"Get Requests from Scheduler: {req.request_id}")
@@ -872,7 +898,7 @@ class InferScheduler:
             if self.role == "prefill" and result.outputs.send_idx == 0:
                 result.finished = False
 
-            result_str = orjson.dumps(result.to_dict())
+            result_str = pickle.dumps(result, protocol=5)
             # if self.role == "prefill" or result.error_code != 200 or result.finished:
             #    logger.info(f"Infer Put Finish Result: {result_str}")
             groups[key].append(result_str)

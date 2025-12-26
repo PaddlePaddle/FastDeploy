@@ -49,6 +49,7 @@ plugins:
             Installation: 安装
             Nvidia GPU: 英伟达 GPU
             KunlunXin XPU: 昆仑芯 XPU
+            Intel Gaudi: 英特尔 Gaudi
             HYGON DCU: 海光 DCU
             Enflame S60: 燧原 S60
             Iluvatar CoreX: 天数 CoreX
@@ -58,19 +59,29 @@ plugins:
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B快速部署
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B快速部署
             Quick Deployment For QWEN: Qwen3-0.6b快速部署
+            Quick Deployment For QWEN2.5-VL: Qwen2.5-VL系列快速部署
             Online Serving: 在线服务
             OpenAI-Compatible API Server: 兼容 OpenAI 协议的服务化部署
             Monitor Metrics: 监控Metrics
             Scheduler: 调度器
             Graceful Shutdown: 服务优雅关闭
             Offline Inference: 离线推理
-            Best Practices: 最佳实践
-            ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
+            Observability: 可观测性
+            Trace: Trace服务
+            CLI: CLI 使用说明
+            Chat: Chat命令
+            Complete: Complete命令
+            Server: Server命令
+            Bench: Bench命令
+            Collect Env: Collect Env命令
+            Run Batch: Run Batch命令
+            Tokenizer: Tokenizer命令
             ERNIE-4.5-21B-A3B: ERNIE-4.5-21B-A3B
             ERNIE-4.5-21B-A3B-Thinking: ERNIE-4.5-21B-A3B-Thinking
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
             ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B
+            PaddleOCR-VL-0.9B: PaddleOCR-VL-0.9B
             FAQ: 常见问题
             Quantization: 量化
             Overview: 概述
@@ -104,6 +115,7 @@ nav:
       - Installation:
           - Nvidia GPU: get_started/installation/nvidia_gpu.md
           - KunlunXin XPU: get_started/installation/kunlunxin_xpu.md
+          - Intel Gaudi: get_started/installation/intel_gaudi.md
           - HYGON DCU: get_started/installation/hygon_dcu.md
           - Enflame S60: get_started/installation/Enflame_gcu.md
           - Iluvatar CoreX: get_started/installation/iluvatar_gpu.md
@@ -113,6 +125,7 @@ nav:
       - ERNIE-4.5-300B-A47B: get_started/ernie-4.5.md
       - ERNIE-4.5-VL-424B-A47B: get_started/ernie-4.5-vl.md
       - Quick Deployment For QWEN: get_started/quick_start_qwen.md
+      - Quick Deployment For QWEN2.5-VL: get_started/quick_start_qwen25_vl.md
   - Online Serving:
       - OpenAI-Compatible API Server: online_serving/README.md
       - Monitor Metrics: online_serving/metrics.md
@@ -126,6 +139,7 @@ nav:
       - ERNIE-4.5-21B-A3B-Thinking: best_practices/ERNIE-4.5-21B-A3B-Thinking.md
       - ERNIE-4.5-VL-28B-A3B: best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md
       - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
+      - PaddleOCR-VL-0.9B: best_practices/PaddleOCR-VL-0.9B.md
       - FAQ: best_practices/FAQ.md
   - Quantization:
       - Overview: quantization/README.md
@@ -152,3 +166,14 @@ nav:
       - Log Description: usage/log.md
       - Code Overview: usage/code_overview.md
       - Environment Variables: usage/environment_variables.md
+  - CLI:
+      - Overview: cli/README.md
+      - Chat: cli/chat.md
+      - Complete: cli/complete.md
+      - Server: cli/serve.md
+      - Collect Env: cli/collect-env.md
+      - Bench: cli/bench.md
+      - Run Batch: cli/run-batch.md
+      - Tokenizer: cli/tokenizer.md
+  - Observability:
+      - Trace: observability/trace.md

@@ -17,12 +17,15 @@
 import asyncio
 import heapq
 import random
+import time
+from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
-import msgpack
 import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
 
 UVICORN_CONFIG = {
@@ -121,9 +124,18 @@ class DealerConnectionManager:
         while self.running:
             try:
                 raw_data = await dealer.read()
-                response = msgpack.unpackb(raw_data[-1])
+                response = ForkingPickler.loads(raw_data[-1])
+                _zmq_metrics_stats = ZMQMetricsStats()
+                _zmq_metrics_stats.msg_recv_total += 1
+                if "zmq_send_time" in response:
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
+                address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
+                    request_id = request_id.rsplit("_", 1)[0]
+                elif "reward" == request_id[:6]:
                     request_id = request_id.rsplit("_", 1)[0]
                 elif "chatcmpl" == request_id[:8]:
                     request_id = request_id.rsplit("_", 1)[0]
@@ -210,7 +222,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
     parser.add_argument("--workers", default=1, type=int, help="number of workers")
-    parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
+    parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
         "--max-waiting-time",
@@ -236,6 +248,8 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
+
+    parser.add_argument("--api-key", type=str, action="append", help="API_KEY required for service authentication")
 
     parser = EngineArgs.add_cli_args(parser)
     return parser

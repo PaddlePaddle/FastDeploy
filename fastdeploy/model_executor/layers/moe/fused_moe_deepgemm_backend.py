@@ -14,18 +14,20 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
+from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
-from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
-from fastdeploy.utils import ceil_div
+from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
+from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 
 class DeepGemmFusedMoeMethod(MoEMethodBase):
@@ -37,192 +39,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         deepgemm create weight process.
         """
-        self.up_gate_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.moe_intermediate_size * 2,
-            layer.hidden_size,
-        ]
-        self.down_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.hidden_size,
-            layer.moe_intermediate_size,
-        ]
-        self.up_gate_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-        ]
-        self.down_proj_scale_shape = [
-            layer.num_local_experts,
-            ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-            ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-        ]
-        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
-        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
-            layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
-                dtype=layer.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            )
-
-            layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
-                dtype=layer.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            )
-            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
-            set_weight_attrs(
-                layer.up_gate_proj_weight,
-                {
-                    **extra_weight_attrs,
-                    "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=True),
-                },
-            )
-            set_weight_attrs(
-                layer.down_proj_weight,
-                {
-                    **extra_weight_attrs,
-                    "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=False),
-                },
-            )
-        else:
-            self.weight_dtype = paddle.float8_e4m3fn
-            self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
-            up_gate_proj_weight_name = self.added_weight_attrs[0]
-            down_proj_weight_name = self.added_weight_attrs[1]
-            up_gate_proj_scale_name = self.added_scale_attrs[0]
-            down_proj_scale_name = self.added_scale_attrs[1]
-            setattr(
-                layer,
-                up_gate_proj_weight_name,
-                layer.create_parameter(
-                    shape=self.up_gate_proj_weight_shape,
-                    dtype=self.weight_dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            setattr(
-                layer,
-                down_proj_weight_name,
-                layer.create_parameter(
-                    shape=self.down_proj_weight_shape,
-                    dtype=self.weight_dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            # weight_scale
-            setattr(
-                layer,
-                up_gate_proj_scale_name,
-                layer.create_parameter(
-                    shape=self.up_gate_proj_scale_shape,
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            setattr(
-                layer,
-                down_proj_scale_name,
-                layer.create_parameter(
-                    shape=self.down_proj_scale_shape,
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
-            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
-            set_weight_attrs(
-                getattr(layer, up_gate_proj_weight_name),
-                extra_weight_attrs,
-            )
-            set_weight_attrs(
-                getattr(layer, up_gate_proj_scale_name),
-                extra_weight_attrs,
-            )
-
-            set_weight_attrs(
-                getattr(layer, down_proj_weight_name),
-                extra_weight_attrs,
-            )
-            set_weight_attrs(
-                getattr(layer, down_proj_scale_name),
-                extra_weight_attrs,
-            )
+        BlockWiseFP8MoEMethod.create_weights(self, layer, **extra_weight_attrs)
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not self.quant_config.is_checkpoint_bf16:
-            return
-        weight_id_map = {"gate_up": 0, "down": 1}
-        if (
-            hasattr(layer.up_gate_proj_weight, "tensor_track")
-            and layer.up_gate_proj_weight.tensor_track is not None
-            and layer.up_gate_proj_weight.tensor_track.is_fully_copied()
-        ):
-            weight_type = "gate_up"
-            layer.up_gate_proj_weight.tensor_track = None
-        else:
-            weight_type = "down"
-            layer.down_proj_weight.tensor_track = None
-
-        # 1.init shape and type
-        self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
-        # weight
-        weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
-        unquantized_weight_name = weight_name.replace("quant_weight", "weight")
-        weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
-        weight_dtype = paddle.float8_e4m3fn
-        # scale
-        scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
-        scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
-        scale_dtype = "float32"
-
-        # 2.crate tmp tensor
-
-        weight = paddle.empty(shape=[weight_shape[0], weight_shape[2], weight_shape[1]], dtype=weight_dtype)
-        scale = paddle.empty(shape=[scale_shape[0], scale_shape[2], scale_shape[1]], dtype=scale_dtype)
-
-        # 3.quantize weight
-        from fastdeploy.model_executor.layers.utils import per_block_cast_to_fp8
-
-        for expert_id in range(layer.num_local_experts):
-            weight_quant, scale[expert_id] = per_block_cast_to_fp8(
-                getattr(layer, unquantized_weight_name)[expert_id], self.quant_config.weight_block_size
-            )
-            weight[expert_id].copy_(weight_quant, False)
-
-        getattr(layer, unquantized_weight_name).value().get_tensor()._clear()
-
-        # create weight
-        setattr(
-            layer,
-            weight_name,
-            layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-                ],
-                dtype=weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # create scale
-        setattr(
-            layer,
-            scale_name,
-            layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-                ],
-                dtype=scale_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]).contiguous(), False)
-        getattr(layer, scale_name).copy_(scale.transpose([0, 2, 1]).contiguous(), False)
+        BlockWiseFP8MoEMethod.process_weights_after_loading(self, layer)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -268,6 +89,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         for expert_idx in logical_expert_ids:
             up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
             down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
@@ -316,17 +141,27 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
         gate_out = gate(x.cast("float32"))
+
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0]
         )
+
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
         # 3. EP Dispatch
         (
             recv_x,
@@ -334,8 +169,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_topk_weights,
             recv_num_tokens_per_expert_list,
             handle,
-            _,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
+            event,
+        ) = self.ep_prefill_runner.dispatch(
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
+        )
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
@@ -345,7 +185,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
 
             (
                 permute_input,
@@ -365,7 +204,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_nums_this_rank[0],
                 token_nums_this_rank[1],
                 True,  # use_in_ep
-                token_nums_this_rank_padded,
+                token_all_num,
             )
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
@@ -417,13 +256,22 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
 
         # 5. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -431,6 +279,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, use_fp8=True
@@ -495,6 +347,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
@@ -522,6 +375,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # apply_norm_weight
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
@@ -593,7 +449,5 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             False,  # norm_topk_prob
             1.0,
         )[0]
-        if layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

@@ -198,6 +198,8 @@ for output in outputs:
 * finished(bool)：标识当前query 是否推理结束
 * metrics(fastdeploy.engine.request.RequestMetrics)：记录推理耗时指标
 * num_cached_tokens(int): 缓存的token数量, 仅在开启 ``enable_prefix_caching``时有效
+* num_input_image_tokens(int): 输入图片token的数量
+* num_input_video_tokens(int): 输入视频token的数量
 * error_code(int): 错误码
 * error_msg(str): 错误信息
 

@@ -31,9 +31,6 @@ from tests.model_loader.utils import (
     run_with_timeout,
 )
 
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
-
 prompts = ["解释下“温故而知新", "Hello, how are you?"]
 
 
@@ -48,6 +45,7 @@ model_param_map = {
         ],
         "max_num_seqs": 1,
         "graph_optimization_config": {"use_cudagraph": False},
+        "env": {"FD_USE_MACHETE": "0"},
     }
 }
 
@@ -102,9 +100,7 @@ def test_model_cache(
             max_tokens,
             quantization,
             "default_v1",
-            FD_ENGINE_QUEUE_PORT,
             prompts,
-            FD_CACHE_QUEUE_PORT,
         ),
     )
 
@@ -123,9 +119,7 @@ def test_model_cache(
             max_tokens,
             quantization,
             "default_v1",
-            FD_ENGINE_QUEUE_PORT,
             prompts,
-            FD_CACHE_QUEUE_PORT,
         ),
     )
     check_tokens_id_and_text_close(

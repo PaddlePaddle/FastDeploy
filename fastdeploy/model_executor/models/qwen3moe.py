@@ -56,14 +56,6 @@ class Qwen3MoeBlock(nn.Layer):
     ) -> None:
         super().__init__()
 
-        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
-        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
-        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.tp_group = fd_config.parallel_config.tp_group
-
-        self.use_ep = self.expert_parallel_size > 1
-        self.use_tp = self.tensor_parallel_size > 1
-
         weight_key_map = {
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
             "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.weight",
@@ -87,31 +79,8 @@ class Qwen3MoeBlock(nn.Layer):
             weight_dtype="float32",
         )
 
-    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
-        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
-        # AllGather will hang when the data shapes on multi-ranks are different!
-        part_hidden_states = paddle.zeros(
-            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
-        )
-        start_offset = self.tensor_parallel_rank * token_num_per_rank
-        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
-        if end_offset > token_num:
-            end_offset = token_num
-        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
-        out = self.experts(part_hidden_states, self.gate)
-        multi_outs = []
-        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-        out = paddle.concat(multi_outs, axis=0)
-        out = out[:token_num, :]
-        return out
-
-    def forward(self, x):
-        token_num = x.shape[0]
-        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
-            out = self.split_allgather_out(x, token_num)
-        else:
-            out = self.experts(x, self.gate)
-        return out
+    def forward(self, x, forward_meta):
+        return self.experts(x, self.gate, forward_meta)
 
     def load_state_dict(self, state_dict):
         """ """
@@ -128,8 +97,6 @@ class Qwen3MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
-
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -158,7 +125,7 @@ class Qwen3MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -198,15 +165,17 @@ class Qwen3DecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -223,11 +192,9 @@ class Qwen3DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -237,7 +204,7 @@ class Qwen3DecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -282,7 +249,7 @@ class Qwen3MoeModel(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
@@ -306,16 +273,14 @@ class Qwen3MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
@@ -393,7 +358,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -451,6 +416,20 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
+    def empty_input_forward(self, forward_meta):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -491,7 +470,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
@@ -514,7 +493,7 @@ class Qwen3MoePretrainedModel(PretrainedModel):
                 base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
                 base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
                 # if we have enough num_key_value_heads to split, then split it.
-                if config.num_key_value_heads % config.tensor_parallel_degree == 0:
+                if config.num_key_value_heads % config.tensor_model_parallel_size == 0:
                     base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)

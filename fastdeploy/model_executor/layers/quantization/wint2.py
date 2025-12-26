@@ -79,7 +79,7 @@ class WINT2Config(QuantConfigBase):
             WINT2Config: The newly created instance of `WINT2Config`.
         """
 
-        dense_quant_type = config.get("dense_quant_config", "wint8")
+        dense_quant_type = config.get("dense_quant_type", "wint8")
         dense_quant_granularity = config.get("dense_quant_granularity", "per_channel")
 
         moe_quant_config = config.get("moe_quant_config", {})

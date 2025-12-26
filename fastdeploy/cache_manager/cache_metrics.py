@@ -17,7 +17,7 @@
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
-logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
 
 
 class CacheMetrics:

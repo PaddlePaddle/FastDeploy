@@ -18,19 +18,7 @@ from enum import Enum
 
 from fastdeploy.utils import get_logger
 
-logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
-
-
-DISABLE_PREFIX_CACHE_MM_MODEL: set[str] = {
-    "Ernie5ForCausalLM",
-}
-
-
-def is_mm_model_disable_prefix_cache(model_config):
-    """
-    check if the model architecture is in DISABLE_PREFIX_CACHE_MM_MODEL
-    """
-    return model_config._architecture in DISABLE_PREFIX_CACHE_MM_MODEL
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
 
 
 class CacheStatus(Enum):
@@ -42,6 +30,8 @@ class CacheStatus(Enum):
     SWAP2CPU = 1
     SWAP2GPU = 2
     CPU = 3
+    GPU2STORAGE = 4
+    STORAGE2GPU = 5
 
 
 class BlockNode:

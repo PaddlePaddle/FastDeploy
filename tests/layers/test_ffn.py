@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import os
 import shutil
@@ -23,6 +39,16 @@ from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
 paddle.set_default_dtype("bfloat16")
+if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
+    # (ZKK): CI machine.
+    os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+
+
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
 
 
 class FFNWrapper(paddle.nn.Layer):
@@ -30,7 +56,7 @@ class FFNWrapper(paddle.nn.Layer):
         super().__init__()
         self.model_config = model_config
 
-        self.intermediate_size = 3584
+        self.intermediate_size = self.model_config.intermediate_size
         self.hidden_size = self.model_config.hidden_size
         self.prefix = "hahahha"
         self.fd_config = FDConfig(
@@ -78,10 +104,9 @@ class FFNWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 7168
-        self.moe_intermediate_size = 1
-        self.moe_num_experts = 1
-        self.moe_k = 1
+        self.hidden_size = 4096
+        self.intermediate_size = 2048
+        self.num_layers = 1
         self.hidden_act = "silu"
         self.num_attention_heads = 64
         self.model_config = self.build_model_config()
@@ -99,9 +124,7 @@ class TestFusedMoE(unittest.TestCase):
         config_dict = {
             "architectures": self.architectures,
             "hidden_size": self.hidden_size,
-            "moe_intermediate_size": self.moe_intermediate_size,
-            "moe_num_experts": self.moe_num_experts,
-            "moe_k": self.moe_k,
+            "intermediate_size": self.intermediate_size,
             "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
             "dtype": "bfloat16",
@@ -118,23 +141,20 @@ class TestFusedMoE(unittest.TestCase):
         init_distributed_environment()
 
         ffn = FFNWrapper(self.model_config)
-
-        # (ZKK): disable this test,
-        # CI machine does not support deepgemm blockwise_fp8, compilation error.
-        return
-
+        forward_meta = MockForwardMeta()
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        for idx, num_tokens in enumerate([10, 20, 40, 60, 80, 100, 128, 160, 192, 256]):
+        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256, 4096, 4096 * 4]
+        for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
             moe_cuda_graphs[idx] = graphs.CUDAGraph()
             moe_cuda_graphs[idx].capture_begin()
 
-            num_layers = 80
+            num_layers = self.num_layers
             for _ in range(num_layers):
-                out = ffn.ffn(cache_hidden_states[idx])
+                out = ffn.ffn(cache_hidden_states[idx], forward_meta=forward_meta)
 
             moe_cuda_graphs[idx].capture_end()
 
@@ -152,6 +172,14 @@ class TestFusedMoE(unittest.TestCase):
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print("num_tokens:", num_tokens)
             print(times[-5:])
+
+            flops = num_layers * 2 * num_tokens * self.model_config.hidden_size * ffn.intermediate_size * 3
+            memory = num_layers * self.model_config.hidden_size * ffn.intermediate_size * 3
+            # memory += (num_layers * num_tokens * ffn.intermediate_size * 2)
+
+            print(round(flops / times[-1] / (1024**3), 1), "TFLOPS")
+
+            print(round(memory / times[-1] / (1024**3), 1), "TB/s")
 
         shutil.rmtree(self.model_name_or_path)
         return out

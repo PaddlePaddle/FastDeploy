@@ -14,15 +14,18 @@
 # limitations under the License.
 """
 
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional
+import multiprocessing
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, List, Optional
 
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.envs import FD_FILL_BITMASK_BATCH
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
@@ -53,145 +56,286 @@ def top_p_normalize_probs_paddle(
     return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
-class SamplerProcessor:
+def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder):
+    real_bsz = seq_lens_this_time.shape[0]
+    repeats = paddle.where(seq_lens_encoder[:real_bsz] == 0, seq_lens_this_time, paddle.ones_like(seq_lens_this_time))
+    top_p_padding = paddle.repeat_interleave(top_p[:real_bsz], repeats).unsqueeze(1)
+    top_k_padding = paddle.repeat_interleave(top_k[:real_bsz], repeats).unsqueeze(1)
+    topp_seed = paddle.repeat_interleave(infer_seed[:real_bsz], repeats).unsqueeze(1)
+
+    MAX_INFER_SEED = 9223372036854775806
+
+    token_lens = paddle.where(
+        seq_lens_encoder[:real_bsz] == 0,
+        seq_lens_this_time,
+        paddle.ones_like(seq_lens_this_time),
+    )
+
+    batch_start = (paddle.cumsum(token_lens, axis=0, dtype="int64") - token_lens.astype("int64")).reshape([-1])  # [B]
+    token_batch_ids = paddle.repeat_interleave(
+        paddle.arange(token_lens.shape[0], dtype="int64"),
+        token_lens,
+    )
+    token_pos = paddle.arange(topp_seed.shape[0], dtype="int64")
+    local_pos = token_pos - paddle.gather(batch_start, token_batch_ids)
+
+    is_decoder = paddle.gather(seq_lens_encoder[:real_bsz] == 0, token_batch_ids).reshape([-1])
+
+    offsets = paddle.where(
+        is_decoder,
+        local_pos * 4,
+        paddle.zeros_like(local_pos),
+    )
+
+    topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
+
+    return top_p_padding, top_k_padding, topp_seed
+
+
+class GuidedDecoding:
     """
-    SamplingProcessor for guided decoding.
+    processor for guided decoding.
     """
 
-    def __init__(self):
-        self.async_step = None
+    def __init__(self, fd_config: FDConfig):
         self.token_bitmask = None
-        self.logits_processor: Dict[int, Optional[Any]] = dict()
-        self.executor = ThreadPoolExecutor()
-        self.logits_lock = threading.Lock()
+        self.max_num_seqs: int = int(
+            fd_config.scheduler_config.max_num_seqs if fd_config.scheduler_config is not None else 1
+        )
+        self.logits_processors: List[Any] = [None] * self.max_num_seqs
         self.reasoning_parser = None
+        self._prefill_done_idxs: List[bool] = [False] * self.max_num_seqs
+        # for pd
+        self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
+
+        self.fill_bitmask_parallel_batch_size: int = FD_FILL_BITMASK_BATCH
+        max_workers = max(
+            1,
+            min(multiprocessing.cpu_count() // 2, int(self.max_num_seqs) / int(self.fill_bitmask_parallel_batch_size)),
+        )
+        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=int(max_workers))
+        self._fillmask_futures: List[Future] = [None] * self.max_num_seqs
+        self.is_cuda_platform = current_platform.is_cuda()
+        logger.info(
+            f"GuidedDecoding max_num_seqs={self.max_num_seqs} fill_bitmask_parallel_batch_size={self.fill_bitmask_parallel_batch_size} is_cuda_platform={self.is_cuda_platform} max_workers={max_workers}"
+        )
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         self.reasoning_parser = reasoning_parser
 
     def add_logits_processor(
         self,
-        ids: int,
+        idx: int,
         future: Optional[Any] = None,
         prefill_tokens: List[int] = [],
     ):
         """add logits processor to SamplerProcessor"""
-        with self.logits_lock:
-            if future is None:
-                if ids in self.logits_processor:
-                    del self.logits_processor[ids]
-                return
+        self._prefill_done_idxs[idx] = False
 
-            if isinstance(future, LogitsProcessorBase):
-                self.logits_processor[ids] = future
-                for token in prefill_tokens:
-                    self.logits_processor[ids].accept_token(token)
-            elif future.done():
-                self.logits_processor[ids] = future.result()
-                for token in prefill_tokens:
-                    self.logits_processor[ids].accept_token(token)
-            else:
-                self.logits_processor[ids] = [future, prefill_tokens]
-
-    def update_vocab_mask(self, skip_idx_list: List[int] = []):
-        """update vocab mask. (cpu-heavy operation)"""
-        if len(self.logits_processor) == 0:
+        if future is None:
+            # normal request without guided_backend
+            self.logits_processors[idx] = None
             return
 
-        with self.logits_lock:
-            for idx, processor in self.logits_processor.items():
-                if processor is None:
-                    del self.logits_processor[idx]
-                    continue
+        if len(prefill_tokens) != 0:
+            # first_token from prefill node
+            self._prefill_done_idxs[idx] = True
 
-                if not isinstance(processor, LogitsProcessorBase):
-                    future, prefill_tokens = self.logits_processor[idx]
-                    self.logits_processor[idx] = future.result()
-                    for token in prefill_tokens:
-                        self.logits_processor[idx].accept_token(token)
+        if future.done():
+            # cached xgrammar
+            self.logits_processors[idx] = future.result()
+            for token in prefill_tokens:
+                self._accept_token(idx, token)
+        else:
+            # async
+            self.logits_processors[idx] = future
+            self._tokens_to_acc[idx] = prefill_tokens
 
-            available_processors = None
-            for processor in self.logits_processor.values():
-                if processor.is_terminated():
-                    continue
-                available_processors = processor
-            if available_processors is None:
-                return
+    def should_fill_bitmask(self, idx: int) -> bool:
+        """
+        Determines whether to fill a bitmask for the logits processor at the given index.
 
-        # allocate token bitmask
-        self.token_bitmask = available_processors.allocate_token_bitmask()
+        Args:
+            idx (int): The index of the logits processor to check
 
-        with self.logits_lock:
-            # fill token bitmask
-            for idx, processor in self.logits_processor.items():
-                if processor.is_terminated() or idx in skip_idx_list:
-                    continue
+        Returns:
+            bool: True if the idx request bitmask should be filled
 
-                processor.fill_token_bitmask(self.token_bitmask, idx)
+        """
+        if self.reasoning_parser is not None:
+            if self.logits_processors[idx].enable_reasoning:  # <think> guided
+                return True
+            if not self.logits_processors[idx].reasoning_ended:
+                return False
+        return True
 
-    def apply_token_mask(self, logits: paddle.Tensor, skip_idx_list: List[int] = []):
+    def reset_processor(self, idx: int):
+        """reset idx"""
+        self._prefill_done_idxs[idx] = False
+        self.logits_processors[idx] = None
+
+    def update_vocab_mask(self, prefill_done_idxs: List[int] = []):
+        """update vocab mask. (cpu-heavy operation)"""
+        for idx in prefill_done_idxs:
+            if self.logits_processors[idx] is None:
+                continue
+
+            assert not self._prefill_done_idxs[idx]
+            self._prefill_done_idxs[idx] = True
+            if isinstance(self.logits_processors[idx], Future):
+                continue
+
+        idxs = []
+        for idx, processor in enumerate(self.logits_processors):
+            if processor is None or not self._prefill_done_idxs[idx]:
+                continue
+            # skip, join at apply_token_mask
+            if isinstance(processor, Future):
+                continue
+            if processor.is_terminated:
+                self.reset_processor(idx)
+                continue
+
+            self.accept_tokens_from_prefill_node(idx)
+
+            if self.token_bitmask is None:
+                self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
+
+            if self.should_fill_bitmask(idx):
+                idxs.append(idx)
+        self._async_batch_fill_token_bitmask(idxs)
+
+    def batch_fill_token_bitmask(self, batch: List[int]):
+        """
+        Fills the token bitmask for a batch of logits processor indices.
+
+        This method is typically called asynchronously via a thread pool executor
+        to parallelize the bitmask filling operation. It is important that any
+        shared data structures accessed within this method (such as
+        `self.token_bitmask` and `self.logits_processors`) are thread-safe or
+        properly synchronized to avoid race conditions.
+
+        Args:
+            batch (List[int]): List of indices for which to fill the token bitmask.
+        """
+        for idx in batch:
+            self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
+
+    def _async_batch_fill_token_bitmask(self, idxs: List[int]):
+        """launch async fill"""
+        batch: List[int] = []
+        for idx in idxs:
+            batch.append(idx)
+            if len(batch) == self.fill_bitmask_parallel_batch_size:
+                promise = self.executor_for_fillmask.submit(self.batch_fill_token_bitmask, batch[:])
+                self._fillmask_futures[idx] = promise
+                batch = []
+        if batch:
+            promise = self.executor_for_fillmask.submit(self.batch_fill_token_bitmask, batch[:])
+            self._fillmask_futures[batch[-1]] = promise
+
+    def join_async_fillmask(self):
+        """join all async fill futures"""
+        for idx, furture in enumerate(self._fillmask_futures):
+            if furture is not None:
+                try:
+                    furture.result()
+                except Exception as e:
+                    logger.error(f"Exception in async fillmask future at idx {idx}: {e}", exc_info=True)
+                self._fillmask_futures[idx] = None
+
+    def accept_tokens_from_prefill_node(self, idx: int):
+        """accept prefill token, not future"""
+        if self._tokens_to_acc[idx] is not None:
+            # accept token from prefill node first
+            for token in self._tokens_to_acc[idx]:
+                self._accept_token(idx, token)
+            self._tokens_to_acc[idx] = None
+
+    def apply_token_mask(self, logits: paddle.Tensor, prefill_done_idxs: List[int] = []):
         """apply token mask to logits"""
-        if len(self.logits_processor) == 0 or self.token_bitmask is None:
-            return logits
-
-        # self.async_step.result()
-        available_processors = None
-        with self.logits_lock:
-            for processor in self.logits_processor.values():
-                if processor.is_terminated():
-                    continue
-                available_processors = processor
-        if available_processors is None:
-            return logits
 
         indices = []
-        for idx, processor in self.logits_processor.items():
-            if processor is None or idx in skip_idx_list:
+        for idx, processor in enumerate(self.logits_processors):
+            if processor is None or not self._prefill_done_idxs[idx]:
                 continue
-            if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
-                indices.append(idx)
 
-        return available_processors.apply_token_mask(logits, self.token_bitmask, indices=indices)
+            # compiled done, check idx should fill,  fill_token_bitmask done in preprocess
+            if not isinstance(processor, Future):
+                if self.should_fill_bitmask(idx):
+                    indices.append(idx)
+                continue
+
+            # is Future, processor async compiled not ready, need join and wait
+            ts = time.time()
+            wait = False
+            if not processor.done():
+                wait = True
+            self.logits_processors[idx] = processor.result()
+            if wait:
+                logger.debug(f"[{idx} join async compile xgrammar, time_cost:{time.time() - ts}]")
+
+            self.accept_tokens_from_prefill_node(idx)
+            # Possible optimization: Extract 'think' content validation from logits_processors,
+            # allowing join operations to complete immediately after 'think' terminates.
+            # Furthermore, the current idx could be skipped, with compilation overhead
+            # estimated at only a few milliseconds.
+
+            # check idx for fill_token_mask
+            if not self.should_fill_bitmask(idx):
+                continue
+
+            indices.append(idx)
+
+            if self.token_bitmask is None:
+                self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
+
+            # launch async fill
+            self._async_batch_fill_token_bitmask([idx])
+
+        if len(indices) == 0:
+            return logits
+        self.join_async_fillmask()
+        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
+            apply_token_mask,
+        )
+
+        return apply_token_mask(logits, self.token_bitmask, indices=indices, is_cuda_platform=self.is_cuda_platform)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
-        if idx not in self.logits_processor:
-            raise ValueError(f"Invalid index, idx: {idx}, logit_processors.keys: {self.logits_processor.keys()}")
 
-        if self.logits_processor[idx].is_terminated():
-            return
+        if self.reasoning_parser is not None:
+            if not self.logits_processors[idx].enable_reasoning:
+                if not self.logits_processors[idx].reasoning_ended:
+                    reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
+                    self.logits_processors[idx].reasoning_ended = reasoning_ended
+                    return
 
-        if (
-            self.reasoning_parser is not None
-            and self.logits_processor[idx].enable_reasoning
-            and not self.logits_processor[idx].reasoning_ended
-        ):
-            reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
-            self.logits_processor[idx].reasoning_ended = reasoning_ended
-            return
+        if not self.logits_processors[idx].accept_token(token) or self.logits_processors[idx].is_terminated:
+            self.reset_processor(idx)
 
-        self.logits_processor[idx].accept_token(token)
-
-    def update_output_tokens(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
+    def update_output_tokens(self, next_tokens: paddle.Tensor):
         """update output tokens"""
-        if len(self.logits_processor) == 0:
+        if len(self.logits_processors) == 0:
             return
 
         token_ids = next_tokens.numpy().tolist()
-        with self.logits_lock:
-            for idx in self.logits_processor.keys():
-                token = token_ids[idx][0]
-                if token < 0 or self.logits_processor[idx] is None or idx in skip_idx_list:
-                    continue
+        for idx, processor in enumerate(self.logits_processors):
+            if not self._prefill_done_idxs[idx] or processor is None:
+                continue
+            if idx >= len(token_ids):
+                continue
+            token = token_ids[idx][0]
+            if token < 0:
+                self.reset_processor(idx)
+                continue
+            logger.debug(f"[{idx}]accept token{token}")
+            self._accept_token(idx, token)
 
-                self._accept_token(idx, token)
-
-    def pre_process(self, skip_idx_list: List[int] = []):
+    def pre_process(self, prefill_done_idxs: List[int] = []):
         """pre process before running"""
-        # create async operation for guided decoding
-        # TODO: support async
-        self.update_vocab_mask(skip_idx_list)
-        # self.async_step = self.executor.submit(self.update_vocab_mask)
+        self.update_vocab_mask(prefill_done_idxs)
 
 
 class Sampler(nn.Layer):
@@ -216,7 +360,7 @@ class Sampler(nn.Layer):
         else:
             raise NotImplementedError
 
-        self.processor = SamplerProcessor()
+        self.guided_decoding = GuidedDecoding(fd_config)
         self.logprobs_mode = fd_config.model_config.logprobs_mode if fd_config is not None else logprobs_mode
         # Can only be created when fd_config.early_stopper_config.enable_early_stop = True
         if (
@@ -230,32 +374,36 @@ class Sampler(nn.Layer):
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         """set reasoning parser"""
-        self.processor.apply_reasoning_parser(reasoning_parser)
+        self.guided_decoding.apply_reasoning_parser(reasoning_parser)
 
-    def apply_logits_processor(self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = []):
+    def apply_logits_processor(
+        self, ids: int, future: Future[LogitsProcessorBase] = None, prefill_tokens: List[int] = []
+    ):
         """apply logits processor to sampler"""
-        self.processor.add_logits_processor(ids, future, prefill_tokens)
+        self.guided_decoding.add_logits_processor(ids, future, prefill_tokens)
 
-    def pre_process(self, skip_idx_list: List[int] = []):
+    def pre_process(self, prefill_done_idxs: List[int] = []):
         """pre process before running"""
-        self.processor.pre_process(skip_idx_list)
+        self.guided_decoding.pre_process(prefill_done_idxs)
 
-    def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
+    def post_process(self, next_tokens: paddle.Tensor):
         """post process after running"""
-        self.processor.update_output_tokens(next_tokens, skip_idx_list)
+        self.guided_decoding.update_output_tokens(next_tokens)
 
     def compute_logprobs(
         self,
         logits: paddle.Tensor,
-        sampling_metadata: SamplingMetadata,
+        sampling_metadata: Optional[SamplingMetadata] = None,
     ) -> paddle.Tensor:
         """ """
+        if sampling_metadata is None:
+            return F.log_softmax(logits, axis=-1)
         last_logits = logits
         real_bsz = last_logits.shape[0]
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         share_inputs = sampling_metadata.share_inputs
-        if temp_scaled_logprobs is not None:
+        if temp_scaled_logprobs is not None and sampling_metadata.temp_scaled_logprobs_flag:
             real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
             temperature = sampling_metadata.temperature[:real_bsz]
             temp_temperature = paddle.where(real_bsz_temp_scaled, temperature, paddle.ones_like(temperature))
@@ -265,7 +413,11 @@ class Sampler(nn.Layer):
         top_p_logprob = None
         top_p_req_mask = None
 
-        if top_p_normalized_logprobs is not None and share_inputs is not None:
+        if (
+            top_p_normalized_logprobs is not None
+            and share_inputs is not None
+            and sampling_metadata.top_p_normalized_logprobs_flag
+        ):
             seq_lens_this_time = share_inputs["seq_lens_this_time"].reshape([-1, 1])[:real_bsz]
             seq_lens_encoder = share_inputs["seq_lens_encoder"].reshape([-1, 1])[:real_bsz]
             seq_lens_decoder = share_inputs["seq_lens_decoder"].reshape([-1, 1])[:real_bsz]
@@ -309,6 +461,8 @@ class Sampler(nn.Layer):
         assert token_ids.dtype == paddle.int64
         logprobs.clip_(min=paddle.finfo(logprobs.dtype).min)
         # Get with the logprob of the prompt or sampled token.
+        if len(token_ids.shape) < len(logprobs.shape):
+            token_ids = token_ids.unsqueeze(-1)
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
@@ -322,17 +476,19 @@ class Sampler(nn.Layer):
         else:
             indices = token_ids
             top_logprobs = token_logprobs
-
+        indices = indices.cpu()
+        top_logprobs = top_logprobs.cpu()
+        token_ranks = token_ranks.cpu()
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 
     def forward_cuda(
         self,
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
-        skip_idx_list: List[int] = [],
+        p_done_idxs: List[int] = [],
     ) -> SamplerOutput:
         """ """
-        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+        logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
@@ -340,6 +496,9 @@ class Sampler(nn.Layer):
                 raw_logprobs = self.compute_logprobs(logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = logits.clone()
+
+        for proc in sampling_metadata.logits_processors or []:
+            logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -370,7 +529,7 @@ class Sampler(nn.Layer):
             sampling_metadata.top_p,
             sampling_metadata.top_k,
             sampling_metadata.top_k_list,
-            seed=sampling_metadata.seed[0, 0],
+            topp_seed=sampling_metadata.seed,
         )
 
         logprobs_tensors = (
@@ -387,6 +546,7 @@ class Sampler(nn.Layer):
             # token per request.
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
+            logits=logits,
         )
 
         return sampler_output
@@ -445,6 +605,8 @@ class SpeculativeSampler(nn.Layer):
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
+        elif current_platform.is_xpu():
+            self.forward = self.forward_xpu
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
@@ -477,7 +639,7 @@ class SpeculativeSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        batch_token_num = share_inputs["batch_token_num"][:real_bsz]
+        batch_token_num = share_inputs["accept_num"][:real_bsz]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
@@ -567,6 +729,7 @@ class SpeculativeSampler(nn.Layer):
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
         accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """ """
 
@@ -591,6 +754,15 @@ class SpeculativeSampler(nn.Layer):
 
         probs = F.softmax(logits)
 
+        top_p, top_k, topp_seed = padding_sampling_params(
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            sampling_metadata.seed,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["seq_lens_encoder"],
+        )
+        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
             sampling_metadata.top_p,
@@ -600,6 +772,7 @@ class SpeculativeSampler(nn.Layer):
         )
 
         speculate_verify(
+            sampled_token_ids,
             share_inputs["accept_tokens"],
             share_inputs["accept_num"],
             share_inputs["step_idx"],
@@ -622,7 +795,7 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
             self.speculative_verify_window,
             True,  # enable_topp
-            self.speculative_benchmark_mode,
+            (self.speculative_benchmark_mode or reject_all_drafts),
             accept_all_drafts,
         )
 
@@ -633,7 +806,7 @@ class SpeculativeSampler(nn.Layer):
             batch_token_num = paddle.where(
                 share_inputs["seq_lens_encoder"][:real_bsz] != 0,
                 paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
-                share_inputs["accept_num"][:real_bsz].unsqueeze(1),
+                share_inputs["seq_lens_this_time"],
             ).squeeze(1)
             share_inputs["batch_token_num"] = batch_token_num
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
@@ -643,11 +816,11 @@ class SpeculativeSampler(nn.Layer):
                 [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
             ).astype("int32")
             share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logtis = paddle.empty(
+            target_logits = paddle.empty(
                 [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
             )
             speculate_get_target_logits(
-                target_logtis,
+                target_logits,
                 logits,
                 cu_batch_token_offset,
                 ori_cu_batch_token_offset,
@@ -656,28 +829,110 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["accept_num"],
             )
             if self.logprobs_mode == "raw_logprobs":
-                raw_logprobs = self.compute_logprobs(target_logtis, sampling_metadata)
+                raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
-                raw_logprobs = target_logtis.clone()
+                raw_logprobs = target_logits.clone()
 
         logprobs_tensors = None
         token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
             token_ids = paddle.concat(
-                [
-                    share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]]
-                    for i in range(share_inputs["accept_num"][:real_bsz].shape[0])
-                ]
+                [share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]] for i in range(real_bsz)]
             )
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
             sampled_token_ids=token_ids,
             logprobs_tensors=logprobs_tensors,
-            token_num_per_batch=batch_token_num,
+            token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+            logits=logits,
         )
 
+        return sampler_output
+
+    def forward_xpu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        max_model_len: int,
+        share_inputs: List[paddle.Tensor],
+        accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
+    ) -> paddle.Tensor:
+        from fastdeploy.model_executor.ops.xpu import speculate_verify, top_p_candidates
+
+        logits = apply_speculative_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
+            max_model_len,
+        )
+
+        probs = F.softmax(logits)
+
+        top_p, top_k, topp_seed = padding_sampling_params(
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            sampling_metadata.seed,
+            share_inputs["seq_lens_this_time"],
+            paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
+        )
+        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, topp_seed=topp_seed)
+
+        verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
+            probs,
+            sampling_metadata.top_p,
+            share_inputs["output_padding_offset"],
+            self.speculative_max_candidate_len,
+            max_model_len,
+        )
+
+        speculate_verify(
+            sampled_token_ids,
+            share_inputs["accept_tokens"],
+            share_inputs["accept_num"],
+            share_inputs["step_idx"],
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs[
+                "draft_tokens"
+            ],  # Both input and output, need to write the last 1 token accepted to position 0.
+            share_inputs["seq_lens_this_time"],
+            verify_tokens,
+            verify_scores,
+            share_inputs["max_dec_len"],
+            sampling_metadata.eos_token_ids,
+            share_inputs["is_block_step"],
+            share_inputs["output_cum_offsets"],
+            actual_candidate_len,
+            share_inputs["actual_draft_token_num"],
+            sampling_metadata.top_p,
+            max_model_len,
+            self.speculative_verify_window,
+            True,  # enable_topp
+            (self.speculative_benchmark_mode or reject_all_drafts),
+            accept_all_drafts,
+        )
+        # TODO(chenhuan09): support return logprobs
+        token_ids = share_inputs["accept_tokens"]
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=None,
+            token_num_per_batch=share_inputs["accept_num"],
+            cu_batch_token_offset=None,
+        )
         return sampler_output
 
 
@@ -689,6 +944,8 @@ class MTPSampler(nn.Layer):
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
+        elif current_platform.is_xpu():
+            self.forward = self.forward_xpu
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
@@ -848,9 +1105,7 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
-        )
+        next_tokens = paddle.argmax(probs, axis=-1)
 
         token_ids = None
         logprobs_tensors = None
@@ -873,5 +1128,46 @@ class MTPSampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+        )
+        return next_tokens, sampler_output
+
+    def forward_xpu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        max_model_len: int,
+        share_inputs: List[paddle.Tensor],
+    ) -> paddle.Tensor:
+
+        logits = apply_speculative_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
+            max_model_len,
+        )
+        probs = F.softmax(logits)
+
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+        )
+        # TODO(chenhuan09): add support for logprobs
+        token_ids = None
+        logprobs_tensors = None
+
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=logprobs_tensors,
+            token_num_per_batch=None,
+            cu_batch_token_offset=None,
         )
         return next_tokens, sampler_output

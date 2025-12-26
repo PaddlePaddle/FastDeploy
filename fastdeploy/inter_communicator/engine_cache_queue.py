@@ -61,6 +61,7 @@ class EngineCacheQueue:
         """
         self.address: Tuple[str, int] = address
         self.authkey: bytes = authkey
+        self.is_server: bool = is_server
         self.num_client: int = num_client
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
@@ -99,6 +100,12 @@ class EngineCacheQueue:
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
             self.swap_to_gpu_barrier2_init = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.swap_storage_to_gpu_barrier_init = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.swap_to_storage_barrier_init = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
@@ -147,9 +154,22 @@ class EngineCacheQueue:
                 "get_swap_to_gpu_barrier2",
                 callable=lambda idx: self.swap_to_gpu_barrier2_init[idx],
             )
-
+            QueueManager.register(
+                "get_swap_storage_to_gpu_barrier",
+                callable=lambda idx: self.swap_storage_to_gpu_barrier_init[idx],
+            )
+            QueueManager.register(
+                "get_swap_to_storage_barrier",
+                callable=lambda idx: self.swap_to_storage_barrier_init[idx],
+            )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
+
+            # If the port is 0, an anonymous port will be automatically assigned. The port range can be queried from system configuration,
+            # e.g., by running 'cat /proc/sys/net/ipv4/ip_local_port_range'; typically in the range of 10000-60999.
+            # After manager.start(), its address attribute will be updated to the actual listening address.
+            # We update self.address here so that the real address can be queried later.
+            self.address = self.manager.address
             logger.info(f"EngineCacheQueue server started at {self.address}")
         else:
             # Client-side connection setup
@@ -168,6 +188,8 @@ class EngineCacheQueue:
             QueueManager.register("get_swap_to_cpu_barrier2")
             QueueManager.register("get_swap_to_gpu_barrier1")
             QueueManager.register("get_swap_to_gpu_barrier2")
+            QueueManager.register("get_swap_storage_to_gpu_barrier")
+            QueueManager.register("get_swap_to_storage_barrier")
 
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
@@ -187,12 +209,23 @@ class EngineCacheQueue:
         self.swap_to_cpu_barrier2 = self.manager.get_swap_to_cpu_barrier2(self.local_data_parallel_id)
         self.swap_to_gpu_barrier1 = self.manager.get_swap_to_gpu_barrier1(self.local_data_parallel_id)
         self.swap_to_gpu_barrier2 = self.manager.get_swap_to_gpu_barrier2(self.local_data_parallel_id)
+        self.swap_storage_to_gpu_barrier = self.manager.get_swap_storage_to_gpu_barrier(self.local_data_parallel_id)
+        self.swap_to_storage_barrier = self.manager.get_swap_to_storage_barrier(self.local_data_parallel_id)
         self.total_num: int = (1 << self.num_client) - 1
 
         if not is_server:
             # Setup position and total_num for sync operations
             self.position: int = 1 << self.client_id
             logger.info(f"Connected EngineCacheQueue client_id: {self.client_id}")
+
+    def get_server_port(self) -> int:
+        """
+        Returns the actual port that the server instance is listening on.
+        Calling this method only makes sense on instances where is_server=True.
+        """
+        if not self.is_server:
+            raise RuntimeError("Only the server instance can provide the port.")
+        return self.address[1]
 
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """
@@ -225,7 +258,7 @@ class EngineCacheQueue:
             self.task_lock.acquire()
         self.task_sync_value.set(0)
         self.transfer_task_queue.append(item)
-        logger.info(f"put_transfer_task: put swap task {item[-1]} to queue successful")
+        logger.info(f"put_transfer_task: put swap task {item} to queue successful")
         self.task_lock.release()
 
     def get_transfer_task(self):

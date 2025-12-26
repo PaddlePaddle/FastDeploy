@@ -15,11 +15,12 @@
 """
 
 import math
+from typing import Optional
 
 import paddle
 import paddle.nn as nn
 
-from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import h2d_copy
 
 
 class GELUActivation(nn.Layer):
@@ -57,8 +58,10 @@ class Projector(nn.Layer):
 
         self.pre_norm = nn.LayerNorm(self.vision_config.hidden_size, epsilon=1e-05)
         self.linear_1 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear_1.weight.weight_loader = self.weight_loader
         self.act = GELUActivation()
         self.linear_2 = nn.Linear(self.hidden_size, self.text_config.hidden_size)
+        self.linear_2.weight.weight_loader = self.weight_loader
 
     def forward(self, image_features, image_grid_thw):
         m1, m2 = self.merge_kernel_size
@@ -94,14 +97,17 @@ class Projector(nn.Layer):
         hidden_states = self.linear_2(hidden_states)
         return hidden_states
 
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = loaded_weight.transpose([1, 0])
+        if not param._is_initialized():
+            param.initialize()
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
             else:
-                param.copy_(tensor, False)
+                loaded_weight = loaded_weight.cast(param.dtype)
+        h2d_copy(param, loaded_weight)
