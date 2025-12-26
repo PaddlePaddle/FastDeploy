@@ -1,18 +1,18 @@
 #!/bin/bash
 
 # ================== Configuration Parameters ==================
-FD_API_PORT=${FD_API_PORT:-8000}
-FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT:-8001}
-FD_METRICS_PORT=${FD_METRICS_PORT:-8002}
-FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT:-8003}
+FD_API_PORT=${FD_API_PORT:-8180}
+FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT:-8181}
+FD_METRICS_PORT=${FD_METRICS_PORT:-8182}
+FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT:-8183}
 
 
 HOST="0.0.0.0"
 PORT="${FD_API_PORT}"  # 这里需要配合启动脚本那个URL PORT
 BASE_URL="http://$HOST:$PORT"
 
-TOTAL_ROUNDS=30
-CHAT_REQUESTS_PER_ROUND=1
+TOTAL_ROUNDS=6
+CHAT_REQUESTS_PER_ROUND=3
 export CUDA_VISIBLE_DEVICES=0,1
 MAX_MEMORY_MB=10240  # 10GB
 
@@ -79,24 +79,72 @@ check_gpu_memory() {
     local gpu_ids
     gpu_ids=($(get_visible_gpu_ids))
 
+    echo "========== GPU Memory Check =========="
+    echo "CUDA_VISIBLE_DEVICES = $CUDA_VISIBLE_DEVICES"
+    echo "MAX_MEMORY_MB = $MAX_MEMORY_MB"
+    echo "======================================"
+
     if [ ${#gpu_ids[@]} -eq 0 ]; then
         echo "Assertion failed: No valid GPU IDs in CUDA_VISIBLE_DEVICES='$CUDA_VISIBLE_DEVICES'" >&2
         exit 1
     fi
 
     for gpu_id in "${gpu_ids[@]}"; do
-        local memory_used
-        memory_used=$(nvidia-smi -i "$gpu_id" --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null) || \
-            assert_success $? "Failed to query GPU $gpu_id memory usage"
+        echo
+        echo "---- GPU $gpu_id ----"
 
-        if ! [[ "$memory_used" =~ ^[0-9]+ ]]; then
-            echo "Assertion failed: Invalid memory value for GPU $gpu_id: $memory_used" >&2
+        # Query summary
+        local summary
+        summary=$(nvidia-smi -i "$gpu_id" \
+            --query-gpu=index,name,memory.total,memory.used,memory.free,utilization.gpu \
+            --format=csv,noheader,nounits) || {
+                echo "Failed to query GPU $gpu_id summary" >&2
+                exit 1
+            }
+
+        # Parse fields
+        IFS=',' read -r idx name mem_total mem_used mem_free util <<< "$summary"
+
+        echo "GPU $idx: $name"
+        echo "Total Memory : ${mem_total} MB"
+        echo "Used  Memory : ${mem_used} MB"
+        echo "Free  Memory : ${mem_free} MB"
+        echo "GPU Util     : ${util} %"
+
+        # --- Hard assertions ---
+        assert_true "$(( mem_used <= MAX_MEMORY_MB ))" \
+            "GPU $gpu_id memory.used ${mem_used} MB > MAX_MEMORY_MB ${MAX_MEMORY_MB} MB"
+
+        # --- Soft safety check: usage ratio ---
+        local used_ratio
+        used_ratio=$(( mem_used * 100 / mem_total ))
+
+        echo "Used Ratio   : ${used_ratio} %"
+
+        if [ "$used_ratio" -gt 90 ]; then
+            echo "Assertion failed: GPU $gpu_id memory usage > 90% (${used_ratio}%)" >&2
             exit 1
         fi
 
-        assert_true "$(( memory_used <= MAX_MEMORY_MB ))" \
-            "GPU $gpu_id memory $memory_used MB > $MAX_MEMORY_MB MB"
+        # --- Process-level attribution ---
+        echo "Processes on GPU $gpu_id:"
+        local proc_info
+        proc_info=$(nvidia-smi -i "$gpu_id" \
+            --query-compute-apps=pid,process_name,used_memory \
+            --format=csv,noheader,nounits)
+
+        if [ -z "$proc_info" ]; then
+            echo "  (No active compute processes)"
+        else
+            echo "$proc_info" | while IFS=',' read -r pid pname pmem; do
+                echo "  PID=$pid  NAME=$pname  MEM=${pmem}MB"
+            done
+        fi
+
+        echo "GPU $gpu_id memory check PASSED"
     done
+
+    echo "========== GPU Memory Check DONE =========="
 }
 
 # ====================================================

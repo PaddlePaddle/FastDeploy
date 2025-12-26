@@ -232,6 +232,8 @@ while IFS=, read -r file exit_code cost_time; do
         FAIL_COUNT=$((FAIL_COUNT + 1))
         FAIL_FILES+=$(basename "$file")
         echo "$file" >> ${FAIL_FILE_LIST}
+        echo -e "\n\n+++++++++++++++++++++++++ [ $(basename "$file") ] Fail Info +++++++++++++++++++++++++\n\n"
+        cat ${LOG_SUBDIR}/$(basename "$file").log
     fi
 done < "$LOG_RESULT_TMP"
 

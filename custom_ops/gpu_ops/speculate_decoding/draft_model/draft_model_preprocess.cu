@@ -15,33 +15,34 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-
 #define DISPATCH_BLOCKSIZE(BLOCK_SIZE, ...) \
-  do {                                     \
-    constexpr int BlockSize = BLOCK_SIZE;  \
-    __VA_ARGS__;                           \
+  do {                                      \
+    constexpr int BlockSize = BLOCK_SIZE;   \
+    __VA_ARGS__;                            \
   } while (0)
 
-#define DISPATCH_TRUNCATE_FIRST_TOKEN(truncate_first_token, TRUNCATE_FIRST_TOKEN, ...) \
-  do {                                                                                 \
-    if (truncate_first_token) {                                                        \
-      constexpr bool TRUNCATE_FIRST_TOKEN = true;                                     \
-      __VA_ARGS__;                                                                     \
-    } else {                                                                           \
-      constexpr bool TRUNCATE_FIRST_TOKEN = false;                                    \
-      __VA_ARGS__;                                                                     \
-    }                                                                                  \
+#define DISPATCH_TRUNCATE_FIRST_TOKEN(               \
+    truncate_first_token, TRUNCATE_FIRST_TOKEN, ...) \
+  do {                                               \
+    if (truncate_first_token) {                      \
+      constexpr bool TRUNCATE_FIRST_TOKEN = true;    \
+      __VA_ARGS__;                                   \
+    } else {                                         \
+      constexpr bool TRUNCATE_FIRST_TOKEN = false;   \
+      __VA_ARGS__;                                   \
+    }                                                \
   } while (0)
 
-#define DISPATCH_KVCACHE_SCHEDULER(kvcache_scheduler_v1, KVCACHE_SCHEDULER_V1, ...) \
-  do {                                                                              \
-    if (kvcache_scheduler_v1) {                                                     \
-      constexpr bool KVCACHE_SCHEDULER_V1 = true;                                   \
-      __VA_ARGS__;                                                                  \
-    } else {                                                                        \
-      constexpr bool KVCACHE_SCHEDULER_V1 = false;                                  \
-      __VA_ARGS__;                                                                  \
-    }                                                                               \
+#define DISPATCH_KVCACHE_SCHEDULER(                  \
+    kvcache_scheduler_v1, KVCACHE_SCHEDULER_V1, ...) \
+  do {                                               \
+    if (kvcache_scheduler_v1) {                      \
+      constexpr bool KVCACHE_SCHEDULER_V1 = true;    \
+      __VA_ARGS__;                                   \
+    } else {                                         \
+      constexpr bool KVCACHE_SCHEDULER_V1 = false;   \
+      __VA_ARGS__;                                   \
+    }                                                \
   } while (0)
 
 #define DISPATCH_SPLITWISE_PREFILL(splitwise_prefill, SPLITWISE_PREFILL, ...) \
@@ -55,8 +56,9 @@
     }                                                                         \
   } while (0)
 
-
-template <int THREADBLOCK_SIZE, bool TRUNCATE_FIRST_TOKEN, bool KVCACHE_SCHEDULER_V1>
+template <int THREADBLOCK_SIZE,
+          bool TRUNCATE_FIRST_TOKEN,
+          bool KVCACHE_SCHEDULER_V1>
 __global__ void process_splitwise_prefill(
     int64_t* draft_tokens,
     int64_t* input_ids,
@@ -123,10 +125,9 @@ __global__ void process_splitwise_prefill(
   }
 }
 
-
-
-
-template <int THREADBLOCK_SIZE, bool TRUNCATE_FIRST_TOKEN, bool KVCACHE_SCHEDULER_V1>
+template <int THREADBLOCK_SIZE,
+          bool TRUNCATE_FIRST_TOKEN,
+          bool KVCACHE_SCHEDULER_V1>
 __global__ void draft_model_preprocess_kernel(
     int64_t* draft_tokens,
     int64_t* input_ids,
@@ -139,6 +140,8 @@ __global__ void draft_model_preprocess_kernel(
     bool* is_block_step,
     bool* batch_drop,
     int64_t* pre_ids,
+    int* mask_rollback,
+    int* recompute_token_num,
     const int64_t* accept_tokens,
     const int* accept_num,
     const int* base_model_seq_lens_this_time,
@@ -170,7 +173,8 @@ __global__ void draft_model_preprocess_kernel(
     auto* base_model_draft_tokens_now =
         base_model_draft_tokens + tid * base_model_draft_tokens_len;
     auto base_model_seq_len_decoder = base_model_seq_lens_decoder[tid];
-    const int32_t base_model_seq_len_this_time = base_model_seq_lens_this_time[tid];
+    const int32_t base_model_seq_len_this_time =
+        base_model_seq_lens_this_time[tid];
     auto* pre_ids_now = pre_ids + tid * pre_ids_len;
 #pragma unroll
     for (int i = 1; i < base_model_draft_tokens_len; i++) {
@@ -180,7 +184,7 @@ __global__ void draft_model_preprocess_kernel(
     // 1. process block_step situation
     //    -- In v0 mode, block_step will drop mtp query.
     //    -- In v1 mode, block_step will continue to infer.
-    if constexpr(KVCACHE_SCHEDULER_V1) {
+    if constexpr (KVCACHE_SCHEDULER_V1) {
       if (base_model_stop_flags[tid] && base_model_is_block_step[tid]) {
         stop_flags[tid] = true;
         is_block_step[tid] = true;
@@ -213,7 +217,7 @@ __global__ void draft_model_preprocess_kernel(
         }
       } else {  // decode generation
         if constexpr (KVCACHE_SCHEDULER_V1) {
-        // 3. try to recover mtp infer in V1 mode
+          // 3. try to recover mtp infer in V1 mode
           if (!base_model_is_block_step[tid] && is_block_step[tid]) {
             is_block_step[tid] = false;
           }
@@ -221,16 +225,24 @@ __global__ void draft_model_preprocess_kernel(
         if (stop_flags[tid]) {
           stop_flags[tid] = false;
           // TODO: check
-          seq_lens_decoder[tid] = base_model_seq_len_decoder - base_model_seq_len_this_time;
-          step_idx[tid] = base_model_step_idx[tid] - base_model_seq_len_this_time;
+          seq_lens_decoder[tid] =
+              base_model_seq_len_decoder - base_model_seq_len_this_time;
+          step_idx[tid] =
+              base_model_step_idx[tid] - base_model_seq_len_this_time;
         } else {
           // 2: Last base model generated token and first MTP token
-          seq_lens_decoder[tid] -= num_model_step - 1;
-          step_idx[tid] -= num_model_step - 1;
+          const int recompute_token_num_now = recompute_token_num[tid];
+          seq_lens_decoder[tid] -= recompute_token_num_now;
+          step_idx[tid] -= recompute_token_num_now;
+          mask_rollback[tid] += recompute_token_num_now;
+          // NOTE(liuzichang): Used for PD-split mode and future dynamic
+          // strategies.
+          recompute_token_num[tid] = num_model_step - 1;
         }
         for (int i = 0; i < accept_num_now; i++) {
           draft_tokens_now[i] = accept_tokens_now[i];
-          const int pre_id_pos = base_model_step_idx[tid] - (accept_num_now - i);
+          const int pre_id_pos =
+              base_model_step_idx[tid] - (accept_num_now - i);
           const int64_t accept_token = accept_tokens_now[i];
           pre_ids_now[pre_id_pos] = accept_token;
         }
@@ -250,103 +262,107 @@ __global__ void draft_model_preprocess_kernel(
   }
 }
 
-
-void DispatchRunner(
-    const cudaStream_t &stream,
-    int64_t* draft_tokens,
-    int64_t* input_ids,
-    bool* stop_flags,
-    int* seq_lens_this_time,
-    int* seq_lens_encoder,
-    int* seq_lens_decoder,
-    int64_t* step_idx,
-    bool* not_need_stop,
-    bool* is_block_step,
-    bool* batch_drop,
-    int64_t* pre_ids,
-    const int64_t* accept_tokens,
-    const int* accept_num,
-    const int* base_model_seq_lens_this_time,
-    const int* base_model_seq_lens_encoder,
-    const int* base_model_seq_lens_decoder,
-    const int64_t* base_model_step_idx,
-    const bool* base_model_stop_flags,
-    const bool* base_model_is_block_step,
-    int64_t* base_model_draft_tokens,
-    const int bsz,
-    const int num_model_step,
-    const int accept_tokens_len,
-    const int draft_tokens_len,
-    const int input_ids_len,
-    const int base_model_draft_tokens_len,
-    const int pre_ids_len,
-    const bool truncate_first_token,
-    const bool splitwise_prefill,
-    const bool kvcache_scheduler_v1) {
+void DispatchRunner(const cudaStream_t& stream,
+                    int64_t* draft_tokens,
+                    int64_t* input_ids,
+                    bool* stop_flags,
+                    int* seq_lens_this_time,
+                    int* seq_lens_encoder,
+                    int* seq_lens_decoder,
+                    int64_t* step_idx,
+                    bool* not_need_stop,
+                    bool* is_block_step,
+                    bool* batch_drop,
+                    int64_t* pre_ids,
+                    int* mask_rollback,
+                    int* recompute_token_num,
+                    const int64_t* accept_tokens,
+                    const int* accept_num,
+                    const int* base_model_seq_lens_this_time,
+                    const int* base_model_seq_lens_encoder,
+                    const int* base_model_seq_lens_decoder,
+                    const int64_t* base_model_step_idx,
+                    const bool* base_model_stop_flags,
+                    const bool* base_model_is_block_step,
+                    int64_t* base_model_draft_tokens,
+                    const int bsz,
+                    const int num_model_step,
+                    const int accept_tokens_len,
+                    const int draft_tokens_len,
+                    const int input_ids_len,
+                    const int base_model_draft_tokens_len,
+                    const int pre_ids_len,
+                    const bool truncate_first_token,
+                    const bool splitwise_prefill,
+                    const bool kvcache_scheduler_v1) {
   DISPATCH_BLOCKSIZE(512, {
     DISPATCH_TRUNCATE_FIRST_TOKEN(truncate_first_token, TRUNCATE_FIRST_TOKEN, {
       DISPATCH_KVCACHE_SCHEDULER(kvcache_scheduler_v1, KVCACHE_SCHEDULER_V1, {
         DISPATCH_SPLITWISE_PREFILL(splitwise_prefill, SPLITWISE_PREFILL, {
           if constexpr (SPLITWISE_PREFILL) {
-            process_splitwise_prefill<BlockSize, TRUNCATE_FIRST_TOKEN, KVCACHE_SCHEDULER_V1>
-                <<<1, BlockSize, 0, stream>>>(
-                    draft_tokens,
-                    input_ids,
-                    stop_flags,
-                    seq_lens_this_time,
-                    seq_lens_encoder,
-                    seq_lens_decoder,
-                    step_idx,
-                    not_need_stop,
-                    is_block_step,
-                    batch_drop,
-                    pre_ids,
-                    accept_tokens,
-                    accept_num,
-                    base_model_seq_lens_this_time,
-                    base_model_seq_lens_encoder,
-                    base_model_seq_lens_decoder,
-                    base_model_step_idx,
-                    base_model_stop_flags,
-                    base_model_is_block_step,
-                    base_model_draft_tokens,
-                    bsz,
-                    num_model_step,
-                    accept_tokens_len,
-                    draft_tokens_len,
-                    input_ids_len,
-                    base_model_draft_tokens_len,
-                    pre_ids_len);
+            process_splitwise_prefill<BlockSize,
+                                      TRUNCATE_FIRST_TOKEN,
+                                      KVCACHE_SCHEDULER_V1>
+                <<<1, BlockSize, 0, stream>>>(draft_tokens,
+                                              input_ids,
+                                              stop_flags,
+                                              seq_lens_this_time,
+                                              seq_lens_encoder,
+                                              seq_lens_decoder,
+                                              step_idx,
+                                              not_need_stop,
+                                              is_block_step,
+                                              batch_drop,
+                                              pre_ids,
+                                              accept_tokens,
+                                              accept_num,
+                                              base_model_seq_lens_this_time,
+                                              base_model_seq_lens_encoder,
+                                              base_model_seq_lens_decoder,
+                                              base_model_step_idx,
+                                              base_model_stop_flags,
+                                              base_model_is_block_step,
+                                              base_model_draft_tokens,
+                                              bsz,
+                                              num_model_step,
+                                              accept_tokens_len,
+                                              draft_tokens_len,
+                                              input_ids_len,
+                                              base_model_draft_tokens_len,
+                                              pre_ids_len);
           } else {
-            draft_model_preprocess_kernel<BlockSize, TRUNCATE_FIRST_TOKEN, KVCACHE_SCHEDULER_V1>
-                <<<1, BlockSize, 0, stream>>>(
-                    draft_tokens,
-                    input_ids,
-                    stop_flags,
-                    seq_lens_this_time,
-                    seq_lens_encoder,
-                    seq_lens_decoder,
-                    step_idx,
-                    not_need_stop,
-                    is_block_step,
-                    batch_drop,
-                    pre_ids,
-                    accept_tokens,
-                    accept_num,
-                    base_model_seq_lens_this_time,
-                    base_model_seq_lens_encoder,
-                    base_model_seq_lens_decoder,
-                    base_model_step_idx,
-                    base_model_stop_flags,
-                    base_model_is_block_step,
-                    base_model_draft_tokens,
-                    bsz,
-                    num_model_step,
-                    accept_tokens_len,
-                    draft_tokens_len,
-                    input_ids_len,
-                    base_model_draft_tokens_len,
-                    pre_ids_len);
+            draft_model_preprocess_kernel<BlockSize,
+                                          TRUNCATE_FIRST_TOKEN,
+                                          KVCACHE_SCHEDULER_V1>
+                <<<1, BlockSize, 0, stream>>>(draft_tokens,
+                                              input_ids,
+                                              stop_flags,
+                                              seq_lens_this_time,
+                                              seq_lens_encoder,
+                                              seq_lens_decoder,
+                                              step_idx,
+                                              not_need_stop,
+                                              is_block_step,
+                                              batch_drop,
+                                              pre_ids,
+                                              mask_rollback,
+                                              recompute_token_num,
+                                              accept_tokens,
+                                              accept_num,
+                                              base_model_seq_lens_this_time,
+                                              base_model_seq_lens_encoder,
+                                              base_model_seq_lens_decoder,
+                                              base_model_step_idx,
+                                              base_model_stop_flags,
+                                              base_model_is_block_step,
+                                              base_model_draft_tokens,
+                                              bsz,
+                                              num_model_step,
+                                              accept_tokens_len,
+                                              draft_tokens_len,
+                                              input_ids_len,
+                                              base_model_draft_tokens_len,
+                                              pre_ids_len);
           }
         });
       });
@@ -365,6 +381,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -389,45 +407,45 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
   auto not_need_stop_gpu =
       not_need_stop.copy_to(seq_lens_this_time.place(), false);
 
-  DispatchRunner(
-      cu_stream,
-      const_cast<int64_t*>(draft_tokens.data<int64_t>()),
-      const_cast<int64_t*>(input_ids.data<int64_t>()),
-      const_cast<bool*>(stop_flags.data<bool>()),
-      const_cast<int*>(seq_lens_this_time.data<int>()),
-      const_cast<int*>(seq_lens_encoder.data<int>()),
-      const_cast<int*>(seq_lens_decoder.data<int>()),
-      const_cast<int64_t*>(step_idx.data<int64_t>()),
-      const_cast<bool*>(not_need_stop_gpu.data<bool>()),
-      const_cast<bool*>(is_block_step.data<bool>()),
-      const_cast<bool*>(batch_drop.data<bool>()),
-      const_cast<int64_t*>(pre_ids.data<int64_t>()),
-      accept_tokens.data<int64_t>(),
-      accept_num.data<int>(),
-      base_model_seq_lens_this_time.data<int>(),
-      base_model_seq_lens_encoder.data<int>(),
-      base_model_seq_lens_decoder.data<int>(),
-      base_model_step_idx.data<int64_t>(),
-      base_model_stop_flags.data<bool>(),
-      base_model_is_block_step.data<bool>(),
-      const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
-      real_bsz,
-      num_model_step,
-      accept_tokens_len,
-      draft_tokens_len,
-      input_ids_len,
-      base_model_draft_tokens_len,
-      pre_ids_len,
-      truncate_first_token,
-      splitwise_prefill,
-      kvcache_scheduler_v1);
+  DispatchRunner(cu_stream,
+                 const_cast<int64_t*>(draft_tokens.data<int64_t>()),
+                 const_cast<int64_t*>(input_ids.data<int64_t>()),
+                 const_cast<bool*>(stop_flags.data<bool>()),
+                 const_cast<int*>(seq_lens_this_time.data<int>()),
+                 const_cast<int*>(seq_lens_encoder.data<int>()),
+                 const_cast<int*>(seq_lens_decoder.data<int>()),
+                 const_cast<int64_t*>(step_idx.data<int64_t>()),
+                 const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+                 const_cast<bool*>(is_block_step.data<bool>()),
+                 const_cast<bool*>(batch_drop.data<bool>()),
+                 const_cast<int64_t*>(pre_ids.data<int64_t>()),
+                 const_cast<int*>(mask_rollback.data<int>()),
+                 const_cast<int*>(recompute_token_num.data<int>()),
+                 accept_tokens.data<int64_t>(),
+                 accept_num.data<int>(),
+                 base_model_seq_lens_this_time.data<int>(),
+                 base_model_seq_lens_encoder.data<int>(),
+                 base_model_seq_lens_decoder.data<int>(),
+                 base_model_step_idx.data<int64_t>(),
+                 base_model_stop_flags.data<bool>(),
+                 base_model_is_block_step.data<bool>(),
+                 const_cast<int64_t*>(base_model_draft_tokens.data<int64_t>()),
+                 real_bsz,
+                 num_model_step,
+                 accept_tokens_len,
+                 draft_tokens_len,
+                 input_ids_len,
+                 base_model_draft_tokens_len,
+                 pre_ids_len,
+                 truncate_first_token,
+                 splitwise_prefill,
+                 kvcache_scheduler_v1);
 
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
-
 
 PD_BUILD_STATIC_OP(draft_model_preprocess)
     .Inputs({"draft_tokens",
@@ -441,6 +459,8 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
              "is_block_step",
              "batch_drop",
              "pre_ids",
+             "mask_rollback",
+             "recompute_token_num",
              "accept_tokens",
              "accept_num",
              "base_model_seq_lens_this_time",
@@ -460,7 +480,10 @@ PD_BUILD_STATIC_OP(draft_model_preprocess)
               "not_need_stop_out",
               "batch_drop_out",
               "pre_ids_out"})
-    .Attrs({"num_model_step: int", "truncate_first_token: bool", "splitwise_prefill: bool", "kvcache_scheduler_v1: bool"})
+    .Attrs({"num_model_step: int",
+            "truncate_first_token: bool",
+            "splitwise_prefill: bool",
+            "kvcache_scheduler_v1: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
                     {"stop_flags", "stop_flags_out"},

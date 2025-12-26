@@ -406,7 +406,7 @@ def test_process_per_token_handles_recovery_stop_and_cleanup():
 
     result = RequestOutput(
         request_id=task.request_id,
-        outputs=types.SimpleNamespace(token_ids=[]),
+        outputs=types.SimpleNamespace(token_ids=[], tool_calls=[]),
         finished=False,
         metrics=copy.copy(task.metrics),
     )
@@ -433,13 +433,13 @@ def test_postprocess_buffers_and_merges_speculative_results():
 
     target_output = RequestOutput(
         request_id="req-t",
-        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        outputs=types.SimpleNamespace(draft_top_logprobs=None, tool_calls=[]),
         finished=False,
         metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
     )
     draft_output = RequestOutput(
         request_id="req-t",
-        outputs=types.SimpleNamespace(draft_top_logprobs="draft-logprobs"),
+        outputs=types.SimpleNamespace(draft_top_logprobs="draft-logprobs", tool_calls=[]),
         finished=False,
         metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
     )
@@ -460,7 +460,7 @@ def test_postprocess_emits_finished_speculative_batch():
 
     finished_output = RequestOutput(
         request_id="req-finished",
-        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        outputs=types.SimpleNamespace(draft_top_logprobs=None, tool_calls=[]),
         finished=True,
         metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
     )
@@ -477,7 +477,7 @@ def test_postprocess_passes_through_unknown_type():
 
     output = RequestOutput(
         request_id="req-direct",
-        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        outputs=types.SimpleNamespace(draft_top_logprobs=None, tool_calls=[]),
         finished=False,
         metrics=RequestMetrics(arrival_time=time.time(), preprocess_start_time=0, preprocess_end_time=0),
     )
@@ -721,7 +721,7 @@ def test_process_batch_output_speculative_logprob_handles_draft_batch():
     rm.tasks_list[0] = types.SimpleNamespace(request_id="req-draft", block_tables=[1], disaggregate_info=None)
     target = RequestOutput(
         request_id="req-draft",
-        outputs=types.SimpleNamespace(draft_top_logprobs=None),
+        outputs=types.SimpleNamespace(draft_top_logprobs=None, tool_calls=[]),
         finished=False,
         metrics=None,
     )

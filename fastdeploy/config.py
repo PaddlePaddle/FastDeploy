@@ -133,6 +133,11 @@ class ErnieArchitectures:
         "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
+    ERNIE5_MODELS = {
+        "Ernie5ForCausalLM",
+        "Ernie5MoeForCausalLM",
+    }
+
     @classmethod
     def register_ernie_model_arch(cls, model_class):
         if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
@@ -147,6 +152,11 @@ class ErnieArchitectures:
     def is_ernie_arch(cls, architecture):
         """Check if the given architecture is an ERNIE architecture."""
         return architecture in cls.ARCHITECTURES
+
+    @classmethod
+    def is_ernie5_arch(cls, architectures):
+        """Check if the given architecture is an ERNIE5 architecture."""
+        return any(arch in architectures for arch in cls.ERNIE5_MODELS)
 
 
 PRETRAINED_INIT_CONFIGURATION = {
@@ -247,12 +257,6 @@ class ModelConfig:
                 )
 
         self._post_init()
-
-    def disable_mm_prefill_batch(self):
-        """
-        check if the model architecture disable for mm prefill
-        """
-        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
@@ -1296,6 +1300,9 @@ class CacheConfig:
         self.max_processor_cache = None
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
+        self.kvcache_storage_backend = None
+        self.write_policy = None
+
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1303,11 +1310,6 @@ class CacheConfig:
         self.cache_queue_port = parse_ports(self.cache_queue_port)
         self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
         self.pd_comm_port = parse_ports(self.pd_comm_port)
-
-        if self.swap_space is None:
-            self.enable_hierarchical_cache = False
-        else:
-            self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
@@ -1779,15 +1781,12 @@ class FDConfig:
         if not current_platform.is_cuda() and not current_platform.is_maca():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
-        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
-            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
-                self.parallel_config.use_sequence_parallel_moe = False
-                logger.info(
-                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
-                )
-            else:
-                # It will hang when real batch_size < tp_size
-                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
+
+        # adjust speculative config
+        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+            if self.scheduler_config.splitwise_role == "prefill":
+                self.speculative_config.num_speculative_tokens = 1
+                self.speculative_config.num_model_steps = 1
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -1799,6 +1798,20 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
+
+        if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
+            # ernie5 model not support chunked_mm_input
+            self.cache_config.disable_chunked_mm_input = True
 
         self.postprocess_devices_and_ports()
 
