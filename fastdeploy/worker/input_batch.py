@@ -279,7 +279,9 @@ class InputBatch:
             self.batch_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.next_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.cu_next_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
-            self.recompute_token_num = paddle.full([max_num_seqs, 1], self.num_model_steps - 1, dtype="int32")
+            self.recompute_token_num = paddle.full(
+                [max_num_seqs, 1], self.speculative_config.num_model_steps - 1, dtype="int32"
+            )
 
             # attn_mask
             if self.enable_mm:
