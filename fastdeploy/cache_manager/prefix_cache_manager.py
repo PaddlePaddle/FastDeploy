@@ -688,7 +688,8 @@ class PrefixCacheManager:
 
         Returns:
         - common_block_ids: List of matched shared blocks
-        - unique_block_ids: List of exclusively allocated blocks
+        - match_token_num: Number of matched tokens
+        - metrics: Dictionary of metrics
         """
         with self.request_release_lock:
             try:
@@ -706,7 +707,8 @@ class PrefixCacheManager:
                     prompt_token_ids = task.prompt_token_ids
                 req_id = task.request_id
                 logger.info(f"request_match_blocks: start to process req {req_id}")
-                input_token_num = len(prompt_token_ids + task.output_token_ids)
+                input_token_ids = prompt_token_ids + task.output_token_ids
+                input_token_num = len(input_token_ids)
                 common_block_ids = []
                 # 1. match block
                 (
@@ -769,7 +771,7 @@ class PrefixCacheManager:
                     cur_token_idx = match_token_num
                     no_match_block_keys = []
                     while cur_token_idx <= input_token_num - block_size:
-                        cur_block_token_ids = task.prompt_token_ids[cur_token_idx : cur_token_idx + block_size]
+                        cur_block_token_ids = input_token_ids[cur_token_idx : cur_token_idx + block_size]
                         cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
                         no_match_block_keys.append(cur_block_key)
                         cur_token_idx += block_size
@@ -824,46 +826,6 @@ class PrefixCacheManager:
             except Exception as e:
                 logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
                 raise e
-
-    def request_match_storage_blocks(self, request, extra_gpu_block_ids):
-        """
-        Match and fetch the cached blocks from the storage backend for the given request.
-        # TODO: merge this function into request_match_blocks
-
-        args:
-            request: The request to be processed
-            extra_gpu_block_ids: A list of GPU block IDs to be used for fetching the cache
-        returns:
-            matched_block_ids: A list of block IDs that prefetched cache from storage
-        """
-        if self.kvcache_storage_backend is None:
-            return []
-
-        req_id = request.request_id
-        input_ids = request.prompt_token_ids
-        block_size = self.cache_config.block_size
-
-        prefix_block_key = []
-        num_cached_tokens = 0
-        if req_id in self.cache_info:
-            last_node, num_cached_tokens = self.cache_info[req_id]
-            prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
-
-        block_keys = []
-        current_tokens = num_cached_tokens
-        while current_tokens <= len(input_ids) - block_size:
-            cur_block_key = get_hash_str(input_ids[current_tokens : current_tokens + block_size], prefix_block_key)
-            block_keys.append(cur_block_key)
-            current_tokens += block_size
-            prefix_block_key = [cur_block_key]
-
-        logger.info(f"start prefetch cache from storage, req_id: {req_id}, block num: {len(block_keys)}")
-        matched_block_ids = self.issue_prefetch_storage_task(req_id, block_keys, extra_gpu_block_ids)
-        logger.info(
-            f"finish prefetch cache from storage, req_id: {req_id}, matched block num: {len(matched_block_ids)}"
-        )
-
-        return matched_block_ids
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
         """
@@ -1092,7 +1054,7 @@ class PrefixCacheManager:
         storage_block_ids = self.storage_prefetch_block_ids[req_id]
         del self.task_prefetch_event[req_id]
         del self.storage_prefetch_block_ids[req_id]
-        return storage_block_ids
+        return len(storage_block_ids)
 
     def free_nodes_directly(self, node):
         with self.request_release_lock:
@@ -1291,6 +1253,9 @@ class PrefixCacheManager:
                         ):
                             heapq.heappush(self.gpu_lru_leaf_heap, node)
                             self.gpu_lru_leaf_set.add(node)
+                logger.info(
+                    f"free_block_ids_async: need_block_num {need_block_num}, free_block_num {total_gpu_free_count}."
+                )
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:

@@ -544,6 +544,12 @@ class ResourceManagerV1(ResourceManager):
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
+            info = (
+                f"{self.info()}, running_num: {len(self.running)}, waiting_num: {len(self.waiting)}, "
+                f"preempted_num: {len(self.to_be_rescheduled_request_id_set)}"
+            )
+            llm_logger.debug(f"{info}")
+
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0
@@ -646,7 +652,9 @@ class ResourceManagerV1(ResourceManager):
                                 break
                 else:  # need to prefill
                     llm_logger.debug(
-                        f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
+                        f"scheduler prefill task in running queue: {request.request_id}, "
+                        f"request.need_prefill_tokens {request.need_prefill_tokens},"
+                        f"request.num_computed_tokens {request.num_computed_tokens}"
                     )
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
@@ -699,7 +707,10 @@ class ResourceManagerV1(ResourceManager):
                         self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
-                            if self.cache_manager.num_cpu_blocks > 0:
+                            if (
+                                self.cache_manager.num_cpu_blocks > 0
+                                or self.config.cache_config.kvcache_storage_backend
+                            ):
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
@@ -742,7 +753,10 @@ class ResourceManagerV1(ResourceManager):
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         if self.config.cache_config.enable_prefix_caching:
-                            if self.cache_manager.num_cpu_blocks > 0:
+                            if (
+                                self.cache_manager.num_cpu_blocks > 0
+                                or self.config.cache_config.kvcache_storage_backend
+                            ):
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
