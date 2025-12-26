@@ -216,7 +216,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
@@ -236,7 +235,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-
             # prmt back per rank
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
                 ffn_out,
