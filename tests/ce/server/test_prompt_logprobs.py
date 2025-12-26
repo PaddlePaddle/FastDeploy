@@ -13,6 +13,7 @@ from core import TEMPLATE, URL, build_request_payload, send_request
 
 COMPLETIONS_URL = URL.replace("/v1/chat/completions", "/v1/completions")
 
+
 def test_unstream_with_prompt_logprobs():
     """
     测试非流式响应prompt_logprobs字段为正整数时,正确返回
@@ -24,7 +25,7 @@ def test_unstream_with_prompt_logprobs():
             {"role": "user", "content": "牛顿的三大运动定律是什么？"},
         ],
         "max_tokens": 3,
-        "prompt_logprobs": 3
+        "prompt_logprobs": 3,
     }
 
     # 构建请求并发送
@@ -44,7 +45,7 @@ def test_unstream_with_prompt_logprobs():
         else:
             top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
             assert top[0]["rank"] == 1
-            assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
             for i in range(len(top)):
                 assert top[i]["logprob"] < 0
                 assert top[i]["decoded_token"].encode("utf-8")
@@ -62,7 +63,7 @@ def test_unstream_with_prompt_logprobs_zero():
         ],
         "max_tokens": 3,
         "prompt_logprobs": 0,
-        "return_token_ids":True
+        "return_token_ids": True,
     }
 
     # 构建请求并发送
@@ -100,7 +101,7 @@ def test_unstream_with_prompt_logprobs_none():
             {"role": "user", "content": "牛顿的三大运动定律是什么？"},
         ],
         "max_tokens": 3,
-        "return_token_ids":True
+        "return_token_ids": True,
     }
 
     # 构建请求并发送
@@ -129,7 +130,7 @@ def test_unstream_with_prompt_logprobs_n():
         ],
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        "n": 3
+        "n": 3,
     }
 
     # 构建请求并发送
@@ -145,7 +146,7 @@ def test_unstream_with_prompt_logprobs_n():
             else:
                 top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
                 assert top[0]["rank"] == 1
-                assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+                assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
                 for i in range(len(top)):
                     assert top[i]["logprob"] < 0
                     assert top[i]["decoded_token"].encode("utf-8")
@@ -163,7 +164,7 @@ def test_stream_with_prompt_logprobs():
         ],
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        "return_token_ids":True
+        "return_token_ids": True,
     }
 
     payload = build_request_payload(TEMPLATE, data)
@@ -198,12 +199,7 @@ def test_unstream_with_prompt_logprobs_completions():
     """
     测试completions接口非流式响应prompt_logprobs字段为正整数时,正确返回
     """
-    data = {
-        "stream": False,
-        "prompt": "牛顿的三大运动定律是什么？",
-        "max_tokens": 3,
-        "prompt_logprobs": 3
-    }
+    data = {"stream": False, "prompt": "牛顿的三大运动定律是什么？", "max_tokens": 3, "prompt_logprobs": 3}
 
     # 构建请求并发送
     payload = build_request_payload(TEMPLATE, data)
@@ -217,7 +213,7 @@ def test_unstream_with_prompt_logprobs_completions():
         else:
             top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
             assert top[0]["rank"] == 1
-            assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
             for i in range(len(top)):
                 assert top[i]["logprob"] < 0
                 assert top[i]["decoded_token"].encode("utf-8")
@@ -232,7 +228,7 @@ def test_unstream_with_prompt_logprobs_zero_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 0,
-        "return_token_ids":True
+        "return_token_ids": True,
     }
 
     # 构建请求并发送
@@ -253,16 +249,30 @@ def test_unstream_with_prompt_logprobs_zero_completions():
             assert token_id in resp_json["choices"][0]["prompt_token_ids"]
 
 
+def test_unstream_with_prompt_logprobs_chunk():
+    """
+    测试chunk切分的能力是否正常
+    """
+    data = {"stream": False, "prompt": [10] * (32 * 1024), "max_tokens": 1, "return_token_ids": True}
+
+    # 构建请求并发送
+    payload = build_request_payload(TEMPLATE, data)
+    response = send_request(COMPLETIONS_URL, payload)
+    print(json.dumps(response.json(), indent=2, ensure_ascii=False))
+    resp_json = response.json()
+
+    # 校验返回内容与概率信息
+    assert resp_json["choices"][0]["text"] is not None
+    # assert resp_json["usage"]["prompt_tokens"] == 7
+    assert resp_json["usage"]["completion_tokens"] == 1
+    assert resp_json["choices"][0]["prompt_logprobs"] is None
+
+
 def test_unstream_with_prompt_logprobs_none_completions():
     """
     测试completions非流式响应prompt_logprobs字段为0时返回结果是否正确
     """
-    data = {
-        "stream": False,
-        "prompt": "牛顿的三大运动定律是什么？",
-        "max_tokens": 3,
-        "return_token_ids":True
-    }
+    data = {"stream": False, "prompt": "牛顿的三大运动定律是什么？", "max_tokens": 3, "return_token_ids": True}
 
     # 构建请求并发送
     payload = build_request_payload(TEMPLATE, data)
@@ -281,13 +291,7 @@ def test_unstream_with_prompt_logprobs_n_completions():
     """
     测试completions非流式响应组合n参数，返回结果是否正确
     """
-    data = {
-        "stream": False,
-        "prompt": "牛顿的三大运动定律是什么？",
-        "max_tokens": 3,
-        "prompt_logprobs": 3,
-        "n": 3
-    }
+    data = {"stream": False, "prompt": "牛顿的三大运动定律是什么？", "max_tokens": 3, "prompt_logprobs": 3, "n": 3}
 
     # 构建请求并发送
     payload = build_request_payload(TEMPLATE, data)
@@ -302,7 +306,7 @@ def test_unstream_with_prompt_logprobs_n_completions():
             else:
                 top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
                 assert top[0]["rank"] == 1
-                assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+                assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
                 for i in range(len(top)):
                     assert top[i]["logprob"] < 0
                     assert top[i]["decoded_token"].encode("utf-8")
@@ -336,7 +340,7 @@ def test_stream_with_prompt_logprobs_completions():
         # completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
         # if completion_token_ids:
         if not first_packet:
-            assert result_chunk["choices"][0]["prompt_logprobs"] is None 
+            assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
                 if i == 0:
@@ -357,10 +361,10 @@ def test_unstream_with_prompt_logprobs_list_completions():
     """
     data = {
         "stream": False,
-        "prompt": ["牛顿的三大运动定律是什么？","什么是机器学习？"],
+        "prompt": ["牛顿的三大运动定律是什么？", "什么是机器学习？"],
         "max_tokens": 10,
         "prompt_logprobs": 3,
-        "n": 3
+        "n": 3,
     }
 
     # 构建请求并发送
@@ -369,14 +373,14 @@ def test_unstream_with_prompt_logprobs_list_completions():
     # print(json.dumps(response.json(), ensure_ascii=False))
     resp_json = response.json()
 
-    for j in range(data["n"]*len(data["prompt"])):
+    for j in range(data["n"] * len(data["prompt"])):
         for i, prompt_logprobs in enumerate(resp_json["choices"][j]["prompt_logprobs"]):
             if i == 0:
                 assert prompt_logprobs is None
             else:
                 top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
                 assert top[0]["rank"] == 1
-                assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+                assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
                 for i in range(len(top)):
                     assert top[i]["logprob"] < 0
                     assert top[i]["decoded_token"].encode("utf-8")
@@ -391,7 +395,7 @@ def test_unstream_with_prompt_logprobs_no_decode_completions():
         "prompt": ["牛顿的三大运动定律是什么？"],
         "max_tokens": 10,
         "prompt_logprobs": 1,
-        "include_logprobs_decode_token": False
+        "include_logprobs_decode_token": False,
     }
 
     # 构建请求并发送
@@ -406,7 +410,7 @@ def test_unstream_with_prompt_logprobs_no_decode_completions():
         else:
             top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
             assert top[0]["rank"] == 1
-            assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
             for i in range(len(top)):
                 assert top[i]["logprob"] < 0
                 assert top[i]["decoded_token"] is None
@@ -426,7 +430,7 @@ def test_unstream_with_prompt_logprobs_no_decode():
         "logprobs": True,
         "top_logprobs": 3,
         "prompt_logprobs": 1,
-        "include_logprobs_decode_token": False
+        "include_logprobs_decode_token": False,
     }
 
     # 构建请求并发送
@@ -441,7 +445,7 @@ def test_unstream_with_prompt_logprobs_no_decode():
         else:
             top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
             assert top[0]["rank"] == 1
-            assert len(top) in {data["prompt_logprobs"] , data["prompt_logprobs"] + 1}
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
             for i in range(len(top)):
                 assert top[i]["logprob"] < 0
                 assert top[i]["decoded_token"] is None
@@ -459,6 +463,8 @@ if __name__ == "__main__":
     test_unstream_with_prompt_logprobs_none()
     test_unstream_with_prompt_logprobs_n()
     test_stream_with_prompt_logprobs()
+    # chunk切分检查
+    test_unstream_with_prompt_logprobs_chunk()
     # completions接口返回
     test_unstream_with_prompt_logprobs_completions()
     test_unstream_with_prompt_logprobs_zero_completions()
@@ -470,5 +476,3 @@ if __name__ == "__main__":
     # 关闭decode
     test_unstream_with_prompt_logprobs_no_decode_completions()
     test_unstream_with_prompt_logprobs_no_decode()
-
-

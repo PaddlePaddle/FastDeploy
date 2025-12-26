@@ -284,6 +284,15 @@ jobs:
           check_service 180
           python -m pytest -sv test_prompt_ids.py || TEST_EXIT_CODE=1
 
+
+          export TEMPLATE=TOKEN_LOGPROB
+          export FD_USE_GET_SAVE_OUTPUT_V1=1
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
+            -H "Content-Type: application/json" \
+            -d "{\"--model\":\"/MODELDATA/ERNIE-4.5-0.3B-Paddle\",\"--max-model-len\":65536,\"--enable-logprob\":\"True\",\"--max-logprobs\":10,\"--no-enable-prefix-caching\":\"True\"}"
+          check_service 180
+          python -m pytest -sv test_prompt_logprobs.py || TEST_EXIT_CODE=1
+
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
           '
