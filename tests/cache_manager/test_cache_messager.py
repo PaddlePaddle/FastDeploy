@@ -616,6 +616,7 @@ def test_main_initializes_cache_and_exits(monkeypatch):
     args = types.SimpleNamespace(
         device_id=0,
         rank=0,
+        default_dtype="float16",
         cache_dtype="float16",
         key_cache_shape="1,1,1,1",
         value_cache_shape="",
