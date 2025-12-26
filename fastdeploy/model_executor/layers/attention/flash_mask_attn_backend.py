@@ -214,7 +214,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
-            # 这里强行加入了5个属性，这个手段有点不太好，暂时先这样吧。
+            # here we add five members，this is ugly, just for now.
 
             (
                 forward_meta.attn_cu_seqlens_k,
