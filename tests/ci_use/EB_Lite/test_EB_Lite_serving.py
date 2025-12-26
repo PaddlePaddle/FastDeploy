@@ -81,6 +81,8 @@ def setup_and_run_server():
         "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
+        "--guided-decoding-backend",
+        "auto",
     ]
 
     if os.path.exists("log"):
@@ -90,7 +92,7 @@ def setup_and_run_server():
             cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            start_new_session=True,  # Enables killing full group via os.killpg
         )
 
     for _ in range(300):
@@ -106,7 +108,7 @@ def setup_and_run_server():
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
 
-    yield
+    yield  # Run tests
 
     print("\n===== Post-test server cleanup... =====")
     try:
@@ -194,6 +196,8 @@ def setup_w4afp8_server(request):
         load_choices,
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
+        "--guided-decoding-backend",
+        "auto",
     ]
 
     with open(log_path, "w") as logfile:
