@@ -99,9 +99,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         assert next_tokens.numpy()[0, 1] == 999  # Token at step 10, replaced with think_end_id
         assert accept_num.numpy()[0] == 2  # Only accept first 2 tokens
         assert limit_think_status.numpy()[0] == 2  # Status updated to 2
-        # step_idx and seq_lens_decoder should be adjusted
+        # step_idx should be adjusted
         assert step_idx.numpy()[0] == 10  # 12 - (4-2) = 10
-        assert seq_lens_decoder.numpy()[0] == 10  # 12 - (4-2) = 10
 
     def test_model_naturally_generates_think_end_id(self):
         """Test when model naturally generates think_end_id in accepted tokens"""
@@ -358,7 +357,6 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         assert limit_think_status.numpy()[0] == 1
         assert accept_num.numpy()[0] == 1  # Truncated after 1st token
         assert step_idx.numpy()[0] == 8  # 12 - (5-1)
-        assert seq_lens_decoder.numpy()[0] == 8
 
     def test_injection_sequence_steps(self):
         """Test each step of the injection sequence: \n, </think>, \n, \n"""

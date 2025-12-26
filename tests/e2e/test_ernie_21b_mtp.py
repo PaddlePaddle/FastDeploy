@@ -147,7 +147,7 @@ def headers():
     return {"Content-Type": "application/json"}
 
 
-def send_request(url, payload, timeout=600):
+def send_request(url, payload, timeout=60):
     """
     发送请求到指定的URL，并返回响应结果。
     """
