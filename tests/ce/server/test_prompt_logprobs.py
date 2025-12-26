@@ -346,7 +346,7 @@ def test_stream_with_prompt_logprobs_completions():
                     assert prompt_logprobs is None
                 else:
                     top = list(prompt_logprobs.values())
-                    token_id = int(list(prompt_logprobs.keys())[0])
+                    # token_id = int(list(prompt_logprobs.keys())[0])
                     assert top[0]["decoded_token"] is not None
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
