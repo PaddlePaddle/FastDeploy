@@ -169,7 +169,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         ) = self.ep_prefill_runner.dispatch(
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
         )
-        # del x
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -203,7 +202,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # use_in_ep
                 token_all_num,
             )
-            # del recv_x
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
 
@@ -218,7 +216,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            # del permute_input
 
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
@@ -227,10 +224,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                 ffn_out, self.quant_config.weight_block_size[0]
             )
-            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
-            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
-
-            # del ffn_out
+            ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
 
             ffn_out = paddle.empty(
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
@@ -242,7 +236,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            # del ffn_in_x
 
             # prmt back per rank
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
@@ -254,7 +247,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # norm_topk_prob
                 1.0,
             )[0]
-            # del ffn_out
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
