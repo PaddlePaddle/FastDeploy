@@ -184,7 +184,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
     ):
         if int(os.getenv("USE_TBO", "0")) == 1:
             if hasattr(forward_meta, "tbo_microbatch_id"):
-                # 这里只能让后一个microbatch 触发 cache kv 传输！
+                # here we only let the last microbatch invoke cache kv transfer！
                 if forward_meta.tbo_microbatch_id == 0:
                     os.environ["FLAGS_fmt_write_cache_completed_signal"] = "0"
                 elif forward_meta.tbo_microbatch_id == 1:
