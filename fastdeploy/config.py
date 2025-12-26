@@ -314,6 +314,9 @@ class ModelConfig:
             self.moe_num_experts = self.num_experts
         if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.n_routed_experts
+        if hasattr(self, "n_shared_experts") and getattr(self, "moe_num_shared_experts") is None:
+            # Because the ERNIE 4.5 config.json contains two sets of keys, adaptation is required.
+            self.moe_num_shared_experts = self.n_shared_experts
 
     def read_from_env(self):
         """
