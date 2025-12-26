@@ -255,6 +255,7 @@ class TestProcessMMFeatures(unittest.TestCase):
                     "mm_hashes": kwargs.get("mm_hashes", []),
                     "vit_seqlen": kwargs.get("vit_seqlen", []),
                     "vit_position_ids": kwargs.get("vit_position_ids", []),
+                    "mm_num_token_func": lambda **kwargs: 123,
                 }
             )
 
