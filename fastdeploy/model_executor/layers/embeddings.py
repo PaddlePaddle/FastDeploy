@@ -295,8 +295,8 @@ class VocabParallelEmbedding(nn.Layer):
             Tensor: Embedded tensor representation of the input IDs.
         """
 
-        if ids_remove_padding.shape[0] == 0:
-            return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
+        # if ids_remove_padding.shape[0] == 0:
+        #     return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
 
         if self.column_cut:
             input_embedings = self.embeddings(ids_remove_padding)
