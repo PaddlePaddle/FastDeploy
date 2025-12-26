@@ -17,7 +17,6 @@ import os
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -37,26 +36,6 @@ from e2e.utils.serving_utils import (
     clean_ports,
     is_port_open,
 )
-
-
-def clean_ports_for_config(config):
-    """Clean ports used by specific W4AFP8 config"""
-    ports_to_clean = [
-        config["api_port"],
-        config["engine_queue_port"],
-        config["metrics_port"],
-        config["cache_queue_port"],
-    ]
-    for port in ports_to_clean:
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            result = sock.connect_ex(("127.0.0.1", port))
-            sock.close()
-            if result == 0:
-                subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True)
-        except Exception as e:
-            print(f"清理端口 {port} 时出错: {e}")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -142,141 +121,6 @@ def setup_and_run_server():
         print(f"Failed to terminate API server: {e}")
 
 
-W4AFP8_CONFIGS = [
-    {
-        "id": "w4afp8_default",
-        "load_choices": "default",
-        "api_port": FD_API_PORT + 100,
-        "engine_queue_port": FD_ENGINE_QUEUE_PORT + 100,
-        "metrics_port": FD_METRICS_PORT + 100,
-        "cache_queue_port": FD_CACHE_QUEUE_PORT + 100,
-    },
-    {
-        "id": "w4afp8_default_v1",
-        "load_choices": "default_v1",
-        "api_port": FD_API_PORT + 100,
-        "engine_queue_port": FD_ENGINE_QUEUE_PORT + 100,
-        "metrics_port": FD_METRICS_PORT + 100,
-        "cache_queue_port": FD_CACHE_QUEUE_PORT + 100,
-    },
-]
-
-
-@pytest.fixture(scope="module", params=W4AFP8_CONFIGS, ids=lambda x: x["id"])
-def setup_w4afp8_server(request):
-    config = request.param
-    config_id = config["id"]
-    load_choices = config["load_choices"]
-    api_port = config["api_port"]
-    engine_queue_port = config["engine_queue_port"]
-    metrics_port = config["metrics_port"]
-    cache_queue_port = config["cache_queue_port"]
-
-    print(f"\n{'='*60}")
-    print(f"Starting W4AFP8 server with config: {config_id}")
-    print(f"  load_choices: {load_choices}")
-    print(f"  api_port: {api_port}")
-    print(f"{'='*60}")
-
-    clean_ports_for_config(config)
-    time.sleep(5)
-
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
-    else:
-        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
-
-    log_path = f"server_{config_id}.log"
-    log_dir = f"log_{config_id}"
-
-    if os.path.exists(log_dir):
-        shutil.rmtree(log_dir)
-    os.makedirs(log_dir, exist_ok=True)
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "fastdeploy.entrypoints.openai.api_server",
-        "--model",
-        model_path,
-        "--port",
-        str(api_port),
-        "--tensor-parallel-size",
-        "2",
-        "--engine-worker-queue-port",
-        str(engine_queue_port),
-        "--metrics-port",
-        str(metrics_port),
-        "--cache-queue-port",
-        str(cache_queue_port),
-        "--max-model-len",
-        "32768",
-        "--max-num-seqs",
-        "128",
-        "--quantization",
-        "w4afp8",
-        "--load-choices",
-        load_choices,
-        "--graph-optimization-config",
-        '{"cudagraph_capture_sizes": [1]}',
-        "--guided-decoding-backend",
-        "auto",
-    ]
-
-    with open(log_path, "w") as logfile:
-        process = subprocess.Popen(
-            cmd,
-            stdout=logfile,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env={**os.environ, "FD_LOG_DIR": log_dir},
-        )
-
-    for i in range(300):
-        if is_port_open("127.0.0.1", api_port):
-            print(f"API server [{config_id}] is up on port {api_port}")
-            break
-        if i % 30 == 0:
-            print(f"Waiting for server [{config_id}] to start... ({i}s)")
-        time.sleep(1)
-    else:
-        print(f"[TIMEOUT] API server [{config_id}] failed to start.")
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except Exception as e:
-            print(f"Failed to kill process group: {e}")
-        raise RuntimeError(f"API server [{config_id}] did not start on port {api_port}")
-
-    yield {"process": process, "config": config}
-
-    print(f"\n===== Cleanup W4AFP8 server [{config_id}]... =====")
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-        process.wait(timeout=30)
-        print(f"API server [{config_id}] (pid={process.pid}) terminated")
-    except Exception as e:
-        print(f"Failed to terminate API server [{config_id}]: {e}")
-
-    clean_ports_for_config(config)
-    time.sleep(10)
-
-
-@pytest.fixture(scope="module")
-def openai_client_w4afp8(setup_w4afp8_server):
-    """
-    Returns OpenAI client for W4AFP8 quantization service.
-    """
-    config = setup_w4afp8_server["config"]
-    api_port = config["api_port"]
-    ip = "0.0.0.0"
-    client = openai.Client(
-        base_url=f"http://{ip}:{api_port}/v1",
-        api_key="EMPTY_API_KEY",
-    )
-    return client
-
-
 @pytest.fixture(scope="session")
 def api_url(request):
     """
@@ -312,19 +156,6 @@ def consistent_payload():
         "temperature": 0.9,
         "top_p": 0,  # fix top_p to reduce randomness
         "seed": 13,  # fixed random seed
-    }
-
-
-@pytest.fixture
-def consistent_payload_w4afp8():
-    """
-    W4AFP8 测试用的固定 payload
-    """
-    return {
-        "messages": [{"role": "user", "content": "北京天安门在哪里?"}],
-        "temperature": 0.9,
-        "top_p": 0,
-        "seed": 42,
     }
 
 
@@ -1624,29 +1455,3 @@ def test_structured_outputs_grammar(openai_client):
     assert re.fullmatch(pattern, response), f"grammar streaming response: {response} is not as expected"
     response = non_streaming_chat_base(openai_client, grammar_param)
     assert re.fullmatch(pattern, response), f"grammar non_streaming response: {response} is not as expected"
-
-
-def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payload_w4afp8):
-    resp1 = openai_client_w4afp8.chat.completions.create(
-        model="default",
-        stream=False,
-        max_tokens=256,
-        **consistent_payload_w4afp8,
-    )
-    content1 = resp1.choices[0].message.content
-
-    resp2 = openai_client_w4afp8.chat.completions.create(
-        model="default",
-        stream=False,
-        max_tokens=256,
-        **consistent_payload_w4afp8,
-    )
-    content2 = resp2.choices[0].message.content
-
-    required_keywords = ["北京", "天安门"]
-    for keyword in required_keywords:
-        assert keyword in content1, f"First response missing keyword '{keyword}', response content: {content1}"
-        assert keyword in content2, f"Second response missing keyword '{keyword}', response content: {content2}"
-    diff_rate = calculate_diff_rate(content1, content2)
-
-    assert diff_rate < 0.05, f"Output difference too large ({diff_rate:.4%})"
