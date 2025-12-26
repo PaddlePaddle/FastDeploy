@@ -366,12 +366,13 @@ class ModelConfig:
     def read_model_config(self):
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
-            raw_cfg = json.load(open(config_path, "r", encoding="utf-8"))
-            if "text_config" in raw_cfg and isinstance(raw_cfg["text_config"], dict):
-                text_cfg = raw_cfg.pop("text_config")
-                for k, v in text_cfg.items():
-                    if k not in raw_cfg:
-                        raw_cfg[k] = v
+            with open(config_path, "r", encoding="utf-8") as f:
+                raw_cfg = json.load(f)
+                if "text_config" in raw_cfg and isinstance(raw_cfg["text_config"], dict):
+                    text_cfg = raw_cfg.pop("text_config")
+                    for k, v in text_cfg.items():
+                        if k not in raw_cfg:
+                            raw_cfg[k] = v
             self.model_config = raw_cfg
             if "torch_dtype" in self.model_config and "dtype" in self.model_config:
                 raise ValueError(
