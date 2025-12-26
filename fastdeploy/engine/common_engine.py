@@ -1051,10 +1051,6 @@ class EngineService:
             try:
                 block = True if len(added_requests) == 0 else False
                 err, data = self.recv_request_server.receive_pyobj_once(block)
-                # if not self.cfg.model_config.enable_mm:
-                #     err, data = self.recv_request_server.receive_json_once(block)
-                # else:
-                #     err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     # The message "Context was terminated" is normal when closing a ZMQ context
                     if "Context was terminated" in str(err):

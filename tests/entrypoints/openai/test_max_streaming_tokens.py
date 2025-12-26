@@ -757,7 +757,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         )
 
     @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
-    async def test_completion_full_generator_async_process_response_dict(self, mock_logger):
+    async def test_completion_full_generator_async_process_response_obj(self, mock_logger):
         final_response_data = [
             {
                 "request_id": "test_request_id_0",
@@ -809,7 +809,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
         prompt_tokens_list = ["Hello", "Hello"]
 
-        self.engine_client.data_processor.process_response_dict = AsyncMock()
+        self.engine_client.data_processor.process_response_obj = AsyncMock()
 
         actual_response = await self.completion_serving.completion_full_generator(
             request=request,
@@ -823,15 +823,15 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(actual_response, expected_completion_response)
-        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict))
+        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_obj))
 
-        self.engine_client.data_processor.process_response_dict.assert_awaited()
+        self.engine_client.data_processor.process_response_obj.assert_awaited()
 
-        actual_call_times = self.engine_client.data_processor.process_response_dict.call_count
+        actual_call_times = self.engine_client.data_processor.process_response_obj.call_count
         expected_call_times = len(final_response_data)
         self.assertEqual(actual_call_times, expected_call_times)
 
-        call_args_list = self.engine_client.data_processor.process_response_dict.call_args_list
+        call_args_list = self.engine_client.data_processor.process_response_obj.call_args_list
         self.assertEqual(len(call_args_list), expected_call_times)
 
         for idx, data in enumerate(final_response_data):
@@ -841,7 +841,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             self.assertEqual(kwargs.get("include_stop_str_in_output"), request.include_stop_str_in_output)
 
     @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
-    async def test_completion_stream_generator_async_process_response_dict(self, mock_logger):
+    async def test_completion_stream_generator_async_process_response_obj(self, mock_logger):
         final_response_data = [
             [
                 {
@@ -929,7 +929,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             max_tokens=100,
         )
 
-        self.engine_client.data_processor.process_response_dict = AsyncMock()
+        self.engine_client.data_processor.process_response_obj = AsyncMock()
 
         generator = self.completion_serving.completion_stream_generator(
             request=request,
@@ -949,17 +949,17 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 break
         self.assertGreater(len(chunks), 0)
 
-        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict))
-        self.engine_client.data_processor.process_response_dict.assert_awaited()
+        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_obj))
+        self.engine_client.data_processor.process_response_obj.assert_awaited()
 
         flat_response_data = []
         for sub_list in final_response_data:
             flat_response_data.extend(sub_list)
         expected_call_times = len(flat_response_data)
-        actual_call_times = self.engine_client.data_processor.process_response_dict.call_count
+        actual_call_times = self.engine_client.data_processor.process_response_obj.call_count
         self.assertEqual(actual_call_times, expected_call_times)
 
-        call_args_list = self.engine_client.data_processor.process_response_dict.call_args_list
+        call_args_list = self.engine_client.data_processor.process_response_obj.call_args_list
         self.assertEqual(len(call_args_list), expected_call_times)
 
         for idx, data in enumerate(flat_response_data):
