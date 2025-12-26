@@ -19,6 +19,7 @@ import pickle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import paddle
 import zmq
 from paddleformers.transformers import AutoTokenizer
 from PIL import Image
@@ -80,6 +81,7 @@ class DataProcessor(MMBaseDataProcessor):
             tokens_per_second: Temporal resolution for positional embeddings
             **kwargs: Additional configuration
         """
+        super().__init__()
         self.min_frames = video_min_frames
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
@@ -119,19 +121,24 @@ class DataProcessor(MMBaseDataProcessor):
         }
 
     @staticmethod
-    def mm_num_tokens(grid_thw: list | list[list[int]]) -> int | list[int]:
+    def mm_num_tokens(grid_thw: list | list[list[int]] | np.ndarray | paddle.Tensor) -> int | list[int]:
         """
         Calculate the number of tokens in the multimodal input.
         """
+        if isinstance(grid_thw, paddle.Tensor):
+            grid_thw = grid_thw.numpy()
+
         if len(grid_thw) == 0:
             return 0
-        if isinstance(grid_thw[0], list):
-            num_tokens = []
-            for i in range(len(grid_thw)):
-                num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2)
-            return num_tokens
 
-        return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2
+        def calc_one(thw):
+            t, h, w = map(int, thw)
+            return t * h * w // 4
+
+        if isinstance(grid_thw[0], (list, tuple, np.ndarray)):
+            return [calc_one(x) for x in grid_thw]
+
+        return calc_one(grid_thw)
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """

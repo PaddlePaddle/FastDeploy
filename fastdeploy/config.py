@@ -24,6 +24,7 @@ from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
+from packaging.version import parse as parse_version
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from typing_extensions import assert_never
 
@@ -382,11 +383,10 @@ class ModelConfig:
                 self.model_format = "torch"
                 logger.info("The model format is Hugging Face Torch")
             elif "dtype" in self.model_config:
-                # https://github.com/huggingface/transformers/releases/tag/v4.56.0  Transformers 4.56 version deprecated torch_dtype
-                if (
-                    "transformers_version" in self.model_config
-                    and self.model_config["transformers_version"][:4] > "4.56"
-                ):
+                # https://github.com/huggingface/transformers/releases/tag/v4.56.0  Transformers 4.56.0 version deprecated torch_dtype
+                if "transformers_version" in self.model_config and parse_version(
+                    self.model_config["transformers_version"]
+                ) > parse_version("4.56.0"):
                     self.model_format = "torch"
                     logger.info("The model format is Hugging Face Torch")
                 else:

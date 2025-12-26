@@ -23,6 +23,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import paddle
 import zmq
 from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
@@ -103,6 +104,7 @@ class DataProcessor(MMBaseDataProcessor):
         video_fps: int = 2,
         **kwargs,
     ) -> None:
+        super().__init__()
         # Tokenizer and image preprocessor
         self.model_name_or_path = tokenizer_name
         self._load_tokenizer()
@@ -154,23 +156,27 @@ class DataProcessor(MMBaseDataProcessor):
         }
 
     @staticmethod
-    def mm_num_tokens(grid_thw: list | list[list[int]]) -> int | list[int]:
+    def mm_num_tokens(grid_thw: list | list[list[int]] | np.ndarray | paddle.Tensor) -> int | list[int]:
         """
         Calculate the number of tokens in the multimodal input.
         """
+        if isinstance(grid_thw, paddle.Tensor):
+            grid_thw = grid_thw.numpy()
+
         if len(grid_thw) == 0:
             return 0
-        if isinstance(grid_thw[0], list):
-            num_tokens = []
-            for i in range(len(grid_thw)):
-                if grid_thw[i][0] == 1:
-                    num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2)
-                else:  # have time dimension
-                    num_tokens.append(grid_thw[i][0] * grid_thw[i][1] * grid_thw[i][2] // 2 // 2 // 2)
-            return num_tokens
-        if grid_thw[0] == 1:
-            return grid_thw[i][0] * grid_thw[1] * grid_thw[2] // 2 // 2
-        return grid_thw[0] * grid_thw[1] * grid_thw[2] // 2 // 2 // 2
+
+        def calc_one(thw):
+            t, h, w = map(int, thw)
+            if t == 1:
+                return t * h * w // 4
+            else:
+                return t * h * w // 4 // 2
+
+        if isinstance(grid_thw[0], (list, tuple, np.ndarray)):
+            return [calc_one(x) for x in grid_thw]
+
+        return calc_one(grid_thw)
 
     def _build_token_type_mapping(self) -> Dict[Any, int]:
         mapping = defaultdict(lambda: IDS_TYPE_FLAG["text"])

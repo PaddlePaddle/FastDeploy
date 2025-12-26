@@ -28,8 +28,9 @@ class MMBaseDataProcessor(ABC):
         Initialize the mm data processor.
         """
 
+    @staticmethod
     @abstractmethod
-    def mm_num_tokens(self, grid_thw: list) -> int:
+    def mm_num_tokens(grid_thw: list) -> int:
         """
         Calculate the number of tokens in the multimodal input.
         """

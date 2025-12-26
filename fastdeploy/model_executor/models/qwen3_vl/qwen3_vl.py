@@ -69,17 +69,6 @@ class Qwen3_VLModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
-    # 	model_format = getattr(fd_config.model_config, "model_format", None)
-    # 	self._set_model_format_attrs(model_format)
-
-    # def _set_model_format_attrs(self, model_format):
-    # 	if model_format is None:
-    # 		return
-    # 	for name, param in self.named_parameters():
-    # 		if "weight" in name and len(param.shape) == 2:
-    # 			logger.info(f"[Model] {name} need to be transposed weight.")
-    # 			set_weight_attrs(param, {"weight_need_transpose": model_format == "torch"})
-
     def load_state_dict(self, state_dict):
         self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
