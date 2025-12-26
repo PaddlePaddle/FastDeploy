@@ -168,17 +168,14 @@ __global__ void get_expert_token_num(int64_t* topk_ids,
   }
 }
 
-__host__ __device__ __forceinline__
-int align_up(int x, int alignment) {
+__host__ __device__ __forceinline__ int align_up(int x, int alignment) {
   return ((x + alignment - 1) / alignment) * alignment;
 }
 
 template <typename ScaleDtype>
-__host__ __device__ __forceinline__
-int compute_padded_rows(int num_rows) {
+__host__ __device__ __forceinline__ int compute_padded_rows(int num_rows) {
   int tma_alignment_bytes = 16;
-  int alignment_elements =
-      tma_alignment_bytes / sizeof(ScaleDtype);
+  int alignment_elements = tma_alignment_bytes / sizeof(ScaleDtype);
   return align_up(num_rows, alignment_elements);
 }
 
@@ -853,7 +850,7 @@ __global__ void permute_x_fp8_kernel(
   const int hidden_size_scale_int4 = hidden_size_scale / scale_vec_size;
   const int token_nums_feed_to_ffn =
       token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK - 1];
-  
+
   const int padded_num_rows = compute_padded_rows<float>(num_rows);
   // prmt
   for (int64_t s_token_idx = src_token_idx;
@@ -905,23 +902,9 @@ __global__ void permute_x_fp8_kernel(
         }
         // cp scale
         for (int s = tid; s < hidden_size_scale; s += blockDim.x) {
-          permute_scale[s * num_rows + dst_token_idx] =
+          permute_scale[dst_token_idx * hidden_size_scale + s] =
               scale[s * padded_num_rows + s_token_idx];
         }
-        for (int s = tid; s < hidden_size_scale;
-             s += blockDim.x) {
-          permute_scale[dst_token_idx * hidden_size_scale + s] =
-            scale[s * padded_num_rows + s_token_idx];
-        }
-        // for (int v_id = tid; v_id < hidden_size_scale_int4;
-        //      v_id += blockDim.x) {
-        //   *(reinterpret_cast<int4*>(permute_scale +
-        //                             dst_token_idx * hidden_size_scale) +
-        //     v_id) =
-        //       *(reinterpret_cast<const int4*>(scale +
-        //                                       s_token_idx * hidden_size_scale) +
-        //         v_id);
-        // }
       }
     }
   }
@@ -1011,7 +994,6 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
       GetEmptyTensor({token_nums_feed_to_ffn, hidden_size}, input_type, place);
   auto permute_scale =
       GetEmptyTensor({token_nums_feed_to_ffn, hidden_size / 128},
-                    //  {1,token_nums_feed_to_ffn},
                      paddle::DataType::FLOAT32,
                      place);
 

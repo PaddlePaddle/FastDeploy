@@ -161,7 +161,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         # 2. Dynamic compute blockwise quantization scales
-<<<<<<< HEAD
         # TODO: use one per_token_quant kernel
         if x.shape[0] == 0 or (not self.quant_config.deepgemm_scale_ue8m0):
             x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
@@ -169,11 +168,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             )
         else:
             x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
-=======
-        x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-            x, self.quant_config.weight_block_size[0]
-        )
->>>>>>> 867048a8d (Ue8m0 pack int32)
 
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
@@ -244,7 +238,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
             # down_proj
-<<<<<<< HEAD
             if ffn_out.shape[0] == 0 or (not self.quant_config.deepgemm_scale_ue8m0):
                 ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                     ffn_out, self.quant_config.weight_block_size[0]
@@ -258,11 +251,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             if not self.quant_config.deepgemm_scale_ue8m0:
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
-=======
-            ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-                ffn_out, self.quant_config.weight_block_size[0]
-            )
->>>>>>> 867048a8d (Ue8m0 pack int32)
 
             ffn_out = paddle.empty(
                 (ffn_out.shape[0], getattr(layer, self.added_weight_attrs[1]).shape[1]),
@@ -487,7 +475,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # swiglu
         ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
-<<<<<<< HEAD
         if ffn_out.shape[0] == 0 or not self.quant_config.deepgemm_scale_ue8m0:
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                 ffn_out, self.quant_config.weight_block_size[0]
@@ -499,13 +486,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_in_x, ffn_in_x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(ffn_out, use_ue8m0=True)
             ffn_in_x_scale_tensor = transform_scale_ue8m0(ffn_in_x_scale_tensor, mn=ffn_in_x_scale_tensor.shape[-2])
 
-=======
-        # down_proj
-        ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-            ffn_out, self.quant_config.weight_block_size[0]
-        )
-
->>>>>>> 867048a8d (Ue8m0 pack int32)
         ffn_out = paddle.empty(
             (ffn_out.shape[0], getattr(layer, self.added_weight_attrs[1]).shape[1]),
             dtype=paddle.bfloat16,
