@@ -199,16 +199,6 @@ class TokenProcessor:
                         f"finish reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
                     )
 
-    def _reschedule_preempt_task(self, batch_size):
-        """reschedule when real batch size is smaller than the insert position of preemted_task"""
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
-            for request_id in need_to_be_reschedule_req_ids:
-                if self.resource_manager.requests[request_id].idx >= (
-                    batch_size - 1
-                ):  # No more token generated for preempted request
-                    self.resource_manager.reschedule_preempt_task(request_id)
-
     def _process_per_token(self, task, batch_id: int, token_ids: np.ndarray, result: RequestOutput, is_prefill: bool):
         """
         process output token by token
@@ -699,7 +689,6 @@ class TokenProcessor:
 
         batch_result = list()
         # reschedule
-        self._reschedule_preempt_task(batch)
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue

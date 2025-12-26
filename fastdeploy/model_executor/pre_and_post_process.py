@@ -403,6 +403,7 @@ def post_process_normal(
             )
     for preempted_idx in share_inputs["preempted_idx"]:
         sampler_output.sampled_token_ids[preempted_idx] = PREEMPTED_TOKEN_ID
+    share_inputs["preempted_idx"] = []
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
