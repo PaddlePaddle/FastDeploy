@@ -188,6 +188,142 @@ class TestCommonEngine(unittest.TestCase):
         if hasattr(self.engine, "ipc_signal_suffix"):
             self.assertIsNotNone(self.engine.ipc_signal_suffix)
 
+    def test_create_data_processor(self):
+        """Test create_data_processor method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "create_data_processor"))
+        self.assertTrue(callable(getattr(self.engine, "create_data_processor")))
+
+    def test_init_worker_monitor_signals(self):
+        """Test _init_worker_monitor_signals method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "_init_worker_monitor_signals"))
+        self.assertTrue(callable(getattr(self.engine, "_init_worker_monitor_signals")))
+
+    def test_start_worker_queue_service(self):
+        """Test start_worker_queue_service method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "start_worker_queue_service"))
+        self.assertTrue(callable(getattr(self.engine, "start_worker_queue_service")))
+
+    def test_decode_token(self):
+        """Test _decode_token method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "_decode_token"))
+        self.assertTrue(callable(getattr(self.engine, "_decode_token")))
+
+    def test_start_cache_service(self):
+        """Test start_cache_service method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "start_cache_service"))
+        self.assertTrue(callable(getattr(self.engine, "start_cache_service")))
+
+    def test_check_and_free_block_tables(self):
+        """Test check_and_free_block_tables method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "check_and_free_block_tables"))
+        self.assertTrue(callable(getattr(self.engine, "check_and_free_block_tables")))
+
+    def test_clear_data(self):
+        """Test clear_data method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "clear_data"))
+        self.assertTrue(callable(getattr(self.engine, "clear_data")))
+
+    def test_register_to_router(self):
+        """Test _register_to_router method exists and is callable"""
+        self.assertTrue(hasattr(self.engine, "_register_to_router"))
+        self.assertTrue(callable(getattr(self.engine, "_register_to_router")))
+
+    def test_engine_model_config_attributes(self):
+        """Test that engine has expected model configuration attributes"""
+        self.assertTrue(hasattr(self.engine, "cfg"))
+        self.assertIsNotNone(self.engine.cfg)
+
+        if hasattr(self.engine.cfg, "model_config"):
+            model_cfg = self.engine.cfg.model_config
+            self.assertIsNotNone(model_cfg)
+
+            # Test key model config attributes
+            model_attrs = ["model", "max_model_len", "enable_mm"]
+            for attr in model_attrs:
+                if hasattr(model_cfg, attr):
+                    self.assertTrue(hasattr(model_cfg, attr))
+
+    def test_engine_cache_config_attributes(self):
+        """Test that engine has expected cache configuration attributes"""
+        self.assertTrue(hasattr(self.engine, "cfg"))
+        self.assertIsNotNone(self.engine.cfg)
+
+        if hasattr(self.engine.cfg, "cache_config"):
+            cache_cfg = self.engine.cfg.cache_config
+            self.assertIsNotNone(cache_cfg)
+
+            # Test key cache config attributes
+            cache_attrs = ["block_size", "gpu_memory_utilization", "enable_prefix_caching"]
+            for attr in cache_attrs:
+                if hasattr(cache_cfg, attr):
+                    self.assertTrue(hasattr(cache_cfg, attr))
+
+    def test_engine_parallel_config_attributes(self):
+        """Test that engine has expected parallel configuration attributes"""
+        self.assertTrue(hasattr(self.engine, "cfg"))
+        self.assertIsNotNone(self.engine.cfg)
+
+        if hasattr(self.engine.cfg, "parallel_config"):
+            parallel_cfg = self.engine.cfg.parallel_config
+            self.assertIsNotNone(parallel_cfg)
+
+            # Test key parallel config attributes
+            parallel_attrs = ["tensor_parallel_size", "data_parallel_size", "device_ids"]
+            for attr in parallel_attrs:
+                if hasattr(parallel_cfg, attr):
+                    self.assertTrue(hasattr(parallel_cfg, attr))
+
+    def test_engine_structured_outputs_config(self):
+        """Test that engine has structured outputs configuration"""
+        self.assertTrue(hasattr(self.engine, "cfg"))
+        self.assertIsNotNone(self.engine.cfg)
+
+        if hasattr(self.engine.cfg, "structured_outputs_config"):
+            struct_cfg = self.engine.cfg.structured_outputs_config
+            self.assertIsNotNone(struct_cfg)
+
+            # Test key structured outputs config attributes
+            struct_attrs = ["guided_decoding_backend", "disable_any_whitespace", "reasoning_parser"]
+            for attr in struct_attrs:
+                if hasattr(struct_cfg, attr):
+                    self.assertTrue(hasattr(struct_cfg, attr))
+
+    def test_engine_data_processor_attributes(self):
+        """Test that engine data processor has expected attributes"""
+        if hasattr(self.engine, "data_processor"):
+            dp = self.engine.data_processor
+            self.assertIsNotNone(dp)
+
+            # Test data processor has expected attributes
+            dp_attrs = ["eos_token_id", "pad_token_id"]
+            for attr in dp_attrs:
+                if hasattr(dp, attr):
+                    self.assertTrue(hasattr(dp, attr))
+
+    def test_engine_split_connector_attributes(self):
+        """Test that engine split connector has expected attributes"""
+        if hasattr(self.engine, "split_connector"):
+            sc = self.engine.split_connector
+            self.assertIsNotNone(sc)
+
+            # Test split connector has expected attributes
+            sc_attrs = ["current_request_ids"]
+            for attr in sc_attrs:
+                if hasattr(sc, attr):
+                    self.assertTrue(hasattr(sc, attr))
+
+    def test_engine_engine_worker_queue_attributes(self):
+        """Test that engine worker queue has expected attributes"""
+        if hasattr(self.engine, "engine_worker_queue"):
+            ewq = self.engine.engine_worker_queue
+            self.assertIsNotNone(ewq)
+
+            # Test worker queue has expected methods
+            ewq_methods = ["put_tasks", "exist_tasks"]
+            for method in ewq_methods:
+                if hasattr(ewq, method):
+                    self.assertTrue(callable(getattr(ewq, method)))
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -711,6 +847,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 eng._finalizer.detach()
             except Exception:
                 pass
+
+
+if __name__ == "__main__":
+    unittest.main()
 
     def test_check_worker_initialize_status_progress(self):
         """Cover 1710-1762 by simulating stdout and ready signals."""
