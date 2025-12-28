@@ -28,22 +28,27 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
                                 const int max_seq_len) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
+#ifdef PADDLE_WITH_COREX
+  const int warp_id = threadIdx.x / 64;
+  const int lane_id = threadIdx.x % 64;
+#else
   const int warp_id = threadIdx.x / 32;
   const int lane_id = threadIdx.x % 32;
+#endif
 
   int cum_seq_len = 0;
 
   // compute sum of seq_lens[0,1,2,...,bi]
-  for (int i = lane_id; i < bi + 1; i += warpSize) {
+  for (int i = lane_id; i < bi + 1; i += WARP_SIZE) {
     cum_seq_len += seq_lens[i];
   }
 
-  for (int offset = 1; offset < warpSize; offset <<= 1) {
+  for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
     const int tmp = __shfl_up_sync(0xffffffff, cum_seq_len, offset);
     if (lane_id >= offset) cum_seq_len += tmp;
   }
 
-  cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, warpSize - 1);
+  cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, WARP_SIZE - 1);
 
   if (tid == 0) {
     cu_seqlens_q[bi + 1] = cum_seq_len;
@@ -64,8 +69,8 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
 }
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
-                                             const paddle::Tensor &token_num,
-                                             const paddle::Tensor &seq_len) {
+                                             const paddle::Tensor &seq_len,
+                                             const int64_t cpu_token_num) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext *>(
       paddle::experimental::DeviceContextPool::Instance().Get(
@@ -77,9 +82,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   std::vector<int64_t> input_ids_shape = input_ids.shape();
   const int bsz = seq_len.shape()[0];
   const int max_seq_len = input_ids_shape[1];
-  auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
-
-  const int token_num_data = cpu_token_num.data<int64_t>()[0];
+  const int token_num_data = cpu_token_num;
   auto x_remove_padding = paddle::empty(
       {token_num_data}, paddle::DataType::INT64, input_ids.place());
   auto batch_id_per_token = paddle::empty(
@@ -124,11 +127,12 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
 }
 
 PD_BUILD_STATIC_OP(get_padding_offset)
-    .Inputs({"input_ids", "token_num", "seq_len"})
+    .Inputs({"input_ids", "seq_len"})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})
+    .Attrs({"cpu_token_num: int64_t"})
     .SetKernelFn(PD_KERNEL(GetPaddingOffset))
     .SetInferShapeFn(PD_INFER_SHAPE(GetPaddingOffsetInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GetPaddingOffsetInferDtype));

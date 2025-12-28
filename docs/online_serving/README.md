@@ -223,6 +223,9 @@ include_draft_logprobs: Optional[bool] = False
 # Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
 # for debugging or analysis of the generation process (default False means not returned).
 
+include_logprobs_decode_token: Optional[bool] = True
+# Whether to include decoded token in the logprobs/prompt_logprobs results, (default True means the decoded token is always include in results).
+
 logits_processors_args: Optional[Dict] = None
 # Additional arguments for logits processors, enabling customization of generation logic
 # (e.g., dynamically adjusting probability distributions).
@@ -231,6 +234,8 @@ mm_hashes: Optional[list] = None
 # Hash values for multimodal (e.g., image/audio) inputs, used for verification or tracking.
 # Default None indicates no multimodal input or hash validation required.
 
+collect_metrics: Optional[bool] = False
+# Whether to return metrics information, for performance analysis or debugging (default is False, meaning no metrics are returned).
 ```
 
 ### Differences in Return Fields
@@ -478,6 +483,9 @@ top_p_normalized_logprobs: Optional[bool] = False
 include_draft_logprobs: Optional[bool] = False
 # Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
 # for debugging or analysis of the generation process (default False means not returned).
+
+include_logprobs_decode_token: Optional[bool] = True
+# Whether to include decoded token in the prompt_logprobs results, (default True means the decoded token is always include in results).
 
 logits_processors_args: Optional[Dict] = None
 # Additional arguments for logits processors, enabling customization of generation logic

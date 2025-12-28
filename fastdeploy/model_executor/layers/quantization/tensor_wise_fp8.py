@@ -19,6 +19,7 @@ from typing import Optional
 import paddle
 
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -52,14 +53,28 @@ class TensorWiseFP8Config(QuantConfigBase):
         """
         return method according to this config!
         """
-        if isinstance(layer, FusedMoE):
-            from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
-                TensorWiseFP8MoEMethod,
-            )
+        if current_platform.is_intel_hpu():
+            if isinstance(layer, FusedMoE):
+                from fastdeploy.model_executor.layers.backends import (
+                    HpuTensorWiseFP8MoEMethod,
+                )
 
-            return TensorWiseFP8MoEMethod(self)
+                return HpuTensorWiseFP8MoEMethod(self)
+            else:
+                from fastdeploy.model_executor.layers.backends import (
+                    HpuTensorWiseFP8LinearMethod,
+                )
+
+                return HpuTensorWiseFP8LinearMethod(self)
         else:
-            return TensorWiseFP8LinearMethod(self)
+            if isinstance(layer, FusedMoE):
+                from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+                    TensorWiseFP8MoEMethod,
+                )
+
+                return TensorWiseFP8MoEMethod(self)
+            else:
+                return TensorWiseFP8LinearMethod(self)
 
 
 class TensorWiseFP8LinearMethod(QuantMethodBase):

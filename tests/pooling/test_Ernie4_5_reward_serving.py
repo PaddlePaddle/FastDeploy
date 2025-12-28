@@ -196,9 +196,9 @@ def _run_test_logic(reward_api_url, headers, baseline_filename):
 
 def test_reward_model_with_caching(server_default_caching, reward_api_url, headers):
     print("\n>>> Running Test: WITH Prefix Caching")
-    _run_test_logic(reward_api_url, headers, baseline_filename="reward_score_baseline.json")
+    _run_test_logic(reward_api_url, headers, baseline_filename="RM_v1008_5.json")
 
 
 def test_reward_model_without_caching(server_no_caching, reward_api_url, headers):
     print("\n>>> Running Test: WITHOUT Prefix Caching")
-    _run_test_logic(reward_api_url, headers, baseline_filename="reward_score_baseline_no_caching.json")
+    _run_test_logic(reward_api_url, headers, baseline_filename="RM_v1008_5_no_caching.json")

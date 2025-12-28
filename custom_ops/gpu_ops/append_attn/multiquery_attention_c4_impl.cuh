@@ -1108,10 +1108,7 @@ void MultiQueryAppendC4Attention(
     const float ratio = static_cast<float>(num_blocks_need) /
                         static_cast<float>(num_blocks_per_wave);
 
-    uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (!is_decoder) {
-      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
-    }
+    uint32_t chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
     const int num_chunks = div_up(max_dec_len, chunk_size);
 
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
@@ -1390,9 +1387,6 @@ void MultiQueryAppendC4Attention(
                         static_cast<float>(num_blocks_per_wave);
 
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (!is_decoder) {
-      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
-    }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
     uint32_t attn_mask_len;

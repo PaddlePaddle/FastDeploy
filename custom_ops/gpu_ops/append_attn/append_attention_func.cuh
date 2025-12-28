@@ -2470,8 +2470,6 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int num_chunks_this_seq = div_up(seq_len_kv, chunk_size);
     if (num_chunks_this_seq <= 1) {
       continue;
-    } else if (!ENABLE_PREFILL) {
-      continue;
     }
 
     using LoadT = AlignedVector<T, vec_size>;
