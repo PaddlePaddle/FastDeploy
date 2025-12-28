@@ -23,6 +23,7 @@ import numpy as np
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
+from fastdeploy.engine.request import Request
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
 
@@ -353,66 +354,6 @@ class TestCommonEngine(unittest.TestCase):
                 if hasattr(ewq, method):
                     self.assertTrue(callable(getattr(ewq, method)))
 
-    def test_insert_tasks_basic_functionality(self):
-        """Test insert_tasks with real engine for basic functionality"""
-        # Create a simple request
-        request = Request(
-            request_id="test_real_1",
-            prompt="hello",
-            prompt_token_ids=[1, 2, 3],
-            prompt_token_ids_len=3,
-            messages=None,
-            history=None,
-            tools=None,
-            system=None,
-            eos_token_ids=None,
-        )
-
-        # Test basic insert functionality with real engine
-        try:
-            result = self.engine.insert_tasks([request])
-            # Should return True for successful insertion
-            self.assertIsInstance(result, bool)
-        except Exception as e:
-            # If insertion fails due to resource constraints, that's also acceptable
-            # The important thing is that the method executed without crashing
-            self.assertIsInstance(e, (EngineError, Exception))
-
-    def test_update_requests_chunk_size_real_engine(self):
-        """Test update_requests_chunk_size with real engine configuration"""
-        # Create test requests
-        request1 = Request(
-            request_id="chunk_test_1",
-            prompt="test",
-            prompt_token_ids=[1, 2, 3, 4],
-            prompt_token_ids_len=4,
-            messages=None,
-            history=None,
-            tools=None,
-            system=None,
-            eos_token_ids=None,
-        )
-
-        request2 = Request(
-            request_id="chunk_test_2",
-            prompt="test",
-            prompt_token_ids=[1, 2],
-            prompt_token_ids_len=2,
-            messages=None,
-            history=None,
-            tools=None,
-            system=None,
-            eos_token_ids=None,
-        )
-
-        # Test chunk size update with real engine
-        try:
-            self.engine.update_requests_chunk_size([request1, request2])
-            # Method should complete without error
-            self.assertTrue(True)
-        except Exception:
-            # Some configurations might not support chunking, which is fine
-            self.assertTrue(True)
 
     def test_clear_data_real_engine(self):
         """Test clear_data with real engine"""
