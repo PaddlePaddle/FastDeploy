@@ -17,7 +17,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch  # noqa: F401
 
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
 
 # Real FastDeploy imports
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
@@ -58,6 +58,124 @@ class TestLocalScheduler(unittest.TestCase):
         """Clean up after each test method."""
         self.envs_patcher.stop()
 
+    # ========== Mock Factory Methods ==========
+
+    def _create_mock_output(self, index=0, token_ids=None):
+        """Create mock completion output with defaults."""
+        mock = Mock()
+        mock.index = index
+        mock.token_ids = token_ids or []
+        return mock
+
+    def _create_mock_metrics(self):
+        """Create mock metrics with current time."""
+        mock = Mock()
+        mock.arrival_time = time.time()
+        return mock
+
+    # ========== Scheduler Factory Methods ==========
+
+    def _create_scheduler(
+        self,
+        max_size=10,
+        ttl=60,
+        enable_chunked_prefill=True,
+        max_num_partial_prefills=5,
+        max_long_partial_prefills=2,
+        long_prefill_token_threshold=1000,
+    ):
+        """Helper to create scheduler with custom parameters."""
+        return LocalScheduler(
+            max_size=max_size,
+            ttl=ttl,
+            enable_chunked_prefill=enable_chunked_prefill,
+            max_num_partial_prefills=max_num_partial_prefills,
+            max_long_partial_prefills=max_long_partial_prefills,
+            long_prefill_token_threshold=long_prefill_token_threshold,
+        )
+
+    # ========== Assertion Helper Methods ==========
+
+    def _assert_scheduler_state(
+        self,
+        scheduler,
+        expected_max_size=None,
+        expected_ttl=None,
+        expected_ids_cursor=None,
+        expected_num_ids=None,
+        expected_num_requests=None,
+        expected_num_responses=None,
+    ):
+        """Helper to assert scheduler state."""
+        if expected_max_size is not None:
+            self.assertEqual(scheduler.max_size, expected_max_size)
+        if expected_ttl is not None:
+            self.assertEqual(scheduler.ttl, expected_ttl)
+        if expected_ids_cursor is not None:
+            self.assertEqual(scheduler.ids_read_cursor, expected_ids_cursor)
+        if expected_num_ids is not None:
+            self.assertEqual(len(scheduler.ids), expected_num_ids)
+        if expected_num_requests is not None:
+            self.assertEqual(len(scheduler.requests), expected_num_requests)
+        if expected_num_responses is not None:
+            self.assertEqual(len(scheduler.responses), expected_num_responses)
+
+    def _assert_request_added(self, results, request_id, scheduler):
+        """Helper to assert request was added successfully."""
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], request_id)
+        self.assertIsNone(results[0][1])
+        self.assertIn(request_id, scheduler.requests)
+        self.assertIn(request_id, scheduler.ids)
+        self.assertEqual(len(scheduler.requests), 1)
+
+    def _assert_response_stored(self, request_id, scheduler, num_responses=1):
+        """Helper to assert response was stored."""
+        self.assertIn(request_id, scheduler.responses)
+        self.assertEqual(len(scheduler.responses[request_id]), num_responses)
+
+    def _assert_request_exists(self, request_id, scheduler):
+        """Helper to assert request exists in scheduler."""
+        self.assertIn(request_id, scheduler.requests)
+        self.assertIn(request_id, scheduler.ids)
+
+    def _assert_request_not_exists(self, request_id, scheduler):
+        """Helper to assert request doesn't exist in scheduler."""
+        self.assertNotIn(request_id, scheduler.requests)
+        self.assertNotIn(request_id, scheduler.ids)
+
+    def _assert_log_contains(self, mock_logger, message_fragment):
+        """Helper to assert a log contains a specific message fragment."""
+        mock_logger.assert_called()
+        log_calls = [call.args[0] for call in mock_logger.call_args_list]
+        self.assertTrue(any(message_fragment in msg for msg in log_calls))
+
+    # ========== Convenience Wrapper Methods ==========
+
+    def _get_requests_with_defaults(
+        self,
+        available_blocks=100,
+        block_size=10,
+        reserved_output_blocks=10,
+        max_num_batched_tokens=1000,
+        batch=1,
+    ):
+        """Helper to call get_requests with common defaults."""
+        return self.scheduler.get_requests(
+            available_blocks=available_blocks,
+            block_size=block_size,
+            reserved_output_blocks=reserved_output_blocks,
+            max_num_batched_tokens=max_num_batched_tokens,
+            batch=batch,
+        )
+
+    def _add_request_with_result(self, request, request_id, finished=False):
+        """Helper to add request and result in one call."""
+        self.scheduler.put_requests([request])
+        mock_output = self._create_test_request_output(request_id, finished=finished)
+        self.scheduler.put_results([mock_output])
+        return mock_output
+
     def _create_test_request(self, request_id, prompt_token_ids):
         """Helper method to create test Request objects with minimal required parameters."""
         return Request(
@@ -70,45 +188,35 @@ class TestLocalScheduler(unittest.TestCase):
             tools=None,
             system=None,
             eos_token_ids=[2],
-            arrival_time=time.time(),
+            metrics=RequestMetrics(),
         )
 
     def _create_test_request_output(self, request_id, finished=False):
         """Helper method to create test RequestOutput objects."""
-        # Create a mock CompletionOutput for the RequestOutput
-        mock_completion_output = Mock()
-        mock_completion_output.index = 0
-        mock_completion_output.token_ids = []
-
-        # Create a mock RequestMetrics
-        mock_metrics = Mock()
-        mock_metrics.arrival_time = time.time()
-
         return RequestOutput(
             request_id=request_id,
             prompt="test prompt",
             prompt_token_ids=[1, 2, 3],
-            outputs=mock_completion_output,
+            outputs=self._create_mock_output(),
             finished=finished,
-            metrics=mock_metrics,
+            metrics=self._create_mock_metrics(),
         )
 
     def test_local_scheduler_initialization(self):
         """Test LocalScheduler initialization with default parameters."""
-        self.assertEqual(self.scheduler.max_size, self.max_size)
-        self.assertEqual(self.scheduler.ttl, self.ttl)
-        self.assertEqual(self.scheduler.enable_chunked_prefill, self.enable_chunked_prefill)
-        self.assertEqual(self.scheduler.max_num_partial_prefills, self.max_num_partial_prefills)
-        self.assertEqual(self.scheduler.max_long_partial_prefills, self.max_long_partial_prefills)
-        self.assertEqual(self.scheduler.long_prefill_token_threshold, self.long_prefill_token_threshold)
-        self.assertEqual(self.scheduler.ids_read_cursor, 0)
-        self.assertEqual(len(self.scheduler.ids), 0)
-        self.assertEqual(len(self.scheduler.requests), 0)
-        self.assertEqual(len(self.scheduler.responses), 0)
+        self._assert_scheduler_state(
+            self.scheduler,
+            expected_max_size=self.max_size,
+            expected_ttl=self.ttl,
+            expected_ids_cursor=0,
+            expected_num_ids=0,
+            expected_num_requests=0,
+            expected_num_responses=0,
+        )
 
     def test_local_scheduler_initialization_unlimited_size(self):
         """Test LocalScheduler initialization with unlimited size."""
-        scheduler = LocalScheduler(
+        scheduler = self._create_scheduler(
             max_size=0,  # 0 means unlimited
             ttl=30,
             enable_chunked_prefill=False,
@@ -130,10 +238,13 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.reset()
 
         # Verify everything is cleared
-        self.assertEqual(self.scheduler.ids_read_cursor, 0)
-        self.assertEqual(len(self.scheduler.ids), 0)
-        self.assertEqual(len(self.scheduler.requests), 0)
-        self.assertEqual(len(self.scheduler.responses), 0)
+        self._assert_scheduler_state(
+            self.scheduler,
+            expected_ids_cursor=0,
+            expected_num_ids=0,
+            expected_num_requests=0,
+            expected_num_responses=0,
+        )
 
     def test_reset_logs_message(self):
         """Test that reset logs appropriate message."""
@@ -147,14 +258,7 @@ class TestLocalScheduler(unittest.TestCase):
         results = self.scheduler.put_requests(requests)
 
         # Verify the request was added successfully
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0][0], "req_1")  # request_id
-        self.assertIsNone(results[0][1])  # error_message (None for success)
-
-        # Verify internal state
-        self.assertIn("req_1", self.scheduler.requests)
-        self.assertIn("req_1", self.scheduler.ids)
-        self.assertEqual(len(self.scheduler.requests), 1)
+        self._assert_request_added(results, "req_1", self.scheduler)
         self.assertEqual(len(self.scheduler.ids), 1)
 
     def test_put_requests_multiple_requests(self):
@@ -164,7 +268,7 @@ class TestLocalScheduler(unittest.TestCase):
 
         # Verify all requests were added successfully
         self.assertEqual(len(results), 3)
-        for i, (request_id, error) in enumerate(results):
+        for request_id, error in results:
             self.assertIsNone(error)
             self.assertIn(request_id, self.scheduler.requests)
 
@@ -196,14 +300,7 @@ class TestLocalScheduler(unittest.TestCase):
     def test_put_requests_max_size_limit(self):
         """Test that max size limit is enforced."""
         # Create scheduler with small max size
-        small_scheduler = LocalScheduler(
-            max_size=2,
-            ttl=60,
-            enable_chunked_prefill=True,
-            max_num_partial_prefills=5,
-            max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000,
-        )
+        small_scheduler = self._create_scheduler(max_size=2)
 
         # Add first request (should succeed)
         requests_1 = [self.mock_request_1]
@@ -223,14 +320,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_put_requests_unlimited_size(self):
         """Test that unlimited size scheduler accepts all requests."""
-        unlimited_scheduler = LocalScheduler(
-            max_size=0,  # Unlimited
-            ttl=60,
-            enable_chunked_prefill=True,
-            max_num_partial_prefills=5,
-            max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000,
-        )
+        unlimited_scheduler = self._create_scheduler(max_size=0)  # Unlimited
 
         # Add many requests
         many_requests = [self._create_test_request(f"req_{i}", [i]) for i in range(100)]
@@ -291,33 +381,21 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_get_requests_insufficient_resources(self):
         """Test get_requests with insufficient resources."""
-        requests = self.scheduler.get_requests(
-            available_blocks=5,
-            block_size=10,
-            reserved_output_blocks=10,  # More than available
-            max_num_batched_tokens=1000,
-            batch=1,
-        )
+        requests = self._get_requests_with_defaults(
+            available_blocks=5, reserved_output_blocks=10
+        )  # More than available
 
         self.assertEqual(len(requests), 0)
 
     def test_get_requests_insufficient_batch_size(self):
         """Test get_requests with invalid batch size."""
-        requests = self.scheduler.get_requests(
-            available_blocks=100,
-            block_size=10,
-            reserved_output_blocks=10,
-            max_num_batched_tokens=1000,
-            batch=0,  # Invalid batch size
-        )
+        requests = self._get_requests_with_defaults(batch=0)  # Invalid batch size
 
         self.assertEqual(len(requests), 0)
 
     def test_get_requests_no_available_requests(self):
         """Test get_requests when no requests are available."""
-        requests = self.scheduler.get_requests(
-            available_blocks=100, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=1
-        )
+        requests = self._get_requests_with_defaults()
 
         self.assertEqual(len(requests), 0)
 
@@ -326,9 +404,7 @@ class TestLocalScheduler(unittest.TestCase):
         # Add requests to scheduler
         self.scheduler.put_requests([self.mock_request_1, self.mock_request_2])
 
-        requests = self.scheduler.get_requests(
-            available_blocks=100, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=2
-        )
+        requests = self._get_requests_with_defaults(batch=2)
 
         # Should return some requests (exact number depends on resource calculation)
         self.assertGreaterEqual(len(requests), 0)
@@ -339,9 +415,7 @@ class TestLocalScheduler(unittest.TestCase):
         long_request = self._create_test_request("long_req", list(range(2000)))
         self.scheduler.put_requests([long_request])
 
-        requests = self.scheduler.get_requests(
-            available_blocks=500, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=1
-        )
+        requests = self._get_requests_with_defaults(available_blocks=500)
 
         # Behavior depends on chunked prefill logic
         self.assertGreaterEqual(len(requests), 0)
@@ -359,8 +433,7 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_results(results)
 
         # Verify result was stored
-        self.assertIn("req_1", self.scheduler.responses)
-        self.assertEqual(len(self.scheduler.responses["req_1"]), 1)
+        self._assert_response_stored("req_1", self.scheduler)
 
     def test_put_results_multiple_results(self):
         """Test putting multiple results."""
@@ -376,10 +449,8 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_results(results)
 
         # Verify results were stored
-        self.assertIn("req_1", self.scheduler.responses)
-        self.assertIn("req_2", self.scheduler.responses)
-        self.assertEqual(len(self.scheduler.responses["req_1"]), 1)
-        self.assertEqual(len(self.scheduler.responses["req_2"]), 1)
+        self._assert_response_stored("req_1", self.scheduler)
+        self._assert_response_stored("req_2", self.scheduler)
 
     def test_put_results_expired_response(self):
         """Test putting results for expired/non-existent requests."""
@@ -406,7 +477,7 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_results([mock_output_2])
 
         # Should have two responses for the request
-        self.assertEqual(len(self.scheduler.responses["req_1"]), 2)
+        self._assert_response_stored("req_1", self.scheduler, num_responses=2)
 
     def test_get_results_empty(self):
         """Test getting results when none are available."""
@@ -416,9 +487,7 @@ class TestLocalScheduler(unittest.TestCase):
     def test_get_results_with_available_results(self):
         """Test getting results when they are available."""
         # Add request and result
-        self.scheduler.put_requests([self.mock_request_1])
-        mock_output = self._create_test_request_output("req_1", finished=False)
-        self.scheduler.put_results([mock_output])
+        self._add_request_with_result(self.mock_request_1, "req_1", finished=False)
 
         # Get results
         results = self.scheduler.get_results()
@@ -433,9 +502,7 @@ class TestLocalScheduler(unittest.TestCase):
     def test_get_results_finished_request_cleanup(self):
         """Test that finished requests are cleaned up after getting results."""
         # Add request and finished result
-        self.scheduler.put_requests([self.mock_request_1])
-        mock_output = self._create_test_request_output("req_1", finished=True)
-        self.scheduler.put_results([mock_output])
+        self._add_request_with_result(self.mock_request_1, "req_1", finished=True)
 
         # Get results
         results = self.scheduler.get_results()
@@ -453,26 +520,18 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_requests([self.mock_request_1])
 
         # Verify request exists
-        self.assertIn("req_1", self.scheduler.requests)
+        self._assert_request_exists("req_1", self.scheduler)
 
         # Recycle specific request
         self.scheduler._recycle("req_1")
 
         # Verify request was removed
-        self.assertNotIn("req_1", self.scheduler.requests)
-        self.assertNotIn("req_1", self.scheduler.ids)
+        self._assert_request_not_exists("req_1", self.scheduler)
 
     def test_recycle_expired_requests(self):
         """Test recycling expired requests based on TTL."""
         # Create scheduler with short TTL
-        short_ttl_scheduler = LocalScheduler(
-            max_size=10,
-            ttl=1,  # 1 second TTL
-            enable_chunked_prefill=True,
-            max_num_partial_prefills=5,
-            max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000,
-        )
+        short_ttl_scheduler = self._create_scheduler(max_size=10, ttl=1)
 
         # Add request
         short_ttl_scheduler.put_requests([self.mock_request_1])
@@ -489,14 +548,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_recycle_unlimited_size(self):
         """Test recycle behavior with unlimited size scheduler."""
-        unlimited_scheduler = LocalScheduler(
-            max_size=0,  # Unlimited
-            ttl=60,
-            enable_chunked_prefill=True,
-            max_num_partial_prefills=5,
-            max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000,
-        )
+        unlimited_scheduler = self._create_scheduler(max_size=0)  # Unlimited
 
         # Add request
         unlimited_scheduler.put_requests([self.mock_request_1])
@@ -554,9 +606,7 @@ class TestLocalScheduler(unittest.TestCase):
             self.scheduler.put_requests([self.mock_request_1])
 
             # Should log successful enqueue
-            mock_info.assert_called()
-            log_calls = [call.args[0] for call in mock_info.call_args_list]
-            self.assertTrue(any("enqueued some requests" in msg for msg in log_calls))
+            self._assert_log_contains(mock_info, "enqueued some requests")
 
     def test_logging_put_results_finished(self):
         """Test that put_results logs finished responses."""
@@ -568,9 +618,7 @@ class TestLocalScheduler(unittest.TestCase):
             self.scheduler.put_results([mock_output])
 
             # Should log finished response
-            mock_info.assert_called()
-            log_calls = [call.args[0] for call in mock_info.call_args_list]
-            self.assertTrue(any("finished responses" in msg for msg in log_calls))
+            self._assert_log_contains(mock_info, "finished responses")
 
     def test_edge_case_empty_request_list(self):
         """Test putting empty request list."""
@@ -587,14 +635,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_edge_case_zero_ttl(self):
         """Test scheduler with zero TTL."""
-        zero_ttl_scheduler = LocalScheduler(
-            max_size=10,
-            ttl=0,  # Immediate expiration
-            enable_chunked_prefill=True,
-            max_num_partial_prefills=5,
-            max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000,
-        )
+        zero_ttl_scheduler = self._create_scheduler(max_size=10, ttl=0)
 
         # Add request
         zero_ttl_scheduler.put_requests([self.mock_request_1])
