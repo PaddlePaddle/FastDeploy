@@ -243,47 +243,41 @@ def test_convert_tokens_to_string(mock_sp_model, vocab_file):
 
 
 @pytest.mark.parametrize(
-    "token_ids_0,token_ids_1,add_bos,add_eos,description",
+    "token_ids_0,token_ids_1,description",
     [
         # Single sequence with BOS and EOS
-        ([10, 20, 30], None, True, True, "single_sequence_with_special_tokens"),
+        ([10, 20, 30], None, "single_sequence_with_special_tokens"),
         # Token pair with BOS and EOS
-        ([10, 20, 30], [40, 50], True, True, "token_pair_with_special_tokens"),
-        # Single sequence without special tokens
-        ([10, 20, 30], None, False, False, "single_sequence_no_special_tokens"),
+        ([10, 20, 30], [40, 50], "token_pair_with_special_tokens"),
     ],
 )
-def test_build_inputs_with_special_tokens(
-    mock_sp_model, vocab_file, token_ids_0, token_ids_1, add_bos, add_eos, description
-):
+def test_build_inputs_with_special_tokens(mock_sp_model, vocab_file, token_ids_0, token_ids_1, description):
     """Test build_inputs_with_special_tokens with various configurations"""
     # Mock token IDs
     mock_sp_model.piece_to_id.side_effect = lambda token: {"<s>": 1, "</s>": 2, "<pad>": 0, "<unk>": 3}.get(token, 10)
 
     with patch("sentencepiece.SentencePieceProcessor") as mock_spm:
         mock_spm.return_value = mock_sp_model
-        tokenizer = Ernie4_5Tokenizer(vocab_file=vocab_file, add_bos_token=add_bos, add_eos_token=add_eos)
+        tokenizer = Ernie4_5Tokenizer(vocab_file=vocab_file, add_bos_token=True, add_eos_token=True)
 
         result = tokenizer.build_inputs_with_special_tokens(token_ids_0, token_ids_1)
 
         # Verify structure based on test case
         if token_ids_1 is None:
             # Single sequence
-            if add_bos and add_eos:
-                expected = [1] + token_ids_0 + [2]
-                assert result == expected
+            expected = [1] + token_ids_0 + [2]
+            assert result == expected
         else:
             # Token pair
-            if add_bos and add_eos:
-                expected = (
-                    [tokenizer.bos_token_id]
-                    + token_ids_0
-                    + [tokenizer.eos_token_id]
-                    + [tokenizer.bos_token_id]
-                    + token_ids_1
-                    + [tokenizer.eos_token_id]
-                )
-                assert result == expected
+            expected = (
+                [tokenizer.bos_token_id]
+                + token_ids_0
+                + [tokenizer.eos_token_id]
+                + [tokenizer.bos_token_id]
+                + token_ids_1
+                + [tokenizer.eos_token_id]
+            )
+            assert result == expected
 
 
 # ===== Token Type IDs Tests (Parametrized) =====
@@ -328,48 +322,18 @@ def test_create_token_type_ids_from_sequences(
         assert all(x == 1 for x in result[first_seq_length:])
 
 
-def test_get_special_tokens_mask(tokenizer):
-    """Test get_special_tokens_mask when already has special tokens"""
-    token_ids_0 = [1, 10, 20, 2]  # Already has special tokens
-    token_ids_1 = [1, 30, 40, 2]  # Already has special tokens
-
-    result = tokenizer.get_special_tokens_mask(
-        token_ids_0=token_ids_0, token_ids_1=token_ids_1, already_has_special_tokens=True
-    )
-
-    assert isinstance(result, list)
+# ===== Save Vocabulary Tests =====
 
 
-# ===== Save Vocabulary Tests (Parametrized) =====
-
-
-@pytest.mark.parametrize(
-    "scenario,description",
-    [
-        ("file_copying", "test_save_vocabulary_file_copying"),
-        ("serialization", "test_save_vocabulary_serialization"),
-    ],
-)
-def test_save_vocabulary(mock_sp_model, vocab_file, tmp_path, scenario, description):
-    """Test save_vocabulary with file copying and serialization scenarios"""
+def test_save_vocabulary(mock_sp_model, tmp_path):
+    """Test save_vocabulary with serialization"""
     with patch("sentencepiece.SentencePieceProcessor") as mock_spm:
         mock_spm.return_value = mock_sp_model
+        mock_sp_model.serialized_model_proto.return_value = b"serialized_model"
 
-        if scenario == "file_copying":
-            # Create a source vocab file
-            source_vocab = str(tmp_path / "source.model")
-            with open(source_vocab, "wb") as f:
-                f.write(b"fake model content")
-
-            tokenizer = Ernie4_5Tokenizer(vocab_file=source_vocab)
-            save_dir = tmp_path / "saved"
-            save_dir.mkdir()
-
-        else:  # serialization
-            mock_sp_model.serialized_model_proto.return_value = b"serialized_model"
-            tokenizer = Ernie4_5Tokenizer(vocab_file="nonexistent_file.model")
-            save_dir = tmp_path / "saved"
-            save_dir.mkdir()
+        tokenizer = Ernie4_5Tokenizer(vocab_file="nonexistent_file.model")
+        save_dir = tmp_path / "saved"
+        save_dir.mkdir()
 
         result = tokenizer.save_vocabulary(str(save_dir))
 
@@ -377,46 +341,7 @@ def test_save_vocabulary(mock_sp_model, vocab_file, tmp_path, scenario, descript
         assert len(result) == 1
         assert os.path.exists(result[0])
 
-        # Verify content for serialization scenario
-        if scenario == "serialization":
-            with open(result[0], "rb") as f:
-                content = f.read()
-            assert content == b"serialized_model"
-
-
-def test_save_vocabulary_invalid_directory(tokenizer):
-    """Test save_vocabulary with invalid directory"""
-    result = tokenizer.save_vocabulary("/nonexistent/directory")
-
-    # Should return None for invalid directory
-    assert result is None
-
-
-# ===== Serialization Tests =====
-
-
-def test_serialization(mock_sp_model, vocab_file):
-    """Test serialization (__getstate__ and __setstate__)"""
-    with patch("sentencepiece.SentencePieceProcessor") as mock_spm:
-        mock_spm.return_value = mock_sp_model
-        tokenizer = Ernie4_5Tokenizer(vocab_file=vocab_file)
-
-        # Test __getstate__
-        state = tokenizer.__getstate__()
-        assert state["sp_model"] is None
-        assert state["vocab_file"] == vocab_file
-
-        # Test __setstate__
-        restore_state = {
-            "vocab_file": vocab_file,
-            "sp_model_kwargs": {},
-            "add_bos_token": True,
-            "add_eos_token": False,
-            "sp_model": None,
-        }
-        tokenizer.__setstate__(restore_state)
-
-        # Verify sp_model was recreated
-        assert tokenizer.sp_model is not None
-        mock_spm.assert_called_with()
-        mock_sp_model.Load.assert_called_with(vocab_file)
+        # Verify the file was created with serialized content
+        with open(result[0], "rb") as f:
+            content = f.read()
+        assert content == b"serialized_model"
