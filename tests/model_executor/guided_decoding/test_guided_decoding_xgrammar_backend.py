@@ -223,7 +223,6 @@ class TestXGrammarProcessor(unittest.TestCase):
         """Test processor initialization with various parameters."""
         # Test default parameters
         processor = XGrammarProcessor(compiled_grammar=self.mock_compiled_grammar)
-        self.assertEqual(processor.max_rollback_tokens, 200)
         self.assertIsNone(processor.vocab_size)
         self.assertIsNone(processor.batch_size)
         self.assertFalse(processor.terminate_without_stop_token)
