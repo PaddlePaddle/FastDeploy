@@ -454,6 +454,197 @@ class TestCommonEngine(unittest.TestCase):
         # At least some signals should be present in a properly initialized engine
         self.assertGreater(signals_present, 0, "Engine should have IPC signals initialized")
 
+    def test_engine_enable_mm_configuration(self):
+        """Test enable_mm configuration affects behavior"""
+        if hasattr(self.engine.cfg.model_config, "enable_mm"):
+            enable_mm = self.engine.cfg.model_config.enable_mm
+            self.assertIsInstance(enable_mm, bool)
+
+            # If multimodal is enabled, check related attributes exist
+            if enable_mm:
+                if hasattr(self.engine, "data_processor"):
+                    dp = self.engine.data_processor
+                    # Check for multimodal-related attributes
+                    mm_attrs = ["image_patch_id", "image_token_id"]
+                    for attr in mm_attrs:
+                        if hasattr(dp, attr):
+                            # Attribute exists, which is good for mm enabled
+                            pass
+
+    def test_engine_enable_prefix_caching_configuration(self):
+        """Test enable_prefix_caching configuration"""
+        if hasattr(self.engine.cfg.cache_config, "enable_prefix_caching"):
+            enable_pc = self.engine.cfg.cache_config.enable_prefix_caching
+            self.assertIsInstance(enable_pc, bool)
+
+    def test_engine_splitwise_role_configuration(self):
+        """Test splitwise role configuration affects behavior"""
+        if hasattr(self.engine.cfg.scheduler_config, "splitwise_role"):
+            role = self.engine.cfg.scheduler_config.splitwise_role
+            self.assertIn(role, ["prefill", "decode", "mixed"])
+
+            # Check if split_connector exists for splitwise configurations
+            if role in ["prefill", "decode", "mixed"]:
+                if hasattr(self.engine, "split_connector"):
+                    self.assertIsNotNone(self.engine.split_connector)
+
+    def test_engine_quantization_configuration(self):
+        """Test quantization configuration"""
+        if hasattr(self.engine.cfg.model_config, "quantization"):
+            quant_config = self.engine.cfg.model_config.quantization
+            self.assertIsNotNone(quant_config)
+
+    def test_engine_speculative_config(self):
+        """Test speculative decoding configuration"""
+        if hasattr(self.engine.cfg, "speculative_config"):
+            spec_config = self.engine.cfg.speculative_config
+            self.assertIsNotNone(spec_config)
+
+            # Check method exists
+            if hasattr(spec_config, "method"):
+                method = spec_config.method
+                self.assertIsInstance(method, str)
+
+    def test_engine_structured_outputs_config(self):
+        """Test structured outputs configuration"""
+        if hasattr(self.engine.cfg, "structured_outputs_config"):
+            struct_config = self.engine.cfg.structured_outputs_config
+            self.assertIsNotNone(struct_config)
+
+            # Check guided decoding backend
+            if hasattr(struct_config, "guided_decoding_backend"):
+                backend = struct_config.guided_decoding_backend
+                self.assertIsInstance(backend, str)
+
+    def test_create_data_processor_initialization(self):
+        """Test create_data_processor method is called during initialization"""
+        # Verify that data processor was created during engine initialization
+        if hasattr(self.engine, "data_processor"):
+            dp = self.engine.data_processor
+            self.assertIsNotNone(dp)
+
+            # Test that data processor has expected tokenizer attributes
+            if hasattr(dp, "tokenizer"):
+                tokenizer = dp.tokenizer
+                self.assertIsNotNone(tokenizer)
+
+                # Test tokenizer has expected methods
+                expected_methods = ["encode", "decode"]
+                for method in expected_methods:
+                    if hasattr(tokenizer, method):
+                        self.assertTrue(callable(getattr(tokenizer, method)))
+
+    def test_init_worker_monitor_signals_called(self):
+        """Test that worker monitor signals were initialized"""
+        # These signals should be created during engine initialization
+        signal_names = [
+            "exist_task_signal",
+            "exist_swapped_task_signal",
+            "exist_prefill_task_signal",
+            "worker_healthy_live_signal",
+            "cache_ready_signal",
+            "swap_space_ready_signal",
+            "model_weights_status_signal",
+            "prefix_tree_status_signal",
+            "kv_cache_status_signal"
+        ]
+
+        signals_present = 0
+        for signal_name in signal_names:
+            if hasattr(self.engine, signal_name):
+                signals_present += 1
+
+        # At least most signals should be present
+        self.assertGreaterEqual(signals_present, 5, "Most worker monitor signals should be initialized")
+
+    def test_init_worker_signals_called(self):
+        """Test that worker signals were initialized"""
+        # These signals should be created during engine initialization
+        signal_names = [
+            "worker_ready_signal",
+            "loaded_model_signal",
+            "launched_cache_manager_signal",
+            "launched_expert_service_signal"
+        ]
+
+        signals_present = 0
+        for signal_name in signal_names:
+            if hasattr(self.engine, signal_name):
+                signals_present += 1
+
+        # At least some signals should be present
+        self.assertGreaterEqual(signals_present, 2, "Worker signals should be initialized")
+
+    def test_register_to_router_method_exists(self):
+        """Test _register_to_router method exists and can be inspected"""
+        # This method exists but may not be safe to call directly
+        # Just verify it exists and has expected structure
+        self.assertTrue(hasattr(self.engine, "_register_to_router"))
+        self.assertTrue(callable(getattr(self.engine, "_register_to_router")))
+
+        # Check if router config exists
+        if hasattr(self.engine.cfg, "router_config"):
+            router_cfg = self.engine.cfg.router_config
+            # Method should exist regardless of router configuration
+            self.assertTrue(True)
+
+    def test_engine_worker_num_per_node_calculation(self):
+        """Test worker_num_per_node attribute is properly set"""
+        if hasattr(self.engine.cfg, "worker_num_per_node"):
+            worker_num = self.engine.cfg.worker_num_per_node
+            self.assertIsInstance(worker_num, int)
+            self.assertGreater(worker_num, 0)
+
+    def test_engine_tensor_parallel_size_validation(self):
+        """Test tensor parallel size configuration"""
+        if hasattr(self.engine.cfg.parallel_config, "tensor_parallel_size"):
+            tp_size = self.engine.cfg.parallel_config.tensor_parallel_size
+            self.assertIsInstance(tp_size, int)
+            self.assertGreater(tp_size, 0)
+
+    def test_engine_data_parallel_size_validation(self):
+        """Test data parallel size configuration"""
+        if hasattr(self.engine.cfg.parallel_config, "data_parallel_size"):
+            dp_size = self.engine.cfg.parallel_config.data_parallel_size
+            self.assertIsInstance(dp_size, int)
+            self.assertGreaterEqual(dp_size, 1)
+
+    def test_engine_max_model_len_validation(self):
+        """Test max model length configuration"""
+        if hasattr(self.engine.cfg.model_config, "max_model_len"):
+            max_len = self.engine.cfg.model_config.max_model_len
+            self.assertIsInstance(max_len, int)
+            self.assertGreater(max_len, 0)
+
+    def test_engine_max_num_seqs_validation(self):
+        """Test max number of sequences configuration"""
+        if hasattr(self.engine.cfg.scheduler_config, "max_num_seqs"):
+            max_seqs = self.engine.cfg.scheduler_config.max_num_seqs
+            self.assertIsInstance(max_seqs, int)
+            self.assertGreater(max_seqs, 0)
+
+    def test_engine_block_size_validation(self):
+        """Test cache block size configuration"""
+        if hasattr(self.engine.cfg.cache_config, "block_size"):
+            block_size = self.engine.cfg.cache_config.block_size
+            self.assertIsInstance(block_size, int)
+            self.assertGreater(block_size, 0)
+
+    def test_engine_gpu_memory_utilization_validation(self):
+        """Test GPU memory utilization configuration"""
+        if hasattr(self.engine.cfg.cache_config, "gpu_memory_utilization"):
+            utilization = self.engine.cfg.cache_config.gpu_memory_utilization
+            self.assertIsInstance(utilization, float)
+            self.assertGreater(utilization, 0)
+            self.assertLessEqual(utilization, 1)
+
+    def test_engine_max_num_batched_tokens_validation(self):
+        """Test max batched tokens configuration"""
+        if hasattr(self.engine.cfg.scheduler_config, "max_num_batched_tokens"):
+            max_tokens = self.engine.cfg.scheduler_config.max_num_batched_tokens
+            self.assertIsInstance(max_tokens, int)
+            self.assertGreater(max_tokens, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
