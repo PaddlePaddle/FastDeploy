@@ -339,21 +339,33 @@ class TestXGrammarBackend(unittest.TestCase):
         with patch("xgrammar.TokenizerInfo.from_huggingface"), patch("xgrammar.GrammarCompiler"):
             self.backend = XGrammarBackend(self.mock_fd_config)
 
+    def _get_sample_structural_tag(self):
+        """Get a sample structural tag for testing."""
+        return json.dumps(
+            {
+                "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
+                "triggers": ["<tool>"],
+            }
+        )
+
     def test_backend_initialization(self):
-        """Test backend initialization."""
-        self.assertEqual(self.backend.vocab_size, 1000)
-        self.assertEqual(self.backend.batch_size, 4)
-        self.assertTrue(self.backend.any_whitespace)  # disable_any_whitespace is False
+        """Test backend initialization with various configurations."""
+        test_configs = [
+            (1000, 4, False, True),  # vocab_size, max_num_seqs, disable_any_whitespace, expected_any_whitespace
+            (2000, 8, True, False),
+        ]
 
-        # Test with disable_any_whitespace=True
-        mock_fd_config = Mock()
-        mock_fd_config.model_config.vocab_size = 2000
-        mock_fd_config.scheduler_config.max_num_seqs = 8
-        mock_fd_config.structured_outputs_config.disable_any_whitespace = True
+        for vocab_size, max_num_seqs, disable_any_white, expected_any_white in test_configs:
+            mock_fd_config = Mock()
+            mock_fd_config.model_config.vocab_size = vocab_size
+            mock_fd_config.scheduler_config.max_num_seqs = max_num_seqs
+            mock_fd_config.structured_outputs_config.disable_any_whitespace = disable_any_white
 
-        with patch("xgrammar.TokenizerInfo.from_huggingface"), patch("xgrammar.GrammarCompiler"):
-            backend = XGrammarBackend(mock_fd_config)
-            self.assertFalse(backend.any_whitespace)
+            with patch("xgrammar.TokenizerInfo.from_huggingface"), patch("xgrammar.GrammarCompiler"):
+                backend = XGrammarBackend(mock_fd_config)
+                self.assertEqual(backend.vocab_size, vocab_size)
+                self.assertEqual(backend.batch_size, max_num_seqs)
+                self.assertEqual(backend.any_whitespace, expected_any_white)
 
     def test_backend_initialization_tokenizer_failure(self):
         """Test backend initialization with tokenizer failure."""
@@ -387,95 +399,76 @@ class TestXGrammarBackend(unittest.TestCase):
         self.assertEqual(processor.batch_size, self.backend.batch_size)
         self.assertTrue(processor.enable_reasoning)
 
-    def test_json_processor_success(self):
-        """Test successful JSON processor creation."""
-        schema = '{"type": "object", "properties": {"name": {"type": "string"}}}'
-
-        with patch.object(self.backend.grammar_compiler, "compile_json_schema") as mock_compile:
+    def _test_processor_success_helper(self, processor_type, compile_method, test_input, expected_kwargs=None):
+        """Helper method to test successful processor creation."""
+        with patch.object(self.backend.grammar_compiler, compile_method) as mock_compile:
             mock_compiled_grammar = Mock()
             mock_compile.return_value = mock_compiled_grammar
 
-            processor = self.backend._json_processor(schema)
+            processor_method = getattr(self.backend, f"_{processor_type}_processor")
+            processor = processor_method(test_input)
 
             self.assertIsNotNone(processor)
-            mock_compile.assert_called_once_with(schema, any_whitespace=self.backend.any_whitespace)
+            if expected_kwargs:
+                mock_compile.assert_called_once_with(test_input, **expected_kwargs)
+            else:
+                mock_compile.assert_called_once_with(test_input)
+
+    def _test_processor_failure_helper(self, processor_type, compile_method, test_input, expected_kwargs=None):
+        """Helper method to test processor creation with compilation failure."""
+        with patch.object(
+            self.backend.grammar_compiler, compile_method, side_effect=Exception("Compilation error")
+        ) as mock_compile:
+            processor_method = getattr(self.backend, f"_{processor_type}_processor")
+            processor = processor_method(test_input)
+
+            self.assertIsNone(processor)
+            if expected_kwargs:
+                mock_compile.assert_called_once_with(test_input, **expected_kwargs)
+            else:
+                mock_compile.assert_called_once_with(test_input)
+
+    def test_json_processor_success(self):
+        """Test successful JSON processor creation."""
+        schema = '{"type": "object", "properties": {"name": {"type": "string"}}}'
+        self._test_processor_success_helper(
+            "json", "compile_json_schema", schema, {"any_whitespace": self.backend.any_whitespace}
+        )
 
     def test_json_processor_failure(self):
         """Test JSON processor creation with compilation failure."""
         schema = "invalid schema"
-
-        with patch.object(
-            self.backend.grammar_compiler, "compile_json_schema", side_effect=Exception("Compilation error")
-        ) as mock_compile:
-            processor = self.backend._json_processor(schema)
-
-            self.assertIsNone(processor)
-            mock_compile.assert_called_once_with(schema, any_whitespace=self.backend.any_whitespace)
+        self._test_processor_failure_helper(
+            "json", "compile_json_schema", schema, {"any_whitespace": self.backend.any_whitespace}
+        )
 
     def test_regex_processor_success(self):
         """Test successful regex processor creation."""
         pattern = r"[a-z]+"
-
-        with patch.object(self.backend.grammar_compiler, "compile_regex") as mock_compile:
-            mock_compiled_grammar = Mock()
-            mock_compile.return_value = mock_compiled_grammar
-
-            processor = self.backend._regex_processor(pattern)
-
-            self.assertIsNotNone(processor)
-            mock_compile.assert_called_once_with(pattern)
+        self._test_processor_success_helper("regex", "compile_regex", pattern)
 
     def test_regex_processor_failure(self):
         """Test regex processor creation with compilation failure."""
         pattern = "[invalid regex"
-
-        with patch.object(
-            self.backend.grammar_compiler, "compile_regex", side_effect=Exception("Compilation error")
-        ) as mock_compile:
-            processor = self.backend._regex_processor(pattern)
-
-            self.assertIsNone(processor)
-            mock_compile.assert_called_once_with(pattern)
+        self._test_processor_failure_helper("regex", "compile_regex", pattern)
 
     def test_grammar_processor_success(self):
         """Test successful grammar processor creation."""
         grammar = 'root ::= "hello" "world"'
-
-        with patch.object(self.backend.grammar_compiler, "compile_grammar") as mock_compile:
-            mock_compiled_grammar = Mock()
-            mock_compile.return_value = mock_compiled_grammar
-
-            processor = self.backend._grammar_processor(grammar)
-
-            self.assertIsNotNone(processor)
-            mock_compile.assert_called_once_with(grammar)
+        self._test_processor_success_helper("grammar", "compile_grammar", grammar)
 
     def test_grammar_processor_failure(self):
         """Test grammar processor creation with compilation failure."""
         grammar = "invalid grammar"
-
-        with patch.object(
-            self.backend.grammar_compiler, "compile_grammar", side_effect=Exception("Compilation error")
-        ) as mock_compile:
-            processor = self.backend._grammar_processor(grammar)
-
-            self.assertIsNone(processor)
-            mock_compile.assert_called_once_with(grammar)
+        self._test_processor_failure_helper("grammar", "compile_grammar", grammar)
 
     def test_structural_tag_processor_success(self):
         """Test successful structural tag processor creation."""
-        structural_tag = json.dumps(
-            {
-                "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
-                "triggers": ["<tool>"],
-            }
-        )
-
         with patch.object(self.backend.grammar_compiler, "compile_structural_tag") as mock_compile:
             mock_compiled_grammar = Mock()
             mock_compile.return_value = mock_compiled_grammar
 
-            processor = self.backend._structural_tag_processor(structural_tag)
+            processor = self.backend._structural_tag_processor(self._get_sample_structural_tag())
 
             self.assertIsNotNone(processor)
             mock_compile.assert_called_once()
@@ -490,17 +483,10 @@ class TestXGrammarBackend(unittest.TestCase):
 
     def test_structural_tag_processor_compilation_failure(self):
         """Test structural tag processor with compilation failure."""
-        structural_tag = json.dumps(
-            {
-                "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
-                "triggers": ["<tool>"],
-            }
-        )
-
         with patch.object(
             self.backend.grammar_compiler, "compile_structural_tag", side_effect=Exception("Compilation error")
         ) as mock_compile:
-            processor = self.backend._structural_tag_processor(structural_tag)
+            processor = self.backend._structural_tag_processor(self._get_sample_structural_tag())
 
             self.assertIsNone(processor)
             mock_compile.assert_called_once()
@@ -512,6 +498,36 @@ class TestXGrammarChecker(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.checker = XGrammarChecker(disable_any_whitespace=False)
+
+    def _create_mock_request(self):
+        """Create a mock request with all guided decoding fields initialized to None."""
+        request = Mock()
+        request.guided_json = None
+        request.guided_grammar = None
+        request.guided_json_object = None
+        request.guided_choice = None
+        request.structural_tag = None
+        return request
+
+    def _get_sample_structural_tag(self):
+        """Get a sample structural tag for testing."""
+        return json.dumps(
+            {
+                "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
+                "triggers": ["<tool>"],
+            }
+        )
+
+    def _test_schema_format_error(self, field_name, field_value, patch_target, error_substring):
+        """Helper method to test schema format with expected error."""
+        request = self._create_mock_request()
+        setattr(request, field_name, field_value)
+
+        with patch(patch_target, side_effect=RuntimeError("test error")):
+            _, error = self.checker.schema_format(request)
+
+            self.assertIsNotNone(error)
+            self.assertIn(error_substring, error)
 
     def test_checker_initialization(self):
         """Test checker initialization."""
@@ -535,21 +551,16 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_unsupported_json_schema_with_array_features(self):
         """Test detection of unsupported array features in JSON schema."""
-        # Test uniqueItems
-        schema1 = {"type": "array", "uniqueItems": True}
-        self.assertTrue(self.checker._unsupported_json_schema(schema1))
+        # Test uniqueItems, contains, minContains, maxContains
+        test_schemas = [
+            {"type": "array", "uniqueItems": True},
+            {"type": "array", "contains": {"type": "number"}},
+            {"type": "array", "minContains": 1},
+            {"type": "array", "maxContains": 5},
+        ]
 
-        # Test contains
-        schema2 = {"type": "array", "contains": {"type": "number"}}
-        self.assertTrue(self.checker._unsupported_json_schema(schema2))
-
-        # Test minContains
-        schema3 = {"type": "array", "minContains": 1}
-        self.assertTrue(self.checker._unsupported_json_schema(schema3))
-
-        # Test maxContains
-        schema4 = {"type": "array", "maxContains": 5}
-        self.assertTrue(self.checker._unsupported_json_schema(schema4))
+        for schema in test_schemas:
+            self.assertTrue(self.checker._unsupported_json_schema(schema), f"Failed for schema: {schema}")
 
     def test_unsupported_json_schema_with_string_format(self):
         """Test detection of unsupported format in JSON schema."""
@@ -559,21 +570,16 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_unsupported_json_schema_with_object_features(self):
         """Test detection of unsupported object features in JSON schema."""
-        # Test minProperties
-        schema1 = {"type": "object", "minProperties": 1}
-        self.assertTrue(self.checker._unsupported_json_schema(schema1))
+        # Test minProperties, maxProperties, propertyNames, patternProperties
+        test_schemas = [
+            {"type": "object", "minProperties": 1},
+            {"type": "object", "maxProperties": 10},
+            {"type": "object", "propertyNames": {"type": "string"}},
+            {"type": "object", "patternProperties": {"^S_": {"type": "string"}}},
+        ]
 
-        # Test maxProperties
-        schema2 = {"type": "object", "maxProperties": 10}
-        self.assertTrue(self.checker._unsupported_json_schema(schema2))
-
-        # Test propertyNames
-        schema3 = {"type": "object", "propertyNames": {"type": "string"}}
-        self.assertTrue(self.checker._unsupported_json_schema(schema3))
-
-        # Test patternProperties
-        schema4 = {"type": "object", "patternProperties": {"^S_": {"type": "string"}}}
-        self.assertTrue(self.checker._unsupported_json_schema(schema4))
+        for schema in test_schemas:
+            self.assertTrue(self.checker._unsupported_json_schema(schema), f"Failed for schema: {schema}")
 
     def test_unsupported_json_schema_nested(self):
         """Test detection of unsupported features in nested JSON schema."""
@@ -608,13 +614,9 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_guided_json_success(self):
         """Test successful formatting of guided_json."""
-        request = Mock()
+        request = self._create_mock_request()
         original_json = {"type": "object", "properties": {"name": {"type": "string"}}}
         request.guided_json = original_json
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
 
         with patch("xgrammar.Grammar.from_json_schema"):
             result_request, error = self.checker.schema_format(request)
@@ -626,45 +628,28 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_guided_json_invalid_format(self):
         """Test formatting of invalid guided_json."""
-        request = Mock()
-        request.guided_json = "invalid json"
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
-
-        with patch("xgrammar.Grammar.from_json_schema", side_effect=RuntimeError("Invalid JSON")):
-            result_request, error = self.checker.schema_format(request)
-
-            self.assertIsNotNone(error)
-            self.assertIn("Invalid JSON format", error)
+        self._test_schema_format_error(
+            "guided_json", "invalid json", "xgrammar.Grammar.from_json_schema", "Invalid JSON format"
+        )
 
     def test_schema_format_guided_json_unsupported_schema(self):
         """Test formatting of guided_json with unsupported schema."""
-        request = Mock()
+        request = self._create_mock_request()
         unsupported_json = {"type": "number", "multipleOf": 2}
         request.guided_json = unsupported_json
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
 
         # Mock the _unsupported_json_schema method to return True for our test
         with patch("xgrammar.Grammar.from_json_schema"):
             with patch.object(self.checker, "_unsupported_json_schema", return_value=True):
-                result_request, error = self.checker.schema_format(request)
+                _, error = self.checker.schema_format(request)
 
                 self.assertIsNotNone(error)
                 self.assertIn("unsupported JSON schema", error)
 
     def test_schema_format_guided_grammar_success(self):
         """Test successful formatting of guided_grammar."""
-        request = Mock()
-        request.guided_json = None
+        request = self._create_mock_request()
         request.guided_grammar = 'root ::= "hello" "world"'
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
 
         with patch("xgrammar.Grammar.from_ebnf"):
             result_request, error = self.checker.schema_format(request)
@@ -674,27 +659,14 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_guided_grammar_invalid_format(self):
         """Test formatting of invalid guided_grammar."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = "invalid grammar"
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
-
-        with patch("xgrammar.Grammar.from_ebnf", side_effect=RuntimeError("Invalid grammar")):
-            result_request, error = self.checker.schema_format(request)
-
-            self.assertIsNotNone(error)
-            self.assertIn("Invalid grammar format", error)
+        self._test_schema_format_error(
+            "guided_grammar", "invalid grammar", "xgrammar.Grammar.from_ebnf", "Invalid grammar format"
+        )
 
     def test_schema_format_guided_json_object(self):
         """Test formatting of guided_json_object."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
+        request = self._create_mock_request()
         request.guided_json_object = True
-        request.guided_choice = None
-        request.structural_tag = None
 
         result_request, error = self.checker.schema_format(request)
 
@@ -703,12 +675,8 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_guided_choice_success(self):
         """Test successful formatting of guided_choice."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
+        request = self._create_mock_request()
         request.guided_choice = ["hello", "world", "test"]
-        request.structural_tag = None
 
         with patch("xgrammar.Grammar.from_ebnf"):
             result_request, error = self.checker.schema_format(request)
@@ -721,45 +689,23 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_guided_choice_invalid_format(self):
         """Test formatting that results in invalid guided_choice grammar."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = ["hello", "world"]
-        request.structural_tag = None
-
-        with patch("xgrammar.Grammar.from_ebnf", side_effect=RuntimeError("Invalid choice")):
-            result_request, error = self.checker.schema_format(request)
-
-            self.assertIsNotNone(error)
-            self.assertIn("Invalid choice format", error)
+        self._test_schema_format_error(
+            "guided_choice", ["hello", "world"], "xgrammar.Grammar.from_ebnf", "Invalid choice format"
+        )
 
     def test_schema_format_structural_tag_success(self):
         """Test successful formatting of structural_tag."""
-        structural_tag_data = {
-            "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
-            "triggers": ["<tool>"],
-        }
-
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = json.dumps(structural_tag_data)
+        request = self._create_mock_request()
+        request.structural_tag = self._get_sample_structural_tag()
 
         with patch("xgrammar.Grammar.from_structural_tag"):
-            result_request, error = self.checker.schema_format(request)
+            _, error = self.checker.schema_format(request)
 
             self.assertIsNone(error)
 
     def test_schema_format_structural_tag_invalid_json(self):
         """Test formatting of invalid structural_tag JSON."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
+        request = self._create_mock_request()
         request.structural_tag = "invalid json"
 
         # The actual implementation doesn't catch JSONDecodeError, so we expect it to raise
@@ -768,32 +714,16 @@ class TestXGrammarChecker(unittest.TestCase):
 
     def test_schema_format_structural_tag_invalid_grammar(self):
         """Test formatting of structural_tag with invalid grammar."""
-        structural_tag_data = {
-            "structures": [{"begin": "<tool>", "schema": {"type": "string"}, "end": "</tool>"}],
-            "triggers": ["<tool>"],
-        }
-
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = json.dumps(structural_tag_data)
-
-        with patch("xgrammar.Grammar.from_structural_tag", side_effect=RuntimeError("Invalid structural tag")):
-            result_request, error = self.checker.schema_format(request)
-
-            self.assertIsNotNone(error)
-            self.assertIn("Invalid structural_tag format", error)
+        self._test_schema_format_error(
+            "structural_tag",
+            self._get_sample_structural_tag(),
+            "xgrammar.Grammar.from_structural_tag",
+            "Invalid structural_tag format",
+        )
 
     def test_schema_format_regex_passthrough(self):
         """Test that regex requests are passed through unchanged."""
-        request = Mock()
-        request.guided_json = None
-        request.guided_grammar = None
-        request.guided_json_object = None
-        request.guided_choice = None
-        request.structural_tag = None
+        request = self._create_mock_request()
         # Note: regex is handled separately, not through schema_format
 
         result_request, error = self.checker.schema_format(request)
