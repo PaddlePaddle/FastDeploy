@@ -46,6 +46,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             },
             "output_token_ids": 3,
+            "metrics": {},
         }
         self.mock_engine.generate.return_value = [mock_output]
 
@@ -80,6 +81,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             },
             "output_token_ids": 3,
+            "metrics": {},
         }
         self.mock_engine.generate.return_value = [mock_output]
 
@@ -109,10 +111,12 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             {
                 "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
                 "output_token_ids": 2,
+                "metrics": {},
             },
             {
                 "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
                 "output_token_ids": 2,
+                "metrics": {},
             },
         ]
         self.mock_engine.generate.return_value = mock_outputs
@@ -146,10 +150,12 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             {
                 "outputs": {"text": " response1", "token_ids": [1, 2], "top_logprobs": None, "finished": True},
                 "output_token_ids": 2,
+                "metrics": {},
             },
             {
                 "outputs": {"text": " response2", "token_ids": [3, 4], "top_logprobs": None, "finished": True},
                 "output_token_ids": 2,
+                "metrics": {},
             },
         ]
         self.mock_engine.generate.return_value = mock_outputs

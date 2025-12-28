@@ -251,7 +251,7 @@ def get_name():
 
 cmdclass_dict = {"bdist_wheel": CustomBdistWheel}
 cmdclass_dict["build_ext"] = CMakeBuild
-FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.3.0-dev")
+FASTDEPLOY_VERSION = os.environ.get("FASTDEPLOY_VERSION", "2.4.0-dev")
 cmdclass_dict["build_optl"] = PostInstallCommand
 
 
@@ -300,6 +300,7 @@ setup(
             "input/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
             "model_executor/ops/gcu/fastdeploy_ops/*",
+            "cache_manager/transfer_factory/get_rdma_nics.sh",
             "version.txt",
         ]
     },

@@ -44,16 +44,17 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
                                             output_cum_offsets_tmp.place());
   auto output_cum_offsets =
       output_cum_offsets_tmp.copy_to(output_cum_offsets_tmp.place(), false);
-
-  int r = baidu::xpu::api::plugin::speculate_get_output_padding_offset(
-      ctx,
-      output_padding_offset.mutable_data<int>(),
-      output_cum_offsets.mutable_data<int>(),
-      output_cum_offsets_tmp.data<int>(),
-      seq_lens_output.data<int>(),
-      bsz,
-      max_seq_len);
-  PD_CHECK(r == 0, "speculate_clear_accept_nums_kernel  failed.");
+  if (cpu_out_token_num.data<int64_t>()[0] > 0) {
+    int r = baidu::xpu::api::plugin::speculate_get_output_padding_offset(
+        ctx,
+        output_padding_offset.mutable_data<int>(),
+        output_cum_offsets.mutable_data<int>(),
+        output_cum_offsets_tmp.data<int>(),
+        seq_lens_output.data<int>(),
+        bsz,
+        max_seq_len);
+    PD_CHECK(r == 0, "speculate_clear_accept_nums_kernel  failed.");
+  }
 
   return {output_padding_offset, output_cum_offsets};
 }

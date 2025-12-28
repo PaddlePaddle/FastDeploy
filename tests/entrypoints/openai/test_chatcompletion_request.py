@@ -41,7 +41,7 @@ class TestChatCompletionRequest(unittest.TestCase):
         req = ChatCompletionRequest(messages=[1])
         self.assertEqual(req.model, "default")
         self.assertFalse(req.logprobs)
-        self.assertEqual(req.top_logprobs, 0)
+        self.assertIsNone(req.top_logprobs)
         self.assertEqual(req.n, 1)
         self.assertEqual(req.stop, [])
 

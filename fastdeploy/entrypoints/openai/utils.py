@@ -18,9 +18,9 @@ import asyncio
 import heapq
 import random
 import time
+from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
-import msgpack
 import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
@@ -124,7 +124,7 @@ class DealerConnectionManager:
         while self.running:
             try:
                 raw_data = await dealer.read()
-                response = msgpack.unpackb(raw_data[-1])
+                response = ForkingPickler.loads(raw_data[-1])
                 _zmq_metrics_stats = ZMQMetricsStats()
                 _zmq_metrics_stats.msg_recv_total += 1
                 if "zmq_send_time" in response:

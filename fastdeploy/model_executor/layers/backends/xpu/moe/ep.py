@@ -19,17 +19,15 @@ from abc import abstractmethod
 import deep_ep
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
 
 
-@singleton
-class DeepEPEngine:
+class DeepEPEngineBase:
     """
-    A wrapper class for DeepEP engine.
+    Base class for DeepEP engine implementations.
     """
 
     def __init__(
@@ -45,7 +43,7 @@ class DeepEPEngine:
         group=None,
     ):
         """
-        Initialize the DeepEP engine.
+        Initialize the DeepEP engine base.
         Args:
             group: The MPI group object.
             ep_size: The number of ranks.
@@ -68,27 +66,48 @@ class DeepEPEngine:
         self.group = group
         self.num_local_experts = num_experts // ep_size
         self.deepep_engine = None
-        self.init_deepep_engine()
 
-    def init_deepep_engine(self):
-        if self.splitwise_role == "mixed" or self.moe_phase.phase == "prefill":
-            self.deepep_engine = deep_ep.Buffer(
-                self.group,
-                int(1e9),
-                0,
-                num_experts=self.num_experts,
-                low_latency_mode=False,
-                num_qps_per_rank=1,
-            )
-        elif self.moe_phase.phase == "decode":
-            logger.info("Initializing Low Latency Buffer")
-            self.get_low_latency_buffer()
+    def barrier_all(self):
+        """
+        barrier_all
+        """
+        if self.deepep_engine is not None:
+            self.deepep_engine.barrier_all()
         else:
-            raise ValueError(f"Unknown generation phase {self.moe_phase}")
+            raise RuntimeError("The deepep engine has not been initialized yet.")
+
+
+@singleton
+class DeepEPEngineHighThroughput(DeepEPEngineBase):
+    """
+    High throughput version of DeepEP engine for prefill phase.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.deepep_engine = deep_ep.Buffer(
+            self.group,
+            int(1e9),
+            0,
+            num_experts=self.num_experts,
+            low_latency_mode=False,
+            num_qps_per_rank=1,
+        )
+
+
+@singleton
+class DeepEPEngineLowLatency(DeepEPEngineBase):
+    """
+    Low latency version of DeepEP engine for decode phase.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.get_low_latency_buffer()
 
     def get_low_latency_buffer(self):
         """
-        Get the DeepEP buffer.
+        Initialize low latency buffer for decode phase.
         Args:
             group: The MPI group object.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
@@ -103,23 +122,16 @@ class DeepEPEngine:
             self.ep_size,
             self.num_experts,
         )
-        # Allocate a buffer if not existed or not enough buffer size
-        if (
-            self.deepep_engine is None
-            or self.deepep_engine.group != self.group
-            or not self.deepep_engine.low_latency_mode
-            or self.deepep_engine.num_rdma_bytes < num_rdma_bytes
-        ):
-            # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
-            assert self.num_experts % self.ep_size == 0
-            self.deepep_engine = deep_ep.Buffer(
-                self.group,
-                0,
-                num_rdma_bytes,
-                self.num_experts,
-                low_latency_mode=True,
-                num_qps_per_rank=self.num_experts // self.num_ranks,
-            )
+        # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
+        assert self.num_experts % self.ep_size == 0
+        self.deepep_engine = deep_ep.Buffer(
+            self.group,
+            0,
+            num_rdma_bytes,
+            self.num_experts,
+            low_latency_mode=True,
+            num_qps_per_rank=self.num_experts // self.ep_size,
+        )
 
     def low_latency_dispatch(
         self,
@@ -172,7 +184,6 @@ class DeepEPEngine:
         handle,
     ):
         """
-
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
@@ -191,12 +202,6 @@ class DeepEPEngine:
         clean_low_latency_buffer
         """
         pass
-
-    def barrier_all(self):
-        """
-        barrier_all
-        """
-        self.deepep_engine.barrier_all()
 
 
 class XPUEPRunner:
@@ -227,10 +232,15 @@ class XPUEPRunner:
         self.ep_rank = ep_rank
         self.redundant_experts_num = redundant_experts_num
         self.ep_group = ep_group
+        self.ep_engine = None
         self.init_ep_engine()
 
     def init_ep_engine(self):
-        self.ep_engine = DeepEPEngine(
+        """Initialize the EP engine with default implementation"""
+        self._init_ep_engine(self._get_engine_class())
+
+    def _init_ep_engine(self, engine_class):
+        self.ep_engine = engine_class(
             num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
             hidden_size=self.hidden_size,
             num_experts=self.num_experts + self.redundant_experts_num,
@@ -240,6 +250,11 @@ class XPUEPRunner:
             moe_phase=self.moe_phase,
             group=self.ep_group,
         )
+
+    @abstractmethod
+    def _get_engine_class(self):
+        """Get the engine class to be initialized"""
+        raise NotImplementedError("Subclasses must implement this method")
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
         """
@@ -325,6 +340,9 @@ class XPUEPPrefillRunner(XPUEPRunner):
             ep_group=ep_group,
         )
 
+    def _get_engine_class(self):
+        return DeepEPEngineHighThroughput
+
     def dispatch(
         self,
         x: paddle.Tensor,
@@ -334,9 +352,9 @@ class XPUEPPrefillRunner(XPUEPRunner):
         **kwargs,
     ):
         self.num_combined_tokens = x.shape[0]
-        x_scale_tensor = kwargs.get("x_scale_tensor", None)
+        x_scale = kwargs.get("x_scale", None)
         dispatch_args = {
-            "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
+            "x": (x, x_scale) if x_scale is not None else x,
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
@@ -389,6 +407,9 @@ class XPUEPDecoderRunner(XPUEPRunner):
             ep_group=ep_group,
         )
 
+    def _get_engine_class(self):
+        return DeepEPEngineLowLatency
+
     def dispatch(
         self,
         x: paddle.Tensor,
@@ -407,11 +428,27 @@ class XPUEPDecoderRunner(XPUEPRunner):
             dispatch_hook,
             valid_token_num,
         ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8)
-        # no need to call dispatch_hook here, because it has already been done in xDeepEP
-        # if dispatch_hook is not None:
-        #     dispatch_hook()
+        # valid_token_num is optional:
+        # - if valid_token_num is None, it means that we CANNOT accurately know
+        #   the size of the tensor, but the advantage is that it can reduce
+        #   the overhead of kernel launch.
+        # - if valid_token_num is NOT None, it means that we CAN accurately know
+        #   the size of the tensor, but the disadvantage is that it will interrupt
+        #   the process of kernel launch.
+        if valid_token_num is None and dispatch_hook is not None:
+            dispatch_hook()
 
-        return recv_hidden_states, recv_expert_count, handle, valid_token_num
+        if valid_token_num is None:
+            valid_token_num = -1
+
+        if isinstance(recv_hidden_states, tuple):
+            recv_x = recv_hidden_states[0]
+            recv_x_scale = recv_hidden_states[1]
+        else:
+            recv_x = recv_hidden_states
+            recv_x_scale = None
+
+        return recv_x, recv_x_scale, recv_expert_count, handle, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(

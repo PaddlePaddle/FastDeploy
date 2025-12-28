@@ -150,6 +150,19 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
   return {quanted_x, quanted_scale};
 }
 
+std::vector<std::vector<int64_t>> PerTokenQuantInferShape(
+    std::vector<int64_t> input_shape, const int block_size) {
+  const int token_num = input_shape[0];
+  const int hidden_size = input_shape[1];
+  const int hidden_size_scale = (hidden_size + block_size - 1) / block_size;
+  return {{token_num, hidden_size}, {token_num, hidden_size_scale}};
+}
+
+std::vector<paddle::DataType> PerTokenQuantInferDtype(
+    paddle::DataType input_dtype, const int block_size) {
+  return {paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32};
+}
+
 template <typename T>
 __global__ void quant_per_token_per_block_padding(
     const T *input,
@@ -463,7 +476,9 @@ PD_BUILD_STATIC_OP(per_token_quant)
     .Inputs({"input"})
     .Outputs({"output", "output_scale"})
     .Attrs({"block_size: int"})
-    .SetKernelFn(PD_KERNEL(PerTokenQuant));
+    .SetKernelFn(PD_KERNEL(PerTokenQuant))
+    .SetInferShapeFn(PD_INFER_SHAPE(PerTokenQuantInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(PerTokenQuantInferDtype));
 
 PD_BUILD_STATIC_OP(per_token_quant_padding)
     .Inputs({"input"})

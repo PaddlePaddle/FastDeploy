@@ -149,7 +149,7 @@ jobs:
     if: ${{ needs.ce_job_pre_check.outputs.sm8090_match == 'true' }}
     uses: ./.github/workflows/_build_linux.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "80,90"
       WITH_NIGHTLY_BUILD: OFF
@@ -162,7 +162,7 @@ jobs:
     if: ${{ needs.ce_job_pre_check.outputs.sm8689_match == 'true' }}
     uses: ./.github/workflows/_build_linux.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "86,89"
       WITH_NIGHTLY_BUILD: OFF

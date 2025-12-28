@@ -35,6 +35,7 @@ from fastdeploy.config import (
     PlasAttentionConfig,
     PoolerConfig,
     RouterConfig,
+    RoutingReplayConfig,
     RunnerOption,
     SpeculativeConfig,
     StructuredOutputsConfig,
@@ -46,7 +47,9 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
+    find_free_ports,
     is_port_available,
+    parse_ports,
     parse_quantization,
 )
 
@@ -223,9 +226,17 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "0"
+    cache_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for cache queue.
+    """
+    kvcache_storage_backend: str = None
+    """
+    The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
+    """
+    write_policy: str = "write_through"
+    """
+    The policy of write cache to storage.
     """
 
     # System configuration parameters
@@ -236,6 +247,10 @@ class EngineArgs:
     enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
+    """
+    enable_output_caching: bool = False
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
 
     disable_custom_all_reduce: bool = False
@@ -261,7 +276,12 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
-    engine_worker_queue_port: str = "0"
+    shutdown_comm_group_if_worker_idle: bool = None
+    """
+    Whether to shutdown the comm group when the weight is cleared.
+    """
+
+    engine_worker_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for worker queue communication.
     """
@@ -286,17 +306,27 @@ class EngineArgs:
     Enable expert parallelism.
     """
 
-    cache_transfer_protocol: str = "ipc"
+    enable_chunked_moe: bool = False
+    """
+    Whether use chunked moe.
+    """
+
+    chunked_moe_size: int = 256
+    """
+    Chunk size of moe input.
+    """
+
+    cache_transfer_protocol: str = "ipc,rdma"
     """
     Protocol to use for cache transfer.
     """
 
-    pd_comm_port: Optional[List[int]] = None
+    pd_comm_port: Optional[Union[int, str, list]] = None
     """
     Port for splitwise communication.
     """
 
-    rdma_comm_ports: Optional[List[int]] = None
+    rdma_comm_ports: Optional[Union[int, str, list]] = None
     """
     Ports for rdma communication.
     """
@@ -477,6 +507,21 @@ class EngineArgs:
     Configuration for eplb.
     """
 
+    routing_replay_config: Optional[Dict[str, Any]] = None
+    """
+    Flag to rollout routing replay(r3)
+    """
+
+    skip_port_check: bool = False
+    """
+    Whether to skip port availability check. Default is False (not skip).
+    """
+
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -486,15 +531,11 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if self.speculative_config is not None:
-            self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
-        # if self.dynamic_load_weight:
-        #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if not current_platform.is_cuda():
-                raise NotImplementedError("Only CUDA platform supports logprob.")
+            if not current_platform.is_cuda() and not current_platform.is_xpu():
+                raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
@@ -512,34 +553,82 @@ class EngineArgs:
                     f"scheduler, please provide --router argument."
                 )
 
-            if "rdma" in self.cache_transfer_protocol:
-                if self.rdma_comm_ports is None:
-                    raise ValueError(
-                        "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
-                    )
-                num_nodes = len(self.ips) if self.ips else 1
-                if self.data_parallel_size % num_nodes != 0:
-                    raise ValueError(
-                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
-                        f"num_nodes ({num_nodes})."
-                    )
-                dp_per_node = self.data_parallel_size // num_nodes
-                expected_ports = self.tensor_parallel_size * dp_per_node
-                if len(self.rdma_comm_ports) != expected_ports:
-                    raise ValueError(
-                        f"The number of rdma_comm_ports must equal "
-                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
-                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
-                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
-                    )
-
-        if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
+        if not (
+            current_platform.is_cuda()
+            or current_platform.is_xpu()
+            or current_platform.is_maca()
+            or current_platform.is_iluvatar()
+            or current_platform.is_intel_hpu()
+        ):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
-            self.enable_prefix_caching = False
-            self.max_encoder_cache = 0
+
+        if self.kvcache_storage_backend is not None:
+            if not self.enable_prefix_caching:
+                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
+
+        self.post_init_all_ports()
+
+    def post_init_all_ports(self):
+
+        def post_init_ports(name: str, ports: list, num_total_ports: int):
+            ports = parse_ports(ports)
+            num_cur_dp_ports = num_total_ports
+            if envs.FD_ENABLE_MULTI_API_SERVER:
+                num_cur_dp_ports //= self.data_parallel_size
+            if ports is None:
+                ports = find_free_ports(num_ports=num_cur_dp_ports)
+                console_logger.info(
+                    f"Parameter `{name}` is not specified, found available ports for possible use: {ports}"
+                )
+            else:
+                num_input_ports = len(ports)
+                if num_input_ports != num_total_ports:
+                    ports = find_free_ports(num_ports=num_cur_dp_ports)
+                    console_logger.warn(
+                        f"Parameter `{name}` expects {num_total_ports} ports, but got {num_input_ports}. Ignore them and assign new ones: {ports}"
+                    )
+                else:
+                    console_logger.info(f"Using `{name}`: {ports}")
+
+            if not self.skip_port_check:
+                for port in ports:
+                    assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+
+            console_logger.debug(f"post init {name}: {ports}")
+            return ports
+
+        num_nodes = len(self.ips) if self.ips else 1
+        if self.data_parallel_size % num_nodes != 0:
+            raise ValueError(
+                f"data_parallel_size ({self.data_parallel_size}) must be divisible by num_nodes ({num_nodes})."
+            )
+        self.engine_worker_queue_port = post_init_ports(
+            "engine_worker_queue_port",
+            self.engine_worker_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.cache_queue_port = post_init_ports(
+            "cache_queue_port",
+            self.cache_queue_port,
+            self.data_parallel_size // num_nodes,
+        )
+        self.rdma_comm_ports = post_init_ports(
+            "rdma_comm_ports",
+            self.rdma_comm_ports,
+            self.tensor_parallel_size * self.data_parallel_size // num_nodes,
+        )
+        self.pd_comm_port = post_init_ports(
+            "pd_comm_port",
+            self.pd_comm_port,
+            self.data_parallel_size // num_nodes,
+        )
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -786,6 +875,12 @@ class EngineArgs:
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -870,6 +965,30 @@ class EngineArgs:
             default=EngineArgs.eplb_config,
             help="Config of eplb.",
         )
+        parallel_group.add_argument(
+            "--routing-replay-config",
+            type=json.loads,
+            default=EngineArgs.routing_replay_config,
+            help="Flag of rollout routing replay(r3).",
+        )
+        parallel_group.add_argument(
+            "--enable-chunked-moe",
+            action="store_true",
+            default=EngineArgs.enable_chunked_moe,
+            help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--chunked-moe-size",
+            type=int,
+            default=EngineArgs.chunked_moe_size,
+            help="Chunked size of moe input.",
+        )
+        parallel_group.add_argument(
+            "--shutdown-comm-group-if-worker-idle",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.shutdown_comm_group_if_worker_idle,
+            help="Shutdown communication group when worker is idle.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -915,6 +1034,22 @@ class EngineArgs:
             help="Static decoding blocks num.",
         )
 
+        cache_group.add_argument(
+            "--kvcache-storage-backend",
+            type=nullable_str,
+            choices=["mooncake"],
+            default=EngineArgs.kvcache_storage_backend,
+            help="The storage backend for kvcache storage. Leave empty to disable.",
+        )
+
+        cache_group.add_argument(
+            "--write-policy",
+            type=str,
+            choices=["write_through"],
+            default=EngineArgs.write_policy,
+            help="KVCache write policy",
+        )
+
         # Cluster system parameters group
         system_group = parser.add_argument_group("System Configuration")
         system_group.add_argument(
@@ -931,6 +1066,13 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
+        )
+
+        perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
         )
 
         perf_group.add_argument(
@@ -1125,7 +1267,7 @@ class EngineArgs:
         return parser
 
     @classmethod
-    def from_cli_args(cls, args: FlexibleArgumentParser) -> "EngineArgs":
+    def from_cli_args(cls, args: FlexibleArgumentParser, skip_port_check=False) -> "EngineArgs":
         """
         Create an instance of EngineArgs from command line arguments.
         """
@@ -1133,7 +1275,7 @@ class EngineArgs:
         for field in dataclass_fields(cls):
             if hasattr(args, field.name):
                 args_dict[field.name] = getattr(args, field.name)
-        return cls(**args_dict)
+        return cls(**args_dict, skip_port_check=skip_port_check)
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
@@ -1204,16 +1346,20 @@ class EngineArgs:
         eplb_args["enable_eplb"] = self.enable_eplb
         return EPLBConfig(eplb_args)
 
-    def create_engine_config(self, port_availability_check=True) -> FDConfig:
+    def create_routing_repaly_config(self) -> RoutingReplayConfig:
+        """ """
+        routing_replay_args = asdict(self)
+        if self.routing_replay_config is not None:
+            for k, v in self.routing_replay_config.items():
+                routing_replay_args[k] = v
+        return RoutingReplayConfig(routing_replay_args)
+
+    def create_engine_config(self) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-
-        # XPU currently disable prefix cache for VL model
-        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
-            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -1237,11 +1383,6 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
-
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1251,15 +1392,12 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
         eplb_cfg = self.create_eplb_config()
+        routing_replay_config = self.create_routing_repaly_config()
         router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
         structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
-        if port_availability_check:
-            assert is_port_available(
-                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
@@ -1283,4 +1421,5 @@ class EngineArgs:
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
+            routing_replay_config=routing_replay_config,
         )

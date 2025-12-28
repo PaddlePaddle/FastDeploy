@@ -236,6 +236,8 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         # pd_disaggregation
         self.use_pd_disaggregation = int(os.getenv("FLAGS_use_pd_disaggregation", 0))
         self.start_layer_index = llm_config.model_config.start_layer_index
+        if llm_config.quant_config:
+            self.quant_method = llm_config.quant_config.get_quant_method(self)
 
     def init_attention_metadata(self, forward_meta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -287,29 +289,47 @@ class HPUAttentionBackend(AttentionBackend_HPU):
 
         from fastdeploy.model_executor.ops.intel_hpu import (
             fused_qkv_rope,
-            fused_sdpa_proj_t,
+            fused_qkv_rope_ref,
+            fused_sdpa_proj,
+            fused_sdpa_proj_ref,
             index_copy_,
         )
 
-        query_states, key_value_states = fused_qkv_rope(
-            src,
-            qkv_proj.weight,
-            qkv_proj.bias,
-            forward_meta.rotary_embs,
-            getattr(qkv_proj, "act_scale", None),
-            getattr(qkv_proj, "weight_scale", None),
-            getattr(layer, "q_scale", None),
-            getattr(layer, "cache_k_scale", None),
-            getattr(layer, "cache_v_scale", None),
-            q_norm.weight if q_norm is not None else None,
-            k_norm.weight if k_norm is not None else None,
-            self.head_dim,
-            self.num_heads,
-            forward_meta.total_batch,
-            transpose=False,
-            use_neox_style=layer.use_neox_rotary_style,
-            epsilon=1e-6,
-        )
+        if forward_meta.measurement_mode:
+            qkv_proj_act_scale_key = qkv_proj.weight_key.replace("weight", "activation_scale")
+            query_states, key_value_states = fused_qkv_rope_ref(
+                src,
+                qkv_proj.weight,
+                qkv_proj.bias,
+                forward_meta.rotary_embs,
+                self.head_dim,
+                self.num_heads,
+                forward_meta.total_batch,
+                transpose=False,
+                use_neox_style=layer.use_neox_rotary_style,
+                measurement_mode=True,
+                qkv_act_scale_key=qkv_proj_act_scale_key,
+            )
+        else:
+            query_states, key_value_states = fused_qkv_rope(
+                src,
+                qkv_proj.weight,
+                qkv_proj.bias,
+                forward_meta.rotary_embs,
+                getattr(qkv_proj, "act_scale", None),
+                getattr(qkv_proj, "weight_scale", None),
+                getattr(layer, "q_scale", None),
+                getattr(layer, "cache_k_scale", None),
+                getattr(layer, "cache_v_scale", None),
+                q_norm.weight if q_norm is not None else None,
+                k_norm.weight if k_norm is not None else None,
+                self.head_dim,
+                self.num_heads,
+                forward_meta.total_batch,
+                transpose=False,
+                use_neox_style=layer.use_neox_rotary_style,
+                epsilon=1e-6,
+            )
 
         kv, B, BP_BS, M, H = key_value_states.shape
         key_value_states_reshape = key_value_states.reshape([kv, -1, forward_meta.block_size, M, H])
@@ -321,16 +341,38 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         index_copy_(v_cache, forward_meta.block_indices, value_states, 0)
 
         if forward_meta.block_list.shape == forward_meta.block_indices.shape:
-            out_linear_out = fused_sdpa_proj_t(
-                query_states,
-                key_value_states,
-                forward_meta.attn_mask,
-                None,
-                o_proj.weight,
-                scaling_factor=self.head_dim**-0.5,
-                causal=True,
-                softmax_mode=0,
-            )
+            if forward_meta.measurement_mode:
+                o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
+                out_linear_out = fused_sdpa_proj_ref(
+                    query_states,
+                    key_value_states,
+                    forward_meta.attn_mask,
+                    o_proj.weight,
+                    scaling_factor=self.head_dim**-0.5,
+                    causal=True,
+                    softmax_mode=0,
+                    measurement_mode=True,
+                    o_act_scale_key=o_proj_act_scale_key,
+                )
+            else:
+                out_linear_out = fused_sdpa_proj(
+                    query_states,
+                    key_value_states,
+                    forward_meta.attn_mask,
+                    None,
+                    o_proj.weight,
+                    getattr(layer, "q_out_scale", None),
+                    getattr(layer, "cache_k_out_scale", None),
+                    getattr(layer, "cache_v_out_scale", None),
+                    getattr(layer, "s_scale", None),
+                    getattr(o_proj, "act_scale", None),
+                    getattr(layer, "s_out_scale", None),
+                    getattr(o_proj, "act_scale_inv", None),
+                    getattr(o_proj, "weight_scale", None),
+                    scaling_factor=self.head_dim**-0.5,
+                    causal=True,
+                    softmax_mode=0,
+                )
         else:
             key_states_with_context = k_cache.index_select(forward_meta.block_list)
             val_states_with_context = v_cache.index_select(forward_meta.block_list)
@@ -344,12 +386,20 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                     query_states.shape[0],
                     query_states.shape[1],
                 )
-            out_linear_out = fused_sdpa_proj_t(
+            out_linear_out = fused_sdpa_proj(
                 query_states,
                 key_value_states_with_context,
                 forward_meta.attn_mask,
                 None,
                 o_proj.weight,
+                getattr(layer, "q_out_scale", None),
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "s_scale", None),
+                getattr(o_proj, "act_scale", None),
+                getattr(layer, "s_out_scale", None),
+                getattr(o_proj, "act_scale_inv", None),
+                getattr(o_proj, "weight_scale", None),
                 scaling_factor=self.head_dim**-0.5,
                 causal=False,
                 softmax_mode=0,
@@ -378,39 +428,69 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         forward_decode
         """
         # metadata = self.attention_metadata
-        from fastdeploy.model_executor.ops.intel_hpu import fused_block_attention
-
-        res = fused_block_attention(
-            src,
-            forward_meta.rotary_embs,
-            forward_meta.caches[2 * layer.layer_id],
-            forward_meta.caches[2 * layer.layer_id + 1],
-            forward_meta.block_groups,
-            forward_meta.block_list,
-            forward_meta.block_mapping,
-            forward_meta.attention_mask,
-            forward_meta.block_indices,
-            forward_meta.block_offsets,
-            qkv_proj.weight,
-            qkv_proj.bias,
-            o_proj.weight,
-            q_norm.weight if q_norm is not None else None,
-            k_norm.weight if k_norm is not None else None,
-            getattr(qkv_proj, "act_scale", None),
-            getattr(qkv_proj, "weight_scale", None),
-            getattr(layer, "q_scaling_scale", None),
-            getattr(layer, "cache_k_scale", None),
-            getattr(layer, "s_scale", None),
-            getattr(layer, "cache_v_scale", None),
-            getattr(o_proj, "act_scale", None),
-            getattr(o_proj, "weight_scale", None),
-            self.head_dim,
-            self.num_heads,
-            scaling_factor=self.head_dim**-0.5,
-            transpose=False,
-            use_neox_style=layer.use_neox_rotary_style,
-            epsilon=1e-6,
+        from fastdeploy.model_executor.ops.intel_hpu import (
+            fused_block_attention,
+            fused_block_attention_ref,
         )
+
+        if forward_meta.measurement_mode:
+            qkv_proj_act_scale_key = qkv_proj.weight_key.replace("weight", "activation_scale")
+            o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
+            out_linear_out = fused_block_attention_ref(
+                src,
+                forward_meta.rotary_embs,
+                forward_meta.caches[2 * layer.layer_id],
+                forward_meta.caches[2 * layer.layer_id + 1],
+                forward_meta.block_groups,
+                forward_meta.block_list,
+                forward_meta.block_mapping,
+                forward_meta.attention_mask,
+                forward_meta.block_indices,
+                forward_meta.block_offsets,
+                qkv_proj.weight,
+                qkv_proj.bias,
+                o_proj.weight,
+                self.head_dim,
+                self.num_heads,
+                scaling_factor=self.head_dim**-0.5,
+                transpose=False,
+                use_neox_style=layer.use_neox_rotary_style,
+                measurement_mode=True,
+                qkv_act_scale_key=qkv_proj_act_scale_key,
+                o_act_scale_key=o_proj_act_scale_key,
+            )
+        else:
+            out_linear_out = fused_block_attention(
+                src,
+                forward_meta.rotary_embs,
+                forward_meta.caches[2 * layer.layer_id],
+                forward_meta.caches[2 * layer.layer_id + 1],
+                forward_meta.block_groups,
+                forward_meta.block_list,
+                forward_meta.block_mapping,
+                forward_meta.attention_mask,
+                forward_meta.block_indices,
+                forward_meta.block_offsets,
+                qkv_proj.weight,
+                qkv_proj.bias,
+                o_proj.weight,
+                q_norm.weight if q_norm is not None else None,
+                k_norm.weight if k_norm is not None else None,
+                getattr(qkv_proj, "act_scale", None),
+                getattr(qkv_proj, "weight_scale", None),
+                getattr(layer, "q_scaling_scale", None),
+                getattr(layer, "cache_k_scale", None),
+                getattr(layer, "s_scale", None),
+                getattr(layer, "cache_v_scale", None),
+                getattr(o_proj, "act_scale", None),
+                getattr(o_proj, "weight_scale", None),
+                self.head_dim,
+                self.num_heads,
+                scaling_factor=self.head_dim**-0.5,
+                transpose=False,
+                use_neox_style=layer.use_neox_rotary_style,
+                epsilon=1e-6,
+            )
 
         # all_reduce
         if self.tp_size > 1:
@@ -418,5 +498,5 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 tensor_model_parallel_all_reduce_custom,
             )
 
-            tensor_model_parallel_all_reduce_custom(res)
-        return res
+            tensor_model_parallel_all_reduce_custom(out_linear_out)
+        return out_linear_out

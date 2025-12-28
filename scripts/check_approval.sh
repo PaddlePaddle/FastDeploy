@@ -43,25 +43,19 @@ function add_failed(){
 HAS_CUSTOM_REGISTRER=`git diff -U0 upstream/$BRANCH | grep '^\+' | grep -zoE "PD_BUILD_(STATIC_)?OP" || true`
 if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(dengkaipeng)) approval for adding custom op.\n"
-    echo_line2="You must have one QA(DDDivano(zhengtianyu)) approval for adding custom op.\n"
-    echo_line3="You must have one PaddlePaddle RD (XiaoguangHu01(huxiaoguang), jeff41404(gaoxiang), phlrain(liuhongyu)) approval for adding custom op.\n"
+    echo_line2="You must have one PaddlePaddle RD (jeff41404(gaoxiang), yongqiangma(mayongqiang)) approval for adding custom op.\n"
     check_approval "$echo_line1" 1 qingqing01 Jiang-Jia-Jun heavengate
-    check_approval "$echo_line2" 1 DDDivano
-    check_approval "$echo_line3" 1 XiaoguangHu01 jeff41404 phlrain
+    check_approval "$echo_line2" 1 jeff41404 yongqiangma
 fi
 
 WORKER_OR_CONFIG_LIST=(
-    "fastdeploy/config.py"
-    "fastdeploy/worker"
     "fastdeploy/model_executor/graph_optimization"
-    "fastdeploy/model_executor/model_loader"
-    "fastdeploy/model_executor/models"
 )
 
 HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
 if [ "${HAS_WORKER_OR_CONFIG_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
-    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
-    check_approval "$echo_line1" 1 gongshaotian yuanlehome
+    echo_line1="You must have one FastDeploy RD gongshaotian(gongshaotian) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
+    check_approval "$echo_line1" 1 gongshaotian
 fi
 
 SPECULATIVE_DECODING_LIST=(
@@ -73,6 +67,14 @@ HAS_SPECULATIVE_DECODING_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -
 if [ "${HAS_SPECULATIVE_DECODING_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (freeliuzc(liuzichang01), Deleter-D(wangyanpeng04)) approval for modifing [$(IFS=', '; echo "${SPECULATIVE_DECODING_LIST[*]}")]."
     check_approval "$echo_line1" 1 freeliuzc Deleter-D
+fi
+
+ENV_FILE="fastdeploy/envs.py"
+
+HAS_ENV_MODIFY=$(git diff upstream/$BRANCH --name-only | grep -E "^${ENV_FILE}$" || true)
+if [ "${HAS_ENV_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
+    echo_line1="You must have one FastDeploy RD (Jiang-Jia-Jun(jiangjiajun), yuanlehome(liuyuanle), rainyfly(chenjian26), Wanglongzhi2001(wanglongzhi)) approval for modifying [${ENV_FILE}]."
+    check_approval "$echo_line1" 1 Jiang-Jia-Jun yuanlehome rainyfly Wanglongzhi2001
 fi
 
 if [[ "${BRANCH}" != "develop" ]] && [[ -n "${PR_ID}" ]]; then

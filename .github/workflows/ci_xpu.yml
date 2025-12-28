@@ -82,5 +82,5 @@ jobs:
            ${docker_image} /bin/bash -c "
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          bash scripts/run_ci_xpu.sh
+          bash scripts/run_xpu_ci_pytest.sh
           "

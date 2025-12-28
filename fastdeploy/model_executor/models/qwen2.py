@@ -89,7 +89,7 @@ class Qwen2MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -205,7 +205,7 @@ class Qwen2DecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -276,7 +276,7 @@ class Qwen2Model(nn.Layer):
     ):
         """ """
 
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
@@ -375,7 +375,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
                 weight_loader(param, loaded_weight)
             model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.linear.weight.set_value(
                 self.qwen2.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
@@ -445,7 +445,7 @@ class Qwen2PretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )
@@ -468,7 +468,7 @@ class Qwen2PretrainedModel(PretrainedModel):
                 base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
                 base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
                 # if we have enough num_key_value_heads to split, then split it.
-                if config.num_key_value_heads % config.tensor_parallel_degree == 0:
+                if config.num_key_value_heads % config.tensor_model_parallel_size == 0:
                     base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
                     base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
