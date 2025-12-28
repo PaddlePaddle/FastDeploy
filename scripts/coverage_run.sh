@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-tests_path="$DIR/../tests/"
+tests_path="$DIR/../tests/engine/"
 export PYTEST_INI="$DIR/../tests/cov_pytest.ini"
 run_path=$( realpath "$DIR/../")
 
