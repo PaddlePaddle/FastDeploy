@@ -62,8 +62,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_TRITON_KERNEL_CACHE_DIR": lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
     # Whether transition from standalone PD decoupling to centralized inference
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
-    # Whether to use fastsafetensor load weight (0 or 1)
-    "FD_USE_FASTSAFETENSOR": lambda: bool(int(os.getenv("FD_USE_FASTSAFETENSOR", "0"))),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
     # Whether to use aggregate send.
@@ -115,8 +113,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", "8201"),
     # LLMEngine receive control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
-    # Whether to enable cache task in decode node
-    "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "1"),
+    # Whether to enable the decode caches requests for preallocating resource
+    "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
     # Batched token timeout in EP
     "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
@@ -148,9 +146,19 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
+    "FD_ENABLE_ASYNC_LLM": lambda: int(os.getenv("FD_ENABLE_ASYNC_LLM", "0")),
+    "FD_GUIDANCE_DISABLE_ADDITIONAL": lambda: bool(int(os.getenv("FD_GUIDANCE_DISABLE_ADDITIONAL", "1"))),
+    "FD_LLGUIDANCE_LOG_LEVEL": lambda: int(os.getenv("FD_LLGUIDANCE_LOG_LEVEL", "0")),
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
+    # "Enable FP8 calibration on HPU"
+    "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
+    "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
+    "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
+    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
+    "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
 }
 
 

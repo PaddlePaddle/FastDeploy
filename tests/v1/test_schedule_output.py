@@ -146,3 +146,55 @@ def test_preempted_request():
     assert len(scheduler_reqs) == 0
     assert len(resource_manager_v1.running) == 1
     assert len(resource_manager_v1.waiting) == 1
+
+
+def test_caching_output():
+    max_num_seqs = 2
+    engine_args = EngineArgs(
+        max_num_seqs=max_num_seqs,
+        num_gpu_blocks_override=100,
+        max_num_batched_tokens=6400,
+        enable_prefix_caching=True,
+        enable_output_caching=True,
+    )
+    args = asdict(engine_args)
+    cache_cfg = CacheConfig(args)
+    model_cfg = SimpleNamespace(enable_mm=False)
+    speculative_cfg = SimpleNamespace(method=None)
+    model_cfg.print = print
+    model_cfg.max_model_len = 5120
+    cache_cfg.bytes_per_layer_per_block = 1
+    parallel_cfg = ParallelConfig(args)
+    scheduler_cfg = SchedulerConfig(args)
+    graph_opt_cfg = engine_args.create_graph_optimization_config()
+    fd_config = FDConfig(
+        model_config=model_cfg,
+        cache_config=cache_cfg,
+        parallel_config=parallel_cfg,
+        graph_opt_config=graph_opt_cfg,
+        speculative_config=speculative_cfg,
+        scheduler_config=scheduler_cfg,
+    )
+    resource_manager_v1 = ResourceManagerV1(
+        max_num_seqs=max_num_seqs, config=fd_config, tensor_parallel_size=8, splitwise_role="mixed"
+    )
+    req1 = Request.from_dict({"request_id": "req1", "prompt_token_ids": [1] * 3200, "prompt_token_ids_len": 3200})
+    resource_manager_v1.add_request(req1)
+    # step 1
+    assert len(resource_manager_v1.waiting) == 1
+    scheduler_reqs, _ = resource_manager_v1.schedule()
+    assert len(scheduler_reqs) == 1
+    assert scheduler_reqs[0].request_id == "req1"
+    assert scheduler_reqs[0].prefill_start_index == 0
+    assert scheduler_reqs[0].prefill_end_index == 3200
+    assert len(resource_manager_v1.running) == 1
+    _, _ = resource_manager_v1.schedule()
+    req1.output_token_ids.extend([1] * 129)
+    resource_manager_v1.cache_output_tokens(req1)
+    # step 2
+    req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [1] * 3329, "prompt_token_ids_len": 3329})
+    resource_manager_v1.add_request(req2)
+    scheduler_reqs, _ = resource_manager_v1.schedule()
+    assert scheduler_reqs[1].request_id == "req2"
+    assert scheduler_reqs[1].prefill_start_index == 3328
+    assert scheduler_reqs[1].prefill_end_index == 3329

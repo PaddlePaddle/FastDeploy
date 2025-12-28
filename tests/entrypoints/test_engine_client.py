@@ -489,8 +489,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
             data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
             with self.assertRaises(ValueError) as context:
                 self.engine_client.valid_parameters(data)
-            self.assertIn("top_logprobs must be between 0 and 20", str(context.exception))
-            self.assertIn("current value is 25", str(context.exception))
+            self.assertIn(
+                "Number of top_logprobs requested (25) exceeds maximum allowed value (20)", str(context.exception)
+            )
 
             # Test valid value
             data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}

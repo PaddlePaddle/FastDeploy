@@ -430,7 +430,9 @@ __global__ void permute_x_kernel(
         }
         abs_max = phi::BlockAllReduce<MaxOp, float, Kthread>(abs_max);
         float scale = 440.f / abs_max;  // use 440 so we do not have to clip
-        dequant_scale[dst_token_idx] = abs_max;
+        if (tid == 0) {
+          dequant_scale[dst_token_idx] = abs_max;
+        }
         for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
           Load<T, vec_size>(&data_smem[v_id * vec_size], &src_vec);
 #pragma unroll
@@ -661,7 +663,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
 
   int dequant_scale_size = 1;
   if (moe_quant_type == "w4afp8" && !up_gate_proj_in_scale) {
-    dequant_scale_size = moe_topk * num_rows;
+    dequant_scale_size = token_nums_this_rank;
   }
 
   auto dequant_scale =
@@ -847,8 +849,11 @@ __global__ void permute_x_fp8_kernel(
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
       if (s_token_idx >= start_idx && s_token_idx < end_idx) {
-        if ((s_token_idx - start_idx) < token_nums_per_expert[i])
+        if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
           m_indices[s_token_idx] = i;
+        } else {
+          m_indices[s_token_idx] = -1;
+        }
         break;
       }
     }
@@ -984,8 +989,20 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                      paddle::DataType::FLOAT32,
                      place);
 
-  auto m_indices = paddle::full(
-      {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  paddle::Tensor m_indices;
+  if (use_in_ep) {
+    m_indices = GetEmptyTensor(
+        {token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
+  } else {
+    // Note(ZKK)
+    // In TP, we must init m_indices with -1,
+    // because we allocate too much space.
+    // token_rows * moe_topk + num_experts_per_rank * (128 - 1)
+    // Later will optimize this.
+    m_indices = paddle::full(
+        {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  }
+
   auto token_nums_per_expert_cumsum =
       GetEmptyTensor({num_experts_per_rank}, paddle::DataType::INT64, place);
   auto token_nums_per_expert_padded_cumsum =
@@ -1031,6 +1048,64 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
           m_indices};
 }
 
+std::vector<std::vector<int64_t>> EPMoeExpertDispatchFP8InferShape(
+    const std::vector<int64_t>& input_shape,
+    const std::vector<int64_t>& scale_shape,
+    const std::vector<int64_t>& topk_ids_shape,
+    const std::vector<int64_t>& topk_weights_shape,
+    const std::vector<int64_t>& num_experts_per_rank_tensor_shape,
+    const std::vector<int64_t>& num_experts_per_rank_padded_tensor_shape,
+    const bool use_in_ep,
+    const int token_nums_this_rank_padded) {
+  int token_rows = 0;
+  const int moe_topk = topk_ids_shape[1];
+
+  if (input_shape.size() == 3) {
+    token_rows = input_shape[0] * input_shape[1];
+  } else {
+    token_rows = input_shape[0];
+  }
+
+  const int hidden_size = input_shape.back();
+  const int num_experts_per_rank = num_experts_per_rank_tensor_shape[0];
+
+  int32_t token_nums_feed_to_ffn =
+      use_in_ep ? token_nums_this_rank_padded
+                : token_rows * moe_topk + num_experts_per_rank * (128 - 1);
+
+  return {
+      {token_nums_feed_to_ffn, hidden_size},
+      {token_nums_feed_to_ffn, hidden_size / 128},
+      {num_experts_per_rank, token_rows},
+      {num_experts_per_rank},
+      {num_experts_per_rank},
+      {token_nums_feed_to_ffn},
+      {token_rows, num_experts_per_rank},
+      {num_experts_per_rank},
+      {token_nums_feed_to_ffn},
+  };
+}
+
+std::vector<paddle::DataType> EPMoeExpertDispatchFP8InferDtype(
+    const paddle::DataType& input_dtype,
+    const paddle::DataType& scale_dtype,
+    const paddle::DataType& topk_ids_dtype,
+    const paddle::DataType& topk_weights_dtype,
+    const paddle::DataType& num_experts_per_rank_tensor_dtype,
+    const paddle::DataType& num_experts_per_rank_padded_tensor_dtype,
+    const bool use_in_ep,
+    const int token_nums_this_rank_padded) {
+  return {input_dtype,
+          paddle::DataType::FLOAT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT64,
+          paddle::DataType::INT64,
+          paddle::DataType::FLOAT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT32};
+}
+
 PD_BUILD_STATIC_OP(ep_moe_expert_dispatch_fp8)
     .Inputs({"input",
              "scale",
@@ -1048,4 +1123,44 @@ PD_BUILD_STATIC_OP(ep_moe_expert_dispatch_fp8)
               "cumsum_idx_gpu",
               "m_indices"})
     .Attrs({"use_in_ep:bool", "token_nums_this_rank_padded:int"})
-    .SetKernelFn(PD_KERNEL(EPMoeExpertDispatchFP8));
+    .SetKernelFn(PD_KERNEL(EPMoeExpertDispatchFP8))
+    .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertDispatchFP8InferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertDispatchFP8InferDtype));
+
+std::vector<paddle::DataType> EPMoeExpertCombineInferDtype(
+    const paddle::DataType& ffn_out_dtype,
+    const paddle::DataType& expert_scales_float_dtype,
+    const paddle::DataType& permute_indices_per_token_dtype,
+    const paddle::DataType& top_k_indices_dtype,
+    const paddle::optional<paddle::DataType>& down_proj_bias_dtype,
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
+  return {ffn_out_dtype};
+}
+
+std::vector<std::vector<int64_t>> EPMoeExpertCombineInferShape(
+    const std::vector<int64_t>& ffn_out_shape,
+    const std::vector<int64_t>& expert_scales_float_shape,  // dst_weights
+    const std::vector<int64_t>&
+        permute_indices_per_token_shape,  // permute_indices_per_token
+    const std::vector<int64_t>& top_k_indices_shape,  // dst_indices
+    const paddle::optional<std::vector<int64_t>>& down_proj_bias_shape,
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
+  const int num_rows = top_k_indices_shape[0];
+  const int hidden_size = ffn_out_shape[1];
+
+  return {{num_rows, hidden_size}};
+}
+
+PD_BUILD_STATIC_OP(ep_moe_expert_combine)
+    .Inputs({"ffn_out",
+             "expert_scales_float",
+             "permute_indices_per_token",
+             "top_k_indices",
+             paddle::Optional("down_proj_bias")})
+    .Outputs({"output"})
+    .Attrs({"norm_topk_prob:bool", "routed_scaling_factor:float"})
+    .SetKernelFn(PD_KERNEL(EPMoeExpertCombine))
+    .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertCombineInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertCombineInferDtype));

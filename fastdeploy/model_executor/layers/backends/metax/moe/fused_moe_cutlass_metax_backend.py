@@ -15,6 +15,7 @@
 """
 
 import os
+from typing import Callable
 
 import paddle
 from paddle import nn
@@ -66,25 +67,12 @@ class MetaxCutlassUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
             layer.up_gate_proj_bias.set_value(stacked_up_gate_proj_bias)
             layer.down_proj_bias.set_value(stacked_down_proj_bias)
 
-    def compute_ffn(
-        self,
-        layer: nn.Layer,
-        permute_input: paddle.Tensor,
-        token_nums_per_expert: paddle.Tensor,
-        expert_idx_per_token: paddle.Tensor,
-        used_in_ep_low_latency: bool = False,
-        estimate_total_token_nums: int = -1,
-    ):
-        """
-        Paddle Cutlass compute Fused MoE.
-        """
-        raise NotImplementedError
-
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -96,6 +84,7 @@ class MetaxCutlassUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -107,70 +96,12 @@ class MetaxCutlassUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
-        """
-        Paddle Cutlass compute Fused MoE.
-        """
-        if layer.topk_method == "noaux_tc":
-            gate_out = gate(x.cast("float32"))
-
-            gate_out, topk_weights, topk_idx = get_moe_scores(
-                gate_out,
-                layer.n_group,
-                layer.topk_group,
-                layer.top_k,
-                layer.routed_scaling_factor,
-                layer.gate_correction_bias,
-                getattr(layer, "renormalize", True),
-            )
-
-            (
-                permute_input,
-                token_nums_per_expert,
-                permute_indices_per_token,
-                topk_weights,
-                topk_idx,
-            ) = moe_expert_dispatch(
-                x,
-                gate_out,
-                layer.top_k,
-                False,
-                True,
-            )
-
-            ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, None)
-
-            fused_moe_out = moe_expert_reduce(
-                ffn_out,
-                topk_weights,
-                permute_indices_per_token,
-                topk_idx,
-                None,
-                False,
-                1.0,
-            )
-        else:
-            raise NotImplementedError
-
-            fused_moe_out = fused_expert_moe(
-                x,
-                gate.weight,
-                getattr(layer, self.added_weight_attrs[0]),
-                getattr(layer, self.added_weight_attrs[1]),
-                None,
-                (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
-                None,
-                (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-                "weight_only_int8",
-                layer.top_k,
-                True,
-                False,
-            )
-
-        return fused_moe_out
+        raise NotImplementedError
 
 
 class MetaxCutlassMoEMethod(MoEMethodBase):
@@ -189,34 +120,12 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
-    def compute_ffn(
-        self,
-        layer: nn.Layer,
-        permute_input: paddle.Tensor,
-        token_nums_per_expert: paddle.Tensor,
-        expert_idx_per_token: paddle.Tensor,
-        used_in_ep_low_latency: bool = False,
-        estimate_total_token_nums: int = -1,
-    ):
-        """
-        Paddle Cutlass compute Fused MoE.
-        """
-        return moe_expert_ffn(
-            permute_input,
-            token_nums_per_expert,
-            getattr(layer, self.added_weight_attrs[0]),
-            getattr(layer, self.added_weight_attrs[1]),
-            None,
-            (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
-            (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-            "weight_only_int8",
-        )
-
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -228,6 +137,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -239,6 +149,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -262,15 +173,36 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 permute_indices_per_token,
                 topk_weights,
                 topk_idx,
+                expert_idx_per_token,  # only for w4a8
             ) = moe_expert_dispatch(
                 x,
                 gate_out,
+                None,  # Use layer.gate_correction_bias in get_moe_scores.
+                None,  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
+                self.moe_quant_type,
                 True,
             )
 
-            ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, None)
+            if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
+                # only w4a8 need expert_idx_per_token
+                # Other need not this tensor, so we make it None.
+                expert_idx_per_token = None
+            else:
+                expert_idx_per_token = expert_idx_per_token.cast("int64")
+
+            ffn_out = moe_expert_ffn(
+                permute_input,
+                token_nums_per_expert,
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_weight_attrs[1]),
+                None,
+                (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+                (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+                expert_idx_per_token,  # expert_idx_per_token: only for w4a8
+                self.moe_quant_type,
+            )
 
             fused_moe_out = moe_expert_reduce(
                 ffn_out,
@@ -291,7 +223,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 None,
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-                "weight_only_int8",
+                self.moe_quant_type,
                 layer.top_k,
                 True,
                 False,

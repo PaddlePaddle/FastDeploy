@@ -20,7 +20,8 @@ from typing import NamedTuple, Optional
 import paddle
 
 
-class Logprob(NamedTuple):
+@dataclass
+class Logprob:
     """
     A named tuple containing information about a token's log probability.
     """
@@ -128,6 +129,38 @@ PromptLogprobs = LogprobsTensors | list[dict[int, Logprob] | None]
 
 
 @dataclass
+class SpeculateMetrics:
+    """
+    Speculative decoding metrics
+    """
+
+    """
+    The number of accepted tokens in the current request
+    """
+    accepted_tokens: int
+
+    """
+    The number of rejected tokens in the current request
+    """
+    rejected_tokens: int
+
+    """
+    The acceptance rate of the current request
+    """
+    accept_ratio: float
+
+    """
+    Average number of accepted tokens per step for the current request
+    """
+    average_accept_length: float
+
+    """
+    Average acceptance rate of each head in the current request
+    """
+    accept_ratio_per_head: list[float]
+
+
+@dataclass
 class SamplerOutput:
     """ """
 
@@ -139,6 +172,7 @@ class SamplerOutput:
     logprobs_tensors: Optional[LogprobsTensors]
     token_num_per_batch: Optional[paddle.Tensor] = None
     cu_batch_token_offset: Optional[paddle.Tensor] = None
+    logits: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -277,6 +311,11 @@ class ModelOutputData:
         prompt_logprobs
     """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
+
+    """
+        the minimum tokens that will be generated
+    """
+    min_tokens: paddle.Tensor = None
 
 
 @dataclass

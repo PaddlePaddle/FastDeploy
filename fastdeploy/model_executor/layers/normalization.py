@@ -130,6 +130,10 @@ class RMSNorm(nn.Layer):
                 dtype=self._norm_weight_dtype,
             )
 
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight).astype(self._norm_weight_dtype)
+        param.copy_(loaded_weight, False)
+
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
         Load the checkpoint state dictionary into the layer.
@@ -176,6 +180,8 @@ class RMSNorm(nn.Layer):
             paddle.Tensor: Gathered tensor.
         """
         token_num_per_rank = out.shape[0]
+        if token_num_per_rank == 0:
+            return out
         multi_outs = paddle.zeros([token_num_per_rank * self.tp_size, out.shape[1]], dtype=out.dtype)
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         return multi_outs[:token_num, :]

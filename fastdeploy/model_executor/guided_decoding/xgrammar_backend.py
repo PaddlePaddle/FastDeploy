@@ -73,7 +73,6 @@ class XGrammarProcessor(LogitsProcessorBase):
         enable_thinking: bool = False,
     ):
         super().__init__(enable_reasoning=enable_thinking)
-        self.max_rollback_tokens = 200
         self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.compiled_grammar = compiled_grammar
@@ -82,7 +81,6 @@ class XGrammarProcessor(LogitsProcessorBase):
 
         self.matcher = GrammarMatcher(
             compiled_grammar=compiled_grammar,
-            max_rollback_tokens=self.max_rollback_tokens,
             terminate_without_stop_token=terminate_without_stop_token,
             override_stop_tokens=override_stop_tokens,
         )
