@@ -203,7 +203,7 @@ class TokenProcessor:
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
             for request_id in need_to_be_reschedule_req_ids:
-                if self.resource_manager.requests[request_id].idx >= (
+                if self.resource_manager.requests[request_id].idx > (
                     batch_size - 1
                 ):  # No more token generated for preempted request
                     self.resource_manager.reschedule_preempt_task(request_id)
