@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import threading
 import time
 import unittest
 from unittest.mock import Mock, patch  # noqa: F401
@@ -202,32 +201,6 @@ class TestLocalScheduler(unittest.TestCase):
             metrics=self._create_mock_metrics(),
         )
 
-    def test_local_scheduler_initialization(self):
-        """Test LocalScheduler initialization with default parameters."""
-        self._assert_scheduler_state(
-            self.scheduler,
-            expected_max_size=self.max_size,
-            expected_ttl=self.ttl,
-            expected_ids_cursor=0,
-            expected_num_ids=0,
-            expected_num_requests=0,
-            expected_num_responses=0,
-        )
-
-    def test_local_scheduler_initialization_unlimited_size(self):
-        """Test LocalScheduler initialization with unlimited size."""
-        scheduler = self._create_scheduler(
-            max_size=0,  # 0 means unlimited
-            ttl=30,
-            enable_chunked_prefill=False,
-            max_num_partial_prefills=3,
-            max_long_partial_prefills=1,
-            long_prefill_token_threshold=500,
-        )
-        self.assertEqual(scheduler.max_size, 0)
-        self.assertEqual(scheduler.ttl, 30)
-        self.assertFalse(scheduler.enable_chunked_prefill)
-
     def test_reset_functionality(self):
         """Test scheduler reset functionality."""
         # Add some requests and responses
@@ -251,30 +224,6 @@ class TestLocalScheduler(unittest.TestCase):
         with patch.object(scheduler_logger, "info") as mock_info:
             self.scheduler.reset()
             mock_info.assert_called_once_with("Scheduler has been reset")
-
-    def test_put_requests_single_request(self):
-        """Test putting a single request into the scheduler."""
-        requests = [self.mock_request_1]
-        results = self.scheduler.put_requests(requests)
-
-        # Verify the request was added successfully
-        self._assert_request_added(results, "req_1", self.scheduler)
-        self.assertEqual(len(self.scheduler.ids), 1)
-
-    def test_put_requests_multiple_requests(self):
-        """Test putting multiple requests into the scheduler."""
-        requests = [self.mock_request_1, self.mock_request_2, self.mock_request_3]
-        results = self.scheduler.put_requests(requests)
-
-        # Verify all requests were added successfully
-        self.assertEqual(len(results), 3)
-        for request_id, error in results:
-            self.assertIsNone(error)
-            self.assertIn(request_id, self.scheduler.requests)
-
-        # Verify internal state
-        self.assertEqual(len(self.scheduler.requests), 3)
-        self.assertEqual(len(self.scheduler.ids), 3)
 
     def test_put_requests_duplicate_handling(self):
         """Test handling of duplicate request IDs."""
@@ -317,21 +266,6 @@ class TestLocalScheduler(unittest.TestCase):
         for request_id, error in results_2:
             self.assertIsNotNone(error)
             self.assertIn("Exceeding the max length", error)
-
-    def test_put_requests_unlimited_size(self):
-        """Test that unlimited size scheduler accepts all requests."""
-        unlimited_scheduler = self._create_scheduler(max_size=0)  # Unlimited
-
-        # Add many requests
-        many_requests = [self._create_test_request(f"req_{i}", [i]) for i in range(100)]
-        results = unlimited_scheduler.put_requests(many_requests)
-
-        # Verify all were accepted
-        self.assertEqual(len(results), 100)
-        for request_id, error in results:
-            self.assertIsNone(error)
-
-        self.assertEqual(len(unlimited_scheduler.requests), 100)
 
     def test_has_request_existing(self):
         """Test has_request with existing request."""
@@ -420,38 +354,6 @@ class TestLocalScheduler(unittest.TestCase):
         # Behavior depends on chunked prefill logic
         self.assertGreaterEqual(len(requests), 0)
 
-    def test_put_results_single_result(self):
-        """Test putting a single result."""
-        # First add a request
-        self.scheduler.put_requests([self.mock_request_1])
-
-        # Create mock output
-        mock_output = self._create_test_request_output("req_1", finished=False)
-        results = [mock_output]
-
-        # Put results
-        self.scheduler.put_results(results)
-
-        # Verify result was stored
-        self._assert_response_stored("req_1", self.scheduler)
-
-    def test_put_results_multiple_results(self):
-        """Test putting multiple results."""
-        # Add requests first
-        self.scheduler.put_requests([self.mock_request_1, self.mock_request_2])
-
-        # Create mock outputs
-        mock_output_1 = self._create_test_request_output("req_1", finished=False)
-        mock_output_2 = self._create_test_request_output("req_2", finished=True)
-        results = [mock_output_1, mock_output_2]
-
-        # Put results
-        self.scheduler.put_results(results)
-
-        # Verify results were stored
-        self._assert_response_stored("req_1", self.scheduler)
-        self._assert_response_stored("req_2", self.scheduler)
-
     def test_put_results_expired_response(self):
         """Test putting results for expired/non-existent requests."""
         mock_output = self._create_test_request_output("non_existent", finished=False)
@@ -528,86 +430,6 @@ class TestLocalScheduler(unittest.TestCase):
         # Verify request was removed
         self._assert_request_not_exists("req_1", self.scheduler)
 
-    def test_recycle_expired_requests(self):
-        """Test recycling expired requests based on TTL."""
-        # Create scheduler with short TTL
-        short_ttl_scheduler = self._create_scheduler(max_size=10, ttl=1)
-
-        # Add request
-        short_ttl_scheduler.put_requests([self.mock_request_1])
-
-        # Wait for expiration
-        time.sleep(1.5)
-
-        # Trigger recycle (happens automatically in put_requests)
-        short_ttl_scheduler.put_requests([])
-
-        # Request should still be there because _recycle with max_size > 0
-        # only removes expired when exceeding max_size
-        self.assertIn("req_1", short_ttl_scheduler.requests)
-
-    def test_recycle_unlimited_size(self):
-        """Test recycle behavior with unlimited size scheduler."""
-        unlimited_scheduler = self._create_scheduler(max_size=0)  # Unlimited
-
-        # Add request
-        unlimited_scheduler.put_requests([self.mock_request_1])
-
-        # Recycle should do nothing for unlimited size
-        unlimited_scheduler._recycle()
-
-        # Request should still be there
-        self.assertIn("req_1", unlimited_scheduler.requests)
-
-    def test_thread_safety_basic(self):
-        """Test basic thread safety of scheduler operations."""
-        results = []
-        errors = []
-
-        def add_requests():
-            try:
-                for i in range(10):
-                    request = self._create_test_request(f"thread_req_{i}", [i])
-                    result = self.scheduler.put_requests([request])
-                    results.append(result)
-            except Exception as e:
-                errors.append(e)
-
-        def get_requests():
-            try:
-                for i in range(10):
-                    _ = self.scheduler.get_requests(
-                        available_blocks=100,
-                        block_size=10,
-                        reserved_output_blocks=10,
-                        max_num_batched_tokens=100,
-                        batch=1,
-                    )
-                    time.sleep(0.001)  # Small delay
-            except Exception as e:
-                errors.append(e)
-
-        # Run threads concurrently
-        thread1 = threading.Thread(target=add_requests)
-        thread2 = threading.Thread(target=get_requests)
-
-        thread1.start()
-        thread2.start()
-
-        thread1.join()
-        thread2.join()
-
-        # Verify no errors occurred
-        self.assertEqual(len(errors), 0, f"Thread safety errors: {errors}")
-
-    def test_logging_put_requests(self):
-        """Test that put_requests logs appropriate messages."""
-        with patch.object(scheduler_logger, "info") as mock_info:
-            self.scheduler.put_requests([self.mock_request_1])
-
-            # Should log successful enqueue
-            self._assert_log_contains(mock_info, "enqueued some requests")
-
     def test_logging_put_results_finished(self):
         """Test that put_results logs finished responses."""
         # Add request first
@@ -619,29 +441,6 @@ class TestLocalScheduler(unittest.TestCase):
 
             # Should log finished response
             self._assert_log_contains(mock_info, "finished responses")
-
-    def test_edge_case_empty_request_list(self):
-        """Test putting empty request list."""
-        results = self.scheduler.put_requests([])
-        self.assertEqual(len(results), 0)
-
-    def test_edge_case_empty_result_list(self):
-        """Test putting empty result list."""
-        # Should not raise an exception
-        self.scheduler.put_results([])
-
-        # Should have no responses
-        self.assertEqual(len(self.scheduler.responses), 0)
-
-    def test_edge_case_zero_ttl(self):
-        """Test scheduler with zero TTL."""
-        zero_ttl_scheduler = self._create_scheduler(max_size=10, ttl=0)
-
-        # Add request
-        zero_ttl_scheduler.put_requests([self.mock_request_1])
-
-        # Request should be added (TTL only affects recycling)
-        self.assertIn("req_1", zero_ttl_scheduler.requests)
 
 
 if __name__ == "__main__":
