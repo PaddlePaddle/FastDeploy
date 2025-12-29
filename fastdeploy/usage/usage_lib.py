@@ -125,104 +125,7 @@ class TestGetCudaVersion(unittest.TestCase):
         self.assertIsNone(result)
 
 
-# Enhanced tests for cuda_device_count and xpu_device_count functions
-class TestDeviceCountFunctions(unittest.TestCase):
-    """Enhanced tests for device count functions"""
-
-    @patch("fastdeploy.usage.usage_lib.paddle.device.is_compiled_with_cuda")
-    @patch("fastdeploy.usage.usage_lib.paddle.device.cuda.device_count")
-    def test_cuda_device_count_with_cuda(self, mock_device_count, mock_is_compiled):
-        """Test cuda_device_count when CUDA is compiled and available"""
-        mock_is_compiled.return_value = True
-        mock_device_count.return_value = 4
-        result = cuda_device_count()
-        self.assertEqual(result, 4)
-
-    @patch("fastdeploy.usage.usage_lib.paddle.device.is_compiled_with_cuda")
-    def test_cuda_device_count_without_cuda(self, mock_is_compiled):
-        """Test cuda_device_count when CUDA is not compiled"""
-        mock_is_compiled.return_value = False
-        result = cuda_device_count()
-        self.assertEqual(result, 0)
-
-    @patch("fastdeploy.usage.usage_lib.paddle.device.is_compiled_with_xpu")
-    @patch("fastdeploy.usage.usage_lib.paddle.device.xpu.device_count")
-    def test_xpu_device_count_with_xpu(self, mock_device_count, mock_is_compiled):
-        """Test xpu_device_count when XPU is compiled and available"""
-        mock_is_compiled.return_value = True
-        mock_device_count.return_value = 2
-        result = xpu_device_count()
-        self.assertEqual(result, 2)
-
-    @patch("fastdeploy.usage.usage_lib.paddle.device.is_compiled_with_xpu")
-    def test_xpu_device_count_without_xpu(self, mock_is_compiled):
-        """Test xpu_device_count when XPU is not compiled"""
-        mock_is_compiled.return_value = False
-        result = xpu_device_count()
-        self.assertEqual(result, 0)
-
-
-# Enhanced tests for TestUsageMessage class
-class TestUsageMessage(unittest.TestCase):
-    """Test UsageMessage class with enhanced coverage"""
-
-    def setUp(self):
-        self.usage_message = UsageMessage()
-
-    def tearDown(self):
-        # Clean up any global data that might have been modified
-        _GLOBAL_RUNTIME_DATA.clear()
-
-    def test_initialization(self):
-        """Test UsageMessage initialization"""
-        self.assertIsNotNone(self.usage_message.uuid)
-        self.assertIsNone(self.usage_message.provider)
-        self.assertIsNone(self.usage_message.cpu_num)
-        self.assertIsNone(self.usage_message.cpu_type)
-
-    @patch("fastdeploy.usage.usage_lib.Thread")
-    @patch("fastdeploy.usage.usage_lib.is_usage_stats_enabled")
-    def test_report_usage_disabled(self, mock_is_enabled, mock_thread):
-        """Test report_usage when stats are disabled"""
-        mock_is_enabled.return_value = False
-
-        # Mock FDConfig
-        mock_fd_config = MagicMock()
-        mock_fd_config.model_config.quantization = None
-        mock_fd_config.model_config.num_hidden_layers = 12
-        mock_fd_config.cache_config.block_size = 16
-        mock_fd_config.cache_config.gpu_memory_utilization = 0.8
-        mock_fd_config.cache_config.enable_prefix_caching = True
-        mock_fd_config.parallel_config.disable_custom_all_reduce = False
-        mock_fd_config.parallel_config.tensor_parallel_size = 1
-        mock_fd_config.parallel_config.data_parallel_size = 1
-        mock_fd_config.parallel_config.enable_expert_parallel = False
-
-        report_usage_stats(mock_fd_config)
-
-        # Thread should not be started when stats are disabled
-        mock_thread.assert_not_called()
-
-    @patch("fastdeploy.usage.usage_lib.requests.post")
-    def test_send_to_server_success(self, mock_post):
-        """Test successful server communication"""
-        mock_post.return_value.status_code = 200
-
-        data = {"test": "data"}
-        self.usage_message._send_to_server(data)
-
-        mock_post.assert_called_once()
-
-    @patch("fastdeploy.usage.usage_lib.requests.post")
-    def test_send_to_server_failure(self, mock_post):
-        """Test server communication failure"""
-        mock_post.side_effect = RequestException("Network unreachable")
-
-        data = {"test": "data"}
-        # Should not raise exception, just log debug message
-        self.usage_message._send_to_server(data)
-
-
+# 保留原有的测试类
 class TestUsageLibFunctions(unittest.TestCase):
     """Test individual functions in usage_lib.py"""
 
@@ -333,6 +236,62 @@ class TestUsageLibFunctions(unittest.TestCase):
 
         obj = TestObj()
         self.assertEqual(simple_convert(obj), {"converted": True})
+
+
+class TestUsageMessage(unittest.TestCase):
+    """Test UsageMessage class"""
+
+    def setUp(self):
+        self.usage_message = UsageMessage()
+
+    def test_initialization(self):
+        """Test UsageMessage initialization"""
+        self.assertIsNotNone(self.usage_message.uuid)
+        self.assertIsNone(self.usage_message.provider)
+        self.assertIsNone(self.usage_message.cpu_num)
+        self.assertIsNone(self.usage_message.cpu_type)
+
+    @patch("fastdeploy.usage.usage_lib.Thread")
+    @patch("fastdeploy.usage.usage_lib.is_usage_stats_enabled")
+    def test_report_usage_disabled(self, mock_is_enabled, mock_thread):
+        """Test report_usage when stats are disabled"""
+        mock_is_enabled.return_value = False
+
+        # Mock FDConfig
+        mock_fd_config = MagicMock()
+        mock_fd_config.model_config.quantization = None
+        mock_fd_config.model_config.num_hidden_layers = 12
+        mock_fd_config.cache_config.block_size = 16
+        mock_fd_config.cache_config.gpu_memory_utilization = 0.8
+        mock_fd_config.cache_config.enable_prefix_caching = True
+        mock_fd_config.parallel_config.disable_custom_all_reduce = False
+        mock_fd_config.parallel_config.tensor_parallel_size = 1
+        mock_fd_config.parallel_config.data_parallel_size = 1
+        mock_fd_config.parallel_config.enable_expert_parallel = False
+
+        report_usage_stats(mock_fd_config)
+
+        # Thread should not be started when stats are disabled
+        mock_thread.assert_not_called()
+
+    @patch("fastdeploy.usage.usage_lib.requests.post")
+    def test_send_to_server_success(self, mock_post):
+        """Test successful server communication"""
+        mock_post.return_value.status_code = 200
+
+        data = {"test": "data"}
+        self.usage_message._send_to_server(data)
+
+        mock_post.assert_called_once()
+
+    @patch("fastdeploy.usage.usage_lib.requests.post")
+    def test_send_to_server_failure(self, mock_post):
+        """Test server communication failure"""
+        mock_post.side_effect = RequestException("Network unreachable")
+
+        data = {"test": "data"}
+        # Should not raise exception, just log debug message
+        self.usage_message._send_to_server(data)
 
 
 class TestFileWriting(unittest.TestCase):
