@@ -51,7 +51,19 @@ assert_success() {
 # curl_get_status(url, options...) → returns via global variables http_code and response_body
 curl_get_status() {
     local result
-    result=$(curl -s -w "%{http_code}" "$@")
+    result=$(curl -s -i \
+        --connect-timeout 5 \
+        --max-time 120 \
+        -w "%{http_code}" "$@")
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        echo "curl timeout or failed: $*" >&2
+        http_code="000"
+        response_body=""
+        exit 1
+    fi
+
     http_code="${result: -3}"
     response_body="${result%???}"
 }
