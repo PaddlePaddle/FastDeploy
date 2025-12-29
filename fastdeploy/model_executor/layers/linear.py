@@ -79,9 +79,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
         layer.weight.set_value(weights)
 
     def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
-        linear_out = paddle.matmul(x, layer.weight)
-        if layer.with_bias:
-            linear_out = paddle.add(linear_out, layer.bias)
+        linear_out = paddle.nn.functional.linear(x, layer.weight, bias=layer.bias)
         return linear_out
 
 
