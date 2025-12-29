@@ -217,7 +217,6 @@ class FusedMoE(nn.Layer):
             fd_config.model_config.is_quantized
             and not (fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None)
         )
-        self.is_checkpoint_bf16 = not self.is_quantized
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
