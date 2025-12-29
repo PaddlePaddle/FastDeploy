@@ -21,7 +21,11 @@ import time
 
 import openai
 import pytest
-from utils.serving_utils import (
+
+tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, tests_dir)
+
+from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
@@ -306,7 +310,6 @@ def test_w4afp8_consistency_between_runs(openai_client, consistent_payload, curr
         **consistent_payload,
     )
     content1 = resp1.choices[0].message.content
-    print(f"[{config_id}] Response 1: {content1[:100]}...")
 
     # Second request with same parameters
     resp2 = openai_client.chat.completions.create(
@@ -316,7 +319,6 @@ def test_w4afp8_consistency_between_runs(openai_client, consistent_payload, curr
         **consistent_payload,
     )
     content2 = resp2.choices[0].message.content
-    print(f"[{config_id}] Response 2: {content2[:100]}...")
 
     # Check required keywords
     required_keywords = ["北京", "天安门"]
