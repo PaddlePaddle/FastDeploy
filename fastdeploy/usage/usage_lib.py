@@ -1,321 +1,382 @@
 """
-Unit tests for usage_lib.py
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
 
+import datetime
 import json
+import multiprocessing
+import os
+import platform
+import re
+import subprocess
 import time
-import unittest
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from collections.abc import Sequence
+from concurrent.futures.process import ProcessPoolExecutor
+from pathlib import Path
+from threading import Thread
+from typing import Any
+from uuid import uuid4
 
-from requests.exceptions import RequestException
+import cpuinfo
+import paddle
+import psutil
+import requests
 
-from fastdeploy.usage.usage_lib import (
-    _GLOBAL_RUNTIME_DATA,
-    UsageMessage,
-    cuda_device_count,
-    cuda_get_device_properties,
-    cuda_is_initialized,
-    detect_cloud_provider,
-    get_cuda_version,
-    get_current_timestamp_ns,
-    get_xpu_model,
-    is_usage_stats_enabled,
-    report_usage_stats,
-    set_runtime_usage_data,
-    simple_convert,
-    xpu_device_count,
-)
+from fastdeploy.config import FDConfig
+from fastdeploy.platforms import current_platform
+from fastdeploy.utils import api_server_logger, envs
+
+_USAGE_STATS_ENABLED = None
+_USAGE_STATS_SERVER = envs.FD_USAGE_STATS_SERVER
+_GLOBAL_RUNTIME_DATA = dict[str, str | int | bool]()
+_config_home = envs.FD_CONFIG_ROOT
+_USAGE_STATS_JSON_PATH = os.path.join(_config_home, "usage_stats.json")
+_USAGE_ENV_VARS_TO_COLLECT = [
+    "ENABLE_V1_KVCACHE_SCHEDULER",
+    "FD_DISABLE_CHUNKED_PREFILL",
+    "FD_USE_HF_TOKENIZER",
+    "FD_PLUGINS",
+]
 
 
-class TestCudaDeviceProperties(unittest.TestCase):
-    """Test cuda_get_device_properties function"""
+def set_runtime_usage_data(key: str, value: str | int | bool) -> None:
+    """Set global usage data that will be sent with every usage heartbeat."""
+    _GLOBAL_RUNTIME_DATA[key] = value
 
-    @patch("fastdeploy.usage.usage_lib.paddle.device.cuda.get_device_properties")
-    def test_cuda_initialized(self, mock_props):
-        """Test when CUDA is initialized"""
-        mock_obj = MagicMock()
-        mock_obj.major = 8
-        mock_obj.minor = 6
-        mock_obj.name = "A100"
-        mock_obj.total_memory = 40 * 1024**3
-        mock_obj.multi_processor_count = 108
-        mock_props.return_value = mock_obj
 
-        # Test getting all properties
-        result = cuda_get_device_properties(
-            0, ["major", "minor", "name", "total_memory", "multi_processor_count"], True
+def is_usage_stats_enabled():
+    """Determine whether or not we can send usage stats to the server.
+    The logic is as follows:
+    - By default, it should be enabled.
+    - Three environment variables can disable it:
+        - DO_NOT_TRACK=1
+    """
+    global _USAGE_STATS_ENABLED
+    if _USAGE_STATS_ENABLED is None:
+        do_not_track = envs.DO_NOT_TRACK
+
+        _USAGE_STATS_ENABLED = not do_not_track
+    return _USAGE_STATS_ENABLED
+
+
+def get_current_timestamp_ns() -> int:
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
+
+
+def cuda_is_initialized() -> bool:
+    """Check if CUDA is initialized."""
+    if not paddle.is_compiled_with_cuda():
+        return False
+    return paddle.device.cuda.device_count() > 0
+
+
+def cuda_get_device_properties(device, names: Sequence[str], init_cuda=False) -> tuple[Any, ...]:
+    """Get specified CUDA device property values without initializing CUDA in
+    the current process."""
+    if init_cuda or cuda_is_initialized():
+        try:
+            props = paddle.device.cuda.get_device_properties(device)
+            result = []
+            for name in names:
+                if name == "major":
+                    value = props.major
+                elif name == "minor":
+                    value = props.minor
+                elif name == "name":
+                    value = props.name
+                elif name == "total_memory":
+                    value = props.total_memory
+                elif name == "multi_processor_count":
+                    value = props.multi_processor_count
+                else:
+                    value = getattr(props, name)
+                result.append(value)
+            return tuple(result)
+        except Exception as e:
+            api_server_logger.debug(f"Warning: Failed to get CUDA properties: {e}")
+            return tuple([None] * len(names))
+
+    # Run in subprocess to avoid initializing CUDA as a side effect.
+    mp_ctx = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(max_workers=1, mp_context=mp_ctx) as executor:
+        return executor.submit(cuda_get_device_properties, device, names, True).result()
+
+
+def get_xpu_model():
+    try:
+        result = subprocess.run(["xpu-smi"], capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return None
+
+        pattern = r"^\|\s*(\d+)\s+(\w+)\s+\w+"
+        lines = result.stdout.split("\n")
+
+        for line in lines:
+            match = re.search(pattern, line)
+            if match:
+                model = match.group(2)
+                return model
+
+        return "P800"
+    except Exception:
+        return "P800"
+
+
+def get_cuda_version():
+    result = os.popen("nvcc --version").read()
+    regex = r"release (\S+),"
+    match = re.search(regex, result)
+
+    if match:
+        version_str = str(match.group(1))
+        return version_str
+    else:
+        return None
+
+
+def cuda_device_count() -> int:
+    if not paddle.device.is_compiled_with_cuda():
+        return 0
+
+    device_count = paddle.device.cuda.device_count()
+    return device_count
+
+
+def xpu_device_count() -> int:
+    if not paddle.device.is_compiled_with_xpu():
+        return 0
+
+    device_count = paddle.device.xpu.device_count()
+    return device_count
+
+
+def detect_cloud_provider() -> str:
+    if os.environ.get("SYS_JOB_NAME"):
+        return "PDC"
+    # Try detecting through vendor file
+    vendor_files = [
+        "/sys/class/dmi/id/product_version",
+        "/sys/class/dmi/id/bios_vendor",
+        "/sys/class/dmi/id/product_name",
+        "/sys/class/dmi/id/chassis_asset_tag",
+        "/sys/class/dmi/id/sys_vendor",
+    ]
+    # Mapping of identifiable strings to cloud providers
+    cloud_identifiers = {
+        "amazon": "AWS",
+        "microsoft corporation": "AZURE",
+        "google": "GCP",
+        "oraclecloud": "OCI",
+    }
+
+    for vendor_file in vendor_files:
+        path = Path(vendor_file)
+        if path.is_file():
+            file_content = path.read_text().lower()
+            for identifier, provider in cloud_identifiers.items():
+                if identifier in file_content:
+                    return provider
+
+    # Try detecting through environment variables
+    env_to_cloud_provider = {
+        "RUNPOD_DC_ID": "RUNPOD",
+    }
+    for env_var, provider in env_to_cloud_provider.items():
+        if os.environ.get(env_var):
+            return provider
+
+    return "Unknown"
+
+
+def simple_convert(obj):
+    if obj is None:
+        return None
+    elif isinstance(obj, (str, int, float, bool)):
+        return obj
+    elif isinstance(obj, dict):
+        return {k: simple_convert(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [simple_convert(item) for item in obj]
+
+    if isinstance(obj, str):
+        try:
+            return json.loads(obj)
+        except:
+            return obj
+
+    if hasattr(obj, "__dict__"):
+        for method in ["to_dict", "to_json", "__getstate__", "as_dict"]:
+            if hasattr(obj, method):
+                result = getattr(obj, method)()
+                if isinstance(result, dict):
+                    return simple_convert(result)
+                elif isinstance(result, str):
+                    try:
+                        return json.loads(result)
+                    except:
+                        return result
+
+        try:
+            return {k: simple_convert(v) for k, v in vars(obj).items() if not k.startswith("_")}
+        except:
+            return str(obj)
+
+    return str(obj)
+
+
+class UsageMessage:
+    """Collect platform information and send it to the usage stats server."""
+
+    def __init__(self) -> None:
+
+        self.uuid = str(uuid4())
+
+        # Environment Information
+        self.provider: str | None = None
+        self.cpu_num: int | None = None
+        self.cpu_type: str | None = None
+        self.cpu_family_model_stepping: str | None = None
+        self.total_memory: int | None = None
+        self.architecture: str | None = None
+        self.platform: str | None = None
+        self.cuda_runtime: str | None = None
+        self.gpu_num: int | None = None
+        self.gpu_type: str | None = None
+        self.gpu_memory_per_device: int | None = None
+        self.env_var_json: str | None = None
+
+        # FD Information
+        self.model_architecture: str | None = None
+        self.fd_version: str | None = None
+        self.num_layers: int | None = None
+
+        # Metadata
+        self.log_time: int | None = None
+        self.source: str | None = None
+        self.config: str | None = None
+
+    def report_usage(self, fd_config: FDConfig, extra_kvs: dict[str, Any] | None = None) -> None:
+        t = Thread(
+            target=self._report_usage_worker,
+            args=(
+                fd_config,
+                extra_kvs,
+            ),
+            daemon=True,
         )
-        self.assertEqual(result, (8, 6, "A100", 40 * 1024**3, 108))
+        t.start()
 
-        # Test getting partial properties
-        result = cuda_get_device_properties(0, ["name", "total_memory"], True)
-        self.assertEqual(result, ("A100", 40 * 1024**3))
+    def _report_usage_worker(self, fd_config: FDConfig, extra_kvs: dict[str, Any]) -> None:
+        self._report_usage_once(fd_config, extra_kvs)
+        self._report_continuous_usage()
 
+    def _report_usage_once(self, fd_config: FDConfig, extra_kvs: dict[str, Any]):
+        if current_platform.is_cuda_alike():
+            self.gpu_num = cuda_device_count()
+            self.gpu_type, self.gpu_memory_per_device = cuda_get_device_properties(0, ("name", "total_memory"))
+        if current_platform.is_xpu():
+            self.gpu_num = xpu_device_count()
+            self.gpu_type = get_xpu_model()
+            self.gpu_memory_per_device = paddle.device.xpu.memory_total()
+        if current_platform.is_cuda():
+            self.cuda_runtime = get_cuda_version()
+        self.provider = detect_cloud_provider()
+        self.architecture = platform.machine()
+        self.platform = platform.platform()
+        self.total_memory = psutil.virtual_memory().total
 
-class TestGetXpuModel(unittest.TestCase):
-    """Test get_xpu_model function"""
+        info = cpuinfo.get_cpu_info()
+        self.cpu_num = info.get("count", None)
+        self.cpu_type = info.get("brand_raw", "")
+        self.cpu_family_model_stepping = ",".join(
+            [
+                str(info.get("family", "")),
+                str(info.get("model", "")),
+                str(info.get("stepping", "")),
+            ]
+        )
+        self.env_var_json = json.dumps({env_var: getattr(envs, env_var) for env_var in _USAGE_ENV_VARS_TO_COLLECT})
 
-    @patch("fastdeploy.usage.usage_lib.subprocess.run")
-    def test_success_with_valid_model(self, mock_run):
-        """Test successful command execution with valid model"""
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "|   0 P900                    On  |"
-        mock_run.return_value = mock_result
+        self.model_architecture = fd_config.model_config.architectures[0]
+        from fastdeploy import __version__ as FD_VERSION
 
-        result = get_xpu_model()
-        self.assertEqual(result, "P900")
-        mock_run.assert_called_once_with(["xpu-smi"], capture_output=True, text=True)
+        self.fd_version = FD_VERSION
+        self.log_time = get_current_timestamp_ns()
+        self.source = envs.FD_USAGE_SOURCE
 
-    @patch("fastdeploy.usage.usage_lib.subprocess.run")
-    def test_command_failure(self, mock_run):
-        """Test when command fails"""
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_run.return_value = mock_result
+        self.config = json.dumps({k: simple_convert(v) for k, v in vars(fd_config).items()})
+        data = vars(self)
+        if extra_kvs:
+            data.update(extra_kvs)
+        self._write_to_file(data)
+        self._send_to_server(data)
 
-        result = get_xpu_model()
-        self.assertIsNone(result)
+    def _send_to_server(self, data: dict[str, Any]) -> None:
+        try:
+            requests.post(url=_USAGE_STATS_SERVER, json=data, timeout=10)
+        except requests.exceptions.RequestException as e:
+            # silently ignore unless we are using debug log
+            api_server_logger.debug(f"Failed to send usage data to server, errot: {str(e)}")
 
-    @patch("fastdeploy.usage.usage_lib.subprocess.run")
-    def test_no_matching_pattern(self, mock_run):
-        """Test when output doesn't match pattern"""
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Invalid output format"
-        mock_run.return_value = mock_result
+    def _report_continuous_usage(self):
+        """Report usage every 10 minutes."""
+        while True:
+            time.sleep(600)
+            data = {
+                "uuid": self.uuid,
+                "log_time": get_current_timestamp_ns(),
+            }
+            data.update(_GLOBAL_RUNTIME_DATA)
 
-        result = get_xpu_model()
-        self.assertEqual(result, "P800")
+            self._write_to_file(data)
+            self._send_to_server(data)
 
-    @patch("fastdeploy.usage.usage_lib.subprocess.run")
-    def test_exception_handling(self, mock_run):
-        """Test exception handling"""
-        mock_run.side_effect = Exception("Command failed")
-        result = get_xpu_model()
-        self.assertEqual(result, "P800")
-
-
-class TestGetCudaVersion(unittest.TestCase):
-    """Test get_cuda_version function"""
-
-    @patch("fastdeploy.usage.usage_lib.os.popen")
-    def test_success(self, mock_popen):
-        """Test successful version extraction"""
-        mock_popen.return_value.read.return_value = """
-        nvcc: NVIDIA (R) Cuda compiler driver
-        Cuda compilation tools, release 12.1, V12.1.105
-        """
-        result = get_cuda_version()
-        self.assertEqual(result, "12.1")
-
-    @patch("fastdeploy.usage.usage_lib.os.popen")
-    def test_no_match(self, mock_popen):
-        """Test when version can't be extracted"""
-        mock_popen.return_value.read.return_value = "Invalid output"
-        result = get_cuda_version()
-        self.assertIsNone(result)
-
-    @patch("fastdeploy.usage.usage_lib.os.popen")
-    def test_command_failure(self, mock_popen):
-        """Test when command fails"""
-        mock_popen.side_effect = Exception("Command failed")
-        result = get_cuda_version()
-        self.assertIsNone(result)
+    def _write_to_file(self, data: dict[str, Any]) -> None:
+        os.makedirs(os.path.dirname(_USAGE_STATS_JSON_PATH), exist_ok=True)
+        Path(_USAGE_STATS_JSON_PATH).touch(exist_ok=True)
+        with open(_USAGE_STATS_JSON_PATH, "a") as f:
+            json.dump(data, f)
+            f.write("\n")
 
 
-# 保留原有的测试类
-class TestUsageLibFunctions(unittest.TestCase):
-    """Test individual functions in usage_lib.py"""
-
-    def setUp(self):
-        # Clear global data before each test
-        _GLOBAL_RUNTIME_DATA.clear()
-
-    def tearDown(self):
-        # Clear global data after each test
-        _GLOBAL_RUNTIME_DATA.clear()
-
-    def test_set_runtime_usage_data(self):
-        """Test setting runtime usage data"""
-        set_runtime_usage_data("test_key", "test_value")
-        self.assertEqual(_GLOBAL_RUNTIME_DATA["test_key"], "test_value")
-
-        set_runtime_usage_data("int_key", 123)
-        self.assertEqual(_GLOBAL_RUNTIME_DATA["int_key"], 123)
-
-    def test_is_usage_stats_enabled(self):
-        """Test usage stats enable/disable logic"""
-        # Test when DO_NOT_TRACK is not set
-        self.assertTrue(is_usage_stats_enabled())
-
-    def test_get_current_timestamp_ns(self):
-        """Test timestamp generation"""
-        before = time.time_ns()
-        timestamp = get_current_timestamp_ns()
-        after = time.time_ns()
-
-        self.assertIsInstance(timestamp, int)
-        self.assertGreaterEqual(timestamp, before)
-        self.assertLessEqual(timestamp, after)
-
-    @patch("fastdeploy.usage.usage_lib.paddle")
-    def test_cuda_is_initialized(self, mock_paddle):
-        """Test CUDA initialization check"""
-        # Test when CUDA is not compiled
-        mock_paddle.is_compiled_with_cuda.return_value = False
-        self.assertFalse(cuda_is_initialized())
-
-        # Test when CUDA is compiled but no devices
-        mock_paddle.is_compiled_with_cuda.return_value = True
-        mock_paddle.device.cuda.device_count.return_value = 0
-        self.assertFalse(cuda_is_initialized())
-
-        # Test when CUDA is compiled and has devices
-        mock_paddle.device.cuda.device_count.return_value = 2
-        self.assertTrue(cuda_is_initialized())
-
-    @patch("fastdeploy.usage.usage_lib.paddle")
-    def test_cuda_device_count(self, mock_paddle):
-        """Test CUDA device count"""
-        # Test when not compiled with CUDA
-        mock_paddle.device.is_compiled_with_cuda.return_value = False
-        self.assertEqual(cuda_device_count(), 0)
-
-        # Test when compiled with CUDA
-        mock_paddle.device.is_compiled_with_cuda.return_value = True
-        mock_paddle.device.cuda.device_count.return_value = 4
-        self.assertEqual(cuda_device_count(), 4)
-
-    @patch("fastdeploy.usage.usage_lib.paddle")
-    def test_xpu_device_count(self, mock_paddle):
-        """Test XPU device count"""
-        # Test when not compiled with XPU
-        mock_paddle.device.is_compiled_with_xpu.return_value = False
-        self.assertEqual(xpu_device_count(), 0)
-
-        # Test when compiled with XPU
-        mock_paddle.device.is_compiled_with_xpu.return_value = True
-        mock_paddle.device.xpu.device_count.return_value = 2
-        self.assertEqual(xpu_device_count(), 2)
-
-    @patch("fastdeploy.usage.usage_lib.os")
-    @patch("fastdeploy.usage.usage_lib.Path")
-    def test_detect_cloud_provider(self, mock_path, mock_os):
-        """Test cloud provider detection"""
-        # Test PDC detection
-        mock_os.environ.get.return_value = "test_job"
-        self.assertEqual(detect_cloud_provider(), "PDC")
-
-        # Test unknown provider
-        mock_os.environ.get.return_value = None
-        mock_path_instance = MagicMock()
-        mock_path.return_value = mock_path_instance
-        mock_path_instance.is_file.return_value = False
-
-        self.assertEqual(detect_cloud_provider(), "Unknown")
-
-    def test_simple_convert(self):
-        """Test object conversion for serialization"""
-        # Test basic types
-        self.assertEqual(simple_convert("test"), "test")
-        self.assertEqual(simple_convert(123), 123)
-        self.assertEqual(simple_convert(True), True)
-
-        # Test list
-        self.assertEqual(simple_convert([1, "test"]), [1, "test"])
-
-        # Test dict
-        self.assertEqual(simple_convert({"key": "value"}), {"key": "value"})
-
-        # Test object with to_dict method
-        class TestObj:
-            def to_dict(self):
-                return {"converted": True}
-
-        obj = TestObj()
-        self.assertEqual(simple_convert(obj), {"converted": True})
-
-
-class TestUsageMessage(unittest.TestCase):
-    """Test UsageMessage class"""
-
-    def setUp(self):
-        self.usage_message = UsageMessage()
-
-    def test_initialization(self):
-        """Test UsageMessage initialization"""
-        self.assertIsNotNone(self.usage_message.uuid)
-        self.assertIsNone(self.usage_message.provider)
-        self.assertIsNone(self.usage_message.cpu_num)
-        self.assertIsNone(self.usage_message.cpu_type)
-
-    @patch("fastdeploy.usage.usage_lib.Thread")
-    @patch("fastdeploy.usage.usage_lib.is_usage_stats_enabled")
-    def test_report_usage_disabled(self, mock_is_enabled, mock_thread):
-        """Test report_usage when stats are disabled"""
-        mock_is_enabled.return_value = False
-
-        # Mock FDConfig
-        mock_fd_config = MagicMock()
-        mock_fd_config.model_config.quantization = None
-        mock_fd_config.model_config.num_hidden_layers = 12
-        mock_fd_config.cache_config.block_size = 16
-        mock_fd_config.cache_config.gpu_memory_utilization = 0.8
-        mock_fd_config.cache_config.enable_prefix_caching = True
-        mock_fd_config.parallel_config.disable_custom_all_reduce = False
-        mock_fd_config.parallel_config.tensor_parallel_size = 1
-        mock_fd_config.parallel_config.data_parallel_size = 1
-        mock_fd_config.parallel_config.enable_expert_parallel = False
-
-        report_usage_stats(mock_fd_config)
-
-        # Thread should not be started when stats are disabled
-        mock_thread.assert_not_called()
-
-    @patch("fastdeploy.usage.usage_lib.requests.post")
-    def test_send_to_server_success(self, mock_post):
-        """Test successful server communication"""
-        mock_post.return_value.status_code = 200
-
-        data = {"test": "data"}
-        self.usage_message._send_to_server(data)
-
-        mock_post.assert_called_once()
-
-    @patch("fastdeploy.usage.usage_lib.requests.post")
-    def test_send_to_server_failure(self, mock_post):
-        """Test server communication failure"""
-        mock_post.side_effect = RequestException("Network unreachable")
-
-        data = {"test": "data"}
-        # Should not raise exception, just log debug message
-        self.usage_message._send_to_server(data)
-
-
-class TestFileWriting(unittest.TestCase):
-    """Test file writing functionality"""
-
-    @patch("fastdeploy.usage.usage_lib.os.makedirs")
-    @patch("fastdeploy.usage.usage_lib.Path.touch")
-    @patch("fastdeploy.usage.usage_lib.open", new_callable=mock_open)
-    def test_write_to_file(self, mock_file, mock_touch, mock_makedirs):
-        """Test writing usage data to file"""
-        usage_message = UsageMessage()
-        data = {"uuid": "test-uuid", "timestamp": 1234567890}
-
-        usage_message._write_to_file(data)
-
-        # Verify file operations
-        mock_makedirs.assert_called_once()
-        mock_touch.assert_called_once()
-
-        # Verify JSON was written
-        all_writes = [call.args[0] for call in mock_file().write.call_args_list]
-        full_content = "".join(all_writes)
-        self.assertEqual(json.loads(full_content), data)
-
-
-if __name__ == "__main__":
-    unittest.main()
+def report_usage_stats(fd_config: FDConfig) -> None:
+    """Report usage statistics if enabled."""
+    if not is_usage_stats_enabled():
+        return
+    quant_val = fd_config.model_config.quantization
+    if quant_val is None:
+        quantization_str = None
+    elif isinstance(quant_val, dict):
+        quantization_str = quant_val.get("quantization")
+    elif isinstance(quant_val, str):
+        quantization_str = quant_val
+    else:
+        quantization_str = str(quant_val)
+    usage_message = UsageMessage()
+    usage_message.report_usage(
+        fd_config,
+        extra_kvs={
+            "num_layers": fd_config.model_config.num_hidden_layers,
+            "quantization": quantization_str,
+            "block_size": fd_config.cache_config.block_size,
+            "gpu_memory_utilization": fd_config.cache_config.gpu_memory_utilization,
+            "enable_prefix_caching": fd_config.cache_config.enable_prefix_caching,
+            "disable_custom_all_reduce": fd_config.parallel_config.disable_custom_all_reduce,
+            "tensor_parallel_size": fd_config.parallel_config.tensor_parallel_size,
+            "data_parallel_size": fd_config.parallel_config.data_parallel_size,
+            "enable_expert_parallel": fd_config.parallel_config.enable_expert_parallel,
+        },
+    )
