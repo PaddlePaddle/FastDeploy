@@ -1112,75 +1112,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             del quant_weight_list, scale_list, stacked_quant_weight, stacked_scale, processed_scale
             paddle.device.cuda.empty_cache()
 
-        def _process_offline_weight(weight_type: str):
-            weight_idx = 0 if weight_type == "gate_up" else 1
-            weight_name = self.added_weight_attrs[weight_idx]
-
-            weight_list = []
-            for expert_id in range(layer.num_local_experts):
-                expert_weight = getattr(layer, weight_name)[expert_id]
-                converted_weight = w4afp8_gemm_weight_convert(expert_weight)
-                weight_list.append(converted_weight)
-
-            stacked_weight = paddle.stack(weight_list, axis=0)
-            getattr(layer, weight_name).set_value(stacked_weight)
-            del weight_list, stacked_weight
-
-        def _process_offline_scale(weight_type: str):
-
-            weight_idx = 0 if weight_type == "gate_up" else 1
-            scale_name = self.added_scale_attrs[weight_idx]
-            in_scale_name = scale_name.replace("_weight_scale", "_in_scale")
-            reduce_dim = layer.hidden_size if weight_type == "gate_up" else layer.moe_intermediate_size
-
-            in_scale_tensor = None
-            if hasattr(layer, in_scale_name) and not layer.moe_quant_config.moe_dynamic_quant:
-                raw_in_scale = getattr(layer, in_scale_name)
-                in_scale_tensor = 1 / raw_in_scale
-                getattr(layer, in_scale_name).set_value(in_scale_tensor)
-
-            weight_scale = getattr(layer, scale_name)
-
-            if in_scale_tensor is not None:
-                processed_scale = weight_scale / (448 * 7 * 2 ** (-9))
-                if len(processed_scale.shape) == 3:
-                    processed_scale = processed_scale.transpose([0, 2, 1]) / in_scale_tensor[:, None, None]
-                else:
-                    processed_scale = processed_scale / in_scale_tensor[:, None]
-            else:
-                processed_scale = weight_scale / (448 * 7 * 2 ** (-9))
-
-            if len(processed_scale.shape) == 3:
-                expected_groups = reduce_dim // 128
-                if processed_scale.shape[-1] != expected_groups:
-                    assert expected_groups % processed_scale.shape[-1] == 0
-                    processed_scale = processed_scale.repeat_interleave(
-                        expected_groups // processed_scale.shape[-1], axis=-1
-                    )
-
-                origin_shape = processed_scale.shape
-                processed_scale = processed_scale.transpose([0, 2, 1])
-                processed_scale = processed_scale.reshape([-1, processed_scale.shape[-1]])
-                processed_scale = w4afp8_gemm_scale_permute(processed_scale)
-                processed_scale = processed_scale.reshape(
-                    [origin_shape[0], origin_shape[2], origin_shape[1] // 128, 128]
-                )
-                processed_scale = processed_scale.transpose([0, 2, 1, 3])
-
-                setattr(
-                    layer,
-                    scale_name,
-                    layer.create_parameter(
-                        shape=processed_scale.shape,
-                        dtype="float32",
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
-            else:
-                processed_scale = w4afp8_gemm_scale_permute(processed_scale)
-
-            getattr(layer, scale_name).set_value(processed_scale)
-
         up_gate_ready = hasattr(layer, "up_gate_proj_weight") and weight_fully_copied(layer.up_gate_proj_weight)
         down_ready = hasattr(layer, "down_proj_weight") and weight_fully_copied(layer.down_proj_weight)
 
@@ -1218,43 +1149,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 del self._down_processed
 
         else:
-            if up_gate_ready and not getattr(self, "_up_gate_processed", False):
-                weight_type = "gate_up"
-                self._up_gate_processed = True
-
-                logger.info(f"Processing prequantized layer.{layer.layer_idx}.mlp.experts.up_gate_proj...")
-
-                if self.model_format != "torch":
-                    process_weight_transpose(layer, "up_gate_proj_weight")
-                    if hasattr(layer, "up_gate_proj_weight_scale"):
-                        process_weight_transpose(layer, "up_gate_proj_weight_scale")
-
-                _process_offline_weight(weight_type)
-                _process_offline_scale(weight_type)
-
-            elif down_ready and not getattr(self, "_down_processed", False):
-                weight_type = "down"
-                self._down_processed = True
-
-                logger.info(f"Processing prequantized layer.{layer.layer_idx}.mlp.experts.down_proj...")
-
-                if self.model_format != "torch":
-                    process_weight_transpose(layer, "down_proj_weight")
-                    if hasattr(layer, "down_proj_weight_scale"):
-                        process_weight_transpose(layer, "down_proj_weight_scale")
-
-                _process_offline_weight(weight_type)
-                _process_offline_scale(weight_type)
-
-            if getattr(self, "_up_gate_processed", False) and getattr(self, "_down_processed", False):
-                if layer.ep_size > 1 and not layer.moe_quant_config.moe_dynamic_quant:
-                    if hasattr(layer, "up_gate_proj_in_scale_all_experts"):
-                        all_experts_scale = getattr(layer, "up_gate_proj_in_scale_all_experts")
-                        getattr(layer, "up_gate_proj_in_scale_all_experts").set_value(1 / all_experts_scale)
-
-                logger.info(f"Layer {layer.layer_idx} MoE W4AFP8 offline processing completed.")
-                del self._up_gate_processed
-                del self._down_processed
+            return
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
