@@ -27,14 +27,20 @@ class TestBatchedCountGreaterThan(unittest.TestCase):
         return (x >= y).sum(-1)
 
     def test_batched_count_greater_than(self):
-        vocab_size_list = [151552]
+        vocab_size_list = [151552, 566]
         test_token_nums = [1, 32, 128, 1024, 8192]
         for idx, num_tokens in enumerate(test_token_nums):
             for vocab_size in vocab_size_list:
                 x = paddle.randn([num_tokens, vocab_size], dtype="float32")
                 y = paddle.randn([num_tokens, 1], dtype="float32")
+                x[0, 0] = -float("inf")
+                y[0, 0] = -float("inf")
                 out = self.naive_impl(x, y)
                 out_triton = batched_count_greater_than(x, y)
                 self.assertTrue(np.allclose(out.numpy(), out_triton.numpy()))
 
         return out
+
+
+if __name__ == "__main__":
+    unittest.main()

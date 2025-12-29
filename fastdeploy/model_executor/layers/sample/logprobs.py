@@ -30,11 +30,12 @@ def count_greater_kernel(
     b = tl.program_id(0)
     sum_val = 0.0
     y = tl.load(y_ptr + b * 1 + 0)
-    for col_start_idx in tl.range(0, (n_elements + BLOCK_SIZE - 1) // BLOCK_SIZE, num_stages=2):
+    for col_start_idx in range(0, tl.cdiv(n_elements, BLOCK_SIZE)):
         col_ids = col_start_idx * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
         col_mask = col_ids < n_elements
-        x = tl.load(x_ptr + b * n_elements + col_ids, mask=col_mask, other=0.0)
-        cmp_mask = tl.where(col_mask, (x >= y).to(tl.float32), 0.0)
+        x = tl.load(x_ptr + b * n_elements + col_ids, mask=col_mask, other=-float("inf"))
+        compare_mask = x >= y
+        cmp_mask = tl.where(compare_mask & col_mask, 1, 0)
         sum_val += tl.sum(cmp_mask, axis=0)
     tl.store(out_ptr + b, sum_val.to(tl.int64))
 
