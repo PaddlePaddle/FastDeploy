@@ -267,7 +267,8 @@ def test_deepep_engine_combine_rewrites_handle_and_errors(monkeypatch):
     handle = ("src", "layout", 4, 2)
     engine.low_latency_combine(hidden_states, topk_idx, topk_weights, handle)
 
-    assert engine.deepep_engine._combine_handle == handle
+    assert engine.deepep_engine._combine_handle[3] is None
+    assert engine.deepep_engine._combine_handle[4] == 2
 
     engine.buffer.deepep_buffer = None
     with pytest.raises(RuntimeError, match="DeepEP buffer not initialized"):
@@ -422,8 +423,10 @@ def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
     gate_out = paddle.randn([1, 4], dtype="float32")
 
     topk_idx, topk_weights = runner.moe_select(layer, gate_out)
-    assert topk_idx.shape == [1, 1]
-    assert topk_weights.shape == [1, 1]
+    assert list(topk_idx.shape) == [1, 1]
+    assert list(topk_weights.shape) == [1, 1]
+    assert paddle.allclose(topk_idx, paddle.to_tensor([[1]], dtype="int64"))
+    assert paddle.allclose(topk_weights, paddle.to_tensor([[0.5]]))
 
 
 def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
@@ -462,8 +465,10 @@ def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
     gate_out = paddle.randn([1, 4], dtype="float32")
 
     topk_idx, topk_weights = runner.moe_select(layer, gate_out)
-    assert topk_idx.shape == [1, 1]
-    assert topk_weights.shape == [1, 1]
+    assert list(topk_idx.shape) == [1, 1]
+    assert list(topk_weights.shape) == [1, 1]
+    assert paddle.allclose(topk_idx, paddle.to_tensor([[2]], dtype="int64"))
+    assert paddle.allclose(topk_weights, paddle.to_tensor([[0.25]]))
 
 
 def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
@@ -492,5 +497,7 @@ def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
     gate_out = paddle.randn([1, 4], dtype="float32")
 
     topk_idx, topk_weights = runner.moe_select(layer, gate_out)
-    assert topk_idx.shape == [1, 1]
-    assert topk_weights.shape == [1, 1]
+    assert list(topk_idx.shape) == [1, 1]
+    assert list(topk_weights.shape) == [1, 1]
+    assert paddle.allclose(topk_idx, paddle.to_tensor([[3]], dtype="int64"))
+    assert paddle.allclose(topk_weights, paddle.to_tensor([[0.75]]))
