@@ -308,8 +308,8 @@ class DataProcessorTestCase(unittest.TestCase):
             def _load_tokenizer(self):
                 return DummyTokenizer()
 
-            def process_request(self, request, **kwargs):
-                return super().process_request(request, **kwargs)
+            def process_request_obj(self, request, **kwargs):
+                return super().process_request_obj(request, **kwargs)
 
             def process_response(self, response_dict):
                 return super().process_response(response_dict)
@@ -319,7 +319,7 @@ class DataProcessorTestCase(unittest.TestCase):
         defaults = processor._apply_default_parameters(request)
         self.assertAlmostEqual(defaults.sampling_params.top_p, 0.5)
         with self.assertRaises(NotImplementedError):
-            processor.process_request({}, max_model_len=None)
+            processor.process_request_obj({}, max_model_len=None)
         with self.assertRaises(NotImplementedError):
             processor.process_response({})
         with self.assertRaises(NotImplementedError):
@@ -364,7 +364,7 @@ class DataProcessorTestCase(unittest.TestCase):
             temperature=0,
             top_p=0,
         )
-        processed = self.processor.process_request(request, max_model_len=5)
+        processed = self.processor.process_request_obj(request, max_model_len=5)
 
         self.assertEqual(processed.prompt_token_ids, [1, 2, 3, 4])
         self.assertEqual(processed.sampling_params.max_tokens, 1)
@@ -375,8 +375,8 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_request_requires_prompt_or_messages(self):
         request = DummyRequest(prompt=None, messages=None, prompt_token_ids=None)
-        with self.assertRaisesRegex(ValueError, "should have `input_ids`, `text` or `messages`"):
-            self.processor.process_request(request, max_model_len=5)
+        with self.assertRaisesRegex(ValueError, "Request must contain 'prompt_token_ids', 'prompt', or 'messages'"):
+            self.processor.process_request_obj(request, max_model_len=5)
 
     def test_process_request_obj_rejects_bad_kwargs(self):
         request = {

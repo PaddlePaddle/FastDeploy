@@ -266,7 +266,7 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertEqual(len(stop_lens2), 2)
 
     def test_process_request_chat_template_kwargs(self):
-        """Test chat_template_kwargs application inside process_request."""
+        """Test chat_template_kwargs application inside process_request_obj."""
 
         proc = self._make_processor()
 
@@ -278,7 +278,7 @@ class TestErnie4_5Processor(unittest.TestCase):
         }
         request = Request.from_dict(request)
 
-        processed = proc.process_request(request, max_model_len=20, chat_template_kwargs={"extra": "VALUE"})
+        processed = proc.process_request_obj(request, max_model_len=20, chat_template_kwargs={"extra": "VALUE"})
 
         self.assertEqual(processed.eos_token_ids, [proc.tokenizer.eos_token_id])
 

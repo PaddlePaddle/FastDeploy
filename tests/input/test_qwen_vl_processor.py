@@ -153,7 +153,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
 
         request = Request.from_dict(message)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
@@ -248,7 +248,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
 
         request = Request.from_dict(prompt)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
@@ -301,7 +301,7 @@ class TestQwenVLProcessor(unittest.TestCase):
             },
         }
         request2 = Request.from_dict(prompt)
-        result2 = self.processor.process_request(request2, 1024 * 100)
+        result2 = self.processor.process_request_obj(request2, 1024 * 100)
 
         # Verify both processing methods produce identical results
         self.assertEqual(result.prompt_token_ids, result2.prompt_token_ids)

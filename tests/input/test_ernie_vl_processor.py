@@ -267,8 +267,8 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
                 processor._check_mm_limits(mm_data)
             self.assertIn("Too many image items", str(context.exception))
 
-    def test_process_request(self):
-        """Test process_request method"""
+    def test_process_request_obj(self):
+        """Test process_request_obj method"""
         # from fastdeploy.engine.request import Request
 
         # Mock the process_request_dict method
@@ -283,7 +283,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             mock_result_request = MagicMock(spec=Request)
             mock_from_dict.return_value = mock_result_request
 
-            self.processor.process_request(mock_request, max_model_len=100, chat_template_kwargs={"key": "value"})
+            self.processor.process_request_obj(mock_request, max_model_len=100, chat_template_kwargs={"key": "value"})
 
             # Verify process_request_dict was called
             self.processor.process_request_obj.assert_called_once()

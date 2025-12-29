@@ -75,22 +75,22 @@ class PaddleOCRVLProcessor(TextProcessor):
         self.image_patch_id = self.processor.image_patch_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """
-        Process incoming request and generate model inputs.
+    # def process_request(self, request, max_model_len=None, **kwargs):
+    #     """
+    #     Process incoming request and generate model inputs.
 
-        Args:
-            request: Input request object
-            max_model_len (int, optional): Maximum context length
-            **kwargs: Additional processing parameters
+    #     Args:
+    #         request: Input request object
+    #         max_model_len (int, optional): Maximum context length
+    #         **kwargs: Additional processing parameters
 
-        Returns:
-            Request: Processed request with model inputs
-        """
-        setattr(request, "enable_thinking", kwargs.get("enable_thinking", False))
-        self.process_request_obj(request, max_model_len)
-        request = self._apply_default_parameters(request)
-        return request
+    #     Returns:
+    #         Request: Processed request with model inputs
+    #     """
+    #     setattr(request, "enable_thinking", kwargs.get("enable_thinking", False))
+    #     self.process_request_obj(request, max_model_len)
+    #     request = self._apply_default_parameters(request)
+    #     return request
 
     def _parse_processor_kwargs(self, kwargs):
         """
@@ -189,7 +189,7 @@ class PaddleOCRVLProcessor(TextProcessor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_obj(self, request, max_model_len=None):
+    def process_request_obj(self, request, max_model_len=None, **kwargs):
         """
         Process request dictionary into model inputs.
 

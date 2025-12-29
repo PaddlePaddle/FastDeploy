@@ -977,7 +977,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             self.processor._check_mm_limits(item_exceeded)
 
     def test_process_request_wrapper(self):
-        """测试 process_request 封装方法"""
+        """测试 process_request_obj 封装方法"""
         # 1. 模拟输入 Request 对象
         request_obj = MagicMock()
         request_dict = {
@@ -996,7 +996,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             final_mock_request = MagicMock()
             MockRequestCls.from_dict.return_value = final_mock_request
 
-            result_request = self.processor.process_request(request_obj, max_model_len=512)
+            result_request = self.processor.process_request_obj(request_obj, max_model_len=512)
             self.assertEqual(result_request.enable_thinking, False)
 
     def test_parse_processor_kwargs_invalid_type(self):

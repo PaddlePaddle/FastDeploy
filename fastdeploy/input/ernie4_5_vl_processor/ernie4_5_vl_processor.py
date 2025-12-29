@@ -111,13 +111,13 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "presence_penalty", 0.0)
         return request
 
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """process the input data"""
-        setattr(request, "chat_template_kwargs", kwargs.get("chat_template_kwargs"))
-        self.process_request_obj(request, max_model_len)
-        request = self._apply_default_parameters(request)
+    # def process_request(self, request, max_model_len=None, **kwargs):
+    #     """process the input data"""
+    #     setattr(request, "chat_template_kwargs", kwargs.get("chat_template_kwargs"))
+    #     self.process_request_obj(request, max_model_len)
+    #     request = self._apply_default_parameters(request)
 
-        return request
+    #     return request
 
     def _parse_processor_kwargs(self, kwargs):
         """解析多模态处理器参数配置"""
@@ -194,7 +194,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_obj(self, request, max_model_len=None):
+    def process_request_obj(self, request, max_model_len=None, **kwargs):
         """process the input data"""
 
         request = self._apply_default_parameters(request)
@@ -229,7 +229,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         elif request.messages:
             messages = request.messages
             self._check_mm_limits(messages)
-            chat_template_kwargs = request.chat_template_kwargs
+            chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
+            if not chat_template_kwargs:
+                chat_template_kwargs = request.chat_template_kwargs
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
