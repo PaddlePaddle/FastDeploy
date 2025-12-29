@@ -1176,7 +1176,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &AppendAttentionWithOutput,
         "append attention with output function");
 
-#ifdef DENABLE_FLASH_MASK_ATTENTION
+#ifdef ENABLE_FLASH_MASK_ATTENTION
   m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
 #endif
 
