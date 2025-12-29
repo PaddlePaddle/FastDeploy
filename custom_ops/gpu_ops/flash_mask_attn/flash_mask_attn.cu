@@ -168,21 +168,21 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
   }
 }
 
-// PD_BUILD_STATIC_OP(flash_mask_attention)
-//     .Inputs({"q_input",
-//              "k_input",
-//              "v_input",
-//              "cu_seq_q",
-//              "cu_seq_k",
-//              "seq_len_encoder",
-//              "attn_out",
-//              paddle::Optional("mask")})
-//     .Attrs({"head_num: int",
-//             "kv_head_num: int",
-//             "head_dim: int",
-//             "max_seq_len: int",
-//             "q_token_num: int",
-//             "k_token_num: int"})
-//     .Outputs({"out"})
-//     .SetInplaceMap({{"attn_out", "out"}})
-//     .SetKernelFn(PD_KERNEL(FlashAttentionMask));
+PD_BUILD_STATIC_OP(flash_mask_attention)
+    .Inputs({"q_input",
+             "k_input",
+             "v_input",
+             "cu_seq_q",
+             "cu_seq_k",
+             "seq_len_encoder",
+             "attn_out",
+             paddle::Optional("mask")})
+    .Attrs({"head_num: int",
+            "kv_head_num: int",
+            "head_dim: int",
+            "max_seq_len: int",
+            "q_token_num: int",
+            "k_token_num: int"})
+    .Outputs({"out"})
+    .SetInplaceMap({{"attn_out", "out"}})
+    .SetKernelFn(PD_KERNEL(FlashAttentionMask));
