@@ -250,7 +250,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 None,  # down_proj_bias
                 False,  # norm_topk_prob
                 1.0,
-            )[0]
+            )
 
         else:
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
@@ -448,6 +448,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             None,
             False,  # norm_topk_prob
             1.0,
-        )[0]
+        )
 
         return tmp_ffn_out
