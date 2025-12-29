@@ -199,6 +199,10 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
         try:
+            # # 将 topk_idx 转换为 int64 类型
+            # if topk_idx.dtype != paddle.int64:
+            #     print(f"[DeepEP] Converting topk_idx from {topk_idx.dtype} to int64")
+            #     topk_idx = topk_idx.astype(paddle.int64)
             # 调试信息输入
             print("[DeepEP] Starting low_latency_dispatch...")
             print(f"[DeepEP] hidden_states: shape={hidden_states.shape}, dtype={hidden_states.dtype}")
@@ -272,6 +276,9 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             combined_hidden_states: [num_tokens, hidden_size]
         """
         print("============enter low_latency_combine")
+        print(f"[DeepEP] ll_combine Converting topk_idx from {topk_idx.dtype} to int32")
+        topk_idx = topk_idx.astype(paddle.int32)
+
         if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":
             # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
             # and when the default recommended version of PaddlePaddle is greater than 3.1.0
