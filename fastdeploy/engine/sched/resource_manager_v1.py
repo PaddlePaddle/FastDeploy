@@ -323,13 +323,14 @@ class ResourceManagerV1(ResourceManager):
                     grid_thw.extend([[2, h, w]] * (t // 2))
                     token_st = inputs["mm_positions"][idx].offset
                     for _ in range(t // 2):
-                        new_mm_positions.append(ImagePosition(token_st, h * w // 4))
+                        mm_num_token = inputs["mm_num_token_func"](grid_thw=[2, h, w])
+                        new_mm_positions.append(ImagePosition(token_st, mm_num_token))
                         # videos are split into patches every 2 frames, need to rehash
                         new_mm_hashes.append(
                             MultimodalHasher.hash_features(inputs["images"][image_st : image_st + 2 * h * w])
                         )
                         image_st += 2 * h * w
-                        token_st += h * w // 4
+                        token_st += mm_num_token
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
         elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
@@ -446,7 +447,6 @@ class ResourceManagerV1(ResourceManager):
                     else:
                         grid_thw.extend([[2, h, w]] * (t // 2))
 
-                grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
                     from fastdeploy.model_executor.ops.xpu import get_img_boundaries
                 elif current_platform.is_iluvatar():
@@ -456,11 +456,13 @@ class ResourceManagerV1(ResourceManager):
                 else:
                     from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
+                mm_num_token = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                mm_num_token = paddle.to_tensor(mm_num_token, dtype="int64")
                 request.multimodal_img_boundaries = get_img_boundaries(
-                    task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
+                    task_input_ids=input_ids, mm_num_token=mm_num_token, image_patch_id=image_patch_id
                 ).numpy()
 
-                grid_thw = grid_thw.numpy().reshape([-1, 3])
+                grid_thw = np.array(grid_thw).reshape([-1, 3])
                 inputs["grid_thw"] = grid_thw
 
             grid_thw = inputs["grid_thw"]

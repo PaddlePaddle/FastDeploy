@@ -18,13 +18,12 @@ import numpy as np
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
-from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
 
-class QwenVLProcessor(TextProcessor):
+class Qwen3VLProcessor(TextProcessor):
     """
     Qwen Vision-Language processor for handling multimodal inputs.
 
@@ -68,7 +67,7 @@ class QwenVLProcessor(TextProcessor):
         self.processor = DataProcessor(
             model_path=model_name_or_path,
             enable_processor_cache=enable_processor_cache,
-            tokens_per_second=config.vision_config.tokens_per_second,
+            # tokens_per_second=config.vision_config.tokens_per_second,
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )
@@ -210,8 +209,11 @@ class QwenVLProcessor(TextProcessor):
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
-        # processing stop_sequences and stop_token_ids
-        process_stop_token_ids(request, self.update_stop_seq)
+        stop_sequences = request.get("stop", [])
+        if stop_sequences:
+            stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
+            request["stop_token_ids"] = stop_seqs
+            request["stop_seqs_len"] = stop_seqs_len
 
         bad_words = request.get("bad_words")
         bad_words_token_ids = request.get("bad_words_token_ids")
@@ -267,18 +269,6 @@ class QwenVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
-        if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
         data_processor_logger.info(f"Processed request {request}")
 
         return request
@@ -331,4 +321,5 @@ class QwenVLProcessor(TextProcessor):
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
 
         outputs["mm_num_token_func"] = self.processor.mm_num_tokens
+
         return outputs

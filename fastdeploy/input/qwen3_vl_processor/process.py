@@ -32,8 +32,91 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor
-from .process_video import sample_frames
+from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
+
+VIDEO_MIN_PIXELS = 128 * 28 * 28
+VIDEO_MAX_PIXELS = 768 * 28 * 28
+FRAME_FACTOR = 2
+FPS = 2.0
+FPS_MIN_FRAMES = 4
+FPS_MAX_FRAMES = 768
+
+
+def sample_frames(
+    frame_factor: int,
+    min_frames: int,
+    max_frames: int,
+    metadata: Optional[dict] = None,
+    fps: Optional[Union[int, float]] = -1,
+    num_frames: Optional[int] = -1,
+):
+    """
+    Sample frames from video according to specified criteria.
+
+    Args:
+        frame_factor: Ensure sampled frames are multiples of this factor
+        min_frames: Minimum number of frames to sample
+        max_frames: Maximum number of frames to sample
+        metadata: Video metadata containing fps information
+        fps: Target frames per second for sampling
+        num_frames: Exact number of frames to sample
+
+    Returns:
+        np.ndarray: Sampled video frames
+
+    Raises:
+        ValueError: If both fps and num_frames are specified,
+                   or if required metadata is missing,
+                   or if requested frames exceed available frames
+    """
+    if fps > 0 and num_frames > 0:
+        raise ValueError("`num_frames` and `fps` are mutually exclusive arguments, please use only one!")
+
+    total_num_frames = metadata["num_of_frame"]
+
+    # If num_frames is not given but fps is, calculate num_frames from fps
+    if num_frames > 0:
+        num_frames = round(num_frames / frame_factor) * frame_factor
+    elif fps > 0:
+        if metadata is None:
+            raise ValueError(
+                "Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. "
+                "Please pass in `VideoMetadata` object or use a fixed `num_frames` per input video"
+            )
+        # max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
+        min_frames = ceil_by_factor(min_frames, frame_factor)
+        max_frames = floor_by_factor(min(max_frames, total_num_frames), frame_factor)
+
+        num_frames = total_num_frames / metadata["fps"] * fps
+
+        if num_frames > total_num_frames:
+            data_processor_logger.warning(f"smart_nframes: nframes[{num_frames}] > total_frames[{total_num_frames}]")
+
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
+        num_frames = floor_by_factor(num_frames, frame_factor)
+
+    if num_frames > total_num_frames:
+        raise ValueError(
+            f"Video can't be sampled. The inferred `num_frames={num_frames}` exceeds `total_num_frames={total_num_frames}`. "
+            "Decrease `num_frames` or `fps` for sampling."
+        )
+
+    # Hack code ensures that num_frames can always be divided by 4
+    # due to sched/resource_manager_v1.py 中 grid_thw.extend([[2, h, w]] * (t // 2))
+    if num_frames > 2 and num_frames % 4 != 0:
+        num_frames = (num_frames // 4) * 4  # 向下取整到 4 的倍数
+        total_num_frames = (total_num_frames // 4) * 4
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
+
+    # Calculate frame indices based on sampling strategy
+    if num_frames > 0:
+        # Evenly spaced sampling for target frame count
+        indices = np.arange(0, total_num_frames, total_num_frames / num_frames).astype(np.int32)
+    else:
+        # Keep all frames if no sampling requested
+        indices = np.arange(0, total_num_frames).astype(np.int32)
+
+    return indices
 
 
 class DataProcessor(MMBaseDataProcessor):
@@ -58,10 +141,10 @@ class DataProcessor(MMBaseDataProcessor):
         self,
         model_path: str,
         enable_processor_cache: bool = False,
-        video_min_frames: int = 4,
-        video_max_frames: int = 768,
+        video_min_frames: int = FPS_MIN_FRAMES,
+        video_max_frames: int = FPS_MAX_FRAMES,
         video_target_frames: int = -1,
-        video_fps: int = -1,
+        video_fps: int = FPS,
         tokens_per_second: int = 2,
         tokenizer=None,
         **kwargs,
@@ -81,6 +164,7 @@ class DataProcessor(MMBaseDataProcessor):
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
         self.fps = video_fps
+        self.frame_factor = FRAME_FACTOR
 
         # Initialize tokenizer with left padding and fast tokenizer
         if tokenizer is None:
@@ -88,6 +172,7 @@ class DataProcessor(MMBaseDataProcessor):
             self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
         else:
             self.tokenizer = tokenizer
+
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
         self.enable_processor_cache = enable_processor_cache
 
@@ -96,14 +181,13 @@ class DataProcessor(MMBaseDataProcessor):
         self.temporal_conv_size = self.image_processor.temporal_patch_size
 
         # Special tokens and IDs
-        self.image_token = "<|IMAGE_PLACEHOLDER|>"
+        self.image_token = "<|image_pad|>"
         self.video_token = "<|video_pad|>"
 
         self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
         self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
-        self.image_patch_id = self.image_token_id
 
-        self.vision_start = "<|IMAGE_START|>"
+        self.vision_start = "<|vision_start|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
 
         self.tokens_per_second = tokens_per_second
@@ -171,13 +255,11 @@ class DataProcessor(MMBaseDataProcessor):
             "fps": [],
             "mm_positions": [],
             "mm_hashes": [],
-            "vit_seqlen": [],
-            "vit_position_ids": [],
         }
 
         # Define placeholders and their lengths
-        IMAGE_PLACEHOLDER = self.image_token
-        VIDEO_PLACEHOLDER = self.video_token
+        IMAGE_PLACEHOLDER = "<|image_pad|>"
+        VIDEO_PLACEHOLDER = "<|video_pad|>"
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
 
@@ -389,15 +471,13 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].append(0)
 
-        # position_ids
         t, h, w = grid_thw
         pos_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, 0)
+
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
+
         outputs["fps"].append(0)
-        numel = h * w
-        outputs["vit_seqlen"].append(numel)
-        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _add_processed_image(self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
         img, meta = img_cache
@@ -432,13 +512,19 @@ class DataProcessor(MMBaseDataProcessor):
             - Handles temporal dimension in position embeddings
             - Uses video-specific token IDs and type markers
         """
-        ret = self.image_processor.preprocess(images=frames)
+        ret = self.image_processor.preprocess(
+            images=frames,
+            min_pixels=VIDEO_MIN_PIXELS,
+            max_pixels=VIDEO_MAX_PIXELS,
+        )
 
-        num_tokens = ret["image_grid_thw"].prod() // self.image_processor.merge_size**2
-        grid_thw = ret["image_grid_thw"].tolist()
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
+        grid_thw = ret["grid_thw"].tolist()
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        # Hack code. In order to adapt to the framework, only image_token can be passed
+        # The correct way should be to use [self.video_token_id] * num_tokens
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += int(num_tokens)
 
@@ -457,10 +543,8 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
+
         outputs["fps"].append(fps)
-        numel = h * w
-        outputs["vit_seqlen"].append(numel)
-        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _add_processed_video(self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
         frames, meta = frames_cache
@@ -544,7 +628,7 @@ class DataProcessor(MMBaseDataProcessor):
 
             # Sample frames according to specifications
             frame_indices = sample_frames(
-                frame_factor=self.temporal_conv_size,  # Ensure divisible by temporal patch size
+                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,
@@ -588,35 +672,3 @@ class DataProcessor(MMBaseDataProcessor):
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
-
-    def apply_chat_template(self, request):
-        """
-        Apply chat template to convert messages into token sequence.
-
-        Args:
-            request: Dictionary containing chat messages
-
-        Returns:
-            List of token IDs
-
-        Raises:
-            ValueError: If model doesn't support chat templates
-        """
-        if self.tokenizer.chat_template is None:
-            raise ValueError("This model does not support chat_template.")
-
-        raw_prompt = self.tokenizer.apply_chat_template(
-            request["messages"],
-            tokenize=False,
-            add_generation_prompt=request.get("add_generation_prompt", True),
-            chat_template=request.get("chat_template", None),
-        )
-        prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
-        request["text_after_process"] = raw_prompt
-
-        tokens = self.tokenizer.tokenize(prompt_token_str)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(
-            f"req_id:{request.get('request_id', ''), } prompt: {raw_prompt} tokens: {tokens}, token_ids: {token_ids}"
-        )
-        return token_ids
