@@ -32,6 +32,7 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
 )
+from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
     ImagePosition,
     Request,
@@ -182,7 +183,7 @@ class ResourceManagerV1(ResourceManager):
             name="need_block_num_signal",
             array=need_block_num_data,
             dtype=np.int32,
-            suffix=local_data_parallel_id,
+            suffix=self.config.parallel_config.local_engine_worker_queue_port,
             create=True,
         )
 
@@ -680,7 +681,7 @@ class ResourceManagerV1(ResourceManager):
 
                     request = self.waiting[0]
                     if (
-                        self.config.model_config.disable_mm_prefill_batch()
+                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
                         and self._is_mm_request(request)
                         and self.exist_mm_prefill(scheduled_reqs)
                     ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
