@@ -119,9 +119,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
-    # Max allocated KV cache blocks. Use this to limit how many KV cache blocks the engine is allowed to allocate.
-    # Set to -1 (default) for no limit, or a positive integer to cap the maximum number of blocks that can be allocated.
-    "FD_MAX_KVCACHE_BLOCKS": lambda: int(os.getenv("FD_MAX_KVCACHE_BLOCKS", "-1")),
     # Enable or disable model caching.
     # When enabled, the quantized model is stored as a cache for future inference to improve loading efficiency.
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
@@ -149,6 +146,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
+    "FD_ENABLE_ASYNC_LLM": lambda: int(os.getenv("FD_ENABLE_ASYNC_LLM", "0")),
     "FD_GUIDANCE_DISABLE_ADDITIONAL": lambda: bool(int(os.getenv("FD_GUIDANCE_DISABLE_ADDITIONAL", "1"))),
     "FD_LLGUIDANCE_LOG_LEVEL": lambda: int(os.getenv("FD_LLGUIDANCE_LOG_LEVEL", "0")),
     # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"

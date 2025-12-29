@@ -530,7 +530,7 @@ class SiglipEncoder(nn.Layer):
             all_attentions=all_attentions,
             attn_cu_seqlens=attn_cu_seqlens,
             output_hidden_states=output_hidden_states,
-            reversed_window_indices=reversed_window_indices if output_hidden_states else None,
+            reversed_window_indices=reversed_window_indices if use_window_attn else None,
             use_window_attn=use_window_attn,
             hidden_states=hidden_states,
             attention_mask=attention_mask,

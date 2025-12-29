@@ -5,6 +5,7 @@ tests_path="$DIR/../tests/"
 export PYTEST_INI="$DIR/../tests/cov_pytest.ini"
 run_path=$( realpath "$DIR/../")
 
+
 export COVERAGE_FILE=${COVERAGE_FILE:-$DIR/../coveragedata/.coverage}
 export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 
@@ -73,7 +74,6 @@ is_excluded() {
     done
     return 1
 }
-
 # FIND_PATTERN="test_*.py"
 # declare -a ALL_PATHS=()
 
@@ -232,6 +232,8 @@ while IFS=, read -r file exit_code cost_time; do
         FAIL_COUNT=$((FAIL_COUNT + 1))
         FAIL_FILES+=$(basename "$file")
         echo "$file" >> ${FAIL_FILE_LIST}
+        echo -e "\n\n+++++++++++++++++++++++++ [ $(basename "$file") ] Fail Info +++++++++++++++++++++++++\n\n"
+        cat ${LOG_SUBDIR}/$(basename "$file").log
     fi
 done < "$LOG_RESULT_TMP"
 

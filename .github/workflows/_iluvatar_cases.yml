@@ -1,0 +1,70 @@
+name: ILUVATAR-Test
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:fd-ci"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+      MODEL_CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run_iluvatar_cases:
+    runs-on: iluvatar-gpu-2
+    timeout-minutes: 60
+    container:
+      image: ${{ inputs.DOCKER_IMAGE }}
+      env:
+        LD_LIBRARY_PATH: /usr/local/corex/lib
+        LIBRARY_PATH: /usr/local/corex/lib
+    steps:
+      - name: Print current runner name
+        run: |
+          echo "Current runner name: ${{ runner.name }}"
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+            # Clean the repository directory before starting
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}*
+            fi
+            git config --global --add safe.directory '*'
+            wget -q ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+
+      - name: Run CI unittest
+        env:
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+        run: |
+          cd FastDeploy
+          bash scripts/run_ci_iluvatar.sh
