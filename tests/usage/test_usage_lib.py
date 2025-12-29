@@ -65,7 +65,7 @@ class TestGetXpuModel(unittest.TestCase):
 
         result = get_xpu_model()
         self.assertEqual(result, "P900")
-        mock_run.assert_called_once_with(["xpu-smi"], capture_output=True, text=True)
+        mock_run.assert_called_once_with(["xpu-smi"], capture_output=True, text=True, timeout=5)
 
     @patch("fastdeploy.usage.usage_lib.subprocess.run")
     def test_command_failure(self, mock_run):

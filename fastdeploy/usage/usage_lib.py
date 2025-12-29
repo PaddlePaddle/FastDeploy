@@ -139,14 +139,20 @@ def get_xpu_model():
 
 
 def get_cuda_version():
-    result = os.popen("nvcc --version").read()
-    regex = r"release (\S+),"
-    match = re.search(regex, result)
+    try:
+        result = os.popen("nvcc --version").read()
+        if not result:
+            return None
 
-    if match:
-        version_str = str(match.group(1))
-        return version_str
-    else:
+        regex = r"release (\S+),"
+        match = re.search(regex, result)
+
+        if match:
+            return str(match.group(1))
+        else:
+            return None
+
+    except Exception:
         return None
 
 
