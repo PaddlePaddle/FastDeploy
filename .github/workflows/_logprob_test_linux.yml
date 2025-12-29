@@ -51,7 +51,7 @@ jobs:
 
             while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
               echo "Attempt $((CLEAN_COUNT+1)) to remove /workspace/* ..."
-              rm -rf "${REPO_NAME}"* || true
+              rm -rf /workspace/* || true
               sleep 2
 
               # Check if anything matching /workspace/* still exists

@@ -133,6 +133,11 @@ class ErnieArchitectures:
         "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
+    ERNIE5_MODELS = {
+        "Ernie5ForCausalLM",
+        "Ernie5MoeForCausalLM",
+    }
+
     @classmethod
     def register_ernie_model_arch(cls, model_class):
         if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
@@ -147,6 +152,11 @@ class ErnieArchitectures:
     def is_ernie_arch(cls, architecture):
         """Check if the given architecture is an ERNIE architecture."""
         return architecture in cls.ARCHITECTURES
+
+    @classmethod
+    def is_ernie5_arch(cls, architectures):
+        """Check if the given architecture is an ERNIE5 architecture."""
+        return any(arch in architectures for arch in cls.ERNIE5_MODELS)
 
 
 PRETRAINED_INIT_CONFIGURATION = {
@@ -247,12 +257,6 @@ class ModelConfig:
                 )
 
         self._post_init()
-
-    def disable_mm_prefill_batch(self):
-        """
-        check if the model architecture disable for mm prefill
-        """
-        return self._architecture in ["Ernie5ForCausalLM", "Ernie5MoeForCausalLM"]
 
     def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
@@ -1804,6 +1808,10 @@ class FDConfig:
             else:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
+
+        if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
+            # ernie5 model not support chunked_mm_input
+            self.cache_config.disable_chunked_mm_input = True
 
         self.postprocess_devices_and_ports()
 
