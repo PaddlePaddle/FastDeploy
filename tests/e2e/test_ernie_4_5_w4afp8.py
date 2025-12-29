@@ -15,7 +15,6 @@
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -27,8 +26,11 @@ from utils.serving_utils import (
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
+    clean_ports,
     is_port_open,
 )
+
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 W4AFP8_CONFIGS = [
     {
@@ -36,55 +38,26 @@ W4AFP8_CONFIGS = [
         "load_choices": "default",
         "model_name": "ernie-4_5-21b-a3b-bf16-paddle",
         "model_subdir": None,
-        "api_port": FD_API_PORT + 100,
-        "engine_queue_port": FD_ENGINE_QUEUE_PORT + 100,
-        "metrics_port": FD_METRICS_PORT + 100,
-        "cache_queue_port": FD_CACHE_QUEUE_PORT + 100,
     },
     {
         "id": "w4afp8_default_v1",
         "load_choices": "default_v1",
         "model_name": "ERNIE-4.5-21B-A3B-PT",
         "model_subdir": "torch",
-        "api_port": FD_API_PORT + 200,
-        "engine_queue_port": FD_ENGINE_QUEUE_PORT + 200,
-        "metrics_port": FD_METRICS_PORT + 200,
-        "cache_queue_port": FD_CACHE_QUEUE_PORT + 200,
     },
 ]
 
 
-def clean_ports_for_config(config):
-    """Clean ports used by specific W4AFP8 config"""
-    ports_to_clean = [
-        config["api_port"],
-        config["engine_queue_port"],
-        config["metrics_port"],
-        config["cache_queue_port"],
-    ]
-    for port in ports_to_clean:
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            result = sock.connect_ex(("127.0.0.1", port))
-            sock.close()
-            if result == 0:
-                subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True)
-        except Exception as e:
-            print(f"清理端口 {port} 时出错: {e}")
-
-
 def get_model_path(config):
+    """Get model path based on config and MODEL_PATH environment variable."""
     base_path = os.getenv("MODEL_PATH")
     model_name = config["model_name"]
     model_subdir = config.get("model_subdir")
 
     if base_path:
         if model_subdir:
-            # 例如: MODEL_PATH/torch/ERNIE-4.5-21B-A3B-PT
             model_path = os.path.join(base_path, model_subdir, model_name)
         else:
-            # 例如: MODEL_PATH/ernie-4_5-21b-a3b-bf16-paddle
             model_path = os.path.join(base_path, model_name)
     else:
         if model_subdir:
@@ -95,26 +68,32 @@ def get_model_path(config):
     return model_path
 
 
-@pytest.fixture(scope="module", params=W4AFP8_CONFIGS, ids=lambda x: x["id"], autouse=True)
+@pytest.fixture(scope="module", params=W4AFP8_CONFIGS, ids=lambda x: x["id"])
 def setup_w4afp8_server(request):
+    """
+    Setup W4AFP8 server for each config.
+    This fixture is parameterized to run with different configurations.
+    """
     config = request.param
     config_id = config["id"]
     load_choices = config["load_choices"]
-    api_port = config["api_port"]
-    engine_queue_port = config["engine_queue_port"]
-    metrics_port = config["metrics_port"]
-    cache_queue_port = config["cache_queue_port"]
 
     print(f"\n{'='*60}")
     print(f"Starting W4AFP8 server with config: {config_id}")
     print(f"  load_choices: {load_choices}")
-    print(f"  api_port: {api_port}")
+    print(f"  api_port: {FD_API_PORT}")
     print(f"{'='*60}")
 
-    clean_ports_for_config(config)
+    # Clean ports before starting
+    clean_ports()
     time.sleep(5)
 
     model_path = get_model_path(config)
+
+    # Check model path exists
+    print(f"Model path: {model_path}")
+    if not os.path.exists(model_path):
+        pytest.skip(f"Model path does not exist: {model_path}")
 
     log_path = f"server_{config_id}.log"
     log_dir = f"log_{config_id}"
@@ -130,15 +109,15 @@ def setup_w4afp8_server(request):
         "--model",
         model_path,
         "--port",
-        str(api_port),
+        str(FD_API_PORT),
         "--tensor-parallel-size",
         "2",
         "--engine-worker-queue-port",
-        str(engine_queue_port),
+        str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
-        str(metrics_port),
+        str(FD_METRICS_PORT),
         "--cache-queue-port",
-        str(cache_queue_port),
+        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -151,6 +130,8 @@ def setup_w4afp8_server(request):
         '{"cudagraph_capture_sizes": [1]}',
     ]
 
+    print(f"Starting server with command: {' '.join(cmd)}")
+
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
             cmd,
@@ -160,45 +141,89 @@ def setup_w4afp8_server(request):
             env={**os.environ, "FD_LOG_DIR": log_dir},
         )
 
+    print(f"Server process started with PID: {process.pid}")
+
+    # Wait for server to start
+    server_started = False
     for i in range(300):
-        if is_port_open("127.0.0.1", api_port):
-            print(f"API server [{config_id}] is up on port {api_port}")
+        # Check if process is still alive
+        if process.poll() is not None:
+            print(f"[ERROR] Server process exited early with code: {process.returncode}")
             break
+
+        if is_port_open("127.0.0.1", FD_API_PORT):
+            print(f"API server [{config_id}] is up on port {FD_API_PORT}")
+            server_started = True
+            break
+
         if i % 30 == 0:
             print(f"Waiting for server [{config_id}] to start... ({i}s)")
         time.sleep(1)
-    else:
-        print(f"[TIMEOUT] API server [{config_id}] failed to start.")
+
+    if not server_started:
+        print(f"[TIMEOUT] API server [{config_id}] failed to start in 5 minutes.")
+
+        # Print log content for debugging
+        print(f"\n{'='*60}")
+        print(f"Server log [{config_id}]:")
+        print(f"{'='*60}")
+        try:
+            with open(log_path, "r") as f:
+                log_content = f.read()
+                # Print last 100 lines
+                lines = log_content.split("\n")
+                print("\n".join(lines[-100:]))
+        except Exception as e:
+            print(f"Failed to read log: {e}")
+        print(f"{'='*60}\n")
+
+        # Cleanup
         try:
             os.killpg(process.pid, signal.SIGTERM)
         except Exception as e:
             print(f"Failed to kill process group: {e}")
-        raise RuntimeError(f"API server [{config_id}] did not start on port {api_port}")
+
+        clean_ports()
+        raise RuntimeError(f"API server [{config_id}] did not start on port {FD_API_PORT}")
 
     yield {"process": process, "config": config}
 
+    # Cleanup after test
     print(f"\n===== Cleanup W4AFP8 server [{config_id}]... =====")
+
+    # Graceful shutdown
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        process.terminate()
         process.wait(timeout=30)
-        print(f"API server [{config_id}] (pid={process.pid}) terminated")
+        print(f"API server [{config_id}] (pid={process.pid}) terminated gracefully")
+    except subprocess.TimeoutExpired:
+        print(f"Timeout waiting for server [{config_id}], force killing...")
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=10)
+        except Exception as e:
+            print(f"Failed to force kill: {e}")
     except Exception as e:
         print(f"Failed to terminate API server [{config_id}]: {e}")
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except:
+            pass
 
-    clean_ports_for_config(config)
+    # Clean ports after shutdown
+    clean_ports()
     time.sleep(10)
+    print(f"Cleanup [{config_id}] completed")
 
 
 @pytest.fixture(scope="module")
-def openai_client_w4afp8(setup_w4afp8_server):
+def openai_client(setup_w4afp8_server):
     """
     Returns OpenAI client for W4AFP8 quantization service.
+    Depends on setup_w4afp8_server to ensure server is running.
     """
-    config = setup_w4afp8_server["config"]
-    api_port = config["api_port"]
-    ip = "127.0.0.1"
     client = openai.OpenAI(
-        base_url=f"http://{ip}:{api_port}/v1",
+        base_url=f"http://127.0.0.1:{FD_API_PORT}/v1",
         api_key="EMPTY_API_KEY",
     )
     return client
@@ -213,7 +238,7 @@ def current_config(setup_w4afp8_server):
 
 
 @pytest.fixture
-def consistent_payload_w4afp8():
+def consistent_payload():
     """
     Returns a fixed payload for consistency testing,
     including a fixed random seed and temperature.
@@ -263,7 +288,7 @@ def calculate_diff_rate(text1, text2):
 # ==========================
 # Test Cases
 # ==========================
-def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payload_w4afp8, current_config):
+def test_w4afp8_consistency_between_runs(openai_client, consistent_payload, current_config):
     """
     Test that two runs with the same fixed input produce similar outputs.
     This test runs for each W4AFP8 config (default and default_v1).
@@ -273,32 +298,44 @@ def test_w4afp8_consistency_between_runs(openai_client_w4afp8, consistent_payloa
 
     print(f"\n[{config_id}] Testing consistency with load_choices={load_choices}")
 
-    resp1 = openai_client_w4afp8.chat.completions.create(
+    # First request
+    resp1 = openai_client.chat.completions.create(
         model="default",
         stream=False,
         max_tokens=256,
-        **consistent_payload_w4afp8,
+        **consistent_payload,
     )
     content1 = resp1.choices[0].message.content
+    print(f"[{config_id}] Response 1: {content1[:100]}...")
 
-    resp2 = openai_client_w4afp8.chat.completions.create(
+    # Second request with same parameters
+    resp2 = openai_client.chat.completions.create(
         model="default",
         stream=False,
         max_tokens=256,
-        **consistent_payload_w4afp8,
+        **consistent_payload,
     )
     content2 = resp2.choices[0].message.content
+    print(f"[{config_id}] Response 2: {content2[:100]}...")
 
+    # Check required keywords
     required_keywords = ["北京", "天安门"]
     for keyword in required_keywords:
-        assert (
-            keyword in content1
-        ), f"[{config_id}] First response missing keyword '{keyword}', response content: {content1}"
-        assert (
-            keyword in content2
-        ), f"[{config_id}] Second response missing keyword '{keyword}', response content: {content2}"
+        assert keyword in content1, (
+            f"[{config_id}] First response missing keyword '{keyword}', " f"response content: {content1}"
+        )
+        assert keyword in content2, (
+            f"[{config_id}] Second response missing keyword '{keyword}', " f"response content: {content2}"
+        )
 
+    # Check consistency between runs
     diff_rate = calculate_diff_rate(content1, content2)
-    assert diff_rate < 0.05, f"[{config_id}] Output difference too large ({diff_rate:.4%})"
+    print(f"[{config_id}] Diff rate between two runs: {diff_rate:.4%}")
+
+    assert diff_rate < 0.05, (
+        f"[{config_id}] Output difference too large ({diff_rate:.4%})\n"
+        f"Response 1: {content1}\n"
+        f"Response 2: {content2}"
+    )
 
     print(f"[{config_id}] Consistency test passed! Diff rate: {diff_rate:.4%}")
