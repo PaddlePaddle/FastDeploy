@@ -67,7 +67,6 @@ def batched_count_greater_than(x: paddle.Tensor, y: paddle.Tensor) -> paddle.Ten
         x_ptr=x,
         y_ptr=y,
         out_ptr=out,
-        num_tokens=num_tokens,
         n_elements=n_elements,
         BLOCK_SIZE=config["BLOCK_SIZE"],
         num_warps=config["num_warps"],
