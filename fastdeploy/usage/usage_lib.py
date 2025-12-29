@@ -109,14 +109,17 @@ def cuda_get_device_properties(device, names: Sequence[str], init_cuda=False) ->
             return tuple([None] * len(names))
 
     # Run in subprocess to avoid initializing CUDA as a side effect.
-    mp_ctx = multiprocessing.get_context("fork")
+    try:
+        mp_ctx = multiprocessing.get_context("spawn")
+    except ValueError:
+        mp_ctx = multiprocessing.get_context()
     with ProcessPoolExecutor(max_workers=1, mp_context=mp_ctx) as executor:
         return executor.submit(cuda_get_device_properties, device, names, True).result()
 
 
 def get_xpu_model():
     try:
-        result = subprocess.run(["xpu-smi"], capture_output=True, text=True)
+        result = subprocess.run(["xpu-smi"], capture_output=True, text=True, timeout=5)
 
         if result.returncode != 0:
             return None
@@ -231,7 +234,7 @@ def simple_convert(obj):
 
         try:
             return {k: simple_convert(v) for k, v in vars(obj).items() if not k.startswith("_")}
-        except:
+        except Exception:
             return str(obj)
 
     return str(obj)
@@ -326,7 +329,7 @@ class UsageMessage:
 
     def _send_to_server(self, data: dict[str, Any]) -> None:
         try:
-            requests.post(url=_USAGE_STATS_SERVER, json=data, timeout=10)
+            requests.post(url=_USAGE_STATS_SERVER, json=data)
         except requests.exceptions.RequestException as e:
             # silently ignore unless we are using debug log
             api_server_logger.debug(f"Failed to send usage data to server, errot: {str(e)}")
