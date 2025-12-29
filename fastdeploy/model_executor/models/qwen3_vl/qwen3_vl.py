@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from functools import partial
 from typing import Dict, List, Optional, Union
 
 import numpy as np
@@ -282,9 +281,6 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
 
         return deepstack_input_embeds, mm_embeddings_main
 
-    def _compute_deepstack_embeds(self):
-        pass
-
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -298,10 +294,7 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         image_mask = ids_remove_padding == self.model.image_token_id
         image_token_num = image_mask.sum()
 
-        video_mask = ids_remove_padding == self.model.video_token_id
-        video_token_num = video_mask.sum()
-
-        if image_token_num.item() <= 0 and video_token_num.item() <= 0:
+        if image_token_num.item() <= 0:
             return input_embeddings
 
         deepstack_input_embeds = None
@@ -313,13 +306,11 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             ) = self._compute_deepstack_embeds_v0(
                 input_embeddings,
                 image_features,
-                image_mask | video_mask,
+                image_mask,
             )
 
         if image_token_num.item() > 0:
             input_embeddings[image_mask] = mm_embeddings
-        if video_token_num.item() > 0:
-            input_embeddings[video_mask] = mm_embeddings
 
         if deepstack_input_embeds is not None:
             self._set_deepstack_input_embeds(deepstack_input_embeds)
@@ -400,74 +391,75 @@ class Qwen3VLPretrainedModel(PretrainedModel):
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config: PretrainedConfig, is_split: bool = True):
-        logger.info("qwen3_vl inference model _get_tensor_parallel_mappings")
-        from fastdeploy.model_executor.models.tp_utils import (
-            build_expanded_keys,
-            has_prefix,
-            split_or_merge_func_v1,
-        )
+        return {}
+        # logger.info("qwen3_vl inference model _get_tensor_parallel_mappings")
+        # from fastdeploy.model_executor.models.tp_utils import (
+        #     build_expanded_keys,
+        #     has_prefix,
+        #     split_or_merge_func_v1,
+        # )
 
-        fn = split_or_merge_func_v1(
-            is_split=is_split,
-            tensor_model_parallel_size=config.tensor_model_parallel_size,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads,
-            num_key_value_heads=config.num_key_value_heads,
-            head_dim=config.head_dim,
-        )
+        # fn = split_or_merge_func_v1(
+        #     is_split=is_split,
+        #     tensor_model_parallel_size=config.tensor_model_parallel_size,
+        #     tensor_parallel_rank=config.tensor_parallel_rank,
+        #     num_attention_heads=config.num_attention_heads,
+        #     num_key_value_heads=config.num_key_value_heads,
+        #     head_dim=config.head_dim,
+        # )
 
-        vision_num_heads = config.vision_config.get("num_heads")
-        vision_hidden = config.vision_config.get("hidden_size")
-        vision_head_dim = vision_hidden // vision_num_heads
-        vision_fn = split_or_merge_func_v1(
-            is_split=is_split,
-            tensor_model_parallel_size=config.tensor_model_parallel_size,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=vision_num_heads,
-            num_key_value_heads=vision_num_heads,
-            head_dim=vision_head_dim,
-        )
+        # vision_num_heads = config.vision_config.get("num_heads")
+        # vision_hidden = config.vision_config.get("hidden_size")
+        # vision_head_dim = vision_hidden // vision_num_heads
+        # vision_fn = split_or_merge_func_v1(
+        #     is_split=is_split,
+        #     tensor_model_parallel_size=config.tensor_model_parallel_size,
+        #     tensor_parallel_rank=config.tensor_parallel_rank,
+        #     num_attention_heads=vision_num_heads,
+        #     num_key_value_heads=vision_num_heads,
+        #     head_dim=vision_head_dim,
+        # )
 
-        def get_tensor_parallel_split_mappings(num_layers: int, prefix_name: str):
-            base_actions = {}
-            for weight_name, is_column, extra in cls.weight_infos:
-                params = {"is_column": is_column, **({extra.value: True} if extra else {})}
+        # def get_tensor_parallel_split_mappings(num_layers: int, prefix_name: str):
+        #     base_actions = {}
+        #     for weight_name, is_column, extra in cls.weight_infos:
+        #         params = {"is_column": is_column, **({extra.value: True} if extra else {})}
 
-                if "lm_head.weight" in weight_name or weight_name.startswith("."):
-                    key = weight_name
-                elif not has_prefix(prefix_name, weight_name):
-                    key = f"{prefix_name}{weight_name}"
-                else:
-                    key = weight_name
-                base_actions[key] = partial(fn, **params)
+        #         if "lm_head.weight" in weight_name or weight_name.startswith("."):
+        #             key = weight_name
+        #         elif not has_prefix(prefix_name, weight_name):
+        #             key = f"{prefix_name}{weight_name}"
+        #         else:
+        #             key = weight_name
+        #         base_actions[key] = partial(fn, **params)
 
-            return build_expanded_keys(base_actions, num_layers)
+        #     return build_expanded_keys(base_actions, num_layers)
 
-        def get_vision_parallel_split_mappings(num_layers: int, deepstack_count: int):
-            base_actions = {}
-            for weight_name, is_column, extra in cls.weight_vision:
-                params = {"is_column": is_column, **({extra.value: True} if extra else {})}
-                base_actions[weight_name] = partial(vision_fn, **params)
+        # def get_vision_parallel_split_mappings(num_layers: int, deepstack_count: int):
+        #     base_actions = {}
+        #     for weight_name, is_column, extra in cls.weight_vision:
+        #         params = {"is_column": is_column, **({extra.value: True} if extra else {})}
+        #         base_actions[weight_name] = partial(vision_fn, **params)
 
-            actions = build_expanded_keys(
-                {k: v for k, v in base_actions.items() if "visual.blocks." in k},
-                num_layers,
-            )
+        #     actions = build_expanded_keys(
+        #         {k: v for k, v in base_actions.items() if "visual.blocks." in k},
+        #         num_layers,
+        #     )
 
-            for key, action in base_actions.items():
-                if "visual.blocks." not in key:
-                    actions[key] = action
+        #     for key, action in base_actions.items():
+        #         if "visual.blocks." not in key:
+        #             actions[key] = action
 
-            for idx in range(deepstack_count):
-                actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.weight"] = partial(vision_fn, is_column=True)
-                actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.bias"] = partial(vision_fn, is_column=True)
-                actions[f"visual.deepstack_merger_list.{idx}.linear_fc2.weight"] = partial(vision_fn, is_column=False)
-            return actions
+        #     for idx in range(deepstack_count):
+        #         actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.weight"] = partial(vision_fn, is_column=True)
+        #         actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.bias"] = partial(vision_fn, is_column=True)
+        #         actions[f"visual.deepstack_merger_list.{idx}.linear_fc2.weight"] = partial(vision_fn, is_column=False)
+        #     return actions
 
-        mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers, config.prefix_name)
-        vision_depth = config.vision_config.get("depth", 0)
-        deepstack_count = len(config.vision_config.get("deepstack_visual_indexes", []))
-        vision_mappings = get_vision_parallel_split_mappings(vision_depth, deepstack_count)
+        # mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers, config.prefix_name)
+        # vision_depth = config.vision_config.get("depth", 0)
+        # deepstack_count = len(config.vision_config.get("deepstack_visual_indexes", []))
+        # vision_mappings = get_vision_parallel_split_mappings(vision_depth, deepstack_count)
 
-        mappings.update(vision_mappings)
-        return mappings
+        # mappings.update(vision_mappings)
+        # return mappings

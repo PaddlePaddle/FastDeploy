@@ -28,8 +28,8 @@ def sample_frames(
     min_frames: int,
     max_frames: int,
     metadata: Optional[dict] = None,
-    fps: Optional[Union[int, float]] = None,
-    num_frames: Optional[int] = None,
+    fps: Optional[Union[int, float]] = -1,
+    num_frames: Optional[int] = -1,
 ):
     """
     Sample frames from video according to specified criteria.

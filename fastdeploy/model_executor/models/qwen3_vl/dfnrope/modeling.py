@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from functools import partial
-
-import numpy as np
 import paddle
 from paddle import nn
 from paddle.distributed import fleet
@@ -68,7 +65,7 @@ class Qwen3VisionMLP(nn.Layer):
         self,
         dim: int,
         hidden_dim: int,
-        hidden_act: str = "gelu",
+        hidden_act: str = "gelu_tanh",
         tensor_model_parallel_size: int = 1,
         model_format: str = "",
     ) -> None:
@@ -174,7 +171,7 @@ class Qwen3VisionBlock(nn.Layer):
         dim: int,
         num_heads: int,
         mlp_hidden_dim: int,
-        hidden_act: str = "gelu",
+        hidden_act: str = "gelu_tanh",
         tensor_model_parallel_size: int = 1,
         tensor_parallel_rank: int = 0,
         model_format: str = "",
@@ -418,61 +415,62 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
+        return {}
+        # from paddleformers.transformers.conversion_utils import split_or_merge_func
 
-        from fastdeploy.model_executor.models.tp_utils import build_expanded_keys
+        # from fastdeploy.model_executor.models.tp_utils import build_expanded_keys
 
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_model_parallel_size=config.tensor_model_parallel_size,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-        )
+        # fn = split_or_merge_func(
+        #     is_split=is_split,
+        #     tensor_model_parallel_size=config.tensor_model_parallel_size,
+        #     tensor_parallel_rank=config.tensor_parallel_rank,
+        # )
 
-        vision_config = config.vision_config
-        tp_degree = getattr(config, "tensor_model_parallel_size", 1)
-        tp_rank = getattr(config, "tensor_parallel_rank", 0)
+        # vision_config = config.vision_config
+        # tp_degree = getattr(config, "tensor_model_parallel_size", 1)
+        # tp_rank = getattr(config, "tensor_parallel_rank", 0)
 
-        def split_qkv_weight(weight):
-            hidden = vision_config.hidden_size
-            head_dim = hidden // vision_config.num_heads
-            weight = weight.reshape([hidden, 3, vision_config.num_heads, head_dim])
-            weight = np.split(weight, tp_degree, axis=2)[tp_rank]
-            return weight.reshape([hidden, -1])
+        # def split_qkv_weight(weight):
+        #     hidden = vision_config.hidden_size
+        #     head_dim = hidden // vision_config.num_heads
+        #     weight = weight.reshape([hidden, 3, vision_config.num_heads, head_dim])
+        #     weight = np.split(weight, tp_degree, axis=2)[tp_rank]
+        #     return weight.reshape([hidden, -1])
 
-        def split_qkv_bias(bias):
-            head_dim = vision_config.hidden_size // vision_config.num_heads
-            bias = bias.reshape([3, vision_config.num_heads, head_dim])
-            bias = np.split(bias, tp_degree, axis=1)[tp_rank]
-            return bias.reshape([-1])
+        # def split_qkv_bias(bias):
+        #     head_dim = vision_config.hidden_size // vision_config.num_heads
+        #     bias = bias.reshape([3, vision_config.num_heads, head_dim])
+        #     bias = np.split(bias, tp_degree, axis=1)[tp_rank]
+        #     return bias.reshape([-1])
 
-        base_actions = {
-            "visual.blocks.0.attn.proj.weight": partial(fn, is_column=False),
-            "visual.blocks.0.mlp.linear_fc1.weight": partial(fn, is_column=True),
-            "visual.blocks.0.mlp.linear_fc1.bias": partial(fn, is_column=True),
-            "visual.blocks.0.mlp.linear_fc2.weight": partial(fn, is_column=False),
-            "visual.blocks.0.attn.qkv.weight": split_qkv_weight,
-            "visual.blocks.0.attn.qkv.bias": split_qkv_bias,
-            "visual.merger.linear_fc1.weight": partial(fn, is_column=True),
-            "visual.merger.linear_fc1.bias": partial(fn, is_column=True),
-            "visual.merger.linear_fc2.weight": partial(fn, is_column=False),
-        }
+        # base_actions = {
+        #     "visual.blocks.0.attn.proj.weight": partial(fn, is_column=False),
+        #     "visual.blocks.0.mlp.linear_fc1.weight": partial(fn, is_column=True),
+        #     "visual.blocks.0.mlp.linear_fc1.bias": partial(fn, is_column=True),
+        #     "visual.blocks.0.mlp.linear_fc2.weight": partial(fn, is_column=False),
+        #     "visual.blocks.0.attn.qkv.weight": split_qkv_weight,
+        #     "visual.blocks.0.attn.qkv.bias": split_qkv_bias,
+        #     "visual.merger.linear_fc1.weight": partial(fn, is_column=True),
+        #     "visual.merger.linear_fc1.bias": partial(fn, is_column=True),
+        #     "visual.merger.linear_fc2.weight": partial(fn, is_column=False),
+        # }
 
-        for idx in range(len(vision_config.deepstack_visual_indexes)):
-            base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.weight"] = partial(fn, is_column=True)
-            base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.bias"] = partial(fn, is_column=True)
-            base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc2.weight"] = partial(fn, is_column=False)
+        # for idx in range(len(vision_config.deepstack_visual_indexes)):
+        #     base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.weight"] = partial(fn, is_column=True)
+        #     base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc1.bias"] = partial(fn, is_column=True)
+        #     base_actions[f"visual.deepstack_merger_list.{idx}.linear_fc2.weight"] = partial(fn, is_column=False)
 
-        final_actions = {}
-        final_actions.update(
-            build_expanded_keys(
-                {k: v for k, v in base_actions.items() if "visual.blocks.0." in k},
-                vision_config.depth,
-            )
-        )
-        for k, v in base_actions.items():
-            if "visual.blocks.0." not in k:
-                final_actions[k] = v
-        return final_actions
+        # final_actions = {}
+        # final_actions.update(
+        #     build_expanded_keys(
+        #         {k: v for k, v in base_actions.items() if "visual.blocks.0." in k},
+        #         vision_config.depth,
+        #     )
+        # )
+        # for k, v in base_actions.items():
+        #     if "visual.blocks.0." not in k:
+        #         final_actions[k] = v
+        # return final_actions
 
     def load_state_dict(self, state_dict):
         params_dict = dict(self.named_parameters())
