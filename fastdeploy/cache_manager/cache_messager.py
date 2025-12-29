@@ -1032,7 +1032,7 @@ if __name__ == "__main__":
     if args.mp_num > 1:
         logger = get_logger("cache_messager", f"cache_messager.log.{rank_id}")
     else:
-        logger = get_logger("cache_messager", f"cache_messager.log")
+        logger = get_logger("cache_messager", "cache_messager.log")
 
     logger.info("create cache messager...")
     logger.info(f"{args}")

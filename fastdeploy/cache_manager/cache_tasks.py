@@ -1,6 +1,6 @@
-
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
+
 
 @dataclass(frozen=True, kw_only=True)
 class CacheTask:
@@ -9,10 +9,12 @@ class CacheTask:
     token_ids: List[int]
     gpu_block_ids: List[int]
 
+
 @dataclass(frozen=True, kw_only=True)
 class ReadStorageTask(CacheTask):
     start_read_block_idx: int
     timeout: float = 30.0
+
 
 @dataclass(frozen=True, kw_only=True)
 class WriteStorageTask(CacheTask):

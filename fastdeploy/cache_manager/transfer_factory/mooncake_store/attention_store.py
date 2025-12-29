@@ -14,23 +14,29 @@
 # limitations under the License.
 """
 
-import ctypes
-import paddle
-import json
-import os
 import time
 import traceback
-import uuid
-from dataclasses import dataclass, fields
-from typing import Any, List, Optional
+from dataclasses import dataclass
+from typing import List
 
-import attentionstore_sdk.api.common.common_pb2 as common_pb2
-from attentionstore_sdk.sdk import AttentionStoreSDK, Tokens
-from attentionstore_sdk.utils.err import AttentionStoreSDKError
+import paddle
+
 from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
 )
+
+try:
+    from attentionstore_sdk.sdk import AttentionStoreSDK, Tokens
+    from attentionstore_sdk.utils.err import AttentionStoreSDKError
+
+    _ATTENTIONSTORE_AVAILABLE = True
+except Exception:
+    AttentionStoreSDK = None
+    Tokens = None
+    AttentionStoreSDKError = None
+    _ATTENTIONSTORE_AVAILABLE = False
+
 
 @dataclass
 class AttentionStoreConfig:
@@ -45,16 +51,12 @@ class AttentionStoreConfig:
     device_id: int = 0
     dp_id: int = 0
 
+
 class AttentionStore(KVCacheStorage):
     def __init__(self, **args):
 
-        try:
-            import attentionstore_sdk.api.common.common_pb2 as common_pb2
-            from attentionstore_sdk.sdk import AttentionStoreSDK, Tokens
-        except ImportError as e:
-            raise ImportError(
-                "Please install attentionstore_sdk to run Fastdeploy with attentionstore_sdk."
-            ) from e
+        if not _ATTENTIONSTORE_AVAILABLE:
+            raise ImportError("Please install attentionstore_sdk to run Fastdeploy with attentionstore_sdk.")
 
         self.config = AttentionStoreConfig(**args)
 
@@ -73,10 +75,12 @@ class AttentionStore(KVCacheStorage):
                 self.config.dp_id,
             )
             self.wait_for_sdk_ready(timeout=300, delta_t=5)
-            logger.info(f"✅ AttentionStoreSDK is inititialized successfully!")
+            logger.info("✅ AttentionStoreSDK is inititialized successfully!")
         except Exception as e:
-            logger.error(f"❌ AttentionStoreSDK initialization failed, error: {e}, traceback: {traceback.format_exc()}"
-                         f"\nconfig: {self.config}")
+            logger.error(
+                f"❌ AttentionStoreSDK initialization failed, error: {e}, traceback: {traceback.format_exc()}"
+                f"\nconfig: {self.config}"
+            )
 
     def wait_for_sdk_ready(self, timeout: float, delta_t: float):
         t = 0
@@ -87,28 +91,32 @@ class AttentionStore(KVCacheStorage):
                 return
             except AttentionStoreSDKError as e:
                 if "cuda memory not ready" in str(e):
-                    logger.debug(f"wait_for_sdk_ready: cuda memory not ready, try again..")
+                    logger.debug("wait_for_sdk_ready: cuda memory not ready, try again..")
                     time.sleep(delta_t)
                     continue
                 else:
-                    raise RuntimeError(f"Unexpected exception during AttentionStoreSDK initialization: {e}\n{traceback.format_exc()}")
+                    raise RuntimeError(
+                        f"Unexpected exception during AttentionStoreSDK initialization: {e}\n{traceback.format_exc()}"
+                    )
             finally:
                 t += delta_t
         raise TimeoutError(f"AttentionStoreSDK initialization timed out after {timeout} seconds")
 
     def read(
         self,
-        key_cache: List[paddle.Tensor], 
-        val_cache: List[paddle.Tensor], 
+        key_cache: List[paddle.Tensor],
+        val_cache: List[paddle.Tensor],
         token_ids: List[int],
         gpu_block_ids: List[int],
         start_read_block_idx: int,
         timeout: float = 30.0,
     ):
-        logger.debug(f"read: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_read_block_idx={start_read_block_idx} timeout={timeout}")
+        logger.debug(
+            f"read: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_read_block_idx={start_read_block_idx} timeout={timeout}"
+        )
         tokens = Tokens(token_ids, self.config.block_token_size)
-        k_data_ptrs = [k.data_ptr()for k in key_cache]
-        v_data_ptrs = [v.data_ptr()for v in val_cache]
+        k_data_ptrs = [k.data_ptr() for k in key_cache]
+        v_data_ptrs = [v.data_ptr() for v in val_cache]
         num = 0
         try:
             num = self.sdk.read(
@@ -126,18 +134,20 @@ class AttentionStore(KVCacheStorage):
         return num
 
     def write(
-        self, 
-        key_cache: List[paddle.Tensor], 
-        val_cache: List[paddle.Tensor], 
-        token_ids: List[int], 
+        self,
+        key_cache: List[paddle.Tensor],
+        val_cache: List[paddle.Tensor],
+        token_ids: List[int],
         gpu_block_ids: List[int],
         start_write_block_idx: int,
         timeout: float = 30.0,
     ) -> int:
-        logger.debug(f"write: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_write_block_idx={start_write_block_idx} timeout={timeout}")
+        logger.debug(
+            f"write: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_write_block_idx={start_write_block_idx} timeout={timeout}"
+        )
         tokens = Tokens(token_ids, self.config.block_token_size)
-        k_data_ptrs = [k.data_ptr()for k in key_cache]
-        v_data_ptrs = [v.data_ptr()for v in val_cache]
+        k_data_ptrs = [k.data_ptr() for k in key_cache]
+        v_data_ptrs = [v.data_ptr() for v in val_cache]
         num = 0
         try:
             num = self.sdk.write(
@@ -151,7 +161,9 @@ class AttentionStore(KVCacheStorage):
             )
             logger.debug(f"write: successfully wrote {num} blocks")
         except AttentionStoreSDKError as e:
-            logger.error(f"Failed to execute AttentionStoreSDK write, error: {e}, traceback:\n{traceback.format_exc()}")
+            logger.error(
+                f"Failed to execute AttentionStoreSDK write, error: {e}, traceback:\n{traceback.format_exc()}"
+            )
         return num
 
     def query(self, token_ids: List[int], start_match_block_idx: int, timeout: float = 10.0):
@@ -166,26 +178,28 @@ class AttentionStore(KVCacheStorage):
             num = self.sdk.match(tokens, start_match_block_idx, timeout)
             logger.debug(f"query: successfully matched {num} blocks")
         except AttentionStoreSDKError as e:
-            logger.error(f"Failed to execute AttentionStoreSDK match, error: {e}, traceback:\n{traceback.format_exc()}")
+            logger.error(
+                f"Failed to execute AttentionStoreSDK match, error: {e}, traceback:\n{traceback.format_exc()}"
+            )
         return num
 
     def get(self, **kwargs):
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def batch_get(self, **kwargs):
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def set(self, **kwargs) -> bool:
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def batch_set(self, **kwargs) -> bool:
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def exists(self, keys: List[str]) -> bool:
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def clear(self) -> bool:
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")
 
     def register_buffer(self, buffer_ptr, buffer_size, buffer_type="none_type") -> None:
-        raise NotImplementedError(f"AttentionStore does not support this method")
+        raise NotImplementedError("AttentionStore does not support this method")

@@ -807,11 +807,11 @@ class PrefixCacheManager:
 
         logger.info(f"start prefetch cache from storage, req_id: {req_id}, block num: {len(block_keys)}")
         task = ReadStorageTask(
-            task_id=req_id, 
-            keys=block_keys, 
-            token_ids=input_ids, 
+            task_id=req_id,
+            keys=block_keys,
+            token_ids=input_ids,
             gpu_block_ids=extra_gpu_block_ids,
-            start_read_block_idx=num_cached_tokens // block_size, 
+            start_read_block_idx=num_cached_tokens // block_size,
         )
         matched_block_ids = self.issue_prefetch_storage_task(task, is_sync=True)
         logger.info(
@@ -1013,7 +1013,9 @@ class PrefixCacheManager:
             return
 
         if len(task.keys) != len(task.gpu_block_ids):
-            err_msg = f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            err_msg = (
+                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
