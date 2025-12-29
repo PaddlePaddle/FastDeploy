@@ -9,11 +9,11 @@ When using FastDeploy to deploy models (including offline inference and service 
 | Parameter Name | Type | Description |
 |:--------------|:----|:-----------|
 | ```port``` | `int` | Only required for service deployment, HTTP service port number, default: 8000 |
-| ```metrics_port``` | `int` | Only required for service deployment, metrics monitoring port number, default: 8001 |
+| ```metrics_port``` | `int` | Only required for service deployment, metrics monitoring port number, default: None (shares port with main service) |
 | ```max_waiting_time``` | `int` | Only required for service deployment, maximum wait time for establishing a connection upon service request. Default: -1 (indicates no wait time limit).|
 | ```max_concurrency```  | `int` | Only required for service deployment, the actual number of connections established by the service, default 512 |
-| ```engine_worker_queue_port``` | `int` | FastDeploy internal engine communication port, default: 8002 |
-| ```cache_queue_port``` | `int` | FastDeploy internal KVCache process communication port, default: 8003 |
+| ```engine_worker_queue_port``` | `list[int]` | FastDeploy internal engine communication port list, auto-allocated based on data_parallel_size |
+| ```cache_queue_port``` | `list[int]` | FastDeploy internal KVCache process communication port list, auto-allocated based on data_parallel_size |
 | ```max_model_len``` | `int` | Default maximum supported context length for inference, default: 2048 |
 | ```tensor_parallel_size``` | `int` | Default tensor parallelism degree for model, default: 1 |
 | ```data_parallel_size``` | `int` | Default data parallelism degree for model, default: 1 |
@@ -21,15 +21,15 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```max_num_seqs``` | `int` | Maximum concurrent number in Decode phase, default: 8 |
 | ```mm_processor_kwargs``` | `dict[str]` | Multimodal processor parameter configuration, e.g.: {"image_min_pixels": 3136, "video_fps": 2} |
 | ```tokenizer``` | `str` | Tokenizer name or path, defaults to model path |
-| ```use_warmup``` | `int` | Whether to perform warmup at startup, will automatically generate maximum length data for warmup, enabled by default when automatically calculating KV Cache |
+| ```use_warmup``` | `int` | Whether to perform warmup at startup, will automatically generate maximum length data for warmup, default: 0 (disabled) |
 | ```limit_mm_per_prompt``` | `dict[str]` | Limit the amount of multimodal data per prompt, e.g.: {"image": 10, "video": 3}, default: 1 for all |
-| ```enable_mm``` | `bool` | __[DEPRECATED]__ Whether to support multimodal data (for multimodal models only), default: False |
+| ```enable_mm``` | `bool` | __[DEPRECATED]__ Whether to support multimodal data (for multimodal models only), model architecture automatically detects multimodal models, no manual setting needed |
 | ```quantization``` | `str` | Model quantization strategy, when loading BF16 CKPT, specifying wint4 or wint8 supports lossless online 4bit/8bit quantization |
 | ```gpu_memory_utilization``` | `float` | GPU memory utilization, default: 0.9 |
 | ```num_gpu_blocks_override``` | `int` | Preallocated KVCache blocks, this parameter can be automatically calculated by FastDeploy based on memory situation, no need for user configuration, default: None |
 | ```max_num_batched_tokens``` | `int` | Maximum batch token count in Prefill phase, default: None (same as max_model_len) |
 | ```kv_cache_ratio``` | `float` | KVCache blocks are divided between Prefill phase and Decode phase according to kv_cache_ratio ratio, default: 0.75 |
-| ```enable_prefix_caching``` | `bool` | Whether to enable Prefix Caching, default: False |
+| ```enable_prefix_caching``` | `bool` | Whether to enable Prefix Caching, default: True (on GPU/XPU/HPU platforms), False on other platforms |
 | ```swap_space``` | `float` | When Prefix Caching is enabled, CPU memory size for KVCache swapping, unit: GB, default: None |
 | ```enable_chunked_prefill``` | `bool` | Enable Chunked Prefill, default: False |
 | ```max_num_partial_prefills``` | `int` | When Chunked Prefill is enabled, maximum concurrent number of partial prefill batches, default: 1 |
@@ -37,7 +37,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
 | ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
-| ```use_cudagraph```                | `bool`      | __[DEPRECATED]__ CUDAGraph is enabled by default since version 2.3. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. |
+| ```use_cudagraph```                | `bool`      | __[DEPRECATED since version 2.3]__ CUDAGraph is enabled by default. Now controlled via `use_cudagraph` parameter in `graph_optimization_config`, see [graph_optimization.md](./features/graph_optimization.md) for details |
 | ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":true, "graph_opt_level":0}'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce``` | `bool` | Disable Custom all-reduce, default: False |
 | ```use_internode_ll_two_stage``` | `bool` | Use two stage communication in deepep moe, default: False |
@@ -47,20 +47,27 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `guidance`, `off`, default: `off` |
 | ```guided_decoding_disable_any_whitespace``` | `bool` | Whether to disable whitespace generation during guided decoding, default: False |
 | ```speculative_config``` | `dict[str]` | Speculative decoding configuration, only supports standard format JSON string, default: None |
-| ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
-| ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
-| ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
-| ```logprobs_mode``` | `str` | Indicates the content returned in the logprobs. Supported mode: `raw_logprobs`, `processed_logprobs`, `raw_logits`, `processed_logits`. Raw means the values before applying logit processors, like bad words. Processed means the values after applying such processors. |
+| ```dynamic_load_weight``` | `bool` | Whether to enable dynamic weight loading, default: False |
+| ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel, default: False |
+| ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens, default: False. If logprob is not used, this parameter can be omitted when starting |
+| ```logprobs_mode``` | `str` | Specifies the content returned in logprobs, default: `raw_logprobs`. Supported modes: `raw_logprobs`, `processed_logprobs`, `raw_logits`, `processed_logits`. Processed means values after applying logit processors (temperature, penalties, bad words) |
 | ```max_logprobs```   | `int`      | Maximum number of log probabilities to return, default: 20. -1 means vocab_size. |
 | ```served_model_name```| `str`| The model name used in the API. If not specified, the model name will be the same as the --model argument |
 | ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. If unspecified, will use the default version. |
 | ```chat_template``` | `str` | Specify the template used for model concatenation, It supports both string input and file path input. The default value is None. If not specified, the model's default template will be used. |
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
-| ```load_choices```       | `str`      | By default, the "default" loader is used for weight loading. To load Torch weights or enable weight acceleration, "default_v1" must be used.|
-| ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable). |
-| ```max_processor_cache```  | `int` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable). |
-| ```api_key```  |`dict[str]`| Validate API keys in the service request headers, supporting multiple key inputs|
+| ```load_choices```       | `str`      | Weight loader selection, default: "default_v1". Supports "default" and "default_v1", latter for loading torch weights and weight acceleration|
+| ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable), default: -1 (auto-calculated) |
+| ```max_processor_cache```  | `float` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable), default: -1 (auto-calculated) |
+| ```api_key```  |`list[str]`| Validate API keys in the service request headers, supporting multiple key inputs. Same effect as environment variable `FD_API_KEY`, with higher priority|
+| ```enable_output_caching```        | `bool`      | Whether to enable KV cache for output tokens, only valid in V1 scheduler (ENABLE_V1_KVCACHE_SCHEDULER=1), default: True |
+| ```workers```                      | `int`       | Only required for service deployment, number of API server worker processes, default: 1 |
+| ```timeout```                      | `int`       | Only required for service deployment, worker silent timeout (seconds), set to 0 to disable timeout, default: 0 |
+| ```timeout_graceful_shutdown```    | `int`       | Only required for service deployment, graceful shutdown timeout (seconds), set to 0 for infinite timeout, default: 0 |
+| ```router```                       | `str`       | Router server URL for request routing in splitwise deployment, e.g., `http://127.0.0.1:8000` |
+| ```disable_chunked_mm_input```     | `bool`      | Disable chunked processing for multimodal inputs, default: False |
+| ```logits_processors```            | `list[str]` | List of fully qualified class names (FQCN) of logits processors supported by the service, e.g., `fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor` |
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 

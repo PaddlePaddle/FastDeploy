@@ -129,7 +129,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
-        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
@@ -530,9 +530,11 @@ class PaddleDisWorkerProc:
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            if envs.FD_MAX_KVCACHE_BLOCKS > 0 and num_blocks_local > envs.FD_MAX_KVCACHE_BLOCKS:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to {envs.FD_MAX_KVCACHE_BLOCKS}")
-                num_blocks_local = envs.FD_MAX_KVCACHE_BLOCKS
+            # NOTE(liuzichang): Too many block will lead to illegal memory access
+            # We will develop dynamic limits in future.
+            if num_blocks_local > 40000:
+                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
+                num_blocks_local = min(40000, num_blocks_local)
             logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
@@ -813,8 +815,8 @@ def parse_args():
     parser.add_argument(
         "--load_choices",
         type=str,
-        default="default",
-        help="The format of the model weights to load. default/new_loader.",
+        default="default_v1",
+        help="The format of the model weights to load. default/default_v1.",
     )
 
     parser.add_argument(
@@ -891,6 +893,12 @@ def parse_args():
         help="Shutdown comm group if worker idle.",
     )
 
+    parser.add_argument(
+        "--enable_entropy",
+        action="store_true",
+        help="Enable output of token-level entropy.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -950,7 +958,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
-    model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
+    model_config.pretrained_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
     model_config.pretrained_config.is_mtp = False
     model_config.pretrained_config.head_dim = model_config.head_dim
 

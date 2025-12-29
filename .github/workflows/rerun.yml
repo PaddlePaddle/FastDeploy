@@ -44,7 +44,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
-          JOB_NAME: 'CI_ILUVATAR'
+          JOB_NAME: 'Run iluvatar Tests / run_iluvatar_cases'
 
       - name: Rerun CI_XPU
         if: ${{ contains(github.event.comment.body, 'ci_xpu') }}
@@ -55,6 +55,26 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
           JOB_NAME: 'CI_XPU'
+
+      - name: Rerun CI_HPU
+        if: ${{ contains(github.event.comment.body, 'ci_hpu') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'CI_HPU'
+
+      - name: Rerun CI_METAX
+        if: ${{ contains(github.event.comment.body, 'ci_metax') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Trigger Jenkins for PR'
 
       - name: Rerun Check PR Template
         if: ${{ contains(github.event.comment.body, 'check_pr_template') }}
