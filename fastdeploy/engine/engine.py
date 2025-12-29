@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import multiprocessing
 import os
@@ -85,6 +86,7 @@ class LLMEngine:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        self.cfg.print()
         self.running = True
         self.is_started = False
 
@@ -368,7 +370,7 @@ class LLMEngine:
             )
 
         # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+        if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
             )
@@ -524,7 +526,7 @@ class LLMEngine:
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
-        ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
+        ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
             ips = ",".join(self.cfg.ips)
@@ -575,6 +577,10 @@ class LLMEngine:
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
+        # TODO (iluvatar): remove aftet paddle fix launch error
+        if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
+            arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
+
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_chunked_moe": self.cfg.parallel_config.enable_chunked_moe,
@@ -588,6 +594,8 @@ class LLMEngine:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
+            "enable_entropy": self.cfg.model_config.enable_entropy,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -732,7 +740,7 @@ class LLMEngine:
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
-            if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+            if self.cfg.parallel_config.data_parallel_size > 1:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
@@ -757,12 +765,13 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
-                    ctx = multiprocessing.get_context("spawn")
+                    ctx = multiprocessing.get_context("fork")
+                    cfg = copy.deepcopy(self.cfg)
                     self.dp_processed.append(
                         ctx.Process(
                             target=start_data_parallel_service,
                             args=(
-                                self.cfg,
+                                cfg,
                                 i,
                                 None,
                                 request_queues_for_dp_ipc,

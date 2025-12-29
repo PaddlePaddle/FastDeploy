@@ -49,6 +49,21 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+void FlashAttentionMask(const paddle::Tensor& q_input,
+                        const paddle::Tensor& k_input,
+                        const paddle::Tensor& v_input,
+                        const paddle::Tensor& cu_seq_q,
+                        const paddle::Tensor& cu_seq_k,
+                        const paddle::Tensor& seq_len_encoder,
+                        const paddle::Tensor& attn_out,
+                        const paddle::optional<paddle::Tensor>& mask,
+                        const int head_num,
+                        const int kv_head_num,
+                        const int head_dim,
+                        const int max_seq_len,
+                        const int q_token_num,
+                        const int k_token_num);
+
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -284,16 +299,13 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const int token_nums_this_rank_padded);
 
 std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size,
-                                          const bool use_ue8m0);
+                                          const int block_size);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size,
-                                                 const bool use_ue8m0);
+                                                 const int block_size);
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor& input,
     paddle::Tensor& recv_expert_count,
-    const int block_size,
-    const bool use_ue8m0);
+    const int block_size);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
@@ -502,8 +514,8 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     paddle::Tensor& image_index,
     const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
-                                            int64_t num_experts);
+std::vector<paddle::Tensor> count_tokens_per_expert_func(
+    const paddle::Tensor& topk_ids, int64_t num_experts);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -890,6 +902,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -1161,6 +1175,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("append_attention_with_output",
         &AppendAttentionWithOutput,
         "append attention with output function");
+  m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
+
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache
@@ -1235,14 +1251,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenQuant,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
   m.def("per_token_quant_padding",
         &PerTokenQuantPadding,
         py::arg("input"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
@@ -1250,7 +1264,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("recv_expert_count"),
         py::arg("block_size"),
-        py::arg("use_ue8m0") = false,
         "per token per block quant");
 
 #ifdef ENABLE_MACHETE

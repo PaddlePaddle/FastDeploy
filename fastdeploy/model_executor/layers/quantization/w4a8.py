@@ -52,6 +52,6 @@ class W4A8Config(QuantConfigBase):
                 XPUW4A8MoEMethod,
             )
 
-            return XPUW4A8MoEMethod(self)
+            return XPUW4A8MoEMethod(self, layer)
         else:
             raise ValueError(f"Unsupported layer type {type(layer)} for w4a8")
