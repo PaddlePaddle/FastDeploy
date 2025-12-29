@@ -26,18 +26,15 @@ from paddle.distributed.fleet.meta_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
-from paddle.distributed.fleet.utils import recompute
 from paddle.nn.functional.flash_attention import (
     flash_attn_unpadded as flash_attn_varlen_func,
 )
-from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
 from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from .activation import ACT2FN
-from .configuration import DFNRopeVisionTransformerConfig
 
 
 def get_hcg():
@@ -513,7 +510,7 @@ class PatchMerger(nn.Layer):
         return x
 
 
-class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
+class DFNRopeVisionTransformerPretrainedModel(nn.Layer):
     """_summary_
 
     Args:
@@ -522,8 +519,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
     Returns:
         _type_: _description_
     """
-
-    config_class = DFNRopeVisionTransformerConfig
 
     def __init__(self, config, prefix_name: str = "") -> None:
         super().__init__(config.vision_config)
@@ -637,18 +632,12 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             cu_seqlens[-1] = cu_seqlens[-2] + num_pad
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
-
-        vit_num_recompute_layers = getattr(self.config, "vit_num_recompute_layers", self.config.depth)
-
         for idx, blk in enumerate(self.blocks):
-            if self.config.recompute and self.training and idx < vit_num_recompute_layers:
-                hidden_states = recompute(blk, hidden_states, cu_seqlens, rotary_pos_emb)
-            else:
-                hidden_states = blk(
-                    hidden_states,
-                    cu_seqlens=cu_seqlens,
-                    rotary_pos_emb=rotary_pos_emb,
-                )
+            hidden_states = blk(
+                hidden_states,
+                cu_seqlens=cu_seqlens,
+                rotary_pos_emb=rotary_pos_emb,
+            )
 
         # ret = self.merger(hidden_states)
         # ret = hidden_states
