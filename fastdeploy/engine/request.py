@@ -115,6 +115,7 @@ class Request:
         # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
         self.num_cached_tokens = 0
+        self.num_cached_blocks = 0
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 

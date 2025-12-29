@@ -112,7 +112,7 @@ class PrefixCacheManager:
         self.req_leaf_map = {}  # {request_id: leaf node}
         self.leaf_req_map = defaultdict(set)
         self.unfilled_req_block_map = defaultdict(list)
-        self.cache_info = {}  # {request_id: (last_match_node, num_cached_tokens)}
+        self.req_to_radix_tree_info = {}  # {request_id: (last_match_node, num_cached_tokens_in_raidx_tree)}
 
         self.executor_pool = ThreadPoolExecutor(max_workers=1)
         self.free_gpu_executor_pool = ThreadPoolExecutor(max_workers=1)
@@ -633,7 +633,7 @@ class PrefixCacheManager:
         """
         try:
             req_id = task.request_id
-            last_node, num_cached_tokens = self.cache_info[req_id]
+            last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
             if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                 self.leaf_req_map[last_node].remove(req_id)
@@ -652,8 +652,8 @@ class PrefixCacheManager:
                 )
                 self.req_leaf_map[req_id] = leaf_node
                 self.leaf_req_map[leaf_node].add(req_id)
-                self.cache_info[req_id] = [leaf_node, can_cache_computed_tokens]
-                task.cached_block_num = can_cache_computed_tokens // block_size
+                self.req_to_radix_tree_info[req_id] = [leaf_node, can_cache_computed_tokens]
+                task.num_cached_blocks = can_cache_computed_tokens // block_size
         except Exception as e:
             logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
             raise e
@@ -820,9 +820,10 @@ class PrefixCacheManager:
                 # set leaf node temporarily, then update it in update_cache_blocks
                 self.req_leaf_map[req_id] = match_block_node
                 self.leaf_req_map[match_block_node].add(req_id)
-                #  record request cache info
-                self.cache_info[req_id] = [match_block_node, len(common_block_ids) * block_size]
-                task.cached_block_num = len(common_block_ids)
+                # record request cache info in radix tree, note that the block ids for receiving storage cache
+                # are recorded into radix tree in update_cache_blocks
+                self.req_to_radix_tree_info[req_id] = [match_block_node, gpu_match_token_num + cpu_match_token_num]
+                task.num_cached_blocks = len(common_block_ids)
                 return common_block_ids, match_token_num, metrics
             except Exception as e:
                 logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
@@ -961,8 +962,8 @@ class PrefixCacheManager:
                     keys.append(node.hash_value)
                     node = node.parent
 
-                if req_id in self.cache_info:
-                    del self.cache_info[req_id]
+                if req_id in self.req_to_radix_tree_info:
+                    del self.req_to_radix_tree_info[req_id]
 
                 logger.info(f"release_block_ids: req_id {req_id} leaf_node {leaf_node}")
 
@@ -1202,6 +1203,7 @@ class PrefixCacheManager:
 
                 while True:
                     if len(self.gpu_lru_leaf_heap) == 0:
+                        logger.info("free_block_ids_async: no more gpu leaf node available.")
                         break
                     if total_gpu_free_count >= need_block_num:
                         break
@@ -1644,7 +1646,7 @@ class PrefixCacheManager:
                     match_token_num = match_token_num + block_size
                     current_match_node = child
                     #  record request cache info
-                    self.cache_info[req_id] = [child, match_token_num]
+                    self.req_to_radix_tree_info[req_id] = [child, match_token_num]
                 else:
                     break
 
@@ -1968,7 +1970,7 @@ class PrefixCacheManager:
         self.req_leaf_map.clear()
         self.leaf_req_map.clear()
         self.unfilled_req_block_map.clear()
-        self.cache_info.clear()
+        self.req_to_radix_tree_info.clear()
 
         # reset gpu cache data structure
         self.gpu_lru_leaf_heap.clear()

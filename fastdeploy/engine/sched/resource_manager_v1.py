@@ -274,7 +274,7 @@ class ResourceManagerV1(ResourceManager):
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
                     self._free_blocks(preempted_req)
-                    preempted_req.cached_block_num = 0
+                    preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
@@ -1105,7 +1105,7 @@ class ResourceManagerV1(ResourceManager):
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
             self.cache_manager.release_block_ids(request)
-            self.cache_manager.recycle_gpu_blocks(request.block_tables[request.cached_block_num :])
+            self.cache_manager.recycle_gpu_blocks(request.block_tables[request.num_cached_blocks :])
         else:
             self.cache_manager.recycle_gpu_blocks(request.block_tables)
         request.block_tables = []
