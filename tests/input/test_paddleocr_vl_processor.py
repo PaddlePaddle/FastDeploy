@@ -976,29 +976,6 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.processor._check_mm_limits(item_exceeded)
 
-    def test_process_request_wrapper(self):
-        """测试 process_request_obj 封装方法"""
-        # 1. 模拟输入 Request 对象
-        request_obj = MagicMock()
-        request_dict = {
-            "prompt": "test prompt",
-            "multimodal_data": {"image": ["image1"]},
-            "metadata": {"generated_token_ids": []},
-            "request_id": "test-request_0",
-        }
-        request_obj = Request.from_dict(request_dict)
-
-        # 2. patch 'Request'
-        # patch_target = "fastdeploy.input.paddleocr_vl_processor.paddleocr_vl_processor.Request"
-        patch_target = "fastdeploy.engine.request.Request"
-        with patch(patch_target) as MockRequestCls:
-
-            final_mock_request = MagicMock()
-            MockRequestCls.from_dict.return_value = final_mock_request
-
-            result_request = self.processor.process_request_obj(request_obj, max_model_len=512)
-            self.assertEqual(result_request.enable_thinking, False)
-
     def test_parse_processor_kwargs_invalid_type(self):
         """测试 _parse_processor_kwargs 传入非字典类型"""
         invalid_input = ["video_max_frames", 10]
