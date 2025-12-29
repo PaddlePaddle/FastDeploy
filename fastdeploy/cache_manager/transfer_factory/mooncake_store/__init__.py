@@ -15,5 +15,6 @@
 """
 
 from .mooncake_store import MooncakeStore
+from .attention_store import AttentionStore
 
-__all__ = ["MooncakeStore"]
+__all__ = ["MooncakeStore", "AttentionStore"]

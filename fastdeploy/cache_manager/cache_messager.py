@@ -1029,7 +1029,10 @@ if __name__ == "__main__":
 
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    logger = get_logger("cache_messager", f"cache_messager_tprank{args.rank}.log")
+    if args.mp_num > 1:
+        logger = get_logger("cache_messager", f"cache_messager.log.{rank_id}")
+    else:
+        logger = get_logger("cache_messager", f"cache_messager.log")
 
     logger.info("create cache messager...")
     logger.info(f"{args}")
