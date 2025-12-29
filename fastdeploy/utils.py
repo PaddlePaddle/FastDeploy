@@ -970,7 +970,6 @@ def check_download_links(bos_client, links, timeout=1):
 def init_bos_client():
     from baidubce.auth.bce_credentials import BceCredentials
     from baidubce.bce_client_configuration import BceClientConfiguration
-    from baidubce.exception import BceHttpClientError, BceServerError
     from baidubce.services.bos.bos_client import BosClient
 
     cfg = BceClientConfiguration(
@@ -981,14 +980,12 @@ def init_bos_client():
     try:
         client = BosClient(cfg)
         client.list_buckets()
-    except BceServerError as e:
-        if e.status_code == 403:
-            raise Exception("BOS authentication failed: Invalid AK/SK") from e
-        raise Exception(f"BOS connection failed: {str(e)}") from e
-    except BceHttpClientError as e:
-        raise Exception(f"Invalid BOS endpoint configuration: {str(e)}") from e
     except Exception as e:
-        raise Exception(f"BOS client validation error: {str(e)}") from e
+        raise Exception(
+            "Create BOSClient Error, Please check your ENV [ ENCODE_FEATURE_BOS_AK, ENCODE_FEATURE_BOS_SK, ENCODE_FEATURE_ENDPOINT ] \n"
+            f"Current ENV AK: {envs.ENCODE_FEATURE_BOS_AK}, SK: {envs.ENCODE_FEATURE_BOS_SK}, Endpoint: {envs.ENCODE_FEATURE_ENDPOINT} \n"
+            f"{str(e)}"
+        )
     return client
 
 

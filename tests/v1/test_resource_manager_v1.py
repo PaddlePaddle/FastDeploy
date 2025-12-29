@@ -27,6 +27,7 @@ class TestResourceManagerV1(unittest.TestCase):
         model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
         speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
+        model_cfg.architectures = ["test_model"]
         model_cfg.max_model_len = 5120
         cache_cfg.bytes_per_layer_per_block = 1
         parallel_cfg = ParallelConfig(args)
