@@ -521,7 +521,7 @@ class DFNRopeVisionTransformerPretrainedModel(nn.Layer):
     """
 
     def __init__(self, config, prefix_name: str = "") -> None:
-        super().__init__(config.vision_config)
+        super().__init__()
         self.spatial_merge_size = config.vision_config.spatial_merge_size
         self.prefix_name = prefix_name
         self.patch_embed = PatchEmbed(
