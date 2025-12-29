@@ -301,8 +301,6 @@ class DeepEPEngine:
                 use_fp8=use_fp8,
                 async_finish=False,
                 return_recv_hook=True,
-                round_scale=True,
-                use_ue8m0=True,
             )
         else:
             (
