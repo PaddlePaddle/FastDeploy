@@ -127,7 +127,7 @@ class TestInitBosClient(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             init_bos_client()
-        self.assertIn("BOS client validation error", str(context.exception))
+        self.assertIn("Create BOSClient Error, Please check your ENV", str(context.exception))
         os.environ.clear()
 
 

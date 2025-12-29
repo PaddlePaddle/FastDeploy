@@ -16,6 +16,7 @@
 
 import traceback
 
+from fastdeploy.cache_manager.transfer_factory.utils import get_rdma_nics
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -40,7 +41,6 @@ class RDMACommManager:
         prefill_tp_idx,
     ):
         try:
-            import importlib
             import os
             import subprocess
 
@@ -66,28 +66,9 @@ class RDMACommManager:
                     logger.info("Setting environment variable: export KVCACHE_GDRCOPY_FLUSH_ENABLE=1")
 
             if os.getenv("KVCACHE_RDMA_NICS", "") == "" and current_platform.is_cuda():
-                res = importlib.resources.files("fastdeploy.cache_manager.transfer_factory") / "get_rdma_nics.sh"
-                get_rdma_nics = None
-                with importlib.resources.as_file(res) as path:
-                    get_rdma_nics = str(path)
-                nic_type = current_platform.device_name
-                command = ["bash", get_rdma_nics, nic_type]
-                result = subprocess.run(
-                    command,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    check=False,
-                )
-                logger.info(f"get_rdma_nics command: {command}")
-                logger.info(f"get_rdma_nics output: {result.stdout}")
-                if result.returncode != 0:
-                    raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
-
-                env_name, env_value = result.stdout.strip().split("=")
-                assert env_name == "KVCACHE_RDMA_NICS"
-                os.environ[env_name] = env_value
-                logger.info(f"Setting environment variable: export {env_name}={env_value}")
+                rdma_nics = get_rdma_nics()
+                os.environ["KVCACHE_RDMA_NICS"] = rdma_nics
+                logger.info(f"Setting environment variable: export KVCACHE_RDMA_NICS={rdma_nics}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize RDMA environment! {e} {traceback.format_exc()}")

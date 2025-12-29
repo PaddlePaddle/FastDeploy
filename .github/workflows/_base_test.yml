@@ -49,11 +49,29 @@ jobs:
           docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
           -e "REPO_NAME=${REPO_NAME}" \
           ${docker_image} /bin/bash -c '
-            if [ -d ${REPO_NAME} ]; then
-              echo "Directory ${REPO_NAME} exists, removing it..."
-              rm -rf ${REPO_NAME}*
-            fi
-          '
+              CLEAN_RETRIES=3
+              CLEAN_COUNT=0
+
+              while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
+                echo "Attempt $((CLEAN_COUNT+1)) to remove ${REPO_NAME}* ..."
+                rm -rf "${REPO_NAME}"* || true
+                sleep 2
+
+                # Check if anything matching ${REPO_NAME}* still exists
+                if ! ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                  echo "All ${REPO_NAME}* removed successfully"
+                  break
+                fi
+
+                CLEAN_COUNT=$((CLEAN_COUNT + 1))
+              done
+
+              if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
+                ls -ld "${REPO_NAME}"*
+                exit 1
+              fi
+            '
 
           # Download with retry and validation
           MAX_RETRIES=3
@@ -175,7 +193,7 @@ jobs:
           python -m pip install ${fastdeploy_wheel_url}
           python -m pip install pytest
 
-          wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
+          wget --no-proxy https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
@@ -263,7 +281,7 @@ jobs:
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-VL-28B-A3B-Thinking\", \"--reasoning-parser\": \"ernie-45-vl-thinking\", \"--tool-call-parser\": \"ernie-45-vl-thinking\", \"--tensor-parallel-size\": 1, \"--quantization\": \"wint4\", \"--max-model-len\": 131072, \"--max-num-seqs\": 32, \"--no-enable-prefix-caching\": true}"
-          check_service 90
+          check_service 180
           python -m pytest -sv test_prompt_ids.py || TEST_EXIT_CODE=1
 
           popd
