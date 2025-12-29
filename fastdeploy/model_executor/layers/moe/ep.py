@@ -20,8 +20,14 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
+
 try:
-    from paddle.distributed.communication import deep_ep
+    if envs.FD_USE_UPSTREAM_DEEP_EP:
+        paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
+        import deep_ep
+    else:
+        from paddle.distributed.communication import deep_ep
 except:
     logger.warning("import deep_ep Failed!")
 
@@ -280,23 +286,42 @@ class DeepEPEngine:
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        (
-            packed_recv_x,
-            recv_expert_count,
-            handle,
-            _,
-            dispatch_hook,
-        ) = self.deepep_engine.low_latency_dispatch(
-            hidden_states,
-            topk_idx,
-            expertwise_scale,
-            self.buffer.num_max_dispatch_tokens_per_rank,
-            self.num_experts,
-            use_fp8=use_fp8,
-            async_finish=False,
-            return_recv_hook=True,
-            num_per_channel=quant_group_size,
-        )
+        if envs.FD_USE_UPSTREAM_DEEP_EP:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+                round_scale=True,
+                use_ue8m0=True,
+            )
+        else:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                expertwise_scale,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+                num_per_channel=quant_group_size,
+            )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
@@ -560,19 +585,28 @@ class EPPrefillRunner(EPRunner):
         if buffer is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        (
-            num_tokens_per_rank,
-            num_tokens_per_rdma_rank,
-            num_tokens_per_expert,
-            is_token_in_rank,
-            event,
-        ) = buffer.get_dispatch_layout(
-            topk_idx,
-            self.num_experts,
-            previous_event=kwargs.get("previous_event", None),
-            allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
-            async_finish=self.ep_engine.async_finish,
-        )
+        if envs.FD_USE_UPSTREAM_DEEP_EP:
+            (
+                num_tokens_per_rank,
+                num_tokens_per_rdma_rank,
+                num_tokens_per_expert,
+                is_token_in_rank,
+                event,
+            ) = buffer.get_dispatch_layout(topk_idx, self.num_experts, async_finish=self.ep_engine.async_finish)
+        else:
+            (
+                num_tokens_per_rank,
+                num_tokens_per_rdma_rank,
+                num_tokens_per_expert,
+                is_token_in_rank,
+                event,
+            ) = buffer.get_dispatch_layout(
+                topk_idx,
+                self.num_experts,
+                previous_event=kwargs.get("previous_event", None),
+                allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
+                async_finish=self.ep_engine.async_finish,
+            )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
