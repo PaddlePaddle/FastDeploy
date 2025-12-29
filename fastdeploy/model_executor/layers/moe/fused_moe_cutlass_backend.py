@@ -1048,8 +1048,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 quant_weight_list.append(quant_weight)
                 scale_list.append(weight_scale)
 
-            if hasattr(getattr(layer, weight_name), "tensor_track"):
-                getattr(layer, weight_name).tensor_track = None
             free_tensor(getattr(layer, weight_name))
 
             stacked_quant_weight = paddle.stack(quant_weight_list, axis=0)
