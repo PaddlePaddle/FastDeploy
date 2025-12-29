@@ -3,8 +3,10 @@ Unit tests for usage_lib.py
 """
 
 import json
+import sys
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 from requests.exceptions import RequestException
@@ -356,6 +358,190 @@ class TestFileWriting(unittest.TestCase):
         all_writes = [call.args[0] for call in mock_file().write.call_args_list]
         full_content = "".join(all_writes)
         self.assertEqual(json.loads(full_content), data)
+
+
+class TestReportUsageWorker(unittest.TestCase):
+    """Test _report_usage_worker method"""
+
+    def setUp(self):
+        self.usage_message = UsageMessage()
+        self.mock_fd_config = MagicMock()
+        self.mock_extra_kvs = {"test_param": "test_value"}
+
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._report_usage_once")
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._report_continuous_usage")
+    def test_report_usage_worker_calls_methods(self, mock_continuous, mock_once):
+        """Test that _report_usage_worker calls required methods"""
+        self.usage_message._report_usage_worker(self.mock_fd_config, self.mock_extra_kvs)
+
+        # Verify that both methods are called with correct arguments
+        mock_once.assert_called_once_with(self.mock_fd_config, self.mock_extra_kvs)
+        mock_continuous.assert_called_once()
+
+
+class TestReportUsageOnce(unittest.TestCase):
+    """Test _report_usage_once method"""
+
+    def setUp(self):
+        self.usage_message = UsageMessage()
+        self.mock_fd_config = MagicMock()
+
+        # Setup mock FDConfig
+        self.mock_fd_config.model_config.architectures = ["TestModel"]
+        self.mock_fd_config.model_config.quantization = None
+
+    @patch("fastdeploy.usage.usage_lib.current_platform")
+    @patch("fastdeploy.usage.usage_lib.cuda_device_count")
+    @patch("fastdeploy.usage.usage_lib.cuda_get_device_properties")
+    @patch("fastdeploy.usage.usage_lib.xpu_device_count")
+    @patch("fastdeploy.usage.usage_lib.get_xpu_model")
+    @patch("fastdeploy.usage.usage_lib.get_cuda_version")
+    @patch("fastdeploy.usage.usage_lib.detect_cloud_provider")
+    @patch("fastdeploy.usage.usage_lib.platform.machine")
+    @patch("fastdeploy.usage.usage_lib.platform.platform")
+    @patch("fastdeploy.usage.usage_lib.psutil.virtual_memory")
+    @patch("fastdeploy.usage.usage_lib.cpuinfo.get_cpu_info")
+    @patch("fastdeploy.usage.usage_lib.get_current_timestamp_ns")
+    @patch("fastdeploy.usage.usage_lib.simple_convert")
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._write_to_file")
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._send_to_server")
+    def test_report_usage_once_cuda_platform(
+        self,
+        mock_send,
+        mock_write,
+        mock_convert,
+        mock_timestamp,
+        mock_cpuinfo,
+        mock_virtual_memory,
+        mock_platform,
+        mock_machine,
+        mock_detector,
+        mock_cuda_version,
+        mock_xpu_model,
+        mock_xpu_count,
+        mock_cuda_props,
+        mock_cuda_count,
+        mock_current_platform,
+    ):
+        """Test _report_usage_once method for CUDA platform"""
+        # Mock platform
+        mock_current_platform.is_cuda_alike.return_value = True
+        mock_current_platform.is_xpu.return_value = False
+        mock_current_platform.is_cuda.return_value = True
+
+        # Mock device properties
+        mock_cuda_count.return_value = 2
+        mock_cuda_props.return_value = ("TestGPU", 1024 * 1024 * 1024)  # 1GB
+
+        # Mock system info
+        mock_detector.return_value = "AWS"
+        mock_machine.return_value = "x86_64"
+        mock_platform.return_value = "Linux-5.15.0"
+
+        vm_mock = MagicMock()
+        vm_mock.total = 1024 * 1024 * 1024 * 16  # 16GB
+        mock_virtual_memory.return_value = vm_mock
+
+        # Mock CPU info
+        mock_cpuinfo.return_value = {
+            "count": 8,
+            "brand_raw": "Intel Xeon",
+            "family": "6",
+            "model": "85",
+            "stepping": "7",
+        }
+
+        # Mock other values
+        mock_timestamp.return_value = 1234567890000000000
+        mock_cuda_version.return_value = "12.1"
+        mock_convert.return_value = {"config": "test"}
+
+        fake_envs = SimpleNamespace(
+            ENABLE_V1_KVCACHE_SCHEDULER="test_source",
+            FD_DISABLE_CHUNKED_PREFILL=False,
+            FD_USE_HF_TOKENIZER=False,
+            FD_PLUGINS="",
+        )
+
+        # Mock imports
+        with patch.dict("sys.modules", {"fastdeploy": MagicMock()}):
+            mock_fastdeploy = sys.modules["fastdeploy"]
+            mock_fastdeploy.__version__ = "1.0.0"
+            with patch("fastdeploy.usage.usage_lib.envs", fake_envs):
+                self.usage_message._report_usage_once(self.mock_fd_config, {})
+
+        # Verify platform detection was called
+        mock_current_platform.is_cuda_alike.assert_called()
+        mock_current_platform.is_xpu.assert_called()
+        mock_current_platform.is_cuda.assert_called()
+
+        # Verify device properties were collected
+        mock_cuda_count.assert_called()
+        mock_cuda_props.assert_called()
+        mock_cuda_version.assert_called()
+
+        # Verify system info was collected
+        mock_detector.assert_called()
+        mock_machine.assert_called()
+        mock_platform.assert_called()
+
+        # Verify file operations were called
+        mock_write.assert_called_once()
+        mock_send.assert_called_once()
+
+    @patch("fastdeploy.usage.usage_lib.current_platform")
+    @patch("fastdeploy.usage.usage_lib.paddle.device.xpu")
+    @patch("fastdeploy.usage.usage_lib.xpu_device_count")
+    @patch("fastdeploy.usage.usage_lib.get_xpu_model")
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._write_to_file")
+    @patch("fastdeploy.usage.usage_lib.UsageMessage._send_to_server")
+    def test_report_usage_once_xpu_platform(
+        self, mock_send, mock_write, mock_xpu_model, mock_xpu_count, mock_xpu, mock_current_platform
+    ):
+        """Test _report_usage_once method for XPU platform"""
+        # Mock platform
+        mock_current_platform.is_cuda_alike.return_value = False
+        mock_current_platform.is_xpu.return_value = True
+
+        # Mock XPU properties
+        mock_xpu_count.return_value = 1
+        mock_xpu_model.return_value = "P900"
+        mock_xpu.memory_total.return_value = 1024 * 1024 * 1024  # 1GB
+
+        fake_envs = SimpleNamespace(
+            ENABLE_V1_KVCACHE_SCHEDULER="test_source",
+            FD_DISABLE_CHUNKED_PREFILL=False,
+            FD_USE_HF_TOKENIZER=False,
+            FD_PLUGINS="",
+            FD_USAGE_SOURCE="",
+        )
+
+        # Mock other necessary methods
+        with patch.multiple(
+            "fastdeploy.usage.usage_lib",
+            detect_cloud_provider=MagicMock(return_value="Unknown"),
+            platform=MagicMock(),
+            psutil=MagicMock(),
+            cpuinfo=MagicMock(),
+            get_current_timestamp_ns=MagicMock(return_value=1234567890000000000),
+            envs=fake_envs,
+            simple_convert=MagicMock(return_value={}),
+        ):
+
+            with patch.dict("sys.modules", {"fastdeploy": MagicMock()}):
+                mock_fastdeploy = sys.modules["fastdeploy"]
+                mock_fastdeploy.__version__ = "1.0.0"
+
+                self.usage_message._report_usage_once(self.mock_fd_config, {})
+
+        # Verify XPU properties were collected
+        mock_xpu_count.assert_called()
+        mock_xpu_model.assert_called()
+        mock_xpu.memory_total.assert_called()
+
+        # Verify file operations were called
+        mock_write.assert_called_once()
+        mock_send.assert_called_once()
 
 
 if __name__ == "__main__":
