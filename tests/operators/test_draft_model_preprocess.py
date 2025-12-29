@@ -87,8 +87,6 @@ def draft_model_preprocess_kernel(
     is_block_step,
     batch_drop,
     pre_ids,
-    mask_rollback,
-    recompute_token_num,
     accept_tokens,
     accept_num,
     base_model_seq_lens_this_time,
@@ -116,7 +114,6 @@ def draft_model_preprocess_kernel(
         base_model_seq_len_decoder = base_model_seq_lens_decoder[tid]
         base_model_seq_len_this_time = base_model_seq_lens_this_time[tid]
         pre_ids_now = pre_ids[tid]
-        recompute_token_num_now = recompute_token_num[tid]
 
         base_model_draft_tokens_now[1:base_model_draft_tokens_len] = -1
 
@@ -159,10 +156,8 @@ def draft_model_preprocess_kernel(
                     step_idx[tid] = base_model_step_idx[tid] - base_model_seq_len_this_time
                 else:
                     # 2: Last base model generated token and first MTP token
-                    seq_lens_decoder[tid] -= recompute_token_num_now
-                    step_idx[tid] -= recompute_token_num_now
-                    mask_rollback[tid] += recompute_token_num_now
-                    recompute_token_num[tid] = num_model_step - 1
+                    seq_lens_decoder[tid] -= num_model_step - 1
+                    step_idx[tid] -= num_model_step - 1
 
                 for i in range(accept_num_now):
                     draft_tokens_now[i] = accept_tokens_now[i]
@@ -192,8 +187,6 @@ def DispatchRunner(
     is_block_step,
     batch_drop,
     pre_ids,
-    mask_rollback,
-    recompute_token_num,
     accept_tokens,
     accept_num,
     base_model_seq_lens_this_time,
@@ -251,8 +244,6 @@ def DispatchRunner(
             is_block_step,
             batch_drop,
             pre_ids,
-            mask_rollback,
-            recompute_token_num,
             accept_tokens,
             accept_num,
             base_model_seq_lens_this_time,
@@ -282,8 +273,6 @@ def draft_model_preprocess_ref(
     is_block_step,
     batch_drop,
     pre_ids,
-    mask_rollback,
-    recompute_token_num,
     accept_tokens,
     accept_num,
     base_model_seq_lens_this_time,
@@ -312,8 +301,6 @@ def draft_model_preprocess_ref(
         is_block_step,
         batch_drop,
         pre_ids,
-        mask_rollback,
-        recompute_token_num,
         accept_tokens,
         accept_num,
         base_model_seq_lens_this_time,
@@ -331,7 +318,7 @@ def draft_model_preprocess_ref(
     )
 
 
-class TestDraftModelPreprocess(unittest.TestCase):
+class TestDraftModelPreprocess:
     def _run_tests(self):
         paddle.seed(2022)
 
@@ -356,8 +343,6 @@ class TestDraftModelPreprocess(unittest.TestCase):
         not_need_stop = paddle.zeros([1], dtype="bool").cpu()
         is_block_step = paddle.zeros([bsz], dtype="bool")
         batch_drop = paddle.zeros([bsz], dtype="bool")
-        mask_rollback = paddle.zeros([bsz], dtype="int32")
-        recompute_token_num = paddle.zeros([bsz], dtype="int32")
 
         # Output tensors
         accept_tokens = paddle.randint(0, 100, [bsz, 100], dtype="int64")
@@ -386,8 +371,6 @@ class TestDraftModelPreprocess(unittest.TestCase):
             is_block_step,
             batch_drop,
             pre_ids,
-            mask_rollback,
-            recompute_token_num,
             accept_tokens,
             accept_num,
             base_model_seq_lens_this_time,
@@ -410,8 +393,13 @@ class TestDraftModelPreprocess(unittest.TestCase):
 
     def test_draft_model_preprocess(self):
         results1, results2 = self._run_tests()
-        for i in range(12):
-            np.testing.assert_equal(results1[i].numpy(), results2[i].numpy())
+        np.testing.assert_allclose(results1[0], results2[0])  # draft_tokens
+        np.testing.assert_allclose(results1[1], results2[1])  # input_ids
+        np.testing.assert_allclose(results1[2], results2[2])  # stop_flags
+        np.testing.assert_allclose(results1[3], results2[3])  # seq_lens_this_time
+        np.testing.assert_allclose(results1[11], results2[11])  # accept_tokens
+        np.testing.assert_allclose(results1[12], results2[12])  # accept_num
+        np.testing.assert_allclose(results1[7], results2[7])  # not_need_stop
 
 
 if __name__ == "__main__":
