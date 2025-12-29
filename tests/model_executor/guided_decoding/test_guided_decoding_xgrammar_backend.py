@@ -19,8 +19,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
-import torch
-
+sys.modules["torch"] = Mock()
 sys.modules["xgrammar"] = Mock()
 sys.modules["fastdeploy"] = Mock()
 sys.modules["fastdeploy.config"] = Mock()
@@ -41,7 +40,10 @@ class MockGrammarMatcher:
 
 
 def mock_allocate_token_bitmask(batch_size, vocab_size):
-    return torch.zeros((batch_size, vocab_size), dtype=torch.int32)
+    mock_tensor = Mock()
+    mock_tensor.shape = (batch_size, vocab_size)
+    mock_tensor.dtype = "int32"
+    return mock_tensor
 
 
 sys.modules["xgrammar"].CompiledGrammar = type("CompiledGrammar", (), {})
@@ -161,7 +163,7 @@ class TestXGrammarProcessor(unittest.TestCase):
         if self.processor.batch_size is None or self.processor.vocab_size is None:
             return
         bitmask = self.processor.allocate_token_bitmask()
-        self.assertIsInstance(bitmask, torch.Tensor)
+        self.assertIsInstance(bitmask, Mock)
         self.assertEqual(bitmask.shape, (self.processor.batch_size, self.processor.vocab_size))
 
     def test_fill_token_bitmask(self):
