@@ -16,14 +16,13 @@
 
 constexpr float epsilon = 1e-10;
 
-__device__ __forceinline__ float ceil_to_ue8m0(float s) {
-  int exp;
-  frexpf(s, &exp);
-  float pow2 = ldexpf(1.0f, exp - 1);
-  if (pow2 < s) {
-    pow2 = ldexpf(1.0f, exp);
-  }
-  return pow2;
+__device__ __forceinline__ float ceil_to_ue8m0(float x) {
+  x = fabsf(x);
+  x = fmaxf(x, epsilon);
+  float log2x = log2f(x);
+  log2x += 1e-6f;  // 1e-6f prevents accuracy issues with log2 (x) calculations
+  float e = ceilf(log2x);
+  return exp2f(e);
 }
 
 __host__ __device__ __forceinline__ int ceil_div(int x, int y) {

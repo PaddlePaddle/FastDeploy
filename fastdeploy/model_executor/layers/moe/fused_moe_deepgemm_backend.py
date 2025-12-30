@@ -243,10 +243,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     ffn_out, self.quant_config.weight_block_size[0]
                 )
             else:
-                # ffn_in_x, ffn_in_x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(ffn_out, use_ue8m0=True)
-                # ffn_in_x_scale_tensor = transform_scale_ue8m0(
-                #     ffn_in_x_scale_tensor, mn=ffn_in_x_scale_tensor.shape[-2]
-                # )
                 ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
                     ffn_out, 128, use_ue8m0=True
                 )
@@ -437,10 +433,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if not self.quant_config.deepgemm_scale_ue8m0:
             recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
         else:
-            # recv_x, recv_x_scale = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True) # recv_x_scale 为float32
-            recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-                x, 128, use_ue8m0=True
-            )  # recv_x_scale 为int32
+            recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(x, 128, use_ue8m0=True)
 
         (
             permute_input,
@@ -467,7 +460,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
             permute_scale = permute_scale.transpose([1, 0])
         else:
-            # permute_scale = transform_scale_ue8m0(permute_scale, mn=permute_scale.shape[-2])
             pass
 
         # up_gate_proj
@@ -493,8 +485,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0])
         else:
-            # ffn_in_x, ffn_in_x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(ffn_out, use_ue8m0=True)
-            # ffn_in_x_scale_tensor = transform_scale_ue8m0(ffn_in_x_scale_tensor, mn=ffn_in_x_scale_tensor.shape[-2])
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
                 ffn_out, 128, use_ue8m0=True
             )
