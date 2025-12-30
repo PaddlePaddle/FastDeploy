@@ -346,7 +346,13 @@ def test_unstream_with_prompt_logprobs_chunk():
     """
     测试chunk切分的能力是否正常
     """
-    data = {"stream": False, "prompt": [10] * (32 * 1024), "max_tokens": 1, "return_token_ids": True}
+    data = {
+        "stream": False,
+        "prompt": [10] * (32 * 1024),
+        "max_tokens": 1,
+        "prompt_logprobs": 1,
+        "return_token_ids": True,
+    }
 
     response = send_request(COMPLETIONS_URL, data)
     resp_json = response.json()
