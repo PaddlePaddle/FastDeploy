@@ -32,6 +32,7 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
 )
+from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
     ImagePosition,
     Request,
@@ -882,9 +883,21 @@ class ResourceManagerV1(ResourceManager):
         """
         try:
             cache_prepare_time = time.time()
-            (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
-                request, self.config.cache_config.block_size
-            )
+            if self._is_mm_request(request) and ErnieArchitectures.is_ernie5_arch(
+                self.config.model_config.architectures
+            ):
+                # For multimodal requests using Ernie 5 series models, skip prefix cache.
+                hit_info = {
+                    "gpu_cache_blocks": 0,
+                    "cpu_cache_blocks": 0,
+                    "gpu_match_token_num": 0,
+                    "cpu_match_token_num": 0,
+                }
+                common_block_ids, matched_token_num = [], 0
+            else:
+                (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
+                    request, self.config.cache_config.block_size
+                )
 
             matched_block_num = len(common_block_ids)
             no_cache_block_num = self.cache_manager.get_required_block_num(
