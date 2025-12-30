@@ -30,7 +30,6 @@ class RDMACommManager:
     def __init__(
         self,
         splitwise_role,
-        rank,
         gpu_id,
         cache_k_ptr_list,
         cache_v_ptr_list,
