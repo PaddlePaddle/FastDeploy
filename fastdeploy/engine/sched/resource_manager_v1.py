@@ -1005,8 +1005,6 @@ class ResourceManagerV1(ResourceManager):
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
                     extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks)
-                    if self.config.cache_config.enable_prefix_caching:
-                        self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                     request.block_tables.extend(extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position

@@ -756,7 +756,7 @@ class PrefixCacheManager:
                 storage_match_token_num = 0
                 match_storage_block_ids = []
 
-                if self.kvcache_storage_backend and no_match_block_num > 0:
+                if self.kvcache_storage_backend and no_match_token_num >= block_size:
                     if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num):
                         raise Exception(
                             "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
@@ -914,6 +914,7 @@ class PrefixCacheManager:
                     req_id,
                     cpu_match_token_num,
                     gpu_match_token_num,
+                    0,
                     input_token_num,
                 )
                 hit_info["gpu_cache_blocks"] = gpu_match_token_num // block_size
