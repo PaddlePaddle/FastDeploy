@@ -351,9 +351,7 @@ def test_unstream_with_prompt_logprobs_chunk():
         "prompt": [10] * (32 * 1024),
         "max_tokens": 1,
         "prompt_logprobs": 1,
-        "return_token_ids": True,
     }
-
     response = send_request(COMPLETIONS_URL, data)
     resp_json = response.json()
 
@@ -361,7 +359,16 @@ def test_unstream_with_prompt_logprobs_chunk():
     assert resp_json["choices"][0]["text"] is not None
     # assert resp_json["usage"]["prompt_tokens"] == 7
     assert resp_json["usage"]["completion_tokens"] == 1
-    assert resp_json["choices"][0]["prompt_logprobs"] is None
+    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
+        if i == 0:
+            assert prompt_logprobs is None
+        else:
+            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
+            assert top[0]["rank"] == 1
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
+            for i in range(len(top)):
+                assert top[i]["logprob"] < 0
+                assert top[i]["decoded_token"].encode("utf-8")
 
 
 def test_unstream_with_prompt_logprobs_none_completions():
