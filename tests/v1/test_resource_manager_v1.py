@@ -44,6 +44,7 @@ class TestResourceManagerV1(unittest.TestCase):
         speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
         model_cfg.max_model_len = 5120
+        model_cfg.architectures = ["test_model"]
         cache_cfg.bytes_per_layer_per_block = 1
         parallel_cfg = ParallelConfig(args)
         scheduler_cfg = SchedulerConfig(args)
