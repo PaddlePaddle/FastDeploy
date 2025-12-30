@@ -123,7 +123,7 @@ __global__ void quant_per_token_per_block_padding(
 
           // column-major base index
           int32_t *scale_now = quanted_scale;
-          const int base_idx = token_idx + pack_idx * token_num;
+          const int base_idx = token_idx + pack_idx * padded_token_num;
 
           // ---------------- store exp ----------------
           reinterpret_cast<uint8_t *>(&scale_now[base_idx])[byte_idx] =
