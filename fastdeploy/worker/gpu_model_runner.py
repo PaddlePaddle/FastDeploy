@@ -1596,7 +1596,7 @@ class GPUModelRunner(ModelRunnerBase):
         from fastdeploy import envs
 
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        for i in range(self.model_config.num_hidden_layers):
+        for i in range(self.model_config.num_hidden_layers + self.speculative_config.num_extra_cache_layer):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"
@@ -1617,10 +1617,12 @@ class GPUModelRunner(ModelRunnerBase):
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                     )
+                    set_data_ipc(key_cache_scales, key_cache_scales_name)
                     if value_cache_shape:
                         val_cache_scales = paddle.full(
                             shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                         )
+                        set_data_ipc(val_cache_scales, value_cache_scales_name)
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                     else:
                         cache_kvs_list.extend([key_cache_scales])
