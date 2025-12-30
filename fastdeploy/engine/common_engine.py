@@ -1073,13 +1073,13 @@ class EngineService:
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
                         self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
-                        abort_res = RequestOutput(
-                            request_id=req_id,
-                            finished=True,
-                            error_code=499,
-                            error_msg=f"Your request with request_id:{req_id} is aborted.",
-                        )
-                        self.scheduler.put_results([abort_res])
+                        # abort_res = RequestOutput(
+                        #     request_id=req_id,
+                        #     finished=True,
+                        #     error_code=499,
+                        #     error_msg=f"Your request with request_id:{req_id} is aborted.",
+                        # )
+                        # self.scheduler.put_results([abort_res])
                         self.resource_manager.abort_req_ids_set.add(req_id)
                         continue
                     err_msg = None

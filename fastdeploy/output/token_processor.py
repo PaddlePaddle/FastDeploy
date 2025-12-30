@@ -213,12 +213,12 @@ class TokenProcessor:
         abort_req_ids = list(self.resource_manager.abort_req_ids_set)
         for request_id in abort_req_ids:
             if request_id not in self.resource_manager.req_dict:
-                self.resource_manager.abort_req_ids_set.discard(request_id)
+                self.resource_manager.abort_req_ids_set.remove(request_id)
                 continue
             batch_id = self.resource_manager.req_dict[request_id]
-            if batch_id >= (batch_size - 1):
+            if batch_id > (batch_size - 1):
                 llm_logger.info(f"Aborted task {request_id} idx {batch_id} is out of batch {batch_size}. Recycling.")
-                self.resource_manager.abort_req_ids_set.discard(request_id)
+                self.resource_manager.abort_req_ids_set.remove(request_id)
                 task = self.resource_manager.tasks_list[batch_id]
                 self._recycle_resources(request_id, batch_id, task)
 
@@ -273,10 +273,9 @@ class TokenProcessor:
 
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
-            is_aborted = task_id in self.resource_manager.abort_req_ids_set
             token_ids = stream_data.tokens  # numpy.array
             if token_ids is not None and token_ids[-1] <= 0:
-                if is_aborted:
+                if task_id in self.resource_manager.abort_req_ids_set:
                     llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
                     self.resource_manager.abort_req_ids_set.discard(task_id)
                     self._recycle_resources(task_id, i, task)
@@ -714,7 +713,7 @@ class TokenProcessor:
         batch_result = list()
         # reschedule
         self._reschedule_preempt_task(batch)
-        self._recycle_aborted_task(batch)
+        # self._recycle_aborted_task(batch)
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue
@@ -722,7 +721,6 @@ class TokenProcessor:
             recovery_stop = False
             task = self.resource_manager.tasks_list[i]
             task_id = task.request_id
-            is_aborted = task_id in self.resource_manager.abort_req_ids_set
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
@@ -751,7 +749,7 @@ class TokenProcessor:
                         + accept_num[i]
                     ].tolist()
                 if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
-                    if is_aborted:
+                    if task_id in self.resource_manager.abort_req_ids_set:
                         llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
                         self.resource_manager.abort_req_ids_set.discard(task_id)
                         self._recycle_resources(task_id, i, task)
@@ -766,13 +764,27 @@ class TokenProcessor:
                 if recovery_stop:
                     llm_logger.info(f"recovery stop signal found at task {task_id}")
                 if not recovery_stop and token_id < 0:
-                    if is_aborted:
+                    is_aborted = task_id in self.resource_manager.abort_req_ids_set
+                    if task_id in self.resource_manager.abort_req_ids_set:
                         llm_logger.info(f"Aborted task {task_id} received negative token. Recycling.")
-                        self.resource_manager.abort_req_ids_set.discard(task_id)
+                        self.resource_manager.abort_req_ids_set.remove(task_id)
                         self._recycle_resources(task_id, i, task)
+                        llm_logger.info(f"{task_id} received negative token. Recycle end.")
+                        abort_res = RequestOutput(
+                            request_id=task_id,
+                            finished=True,
+                            error_code=499,
+                            error_msg=f"Your request with request_id:{task_id} is aborted.",
+                        )
+                        batch_result.append(abort_res)
+                        continue
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            llm_logger.info(f"Task {task_id} preempt")
                             self.resource_manager.reschedule_preempt_task(task_id)
+                    llm_logger.info(
+                        f"Task {task_id} received negative token:{token_id},before:{is_aborted},after:{task_id in self.resource_manager.abort_req_ids_set}, Recycling."
+                    )
                     continue
 
             if task.get("prefill_chunk_info", None) is not None:
@@ -789,6 +801,7 @@ class TokenProcessor:
                 task.metrics.record_recv_first_token()
                 task.metrics.cal_cost_time()
                 metrics = copy.copy(task.metrics)
+                llm_logger.info(f"task:{task.request_id} start recode first token")
                 self._record_first_token_metrics(task, current_time)
 
                 tracing.trace_report_span(
@@ -874,7 +887,9 @@ class TokenProcessor:
                             result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
                             result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
                             result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
-
+                llm_logger.info(
+                    f"Request: {task_id} generated token {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
+                )
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
@@ -901,7 +916,9 @@ class TokenProcessor:
                         self._compute_speculative_status(result)
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
+                    llm_logger.info(f"task {task_id} received eos token. Recycling.")
                     self._recycle_resources(task_id, i, task, result, is_prefill)
+                    llm_logger.info(f"eos token {task_id} Recycle end.")
                     break
 
             llm_logger.debug(f"get response from infer: {result}")

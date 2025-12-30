@@ -818,6 +818,7 @@ class EngineClient:
 
     async def abort(self, request_id, n=1) -> None:
         if envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE:
+            api_server_logger.info(f"abort request_id:{request_id}")
             if n <= 0:
                 api_server_logger.warning("Abort function called with non-positive n: %d. No requests aborted.", n)
                 return
