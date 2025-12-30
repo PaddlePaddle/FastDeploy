@@ -645,7 +645,6 @@ class GPUModelRunner(ModelRunnerBase):
             request = req_dicts[i]
             # assert isinstance(request, Request)
             idx = request.idx
-            self.share_inputs["req_ids"][idx] = str(request.request_id)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -653,6 +652,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["req_ids"][idx] = str(request.request_id)
                 # guided decoding
                 if (
                     request.guided_json is not None
