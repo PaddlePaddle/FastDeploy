@@ -25,7 +25,6 @@ class TestRDMACommManager(unittest.TestCase):
     def setUp(self):
         self.args = {
             "splitwise_role": "prefill",
-            "rank": 0,
             "gpu_id": 0,
             "cache_k_ptr_list": [1, 2, 3],
             "cache_v_ptr_list": [4, 5, 6],
