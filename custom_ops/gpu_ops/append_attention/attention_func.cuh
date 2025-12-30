@@ -605,13 +605,12 @@ __device__ __forceinline__ void compute_sfm_v_c8_iter_sq_bvec(
 }
 
 template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
-__device__ __forceinline__ void merge_block_res(
-    float (*o_frag)[num_frags_y][8],
-    float* md_smem,
-    float (*m)[2],
-    float (*d)[2],
-    const uint32_t wid,
-    const uint32_t tid) {
+__device__ __forceinline__ void merge_block_res(float (*o_frag)[num_frags_y][8],
+                                                float* md_smem,
+                                                float (*m)[2],
+                                                float (*d)[2],
+                                                const uint32_t wid,
+                                                const uint32_t tid) {
   float2* smem_md = reinterpret_cast<float2*>(
       md_smem + num_frags_x * num_frags_y * 1024);  // 4 * 32 * 8
 #pragma unroll
@@ -922,21 +921,24 @@ __global__ void merge_chunks_kernel(
     LoadT res_vec;
     if (num_chunks_this_seq == 1) {
       if (ty == 0) {
-        uint32_t offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks *
-                        num_heads + hid) * head_dim + vid * vec_size;
+        uint32_t offset = ((bid * max_tokens_per_batch + local_seq_id) *
+                               num_chunks * num_heads +
+                           hid) *
+                              head_dim +
+                          vid * vec_size;
         Load<T, vec_size>(&multi_out[offset], &load_vec);
         Store<T, vec_size>(
-            load_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
+            load_vec,
+            &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
       }
     } else {
-      
       if constexpr (std::is_same<T, half>::value) {
-  #pragma unroll
+#pragma unroll
         for (int i = 0; i < vec_size / 2; ++i) {
           *((half2*)(&res_vec) + i) = make_half2(0, 0);
         }
       } else {
-  #pragma unroll
+#pragma unroll
         for (int i = 0; i < vec_size / 2; ++i) {
           *((nv_bfloat162*)(&res_vec) + i) = make_bfloat162(0, 0);
         }
@@ -948,13 +950,14 @@ __global__ void merge_chunks_kernel(
       } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
         m = -3.0e+30f;
       }
-  #pragma unroll 2
+#pragma unroll 2
       for (int i = ty; i < num_chunks_this_seq; i += bdy) {
         uint32_t offset;
 
-        offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks + i) *
-                    num_heads +
-                hid;
+        offset =
+            ((bid * max_tokens_per_batch + local_seq_id) * num_chunks + i) *
+                num_heads +
+            hid;
         float m_prev = m;
         float d_prev = d;
         const float m_now = multi_m[offset];
@@ -964,14 +967,14 @@ __global__ void merge_chunks_kernel(
         offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks *
                       num_heads +
                   i * num_heads + hid) *
-                    head_dim +
-                vid * vec_size;
+                     head_dim +
+                 vid * vec_size;
         Load<T, vec_size>(&multi_out[offset], &load_vec);
         const float scale1 = expf(m_prev - m), scale2 = expf(m_now - m);
         const T scale1_T = static_cast<T>(scale1),
                 scale2_T = static_cast<T>(scale2);
         d = d * scale1 + d_now * scale2;
-  #pragma unroll
+#pragma unroll
         for (int j = 0; j < vec_size; j++) {
           res_vec[j] = res_vec[j] * scale1_T + load_vec[j] * scale2_T;
         }
@@ -985,7 +988,7 @@ __global__ void merge_chunks_kernel(
         // merge bdy
         prefill_softmax_state_t<vec_size, T> st;
         st.init();
-  #pragma unroll
+#pragma unroll
         for (int i = 0; i < bdy; i++) {
           Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
           const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
@@ -1009,16 +1012,16 @@ __global__ void merge_chunks_kernel(
                             &smooth_weight_vec);
         }
 
-  #pragma unroll
+#pragma unroll
         for (int i = 0; i < vec_size; ++i) {
           StoreFunc<T, vec_size, T>()(st.o,
-                                        shift_bias_vec,
-                                        smooth_weight_vec,
-                                        out_vec,
-                                        quant_max_bound,
-                                        quant_min_bound,
-                                        in_scale,
-                                        i);
+                                      shift_bias_vec,
+                                      smooth_weight_vec,
+                                      out_vec,
+                                      quant_max_bound,
+                                      quant_min_bound,
+                                      in_scale,
+                                      i);
         }
         Store<T, vec_size>(
             out_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);

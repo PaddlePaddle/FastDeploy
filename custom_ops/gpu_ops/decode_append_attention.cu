@@ -100,8 +100,8 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
   const int max_kv_len_this_time = set_max_lengths.data<int>()[5];
 
   auto stream = qkv.stream();
-  bool is_fp8 = cache_quant_type == "cache_fp8" ||
-                  cache_quant_type == "block_wise_fp8";
+  bool is_fp8 =
+      cache_quant_type == "cache_fp8" || cache_quant_type == "block_wise_fp8";
   bool is_dynamic_cfp8 = cache_quant_type == "block_wise_fp8";
 
   if (max_just_dec_len_this_time > 0) {
