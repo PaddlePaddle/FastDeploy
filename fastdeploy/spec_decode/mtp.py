@@ -45,7 +45,6 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
-        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -66,6 +65,7 @@ else:
         speculate_get_logits,
         speculate_save_output_topk,
         update_attn_mask_offsets,
+        set_data_ipc,
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
