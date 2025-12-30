@@ -668,15 +668,13 @@ class LLMEngine:
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
-                processed = self.engine.data_processor.process_response(result)
-                if processed is None:
-                    continue
+                processed = self.engine.data_processor.process_response_obj(response_obj=result, stream=stream)
                 output = processed.to_dict()
                 yield output
 
             # Exit loop if termination condition is met
             if is_end:
-                processed = self.engine.data_processor.process_response(result)
+                processed = self.engine.data_processor.process_response_obj(response_obj=result, stream=stream)
                 output = processed.to_dict()
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:

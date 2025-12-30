@@ -251,45 +251,45 @@ class Ernie4_5Processor(BaseDataProcessor):
         data_processor_logger.info(f"Processed request: {request}")
         return request
 
-    def process_response(self, response_dict, **kwargs):
-        """
-        Preprocess the response
+    # def process_response(self, response_dict, **kwargs):
+    #     """
+    #     Preprocess the response
 
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
+    #     Args:
+    #         response_dict (Dict): response for engine, contain ids fields
 
-        Returns:
-            Dict: response contain text fields
-        """
-        req_id = response_dict.request_id
-        token_ids = response_dict.outputs.token_ids
+    #     Returns:
+    #         Dict: response contain text fields
+    #     """
+    #     req_id = response_dict.request_id
+    #     token_ids = response_dict.outputs.token_ids
 
-        response_dict.usage = {"completion_tokens": response_dict.outputs.index + 1}
-        if token_ids[-1] == self.tokenizer.eos_token_id:
-            token_ids = token_ids[:-1]
-        full_text = self.tokenizer.decode(token_ids)
-        if self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text,
-                response_dict,
-                self.model_status_dict[req_id],
-            )
-            response_dict.outputs.text = text
-            response_dict.outputs.reasoning_content = reasoning_content
-        else:
-            response_dict.outputs.text = full_text
-        if self.tool_parser_obj:
-            tool_parser = self.tool_parser_obj(self.tokenizer)
-            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
-            if tool_call_info.tools_called:
-                response_dict.outputs.tool_calls = tool_call_info.tool_calls
-                response_dict.outputs.text = tool_call_info.content
-        if req_id in self.model_status_dict:
-            del self.model_status_dict[req_id]
-        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
-        if response_dict.outputs.text == "" and response_dict.outputs.reasoning_content == "":
-            return None
-        return response_dict
+    #     response_dict.usage = {"completion_tokens": response_dict.outputs.index + 1}
+    #     if token_ids[-1] == self.tokenizer.eos_token_id:
+    #         token_ids = token_ids[:-1]
+    #     full_text = self.tokenizer.decode(token_ids)
+    #     if self.reasoning_parser:
+    #         reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+    #             full_text,
+    #             response_dict,
+    #             self.model_status_dict[req_id],
+    #         )
+    #         response_dict.outputs.text = text
+    #         response_dict.outputs.reasoning_content = reasoning_content
+    #     else:
+    #         response_dict.outputs.text = full_text
+    #     if self.tool_parser_obj:
+    #         tool_parser = self.tool_parser_obj(self.tokenizer)
+    #         tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+    #         if tool_call_info.tools_called:
+    #             response_dict.outputs.tool_calls = tool_call_info.tool_calls
+    #             response_dict.outputs.text = tool_call_info.content
+    #     if req_id in self.model_status_dict:
+    #         del self.model_status_dict[req_id]
+    #     data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
+    #     if response_dict.outputs.text == "" and response_dict.outputs.reasoning_content == "":
+    #         return None
+    #     return response_dict
 
     def process_response_obj(self, response_obj, stream, **kwargs):
         """

@@ -311,8 +311,8 @@ class DataProcessorTestCase(unittest.TestCase):
             def process_request_obj(self, request, **kwargs):
                 return super().process_request_obj(request, **kwargs)
 
-            def process_response(self, response_dict):
-                return super().process_response(response_dict)
+            def process_response_obj(self, response_obj):
+                return super().process_response_obj(response_obj)
 
         processor = MinimalProcessor()
         request = Request(request_id="test_0", sampling_params=SamplingParams())
@@ -321,7 +321,7 @@ class DataProcessorTestCase(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             processor.process_request_obj({}, max_model_len=None)
         with self.assertRaises(NotImplementedError):
-            processor.process_response({})
+            processor.process_response_obj({})
         with self.assertRaises(NotImplementedError):
             processor.text2ids("text")
         with self.assertRaises(NotImplementedError):
@@ -426,11 +426,10 @@ class DataProcessorTestCase(unittest.TestCase):
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-only")
 
         response = SimpleNamespace(
-            request_id="resp",
-            outputs=SimpleNamespace(token_ids=[1, processor.tokenizer.eos_token_id]),
+            request_id="resp", outputs=SimpleNamespace(token_ids=[1, processor.tokenizer.eos_token_id]), finished=True
         )
 
-        processed = processor.process_response(response)
+        processed = processor.process_response_obj_normal(response)
         self.assertEqual(processed.outputs.text, "tool-only")
         self.assertEqual(processed.outputs.reasoning_content, "think")
         self.assertEqual(processed.outputs.tool_calls, ["tool"])

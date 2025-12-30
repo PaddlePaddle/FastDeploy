@@ -84,15 +84,15 @@ class BaseDataProcessor(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def process_response(self, response_dict):
+    def process_response_obj(self, response_obj):
         """
         Preprocess the response
 
         Args:
-            response_dict (Dict): response for engine, contain ids fields
+            response_obj RequestOutput: response for engine, contain ids fields
 
         Returns:
-            Dict: response contain text fields
+            RequestOutput: response contain text fields
         """
         raise NotImplementedError
 
@@ -372,39 +372,39 @@ class DataProcessor(BaseDataProcessor):
         full_text = self.tokenizer.decode(token_ids, **kwargs)
         return full_text
 
-    def process_response(self, response_dict, **kwargs):
-        """
-        Preprocess the response
+    # def process_response(self, response_dict, **kwargs):
+    #     """
+    #     Preprocess the response
 
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
+    #     Args:
+    #         response_dict (Dict): response for engine, contain ids fields
 
-        Returns:
-            Dict: response contain text fields
-        """
-        req_id = response_dict.request_id
-        token_ids = response_dict.outputs.token_ids
-        if token_ids[-1] == self.tokenizer.eos_token_id:
-            token_ids = token_ids[:-1]
-        full_text = self.tokenizer.decode(token_ids)
-        response_dict.outputs.text = full_text
-        if self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict[req_id]
-            )
-            response_dict.outputs.text = text
-            response_dict.outputs.reasoning_content = reasoning_content
-        if self.tool_parser_obj:
-            tool_parser = self.tool_parser_obj(self.tokenizer)
-            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
-            if tool_call_info.tools_called:
-                response_dict.outputs.tool_calls = tool_call_info.tool_calls
-                response_dict.outputs.text = tool_call_info.content
-        if req_id in self.model_status_dict:
-            del self.model_status_dict[req_id]
-        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
+    #     Returns:
+    #         Dict: response contain text fields
+    #     """
+    #     req_id = response_dict.request_id
+    #     token_ids = response_dict.outputs.token_ids
+    #     if token_ids[-1] == self.tokenizer.eos_token_id:
+    #         token_ids = token_ids[:-1]
+    #     full_text = self.tokenizer.decode(token_ids)
+    #     response_dict.outputs.text = full_text
+    #     if self.reasoning_parser:
+    #         reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+    #             full_text, response_dict, self.model_status_dict[req_id]
+    #         )
+    #         response_dict.outputs.text = text
+    #         response_dict.outputs.reasoning_content = reasoning_content
+    #     if self.tool_parser_obj:
+    #         tool_parser = self.tool_parser_obj(self.tokenizer)
+    #         tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+    #         if tool_call_info.tools_called:
+    #             response_dict.outputs.tool_calls = tool_call_info.tool_calls
+    #             response_dict.outputs.text = tool_call_info.content
+    #     if req_id in self.model_status_dict:
+    #         del self.model_status_dict[req_id]
+    #     data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
-        return response_dict
+    #     return response_dict
 
     def process_response_obj_normal(self, response_obj, **kwargs):
         """

@@ -564,7 +564,7 @@ class LLM:
                         continue
 
                     result = self.req_output.pop(req_id)
-                    result = self.llm_engine.data_processor.process_response(result)
+                    result = self.llm_engine.data_processor.process_response_obj_normal(response_obj=result)
 
                     # filter logprobs
                     if result.outputs.top_logprobs is not None and topk_logprobs is not None:
