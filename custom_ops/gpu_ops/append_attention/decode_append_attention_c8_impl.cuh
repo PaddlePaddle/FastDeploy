@@ -187,7 +187,6 @@ __global__ void decode_append_attention_c8_kernel(
                        params.max_num_chunks * q_n_stride +
                    chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
                    tid % 8 * num_elems_per_128b<T>();
-    // }
     const int *mask_offset_this_seq =
         params.mask_offset ? params.mask_offset + q_start_seq_id * 2 : nullptr;
 
@@ -233,7 +232,7 @@ __global__ void decode_append_attention_c8_kernel(
                       : chunk_len,
                NUM_WARP_KV * num_frags_z * 16);
     const uint32_t mask_check_iteration =
-        (CAUSAL               ? (min(chunk_len,
+        (CAUSAL ? (min(chunk_len,
                        sub_if_greater_or_zero(
                            kv_len - q_len +
                                tile_idx * num_rows_per_block / GROUP_SIZE,
@@ -405,7 +404,6 @@ __global__ void decode_append_attention_c8_kernel(
 
       if (iter >= mask_check_iteration || params.sliding_window > 0) {
         mask_s<T,
-               true,
                CAUSAL,
                GROUP_SIZE,
                NUM_WARPS,
@@ -413,7 +411,7 @@ __global__ void decode_append_attention_c8_kernel(
                num_frags_y,
                num_frags_z>(
             params.attn_mask
-                ? params.attn_mask + batch_idx * params.attn_mask_len
+                ? params.attn_mask + batch_idx * params.attn_mask_len * params.attn_mask_len
                 : nullptr,
             q_base_seq_id_this_block,
             kv_idx_base + wid * num_frags_z * 16,
@@ -573,9 +571,12 @@ __global__ void decode_append_attention_c8_kernel(
     // for (uint32_t i = 0; i < NUM_WARP_KV; ++i) {
     //   bar[i].wait(std::move(tokens[i]));
     // }
-    merge_block_res_v2<num_frags_x, num_frags_y, T>(
+    merge_block_res<num_frags_x, num_frags_y, T>(
         o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
+    if (num_chunks_this_seq <= 1) {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
     // write o
     // [num_frags_x, 16, num_frags_y, 16]
     write_o_reg_gmem_multi_warps<GROUP_SIZE, num_frags_x, num_frags_y, T>(
@@ -814,11 +815,10 @@ void DecodeAppendC8Attention(const AppendAttnMetaData &meta_data,
   constexpr int blocky = (128 + blockx - 1) / blockx;
   dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
   dim3 blocks_merge(blockx, blocky);
-  launchWithPdlWhenEnabled(merge_multi_chunks_v2_kernel<NV_TYPE,
-                                                        vec_size,
-                                                        blocky,
-                                                        HEAD_DIM,
-                                                        NV_TYPE>,
+  launchWithPdlWhenEnabled(merge_chunks_kernel<NV_TYPE,
+                                              vec_size,
+                                              blocky,
+                                              HEAD_DIM>,
                            grids_merge,
                            blocks_merge,
                            0,

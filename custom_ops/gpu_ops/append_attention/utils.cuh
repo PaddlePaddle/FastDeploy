@@ -651,7 +651,7 @@ struct StoreFunc<T, VEC_SIZE, T> {
   }
 
 #define DISPATCH_IS_FP8(is_fp8, IS_FP8, ...) \
-  if (causal) {                              \
+  if (is_fp8) {                              \
     constexpr bool IS_FP8 = true;            \
     __VA_ARGS__                              \
   } else {                                   \
