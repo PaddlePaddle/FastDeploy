@@ -203,6 +203,10 @@ class RMSNorm(nn.Layer):
                   The `residual_output` is the result of applying the normalization and possibly other
                   operations (like linear transformation) on the `residual_input`.
         """
+
+        if x.shape[0] == 0:
+            return x, residual_input
+
         x_dtype = x.dtype
         x = x.astype(self.weight.dtype)
         if residual_input is not None:
