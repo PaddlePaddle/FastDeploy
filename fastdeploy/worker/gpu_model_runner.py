@@ -538,7 +538,7 @@ class GPUModelRunner(ModelRunnerBase):
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                         grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                        mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
+                        mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
@@ -563,7 +563,7 @@ class GPUModelRunner(ModelRunnerBase):
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
                 grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                mm_token_lenght = (grid_thw[1] * grid_thw[2]) // 4
+                mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
                 mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                 feature_start = feature_position.offset
@@ -3030,6 +3030,7 @@ class GPUModelRunner(ModelRunnerBase):
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            rope_scaling=getattr(self.model_config, "rope_scaling", {}),
             model_type=self.model_config.model_type,
             max_len_lst=max_len_lst,
             cumsum_seqlens=cumsum_seqlens,

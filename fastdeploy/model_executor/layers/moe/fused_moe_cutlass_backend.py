@@ -210,7 +210,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 None,  # down_proj_bias,
                 False,  # norm_topk_prob
                 1.0,
-            )[0]
+            )
         else:
             tmp_ffn_out = recv_x
 

@@ -514,8 +514,8 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     paddle::Tensor& image_index,
     const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
-                                            int64_t num_experts);
+std::vector<paddle::Tensor> count_tokens_per_expert_func(
+    const paddle::Tensor& topk_ids, int64_t num_experts);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -1175,7 +1175,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("append_attention_with_output",
         &AppendAttentionWithOutput,
         "append attention with output function");
+
+#ifdef ENABLE_FLASH_MASK_ATTENTION
   m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
+#endif
 
   /**
    * gqa_rope_write_cache.cu
