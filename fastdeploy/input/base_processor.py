@@ -8,6 +8,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from paddleformers.trl.llm_utils import get_eos_token_id
 
 from fastdeploy import envs
+from fastdeploy.config import ErnieArchitectures
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.utils import data_processor_logger
 
@@ -18,10 +19,10 @@ class BaseDataProcessor(ABC):
         model_name_or_path: str,
         reasoning_parser_obj: Optional[Any] = None,
         tool_parser_obj: Optional[Any] = None,
-        is_ernie: bool = False,
+        architecture: str = False,
     ):
         self.model_name_or_path = model_name_or_path
-        self.is_ernie = is_ernie
+        self.architecture = architecture
         self.decode_status = dict()
         self.model_status_dict = dict()
         self.tool_parser_dict = dict()
@@ -54,7 +55,7 @@ class BaseDataProcessor(ABC):
         Returns:
             tokenizer (AutoTokenizer)
         """
-        if not self.is_ernie:
+        if not ErnieArchitectures.contains_ernie_arch(self.architecture):
             if envs.FD_USE_HF_TOKENIZER:
                 from transformers import AutoTokenizer
 
@@ -148,7 +149,7 @@ class BaseDataProcessor(ABC):
             List[int]: token ids list
         """
 
-        if self.is_ernie:
+        if ErnieArchitectures.contains_ernie_arch(self.architecture):
             tokens = self.tokenizer.tokenize(text)
             token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
             return token_ids

@@ -16,7 +16,7 @@
 
 from typing import Any, Dict, Optional
 
-from fastdeploy.config import ErnieArchitectures, ModelConfig
+from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.reasoning import ReasoningParserManager
 
@@ -78,50 +78,24 @@ class InputPreprocessor:
             )
         except:
             if not self.model_config.enable_mm:
-                is_ernie = ErnieArchitectures.is_ernie_arch(architecture)
                 from fastdeploy.input.text_processor import DataProcessor
 
                 self.processor = DataProcessor(
                     model_name_or_path=self.model_name_or_path,
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
-                    is_ernie=is_ernie,
+                    architecture=architecture,
                 )
             else:
-                if ErnieArchitectures.contains_ernie_arch(architecture):
-                    from fastdeploy.input.ernie4_5_vl_processor import (
-                        Ernie4_5_VLProcessor,
-                    )
+                from fastdeploy.input.multimodal_processor import MultiDataProcessor
 
-                    self.processor = Ernie4_5_VLProcessor(
-                        model_name_or_path=self.model_name_or_path,
-                        limit_mm_per_prompt=self.limit_mm_per_prompt,
-                        mm_processor_kwargs=self.mm_processor_kwargs,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        tool_parser_obj=tool_parser_obj,
-                        enable_processor_cache=self.enable_processor_cache,
-                    )
-                elif "PaddleOCRVL" in architecture:
-                    from fastdeploy.input.paddleocr_vl_processor import (
-                        PaddleOCRVLProcessor,
-                    )
-
-                    self.processor = PaddleOCRVLProcessor(
-                        config=self.model_config,
-                        model_name_or_path=self.model_name_or_path,
-                        limit_mm_per_prompt=self.limit_mm_per_prompt,
-                        mm_processor_kwargs=self.mm_processor_kwargs,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                    )
-                else:
-                    from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
-
-                    self.processor = QwenVLProcessor(
-                        config=self.model_config,
-                        model_name_or_path=self.model_name_or_path,
-                        limit_mm_per_prompt=self.limit_mm_per_prompt,
-                        mm_processor_kwargs=self.mm_processor_kwargs,
-                        reasoning_parser_obj=reasoning_parser_obj,
-                        enable_processor_cache=self.enable_processor_cache,
-                    )
+                self.processor = MultiDataProcessor(
+                    model_name_or_path=self.model_name_or_path,
+                    limit_mm_per_prompt=self.limit_mm_per_prompt,
+                    mm_processor_kwargs=self.mm_processor_kwargs,
+                    reasoning_parser_obj=reasoning_parser_obj,
+                    tool_parser_obj=tool_parser_obj,
+                    enable_processor_cache=self.enable_processor_cache,
+                    architecture=architecture,
+                )
         return self.processor

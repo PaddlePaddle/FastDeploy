@@ -14,15 +14,13 @@
 # limitations under the License.
 """
 
-from .ernie4_5_vl_processor import Ernie4_5_VLProcessor
-from .process import DataProcessor, fancy_print
+from .process import Ernie4_5_VLDataProcessor, fancy_print
 from .process_video import read_video_decord
 from .utils.video_utils import VideoReaderWrapper
 
 __all__ = [
-    "DataProcessor",
+    "Ernie4_5_VLDataProcessor",
     "fancy_print",
     "VideoReaderWrapper",
     "read_video_decord",
-    "Ernie4_5_VLProcessor",
 ]

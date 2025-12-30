@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import zmq
-from paddleformers.transformers import AutoTokenizer
 from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
@@ -34,7 +33,7 @@ from .image_processor import ImageProcessor
 from .process_video import sample_frames
 
 
-class DataProcessor:
+class Paddleocr_VLDataProcessor:
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
 
@@ -54,14 +53,14 @@ class DataProcessor:
 
     def __init__(
         self,
-        model_path: str,
+        tokenizer=None,
+        model_path: str = "",
         enable_processor_cache: bool = False,
         video_min_frames: int = 4,
         video_max_frames: int = 768,
         video_target_frames: int = -1,
         video_fps: int = -1,
         tokens_per_second: int = 2,
-        tokenizer=None,
         **kwargs,
     ) -> None:
         """
@@ -80,11 +79,7 @@ class DataProcessor:
         self.fps = video_fps
 
         # Initialize tokenizer with left padding and fast tokenizer
-        if tokenizer is None:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
-            self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
-        else:
-            self.tokenizer = tokenizer
+        self.tokenizer = tokenizer
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
         self.enable_processor_cache = enable_processor_cache
 
@@ -597,3 +592,34 @@ class DataProcessor:
             f"req_id:{request.get('request_id', ''), } prompt: {raw_prompt} tokens: {tokens}, token_ids: {token_ids}"
         )
         return token_ids
+
+    def pack_outputs(self, outputs):
+        """
+        Prepare final output dictionary for model.
+
+        Args:
+            outputs: Intermediate processing outputs
+
+        Returns:
+            dict: Packed output dictionary with all required fields
+        """
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position ID
+
+        outputs["image_patch_id"] = self.image_token_id
+        outputs["video_patch_id"] = self.video_token_id
+        outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+        return outputs

@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-from .paddleocr_vl_processor import PaddleOCRVLProcessor
-from .process import DataProcessor
+from .process import Paddleocr_VLDataProcessor
 
-__all__ = ["DataProcessor", "PaddleOCRVLProcessor"]
+__all__ = ["Paddleocr_VLDataProcessor"]

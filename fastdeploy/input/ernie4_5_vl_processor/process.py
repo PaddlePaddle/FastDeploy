@@ -70,7 +70,7 @@ def fancy_print(input_ids, tokenizer, image_patch_id=None):
     return res
 
 
-class DataProcessor:
+class Ernie4_5_VLDataProcessor:
     """
     Processes multimodal chat messages into model-ready inputs,
     handling text, images, and videos with 3D positional embeddings.
@@ -86,8 +86,8 @@ class DataProcessor:
 
     def __init__(
         self,
-        tokenizer_name: str,
-        image_preprocessor_name: str,
+        tokenizer: str = None,
+        image_preprocessor_name: str = None,
         enable_processor_cache: bool = False,
         spatial_conv_size: int = 2,
         temporal_conv_size: int = 2,
@@ -103,8 +103,7 @@ class DataProcessor:
         **kwargs,
     ) -> None:
         # Tokenizer and image preprocessor
-        self.model_name_or_path = tokenizer_name
-        self._load_tokenizer()
+        self.tokenizer = tokenizer
         self.tokenizer.ignored_index = -100
         self.image_preprocessor = AdaptiveImageProcessor.from_pretrained(image_preprocessor_name)
         self.enable_processor_cache = enable_processor_cache
@@ -143,7 +142,7 @@ class DataProcessor:
         self.eos_token_id = self.tokenizer.convert_tokens_to_ids(self.eos_token)
 
         self.token_type_mapping = self._build_token_type_mapping()
-        self.is_training = True
+        self.is_training = False
         self.role_prefixes = {
             "system": "",
             "user": "User: ",
@@ -718,3 +717,34 @@ class DataProcessor:
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
+
+    def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
+        "append already completion tokens"
+
+        num_tokens = len(completion_token_ids)
+        multimodal_inputs["input_ids"].extend(completion_token_ids)
+        multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
+
+        start = multimodal_inputs["cur_position"]
+        for i in range(num_tokens):
+            multimodal_inputs["position_ids"].append([start + i] * 3)
+        multimodal_inputs["cur_position"] += num_tokens
+
+    def pack_outputs(self, outs):
+        # Stack or nullify image-related fields
+        if not outs["images"]:
+            outs["images"] = None
+            outs["grid_thw"] = None
+            outs["image_type_ids"] = None
+        else:
+            outs["images"] = np.vstack(outs["images"])
+            outs["grid_thw"] = np.vstack(outs["grid_thw"])
+            outs["image_type_ids"] = np.array(outs["image_type_ids"])
+
+        outs["image_patch_id"] = self.image_patch_id
+        # Convert lists to arrays
+        outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
+        outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
+        outs["position_ids"] = np.array(outs["position_ids"], dtype=np.int64)
+
+        return outs
