@@ -33,6 +33,7 @@ from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.ops import get_all_visible_devices
+from fastdeploy.config import CacheConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -48,7 +49,7 @@ class PrefixCacheManager:
 
     def __init__(
         self,
-        config,
+        config: CacheConfig,
         tensor_parallel_size,
         splitwise_role="mixed",
         local_data_parallel_id=0,
@@ -1000,7 +1001,8 @@ class PrefixCacheManager:
         task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
-            token_ids=request.prompt_token_ids + request.output_token_ids,
+            token_ids=request.prompt_token_ids
+            + (request.output_token_ids if self.config.enable_output_caching else 0),
             gpu_block_ids=gpu_block_ids,
         )
         tic = time.time()

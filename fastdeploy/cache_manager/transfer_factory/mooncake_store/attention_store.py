@@ -61,7 +61,7 @@ class AttentionStore(KVCacheStorage):
         self.config = AttentionStoreConfig(**args)
 
         try:
-            logger.info(f"Start initializing AttentionStoreSDK with config: {self.config}")
+            logger.info(f"[INIT] Start initializing AttentionStoreSDK with config: {self.config}")
             self.sdk = AttentionStoreSDK(
                 self.config.namespace,
                 self.config.pod_name,
@@ -75,11 +75,10 @@ class AttentionStore(KVCacheStorage):
                 self.config.dp_id,
             )
             self.wait_for_sdk_ready(timeout=300, delta_t=5)
-            logger.info("✅ AttentionStoreSDK is inititialized successfully!")
+            logger.info("[INIT] ✅ AttentionStore is initialized successfully!")
         except Exception as e:
             logger.error(
-                f"❌ AttentionStoreSDK initialization failed, error: {e}, traceback: {traceback.format_exc()}"
-                f"\nconfig: {self.config}"
+                f"[INIT] ❌ AttentionStore initialization failed, error: {e}, traceback:\n{traceback.format_exc()}"
             )
 
     def wait_for_sdk_ready(self, timeout: float, delta_t: float):
@@ -91,7 +90,7 @@ class AttentionStore(KVCacheStorage):
                 return
             except AttentionStoreSDKError as e:
                 if "cuda memory not ready" in str(e):
-                    logger.debug("wait_for_sdk_ready: cuda memory not ready, try again..")
+                    logger.debug("[INIT] cuda memory not ready, try again..")
                     time.sleep(delta_t)
                     continue
                 else:
@@ -104,6 +103,7 @@ class AttentionStore(KVCacheStorage):
 
     def read(
         self,
+        task_id: str,
         key_cache: List[paddle.Tensor],
         val_cache: List[paddle.Tensor],
         token_ids: List[int],
@@ -112,7 +112,7 @@ class AttentionStore(KVCacheStorage):
         timeout: float = 30.0,
     ):
         logger.debug(
-            f"read: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_read_block_idx={start_read_block_idx} timeout={timeout}"
+            f"[READ] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_read_block_idx: {start_read_block_idx} timeout: {timeout}"
         )
         tokens = Tokens(token_ids, self.config.block_token_size)
         k_data_ptrs = [k.data_ptr() for k in key_cache]
@@ -128,13 +128,16 @@ class AttentionStore(KVCacheStorage):
                 gpu_block_ids,
                 timeout,
             )
-            logger.debug(f"read: successfully read {num} blocks")
-        except AttentionStoreSDKError as e:
-            logger.error(f"Failed to execute AttentionStoreSDK read, error: {e}, traceback:\n{traceback.format_exc()}")
+            logger.debug(f"[READ] task_id: {task_id} read_blocks={num}")
+        except AttentionStoreSDKError:
+            logger.error(
+                f"[READ] failed to execute sdk read, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+            )
         return num
 
     def write(
         self,
+        task_id: str,
         key_cache: List[paddle.Tensor],
         val_cache: List[paddle.Tensor],
         token_ids: List[int],
@@ -143,7 +146,7 @@ class AttentionStore(KVCacheStorage):
         timeout: float = 30.0,
     ) -> int:
         logger.debug(
-            f"write: token_ids={token_ids} gpu_block_ids={gpu_block_ids} start_write_block_idx={start_write_block_idx} timeout={timeout}"
+            f"[WRITE] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_write_block_idx: {start_write_block_idx} timeout: {timeout}"
         )
         tokens = Tokens(token_ids, self.config.block_token_size)
         k_data_ptrs = [k.data_ptr() for k in key_cache]
@@ -159,27 +162,29 @@ class AttentionStore(KVCacheStorage):
                 gpu_block_ids,
                 timeout,
             )
-            logger.debug(f"write: successfully wrote {num} blocks")
-        except AttentionStoreSDKError as e:
+            logger.debug(f"[WRITE] task_id: {task_id} written_blocks: {num}")
+        except AttentionStoreSDKError:
             logger.error(
-                f"Failed to execute AttentionStoreSDK write, error: {e}, traceback:\n{traceback.format_exc()}"
+                f"[WRITE] failed to execute sdk write, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
 
-    def query(self, token_ids: List[int], start_match_block_idx: int, timeout: float = 10.0):
+    def query(self, task_id: str, token_ids: List[int], start_match_block_idx: int, timeout: float = 10.0):
         """
         Given the input ids and starting index to match, get the valid blocks number that
         can be prefetched from storage backend.
         """
-        logger.debug(f"query: token_ids={token_ids} start_match_block_idx={start_match_block_idx} timeout={timeout}")
+        logger.debug(
+            f"[QUERY] task_id: {task_id} token_ids: {token_ids} start_match_block_idx: {start_match_block_idx} timeout: {timeout}"
+        )
         tokens = Tokens(token_ids, self.config.block_token_size)
         num = 0
         try:
             num = self.sdk.match(tokens, start_match_block_idx, timeout)
-            logger.debug(f"query: successfully matched {num} blocks")
-        except AttentionStoreSDKError as e:
+            logger.debug(f"[QUERY] task_id: {task_id} matched_blocks: {num}")
+        except AttentionStoreSDKError:
             logger.error(
-                f"Failed to execute AttentionStoreSDK match, error: {e}, traceback:\n{traceback.format_exc()}"
+                f"[QUERY] Failed to execute sdk match, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
 
