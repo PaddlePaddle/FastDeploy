@@ -88,7 +88,8 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         elif quant_config_name == "w4afp8":
             quantization_config["dense_quant_type"] = "block_wise_fp8"
             quantization_config["moe_quant_type"] = "w4afp8"
-            quantization_config["hadamard_block_size"] = 512
+            tp_size = getattr(args, "tensor_parallel_size", 1)
+            quantization_config["hadamard_block_size"] = 512 // tp_size
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:

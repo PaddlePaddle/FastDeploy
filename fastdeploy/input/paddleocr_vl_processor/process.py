@@ -19,6 +19,7 @@ import pickle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import paddle
 import zmq
 from paddleformers.transformers import AutoTokenizer
 from PIL import Image
@@ -26,6 +27,7 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
+from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -34,7 +36,7 @@ from .image_processor import ImageProcessor
 from .process_video import sample_frames
 
 
-class DataProcessor:
+class DataProcessor(MMBaseDataProcessor):
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
 
@@ -74,6 +76,7 @@ class DataProcessor:
             tokens_per_second: Temporal resolution for positional embeddings
             **kwargs: Additional configuration
         """
+        super().__init__()
         self.min_frames = video_min_frames
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
@@ -111,6 +114,26 @@ class DataProcessor:
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
+
+    @staticmethod
+    def mm_num_tokens(grid_thw: list | list[list[int]] | np.ndarray | paddle.Tensor) -> int | list[int]:
+        """
+        Calculate the number of tokens in the multimodal input.
+        """
+        if isinstance(grid_thw, paddle.Tensor):
+            grid_thw = grid_thw.numpy()
+
+        if len(grid_thw) == 0:
+            return 0
+
+        def calc_one(thw):
+            t, h, w = map(int, thw)
+            return t * h * w // 4
+
+        if isinstance(grid_thw[0], (list, tuple, np.ndarray)):
+            return [calc_one(x) for x in grid_thw]
+
+        return calc_one(grid_thw)
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
