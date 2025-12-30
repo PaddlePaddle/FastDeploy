@@ -49,12 +49,9 @@ RECOVERY_STOP_SIGNAL = -3
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
 
-if current_platform.is_xpu():
-    MAX_BSZ = 128
-    K = 5
-else:
-    MAX_BSZ = 512
-    K = 20
+
+MAX_BSZ = 512
+K = 20
 
 
 class TokenProcessor:
