@@ -24,6 +24,7 @@ from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
+from packaging.version import parse as parse_version
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from typing_extensions import assert_never
 
@@ -228,6 +229,13 @@ class ModelConfig:
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
+        # Some exported configs (e.g. Qwen3-VL) embed the text model's configuration under a `text_config` key.
+        if "text_config" in pretrained_config and isinstance(pretrained_config["text_config"], dict):
+            text_fg = pretrained_config.pop("text_config")
+            for key, value in text_fg.items():
+                if not hasattr(self, key):
+                    setattr(self, key, value)
+
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)
@@ -241,6 +249,15 @@ class ModelConfig:
 
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
+
+        # Align external multimodal rope_3d configuration
+        if (
+            hasattr(self, "rope_scaling")
+            and isinstance(self.rope_scaling, dict)
+            and "mrope_section" in self.rope_scaling
+        ):
+            setattr(self, "rope_3d", True)
+            setattr(self, "freq_allocation", self.rope_scaling["mrope_section"][0])
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_end_id = args.get("think_end_id", -1)
@@ -357,7 +374,14 @@ class ModelConfig:
     def read_model_config(self):
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
-            self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
+            with open(config_path, "r", encoding="utf-8") as f:
+                raw_cfg = json.load(f)
+                if "text_config" in raw_cfg and isinstance(raw_cfg["text_config"], dict):
+                    text_cfg = raw_cfg.pop("text_config")
+                    for k, v in text_cfg.items():
+                        if k not in raw_cfg:
+                            raw_cfg[k] = v
+            self.model_config = raw_cfg
             if "torch_dtype" in self.model_config and "dtype" in self.model_config:
                 raise ValueError(
                     "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "
@@ -366,10 +390,17 @@ class ModelConfig:
                 )
             elif "torch_dtype" in self.model_config:
                 self.model_format = "torch"
-                logger.info("The model format is Hugging Face")
+                logger.info("The model format is Hugging Face Torch")
             elif "dtype" in self.model_config:
-                self.model_format = "paddle"
-                logger.info("The model format is Paddle")
+                # https://github.com/huggingface/transformers/releases/tag/v4.56.0  Transformers 4.56.0 version deprecated torch_dtype
+                if "transformers_version" in self.model_config and parse_version(
+                    self.model_config["transformers_version"]
+                ) > parse_version("4.56.0"):
+                    self.model_format = "torch"
+                    logger.info("The model format is Hugging Face Torch")
+                else:
+                    self.model_format = "paddle"
+                    logger.info("The model format is Paddle")
             else:
                 raise ValueError(
                     "Unknown model format. Please ensure your config.json contains "

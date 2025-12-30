@@ -21,8 +21,8 @@ import numpy as np
 from PIL import Image
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
-from fastdeploy.input.qwen_vl_processor.process_video import sample_frames
+from fastdeploy.input.qwen3_vl_processor import Qwen3VLProcessor
+from fastdeploy.input.qwen3_vl_processor.process import sample_frames
 
 
 def mock_pil_image(height, width):
@@ -76,7 +76,7 @@ def mock_read_frames(height: int, width: int, nums_frame: int, fps: int):
     return frames, meta
 
 
-class TestQwenVLProcessor(unittest.TestCase):
+class TestQwen3VLProcessor(unittest.TestCase):
     """
     Unit tests for Qwen Vision-Language Processor functionality
     """
@@ -102,19 +102,16 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.patcher_parse_video.start()
 
         self.patcher_read_frames = patch(
-            "fastdeploy.input.qwen_vl_processor.process.DataProcessor._load_and_process_video",
+            "fastdeploy.input.qwen3_vl_processor.process.DataProcessor._load_and_process_video",
             return_value=mock_read_frames(480, 640, 5, 2),
         )
         self.patcher_read_frames.start()
 
-        mm_processor_kwargs = {
-            "video_max_frames": 10,
-            "video_min_frames": 1,
-        }
+        mm_processor_kwargs = {"video_max_frames": 10, "video_min_frames": 1}
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        self.model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
-        self.processor = QwenVLProcessor(
+        self.model_name_or_path = "/ModelData/Qwen3-VL-4B-Instruct"
+        self.processor = Qwen3VLProcessor(
             config=config,
             model_name_or_path=self.model_name_or_path,
             limit_mm_per_prompt=limit_mm_per_prompt,
@@ -204,26 +201,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
-
-    def test_process_request_dict_enable_thinking(self):
-        num_completion_token_ids = 10
-        request = {
-            "request_id": "12345",
-            "completion_token_ids": [1] * num_completion_token_ids,
-            "stop": ["stop", "eof"],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                    ],
-                }
-            ],
-            "chat_template_kwargs": {"enable_thinking": True},
-        }
-
-        result = self.processor.process_request_dict(request, 100)
-        self.assertEqual(result.get("enable_thinking"), False)
 
     def test_prompt(self):
         """
@@ -366,30 +343,78 @@ class TestQwenVLProcessor(unittest.TestCase):
         # Verify both methods produce identical prompt strings
         self.assertEqual(prompt, prompt2)
 
-    def test_think_status(self):
-        """测试 思考机制"""
-        request = {
-            "prompt": "hello",
-            "request_id": "test_1",
-            "prompt_token_ids": [1, 2, 3],
-            "temperature": 0.7,
-            "top_p": 0.9,
-        }
-        self.processor.reasoning_parser = MagicMock()
-        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
-        self.processor.model_status_dict = {}
-        self.processor.process_request_dict(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+    def test_add_processed_image(self):
+        """
+        Test DataProcessor._add_processed_image via Qwen3VLProcessor
+        """
+        merge_size = self.processor.processor.image_processor.merge_size
 
-        request = {
-            "prompt": "hello",
-            "request_id": "test",
-            "prompt_token_ids": [1, 2, 3],
-            "temperature": 0.7,
-            "top_p": 0.9,
+        # shape[0] must be divisible by merge_size^2
+        num_tokens = 4
+        img = np.zeros(
+            (num_tokens * merge_size * merge_size, 3, 3),
+            dtype=np.float32,
+        )
+        meta = {
+            "thw": (1, 8, 8),
         }
-        self.processor.process_request_dict(request, max_model_len=512)
-        self.assertEqual(request["enable_thinking"], True)
+        uuid = "test-image-uuid"
+
+        img_cache = (img, meta)
+
+        outputs = {
+            "mm_positions": [],
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "cur_position": 5,
+            "images": [],
+            "mm_hashes": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "fps": [],
+        }
+
+        # -----------------------
+        # mock vision position computation
+        # -----------------------
+        dp = self.processor.processor
+        dp.image_patch_id = dp.image_token_id
+        dp._compute_vision_positions = MagicMock(return_value=np.array([[10, 11, 12]], dtype=np.int64))
+
+        dp._add_processed_image(img_cache, outputs, uuid)
+
+        # ---- input_ids / token_type_ids ----
+        self.assertEqual(len(outputs["input_ids"]), num_tokens)
+        self.assertEqual(
+            outputs["input_ids"],
+            [self.processor.image_patch_id] * num_tokens,
+        )
+
+        # ---- mm_positions ----
+        self.assertEqual(len(outputs["mm_positions"]), 1)
+        mm_pos = outputs["mm_positions"][0]
+        self.assertEqual(mm_pos.length, num_tokens)
+
+        # ---- vision positions ----
+        dp._compute_vision_positions.assert_called_once_with(5, 1, 8, 8, 0)
+        np.testing.assert_array_equal(
+            outputs["position_ids"][0],
+            np.array([[10, 11, 12]], dtype=np.int64),
+        )
+        self.assertEqual(outputs["cur_position"], 13)
+
+        # ---- image payload ----
+        self.assertEqual(len(outputs["images"]), 1)
+        np.testing.assert_array_equal(outputs["images"][0], img)
+
+        self.assertEqual(outputs["mm_hashes"], [uuid])
+        np.testing.assert_array_equal(
+            outputs["grid_thw"][0],
+            np.array([[1, 8, 8]]),
+        )
+        self.assertEqual(outputs["image_type_ids"], [0])
+        self.assertEqual(outputs["fps"], [0])
 
     def test_parse_processor_kwargs_valid(self):
         """Test _parse_processor_kwargs with valid input"""

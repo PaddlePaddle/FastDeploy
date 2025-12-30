@@ -28,6 +28,7 @@ class TestCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[1], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], []],
             "stop_flags": paddle.to_tensor([[False], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3"],
@@ -55,6 +56,7 @@ class TestCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[1], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], []],
             "stop_flags": paddle.to_tensor([[False], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3"],
@@ -82,6 +84,7 @@ class TestCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[1], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], []],
             "stop_flags": paddle.to_tensor([[True], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3"],
@@ -111,6 +114,7 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[2], [2], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], [], []],
             "stop_flags": paddle.to_tensor([[False], [False], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3", "req_4"],
@@ -130,8 +134,6 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
 
         speculate_calculate_logits_entropy(logits, share_inputs, temperature)
 
-        print(share_inputs["entropy_list"])
-
         self.assertEqual(len(share_inputs["entropy_list"][0]), 2)
         self.assertEqual(len(share_inputs["entropy_list"][1]), 1)
         self.assertEqual(len(share_inputs["entropy_list"][2]), 0)
@@ -145,6 +147,7 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[2], [2], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], [], []],
             "stop_flags": paddle.to_tensor([[False], [False], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3", "req_4"],
@@ -164,8 +167,6 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
 
         speculate_calculate_logits_entropy(logits, share_inputs, temperature)
 
-        print(share_inputs["entropy_list"])
-
         self.assertEqual(len(share_inputs["entropy_list"][0]), 2)
         self.assertEqual(len(share_inputs["entropy_list"][1]), 1)
         self.assertEqual(len(share_inputs["entropy_list"][2]), 0)
@@ -179,6 +180,7 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
         share_inputs = {
             "seq_lens_this_time": paddle.to_tensor([[2], [2], [0], [15]], dtype="int32"),
             "seq_lens_encoder": paddle.to_tensor([[0], [0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [30], [0], [15]], dtype="int32"),
             "entropy_list": [[], [], [], []],
             "stop_flags": paddle.to_tensor([[True], [False], [True], [False]], dtype="bool"),
             "req_ids": ["req_1", "req_2", "req_3", "req_4"],
@@ -197,8 +199,6 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
         temperature = paddle.ones([3], dtype="float32")
 
         speculate_calculate_logits_entropy(logits, share_inputs, temperature)
-
-        print(share_inputs["entropy_list"])
 
         self.assertEqual(len(share_inputs["entropy_list"][0]), 0)
         self.assertEqual(len(share_inputs["entropy_list"][1]), 1)
