@@ -544,12 +544,6 @@ class ResourceManagerV1(ResourceManager):
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
-            info = (
-                f"{self.info()}, running_num: {len(self.running)}, waiting_num: {len(self.waiting)}, "
-                f"preempted_num: {len(self.to_be_rescheduled_request_id_set)}"
-            )
-            llm_logger.debug(f"{info}")
-
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0
