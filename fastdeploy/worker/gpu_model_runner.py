@@ -1596,7 +1596,7 @@ class GPUModelRunner(ModelRunnerBase):
         from fastdeploy import envs
 
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
-        for i in range(self.model_config.num_hidden_layers + self.speculative_config.num_extra_cache_layer):
+        for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"

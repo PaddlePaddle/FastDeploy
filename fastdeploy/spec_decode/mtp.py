@@ -45,6 +45,7 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
+        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -238,22 +239,40 @@ class MTPProposer(Proposer):
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"key_caches_{i}"], f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 self.cache_kvs[f"value_caches_{i}"] = paddle.full(
                     shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"value_caches_{i}"], f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 if kv_cache_quant_type == "block_wise_fp8":
                     self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"key_cache_scales_{i}"],
+                        f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
                     self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"value_cache_scales_{i}"],
+                        f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
