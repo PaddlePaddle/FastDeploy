@@ -287,13 +287,26 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
 
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
+        # combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
+        #     hidden_states,
+        #     topk_idx,
+        #     topk_weights,
+        #     handle,
+        #     async_finish=False,
+        #     return_recv_hook=True,
+        # )
+        print("hidden_states ", hidden_states)
+        print("topk_idx ", topk_idx)
+        print("topk_weights ", topk_weights)
+        print("handle ", handle)
+
         combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
             handle,
             async_finish=False,
-            return_recv_hook=True,
+            return_recv_hook=False,
         )
         print("============after low_latency_combine")
         return combined_hidden_states, combine_hook

@@ -541,6 +541,8 @@ class XPUMoEMethod(MoEMethodBase):
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         print("===========before decode dispatch")
+        print("topk_idx ", topk_idx)
+        print("x ", x)
         # 2. EP Dispatch
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
             use_fp8 = True
