@@ -394,7 +394,6 @@ __device__ __forceinline__ void compute_qk_c8(smem_t* q_smem,
 }
 
 template <typename T,
-          bool partition_kv,
           bool causal,
           uint32_t group_size,
           uint32_t num_warps,
@@ -606,7 +605,7 @@ __device__ __forceinline__ void compute_sfm_v_c8_iter_sq_bvec(
 }
 
 template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
-__device__ __forceinline__ void merge_block_res_v2(
+__device__ __forceinline__ void merge_block_res(
     float (*o_frag)[num_frags_y][8],
     float* md_smem,
     float (*m)[2],
@@ -717,66 +716,15 @@ __device__ __forceinline__ void merge_block_res_v2(
   }
 }
 
-template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
-__device__ __forceinline__ void merge_block_res_v21(
-    float (*o_frag)[num_frags_y][8],
-    float* md_smem,
-    float (*m)[2],
-    float (*d)[2],
-    const uint32_t wid,
-    const uint32_t tid) {
-  float2* smem_md = reinterpret_cast<float2*>(
-      md_smem + num_frags_x * num_frags_y * 1024);  // 4 * 32 * 8
+template <uint32_t num_frags_x, uint32_t num_frags_y>
+__device__ __forceinline__ void normalize_d(float (*o_frag)[num_frags_y][8],
+                                            float (*d)[2]) {
+  float d_rcp[num_frags_x][2];
 #pragma unroll
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
 #pragma unroll
     for (uint32_t j = 0; j < 2; ++j) {
-      smem_md[((wid * num_frags_x + fx) * 2 + j) * 32 + tid] =
-          make_float2(m[fx][j], d[fx][j]);
-    }
-  }
-#pragma unroll
-  for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
-#pragma unroll
-    for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
-      *(reinterpret_cast<float4*>(
-          md_smem + (((wid * num_frags_x + fx) * num_frags_y + fy) * 32 + tid) *
-                        8)) = *(reinterpret_cast<float4*>(&o_frag[fx][fy][0]));
-      *(reinterpret_cast<float4*>(
-          md_smem +
-          (((wid * num_frags_x + fx) * num_frags_y + fy) * 32 + tid) * 8 + 4)) =
-          *(reinterpret_cast<float4*>(&o_frag[fx][fy][4]));
-    }
-  }
-  __syncthreads();
-  float o_scale[4][num_frags_x][2];
-
-  // deal md/scale
-#pragma unroll
-  for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
-#pragma unroll
-    for (uint32_t j = 0; j < 2; ++j) {
-      float m_new;
-      float d_new = 1.f;
-      if constexpr (std::is_same<T, half>::value) {
-        m_new = -5e4f;
-      } else {
-        m_new = -3.0e+30f;
-      }
-#pragma unroll
-      for (uint32_t i = 0; i < 4; ++i) {
-        float2 md = smem_md[((i * num_frags_x + fx) * 2 + j) * 32 + tid];
-        float m_prev = m_new, d_prev = d_new;
-        m_new = max(m_new, md.x);
-        d_new = d_prev * __expf(m_prev - m_new) + md.y * __expf(md.x - m_new);
-      }
-#pragma unroll
-      for (uint32_t i = 0; i < 4; ++i) {
-        float2 md = smem_md[((i * num_frags_x + fx) * 2 + j) * 32 + tid];
-        o_scale[i][fx][j] = __expf(md.x - m_new);
-      }
-      m[fx][j] = m_new;
-      d[fx][j] = d_new;
+      d_rcp[fx][j] = 1.f / d[fx][j];
     }
   }
 
@@ -784,28 +732,11 @@ __device__ __forceinline__ void merge_block_res_v21(
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
 #pragma unroll
     for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
-      // num_warps * 32 * 8 each time
-      AlignedVector<float, 8> o_new;
-#pragma
-      for (uint32_t o_id = 0; o_id < 4; ++o_id) {
-        *(reinterpret_cast<float2*>(&o_new[o_id * 2])) = make_float2(0.f, 0.f);
-      }
 #pragma unroll
-      for (uint32_t i = 0; i < 4; ++i) {
-        AlignedVector<float, 8> oi;
-        Load<float, 8>(
-            md_smem +
-                (((i * num_frags_x + fx) * num_frags_y + fy) * 32 + tid) * 8,
-            &oi);
-#pragma unroll
-        for (uint32_t reg_id = 0; reg_id < 8; ++reg_id) {
-          o_new[reg_id] += oi[reg_id] * o_scale[i][fx][(reg_id % 4) / 2];
-        }
+      for (uint32_t reg_id = 0; reg_id < 8; ++reg_id) {
+        o_frag[fx][fy][reg_id] =
+            o_frag[fx][fy][reg_id] * d_rcp[fx][(reg_id % 4) / 2];
       }
-      *(reinterpret_cast<float4*>(&o_frag[fx][fy][0])) =
-          *(reinterpret_cast<float4*>(&o_new[0]));
-      *(reinterpret_cast<float4*>(&o_frag[fx][fy][4])) =
-          *(reinterpret_cast<float4*>(&o_new[4]));
     }
   }
 }
@@ -941,9 +872,8 @@ struct prefill_softmax_state_t {
 template <typename T,
           int vec_size,
           uint32_t bdy,
-          uint32_t HEAD_DIM,
-          typename OutT = T>
-__global__ void merge_multi_chunks_v2_kernel(
+          uint32_t HEAD_DIM>
+__global__ void merge_chunks_kernel(
     const T* __restrict__ multi_out,    // [token_num, num_chunks, num_heads,
                                         // head_dim]
     const float* __restrict__ multi_m,  // [token_num, num_chunks, num_heads]
@@ -957,7 +887,7 @@ __global__ void merge_multi_chunks_v2_kernel(
     const T* __restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     const T* __restrict__ sinks,          // [q_num_heads]
     const int* __restrict__ chunk_size_ptr,
-    OutT* __restrict__ out,
+    T* __restrict__ out,
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
@@ -990,98 +920,109 @@ __global__ void merge_multi_chunks_v2_kernel(
     using LoadT = AlignedVector<T, vec_size>;
     LoadT load_vec;
     LoadT res_vec;
-    if constexpr (std::is_same<T, half>::value) {
-#pragma unroll
-      for (int i = 0; i < vec_size / 2; ++i) {
-        *((half2*)(&res_vec) + i) = make_half2(0, 0);
+    if (num_chunks_this_seq == 1) {
+      if (ty == 0) {
+        uint32_t offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks *
+                        num_heads + hid) * head_dim + vid * vec_size;
+        Load<T, vec_size>(&multi_out[offset], &load_vec);
+        Store<T, vec_size>(
+            load_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
       }
     } else {
-#pragma unroll
-      for (int i = 0; i < vec_size / 2; ++i) {
-        *((nv_bfloat162*)(&res_vec) + i) = make_bfloat162(0, 0);
-      }
-    }
-    float m;
-    float d = 1.f;
-    if constexpr (std::is_same<T, half>::value) {
-      m = -5e4f;
-    } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-      m = -3.0e+30f;
-    }
-#pragma unroll 2
-    for (int i = ty; i < num_chunks_this_seq; i += bdy) {
-      uint32_t offset;
-
-      offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks + i) *
-                   num_heads +
-               hid;
-      float m_prev = m;
-      float d_prev = d;
-      const float m_now = multi_m[offset];
-      const float d_now = multi_d[offset];
-      m = max(m_prev, m_now);
-
-      offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks *
-                    num_heads +
-                i * num_heads + hid) *
-                   head_dim +
-               vid * vec_size;
-      Load<T, vec_size>(&multi_out[offset], &load_vec);
-      const float scale1 = expf(m_prev - m), scale2 = expf(m_now - m);
-      const T scale1_T = static_cast<T>(scale1),
-              scale2_T = static_cast<T>(scale2);
-      d = d * scale1 + d_now * scale2;
-#pragma unroll
-      for (int j = 0; j < vec_size; j++) {
-        res_vec[j] = res_vec[j] * scale1_T + load_vec[j] * scale2_T;
-      }
-    }
-    // store ty res
-    Store<T, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
-    md_smem[2 * ty] = m;
-    md_smem[2 * ty + 1] = d;
-    __syncthreads();
-    if (ty == 0) {
-      // merge bdy
-      prefill_softmax_state_t<vec_size, T> st;
-      st.init();
-#pragma unroll
-      for (int i = 0; i < bdy; i++) {
-        Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
-        const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
-        st.merge(load_vec, m_tmp, d_tmp);
-      }
-
-      if (sinks) {
-        float current_sink = static_cast<float>(sinks[hid]);
-        st.normalize(current_sink);
+      
+      if constexpr (std::is_same<T, half>::value) {
+  #pragma unroll
+        for (int i = 0; i < vec_size / 2; ++i) {
+          *((half2*)(&res_vec) + i) = make_half2(0, 0);
+        }
       } else {
-        st.normalize();
+  #pragma unroll
+        for (int i = 0; i < vec_size / 2; ++i) {
+          *((nv_bfloat162*)(&res_vec) + i) = make_bfloat162(0, 0);
+        }
       }
+      float m;
+      float d = 1.f;
+      if constexpr (std::is_same<T, half>::value) {
+        m = -5e4f;
+      } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
+        m = -3.0e+30f;
+      }
+  #pragma unroll 2
+      for (int i = ty; i < num_chunks_this_seq; i += bdy) {
+        uint32_t offset;
 
-      const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
-      AlignedVector<T, vec_size> shift_bias_vec;
-      AlignedVector<T, vec_size> smooth_weight_vec;
-      AlignedVector<OutT, vec_size> out_vec;
-      if (shift_bias) {
-        Load<T, vec_size>(shift_bias + shift_smooth_offset, &shift_bias_vec);
-        Load<T, vec_size>(smooth_weight + shift_smooth_offset,
-                          &smooth_weight_vec);
-      }
+        offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks + i) *
+                    num_heads +
+                hid;
+        float m_prev = m;
+        float d_prev = d;
+        const float m_now = multi_m[offset];
+        const float d_now = multi_d[offset];
+        m = max(m_prev, m_now);
 
-#pragma unroll
-      for (int i = 0; i < vec_size; ++i) {
-        StoreFunc<T, vec_size, OutT>()(st.o,
-                                       shift_bias_vec,
-                                       smooth_weight_vec,
-                                       out_vec,
-                                       quant_max_bound,
-                                       quant_min_bound,
-                                       in_scale,
-                                       i);
+        offset = ((bid * max_tokens_per_batch + local_seq_id) * num_chunks *
+                      num_heads +
+                  i * num_heads + hid) *
+                    head_dim +
+                vid * vec_size;
+        Load<T, vec_size>(&multi_out[offset], &load_vec);
+        const float scale1 = expf(m_prev - m), scale2 = expf(m_now - m);
+        const T scale1_T = static_cast<T>(scale1),
+                scale2_T = static_cast<T>(scale2);
+        d = d * scale1 + d_now * scale2;
+  #pragma unroll
+        for (int j = 0; j < vec_size; j++) {
+          res_vec[j] = res_vec[j] * scale1_T + load_vec[j] * scale2_T;
+        }
       }
-      Store<OutT, vec_size>(
-          out_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
+      // store ty res
+      Store<T, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
+      md_smem[2 * ty] = m;
+      md_smem[2 * ty + 1] = d;
+      __syncthreads();
+      if (ty == 0) {
+        // merge bdy
+        prefill_softmax_state_t<vec_size, T> st;
+        st.init();
+  #pragma unroll
+        for (int i = 0; i < bdy; i++) {
+          Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
+          const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
+          st.merge(load_vec, m_tmp, d_tmp);
+        }
+
+        if (sinks) {
+          float current_sink = static_cast<float>(sinks[hid]);
+          st.normalize(current_sink);
+        } else {
+          st.normalize();
+        }
+
+        const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
+        AlignedVector<T, vec_size> shift_bias_vec;
+        AlignedVector<T, vec_size> smooth_weight_vec;
+        AlignedVector<T, vec_size> out_vec;
+        if (shift_bias) {
+          Load<T, vec_size>(shift_bias + shift_smooth_offset, &shift_bias_vec);
+          Load<T, vec_size>(smooth_weight + shift_smooth_offset,
+                            &smooth_weight_vec);
+        }
+
+  #pragma unroll
+        for (int i = 0; i < vec_size; ++i) {
+          StoreFunc<T, vec_size, T>()(st.o,
+                                        shift_bias_vec,
+                                        smooth_weight_vec,
+                                        out_vec,
+                                        quant_max_bound,
+                                        quant_min_bound,
+                                        in_scale,
+                                        i);
+        }
+        Store<T, vec_size>(
+            out_vec, &out[(qid * num_heads + hid) * head_dim + vid * vec_size]);
+      }
     }
     __syncthreads();
   }

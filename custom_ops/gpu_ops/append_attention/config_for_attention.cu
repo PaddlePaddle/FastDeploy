@@ -126,7 +126,7 @@ __global__ void config_decode_attn(const int *__restrict__ seq_lens_this_time,
   if (tid == 0 && wid == 0) {
     if (num_block_all_shared[0] <= config_gridx) {
       chunk_size_best = min_chunk_size;
-      num_block_all_best = num_block_all_shared[block_size - 1];
+      num_block_all_best = num_block_all_shared[0];
     } else if (num_block_all_shared[block_size - 1] >= config_gridx) {
       chunk_size_best = min_chunk_size * block_size;
       num_block_all_best = num_block_all_shared[block_size - 1];
@@ -251,7 +251,7 @@ void ConfigForAttention(
   auto max_len_cpu_ptr = max_len_tensor_cpu.data<int>();
   int max_just_dec_len_this_time = max_len_cpu_ptr[4];
 
-  const uint32_t block_indices_ele_num = block_indices.shape()[0];
+  const uint32_t block_indices_ele_num = block_indices.size();
 
   // decoder
   if (max_just_dec_len_this_time > 0) {

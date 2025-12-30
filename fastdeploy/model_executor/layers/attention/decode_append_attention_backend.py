@@ -66,7 +66,11 @@ class DecodeAppendAttentionBackend(AttentionBackend):
     def __init__(
         self,
         fd_config: FDConfig,
-        max_batch_size: int,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ) -> None:
         """
         AppendAttentionBackend __init__
@@ -85,23 +89,16 @@ class DecodeAppendAttentionBackend(AttentionBackend):
             self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
-        self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
+        self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens if self.speculative_method is not None else 0
         self.max_tokens_per_batch = self.speculate_max_draft_token_num + 1
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
 
-        self.num_heads: int = (
-            fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
-        )
-        self.model_config.kv_num_heads = max(
-            1,
-            int(fd_config.model_config.num_key_value_heads) // fd_config.parallel_config.tensor_parallel_size,
-        )
-        self.head_dim: int = fd_config.model_config.head_dim
-
-        self.kv_num_heads: int = self.model_config.kv_num_heads
+        self.kv_num_heads: int = kv_num_heads
+        self.num_heads: int = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
+
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
@@ -114,11 +111,11 @@ class DecodeAppendAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
         self.fd_config = fd_config
-        self.max_batch_size = max_batch_size
-        self.buffer: dict = self.allocate_buffer()
+        self.buffer: dict = {}
 
-    def allocate_buffer(
+    def init_buffer(
         self,
+        max_batch_size: int,
     ) -> dict:
         # Initialize AttentionBackend buffers
         assert self.num_heads % self.kv_num_heads == 0
@@ -129,31 +126,29 @@ class DecodeAppendAttentionBackend(AttentionBackend):
 
         q_tile_size = 16 if self.max_tokens_per_batch * self.group_size <= 16 else 32
         q_tile_num = (self.max_tokens_per_batch * self.group_size + q_tile_size - 1) // q_tile_size
-        buffer = {}
-        buffer["max_len_tensor_cpu"] = paddle.full([5], 0, dtype="int32")
+        self.buffer["max_len_tensor_cpu"] = paddle.full([6], 0, dtype="int32").cpu()
         # block_indices: Launched block's indices with 4 dimensions [batch_idx, kv_head_idx, chunk_idx, q_tile_idx] in decode append attention backend
-        buffer["block_indices"] = paddle.full(
-            [self.max_batch_size * self.kv_num_heads * max_num_chunk * q_tile_num, 4], 0, dtype="int32"
+        self.buffer["block_indices"] = paddle.full(
+            [max_batch_size * self.kv_num_heads * max_num_chunk * q_tile_num, 4], 0, dtype="int32"
         )
         # num_blocks: Number of Launched blocks in decode append attention backend, researched by config_for_attention op
-        buffer["num_blocks"] = paddle.full([1], 0, dtype="int32")
+        self.buffer["num_blocks"] = paddle.full([1], 0, dtype="int32")
         # chunk_size: Chunk size for split kv cache in decode append attention backend, researched by config_for_attention op
-        buffer["chunk_size"] = paddle.full([1], 0, dtype="int32")
+        self.buffer["chunk_size"] = paddle.full([1], 0, dtype="int32")
         # tmp_workspace: Workspace tensor for temporary store the result before merging in decode append attention backend
-        buffer["tmp_workspace"] = paddle.full(
-            [self.max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_heads * self.head_dim],
+        self.buffer["tmp_workspace"] = paddle.full(
+            [max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_heads * self.head_dim],
             0,
-            dtype=self.attention_metadata._dtype,
+            dtype=paddle.get_default_dtype(),
         )
         # tmp_m: Tmp_m tensor for temporary store the max value before merging in decode append attention backend
-        buffer["tmp_m"] = paddle.full(
-            [self.max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_head], 0, dtype="float32"
+        self.buffer["tmp_m"] = paddle.full(
+            [max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_heads], 0, dtype="float32"
         )
         # tmp_d: Tmp_d tensor for temporary store the exponential sum before merging in decode append attention backend
-        buffer["tmp_d"] = paddle.full(
-            [self.max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_head], 0, dtype="float32"
+        self.buffer["tmp_d"] = paddle.full(
+            [max_batch_size * self.max_tokens_per_batch, max_num_chunk, self.num_heads], 0, dtype="float32"
         )
-        return buffer
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -241,7 +236,6 @@ class DecodeAppendAttentionBackend(AttentionBackend):
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if layer.layer_id == 0:
-            # print(forward_meta.seq_lens_this_time)
             config_for_attention(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -265,7 +259,7 @@ class DecodeAppendAttentionBackend(AttentionBackend):
             forward_meta.batch_id_per_token,
             forward_meta.cu_seqlens_q,
             forward_meta.block_tables,
-            forward_meta.set_max_lengths,
+            self.buffer["max_len_tensor_cpu"],
             forward_meta.rotary_embs,
             getattr(layer, "qkv_bias", None),
             cache_k_scales,

@@ -59,7 +59,7 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& sinks,
-    const std::string& cache_quant_type_str,
+    const std::string& cache_quant_type,
     const int max_input_length,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -74,7 +74,7 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
   meta_data.kv_num_heads = key_cache_dims[1];
   meta_data.head_dims = key_cache_dims[3];
   // TODO: trick method support c4, add attr head_dims in the future
-  if (cache_quant_type_str == "cache_int4_zp") {
+  if (cache_quant_type == "cache_int4_zp") {
     meta_data.head_dims *= 2;
   }
   const int total_num_head =
@@ -100,9 +100,9 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
   const int max_kv_len_this_time = set_max_lengths.data<int>()[5];
 
   auto stream = qkv.stream();
-  bool is_fp8 = cache_quant_type_str == "cache_fp8" or
-                cache_quant_type_str == "block_wise_fp8";
-  bool is_dynamic_cfp8 = cache_quant_type_str == "block_wise_fp8";
+  bool is_fp8 = cache_quant_type == "cache_fp8" ||
+                  cache_quant_type == "block_wise_fp8";
+  bool is_dynamic_cfp8 = cache_quant_type == "block_wise_fp8";
 
   if (max_just_dec_len_this_time > 0) {
     DISPATCH_CAUSAL(
@@ -143,10 +143,10 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
                                       tmp_m,
                                       tmp_d,
                                       attn_mask,
-                                      cache_quant_type_str == "block_wise_fp8"
+                                      cache_quant_type == "block_wise_fp8"
                                           ? cache_k_quant_scales.get()
                                           : cache_k_dequant_scales.get(),
-                                      cache_quant_type_str == "block_wise_fp8"
+                                      cache_quant_type == "block_wise_fp8"
                                           ? cache_v_quant_scales.get()
                                           : cache_v_dequant_scales.get(),
                                       sinks,
@@ -186,10 +186,10 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
                                       tmp_m,
                                       tmp_d,
                                       attn_mask,
-                                      cache_quant_type_str == "block_wise_fp8"
+                                      cache_quant_type == "block_wise_fp8"
                                           ? cache_k_quant_scales.get()
                                           : cache_k_dequant_scales.get(),
-                                      cache_quant_type_str == "block_wise_fp8"
+                                      cache_quant_type == "block_wise_fp8"
                                           ? cache_v_quant_scales.get()
                                           : cache_v_dequant_scales.get(),
                                       sinks,
@@ -249,7 +249,7 @@ std::vector<std::vector<int64_t>> DecodeAppendAttentionInferShape(
     const paddle::optional<std::vector<int64_t>>& cache_v_zp_shape,
     const paddle::optional<std::vector<int64_t>>& mask_offset_shape,
     const paddle::optional<std::vector<int64_t>>& sinks_shape,
-    const std::string& cache_quant_type_str,
+    const std::string& cache_quant_type,
     const int max_input_length,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -259,7 +259,7 @@ std::vector<std::vector<int64_t>> DecodeAppendAttentionInferShape(
   const int token_num = qkv_shape[0];
   const int kv_num_heads = key_cache_shape[1];
   int head_dim = key_cache_shape[3];
-  if (cache_quant_type_str == "cache_int4_zp") {
+  if (cache_quant_type == "cache_int4_zp") {
     head_dim *= 2;
   }
   const int total_num_head = qkv_shape[qkv_shape.size() - 1] / head_dim;
@@ -293,7 +293,7 @@ std::vector<paddle::DataType> DecodeAppendAttentionInferDtype(
     const paddle::optional<paddle::DataType>& cache_v_zp_dtype,
     const paddle::optional<paddle::DataType>& mask_offset_dtype,
     const paddle::optional<paddle::DataType>& sinks_dtype,
-    const std::string& cache_quant_type_str,
+    const std::string& cache_quant_type,
     const int max_input_length,
     const float quant_max_bound,
     const float quant_min_bound,
