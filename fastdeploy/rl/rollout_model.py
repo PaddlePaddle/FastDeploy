@@ -47,6 +47,10 @@ from fastdeploy.model_executor.models.qwen3 import (
     Qwen3ForCausalLM,
     Qwen3PretrainedModel,
 )
+from fastdeploy.model_executor.models.qwen3_vl.qwen3_vl import (
+    Qwen3VLForConditionalGeneration,
+    Qwen3VLPretrainedModel,
+)
 from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
@@ -530,6 +534,54 @@ class Qwen2_5_VLForConditionalGenerationRL(Qwen2_5_VLForConditionalGeneration, B
     def name(self) -> str:
         """name"""
         return "Qwen2_5_VLForConditionalGenerationRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx):
+            # FFN mappings
+            for ph in place_holders:
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
+                    f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                )
+
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
+
+
+class Qwen3VLForConditionalGenerationRL(Qwen3VLForConditionalGeneration, BaseRLModel):
+    """
+    Qwen3VLForConditionalGenerationRL
+    """
+
+    _get_tensor_parallel_mappings = Qwen3VLPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Qwen3VLForConditionalGenerationRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Qwen3VLForConditionalGenerationRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         if self._mappings_built:

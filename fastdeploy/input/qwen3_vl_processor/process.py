@@ -16,7 +16,7 @@
 """
 
 import pickle
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -24,7 +24,7 @@ import zmq
 from paddleformers.transformers import AutoTokenizer
 from PIL import Image
 
-from fastdeploy.engine.request import ImagePosition, Request
+from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
@@ -32,13 +32,91 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor
-from .process_video import sample_frames
+from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
 
+VIDEO_MIN_PIXELS = 128 * 28 * 28
+VIDEO_MAX_PIXELS = 768 * 28 * 28
 FRAME_FACTOR = 2
 FPS = 2.0
 FPS_MIN_FRAMES = 4
 FPS_MAX_FRAMES = 768
+
+
+def sample_frames(
+    frame_factor: int,
+    min_frames: int,
+    max_frames: int,
+    metadata: Optional[dict] = None,
+    fps: Optional[Union[int, float]] = -1,
+    num_frames: Optional[int] = -1,
+):
+    """
+    Sample frames from video according to specified criteria.
+
+    Args:
+        frame_factor: Ensure sampled frames are multiples of this factor
+        min_frames: Minimum number of frames to sample
+        max_frames: Maximum number of frames to sample
+        metadata: Video metadata containing fps information
+        fps: Target frames per second for sampling
+        num_frames: Exact number of frames to sample
+
+    Returns:
+        np.ndarray: Sampled video frames
+
+    Raises:
+        ValueError: If both fps and num_frames are specified,
+                   or if required metadata is missing,
+                   or if requested frames exceed available frames
+    """
+    if fps > 0 and num_frames > 0:
+        raise ValueError("`num_frames` and `fps` are mutually exclusive arguments, please use only one!")
+
+    total_num_frames = metadata["num_of_frame"]
+
+    # If num_frames is not given but fps is, calculate num_frames from fps
+    if num_frames > 0:
+        num_frames = round(num_frames / frame_factor) * frame_factor
+    elif fps > 0:
+        if metadata is None:
+            raise ValueError(
+                "Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. "
+                "Please pass in `VideoMetadata` object or use a fixed `num_frames` per input video"
+            )
+        # max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
+        min_frames = ceil_by_factor(min_frames, frame_factor)
+        max_frames = floor_by_factor(min(max_frames, total_num_frames), frame_factor)
+
+        num_frames = total_num_frames / metadata["fps"] * fps
+
+        if num_frames > total_num_frames:
+            data_processor_logger.warning(f"smart_nframes: nframes[{num_frames}] > total_frames[{total_num_frames}]")
+
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
+        num_frames = floor_by_factor(num_frames, frame_factor)
+
+    if num_frames > total_num_frames:
+        raise ValueError(
+            f"Video can't be sampled. The inferred `num_frames={num_frames}` exceeds `total_num_frames={total_num_frames}`. "
+            "Decrease `num_frames` or `fps` for sampling."
+        )
+
+    # Hack code ensures that num_frames can always be divided by 4
+    # due to sched/resource_manager_v1.py 中 grid_thw.extend([[2, h, w]] * (t // 2))
+    if num_frames > 2 and num_frames % 4 != 0:
+        num_frames = (num_frames // 4) * 4  # 向下取整到 4 的倍数
+        total_num_frames = (total_num_frames // 4) * 4
+        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
+
+    # Calculate frame indices based on sampling strategy
+    if num_frames > 0:
+        # Evenly spaced sampling for target frame count
+        indices = np.arange(0, total_num_frames, total_num_frames / num_frames).astype(np.int32)
+    else:
+        # Keep all frames if no sampling requested
+        indices = np.arange(0, total_num_frames).astype(np.int32)
+
+    return indices
 
 
 class DataProcessor(MMBaseDataProcessor):
@@ -94,6 +172,7 @@ class DataProcessor(MMBaseDataProcessor):
             self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
         else:
             self.tokenizer = tokenizer
+
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
         self.enable_processor_cache = enable_processor_cache
 
@@ -225,7 +304,7 @@ class DataProcessor(MMBaseDataProcessor):
         return outputs
 
     def request2ids(
-        self, request: Request, tgts: List[str] = None
+        self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat request with multimodal messages into model inputs.
@@ -241,7 +320,7 @@ class DataProcessor(MMBaseDataProcessor):
         """
 
         # Parse and validate chat messages
-        messages = parse_chat_messages(request.messages)
+        messages = parse_chat_messages(request.get("messages"))
         mm_items = []
         for msg in messages:
             role = msg.get("role")
@@ -292,14 +371,14 @@ class DataProcessor(MMBaseDataProcessor):
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
 
-        chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
+        chat_template_kwargs = request.get("chat_template_kwargs", {})
         prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
-            add_generation_prompt=request.add_generation_prompt if request.add_generation_prompt is not None else True,
+            add_generation_prompt=request.get("add_generation_prompt", True),
             **chat_template_kwargs,
         )
-        request.prompt_tokens = prompt
+        request["prompt_tokens"] = prompt
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
@@ -433,7 +512,11 @@ class DataProcessor(MMBaseDataProcessor):
             - Handles temporal dimension in position embeddings
             - Uses video-specific token IDs and type markers
         """
-        ret = self.image_processor.preprocess(images=frames)
+        ret = self.image_processor.preprocess(
+            images=frames,
+            min_pixels=VIDEO_MIN_PIXELS,
+            max_pixels=VIDEO_MAX_PIXELS,
+        )
 
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
