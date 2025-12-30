@@ -19,6 +19,7 @@ import pickle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import paddle
 import zmq
 from PIL import Image
 
@@ -31,6 +32,11 @@ from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
 from .process_video import sample_frames
+
+FRAME_FACTOR = 2
+FPS = 2.0
+FPS_MIN_FRAMES = 4
+FPS_MAX_FRAMES = 768
 
 
 class Qwen_VLDataProcessor:
@@ -56,10 +62,10 @@ class Qwen_VLDataProcessor:
         tokenizer=None,
         model_path: str = "",
         enable_processor_cache: bool = False,
-        video_min_frames: int = 4,
-        video_max_frames: int = 768,
+        video_min_frames: int = FPS_MIN_FRAMES,
+        video_max_frames: int = FPS_MAX_FRAMES,
         video_target_frames: int = -1,
-        video_fps: int = -1,
+        video_fps: int = FPS,
         tokens_per_second: int = 2,
         **kwargs,
     ) -> None:
@@ -73,10 +79,12 @@ class Qwen_VLDataProcessor:
             tokens_per_second: Temporal resolution for positional embeddings
             **kwargs: Additional configuration
         """
+        super().__init__()
         self.min_frames = video_min_frames
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
         self.fps = video_fps
+        self.frame_factor = FRAME_FACTOR
 
         self.tokenizer = tokenizer
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
@@ -104,6 +112,26 @@ class Qwen_VLDataProcessor:
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
+
+    @staticmethod
+    def mm_num_tokens(grid_thw: list | list[list[int]] | np.ndarray | paddle.Tensor) -> int | list[int]:
+        """
+        Calculate the number of tokens in the multimodal input.
+        """
+        if isinstance(grid_thw, paddle.Tensor):
+            grid_thw = grid_thw.numpy()
+
+        if len(grid_thw) == 0:
+            return 0
+
+        def calc_one(thw):
+            t, h, w = map(int, thw)
+            return t * h * w // 4
+
+        if isinstance(grid_thw[0], (list, tuple, np.ndarray)):
+            return [calc_one(x) for x in grid_thw]
+
+        return calc_one(grid_thw)
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
@@ -404,7 +432,9 @@ class Qwen_VLDataProcessor:
         grid_thw = ret["grid_thw"].tolist()
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        # Hack code. In order to adapt to the framework, only image_token can be passed
+        # The correct way should be to use [self.video_token_id] * num_tokens
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += int(num_tokens)
 
@@ -508,7 +538,7 @@ class Qwen_VLDataProcessor:
 
             # Sample frames according to specifications
             frame_indices = sample_frames(
-                frame_factor=self.temporal_conv_size,  # Ensure divisible by temporal patch size
+                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,

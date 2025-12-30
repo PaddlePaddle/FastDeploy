@@ -288,6 +288,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/tune_cublaslt_gemm.cu",
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/swap_cache.cu",
+        "gpu_ops/swap_cache_layout.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
@@ -492,6 +493,7 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        cc_compile_args += ["-DENABLE_FLASH_MASK_ATTENTION"]
         sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
