@@ -217,7 +217,7 @@ std::vector<paddle::Tensor> DecodeAppendAttention(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& sinks,
-    const std::string& cache_quant_type_str,
+    const std::string& cache_quant_type,
     const int max_input_length,
     const float quant_max_bound,
     const float quant_min_bound,
