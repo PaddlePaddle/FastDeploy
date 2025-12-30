@@ -30,6 +30,7 @@ from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
 )
+from fastdeploy.model_executor.layers.sample.logprobs import batched_count_greater_than
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
@@ -466,7 +467,7 @@ class Sampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -709,7 +710,7 @@ class SpeculativeSampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -1055,7 +1056,7 @@ class MTPSampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
