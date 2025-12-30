@@ -111,14 +111,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         set_value(request, "presence_penalty", 0.0)
         return request
 
-    # def process_request(self, request, max_model_len=None, **kwargs):
-    #     """process the input data"""
-    #     setattr(request, "chat_template_kwargs", kwargs.get("chat_template_kwargs"))
-    #     self.process_request_obj(request, max_model_len)
-    #     request = self._apply_default_parameters(request)
-
-    #     return request
-
     def _parse_processor_kwargs(self, kwargs):
         """解析多模态处理器参数配置"""
         if not kwargs:

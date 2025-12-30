@@ -500,19 +500,20 @@ class TestQwenVLProcessor(unittest.TestCase):
             self.processor._check_mm_limits(mm_data)
         self.assertIn("Too many video items", str(context.exception))
 
-    def test_process_request_dict_with_prompt(self):
-        """Test process_request_dict with prompt format"""
+    def test_process_request_obj_with_prompt(self):
+        """Test process_request_obj with prompt format"""
         request = {
             "request_id": "12345",
             "prompt": "Test prompt",
             "multimodal_data": {"image": [mock_pil_image(10, 10)]},
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("prompt_token_ids", result)
-        self.assertIn("multimodal_inputs", result)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(len(result.prompt_token_ids), 0)
+        self.assertGreater(len(result.multimodal_inputs), 0)
 
-    def test_process_request_dict_with_messages(self):
-        """Test process_request_dict with messages format"""
+    def test_process_request_obj_with_messages(self):
+        """Test process_request_obj with messages format"""
         request = {
             "request_id": "12345",
             "messages": [
@@ -522,83 +523,86 @@ class TestQwenVLProcessor(unittest.TestCase):
                 }
             ],
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("prompt_token_ids", result)
-        self.assertIn("multimodal_inputs", result)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(len(result.prompt_token_ids), 0)
+        self.assertGreater(len(result.multimodal_inputs), 0)
 
-    def test_process_request_dict_invalid_format(self):
-        """Test process_request_dict with invalid format"""
+    def test_process_request_obj_invalid_format(self):
+        """Test process_request_obj with invalid format"""
         request = {"request_id": "12345"}
+        request = Request.from_dict(request)
         with self.assertRaises(ValueError) as context:
-            self.processor.process_request_dict(request, 1024)
+            self.processor.process_request_obj(request, 1024)
         self.assertIn("must contain 'prompt', or 'messages'", str(context.exception))
 
-    def test_process_request_dict_with_bad_words(self):
-        """Test process_request_dict with bad_words"""
+    def test_process_request_obj_with_bad_words(self):
+        """Test process_request_obj with bad_words"""
         request = {
             "request_id": "12345",
             "prompt": "Test prompt",
             "bad_words": ["bad", "word"],
             "bad_words_token_ids": [100, 200],
         }
-        result = self.processor.process_request_dict(request, 1024)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
         # Verify bad_words_token_ids is set
-        self.assertIn("bad_words_token_ids", result)
-        self.assertIsNotNone(result["bad_words_token_ids"])
+        self.assertIsNotNone(result.sampling_params.bad_words_token_ids)
 
-    def test_process_request_dict_invalid_chat_template_kwargs(self):
-        """Test process_request_dict with invalid chat_template_kwargs"""
+    def test_process_request_obj_invalid_chat_template_kwargs(self):
+        """Test process_request_obj with invalid chat_template_kwargs"""
         request = {
             "request_id": "12345",
             "messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}],
-            "chat_template_kwargs": "invalid",
         }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = "invalid"
         with self.assertRaises(ValueError) as context:
-            self.processor.process_request_dict(request, 1024)
+            self.processor.process_request_obj(request, 1024)
         self.assertIn("must be a dict", str(context.exception))
 
-    def test_process_request_dict_with_completion_token_ids(self):
-        """Test process_request_dict with completion_token_ids"""
-        request = {
-            "request_id": "12345",
-            "prompt": "Test",
-            "completion_token_ids": [1, 2, 3],
-        }
-        result = self.processor.process_request_dict(request, 1024)
+    def test_process_request_obj_with_completion_token_ids(self):
+        """Test process_request_obj with completion_token_ids"""
+        request = {"request_id": "12345", "prompt": "Test"}
+        request = Request.from_dict(request)
+        request.completion_token_ids = [1, 2, 3]
+        result = self.processor.process_request_obj(request, 1024)
         # Verify completion tokens are appended
-        self.assertGreater(len(result["prompt_token_ids"]), 3)
+        self.assertGreater(len(result.prompt_token_ids), 3)
 
-    def test_process_request_dict_prompt_truncation(self):
-        """Test process_request_dict with prompt truncation"""
+    def test_process_request_obj_prompt_truncation(self):
+        """Test process_request_obj with prompt truncation"""
         # Create a long prompt that exceeds max_model_len
         long_prompt = "Test " * 1000
         request = {
             "request_id": "12345",
             "prompt": long_prompt,
         }
-        result = self.processor.process_request_dict(request, 100)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 100)
         # Verify prompt is truncated
-        self.assertLessEqual(len(result["prompt_token_ids"]), 99)
+        self.assertLessEqual(len(result.prompt_token_ids), 99)
 
-    def test_process_request_dict_default_max_tokens(self):
-        """Test process_request_dict sets default max_tokens"""
+    def test_process_request_obj_default_max_tokens(self):
+        """Test process_request_obj sets default max_tokens"""
         request = {
             "request_id": "12345",
             "prompt": "Test",
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("max_tokens", result)
-        self.assertGreater(result["max_tokens"], 0)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(result.sampling_params.max_tokens, 0)
 
-    def test_process_request_dict_enable_thinking_false(self):
-        """Test process_request_dict sets enable_thinking to False"""
+    def test_process_request_obj_enable_thinking_false(self):
+        """Test process_request_obj sets enable_thinking to False"""
         request = {
             "request_id": "12345",
             "prompt": "Test",
             "enable_thinking": True,
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertFalse(result["enable_thinking"])
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertFalse(result.enable_thinking)
 
     def test_append_completion_tokens(self):
         """Test append_completion_tokens method"""
