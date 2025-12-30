@@ -232,7 +232,7 @@ __global__ void decode_append_attention_c8_kernel(
                       : chunk_len,
                NUM_WARP_KV * num_frags_z * 16);
     const uint32_t mask_check_iteration =
-        (CAUSAL ? (min(chunk_len,
+        (CAUSAL               ? (min(chunk_len,
                        sub_if_greater_or_zero(
                            kv_len - q_len +
                                tile_idx * num_rows_per_block / GROUP_SIZE,
@@ -409,19 +409,20 @@ __global__ void decode_append_attention_c8_kernel(
                NUM_WARPS,
                num_frags_x,
                num_frags_y,
-               num_frags_z>(
-            params.attn_mask
-                ? params.attn_mask + batch_idx * params.attn_mask_len * params.attn_mask_len
-                : nullptr,
-            q_base_seq_id_this_block,
-            kv_idx_base + wid * num_frags_z * 16,
-            q_len,
-            kv_len,
-            chunk_end,
-            params.attn_mask_len,
-            s_frag,
-            mask_offset_this_seq,
-            params.sliding_window);
+               num_frags_z>(params.attn_mask
+                                ? params.attn_mask + batch_idx *
+                                                         params.attn_mask_len *
+                                                         params.attn_mask_len
+                                : nullptr,
+                            q_base_seq_id_this_block,
+                            kv_idx_base + wid * num_frags_z * 16,
+                            q_len,
+                            kv_len,
+                            chunk_end,
+                            params.attn_mask_len,
+                            s_frag,
+                            mask_offset_this_seq,
+                            params.sliding_window);
       }
 
       // update m,d
@@ -815,36 +816,34 @@ void DecodeAppendC8Attention(const AppendAttnMetaData &meta_data,
   constexpr int blocky = (128 + blockx - 1) / blockx;
   dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
   dim3 blocks_merge(blockx, blocky);
-  launchWithPdlWhenEnabled(merge_chunks_kernel<NV_TYPE,
-                                              vec_size,
-                                              blocky,
-                                              HEAD_DIM>,
-                           grids_merge,
-                           blocks_merge,
-                           0,
-                           stream,
-                           params.tmp_o,
-                           params.tmp_m,
-                           params.tmp_d,
-                           seq_lens_q.data<int>(),
-                           seq_lens_kv.data<int>(),
-                           seq_lens_encoder.data<int>(),
-                           batch_id_per_token.data<int>(),
-                           cu_seqlens_q.data<int>(),
-                           (NV_TYPE *)nullptr,
-                           (NV_TYPE *)nullptr,
-                           sinks ? reinterpret_cast<NV_TYPE *>(
-                                       const_cast<T *>(sinks.get().data<T>()))
-                                 : nullptr,
-                           chunk_size.data<int>(),
-                           reinterpret_cast<NV_TYPE *>(out->data<T>()),
-                           quant_max_bound,
-                           quant_min_bound,
-                           -1,
-                           max_seq_len,
-                           max_num_chunks,
-                           num_heads,
-                           HEAD_DIM,
-                           token_num,
-                           max_tokens_per_batch);
+  launchWithPdlWhenEnabled(
+      merge_chunks_kernel<NV_TYPE, vec_size, blocky, HEAD_DIM>,
+      grids_merge,
+      blocks_merge,
+      0,
+      stream,
+      params.tmp_o,
+      params.tmp_m,
+      params.tmp_d,
+      seq_lens_q.data<int>(),
+      seq_lens_kv.data<int>(),
+      seq_lens_encoder.data<int>(),
+      batch_id_per_token.data<int>(),
+      cu_seqlens_q.data<int>(),
+      (NV_TYPE *)nullptr,
+      (NV_TYPE *)nullptr,
+      sinks
+          ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(sinks.get().data<T>()))
+          : nullptr,
+      chunk_size.data<int>(),
+      reinterpret_cast<NV_TYPE *>(out->data<T>()),
+      quant_max_bound,
+      quant_min_bound,
+      -1,
+      max_seq_len,
+      max_num_chunks,
+      num_heads,
+      HEAD_DIM,
+      token_num,
+      max_tokens_per_batch);
 }
