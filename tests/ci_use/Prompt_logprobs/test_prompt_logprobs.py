@@ -54,16 +54,13 @@ def setup_and_run_server():
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
-    # env["CUDA_VISIBLE_DEVICES"] = "0,1"
-    env["TEMPLATE"] = "TOKEN_LOGPROB"
-    env["FD_USE_GET_SAVE_OUTPUT_V2"] = "1"
+    env["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        # model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
-        model_path = "/root/paddlejob/workspace/env_run/xujing43/0.3B"
+        model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
 
     log_path = "server.log"
     cmd = [
