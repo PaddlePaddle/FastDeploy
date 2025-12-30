@@ -210,6 +210,9 @@ class MTPProposer(Proposer):
                 self.num_main_model_layers,
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
+                logger.info(
+                    f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -233,7 +236,11 @@ class MTPProposer(Proposer):
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
+                logger.info(f"..creating kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=key_cache_shape,
                     fill_value=0,
