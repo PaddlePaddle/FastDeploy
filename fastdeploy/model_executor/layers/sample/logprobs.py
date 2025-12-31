@@ -18,6 +18,8 @@ import paddle
 import triton
 import triton.language as tl
 
+from fastdeploy.platforms import current_platform
+
 
 @triton.jit
 def count_greater_kernel(
@@ -45,32 +47,36 @@ def batched_count_greater_than(x: paddle.Tensor, y: paddle.Tensor) -> paddle.Ten
     Triton implementation: (x >= y).sum(-1)
 
     Args:
-        x (paddle.Tensor): 2D tensor，shape [num_tokens, n_elements]，float32。
-        y (paddle.Tensor): 2D tensor，shape [num_tokens, 1]，float32。
+        x (paddle.Tensor): 2D tensor，shape [num_tokens, n_elements]，float32.
+        y (paddle.Tensor): 2D tensor，shape [num_tokens, 1]，float32.
 
     Returns:
         paddle.Tensor: 1D tensor，shape [num_tokens].
     """
     assert x.dim() == 2, f"x must be 2D, got {x.dim()}D"
     assert y.dim() == 2 and y.shape[1] == 1, f"y must be 2D with shape [num_tokens, 1], got {y.shape}"
-    assert x.shape[0] == y.shape[0], f"batch size mismatch: x has {x.shape[0]}, y has {y.shape[0]}"
+    assert x.shape[0] == y.shape[0], f"shape[0] mismatch: x has {x.shape[0]}, y has {y.shape[0]}"
     assert x.dtype == y.dtype, f"dtype mismatch: x is {x.dtype}, y is {y.dtype}"
 
-    num_tokens, n_elements = x.shape
-    dtype = paddle.int64
+    if current_platform.is_cuda():
 
-    out = paddle.empty([num_tokens], dtype=dtype, device=x.place)
+        num_tokens, n_elements = x.shape
+        dtype = paddle.int64
 
-    config = {"BLOCK_SIZE": 4096, "num_warps": 16}
-    grid = (num_tokens,)
+        out = paddle.empty([num_tokens], dtype=dtype, device=x.place)
 
-    count_greater_kernel[grid](
-        x_ptr=x,
-        y_ptr=y,
-        out_ptr=out,
-        n_elements=n_elements,
-        BLOCK_SIZE=config["BLOCK_SIZE"],
-        num_warps=config["num_warps"],
-    )
+        config = {"BLOCK_SIZE": 4096, "num_warps": 16}
+        grid = (num_tokens,)
+
+        count_greater_kernel[grid](
+            x_ptr=x,
+            y_ptr=y,
+            out_ptr=out,
+            n_elements=n_elements,
+            BLOCK_SIZE=config["BLOCK_SIZE"],
+            num_warps=config["num_warps"],
+        )
+    else:
+        out = (x >= y).sum(-1)
 
     return out
