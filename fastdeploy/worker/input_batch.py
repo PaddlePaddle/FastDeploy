@@ -381,20 +381,7 @@ class InputBatch:
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
             swap_data(self.cu_batch_token_offset, i1, i2)
-            # swap_data(self.is_block_step, i1, i2)
-            # swap_data(self.batch_drop, i1, i2)
-            # swap_data(self.input_ids_len, i1, i2)
-            # swap_data(self.first_token_hidden_states, i1, i2)
-            # swap_data(self.batch_token_num, i1, i2)
-            # swap_data(self.next_token_num, i1, i2)
-            # swap_data(self.cu_next_token_offset, i1, i2)
             swap_data(self.stop_flags, i1, i2)
-            # attn_mask
-            # if self.enable_mm:
-            #     swap_data(self.attn_mask_offsets, i1, i2)
-            #     swap_data(self.attn_mask_offsets_full, i1, i2)
-            #     swap_data(self.attn_mask_offsets_decoder, i1, i2)
-            #     swap_data(self.decode_states, i1, i2)
         if self.enable_mm:
             if self.image_features_list is not None:
                 self.image_features_list[i1], self.image_features_list[i2] = (
