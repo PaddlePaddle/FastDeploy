@@ -916,7 +916,7 @@ class RowParallelLinear(LinearBase):
             assert with_bias, "with_bias must be True when add_bias is True."
             if self.tp_size > 1 and self.reduce_results:
                 set_weight_attrs(self.bias, {"tp_row_bias": True})
-        
+
         # set_rl_tp_degree
         set_weight_attrs(
             self.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
