@@ -226,11 +226,12 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             print("ll_dispatch num_experts: ", self.num_experts)
             print("ll_dispatch use_fp8: ", use_fp8)
             print("ll_dispatch quant_group_size: ", quant_group_size)
+            return_recv_hook_ = False
             (
                 packed_recv_x,
                 recv_expert_count,
                 handle,
-                _,
+                event,
                 dispatch_hook,
             ) = self.deepep_engine.low_latency_dispatch(
                 hidden_states,
@@ -240,10 +241,11 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
                 self.num_experts,
                 use_fp8=use_fp8,
                 async_finish=True,
-                return_recv_hook=False,
+                return_recv_hook=return_recv_hook_,
                 num_per_channel=quant_group_size,
             )
-
+            dispatch_hook() if return_recv_hook_ else event.current_stream_wait()
+            packed_recv_x = (packed_recv_x[0], packed_recv_x[1].contiguous()) if use_fp8 else packed_recv_x
             print("==========after engine low_latency_dispatch")
 
             print("[DeepEP] low_latency_dispatch completed successfully")
@@ -305,15 +307,16 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         print("topk_idx ", topk_idx)
         print("topk_weights ", topk_weights)
         print("handle ", handle)
-
-        combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
+        return_recv_hook = True
+        combined_hidden_states, event, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
             handle,
-            async_finish=True,
-            return_recv_hook=False,
+            async_finish=not return_recv_hook,
+            return_recv_hook=return_recv_hook,
         )
+        combine_hook() if return_recv_hook else event.current_stream_wait()
         print("============after low_latency_combine")
         return combined_hidden_states, combine_hook
 
