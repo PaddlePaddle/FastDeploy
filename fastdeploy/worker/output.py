@@ -315,7 +315,7 @@ class ModelOutputData:
     """
         index -> request_id
     """
-    index_to_batch_id: list = None
+    index_to_batch_id: dict = {}
 
     """
         the minimum tokens that will be generated
