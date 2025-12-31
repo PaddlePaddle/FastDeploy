@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
 import paddle
@@ -315,7 +315,7 @@ class ModelOutputData:
     """
         index -> request_id
     """
-    index_to_batch_id: dict = {}
+    index_to_batch_id: dict[int, int] = field(default_factory=dict)
 
     """
         the minimum tokens that will be generated
