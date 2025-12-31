@@ -454,9 +454,10 @@ class ColumnParallelLinear(LinearBase):
         )
 
         if self.tp_size > 0:
+            _set_var_distributed(self.weight, split_axis=-1)
             if self.with_bias:
                 # col parallel
-                _set_var_distributed(self.bias, split_axis=1)
+                _set_var_distributed(self.bias, split_axis=0)
                 set_weight_attrs(
                     self.bias,
                     {
@@ -468,6 +469,14 @@ class ColumnParallelLinear(LinearBase):
                         ),
                     },
                 )
+        # set_rl_tp_degree
+        set_weight_attrs(
+            self.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
+        )
+        if self.with_bias:
+            set_weight_attrs(
+                self.bias, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
+            )
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -896,6 +905,7 @@ class RowParallelLinear(LinearBase):
             model_format=fd_config.model_config.model_format,
         )
         if self.tp_size > 1:
+            _set_var_distributed(self.weight, split_axis=0)
             create_weight_kwargs["split_axis"] = 0
             create_weight_kwargs["is_distributed"] = True
         self.quant_method.create_weights(**create_weight_kwargs)
@@ -906,6 +916,11 @@ class RowParallelLinear(LinearBase):
             assert with_bias, "with_bias must be True when add_bias is True."
             if self.tp_size > 1 and self.reduce_results:
                 set_weight_attrs(self.bias, {"tp_row_bias": True})
+        
+        # set_rl_tp_degree
+        set_weight_attrs(
+            self.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
+        )
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]
