@@ -143,7 +143,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         """
         Args:
             hidden_states: [token_num, hidden_size] 'bfloat16/int8'
-            topk_idx: [token_num, num_topk] 'int64'
+            topk_idx: [token_num, num_topk] 'int64', int32 in xpu
 
         Returns:
             recv_hidden_states: [num_local_experts,
@@ -190,8 +190,6 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
-        topk_idx = topk_idx.astype(paddle.int32)
-
         if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":
             # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
             # and when the default recommended version of PaddlePaddle is greater than 3.1.0
