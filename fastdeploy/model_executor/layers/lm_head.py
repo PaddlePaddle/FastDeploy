@@ -105,6 +105,11 @@ class ParallelLMHead(nn.Layer):
                 if self.tp_size > 1:
                     if with_bias:
                         set_weight_attrs(self.linear.bias, {"output_dim": True})
+                if self.bias_key is not None:
+                    set_weight_attrs(
+                        self.linear.bias,
+                        {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}},
+                    )
 
             else:
                 self.linear = RowParallelLinear(
@@ -123,6 +128,9 @@ class ParallelLMHead(nn.Layer):
                     },
                 )
                 set_weight_attrs(self.linear.weight, {"output_dim": False})
+        set_weight_attrs(
+            self.linear.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
+        )
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
