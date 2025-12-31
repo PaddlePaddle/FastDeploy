@@ -219,7 +219,13 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
                 raise RuntimeError("DeepEP engine not initialized. Please call get_low_latency_buffer() first.")
 
             print("==========before engine low_latency_dispatch")
-
+            print("ll_dispatch hidden_states: ", hidden_states)
+            print("ll_dispatch topk_idx: ", topk_idx)
+            print("ll_dispatch expertwise_scale: ", expertwise_scale)
+            print("ll_dispatch num_max_dispatch_tokens_per_rank: ", self.num_max_dispatch_tokens_per_rank)
+            print("ll_dispatch num_experts: ", self.num_experts)
+            print("ll_dispatch use_fp8: ", use_fp8)
+            print("ll_dispatch quant_group_size: ", quant_group_size)
             (
                 packed_recv_x,
                 recv_expert_count,
@@ -233,8 +239,8 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
                 self.num_max_dispatch_tokens_per_rank,
                 self.num_experts,
                 use_fp8=use_fp8,
-                async_finish=False,
-                return_recv_hook=True,
+                async_finish=True,
+                return_recv_hook=False,
                 num_per_channel=quant_group_size,
             )
 
@@ -305,7 +311,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             topk_idx,
             topk_weights,
             handle,
-            async_finish=False,
+            async_finish=True,
             return_recv_hook=False,
         )
         print("============after low_latency_combine")
