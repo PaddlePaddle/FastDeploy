@@ -578,8 +578,6 @@ class GPUModelRunner(ModelRunnerBase):
             for _, index in req_idx_img_index_map.items():
                 if index != -1:
                     self.share_inputs["image_features_list"][idx] = merge_image_features[index]
-            # self.share_inputs["image_features_list"] = merge_image_features
-            # self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
@@ -1177,9 +1175,9 @@ class GPUModelRunner(ModelRunnerBase):
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             if self.enable_mm and self.share_inputs["image_features_list"] is not None:
-                self.share_inputs["image_features"] = paddle.concat(
-                    [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)], axis=0
-                )
+                tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
+                if tensor_feats:
+                    self.share_inputs["image_features"] = paddle.concat(tensor_feats, axis=0)
             recover_decode_task(
                 self.share_inputs["stop_flags"],
                 self.share_inputs["seq_lens_this_time"],
