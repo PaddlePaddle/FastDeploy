@@ -658,6 +658,7 @@ class CacheTransferManager:
                 for i in range(self.num_layers + self.num_extra_layers):
                     key_cache.append(self.gpu_cache_kvs[f"key_caches_{i}_rank{self.rank}.device{self.device}"])
                     val_cache.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{self.rank}.device{self.device}"])
+                gpu_block_ids = gpu_block_ids[start_write_block_idx:]
                 write_block_num = self.storage_backend.write(
                     task_id, key_cache, val_cache, token_ids, gpu_block_ids, start_write_block_idx, timeout
                 )

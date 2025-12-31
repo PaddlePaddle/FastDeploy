@@ -112,7 +112,7 @@ class AttentionStore(KVCacheStorage):
         timeout: float = 30.0,
     ):
         logger.debug(
-            f"[READ] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_read_block_idx: {start_read_block_idx} timeout: {timeout}"
+            f"[READ BEGIN] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_read_block_idx: {start_read_block_idx} timeout: {timeout}"
         )
         tokens = Tokens(token_ids, self.config.block_token_size)
         k_data_ptrs = [k.data_ptr() for k in key_cache]
@@ -128,10 +128,10 @@ class AttentionStore(KVCacheStorage):
                 gpu_block_ids,
                 timeout,
             )
-            logger.debug(f"[READ] task_id: {task_id} read_blocks={num}")
+            logger.debug(f"[READ END] task_id: {task_id} read_blocks={num}")
         except AttentionStoreSDKError:
             logger.error(
-                f"[READ] failed to execute sdk read, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+                f"[READ ERROR] failed to execute sdk read, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
 
@@ -146,7 +146,7 @@ class AttentionStore(KVCacheStorage):
         timeout: float = 30.0,
     ) -> int:
         logger.debug(
-            f"[WRITE] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_write_block_idx: {start_write_block_idx} timeout: {timeout}"
+            f"[WRITE BEGIN] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_write_block_idx: {start_write_block_idx} timeout: {timeout}"
         )
         tokens = Tokens(token_ids, self.config.block_token_size)
         k_data_ptrs = [k.data_ptr() for k in key_cache]
@@ -162,10 +162,10 @@ class AttentionStore(KVCacheStorage):
                 gpu_block_ids,
                 timeout,
             )
-            logger.debug(f"[WRITE] task_id: {task_id} written_blocks: {num}")
+            logger.debug(f"[WRITE END] task_id: {task_id} written_blocks: {num}")
         except AttentionStoreSDKError:
             logger.error(
-                f"[WRITE] failed to execute sdk write, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+                f"[WRITE ERROR] failed to execute sdk write, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
 
@@ -175,16 +175,16 @@ class AttentionStore(KVCacheStorage):
         can be prefetched from storage backend.
         """
         logger.debug(
-            f"[QUERY] task_id: {task_id} token_ids: {token_ids} start_match_block_idx: {start_match_block_idx} timeout: {timeout}"
+            f"[QUERY BEGIN] task_id: {task_id} token_ids: {token_ids} start_match_block_idx: {start_match_block_idx} timeout: {timeout}"
         )
         tokens = Tokens(token_ids, self.config.block_token_size)
         num = 0
         try:
             num = self.sdk.match(tokens, start_match_block_idx, timeout)
-            logger.debug(f"[QUERY] task_id: {task_id} matched_blocks: {num}")
+            logger.debug(f"[QUERY END] task_id: {task_id} matched_blocks: {num}")
         except AttentionStoreSDKError:
             logger.error(
-                f"[QUERY] Failed to execute sdk match, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+                f"[QUERY ERROR] Failed to execute sdk match, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
             )
         return num
 

@@ -33,7 +33,7 @@ from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.ops import get_all_visible_devices
-from fastdeploy.config import CacheConfig
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -49,7 +49,7 @@ class PrefixCacheManager:
 
     def __init__(
         self,
-        config: CacheConfig,
+        config: FDConfig,
         tensor_parallel_size,
         splitwise_role="mixed",
         local_data_parallel_id=0,
@@ -814,6 +814,7 @@ class PrefixCacheManager:
             gpu_block_ids=extra_gpu_block_ids,
             start_read_block_idx=num_cached_tokens // block_size,
         )
+        logger.debug(f"issue read storage task: {task}")
         matched_block_ids = self.issue_prefetch_storage_task(task, is_sync=True)
         logger.info(
             f"finish prefetch cache from storage, req_id: {req_id}, matched block num: {len(matched_block_ids)}"
@@ -986,6 +987,12 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        if self.config.cache_config.enable_output_caching:
+            token_ids += request.output_token_ids
+
         req_id = request.request_id
         keys = []
         node = self.req_leaf_map[req_id]
@@ -1001,10 +1008,10 @@ class PrefixCacheManager:
         task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
-            token_ids=request.prompt_token_ids
-            + (request.output_token_ids if self.config.enable_output_caching else 0),
+            token_ids=token_ids,
             gpu_block_ids=gpu_block_ids,
         )
+        logger.debug(f"issue write storage task: {task}")
         tic = time.time()
         self.issue_write_back_storage_task(task, is_sync=True)
         cost_time = time.time() - tic
