@@ -122,6 +122,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         cfg.speculative_config.method = "mtp" if speculative_decoding else None
         cfg.speculative_config.num_speculative_tokens = 1
         cfg.model_config.enable_logprob = use_logprobs
+        cfg.speculative_config.enable_draft_logprob = True
 
         processor = TokenProcessor.__new__(TokenProcessor)
         processor.cfg = cfg
@@ -139,6 +140,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.number_of_output_tokens = 0
         processor.prefill_result_status = {}
         processor.use_logprobs = use_logprobs
+        processor.enable_draft_logprob = cfg.speculative_config.enable_draft_logprob
         processor.num_draft_tokens = 0
         processor.num_accepted_tokens = 0
         processor.num_emitted_tokens = 0
