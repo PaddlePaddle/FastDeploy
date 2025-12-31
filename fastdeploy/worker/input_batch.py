@@ -272,32 +272,6 @@ class InputBatch:
                 dtype="float32",
             )
             self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
-            self.is_block_step = paddle.full([max_num_seqs, 1], False, dtype="bool")
-            self.batch_drop = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
-            self.input_ids_len = paddle.zeros(shape=[max_num_seqs, 1], dtype="int64").cpu()
-            self.first_token_hidden_states = paddle.full([max_num_seqs, self.model_config.hidden_size], -1)
-            self.batch_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
-            self.next_token_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
-            self.cu_next_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
-            self.recompute_token_num = paddle.full(
-                [max_num_seqs, 1], self.speculative_config.num_model_steps - 1, dtype="int32"
-            )
-
-            # attn_mask
-            if self.enable_mm:
-                self.attn_mask_offsets = paddle.full(
-                    shape=[max_num_seqs * self.model_config.max_model_len], fill_value=-1, dtype="int32"
-                )
-                self.attn_mask_offsets_full = paddle.full(
-                    [max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
-                )
-                self.attn_mask_offsets_decoder = paddle.full([max_num_seqs, 1], -1, dtype="int32")
-                self.decode_states = paddle.full(
-                    [max_num_seqs, max_draft_token_num + 1],
-                    -1,
-                    dtype="int32",
-                )
-
         if self.enable_mm:
             head_dim = self.model_config.head_dim
             if (
@@ -319,7 +293,8 @@ class InputBatch:
                 fill_value=0,
                 dtype="float32",
             )
-            self.image_features = None
+            self.image_features = None  # Built before the forward
+            self.image_features_list = None
 
         # For logits processors
         self.logits_processors = build_logits_processors(fd_config)
@@ -362,7 +337,7 @@ class InputBatch:
         swap_data(self.prompt_lens, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.stop_flags, i1, i2)
-        swap_data(self.recompute_token_num, i1, i2)
+        # swap_data(self.recompute_token_num, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
@@ -406,21 +381,27 @@ class InputBatch:
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
             swap_data(self.cu_batch_token_offset, i1, i2)
-            swap_data(self.is_block_step, i1, i2)
-            swap_data(self.batch_drop, i1, i2)
-            swap_data(self.input_ids_len, i1, i2)
-            swap_data(self.first_token_hidden_states, i1, i2)
-            swap_data(self.batch_token_num, i1, i2)
-            swap_data(self.next_token_num, i1, i2)
-            swap_data(self.cu_next_token_offset, i1, i2)
+            # swap_data(self.is_block_step, i1, i2)
+            # swap_data(self.batch_drop, i1, i2)
+            # swap_data(self.input_ids_len, i1, i2)
+            # swap_data(self.first_token_hidden_states, i1, i2)
+            # swap_data(self.batch_token_num, i1, i2)
+            # swap_data(self.next_token_num, i1, i2)
+            # swap_data(self.cu_next_token_offset, i1, i2)
             swap_data(self.stop_flags, i1, i2)
             # attn_mask
-            if self.enable_mm:
-                swap_data(self.attn_mask_offsets, i1, i2)
-                swap_data(self.attn_mask_offsets_full, i1, i2)
-                swap_data(self.attn_mask_offsets_decoder, i1, i2)
-                swap_data(self.decode_states, i1, i2)
-
+            # if self.enable_mm:
+            #     swap_data(self.attn_mask_offsets, i1, i2)
+            #     swap_data(self.attn_mask_offsets_full, i1, i2)
+            #     swap_data(self.attn_mask_offsets_decoder, i1, i2)
+            #     swap_data(self.decode_states, i1, i2)
+        if self.enable_mm:
+            if self.image_features_list is not None:
+                self.image_features_list[i1], self.image_features_list[i2] = (
+                    self.image_features_list[i2],
+                    self.image_features_list[i1],
+                )
+            swap_data(self.share_inputs["rope_emb"], i1, i2)
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
@@ -470,6 +451,231 @@ class InputBatch:
         return batch_id
 
 
+class ProposerInputBatch(InputBatch):
+    def __init__(self, fd_config: FDConfig, target_model_input_batch: InputBatch) -> None:
+        self.enable_mm = fd_config.model_config.enable_mm
+        self.num_model_steps = fd_config.speculative_config.num_model_steps
+        self.index_to_batch_id = {}
+
+        self.block_tables = paddle.clone(target_model_input_batch["block_tables"])
+        self.input_ids = paddle.clone(target_model_input_batch["input_ids"])
+        self.input_ids_cpu = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs, fd_config.model_config.max_model_len],
+            fill_value=-1,
+            dtype="int64",
+        ).cpu()
+        self.seq_lens_this_time_buffer = paddle.clone(target_model_input_batch["seq_lens_this_time"])
+
+        self.seq_lens_encoder = paddle.clone(target_model_input_batch["seq_lens_encoder"])
+        self.seq_lens_decoder = paddle.clone(target_model_input_batch["seq_lens_decoder"])
+        self.step_idx = paddle.clone(target_model_input_batch["step_idx"])
+        self.stop_flags = paddle.clone(target_model_input_batch["stop_flags"])
+        self.stop_nums = paddle.clone(target_model_input_batch["stop_nums"])
+        self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+        self.pre_ids = paddle.clone(target_model_input_batch["pre_ids"])
+        self.output_cum_offsets = paddle.clone(target_model_input_batch["output_cum_offsets"])
+        self.output_padding_offset = paddle.clone(target_model_input_batch["output_padding_offset"])
+        self.ids_remove_padding = paddle.clone(target_model_input_batch["ids_remove_padding"])
+        self.batch_id_per_token = paddle.clone(target_model_input_batch["batch_id_per_token"])
+        self.cu_seqlens_q = paddle.clone(target_model_input_batch["cu_seqlens_q"])
+        self.cu_seqlens_k = paddle.clone(target_model_input_batch["cu_seqlens_k"])
+
+        self.target_hidden_states = paddle.full(
+            [
+                fd_config.scheduler_config.max_num_batched_tokens
+                + fd_config.scheduler_config.max_extra_num_batched_tokens,
+                fd_config.model_config.hidden_size,
+            ],
+            0,
+            dtype="bfloat16",
+        )
+
+        tmp_position_ids = paddle.arange(fd_config.model_config.max_model_len).reshape((1, -1))
+        from fastdeploy.model_executor.layers.rotary_embedding import get_rope
+
+        self.rope_emb = get_rope(
+            rotary_dim=fd_config.model_config.head_dim,
+            position_ids=tmp_position_ids,
+            base=fd_config.model_config.rope_theta,
+            model_config=fd_config.model_config,
+        )
+
+        # self.caches = self.cache_kvs
+        # Inherit generation hyperparameters from the main model for consistency
+        self.prompt_lens = target_model_input_batch["prompt_lens"]
+        self.top_p = target_model_input_batch["top_p"]
+        self.top_k = target_model_input_batch["top_k"]
+        self.temperature = target_model_input_batch["temperature"]
+        self.eos_token_id = target_model_input_batch["eos_token_id"]
+        self.penalty_score = target_model_input_batch["penalty_score"]
+        self.frequency_score = target_model_input_batch["frequency_score"]
+        self.presence_score = target_model_input_batch["presence_score"]
+        self.infer_seed = target_model_input_batch["infer_seed"]
+
+        self.max_dec_len = target_model_input_batch["max_dec_len"]
+        self.min_dec_len = target_model_input_batch["min_dec_len"]
+
+        self.bad_tokens = target_model_input_batch["bad_tokens"]
+
+        # Integraad_tokens"]te the updated results in model forward
+        self.base_model_draft_tokens = target_model_input_batch["draft_tokens"]
+        self.substep = 0
+
+        # Declare AttentionBackend buffers
+        self.decoder_batch_ids = None
+        self.decoder_tile_ids_per_batch = None
+        self.decoder_num_blocks_cpu = None  # Pinning Memory
+        self.decoder_num_blocks_device = None
+        self.decoder_chunk_size_device = None
+        self.max_len_tensor_cpu = None  # CPU
+        self.encoder_batch_ids = None
+        self.encoder_tile_ids_per_batch = None
+        self.encoder_num_blocks_x_cpu = None  # CPU
+        self.kv_batch_ids = None
+        self.kv_tile_ids_per_batch = None
+        self.kv_num_blocks_x_cpu = None  # CPU
+
+        # Input tokens
+        self.draft_tokens = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs, fd_config.speculative_config.num_speculative_tokens + 1],
+            fill_value=-1,
+            dtype="int64",
+        )
+
+        self.encoder_block_lens = paddle.clone(target_model_input_batch["encoder_block_lens"])
+        self.free_list = list(
+            range(
+                fd_config.cache_config.total_block_num - 1,
+                int(fd_config.cache_config.total_block_num * fd_config.cache_config.kv_cache_ratio) - 1,
+                -1,
+            )
+        )
+        self.free_list_len = len(self.free_list)
+
+        self.free_list = paddle.to_tensor(self.free_list, dtype="int32")
+        self.free_list_len = paddle.full(shape=[1], fill_value=self.free_list_len, dtype="int32")
+
+        self.is_block_step = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool"
+        )
+        self.batch_drop = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool"
+        )
+        self.used_list_len = paddle.full(shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
+
+        if self.num_model_steps > 1:
+            self.last_seq_lens_this_time = paddle.full_like(
+                target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
+            )
+        self.input_ids_len = paddle.zeros(shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype="int64").cpu()
+        self.temp_scaled_logprobs = target_model_input_batch["temp_scaled_logprobs"]
+        self.top_p_normalized_logprobs = target_model_input_batch["top_p_normalized_logprobs"]
+        self.accept_num = target_model_input_batch["accept_num"]
+        self.accept_tokens = target_model_input_batch["accept_tokens"]
+        self.draft_logits = target_model_input_batch["draft_logits"]
+        self.first_token_hidden_states = paddle.full(
+            [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.hidden_size], -1
+        )
+        self.batch_token_num = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32"
+        )
+        self.next_token_num = paddle.full(shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
+        self.cu_batch_token_offset = paddle.full_like(
+            target_model_input_batch["cu_batch_token_offset"], fill_value=0, dtype="int32"
+        )
+        self.cu_next_token_offset = paddle.full(
+            shape=[fd_config.scheduler_config.max_num_seqs + 1], fill_value=0, dtype="int32"
+        )
+        self.mask_rollback = paddle.full([fd_config.scheduler_config.max_num_seqs, 1], 0, dtype="int32")
+        # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
+        # using the target model's hidden states.
+        self.recompute_token_num = paddle.full(
+            [fd_config.scheduler_config.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
+        )
+        # attn_mask
+        if self.enable_mm:
+            self.attn_mask_offsets = paddle.full(
+                shape=[fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len],
+                fill_value=-1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets_full = paddle.full(
+                [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.max_model_len], -1, dtype="int32"
+            )
+            self.attn_mask_offsets_decoder = paddle.full(
+                [fd_config.scheduler_config.max_num_seqs, 1], -1, dtype="int32"
+            )
+            self.decode_states = paddle.full(
+                [fd_config.scheduler_config.max_num_seqs, fd_config.speculative_config.num_speculative_tokens + 1],
+                -1,
+                dtype="int32",
+            )
+
+    def swap_states(self, i1, i2) -> None:
+        def swap_data(tensor, idx1, idx2):
+            """Safely swap tensor slices using clone"""
+            temp = tensor[idx1].clone()
+            tensor[idx1] = tensor[idx2].clone()
+            tensor[idx2] = temp
+
+        # self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
+        swap_data(self.block_tables, i1, i2)
+        swap_data(self.input_ids, i1, i2)
+        swap_data(self.input_ids_cpu, i1, i2)
+        swap_data(self.seq_lens_this_time_buffer, i1, i2)
+        swap_data(self.seq_lens_encoder, i1, i2)
+        swap_data(self.seq_lens_decoder, i1, i2)
+        swap_data(self.step_idx, i1, i2)
+        swap_data(self.stop_flags, i1, i2)
+        swap_data(self.stop_nums, i1, i2)
+        swap_data(self.not_need_stop, i1, i2)
+        swap_data(self.pre_ids, i1, i2)
+        swap_data(self.output_cum_offsets, i1, i2)
+        swap_data(self.output_padding_offset, i1, i2)
+        swap_data(self.ids_remove_padding, i1, i2)
+        swap_data(self.batch_id_per_token, i1, i2)
+        swap_data(self.cu_seqlens_q, i1, i2)
+        swap_data(self.cu_seqlens_k, i1, i2)
+
+        swap_data(self.target_hidden_states, i1, i2)
+
+        swap_data(self.draft_tokens, i1, i2)
+        swap_data(self.encoder_block_lens, i1, i2)
+
+        swap_data(self.is_block_step, i1, i2)
+        swap_data(self.batch_drop, i1, i2)
+        swap_data(self.used_list_len, i1, i2)
+
+        if self.num_model_steps > 1:
+            swap_data(self.last_seq_lens_this_time, i1, i2)
+
+        swap_data(self.input_ids_len, i1, i2)
+        swap_data(self.first_token_hidden_states, i1, i2)
+
+        swap_data(self.batch_token_num, i1, i2)
+        swap_data(self.next_token_num, i1, i2)
+        swap_data(self.cu_batch_token_offset, i1, i2)
+        swap_data(self.cu_next_token_offset, i1, i2)
+        swap_data(self.mask_rollback, i1, i2)
+        swap_data(self.recompute_token_num, i1, i2)
+
+        if self.enable_mm:
+            swap_data(self.attn_mask_offsets, i1, i2)
+            swap_data(self.attn_mask_offsets_full, i1, i2)
+            swap_data(self.attn_mask_offsets_decoder, i1, i2)
+            swap_data(self.decode_states, i1, i2)
+
+
+def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, index_to_batch_id):
+    swapped = set()
+    for i, target in index_to_batch_id.items():
+        if i in swapped or target in swapped or i == target:
+            continue
+        input_batch.swap_states(i, target)
+        swapped.add(i)
+        swapped.add(target)
+
+
 def reorder_split_prefill_and_decode(input_batch: InputBatch):
     """
     Reorder input_batch data to place decode requests first and prefill requests last.
@@ -501,6 +707,45 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
+def recover_batch_index_for_output(output_cls, index_to_batch_id, recover_list):
+    """
+    Reorder model_output according to index_to_batch_id mapping.
+
+    Args:
+        model_output: Model output object containing sampled_token_ids and other attributes
+        index_to_batch_id: Dict mapping indices to original batch IDs
+
+    Returns:
+        Updated model_output object with reordered attributes
+    """
+    res_map = {}
+    is_not_swapped = all(i == v for i, v in index_to_batch_id.items())
+    # Create a new tensor to store the reordered results
+    sorted_keys = sorted(index_to_batch_id.keys())
+    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+    for recover_name in recover_list:
+        recover_tensor = getattr(output_cls, recover_name)
+        if is_not_swapped:
+            res_map[recover_name] = recover_tensor
+            continue
+
+        if isinstance(recover_tensor, paddle.Tensor):
+            # Create a new tensor to store the reordered results
+            res_map[recover_name] = paddle.scatter_nd(
+                paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), recover_tensor, recover_tensor.shape
+            )
+        elif isinstance(recover_tensor, list):
+            real_recover_tensor = recover_tensor.copy()
+            for i1, i2 in enumerate(index_to_batch_id):
+                real_recover_tensor[i1], real_recover_tensor[i2] = real_recover_tensor[i2], real_recover_tensor[i1]
+            res_map[recover_name] = real_recover_tensor
+        else:
+            logger.info("Unsupported type of {}".format(recover_name))
+
+    return res_map
+
+
 def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
     """
     Reorder sampled_token_ids according to index_to_batch_id mapping.
@@ -521,53 +766,46 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
     index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
     index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
 
-    # Use scatter_nd to place sampled_token_ids values at specified positions in reordered_token_ids
-    reordered_token_ids = paddle.scatter_nd(
+    real_token_ids = paddle.scatter_nd(
         paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
     )
+    sampler_output.sampled_token_ids = real_token_ids
 
-    # Update sampled_token_ids in sampler_output
-    sampler_output.sampled_token_ids = reordered_token_ids
+    if sampler_output.logprobs_tensors is not None:
+        logprob_token_ids = sampler_output.logprobs_tensors.logprob_token_ids
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        selected_token_ranks = sampler_output.logprobs_tensors.selected_token_ranks
+        real_logprob_token_ids = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprob_token_ids, sampled_token_ids.shape
+        )
 
+        real_logprobs = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprobs, sampled_token_ids.shape
+        )
+        real_selected_token_ranks = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), selected_token_ranks, sampled_token_ids.shape
+        )
+        sampler_output.logprobs_tensors.logprob_token_ids = real_logprob_token_ids
+        sampler_output.logprobs_tensors.logprobs = real_logprobs
+        sampler_output.logprobs_tensors.sampled_token_ranks = real_selected_token_ranks
 
-def recover_batch_index_for_model_output(model_output, index_to_batch_id):
-    """
-    Reorder model_output according to index_to_batch_id mapping.
+    if sampler_output.token_num_per_batch is not None:
+        token_num_per_batch = sampler_output.token_num_per_batch
+        real_token_num_per_batch = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), token_num_per_batch, sampled_token_ids.shape
+        )
+        sampler_output.token_num_per_batch = real_token_num_per_batch
 
-    Args:
-        model_output: Model output object containing sampled_token_ids and other attributes
-        index_to_batch_id: Dict mapping indices to original batch IDs
+    if sampler_output.cu_batch_token_offset is not None:
+        cu_batch_token_offset = sampler_output.cu_batch_token_offset
+        real_cu_batch_token_offset = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), cu_batch_token_offset, sampled_token_ids.shape
+        )
+        sampler_output.cu_batch_token_offset = real_cu_batch_token_offset
 
-    Returns:
-        Updated model_output object with reordered attributes
-    """
-
-    accept_tokens = model_output.accept_tokens
-    accept_num = model_output.accept_num
-    seq_lens_decoder = model_output.seq_lens_decoder
-    prompt_lens = model_output.prompt_lens
-
-    if all(i == v for i, v in index_to_batch_id.items()):
-        return accept_tokens, accept_num, seq_lens_decoder, prompt_lens
-
-    # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
-
-    # Use scatter_nd to place values at specified positions
-    reordered_accept_tokens = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), accept_tokens, accept_tokens.shape
-    )
-    reordered_accept_num = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), accept_num, accept_num.shape
-    )
-
-    reordered_seq_lens_decoder = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), seq_lens_decoder, seq_lens_decoder.shape
-    )
-    reordered_prompt_lens = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), prompt_lens, prompt_lens.shape
-    )
-
-    return reordered_accept_tokens, reordered_accept_num, reordered_seq_lens_decoder, reordered_prompt_lens
+    if sampler_output.logits is not None:
+        logits = sampler_output.logits
+        real_logits = paddle.scatter_nd(
+            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logits, sampled_token_ids.shape
+        )
+        sampler_output.logits = real_logits

@@ -24,7 +24,7 @@ from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
-    recover_batch_index_for_model_output,
+    recover_batch_index_for_output,
     recover_batch_index_for_sampler_output,
 )
 
@@ -419,14 +419,18 @@ def post_process_normal(
 
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
-    recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
+    if not skip_save_output:
+        recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
+                recover_model_output_map = recover_batch_index_for_output(
+                    model_output, model_output.index_to_batch_id, ["prompt_logprobs_list"]
+                )
                 output = _build_stream_transfer_data(
                     sampler_output.sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs_list=model_output.prompt_logprobs_list,
+                    prompt_logprobs_list=recover_model_output_map["prompt_logprobs_list"],
                 )
                 async_output_queue.put(output)
         else:
@@ -503,20 +507,26 @@ def post_process_specualate(
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
-            accept_tokens, accept_num, seq_lens_decoder, prompt_lens = recover_batch_index_for_model_output(
-                model_output, model_output.index_to_batch_id
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
             )
             speculate_save_output(
-                accept_tokens,
-                accept_num,
+                recover_model_output_map["accept_tokens"],
+                recover_model_output_map["accept_num"],
                 model_output.not_need_stop,
-                seq_lens_decoder,
-                prompt_lens,
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
                 model_output.mp_rank,
                 save_each_rank,
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
             )
         else:
+            recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output, model_output.index_to_batch_id, ["seq_lens_decoder", "prompt_lens"]
+            )
             speculate_save_output_topk(
                 sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
@@ -525,8 +535,8 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,

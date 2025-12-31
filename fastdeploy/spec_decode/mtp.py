@@ -29,7 +29,6 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
@@ -68,7 +67,10 @@ else:
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
-from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
+from fastdeploy.worker.input_batch import (
+    ProposerInputBatch,
+    reorder_split_prefill_and_decode_form_index_to_batch_id,
+)
 
 from .base import Proposer
 
@@ -110,7 +112,7 @@ class MTPProposer(Proposer):
             raise RuntimeError("Unsupported platform.")
 
         self.sampler = MTPSampler(fd_config)
-        self._init_model_inputs()
+        self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -363,115 +365,6 @@ class MTPProposer(Proposer):
                 "free_list": paddle.to_tensor(free_list, dtype="int32"),
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
-        )
-
-    def _init_model_inputs(self):
-        """
-        Init model inputs
-        """
-        self.model_inputs = InputBatch(self.fd_config)
-        # Same shape/dytpe with base model
-        self.model_inputs["block_tables"] = paddle.clone(self.target_model_inputs["block_tables"])
-        self.model_inputs["input_ids"] = paddle.clone(self.target_model_inputs["input_ids"])
-        self.model_inputs["seq_lens_this_time_buffer"] = paddle.clone(self.target_model_inputs["seq_lens_this_time"])
-
-        self.model_inputs["seq_lens_encoder"] = paddle.clone(self.target_model_inputs["seq_lens_encoder"])
-        self.model_inputs["seq_lens_decoder"] = paddle.clone(self.target_model_inputs["seq_lens_decoder"])
-        self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
-        self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
-        self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
-        self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
-        self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
-        self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
-        self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
-        self.model_inputs["output_padding_offset"] = paddle.clone(self.target_model_inputs["output_padding_offset"])
-        self.model_inputs["ids_remove_padding"] = paddle.clone(self.target_model_inputs["ids_remove_padding"])
-        self.model_inputs["batch_id_per_token"] = paddle.clone(self.target_model_inputs["batch_id_per_token"])
-        self.model_inputs["cu_seqlens_q"] = paddle.clone(self.target_model_inputs["cu_seqlens_q"])
-        self.model_inputs["cu_seqlens_k"] = paddle.clone(self.target_model_inputs["cu_seqlens_k"])
-        self.model_inputs["decoder_batch_ids"] = paddle.clone(self.target_model_inputs["decoder_batch_ids"])
-
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
-            self.target_model_inputs["decoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["target_hidden_states"] = paddle.full(
-            [
-                self.fd_config.scheduler_config.max_num_batched_tokens
-                + self.fd_config.scheduler_config.max_extra_num_batched_tokens,
-                self.model_config.hidden_size,
-            ],
-            0,
-            dtype="bfloat16",
-        )
-        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-        self.model_inputs["rope_emb"] = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config,
-        )
-        # self.model_inputs["caches"] = self.cache_kvs
-        # Inherit generation hyperparameters from the main model for consistency
-        self.model_inputs["top_p"] = paddle.clone(self.target_model_inputs["top_p"])
-        self.model_inputs["top_k"] = paddle.clone(self.target_model_inputs["top_k"])
-        self.model_inputs["temperature"] = paddle.clone(self.target_model_inputs["temperature"])
-        self.model_inputs["eos_token_id"] = paddle.clone(self.target_model_inputs["eos_token_id"])
-        self.model_inputs["penalty_score"] = paddle.clone(self.target_model_inputs["penalty_score"])
-        self.model_inputs["frequency_score"] = paddle.clone(self.target_model_inputs["frequency_score"])
-        self.model_inputs["presence_score"] = paddle.clone(self.target_model_inputs["presence_score"])
-        self.model_inputs["infer_seed"] = paddle.clone(self.target_model_inputs["infer_seed"])
-
-        self.model_inputs["max_dec_len"] = paddle.clone(self.target_model_inputs["max_dec_len"])
-        self.model_inputs["min_dec_len"] = paddle.clone(self.target_model_inputs["min_dec_len"])
-
-        self.model_inputs["bad_tokens"] = paddle.clone(self.target_model_inputs["bad_tokens"])
-
-        # Integrate the updated results in model forward
-        self.model_inputs["base_model_draft_tokens"] = paddle.clone(self.target_model_inputs["draft_tokens"])
-        self.model_inputs["substep"] = 0
-
-        # Declare AttentionBackend buffers
-        self.model_inputs["decoder_batch_ids"] = None
-        self.model_inputs["decoder_tile_ids_per_batch"] = None
-        self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
-        self.model_inputs["decoder_num_blocks_device"] = None
-        self.model_inputs["decoder_chunk_size_device"] = None
-        self.model_inputs["max_len_tensor_cpu"] = None  # CPU
-        self.model_inputs["encoder_batch_ids"] = None
-        self.model_inputs["encoder_tile_ids_per_batch"] = None
-        self.model_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
-        self.model_inputs["kv_batch_ids"] = None
-        self.model_inputs["kv_tile_ids_per_batch"] = None
-        self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-
-        self.model_inputs["encoder_block_lens"] = paddle.clone(self.target_model_inputs["encoder_block_lens"])
-
-        self.free_list = list(
-            range(
-                self.cache_config.total_block_num - 1,
-                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
-                -1,
-            )
-        )
-        self.free_list_len = len(self.free_list)
-
-        self.model_inputs["free_list"] = paddle.to_tensor(self.free_list, dtype="int32")
-        self.model_inputs["free_list_len"] = paddle.full(shape=[1], fill_value=self.free_list_len, dtype="int32")
-        if self.num_model_steps > 1:
-            self.last_seq_lens_this_time = paddle.full_like(
-                self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
-            )
-
-        self.model_inputs["temp_scaled_logprobs"] = paddle.clone(self.target_model_inputs["temp_scaled_logprobs"])
-        self.model_inputs["top_p_normalized_logprobs"] = paddle.clone(
-            self.target_model_inputs["top_p_normalized_logprobs"]
-        )
-        self.model_inputs["accept_num"] = paddle.clone(self.target_model_inputs["accept_num"])
-        self.model_inputs["accept_tokens"] = paddle.clone(self.target_model_inputs["accept_tokens"])
-        self.model_inputs["draft_logits"] = paddle.clone(self.target_model_inputs["draft_logits"])
-
-        self.model_inputs["cu_batch_token_offset"] = paddle.full_like(
-            self.target_model_inputs["cu_batch_token_offset"], fill_value=0, dtype="int32"
         )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
@@ -1190,9 +1083,8 @@ class MTPProposer(Proposer):
             raise NotImplementedError
         return cache_type
 
-    def reorder_inputs(self):
+    def reorder_inputs(self, base_model_index_to_batch_id):
         """
         Reorder inputs to split prefill and decode.
         """
-        self.model_inputs.condense()
-        reorder_split_prefill_and_decode(self.model_inputs)
+        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs, base_model_index_to_batch_id)

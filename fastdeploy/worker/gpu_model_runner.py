@@ -395,8 +395,9 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if not self.enable_mm:
             return
-
-        self.share_inputs["image_features"] = None
+        self.share_inputs["image_features_list"] = [-1] * self.scheduler_config.max_num_seqs
+        img_index = 0
+        req_idx_img_index_map = {}
         multi_vision_inputs = {
             "images_lst": [],
             "grid_thw_lst": [],
@@ -423,7 +424,9 @@ class GPUModelRunner(ModelRunnerBase):
                         self.encoder_cache.pop(mm_hash, None)
 
             position_ids = request.multimodal_inputs["position_ids"]
-            rope_3d_position_ids["position_ids_idx"].append(self.share_inputs.get_index_by_batch_id(request.idx))
+            idx = self.share_inputs.get_index_by_batch_id(request.idx)
+            rope_3d_position_ids["position_ids_idx"].append(idx)
+            req_idx_img_index_map[idx] = -1
             rope_3d_position_ids["position_ids_lst"].append(position_ids)
             rope_3d_position_ids["position_ids_offset"].append(
                 position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
@@ -435,6 +438,8 @@ class GPUModelRunner(ModelRunnerBase):
                 rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
             if request.with_image:
+                req_idx_img_index_map[idx] = img_index
+                img_index = img_index + 1
                 inputs = request.multimodal_inputs
                 if self.encoder_cache is not None:
                     if envs.FD_ENABLE_MAX_PREFILL:
@@ -550,10 +555,9 @@ class GPUModelRunner(ModelRunnerBase):
                     feature_end = feature_position.offset + feature_position.length
                     merge_image_features.append(mm_feature[feature_start:feature_end])
 
-                self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
-                logger.debug(
-                    f"merge_image_features length: {len(merge_image_features)}, features shape: {self.share_inputs['image_features'].shape}"
-                )
+                for idx, index in req_idx_img_index_map.items():
+                    if index != -1:
+                        self.share_inputs["image_features_list"][idx] = merge_image_features[index]
         elif len(multi_vision_inputs["images_lst"]) > 0:
             assert len(multi_vision_inputs["feature_position_list"]) == len(
                 multi_vision_inputs["grid_thw_lst"]
@@ -571,7 +575,11 @@ class GPUModelRunner(ModelRunnerBase):
                 merge_image_features.append(mm_feature[feature_start:feature_end])
                 feature_idx += mm_token_lenght
                 thw_idx += 1
-            self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
+            for _, index in req_idx_img_index_map.items():
+                if index != -1:
+                    self.share_inputs["image_features_list"][idx] = merge_image_features[index]
+            # self.share_inputs["image_features_list"] = merge_image_features
+            # self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
@@ -1167,6 +1175,10 @@ class GPUModelRunner(ModelRunnerBase):
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if self.enable_mm and self.share_inputs["image_features_list"] is not None:
+                self.share_inputs["image_features"] = paddle.concat(
+                    [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)], axis=0
+                )
             recover_decode_task(
                 self.share_inputs["stop_flags"],
                 self.share_inputs["seq_lens_this_time"],
@@ -1263,6 +1275,21 @@ class GPUModelRunner(ModelRunnerBase):
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
+
+    def _process_reorder(self) -> None:
+        if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
+            if (
+                self.enable_mm
+                and not envs.ENABLE_V1_KVCACHE_SCHEDULER
+                and self.share_inputs["image_features_list"] is not None
+            ):
+                logger.info("Multimodal models skip reordering if v1 scheduling is not enabled.")
+            else:
+                self.share_inputs.condense()
+                reorder_split_prefill_and_decode(input_batch=self.share_inputs)
+                if self.speculative_decoding:
+                    if self.speculative_method == "mtp":
+                        self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
 
     def load_model(self) -> None:
         """load or download model"""
@@ -2116,12 +2143,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_forward_meta(is_dummy_or_profile_run=False)
 
         # Reorder inputs to split prefill and decode tokens
-        if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
-            self.share_inputs.condense()
-            reorder_split_prefill_and_decode(input_batch=self.share_inputs)
-            if self.speculative_decoding:
-                if self.speculative_method == "mtp":
-                    self.proposer.reorder_inputs()
+
+        self._process_reorder()
 
         self._prepare_inputs()
         self.sampler.pre_process(p_done_idxs)
