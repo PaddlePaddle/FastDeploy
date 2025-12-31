@@ -540,9 +540,6 @@ class XPUMoEMethod(MoEMethodBase):
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        print("===========before decode dispatch")
-        print("topk_idx ", topk_idx)
-        print("x ", x)
         # 2. EP Dispatch
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
             use_fp8 = True
@@ -563,7 +560,6 @@ class XPUMoEMethod(MoEMethodBase):
             use_fp8=use_fp8,
             expertwise_scale=expertwise_scale,
         )
-        print("===========after decode dispatch")
         # 3. Compute ffn
         ffn_out = self.compute_ffn(
             layer,
@@ -572,7 +568,6 @@ class XPUMoEMethod(MoEMethodBase):
             token_nums_per_expert,
             valid_token_num,
         )
-        print("===========after compute ffn")
         # 4. EP combine
         return self.ep_decoder_runner.combine(
             ffn_out,
