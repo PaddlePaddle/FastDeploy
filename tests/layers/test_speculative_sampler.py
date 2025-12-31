@@ -83,6 +83,7 @@ def _create_default_sampling_metadata(
 def _create_fd_config(max_model_len):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
+    model_config.architectures = ["test_model"]
     speculative_config = SpeculativeConfig({})
     graph_opt_config = GraphOptimizationConfig({})
     scheduler_config = SchedulerConfig({})
