@@ -310,6 +310,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/update_attn_mask_offsets.cu",
         "gpu_ops/fused_neox_rope_embedding.cu",
         "gpu_ops/gelu_tanh.cu",
+        "gpu_ops/sgemm_1.cu",
     ]
 
     # pd_disaggregation
