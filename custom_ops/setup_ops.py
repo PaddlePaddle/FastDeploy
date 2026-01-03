@@ -637,12 +637,17 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
         "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
         "gpu_ops/sample_kernels/min_p_sampling_from_probs.cu",
+        "gpu_ops/get_data_ptr_ipc.cu",
+        "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
+        "gpu_ops/unset_data_ipc.cu",
+        "gpu_ops/swap_cache_batch.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
         "metax_ops/apply_rope_qkv.cu",
         "metax_ops/cache_kv_with_rope.cu",
+        "metax_ops/cpp_extensions.cc",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
