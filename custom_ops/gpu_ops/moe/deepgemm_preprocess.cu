@@ -58,9 +58,8 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
       token_nums_per_expert.data<int32_t>() + num_experts,
       topk_ids_numel,
       num_experts);
-  
-  CUDA_CHECK(cudaGetLastError());
 
+  CUDA_CHECK(cudaGetLastError());
   return {token_nums_per_expert};
 }
 
