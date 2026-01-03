@@ -29,16 +29,15 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
 {
   using namespace cute;
 
-  // Preconditions
-  CUTE_STATIC_ASSERT_V(rank(shape_MNK) == Int<3>{});                   // (M, N, K)
-  CUTE_STATIC_ASSERT_V(rank(cta_tiler) == Int<3>{});                   // (BLK_M, BLK_N, BLK_K)
+  CUTE_STATIC_ASSERT_V(rank(shape_MNK) == Int<3>{}); // (M, N, K)
+  CUTE_STATIC_ASSERT_V(rank(cta_tiler) == Int<3>{}); // (BLK_M, BLK_N, BLK_K)
 
   static_assert(is_static<AThreadLayout>::value);
   static_assert(is_static<BThreadLayout>::value);
   static_assert(is_static<CThreadLayout>::value);
 
-  CUTE_STATIC_ASSERT_V(size(tA) == size(tB));                          // NumThreads
-  CUTE_STATIC_ASSERT_V(size(tC) == size(tA));                          // NumThreads
+  CUTE_STATIC_ASSERT_V(size(tA) == size(tB)); // NumThreads
+  CUTE_STATIC_ASSERT_V(size(tC) == size(tA)); // NumThreads
 
   CUTE_STATIC_ASSERT_V(size<0>(cta_tiler) % size<0>(tA) == Int<0>{});  // BLK_M / THR_M
   CUTE_STATIC_ASSERT_V(size<2>(cta_tiler) % size<1>(tA) == Int<0>{});  // BLK_K / THR_K
@@ -62,9 +61,6 @@ gemm_device(ProblemShape shape_MNK, CtaTiler cta_tiler,
   CUTE_STATIC_ASSERT_V(congruent(select<1,2>(shape_MNK), dB));         // dB strides for shape NK
   CUTE_STATIC_ASSERT_V(congruent(select<0,1>(shape_MNK), dC));         // dC strides for shape MN
 
-  //
-  // Full and Tiled Tensors
-  //
 
   // Represent the full tensors
   Tensor mA = make_tensor(make_gmem_ptr(A), select<0,2>(shape_MNK), dA); // (M,K)
@@ -234,10 +230,8 @@ gemm_nt(int m, int n, int k,
 
 // Setup params for a TN GEMM
 // Use padded m-major smem sA, padded n-major smem sB, and k-major threads tA|tB
-template <class TA, class TB, class TC,
-          class Alpha, class Beta>
-void
-gemm_tn(int m, int n, int k,
+template <class TA, class TB, class TC, class Alpha, class Beta>
+void gemm_tn(int m, int n, int k,
         Alpha alpha,
         TA const* A, int ldA,
         TB const* B, int ldB,
@@ -247,7 +241,6 @@ gemm_tn(int m, int n, int k,
 {
   using namespace cute;
 
-  // Define shapes (dynamic)
   auto M = int(m);
   auto N = int(n);
   auto K = int(k);
@@ -285,10 +278,8 @@ gemm_tn(int m, int n, int k,
        alpha, beta);
 }
 
-template <class TA, class TB, class TC,
-          class Alpha, class Beta>
-void
-gemm(char transA, char transB, int m, int n, int k,
+template <class TA, class TB, class TC, class Alpha, class Beta>
+void gemm(char transA, char transB, int m, int n, int k,
      Alpha alpha,
      TA const* A, int ldA,
      TB const* B, int ldB,
