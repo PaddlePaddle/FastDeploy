@@ -143,6 +143,8 @@ std::vector<paddle::Tensor> WeightOnlyLinear(
     const int arch,
     const int group_size);
 
+std::vector<paddle::Tensor> Quant2dPerToken(const paddle::Tensor& x);
+
 std::vector<paddle::Tensor> MoeEPCombine(const paddle::Tensor& ffn_out,
                                          const paddle::Tensor& moe_index,
                                          const paddle::Tensor& weights,
@@ -246,7 +248,8 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
@@ -292,6 +295,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -669,6 +674,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("batch_drop"),
         py::arg("pre_ids"),
+        py::arg("mask_rollback"),
+        py::arg("recompute_token_num"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("base_model_seq_lens_this_time"),
@@ -1011,6 +1018,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",
         &SpeculateVerify,
+        py::arg("sampled_token_ids"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("step_idx"),
@@ -1274,6 +1282,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("weight_dtype"),
         py::arg("arch"),
         py::arg("group_size") = -1);
+
+  m.def(
+      "quant2d_per_token", &Quant2dPerToken, py::arg("x"), "quant x per token");
 
   m.def("xpu_moe_layer",
         &MoeLayer,

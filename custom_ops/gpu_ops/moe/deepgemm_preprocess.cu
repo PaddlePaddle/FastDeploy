@@ -41,10 +41,8 @@ __global__ void cuda_kernel(const scalar_t *__restrict__ topk_ids,
   }
 }
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
-                                            int64_t num_experts) {
-  CUDA_CHECK(cudaGetLastError());
-
+std::vector<paddle::Tensor> count_tokens_per_expert_func(
+    const paddle::Tensor &topk_ids, int64_t num_experts) {
   int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
 
   auto token_nums_per_expert = paddle::empty(
@@ -59,7 +57,26 @@ paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
       token_nums_per_expert.data<int32_t>() + num_experts,
       topk_ids_numel,
       num_experts);
-
+  
   CUDA_CHECK(cudaGetLastError());
-  return token_nums_per_expert;
+
+  return {token_nums_per_expert};
 }
+
+std::vector<paddle::DataType> count_tokens_per_expert_func_infer_dtype(
+    const paddle::DataType &topk_ids_dtype, int64_t num_experts) {
+  return {paddle::DataType::INT32};
+}
+
+std::vector<std::vector<int64_t>> count_tokens_per_expert_func_infer_shape(
+    const std::vector<int64_t> &topk_ids_shape, int64_t num_experts) {
+  return {{2, num_experts}};
+}
+
+PD_BUILD_STATIC_OP(count_tokens_per_expert_func)
+    .Inputs({"topk_ids"})
+    .Outputs({"token_nums_per_expert"})
+    .Attrs({"num_experts:int64_t"})
+    .SetKernelFn(PD_KERNEL(count_tokens_per_expert_func))
+    .SetInferShapeFn(PD_INFER_SHAPE(count_tokens_per_expert_func_infer_shape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(count_tokens_per_expert_func_infer_dtype));

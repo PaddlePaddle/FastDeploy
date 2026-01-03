@@ -21,6 +21,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_MoeForCausalLM,
     Ernie4_5_MoePretrainedModel,
@@ -46,9 +47,17 @@ from fastdeploy.model_executor.models.qwen3 import (
     Qwen3ForCausalLM,
     Qwen3PretrainedModel,
 )
+from fastdeploy.model_executor.models.qwen3_vl.qwen3_vl import (
+    Qwen3VLForConditionalGeneration,
+    Qwen3VLPretrainedModel,
+)
 from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
+)
+from fastdeploy.model_executor.utils import (
+    multi_switch_config_context,
+    process_final_after_loading,
 )
 from fastdeploy.rl.rollout_config import RolloutModelConfig
 
@@ -64,13 +73,33 @@ class RolloutModel(nn.Layer):
 
     def _init_model(self) -> nn.Layer:
         """Load model from loader based on config."""
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        return model_loader.load_model(fd_config=self.fd_config)
+
+    def load_weights(self, weights_iterator):
+        """Load weights_iterator."""
+
         context = paddle.LazyGuard()
         architectures = f"{self.fd_config.model_config.architectures[0]}RL"
-        with context:
-            model_cls = ModelRegistry.get_class(architectures)
-            model = model_cls(self.fd_config)
-        model.eval()
-        return model
+        if self.fd_config.quant_config is not None:
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.quant_config, "is_checkpoint_bf16", True),
+                (self.fd_config.load_config, "dynamic_load_weight", False),
+            )
+        else:
+            # bf16
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.load_config, "dynamic_load_weight", False)
+            )
+        with quantization_context:
+            with context:
+                model_cls = ModelRegistry.get_class(architectures)
+                model = model_cls(self.fd_config)
+            model.eval()
+            model.load_weights(weights_iterator)
+            if self.fd_config.speculative_config.model_type != "mtp":
+                process_final_after_loading(model, self.fd_config)
+        self.rollout_model = model
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""
@@ -505,6 +534,54 @@ class Qwen2_5_VLForConditionalGenerationRL(Qwen2_5_VLForConditionalGeneration, B
     def name(self) -> str:
         """name"""
         return "Qwen2_5_VLForConditionalGenerationRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx):
+            # FFN mappings
+            for ph in place_holders:
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
+                    f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
+                )
+
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
+
+
+class Qwen3VLForConditionalGenerationRL(Qwen3VLForConditionalGeneration, BaseRLModel):
+    """
+    Qwen3VLForConditionalGenerationRL
+    """
+
+    _get_tensor_parallel_mappings = Qwen3VLPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Qwen3VLForConditionalGenerationRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Qwen3VLForConditionalGenerationRL"
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         if self._mappings_built:

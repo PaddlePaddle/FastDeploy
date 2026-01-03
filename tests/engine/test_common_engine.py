@@ -39,8 +39,8 @@ class TestCommonEngine(unittest.TestCase):
                 model=MODEL_NAME,
                 max_model_len=8192,
                 tensor_parallel_size=1,
-                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 10,
-                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 10,
+                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")),
+                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")),
             )
 
             # Create and start the engine service
@@ -210,8 +210,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         engine_worker_queue_port = int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778"))
         cache_queue_port = int(os.getenv("FD_CACHE_QUEUE_PORT", "6779"))
         if dp and dp > 1:
-            engine_worker_queue_port = [engine_worker_queue_port + 20 + i for i in range(dp // nnode)]
-            cache_queue_port = [cache_queue_port + 20 + i for i in range(dp // nnode)]
+            engine_worker_queue_port = [engine_worker_queue_port + 21 + i for i in range(dp // nnode)]
+            cache_queue_port = [cache_queue_port + 21 + i for i in range(dp // nnode)]
 
         args = EngineArgs(
             model=MODEL_NAME,

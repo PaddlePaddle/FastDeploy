@@ -54,6 +54,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.platforms import current_platform
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -539,6 +540,10 @@ class Ernie4_5_VLModel(nn.Layer):
         text_image_index_out(vl_moe_meta.token_type_ids, vl_moe_meta.text_index, vl_moe_meta.image_index)
 
         hidden_states = input_embeddings
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
 
         for i in range(self.num_layers):
@@ -550,6 +555,10 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
+
         return out
 
 
@@ -726,7 +735,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.linear.weight.set_value(
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
@@ -969,7 +978,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
@@ -977,7 +986,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         )
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.vision_config.get("num_heads"),
             num_key_value_heads=config.vision_config.get("num_heads"),

@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-from functools import partial
 from typing import Optional
 
 import numpy as np
@@ -160,15 +159,15 @@ class VisionFlashAttention2(nn.Layer):
         self,
         dim: int,
         num_heads: int = 16,
-        tensor_parallel_degree: int = 1,
+        tensor_model_parallel_size: int = 1,
         tensor_parallel_rank: int = 0,
         model_format: str = "",
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
-        self.tensor_parallel_degree = tensor_parallel_degree
+        self.tensor_model_parallel_size = tensor_model_parallel_size
         self.tensor_parallel_rank = tensor_parallel_rank
-        if tensor_parallel_degree > 1:
+        if tensor_model_parallel_size > 1:
             use_fuse_matmul_bias = False if current_platform.is_maca() or current_platform.is_iluvatar() else True
             self.qkv = ColumnParallelLinear(
                 dim,
@@ -200,7 +199,7 @@ class VisionFlashAttention2(nn.Layer):
         self.head_dim = dim // num_heads  # must added
         self.num_heads = num_heads
         self.hidden_size = dim
-        self.num_heads_per_rank = divide(self.num_heads, self.tensor_parallel_degree)
+        self.num_heads_per_rank = divide(self.num_heads, self.tensor_model_parallel_size)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
@@ -210,7 +209,9 @@ class VisionFlashAttention2(nn.Layer):
         if load_bias:
             head_dim = self.hidden_size // self.num_heads
             shard_weight = loaded_weight[...].reshape([3, self.num_heads, head_dim])
-            shard_weight = paddle.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = paddle.split(shard_weight, self.tensor_model_parallel_size, axis=-2)[
+                self.tensor_parallel_rank
+            ]
             shard_weight = shard_weight.reshape([-1])
         else:
             shard_weight = loaded_weight[...].reshape(
@@ -221,7 +222,9 @@ class VisionFlashAttention2(nn.Layer):
                     self.head_dim,
                 ]
             )
-            shard_weight = paddle.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = paddle.split(shard_weight, self.tensor_model_parallel_size, axis=-2)[
+                self.tensor_parallel_rank
+            ]
             shard_weight = shard_weight.reshape([self.hidden_size, -1])
         shard_weight = get_tensor(shard_weight)
         shard_weight = fd_cast(shard_weight, param)
@@ -253,7 +256,7 @@ class VisionFlashAttention2(nn.Layer):
                 [
                     seq_length,
                     3,
-                    self.num_heads // self.tensor_parallel_degree,
+                    self.num_heads // self.tensor_model_parallel_size,
                     -1,
                 ]
             )
@@ -333,13 +336,13 @@ class VisionMlp(nn.Layer):
         dim: int,
         hidden_dim: int,
         hidden_act: str,
-        tensor_parallel_degree: int = 1,
+        tensor_model_parallel_size: int = 1,
         model_format: str = "",
     ) -> None:
         super().__init__()
-        self.tensor_parallel_degree = tensor_parallel_degree
+        self.tensor_model_parallel_size = tensor_model_parallel_size
 
-        if self.tensor_parallel_degree > 1:
+        if self.tensor_model_parallel_size > 1:
             self.fc1 = ColumnParallelLinear(
                 dim,
                 hidden_dim,
@@ -419,7 +422,7 @@ class DFNRopeVisionBlock(nn.Layer):
     def __init__(
         self,
         config,
-        tensor_parallel_degree: int,
+        tensor_model_parallel_size: int,
         tensor_parallel_rank: int,
         attn_implementation: str = "sdpa",
         model_format: str = "",
@@ -438,7 +441,7 @@ class DFNRopeVisionBlock(nn.Layer):
         self.attn = VisionFlashAttention2(
             config.embed_dim,
             num_heads=config.num_heads,
-            tensor_parallel_degree=tensor_parallel_degree,
+            tensor_model_parallel_size=tensor_model_parallel_size,
             tensor_parallel_rank=tensor_parallel_rank,
             model_format=model_format,
         )
@@ -446,7 +449,7 @@ class DFNRopeVisionBlock(nn.Layer):
             dim=config.embed_dim,
             hidden_dim=mlp_hidden_dim,
             hidden_act=config.hidden_act,
-            tensor_parallel_degree=tensor_parallel_degree,
+            tensor_model_parallel_size=tensor_model_parallel_size,
             model_format=model_format,
         )
         self.config = config
@@ -543,7 +546,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             [
                 DFNRopeVisionBlock(
                     config.vision_config,
-                    config.pretrained_config.tensor_parallel_degree,
+                    config.pretrained_config.tensor_model_parallel_size,
                     config.pretrained_config.tensor_parallel_rank,
                     model_format=model_format,
                 )
@@ -663,63 +666,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             paddle.Tensor: _description_
         """
         return self.forward(hidden_states, grid_thw)
-
-    @classmethod
-    def _get_tensor_parallel_mappings(cls, config, is_split=True):
-        """
-        dummy
-        """
-
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
-
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-        )
-        vision_config = config.vision_config
-
-        def split_qkv_weight(x):
-            head_dim = vision_config.hidden_size // vision_config.num_heads
-            x = x.reshape(
-                [
-                    vision_config.hidden_size,
-                    3,
-                    vision_config.num_heads,
-                    head_dim,
-                ]
-            )
-            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
-            x = x.reshape([vision_config.hidden_size, -1])
-            return x
-
-        def split_qkv_bias(x):
-            head_dim = vision_config.hidden_size // vision_config.num_heads
-            x = x.reshape([3, vision_config.num_heads, head_dim])
-            x = np.split(x, vision_config.tensor_parallel_degree, axis=-2)[vision_config.tensor_parallel_rank]
-            x = x.reshape([-1])
-            return x
-
-        def get_tensor_parallel_split_mappings(depth):
-            final_actions = {}
-            base_actions = {
-                "vision_model.blocks.0.attn.proj.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.fc1.weight": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc1.bias": partial(fn, is_column=True),
-                "vision_model.blocks.0.fc2.weight": partial(fn, is_column=False),
-                "vision_model.blocks.0.qkv.weight": split_qkv_weight,
-                "vision_model.blocks.0.qkv.bias": split_qkv_bias,
-            }
-
-            for key, action in base_actions.items():
-                if "blocks.0." in key:
-                    for i in range(depth):
-                        newkey = key.replace("blocks.0.", f"blocks.{i}.")
-                        final_actions[newkey] = action
-            return final_actions
-
-        mappings = get_tensor_parallel_split_mappings(vision_config.depth)
-        return mappings
 
     def load_state_dict(self, state_dict):
         params_dict = dict(self.named_parameters())

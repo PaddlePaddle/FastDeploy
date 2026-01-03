@@ -52,7 +52,7 @@ def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
             try:
                 func = plugin.load()
                 plugins[plugin.name] = func
-            except Exception:
-                logger.exception("Failed to load plugin %s", plugin.name)
+            except Exception as e:
+                logger.exception(f"Failed to load plugin {plugin.name}, error: {e}")
 
     return plugins
