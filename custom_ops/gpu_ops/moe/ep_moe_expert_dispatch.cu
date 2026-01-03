@@ -958,6 +958,7 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
           token_nums_per_expert_cumsum->data<int64_t>(),
           token_nums_per_expert_padded_cumsum->data<int64_t>(),
           m_indices->data<int>());
+  CUDA_CHECK(cudaGetLastError());
 }
 
 std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
