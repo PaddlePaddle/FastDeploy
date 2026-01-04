@@ -1388,8 +1388,10 @@ class PrefixCacheManager:
         cpu_match_token_num: int,
         swap_node_ids: list,
     ):
-        position = request.multimodal_inputs["mm_positions"][chunk_idx]
-        revert_tokens = matched_token_num - position.offset
+        # position = request.multimodal_inputs["mm_positions"][chunk_idx]
+        # revert_tokens = matched_token_num - position.offset
+        # TODO(chengyanfu): fix when is_chunked_mm_input=True, revert all matched tokens
+        revert_tokens = matched_token_num
         match_block_ids = [node.block_id for node in matche_nodes]
         logger.warning(
             f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_block_ids}"
