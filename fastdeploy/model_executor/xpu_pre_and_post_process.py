@@ -437,7 +437,6 @@ def step_xpu(
     block_size: int,
     enc_dec_block_num: int,
     speculative_config: SpeculativeConfig,
-    max_draft_token_num: int,
     enable_prefix_caching: bool = False,
 ) -> None:
     if speculative_config.method is not None:
