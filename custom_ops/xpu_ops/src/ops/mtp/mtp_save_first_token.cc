@@ -18,16 +18,8 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "paddle/extension.h"
+#include "speculate_msg.h"
 
-#define MAX_BSZ 256
-
-// #define SAVE_WITH_OUTPUT_DEBUG
-#define MAX_DRAFT_TOKENS 6
-struct speculate_msgdata {
-  long mtype;  // NOLINT
-  int mtext[2 + MAX_BSZ +
-            MAX_BSZ * MAX_DRAFT_TOKENS];  // stop_flag, token_num, tokens
-};
 
 void MTPSaveFirstToken(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
@@ -111,8 +103,8 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
 #ifdef SAVE_WITH_OUTPUT_DEBUG
     printf("bid: %d. 1: %d. 2: %d.\n",
            i,
-           (int)x_data[i * x_dim],
-           (int)x_data[i * x_dim + 1]);
+           static_cast<int>(x_data[i * x_dim]),
+           static_cast<int>(x_data[i * x_dim + 1]));
 #endif
     if ((skip_chunk_prefill &&
          seq_lens_decoder_data[i] < prompt_lens_data[i]) ||
@@ -128,9 +120,9 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
 #endif
       msg_sed.mtext[i + 2] = 2;
       msg_sed.mtext[i * MAX_DRAFT_TOKENS + 2 + MAX_BSZ] =
-          (int)x_data[i * x_dim];
+          static_cast<int>(x_data[i * x_dim]);
       msg_sed.mtext[i * MAX_DRAFT_TOKENS + 1 + 2 + MAX_BSZ] =
-          (int)x_data[i * x_dim + 1];
+          static_cast<int>(x_data[i * x_dim + 1]);
     }
 
 #ifdef SAVE_WITH_OUTPUT_DEBUG
@@ -145,8 +137,8 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
 #ifdef SAVE_WITH_OUTPUT_DEBUG
   std::cout << "msg data: ";
   for (int i = 0; i < bsz; i++) {
-    std::cout << " " << (int)x_data[2 * i] << " ";
-    std::cout << " " << (int)x_data[2 * i + 1];
+    std::cout << " " << static_cast<int>(x_data[2 * i]) << " ";
+    std::cout << " " << static_cast<int>(x_data[2 * i + 1]);
   }
   std::cout << std::endl;
 #endif

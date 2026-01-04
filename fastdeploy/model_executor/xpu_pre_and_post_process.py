@@ -528,7 +528,7 @@ def step_xpu(
                 share_inputs["accept_num"],
                 block_size,
                 enc_dec_block_num,
-                max_draft_token_num,
+                speculative_config.num_speculative_tokens,
             )
     else:
         step_paddle(
