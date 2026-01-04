@@ -478,11 +478,6 @@ class CacheTransferManager:
         """
         try:
             if self.storage_backend_type == "mooncake":
-                k_cache_keys = k_cache_keys[:start_read_block_idx]
-                v_cache_keys = v_cache_keys[:start_read_block_idx]
-                gpu_block_ids = gpu_block_ids[:start_read_block_idx]
-                cpu_block_ids = cpu_block_ids[:start_read_block_idx]
-
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
@@ -552,7 +547,6 @@ class CacheTransferManager:
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
             k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
             v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
-
             match_block_num = 0
             if self.storage_backend_type == "mooncake":
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
@@ -562,6 +556,10 @@ class CacheTransferManager:
                 )
             logger.info(f"Matched {match_block_num} blocks in cache storage for read task {task.task_id}")
 
+            k_cache_keys = k_cache_keys[:match_block_num]
+            v_cache_keys = v_cache_keys[:match_block_num]
+            gpu_block_ids = gpu_block_ids[:match_block_num]
+            cpu_block_ids = cpu_block_ids[:match_block_num]
             valid_gpu_block_ids = []
             if match_block_num > 0:
                 # TODO: support timeout with actual block count
@@ -569,7 +567,7 @@ class CacheTransferManager:
                     valid_gpu_block_ids = self._run_read_storage(
                         task.task_id,
                         task.token_ids,
-                        match_block_num,
+                        task.start_read_block_idx + match_block_num,
                         k_cache_keys,
                         v_cache_keys,
                         gpu_block_ids,
@@ -608,11 +606,6 @@ class CacheTransferManager:
     ):
         try:
             if self.storage_backend_type == "mooncake":
-                k_cache_keys = k_cache_keys[start_write_block_idx:]
-                v_cache_keys = v_cache_keys[start_write_block_idx:]
-                gpu_block_ids = gpu_block_ids[start_write_block_idx:]
-                cpu_block_ids = cpu_block_ids[start_write_block_idx:]
-
                 key_cache_size = [
                     self.key_cache_shape[0],
                     self.key_cache_shape[1],
@@ -658,7 +651,6 @@ class CacheTransferManager:
                 for i in range(self.num_layers + self.num_extra_layers):
                     key_cache.append(self.gpu_cache_kvs[f"key_caches_{i}_rank{self.rank}.device{self.device}"])
                     val_cache.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{self.rank}.device{self.device}"])
-                gpu_block_ids = gpu_block_ids[start_write_block_idx:]
                 write_block_num = self.storage_backend.write(
                     task_id, key_cache, val_cache, token_ids, gpu_block_ids, start_write_block_idx, timeout
                 )
@@ -686,6 +678,10 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
 
+            k_cache_keys = k_cache_keys[match_block_num:]
+            v_cache_keys = v_cache_keys[match_block_num:]
+            gpu_block_ids = gpu_block_ids[match_block_num:]
+            cpu_block_ids = cpu_block_ids[match_block_num:]
             if match_block_num >= len(k_cache_keys):
                 logger.info(f"No uncached keys found for task {task.task_id}")
                 gpu_block_ids = []

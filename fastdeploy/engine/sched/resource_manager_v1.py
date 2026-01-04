@@ -940,7 +940,7 @@ class ResourceManagerV1(ResourceManager):
             # Report the number of cached tokens to Prometheus metrics
             main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
             main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
 
             if matched_token_num == request.need_prefill_tokens:
                 request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
