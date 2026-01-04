@@ -65,6 +65,7 @@ else:
         speculate_get_logits,
         speculate_save_output_topk,
         update_attn_mask_offsets,
+        set_data_ipc,
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -94,6 +95,7 @@ class MTPProposer(Proposer):
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
+        self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -209,6 +211,9 @@ class MTPProposer(Proposer):
                 self.num_main_model_layers,
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
+                logger.info(
+                    f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -232,28 +237,50 @@ class MTPProposer(Proposer):
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
+                logger.info(f"..creating kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"key_caches_{i}"], f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 self.cache_kvs[f"value_caches_{i}"] = paddle.full(
                     shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"value_caches_{i}"], f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 if kv_cache_quant_type == "block_wise_fp8":
                     self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"key_cache_scales_{i}"],
+                        f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
                     self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"value_cache_scales_{i}"],
+                        f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
@@ -942,7 +969,7 @@ class MTPProposer(Proposer):
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
-                if self.enable_logprob and substep == 0:
+                if self.enable_logprob and self.enable_draft_logprob and substep == 0:
                     first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
                     speculate_get_logits(
