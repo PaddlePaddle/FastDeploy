@@ -60,7 +60,8 @@ def compute_kernel(
     write_ptr += q_head_id * output_padding_len + page_id * PAGE_SIZE
     write_ptr += offset_m[:, None] * output_padding_len + offset_n[None, :]
 
-    tl.store(write_ptr, accumulator, mask=mask)
+    mask2 = (page_id * PAGE_SIZE + offset_n[None, :]) < kv_len_this_batch
+    tl.store(write_ptr, accumulator, mask=mask & mask2)
 
 
 def indexer_mha_page_logits(query, indexer_cache, weight, block_tables, cu_seqlen_q, seq_lens_decoder):
