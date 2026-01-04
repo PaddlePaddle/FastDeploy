@@ -201,6 +201,17 @@ class ResourceManagerV1(ResourceManager):
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
+        self.init_reserve_output_block_num = (
+            envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # int
+        self.decay_output_block_num = (
+            envs.FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # float
+        self.min_reserve_output_block_num = (
+            envs.FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # int
+        self.current_reserve_output_block_num = self.init_reserve_output_block_num
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -296,6 +307,7 @@ class ResourceManagerV1(ResourceManager):
                 # The request can be scheduled.
                 can_schedule = True
                 break
+        self.current_reserve_output_block_num = self.init_reserve_output_block_num
         return can_schedule
 
     def _update_mm_hashes(self, request):
@@ -719,7 +731,7 @@ class ResourceManagerV1(ResourceManager):
                             request.need_prefill_tokens + self.config.cache_config.block_size - 1
                         ) // self.config.cache_config.block_size + len(
                             self.running
-                        ) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+                        ) * self.current_reserve_output_block_num
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
@@ -776,7 +788,7 @@ class ResourceManagerV1(ResourceManager):
                             request.need_prefill_tokens + self.config.cache_config.block_size - 1
                         ) // self.config.cache_config.block_size + len(
                             self.running
-                        ) * envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+                        ) * self.current_reserve_output_block_num
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
@@ -813,6 +825,11 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+            self.current_reserve_output_block_num = max(
+                int(self.current_reserve_output_block_num - self.decay_output_block_num),
+                self.min_reserve_output_block_num,
+                0,
+            )
 
             self.update_metrics()
 
