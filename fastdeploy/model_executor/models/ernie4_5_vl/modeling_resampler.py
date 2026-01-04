@@ -15,7 +15,6 @@
 """
 
 from copy import deepcopy
-from functools import partial
 
 import numpy as np
 import paddle
@@ -156,7 +155,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.temporal_conv_size = temporal_conv_size
         self.use_recompute_resampler = False
         self.use_temporal_conv = True
-        self.tensor_parallel_degree = config.pretrained_config.tensor_parallel_degree
+        self.tensor_model_parallel_size = config.pretrained_config.tensor_model_parallel_size
         self.prefix_name = prefix_name
 
         # for 空间四合一
@@ -175,7 +174,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                         has_bias=True,
                         fuse_matmul_bias=use_fuse_matmul_bias,
                     )
-                    if self.tensor_parallel_degree > 1
+                    if self.tensor_model_parallel_size > 1
                     else nn.Linear(self.spatial_dim, self.spatial_dim)
                 ),
                 nn.GELU(),
@@ -207,7 +206,7 @@ class VariableResolutionResamplerModel(nn.Layer):
             out_config.hidden_size = out_dim
             self.after_norm = RMSNorm(out_config)
 
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 set_weight_attrs(self.spatial_linear[0].weight, {"output_dim": False})
 
     def spatial_conv_reshape(self, x, spatial_conv_size):
@@ -233,17 +232,17 @@ class VariableResolutionResamplerModel(nn.Layer):
             x = self.spatial_conv_reshape(x, self.spatial_conv_size)
 
             num_pad = 0
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 num_pad = (
-                    x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
+                    x.shape[0] + self.tensor_model_parallel_size - 1
+                ) // self.tensor_model_parallel_size * self.tensor_model_parallel_size - x.shape[0]
 
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
 
             x = self.spatial_linear(x)
 
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = AllGatherOp.apply(x)
 
             if num_pad > 0:
@@ -299,13 +298,13 @@ class VariableResolutionResamplerModel(nn.Layer):
 
         def fwd_temporal(x):
             num_pad = 0
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 num_pad = (
-                    x.shape[0] + self.tensor_parallel_degree - 1
-                ) // self.tensor_parallel_degree * self.tensor_parallel_degree - x.shape[0]
+                    x.shape[0] + self.tensor_model_parallel_size - 1
+                ) // self.tensor_model_parallel_size * self.tensor_model_parallel_size - x.shape[0]
             if num_pad > 0:
                 x = paddle.nn.functional.pad(x, [0, num_pad, 0, 0])
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = ScatterOp.apply(x, axis=0)
             x = self.temporal_linear(x)
 
@@ -317,7 +316,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         def fwd_mlp(x):
             x = self.mlp(x)
             x = self.after_norm(x)
-            if self.tensor_parallel_degree > 1:
+            if self.tensor_model_parallel_size > 1:
                 x = AllGatherOp.apply(x)
             return x
 
@@ -351,31 +350,3 @@ class VariableResolutionResamplerModel(nn.Layer):
                 raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
             else:
                 param.copy_(tensor, False)
-
-    @classmethod
-    def _get_tensor_parallel_mappings(cls, config, is_split=True):
-
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
-
-        fn = split_or_merge_func(
-            is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
-            tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads,
-        )
-        res = {"spatial_linear.0.weight": partial(fn, is_column=False)}
-        for k in (
-            "spatial_linear.0.bias",  # row linear bias
-            "spatial_linear.2.weight",
-            "spatial_linear.2.bias",  # linear
-            "spatial_linear.3.weight",
-            "spatial_linear.3.bias",  # layernorm
-            "temporal_linear.0.weight",
-            "temporal_linear.0.weight",  # linear
-            "temporal_linear.2.weight",
-            "temporal_linear.2.bias",  # linear
-            "temporal_linear.3.weight",
-            "temporal_linear.3.bias",  # bias
-        ):
-            res.update({k: lambda x: x})
-        return res

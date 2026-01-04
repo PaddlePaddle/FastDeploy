@@ -209,6 +209,13 @@ class WeightsMapper:
         return self._map_name(weight_name)
 
 
+def remap_weight_keys(weights_iterator, mapper: dict):
+    return (
+        (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
+        for key, value in weights_iterator
+    )
+
+
 def process_weights_before_loading(
     *, skip_prefixes: Optional[List[str]] = None, mapper: Optional[WeightsMapper] = None
 ):
@@ -383,7 +390,7 @@ def v1_loader_support(fd_config):
 
     def _get_unsupported_quant():
         if current_platform.is_cuda():
-            return {"w4a8", "w4afp8", "wint2"}
+            return {"w4a8", "wint2"}
         elif current_platform.is_xpu():
             return {"w4a8", "w8a8"}
         return set()
