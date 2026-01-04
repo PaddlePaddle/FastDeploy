@@ -1499,10 +1499,9 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache(profile=True)
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
+        self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
@@ -1518,10 +1517,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        self.initialize_kv_cache()
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
