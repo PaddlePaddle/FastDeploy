@@ -61,6 +61,7 @@ class FakeModelConfig:
         self.enable_mm = False
         self.max_model_len = 512
         self.logprobs_mode = "raw_logprobs"
+        self.architectures = ["test_model"]
 
 
 def get_default_test_fd_config():
