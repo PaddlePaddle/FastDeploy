@@ -1478,7 +1478,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.fd_config.speculative_config,
                 self.fd_config.cache_config.enable_prefix_caching,
             )
-
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
