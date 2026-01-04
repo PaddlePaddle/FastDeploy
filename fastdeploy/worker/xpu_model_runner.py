@@ -15,19 +15,23 @@
 """
 
 import os
+import queue
 import random
 import time
+from contextlib import contextmanager
+from threading import Thread
 from typing import List, Optional
 
 import numpy as np
 import paddle
+import zmq
 from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -59,9 +63,24 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
 from fastdeploy.spec_decode import MTPProposer
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
-from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
 logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
+
+
+@contextmanager
+def kv_signal_sender_context_manager(pd_disaggregation_mode):
+    sender = None
+    try:
+        sender = (
+            create_kv_signal_sender()
+            if pd_disaggregation_mode == "per_chunk" or pd_disaggregation_mode == "per_query"
+            else None
+        )
+        yield sender
+    finally:
+        if sender is not None:
+            destroy_kv_signal_sender(sender)
 
 
 class XPUModelRunner(ModelRunnerBase):
@@ -155,6 +174,106 @@ class XPUModelRunner(ModelRunnerBase):
         self.forward_meta: ForwardMeta = None
 
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
+
+        # Initialize ZMQ client for async output
+        self.zmq_client = None
+        self.async_output_queue = None
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            logger.info(f"zmq client get_save_output_rank{local_rank}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            self.zmq_client.connect()
+            self.zmq_client.socket.SNDTIMEO = 3000
+            self.async_output_queue: queue.Queue = queue.Queue()
+            self.async_output_copy_thread = Thread(
+                target=self._async_output_busy_loop,
+                daemon=True,
+                name="WorkerAsyncOutputCopy",
+            )
+            self.async_output_copy_thread.start()
+        # prompt logprobs state
+        self.prompt_logprobs_reqs: dict[str, Request] = {}
+        self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
+
+    def _async_output_busy_loop(self):
+        """Entrypoint for the thread which handles outputs asynchronously."""
+        while True:
+            try:
+                if self.async_output_queue is None or self.zmq_client is None:
+                    break
+                output = self.async_output_queue.get()
+                if self.zmq_client is not None:
+                    self.zmq_client.send_pyobj(output)
+            except Exception as e:
+                logger.exception("Exception in async output loop: %s", e)
+
+    def _get_prompt_logprobs_list(self, hidden_states: paddle.Tensor) -> list[Optional[LogprobsTensors]]:
+        """
+        Build prompt_logprobs for requests that asked for it.
+        """
+        if len(self.prompt_logprobs_reqs) > 0:
+            assert (
+                not self.fd_config.cache_config.enable_prefix_caching
+            ), "prompt_logprobs must disable prefix caching, --no-enable-prefix-caching."
+
+        if len(self.prompt_logprobs_reqs) == 0:
+            return self.scheduler_config.max_num_seqs * [None]
+
+        logprobs_mode = self.fd_config.model_config.logprobs_mode
+        prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
+        completed_prefill_reqs: list[Request] = []
+
+        for req_id, request in self.prompt_logprobs_reqs.items():
+            if not hasattr(request, "sampling_params") or request.sampling_params is None:
+                continue
+            num_prompt_logprobs = request.sampling_params.prompt_logprobs
+            if request.prompt_token_ids is None or num_prompt_logprobs is None:
+                continue
+            if num_prompt_logprobs == -1:
+                num_prompt_logprobs = self.ori_vocab_size
+
+            num_tokens = request.prefill_end_index - request.prefill_start_index
+            num_prompt_tokens = len(request.prompt_token_ids)
+
+            logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
+            if not logprobs_tensors:
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
+
+            start_idx = request.prefill_start_index
+            start_tok = start_idx + 1
+            num_remaining_tokens = num_prompt_tokens - start_tok
+            if num_tokens <= num_remaining_tokens:
+                num_logits = num_tokens
+            else:
+                num_logits = num_remaining_tokens
+                completed_prefill_reqs.append(request)
+                prompt_logprobs_list[request.idx] = logprobs_tensors
+            if num_logits <= 0:
+                continue
+
+            offset = self.share_inputs["cu_seqlens_q"][request.idx]
+            prompt_hidden_states = hidden_states[offset : offset + num_logits]
+            logits = self.model.compute_logits(prompt_hidden_states)
+            prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
+            prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
+            if logprobs_mode == "raw_logprobs":
+                raw_logprobs = self.sampler.compute_logprobs(logits)
+            elif logprobs_mode == "raw_logits":
+                raw_logprobs = logits
+            else:
+                raw_logprobs = self.sampler.compute_logprobs(logits)
+            token_ids, logprobs, ranks = self.sampler.gather_logprobs(
+                raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
+            )
+            chunk_slice = slice(start_idx, start_idx + num_logits)
+            logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
+            logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
+            logprobs_tensors.selected_token_ranks[chunk_slice].copy_(ranks, False)
+
+        for req in completed_prefill_reqs:
+            del self.prompt_logprobs_reqs[req.request_id]
+            del self.in_progress_prompt_logprobs[req.request_id]
+        return prompt_logprobs_list
 
     def exist_prefill(self):
         """
@@ -404,6 +523,13 @@ class XPUModelRunner(ModelRunnerBase):
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+
+                if (
+                    hasattr(request, "sampling_params")
+                    and request.sampling_params is not None
+                    and request.sampling_params.prompt_logprobs is not None
+                ):
+                    self.prompt_logprobs_reqs[request.request_id] = request
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
@@ -704,7 +830,9 @@ class XPUModelRunner(ModelRunnerBase):
             dtype="int64",
         )
         self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        # self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        # self.share_inputs["top_p"] default to 0.0 on XPU for consideration of the performance
+        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["top_k_list"] = [0] * max_num_seqs
         self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
@@ -1247,109 +1375,112 @@ class XPUModelRunner(ModelRunnerBase):
         """
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.kv_signal_sender = create_kv_signal_sender()
-        # 1. Prepare inputs of model and decoder.
-        self._prepare_inputs(is_dummy_run=is_dummy_run)
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop() and not is_dummy_run:
-            self._execute_empty_input(self.forward_meta)
-            return None
+        with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
+            self.kv_signal_sender = sender
+            # 1. Prepare inputs of model and decoder.
+            self._prepare_inputs(is_dummy_run=is_dummy_run)
+            # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+            # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+            # when there is data on other runner, the current runner is required to execute part of the model.
+            if not self.not_need_stop() and not is_dummy_run:
+                self._execute_empty_input(self.forward_meta)
+                return None
 
-        # 2. Padding inputs for cuda grph
+            # 2. Padding inputs for cuda grph
 
-        # 3. Execute model
-        if self.enable_mm:
-            model_output = self.model(
-                self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
+            # 3. Execute model
+            if self.enable_mm:
+                model_output = self.model(
+                    self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
+                )
+            else:
+                model_output = self.model(
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta,
+                )
+
+            hidden_states = xpu_process_output(
+                model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
             )
-        else:
-            model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta,
-            )
+            # 4. Compute logits, Sample
+            logits = self.model.compute_logits(hidden_states)
+            sampler_output = None
+            if not self.speculative_decoding:
+                sampler_output = self.sampler(logits, self.sampling_metadata)
+            else:
+                self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    self.model_config.max_model_len,
+                    self.share_inputs,
+                )
 
-        hidden_states = xpu_process_output(
-            model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
-        )
-        # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
-        sampler_output = None
-        if not self.speculative_decoding:
-            sampler_output = self.sampler(logits, self.sampling_metadata)
-        else:
-            self.sampler(
-                logits,
-                self.sampling_metadata,
-                self.model_config.max_model_len,
+            # 5. Speculative decode
+
+            # 6. Post Process
+            prompt_logprobs_list = None
+            if not self.speculative_decoding:
+                prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
+
+            model_output_data = ModelOutputData(
+                next_tokens=self.share_inputs["next_tokens"],
+                stop_flags=self.share_inputs["stop_flags"],
+                step_idx=self.share_inputs["step_idx"],
+                max_dec_len=self.share_inputs["max_dec_len"],
+                pre_ids=self.share_inputs["pre_ids"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                eos_token_id=self.share_inputs["eos_token_id"],
+                not_need_stop=self.share_inputs["not_need_stop"],
+                input_ids=self.share_inputs["input_ids"],
+                stop_nums=self.share_inputs["stop_nums"],
+                seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                is_block_step=self.share_inputs["is_block_step"],
+                # 投机解码
+                full_hidden_states=model_output if self.speculative_decoding else None,
+                msg_queue_id=self.parallel_config.msg_queue_id,
+                mp_rank=self.local_rank,
+                use_ep=self.parallel_config.use_ep,
+                draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+                actual_draft_token_num=(
+                    self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+                ),
+                accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+                accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
+                prompt_logprobs_list=prompt_logprobs_list,
+            )
+            if self.speculative_decoding:
+                # base model post process
+                xpu_post_process_specualate(model_output_data, False, is_dummy_run)
+            else:
+                xpu_post_process_normal(
+                    sampler_output=sampler_output,
+                    model_output=model_output_data,
+                    share_inputs=self.share_inputs,
+                    block_size=self.cache_config.block_size,
+                    skip_save_output=is_dummy_run,
+                    async_output_queue=self.async_output_queue,
+                    think_end_id=self.model_config.think_end_id,
+                    line_break_id=self.model_config.line_break_id,
+                )
+
+            # draft model propose
+            if self.speculative_method == "mtp":
+                self.proposer.run(full_hidden_states=model_output)
+
+            # 7. Updata 'infer_seed' and step_paddle()
+            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            step_xpu(
                 self.share_inputs,
+                self.cache_config.block_size,
+                self.cache_config.enc_dec_block_num,
+                self.speculative_decoding,
+                self.speculative_config.num_speculative_tokens,
             )
-
-        # 5. Speculative decode
-
-        # 6. Post Process
-        model_output_data = ModelOutputData(
-            next_tokens=self.share_inputs["next_tokens"],
-            stop_flags=self.share_inputs["stop_flags"],
-            step_idx=self.share_inputs["step_idx"],
-            max_dec_len=self.share_inputs["max_dec_len"],
-            pre_ids=self.share_inputs["pre_ids"],
-            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
-            eos_token_id=self.share_inputs["eos_token_id"],
-            not_need_stop=self.share_inputs["not_need_stop"],
-            input_ids=self.share_inputs["input_ids"],
-            stop_nums=self.share_inputs["stop_nums"],
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            is_block_step=self.share_inputs["is_block_step"],
-            # 投机解码
-            full_hidden_states=model_output if self.speculative_decoding else None,
-            msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.local_rank,
-            use_ep=self.parallel_config.use_ep,
-            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
-            actual_draft_token_num=(
-                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
-            ),
-            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
-            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            stop_token_ids=self.share_inputs["stop_seqs"],
-            stop_seqs_len=self.share_inputs["stop_seqs_len"],
-            min_tokens=self.share_inputs["min_dec_len"],
-        )
-        if self.speculative_decoding:
-            # base model post process
-            xpu_post_process_specualate(model_output_data, False, is_dummy_run)
-        else:
-            xpu_post_process_normal(
-                sampler_output=sampler_output,
-                model_output=model_output_data,
-                share_inputs=self.share_inputs,
-                block_size=self.cache_config.block_size,
-                skip_save_output=is_dummy_run,
-                think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
-            )
-
-        # draft model propose
-        if self.speculative_method == "mtp":
-            self.proposer.run(full_hidden_states=model_output)
-
-        # 7. Updata 'infer_seed' and step_paddle()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        step_xpu(
-            self.share_inputs,
-            self.cache_config.block_size,
-            self.cache_config.enc_dec_block_num,
-            self.speculative_decoding,
-            self.speculative_config.num_speculative_tokens,
-        )
-
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            destroy_kv_signal_sender(self.kv_signal_sender)
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
@@ -1608,6 +1739,7 @@ class XPUModelRunner(ModelRunnerBase):
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            rope_scaling=getattr(self.model_config, "rope_scaling", {}),
             model_type=self.model_config.model_type,
             max_len_lst=max_len_lst,
             cumsum_seqlens=cumsum_seqlens,

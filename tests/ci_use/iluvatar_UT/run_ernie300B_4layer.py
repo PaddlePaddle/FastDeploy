@@ -33,7 +33,7 @@ def offline_infer_check():
     ]
     sampling_params = SamplingParams(temperature=0.8, top_p=0.00001, max_tokens=16)
     llm = LLM(
-        model="/data1/fastdeploy/ERNIE_300B_4L",
+        model="/model_data/ERNIE_300B_4L",
         tensor_parallel_size=2,
         max_model_len=8192,
         quantization="wint8",

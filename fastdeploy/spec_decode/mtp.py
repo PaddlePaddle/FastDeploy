@@ -94,6 +94,7 @@ class MTPProposer(Proposer):
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
+        self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -493,6 +494,12 @@ class MTPProposer(Proposer):
             shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
         self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
+        # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
+        # using the target model's hidden states.
+        self.model_inputs["recompute_token_num"] = paddle.full(
+            [self.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
+        )
+
         # attn_mask
         if self.enable_mm:
             self.model_inputs["attn_mask_offsets"] = paddle.full(
@@ -562,7 +569,9 @@ class MTPProposer(Proposer):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                    # P-D split need rollback one step
+                    self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
+                    # NOTE(liuzichang):
+                    # extra 1 : P-D split need rollback one step
                     self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
@@ -758,6 +767,8 @@ class MTPProposer(Proposer):
             self.model_inputs["batch_drop"],
             self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
+            self.model_inputs["mask_rollback"],
+            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
             self.target_model_inputs["seq_lens_this_time"],
@@ -933,7 +944,7 @@ class MTPProposer(Proposer):
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
-                if self.enable_logprob and substep == 0:
+                if self.enable_logprob and self.enable_draft_logprob and substep == 0:
                     first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
                     speculate_get_logits(

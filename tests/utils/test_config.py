@@ -39,6 +39,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -60,6 +61,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -81,6 +83,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config: Mock = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -120,6 +123,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config.splitwise_role = "prefill"
         model_config: Mock = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -162,6 +166,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config: Mock = Mock()
         model_config.max_model_len = 512
+        model_config.architectures = ["test_model"]
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
