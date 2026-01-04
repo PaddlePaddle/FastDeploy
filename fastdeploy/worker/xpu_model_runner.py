@@ -1399,9 +1399,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs,
             )
 
-        # 5. Speculative decode
-
-        # 6. Post Process
+        # 5. Base model Post Process
         prompt_logprobs_list = None
         if not self.speculative_decoding:
             prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -1451,7 +1449,7 @@ class XPUModelRunner(ModelRunnerBase):
                 line_break_id=self.model_config.line_break_id,
             )
 
-        # draft model propose
+        # 6. Draft model propose
         if self.speculative_method == "mtp":
             self.proposer.run(full_hidden_states=model_output)
 
@@ -1462,8 +1460,9 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs,
             self.cache_config.block_size,
             self.cache_config.enc_dec_block_num,
-            self.speculative_decoding,
+            self.fd_config.speculative_config,
             self.speculative_config.num_speculative_tokens,
+            self.fd_config.cache_config.enable_prefix_caching,
         )
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
