@@ -20,7 +20,6 @@
 #include "paddle/extension.h"
 #include "speculate_msg.h"
 
-
 void MTPSaveFirstToken(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
                        const paddle::Tensor& seq_lens_decoder,
