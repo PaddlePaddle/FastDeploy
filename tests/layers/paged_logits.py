@@ -64,6 +64,14 @@ def compute_kernel(
 
 
 def indexer_mha_page_logits(query, indexer_cache, weight, block_tables, cu_seqlen_q, seq_lens_decoder):
+
+    assert query.is_contiguous()
+    assert indexer_cache.is_contiguous()
+    assert weight.is_contiguous()
+    assert block_tables.is_contiguous()
+    assert cu_seqlen_q.is_contiguous()
+    assert seq_lens_decoder.is_contiguous()
+
     assert query.dtype == paddle.bfloat16
     assert indexer_cache.dtype == paddle.bfloat16
     assert weight.dtype == paddle.bfloat16
