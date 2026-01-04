@@ -93,7 +93,8 @@ __global__ void quant_per_token_per_block_padding(
 
       // quant
       if constexpr (UseUE8M0) {
-        scale_to_store = ceil_to_ue8m0(scale_to_store);
+        scale_to_store =
+            exp2f(ceilf(log2f(fmaxf(scale_to_store, epsilon) + 5e-7f)));
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
           res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
@@ -338,7 +339,7 @@ __global__ void masked_quant_per_token_per_block(
       float scale_to_store = max_value_thread / MAX_VALUE;
       // quant
       if constexpr (UseUE8M0) {
-        scale_to_store = ceil_to_ue8m0(scale_to_store);
+        scale_to_store = exp2f(ceilf(log2f(fmaxf(scale_to_store, epsilon))));
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
           res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
