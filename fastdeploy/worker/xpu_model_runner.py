@@ -1479,8 +1479,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.fd_config.cache_config.enable_prefix_caching,
             )
 
-            if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-                destroy_kv_signal_sender(self.kv_signal_sender)
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
