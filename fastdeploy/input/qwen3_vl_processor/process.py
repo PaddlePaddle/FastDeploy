@@ -119,7 +119,7 @@ def sample_frames(
     return indices
 
 
-class DataProcessor(MMBaseDataProcessor):
+class Qwen3_VLDataProcessor(MMBaseDataProcessor):
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
 
