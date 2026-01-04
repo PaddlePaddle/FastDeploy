@@ -126,7 +126,7 @@ class GraphOptBackend:
             ).__get__(self.runnable.__self__)
 
         self.cudagraph_switch_threshold = (
-            512 if self.fd_config.graph_opt_config.graph_opt_level > 0 else self.max_captre_size
+            1024 if self.fd_config.graph_opt_config.graph_opt_level > 0 else self.max_captre_size
         )
 
     def __call__(self, **kwargs):
