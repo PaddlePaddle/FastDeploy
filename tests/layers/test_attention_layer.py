@@ -71,7 +71,6 @@ class TestAttentionPerformance(unittest.TestCase):
         self.fd_config.parallel_config.tp_group = [0]
 
         # Initialize Attention Layer
-        os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
         attn_cls = get_attention_backend()
         self.attn_backend = attn_cls(
             self.fd_config,
@@ -123,10 +122,10 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_position_embeddings": 131072,
             "max_model_len": 131072,
             "head_dim": 128,
-            "hidden_size": 4096,
-            "num_attention_heads": 32,
-            "num_key_value_heads": 4,
-            "num_hidden_layers": 57,
+            "hidden_size": 8192,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 8,
+            "num_hidden_layers": 2,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -158,6 +157,7 @@ class TestAttentionPerformance(unittest.TestCase):
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
                 kv_cache_quant_type="float8_e4m3fn",
+                # kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -270,7 +270,7 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
-        input_ids = paddle.zeros([batch_size, seq_len if mode == ForwardMode.EXTEND else 1], dtype="int64")
+        input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
         token_num = paddle.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, token_num, seq_lens_this_time
@@ -294,12 +294,13 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_mask_offsets=None,
             **attn_backend_buffers,
         )
-        return forward_meta
+
+        hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
+        return forward_meta, hidden_states
 
     def test_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
-        act_tensor_dtype = paddle.bfloat16
 
         # prefill_batch_size = 1
         # prefill_seq_len = 4096
@@ -356,11 +357,7 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.step()
 
         for decode_batch_size in [32, 16, 8, 4, 2]:
-            decode_hidden_states = paddle.randn(
-                [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
-            )
-
-            forward_meta = self.create_forward_meta(
+            forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
                 seq_len=36 * 1024,
                 mode=ForwardMode.DECODE,
@@ -374,12 +371,12 @@ class TestAttentionPerformance(unittest.TestCase):
             paddle.device.synchronize()
 
             # 必须要先预热一次！因为预处理被放到了第一层再做了！
-            self.attn_forward(forward_meta, decode_hidden_states)
+            self.attn_forward(forward_meta, hidden_states)
 
             attn_cuda_graphs = graphs.CUDAGraph()
             attn_cuda_graphs.capture_begin()
 
-            self.attn_forward(forward_meta, decode_hidden_states)
+            self.attn_forward(forward_meta, hidden_states)
 
             attn_cuda_graphs.capture_end()
 

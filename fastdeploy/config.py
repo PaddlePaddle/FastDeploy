@@ -127,6 +127,11 @@ class ErnieArchitectures:
         "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
+    ERNIE5_MODELS = {
+        "Ernie5ForCausalLM",
+        "Ernie5MoeForCausalLM",
+    }
+
     @classmethod
     def register_ernie_model_arch(cls, model_class):
         if model_class.name().startswith("Ernie") and model_class.name() not in cls.ARCHITECTURES:
@@ -141,6 +146,11 @@ class ErnieArchitectures:
     def is_ernie_arch(cls, architecture):
         """Check if the given architecture is an ERNIE architecture."""
         return architecture in cls.ARCHITECTURES
+
+    @classmethod
+    def is_ernie5_arch(cls, architectures):
+        """Check if the given architecture is an ERNIE5 architecture."""
+        return any(arch in architectures for arch in cls.ERNIE5_MODELS)
 
 
 PRETRAINED_INIT_CONFIGURATION = {
@@ -200,6 +210,7 @@ class ModelConfig:
         self.revision = None
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
+        self.enable_entropy = False
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -313,6 +324,9 @@ class ModelConfig:
             self.moe_num_experts = self.num_experts
         if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.n_routed_experts
+        if hasattr(self, "n_shared_experts") and getattr(self, "moe_num_shared_experts") is None:
+            # Because the ERNIE 4.5 config.json contains two sets of keys, adaptation is required.
+            self.moe_num_shared_experts = self.n_shared_experts
 
     def read_from_env(self):
         """
@@ -690,6 +704,8 @@ class SpeculativeConfig:
 
         self.num_extra_cache_layer = 0
 
+        self.enable_draft_logprob: bool = False
+
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -906,17 +922,19 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size[bs] = end
         self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self, max_capture_size: int = 0):
+    def _set_cudagraph_sizes(self, max_capture_size: int = 0, dec_token_per_query_per_step: int = 1):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Shape [1, 2, 4, 8, 16, ... 120, 128]
-        draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        # Shape [128, 144, ... 240, 256]
-        draft_capture_sizes += [16 * i for i in range(9, 17)]
-        # Shape [256, 288, ... 992, 1024]
-        draft_capture_sizes += [32 * i for i in range(9, 33)]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128] * dec_token_per_query_per_step
+        draft_capture_sizes = [i * dec_token_per_query_per_step for i in [1, 2, 4]] + [
+            8 * i * dec_token_per_query_per_step for i in range(1, 17)
+        ]
+        # Shape [128, 144, ... 240, 256] * dec_token_per_query_per_step
+        draft_capture_sizes += [16 * i * dec_token_per_query_per_step for i in range(9, 17)]
+        # Shape [256, 288, ... 992, 1024] * dec_token_per_query_per_step
+        draft_capture_sizes += [32 * i * dec_token_per_query_per_step for i in range(9, 33)]
 
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
@@ -1582,7 +1600,14 @@ class FDConfig:
             max_capture_shape = min(512, max_capture_shape)
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
+            dec_token_per_query_per_step = (
+                self.speculative_config.num_speculative_tokens + 1
+                if self.speculative_config is not None and self.speculative_config.method is not None
+                else 1
+            )
+            self.graph_opt_config._set_cudagraph_sizes(
+                max_capture_size=max_capture_shape, dec_token_per_query_per_step=dec_token_per_query_per_step
+            )
         self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
         self.tokenizer = tokenizer
@@ -1748,15 +1773,6 @@ class FDConfig:
         if not current_platform.is_cuda():
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
-        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
-            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
-                self.parallel_config.use_sequence_parallel_moe = False
-                logger.info(
-                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
-                )
-            else:
-                # It will hang when real batch_size < tp_size
-                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -1768,6 +1784,19 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
+
+        if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
+            # ernie5 model not support chunked_mm_input
+            self.cache_config.disable_chunked_mm_input = True
 
     def check(self):
         """

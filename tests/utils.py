@@ -60,6 +60,7 @@ class FakeModelConfig:
         self.model_format = "auto"
         self.enable_mm = False
         self.max_model_len = 512
+        self.architectures = ["test_model"]
 
 
 def get_default_test_fd_config():
