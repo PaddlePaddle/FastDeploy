@@ -1048,7 +1048,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.forward_meta.kv_signal_sender = self.kv_signal_sender
+            self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
@@ -1376,7 +1376,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
-            self.kv_signal_sender = sender
+            self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.

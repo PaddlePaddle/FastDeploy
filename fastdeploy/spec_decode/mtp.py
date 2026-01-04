@@ -38,8 +38,6 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
-        create_kv_signal_sender,
-        destroy_kv_signal_sender,
         draft_model_postprocess,
         draft_model_preprocess,
         draft_model_update,
@@ -737,9 +735,9 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
         self.forward_meta.attn_backend = self.attn_backends[0]
-
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.forward_meta.kv_signal_sender = self.kv_signal_sender
+            self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
+
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -1013,8 +1011,6 @@ class MTPProposer(Proposer):
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
         # TODO(chenhuan09)：check multi step
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.kv_signal_sender = create_kv_signal_sender()
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1097,8 +1093,6 @@ class MTPProposer(Proposer):
             else:
                 if hasattr(self.model, "empty_input_forward"):
                     self.model.empty_input_forward(self.forward_meta)
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            destroy_kv_signal_sender(self.kv_signal_sender)
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
