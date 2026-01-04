@@ -81,7 +81,7 @@ def setup_and_run_server(request):
         "wint4",
         "--no-enable-prefix-caching",
         "--graph-optimization-config",
-        '{"use_cudagraph":true, "cudagraph_capture_sizes": [1], "graph_opt_level": %s}' % graph_opt_level,
+        f'{{"use_cudagraph":true, "cudagraph_capture_sizes": [1], "graph_opt_level": {graph_opt_level}}}',
     ]
 
     # Start subprocess in new process group
