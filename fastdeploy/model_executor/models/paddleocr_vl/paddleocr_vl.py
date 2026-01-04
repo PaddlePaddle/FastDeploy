@@ -40,6 +40,7 @@ from fastdeploy.model_executor.utils import (
     default_weight_loader,
     process_weights_after_loading,
 )
+from fastdeploy.platforms import current_platform
 
 from .projector import Projector
 from .siglip import SiglipVisionModel
@@ -101,11 +102,18 @@ class PaddleOCRVLModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         hidden_states = input_embeddings
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual)[0]
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
 
         return out
 

@@ -47,6 +47,6 @@ class INTEL_HPUPlatform(Platform):
             return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
         elif selected_backend == _Backend.HPU_ATTN:
             logger.info("Using HPU ATTN backend.")
-            return "fastdeploy.model_executor.layers.backends.intel_hpu.attention.HPUAttentionBackend"
+            return "fastdeploy.model_executor.layers.backends.HPUAttentionBackend"
         else:
             logger.warning("Other backends are not supported for now.")

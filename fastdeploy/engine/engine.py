@@ -577,6 +577,10 @@ class LLMEngine:
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
+        # TODO (iluvatar): remove aftet paddle fix launch error
+        if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
+            arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
+
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_chunked_moe": self.cfg.parallel_config.enable_chunked_moe,
@@ -590,6 +594,8 @@ class LLMEngine:
             "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
+            "enable_entropy": self.cfg.model_config.enable_entropy,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
