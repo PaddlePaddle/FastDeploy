@@ -49,6 +49,21 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+void FlashAttentionMask(const paddle::Tensor& q_input,
+                        const paddle::Tensor& k_input,
+                        const paddle::Tensor& v_input,
+                        const paddle::Tensor& cu_seq_q,
+                        const paddle::Tensor& cu_seq_k,
+                        const paddle::Tensor& seq_len_encoder,
+                        const paddle::Tensor& attn_out,
+                        const paddle::optional<paddle::Tensor>& mask,
+                        const int head_num,
+                        const int kv_head_num,
+                        const int head_dim,
+                        const int max_seq_len,
+                        const int q_token_num,
+                        const int k_token_num);
+
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -499,8 +514,8 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     paddle::Tensor& image_index,
     const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
-                                            int64_t num_experts);
+std::vector<paddle::Tensor> count_tokens_per_expert_func(
+    const paddle::Tensor& topk_ids, int64_t num_experts);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -1160,6 +1175,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("append_attention_with_output",
         &AppendAttentionWithOutput,
         "append attention with output function");
+
+#ifdef ENABLE_FLASH_MASK_ATTENTION
+  m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
+#endif
+
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache

@@ -171,7 +171,9 @@ async def async_request_eb_openai_chat_completions(
     api_url = request_func_input.api_url
     assert api_url.endswith(("completions", "profile")), "OpenAI Chat Completions API URL must end with 'completions'."
 
-    async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(
+        trust_env=True, read_bufsize=10 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT
+    ) as session:
         content = [{"type": "text", "text": request_func_input.prompt}]
         if request_func_input.multi_modal_content:
             content.append(request_func_input.multi_modal_content)
@@ -336,7 +338,9 @@ async def async_request_eb_openai_completions(
         ("completions", "profile")
     ), "OpenAI Completions API URL must end with 'completions' or 'profile'."
 
-    async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(
+        trust_env=True, read_bufsize=10 * 1024 * 1024, timeout=AIOHTTP_TIMEOUT
+    ) as session:
         payload = {
             "model": request_func_input.model,
             "prompt": request_func_input.prompt,

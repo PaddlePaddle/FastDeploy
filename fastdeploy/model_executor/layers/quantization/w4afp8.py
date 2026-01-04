@@ -41,6 +41,7 @@ class W4AFP8Config(QuantConfigBase):
         self.is_permuted = is_permuted
         self.hadamard_block_size = hadamard_block_size
         self.is_quantized = is_quantized
+        self.is_checkpoint_bf16 = not is_quantized
 
     def name(self) -> str:
         return "w4afp8"

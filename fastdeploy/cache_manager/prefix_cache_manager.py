@@ -380,6 +380,7 @@ class PrefixCacheManager:
                 + f" --key_cache_shape {key_cache_shape}"
                 + val_cache_arg_str
                 + f" --pod_ip {pod_ip}"
+                + f" --default_dtype '{self.config.model_config.dtype}'"
                 + f" --cache_queue_port {cache_config.local_cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
@@ -1387,8 +1388,10 @@ class PrefixCacheManager:
         cpu_match_token_num: int,
         swap_node_ids: list,
     ):
-        position = request.multimodal_inputs["mm_positions"][chunk_idx]
-        revert_tokens = matched_token_num - position.offset
+        # position = request.multimodal_inputs["mm_positions"][chunk_idx]
+        # revert_tokens = matched_token_num - position.offset
+        # TODO(chengyanfu): fix when is_chunked_mm_input=True, revert all matched tokens
+        revert_tokens = matched_token_num
         match_block_ids = [node.block_id for node in matche_nodes]
         logger.warning(
             f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_block_ids}"

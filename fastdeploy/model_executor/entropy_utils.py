@@ -46,7 +46,11 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
     for i in range(real_bsz):
         for _ in range(real_seq_lens[i]):
             share_inputs["entropy_list"][i].append(entropy.pop(0))
-        if share_inputs["stop_flags"][i] and len(share_inputs["entropy_list"][i]) != 0:
+        if (
+            share_inputs["stop_flags"][i]
+            and share_inputs["seq_lens_decoder"][i] != 0
+            and len(share_inputs["entropy_list"][i]) != 0
+        ):
             data_processor_logger.info(
                 f"req_id: {share_inputs['req_ids'][i]}, entropy: {sum(share_inputs['entropy_list'][i])/len(share_inputs['entropy_list'][i])}"
             )
@@ -92,7 +96,11 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
     for i in range(real_bsz):
         for _ in range(share_inputs["accept_num"][i]):
             share_inputs["entropy_list"][i].append(entropy.pop(0))
-        if share_inputs["stop_flags"][i] and len(share_inputs["entropy_list"][i]) != 0:
+        if (
+            share_inputs["stop_flags"][i]
+            and share_inputs["seq_lens_decoder"][i] != 0
+            and len(share_inputs["entropy_list"][i]) != 0
+        ):
             data_processor_logger.info(
                 f"req_id: {share_inputs['req_ids'][i]}, entropy: {sum(share_inputs['entropy_list'][i])/len(share_inputs['entropy_list'][i])}"
             )

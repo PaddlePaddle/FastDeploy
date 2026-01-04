@@ -18,6 +18,7 @@ import os
 import queue
 import random
 import time
+from contextlib import contextmanager
 from threading import Thread
 from typing import List, Optional
 
@@ -65,6 +66,21 @@ from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
 logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
+
+
+@contextmanager
+def kv_signal_sender_context_manager(pd_disaggregation_mode):
+    sender = None
+    try:
+        sender = (
+            create_kv_signal_sender()
+            if pd_disaggregation_mode == "per_chunk" or pd_disaggregation_mode == "per_query"
+            else None
+        )
+        yield sender
+    finally:
+        if sender is not None:
+            destroy_kv_signal_sender(sender)
 
 
 class XPUModelRunner(ModelRunnerBase):
@@ -1359,47 +1375,46 @@ class XPUModelRunner(ModelRunnerBase):
         """
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.kv_signal_sender = create_kv_signal_sender()
-        # 1. Prepare inputs of model and decoder.
-        self._prepare_inputs(is_dummy_run=is_dummy_run)
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop() and not is_dummy_run:
-            self._execute_empty_input(self.forward_meta)
-            return None
+        with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
+            self.kv_signal_sender = sender
+            # 1. Prepare inputs of model and decoder.
+            self._prepare_inputs(is_dummy_run=is_dummy_run)
+            # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+            # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+            # when there is data on other runner, the current runner is required to execute part of the model.
+            if not self.not_need_stop() and not is_dummy_run:
+                self._execute_empty_input(self.forward_meta)
+                return None
 
-        # 2. Padding inputs for cuda grph
+            # 2. Padding inputs for cuda grph
 
-        # 3. Execute model
-        if self.enable_mm:
-            model_output = self.model(
-                self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
+            # 3. Execute model
+            if self.enable_mm:
+                model_output = self.model(
+                    self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
+                )
+            else:
+                model_output = self.model(
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta,
+                )
+
+            hidden_states = xpu_process_output(
+                model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
             )
-        else:
-            model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta,
-            )
+            # 4. Compute logits, Sample
+            logits = self.model.compute_logits(hidden_states)
+            sampler_output = None
+            if not self.speculative_decoding:
+                sampler_output = self.sampler(logits, self.sampling_metadata)
+            else:
+                self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    self.model_config.max_model_len,
+                    self.share_inputs,
+                )
 
-        hidden_states = xpu_process_output(
-            model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
-        )
-        # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
-        sampler_output = None
-        if not self.speculative_decoding:
-            sampler_output = self.sampler(logits, self.sampling_metadata)
-        else:
-            self.sampler(
-                logits,
-                self.sampling_metadata,
-                self.model_config.max_model_len,
-                self.share_inputs,
-            )
-
-        # 5. Base model Post Process
         prompt_logprobs_list = None
         if not self.speculative_decoding:
             prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -1725,6 +1740,7 @@ class XPUModelRunner(ModelRunnerBase):
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            rope_scaling=getattr(self.model_config, "rope_scaling", {}),
             model_type=self.model_config.model_type,
             max_len_lst=max_len_lst,
             cumsum_seqlens=cumsum_seqlens,
