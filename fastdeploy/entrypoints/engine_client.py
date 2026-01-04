@@ -432,7 +432,7 @@ class EngineClient:
             api_server_logger.error(err_msg)
             raise ValueError("max_logprobs", err_msg)
 
-        prompt_logprobs = getattr(data, "prompt_logprobs", None)
+        prompt_logprobs = data.get("prompt_logprobs", None)
 
         if prompt_logprobs is not None:
             if not self.enable_logprob:
