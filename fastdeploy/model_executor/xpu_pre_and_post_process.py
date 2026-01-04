@@ -471,7 +471,6 @@ def step_xpu(
                 speculative_config.num_speculative_tokens,
             )
         else:
-            # TODO(chenhuan09): add speculate step system cache support
             if enable_prefix_caching:
                 speculate_step_system_cache(
                     share_inputs["stop_flags"],
