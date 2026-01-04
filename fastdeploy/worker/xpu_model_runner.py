@@ -1415,73 +1415,72 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                 )
 
-        prompt_logprobs_list = None
-        if not self.speculative_decoding:
-            prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
+            prompt_logprobs_list = None
+            if not self.speculative_decoding:
+                prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
-        model_output_data = ModelOutputData(
-            next_tokens=self.share_inputs["next_tokens"],
-            stop_flags=self.share_inputs["stop_flags"],
-            step_idx=self.share_inputs["step_idx"],
-            max_dec_len=self.share_inputs["max_dec_len"],
-            pre_ids=self.share_inputs["pre_ids"],
-            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
-            eos_token_id=self.share_inputs["eos_token_id"],
-            not_need_stop=self.share_inputs["not_need_stop"],
-            input_ids=self.share_inputs["input_ids"],
-            stop_nums=self.share_inputs["stop_nums"],
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            is_block_step=self.share_inputs["is_block_step"],
-            # 投机解码
-            full_hidden_states=model_output if self.speculative_decoding else None,
-            msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.local_rank,
-            use_ep=self.parallel_config.use_ep,
-            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
-            actual_draft_token_num=(
-                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
-            ),
-            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
-            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            stop_token_ids=self.share_inputs["stop_seqs"],
-            stop_seqs_len=self.share_inputs["stop_seqs_len"],
-            min_tokens=self.share_inputs["min_dec_len"],
-            prompt_logprobs_list=prompt_logprobs_list,
-        )
-        if self.speculative_decoding:
-            # base model post process
-            xpu_post_process_specualate(model_output_data, False, is_dummy_run)
-        else:
-            xpu_post_process_normal(
-                sampler_output=sampler_output,
-                model_output=model_output_data,
-                share_inputs=self.share_inputs,
-                block_size=self.cache_config.block_size,
-                skip_save_output=is_dummy_run,
-                async_output_queue=self.async_output_queue,
-                think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
+            model_output_data = ModelOutputData(
+                next_tokens=self.share_inputs["next_tokens"],
+                stop_flags=self.share_inputs["stop_flags"],
+                step_idx=self.share_inputs["step_idx"],
+                max_dec_len=self.share_inputs["max_dec_len"],
+                pre_ids=self.share_inputs["pre_ids"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                eos_token_id=self.share_inputs["eos_token_id"],
+                not_need_stop=self.share_inputs["not_need_stop"],
+                input_ids=self.share_inputs["input_ids"],
+                stop_nums=self.share_inputs["stop_nums"],
+                seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                is_block_step=self.share_inputs["is_block_step"],
+                # 投机解码
+                full_hidden_states=model_output if self.speculative_decoding else None,
+                msg_queue_id=self.parallel_config.msg_queue_id,
+                mp_rank=self.local_rank,
+                use_ep=self.parallel_config.use_ep,
+                draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+                actual_draft_token_num=(
+                    self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+                ),
+                accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+                accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
+                prompt_logprobs_list=prompt_logprobs_list,
+            )
+            if self.speculative_decoding:
+                # base model post process
+                xpu_post_process_specualate(model_output_data, False, is_dummy_run)
+            else:
+                xpu_post_process_normal(
+                    sampler_output=sampler_output,
+                    model_output=model_output_data,
+                    share_inputs=self.share_inputs,
+                    block_size=self.cache_config.block_size,
+                    skip_save_output=is_dummy_run,
+                    async_output_queue=self.async_output_queue,
+                    think_end_id=self.model_config.think_end_id,
+                    line_break_id=self.model_config.line_break_id,
+                )
+
+            # 6. Draft model propose
+            if self.speculative_method == "mtp":
+                self.proposer.run(full_hidden_states=model_output)
+
+            # 7. Updata 'infer_seed' and step_paddle()
+            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            step_xpu(
+                self.share_inputs,
+                self.cache_config.block_size,
+                self.cache_config.enc_dec_block_num,
+                self.fd_config.speculative_config,
+                self.fd_config.cache_config.enable_prefix_caching,
             )
 
-        # 6. Draft model propose
-        if self.speculative_method == "mtp":
-            self.proposer.run(full_hidden_states=model_output)
-
-        # 7. Updata 'infer_seed' and step_paddle()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        step_xpu(
-            self.share_inputs,
-            self.cache_config.block_size,
-            self.cache_config.enc_dec_block_num,
-            self.fd_config.speculative_config,
-            self.speculative_config.num_speculative_tokens,
-            self.fd_config.cache_config.enable_prefix_caching,
-        )
-
-        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            destroy_kv_signal_sender(self.kv_signal_sender)
+            if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+                destroy_kv_signal_sender(self.kv_signal_sender)
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
