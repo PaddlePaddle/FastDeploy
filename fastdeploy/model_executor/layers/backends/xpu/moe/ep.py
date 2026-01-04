@@ -157,7 +157,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
 
-        return_recv_hook_ = False
+        return_recv_hook = True
         (
             packed_recv_x,
             recv_expert_count,
@@ -171,11 +171,11 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             self.num_max_dispatch_tokens_per_rank,
             self.num_experts,
             use_fp8=use_fp8,
-            async_finish=True,
-            return_recv_hook=return_recv_hook_,
+            async_finish=not return_recv_hook,
+            return_recv_hook=return_recv_hook,
             num_per_channel=quant_group_size,
         )
-        dispatch_hook() if return_recv_hook_ else event.current_stream_wait()
+        dispatch_hook() if return_recv_hook else event.current_stream_wait()
         packed_recv_x = (packed_recv_x[0], packed_recv_x[1].contiguous()) if use_fp8 else packed_recv_x
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
