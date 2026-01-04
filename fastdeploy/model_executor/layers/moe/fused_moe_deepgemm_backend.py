@@ -259,7 +259,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             )
             del ffn_out
         else:
-            tmp_ffn_out = paddle.cast([0, hidden_size], paddle.bfloat16)
+            tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
         # 5. EP combine
         event = deep_ep.Buffer.capture()
