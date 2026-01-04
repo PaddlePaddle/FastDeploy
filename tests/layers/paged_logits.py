@@ -27,7 +27,12 @@ def compute_kernel(
     batch_id = tl.program_id(axis=1)
     q_head_id = tl.program_id(axis=2)
 
-    kv_len_this_batch = tl.load(seq_lens_decoder + batch_id) + 1
+    kv_len_this_batch = tl.load(seq_lens_decoder + batch_id)
+    if kv_len_this_batch <= 0:
+        return
+
+    kv_len_this_batch += 1
+
     cu_len_this_batch = tl.load(cu_seqlen_q + batch_id)
 
     if page_id * PAGE_SIZE >= kv_len_this_batch:
