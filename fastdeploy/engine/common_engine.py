@@ -38,7 +38,7 @@ import zmq
 from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, RequestOutput, RequestType
+from fastdeploy.engine.request import Request, ControlRequest, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.eplb.utils import init_eplb_signals
@@ -1064,6 +1064,17 @@ class EngineService:
                         self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
+                if ControlRequest.is_control_request(data):
+                    try:
+                        control_req = ControlRequest.from_dict(data)
+                        self.run_control_method(control_req)
+                    except Exception as e:
+                        self.llm_logger.error(
+                            f"Failed to process control request {data.get('request_id')}: "
+                            f"{e}, {traceback.format_exc()}"
+                        )
+                    continue
+
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
@@ -1114,6 +1125,64 @@ class EngineService:
                     f"Error happened while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
+
+    def run_control_method(self, control_req: ControlRequest):
+        """
+        Execute control methods for engine management using dynamic method invocation.
+        
+        Args:
+            control_req: ControlRequest instance containing method name and arguments
+            
+        Usage:
+            - Control request with method "get_metrics" will call self._control_get_metrics(args)
+            - Method names are automatically mapped to handler methods with prefix "_control_"
+            - If no handler exists, returns error with available methods
+        """
+        method = control_req.get_method()
+        args = control_req.get_args()
+        request_id = control_req.request_id
+        
+        try:
+            self.llm_logger.info(f"Processing control request {request_id}: {method}")
+            
+            # Dynamically map method name to handler method
+            handler_name = f"_control_{method}"
+            handler = getattr(self, handler_name, None)
+            if handler is None or not callable(handler):
+                error_msg = f"Unknown control method: {method}"
+                self.llm_logger.error(errmsg)
+                self._send_error_response(request_id, 400, error_msg)
+                return
+            
+            # Dynamically call the handler method with provided arguments
+            error_code, error_msg = handler(args)
+            if error_code == 0:
+                self.llm_logger.error(f"Control method {method} failed: {error_msg}")
+                self._send_error_response(request_id, error_msg, error_code)
+                return
+
+            self.llm_logger.info(f"Control method {method} success.")
+            succ_result = RequestOutput(request_id=request_id, finished=True)
+            self.send_response_server.send_response(request_id, [succ_result])
+            
+        except Exception as e:
+            error_msg = f"Control method {method} failed: {str(e)}"
+            self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            self._send_error_response(request_id, 500, error_msg)
+
+    def _control_pause(self, args: dict) -> dict:
+        """暂停请求生成
+
+        Args:
+            args: 控制参数字典，暂停相关的配置参数
+
+        Returns:
+            tuple: (error_code, error_msg) 元组
+                - error_code: 错误代码，0表示成功，非0表示失败
+                - error_msg: 错误信息，成功时为空字符串
+        """
+        self.llm_logger.info(f"Pause Request Generation")
+        return 0, ""
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(

@@ -376,6 +376,100 @@ class Request:
         except Exception as e:
             return f"<Request repr failed: {e}>"
 
+class ControlRequest:
+    """A generic control request that supports method and args for control operations.
+    
+    This request type is used for system-level control operations rather than
+    typical inference requests. It enables dynamic control of engine behavior,
+    resource management, and system configuration via a flexible method-args interface.
+    """
+
+    def __init__(
+        self,
+        request_id: str,
+        method: str,
+        args: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Args:
+            request_id: Unique identifier for the control request.
+            method: The control method to execute (e.g., "reset_scheduler", "get_metrics").
+            args: Optional arguments for the control method.
+        """
+        self.request_id = request_id
+        self.method = method
+        self.args = args or {}
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        """Create ControlRequest instance from dictionary."""
+        return cls(
+            request_id=d["request_id"],
+            method=d["method"],
+            args=d.get("args", {})
+        )
+
+    def to_dict(self) -> dict:
+        """Convert ControlRequest into a serializable dict."""
+        return {
+            "request_id": self.request_id,
+            "method": self.method,
+            "args": self.args
+        }
+
+    def __repr__(self) -> str:
+        """Provide a clean representation of the control request."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"ControlRequest(request_id={self.request_id}, method={self.method})"
+            else:
+                return (
+                    f"ControlRequest("
+                    f"request_id={self.request_id}, "
+                    f"method={self.method}, "
+                    f"args={self.args}"
+                    f")"
+                )
+        except Exception as e:
+            return f"<ControlRequest repr failed: {e}>"
+
+    def get_method(self) -> str:
+        """Get the control method name."""
+        return self.method
+
+    def get_args(self) -> Dict[str, Any]:
+        """Get the control method arguments."""
+        return self.args.copy()
+
+    @staticmethod
+    def is_control_request(d: dict) -> bool:
+        """
+        Check if a dictionary represents a valid ControlRequest.
+        
+        Args:
+            d: Dictionary to check
+            
+        Returns:
+            bool: True if the dictionary contains the required fields for a ControlRequest
+        """
+        
+        # Check if all required fields are present and have correct types
+        if not isinstance(d, dict):
+            return False
+        
+        # Check field types
+        if "request_id" not in d or not isinstance(d.get("request_id"), str):
+            return False
+            
+        if "method" not in d or not isinstance(d.get("method"), str):
+            return False
+            
+        # Args is optional, but if present should be a dict
+        if "args" in d and not isinstance(d["args"], dict):
+            return False
+            
+        return True
+
 
 @dataclass(slots=True)
 class CompletionOutput:
