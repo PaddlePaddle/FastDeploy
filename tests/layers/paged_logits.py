@@ -107,7 +107,7 @@ def indexer_mha_page_logits(query, indexer_cache, weight, block_tables, cu_seqle
     output_padding_len = paddle.max(seq_lens_decoder).item() + 1
     output_padding_len = (output_padding_len + block_size - 1) // block_size * block_size
 
-    output = paddle.zeros([token_num * q_num_head, output_padding_len])
+    output = paddle.zeros([token_num * q_num_head, output_padding_len], dtype=query.dtype)
 
     grid = (output_padding_len // block_size, real_bs, q_num_head)
 
