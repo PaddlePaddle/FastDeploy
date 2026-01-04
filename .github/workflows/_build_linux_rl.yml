@@ -51,7 +51,7 @@ on:
     outputs:
       wheel_path_rl:
         description: "Output path of the generated wheel"
-        value: ${{ jobs.fd-build.outputs.wheel_path_rl }}
+        value: ${{ jobs.fd-build-rl.outputs.wheel_path_rl }}
 jobs:
   fd-build-rl:
     runs-on: [self-hosted, GPU-Build]
