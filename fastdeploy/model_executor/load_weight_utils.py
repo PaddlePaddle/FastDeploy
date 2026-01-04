@@ -26,8 +26,6 @@ from functools import wraps
 from pathlib import Path
 
 import paddle
-import paddle.distributed as dist
-from fastsafetensors import SafeTensorsFileLoader, SingleGroup
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.model_utils import load_tp_checkpoint
 from paddleformers.utils.log import logger
@@ -38,11 +36,7 @@ from tqdm import tqdm
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.linear import KVBatchLinear
-from fastdeploy.model_executor.models.tp_utils import (
-    check_tensor_parallel_prerequisites,
-)
 from fastdeploy.model_executor.utils import multi_switch_config_context
-from fastdeploy.platforms import current_platform
 
 
 def pdparams_weight_iterator(paddle_file_list: list[str]):
@@ -68,7 +62,9 @@ def load_weights_from_cache(model, weights_iterator):
             )
         param.copy_(loaded_weight, False)
         if "embeddings" in loaded_weight_name and getattr(model, "tie_word_embeddings", False):
-            model.lm_head.linear.weight.set_value(loaded_weight.transpose([1, 0]))
+            model.lm_head.linear.weight.set_value(
+                loaded_weight.transpose([1, 0]).astype(model.lm_head.linear.weight.dtype)
+            )
         for _, model_sublayer in model.named_sublayers():
             if isinstance(model_sublayer, KVBatchLinear):
                 model_sublayer.process_weights_after_loading()
@@ -288,9 +284,13 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-                k = f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight"
-                if k in weight_list:
-                    no_tp_action_keys.append(k)
+                no_tp_keys = [
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight",
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.bias",
+                ]
+                for k in no_tp_keys:
+                    if k in weight_list:
+                        no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
         new_actions = {k: v for k, v in tp_actions.items() if k not in no_tp_action_keys}
 
@@ -347,45 +347,7 @@ def fast_weights_iterator(safe_tensor_list: list[str]):
                 yield name, param_slice
 
 
-def fastsafetensors_weights_iterator(
-    safetensor_list: list[str],
-):
-    """
-    Return an iterator over tensors on GPU from a given safetensor_list.
-    """
-    world_size = dist.get_world_size()
-    if world_size > 1:
-        pg = dist.get_group()
-        device = f"gpu:{pg.rank}" if paddle.is_compiled_with_cuda() else "cpu"
-    else:
-        pg = SingleGroup()
-        device = f"gpu:{pg.rank()}" if paddle.is_compiled_with_cuda() else "cpu"
-
-    safetensor_files_sub_lists = [
-        safetensor_list[i : i + world_size] for i in range(0, len(safetensor_list), world_size)
-    ]
-
-    for st_file in tqdm(
-        safetensor_files_sub_lists,
-        desc="Loading fastsafetensors checkpoint shards",
-    ):
-        loader = SafeTensorsFileLoader(pg, device, nogds=True, debug_log=False, framework="paddle")
-        rank_file_map = {i: [f] for i, f in enumerate(st_file)}
-        loader.add_filenames(rank_file_map)
-        try:
-            fb = loader.copy_files_to_device()
-            try:
-                keys = list(fb.key_to_rank_lidx.keys())
-                for k in keys:
-                    t = fb.get_tensor(k)
-                    yield k, t
-            finally:
-                fb.close()
-        finally:
-            loader.close()
-
-
-def load_pre_sharded_checkpoint(model_path: str, local_rank: int, use_fastsafetensor: bool = False):
+def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     """
     load_pre_sharded_checkpoint
     """
@@ -423,44 +385,6 @@ def get_all_weights_file(model_path: str):
             key_name_list = list(weight_map.keys())
             files_list = sorted(weight_files_in_index)
     return key_name_list, files_list, use_safetensors
-
-
-def load_tp_checkpoint_v1(
-    model_path: str,
-    cls: PretrainedModel,
-    fd_config: FDConfig,
-    use_fastsafetensor: bool = True,
-):
-    """
-    load_tp_checkpoint_v1
-    """
-
-    safetensor_keys, safetensor_files, _ = get_all_weights_file(model_path)
-
-    if use_fastsafetensor:
-        weights_iterator = fastsafetensors_weights_iterator(safetensor_files)
-    else:
-        weights_iterator = safetensors_weights_iterator(safetensor_files)
-
-    tensor_parallel_filtered_map = {}
-    check_tensor_parallel_prerequisites(
-        fd_config,
-        cls,
-        tensor_parallel_filtered_map,
-        safetensor_keys,
-    )
-    need_tp = True if tensor_parallel_filtered_map else False
-    state_dict = {}
-    for key, weight in weights_iterator:
-        paddle.device.synchronize()
-        if need_tp and key in tensor_parallel_filtered_map:
-            action = tensor_parallel_filtered_map.pop(key)
-            tensor = action(weight).clone()
-        else:
-            tensor = weight.clone()
-        state_dict[key] = tensor
-        weight.value().get_tensor()._clear()
-    return state_dict
 
 
 def deal_state_dict(state_dict):
@@ -523,25 +447,18 @@ def load_composite_checkpoint(
             state_dict = load_pre_sharded_checkpoint(
                 model_path,
                 fd_config.parallel_config.tensor_parallel_rank,
-                use_fastsafetensor=False,
             )
         else:
-            if fd_config.load_config.use_fastsafetensor and (
-                current_platform.available() and current_platform.is_cuda()
-            ):
-                state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
-                deal_state_dict(state_dict)
-            else:
-                fd_config.model_config.pretrained_config.use_sequence_parallel_moe = (
-                    fd_config.parallel_config.use_sequence_parallel_moe
-                )
-                # NOTE: for very big model, cpu will be out of memory
-                state_dict = load_tp_checkpoint(
-                    model_path,
-                    cls,
-                    fd_config.model_config.pretrained_config,
-                    return_numpy=return_numpy,
-                )
+            fd_config.model_config.pretrained_config.use_sequence_parallel_moe = (
+                fd_config.parallel_config.use_sequence_parallel_moe
+            )
+            # NOTE: for very big model, cpu will be out of memory
+            state_dict = load_tp_checkpoint(
+                model_path,
+                cls,
+                fd_config.model_config.pretrained_config,
+                return_numpy=return_numpy,
+            )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
 

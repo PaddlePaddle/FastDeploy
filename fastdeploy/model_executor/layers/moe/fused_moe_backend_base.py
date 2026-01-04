@@ -15,6 +15,7 @@
 """
 
 from abc import abstractmethod
+from typing import Callable
 
 import paddle
 from paddle import nn
@@ -22,9 +23,8 @@ from paddle import nn
 from fastdeploy.model_executor.utils import (
     TensorTracker,
     default_weight_loader,
-    free_tensor,
+    process_weight_transpose,
     set_weight_attrs,
-    weight_fully_copied,
 )
 from fastdeploy.platforms import current_platform
 
@@ -163,6 +163,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -175,6 +176,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -187,6 +189,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -198,6 +201,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -207,13 +211,13 @@ class MoEMethodBase(QuantMethodBase):
             if layer.fd_config.model_config.moe_phase.phase == "prefill":
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_prefill_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(layer, x, gate)
+                return self.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
             else:
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_decode(layer, x, gate)
+                return self.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
         else:
-            return self.apply_tp(layer, x, gate)
+            return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
@@ -222,7 +226,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
         hidden_size = extra_weight_attrs.pop("hidden_size")
         moe_intermediate_size = extra_weight_attrs.pop("moe_intermediate_size")
         self.model_format = extra_weight_attrs.get("model_format")
-        if current_platform.is_cuda() and self.model_format != "torch":
+        if (current_platform.is_cuda() or current_platform.is_intel_hpu()) and self.model_format != "torch":
             self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
             self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
             extra_weight_attrs = {
@@ -307,25 +311,5 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
     def process_weights_after_loading(self, layer):
         if self.model_format != "torch":
             return
-        if not weight_fully_copied(layer.up_gate_proj_weight) or not weight_fully_copied(layer.down_proj_weight):
-            return
-        up_gate_proj_weight_transpose = layer.up_gate_proj_weight.transpose([0, 2, 1])
-        down_proj_weight_transpose = layer.down_proj_weight.transpose([0, 2, 1])
-        up_gate_proj = layer.create_parameter(
-            shape=up_gate_proj_weight_transpose.shape,
-            dtype=up_gate_proj_weight_transpose.dtype,
-            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
-            is_bias=False,
-        )
-        up_gate_proj.copy_(up_gate_proj_weight_transpose, False)
-        free_tensor(layer.up_gate_proj_weight)
-        layer.up_gate_proj_weight = up_gate_proj
-        down_proj = layer.create_parameter(
-            shape=down_proj_weight_transpose.shape,
-            dtype=down_proj_weight_transpose.dtype,
-            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
-            is_bias=False,
-        )
-        down_proj.copy_(down_proj_weight_transpose, False)
-        free_tensor(layer.down_proj_weight)
-        layer.down_proj_weight = down_proj
+        process_weight_transpose(layer, "up_gate_proj_weight")
+        process_weight_transpose(layer, "down_proj_weight")

@@ -14,14 +14,17 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
+from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
+from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
@@ -138,17 +141,27 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
         """
         gate_out = gate(x.cast("float32"))
+
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0]
         )
+
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
         # 3. EP Dispatch
         (
             recv_x,
@@ -158,8 +171,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
         )
+
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
@@ -236,13 +250,16 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 None,  # down_proj_bias
                 False,  # norm_topk_prob
                 1.0,
-            )[0]
+            )
 
         else:
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
 
         # 5. EP combine
-        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        event = deep_ep.Buffer.capture()
+        let_another_thread_run()
+
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -254,6 +271,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -261,6 +279,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, use_fp8=True
@@ -325,6 +347,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.
@@ -352,6 +375,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # apply_norm_weight
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
@@ -422,8 +448,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             None,
             False,  # norm_topk_prob
             1.0,
-        )[0]
-        if layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
+        )
 
         return tmp_ffn_out

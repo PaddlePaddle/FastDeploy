@@ -27,6 +27,8 @@ if current_platform.is_cuda():
 
 def rotate_half(x):
     Dh = x.shape[-1]
+    if Dh == -1:
+        Dh = paddle.shape(x)[-1]
     x1 = x[..., : Dh // 2]
     x2 = x[..., Dh // 2 :]
     return paddle.concat([-x2, x1], axis=-1)
@@ -41,6 +43,8 @@ def apply_rotary_pos_emb_vision(x, cos, sin):
 
 def native_neox_rope_embedding(qkv, cos, sin, num_heads):
     B, seq_length, D = qkv.shape
+    if seq_length == -1:
+        _, seq_length, _ = paddle.shape(qkv)
     qkv = qkv.reshape(
         [
             seq_length,
@@ -55,18 +59,23 @@ def native_neox_rope_embedding(qkv, cos, sin, num_heads):
     return q, k, v
 
 
+jit_unified_marker = paddle.jit.marker.unified if hasattr(paddle.jit.marker, "unified") else lambda fn: fn
+
+
+@jit_unified_marker
 def neox_rope_embedding(
     qkv: paddle.Tensor, cos_emb: paddle.Tensor, sin_emb: paddle.Tensor, num_heads: int, head_dim: int
 ) -> List[paddle.Tensor]:
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() and paddle.in_dynamic_mode():
         return fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
     else:
         return native_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads)
 
 
+@jit_unified_marker
 def get_activation_fn(hidden_act: str):
     if hidden_act == "gelu_pytorch_tanh":
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() and paddle.in_dynamic_mode():
             return gelu_tanh
         else:
             return ACT2FN["gelu_new"]

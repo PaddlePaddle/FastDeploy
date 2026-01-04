@@ -20,7 +20,8 @@ from typing import NamedTuple, Optional
 import paddle
 
 
-class Logprob(NamedTuple):
+@dataclass
+class Logprob:
     """
     A named tuple containing information about a token's log probability.
     """
@@ -30,7 +31,6 @@ class Logprob(NamedTuple):
     decoded_token: Optional[str] = None
 
 
-PromptLogprobs = list[dict[int, Logprob] | None]
 # [{token_id, logprob}] for tokens sampled from the top-k
 SampleLogprobs = list[dict[int, Logprob]]
 
@@ -117,11 +117,47 @@ class LogprobsTensors(NamedTuple):
         Slice rows.
         Keeps the number of max_num_logprobs unchanged.
         """
-        return LogprobsTensors(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.selected_token_ranks[start:end],
-        )
+        with paddle.no_grad():
+            return LogprobsTensors(
+                paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+            )
+
+
+PromptLogprobs = LogprobsTensors | list[dict[int, Logprob] | None]
+
+
+@dataclass
+class SpeculateMetrics:
+    """
+    Speculative decoding metrics
+    """
+
+    """
+    The number of accepted tokens in the current request
+    """
+    accepted_tokens: int
+
+    """
+    The number of rejected tokens in the current request
+    """
+    rejected_tokens: int
+
+    """
+    The acceptance rate of the current request
+    """
+    accept_ratio: float
+
+    """
+    Average number of accepted tokens per step for the current request
+    """
+    average_accept_length: float
+
+    """
+    Average acceptance rate of each head in the current request
+    """
+    accept_ratio_per_head: list[float]
 
 
 @dataclass
@@ -136,6 +172,7 @@ class SamplerOutput:
     logprobs_tensors: Optional[LogprobsTensors]
     token_num_per_batch: Optional[paddle.Tensor] = None
     cu_batch_token_offset: Optional[paddle.Tensor] = None
+    logits: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -274,6 +311,11 @@ class ModelOutputData:
         prompt_logprobs
     """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
+
+    """
+        the minimum tokens that will be generated
+    """
+    min_tokens: paddle.Tensor = None
 
 
 @dataclass

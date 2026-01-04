@@ -22,12 +22,12 @@ if [ -z "${KVCACHE_RDMA_NICS}" ]; then
 fi
 
 unset http_proxy && unset https_proxy
-rm -rf log_*
-source ./utils.sh
+source ${SCRIPT_DIR}/utils.sh
 
 P_PORT=52400
 D_PORT=52500
-REDIS_PORT="${REDIS_PORT:-56388}"
+REDIS_PORT="${REDIS_PORT:-6379}"
+LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
 ports=(
     $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3)) $((P_PORT + 4)) $((P_PORT + 5))
@@ -51,8 +51,8 @@ sleep 1
 
 # start prefill
 export CUDA_VISIBLE_DEVICES=0
-export FD_LOG_DIR="log_prefill"
-mkdir -p ${FD_LOG_DIR}
+export FD_LOG_DIR="log/$LOG_DATE/prefill"
+rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
@@ -76,8 +76,8 @@ wait_for_health ${P_PORT}
 
 # start decode
 export CUDA_VISIBLE_DEVICES=1
-export FD_LOG_DIR="log_decode"
-mkdir -p ${FD_LOG_DIR}
+export FD_LOG_DIR="log/$LOG_DATE/decode"
+rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \

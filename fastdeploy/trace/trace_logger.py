@@ -33,6 +33,7 @@ def print(event, request_id, user):
                     "stage": EVENT_TO_STAGE_MAP.get(event).value,
                 }
             },
+            stacklevel=2,
         )
     except:
         pass

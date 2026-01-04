@@ -15,7 +15,6 @@
 """
 
 import asyncio
-import time
 from typing import Any, Optional, Union
 
 import httpx
@@ -27,23 +26,39 @@ from fastdeploy.utils import data_processor_logger
 class BaseEncodeRequest(BaseModel):
     version: str
     req_id: str
-    is_gen: bool
-    resolution: int
 
 
 class ImageEncodeRequest(BaseEncodeRequest):
     image_url: Union[str, HttpUrl]
+    is_gen: bool
+    resolution: int
 
 
 class VideoEncodeRequest(BaseEncodeRequest):
     video_url: Union[str, HttpUrl]
+    is_gen: bool
+    resolution: int
     start_ts: int
     end_ts: int
     frames: int
     vit_merge: bool
 
 
+class AudioEncodeRequest(BaseEncodeRequest):
+    audio_url: Union[str, HttpUrl]
+    is_add_spk_emb: bool
+    is_pad_aug: bool
+    is_aug: bool
+    audio_start: Optional[float]
+    audio_dur: Optional[float]
+
+
 class ImageDecodeRequest(BaseModel):
+    req_id: str
+    data: list[Any]
+
+
+class AudioDecodeRequest(BaseModel):
     req_id: str
     data: list[Any]
 
@@ -55,6 +70,7 @@ class AsyncTokenizerClient:
         timeout: float = 5.0,
         poll_interval: float = 0.5,
         max_wait: float = 60.0,
+        max_retries: int = 10,
     ):
         """
         :param mode: 'local' 或 'remote'
@@ -67,6 +83,7 @@ class AsyncTokenizerClient:
         self.timeout = timeout
         self.poll_interval = poll_interval
         self.max_wait = max_wait
+        self.max_retries = max_retries
 
     async def encode_image(self, request: ImageEncodeRequest):
         return await self._async_encode_request("image", request.__dict__)
@@ -74,8 +91,14 @@ class AsyncTokenizerClient:
     async def encode_video(self, request: VideoEncodeRequest):
         return await self._async_encode_request("video", request.__dict__)
 
+    async def encode_audio(self, request: AudioEncodeRequest):
+        return await self._async_encode_request("audio", request.__dict__)
+
     async def decode_image(self, request: ImageDecodeRequest):
         return await self._async_decode_request("image", request.__dict__)
+
+    async def decode_audio(self, request: AudioDecodeRequest):
+        return await self._async_decode_request("audio", request.__dict__)
 
     async def log_request(self, request):
         data_processor_logger.debug(f">>> Request: {request.method} {request.url}")
@@ -101,6 +124,8 @@ class AsyncTokenizerClient:
                     url = f"{self.base_url}/image/encode"
                 elif type == "video":
                     url = f"{self.base_url}/video/encode"
+                elif type == "audio":
+                    url = f"{self.base_url}/audio/encode"
                 else:
                     raise ValueError("Invalid type")
 
@@ -110,6 +135,7 @@ class AsyncTokenizerClient:
                 raise RuntimeError(f"Failed to create tokenize task: {e}") from e
 
             task_info = resp.json()
+
             if task_info.get("code") != 0:
                 raise RuntimeError(f"Tokenize task creation failed, {task_info.get('message')}")
 
@@ -154,11 +180,12 @@ class AsyncTokenizerClient:
                 url = None
                 if type == "image":
                     url = f"{self.base_url}/image/decode"
+                elif type == "audio":
+                    url = f"{self.base_url}/audio/decode"
                 else:
                     raise ValueError("Invalid type")
 
-                max_retries = 10
-                for attempt in range(max_retries):
+                for attempt in range(self.max_retries):
                     try:
                         resp = await client.post(url, json=request)
                         resp.raise_for_status()
@@ -167,10 +194,10 @@ class AsyncTokenizerClient:
                         return resp.json().get("result")
                     except Exception as e:
                         data_processor_logger.error(f"Attempt to decode_request {attempt + 1} failed: {e}")
-                        if attempt == max_retries - 1:
+                        if attempt == self.max_retries - 1:
                             data_processor_logger.error(
                                 f"Max retries of decode_request reached. Giving up. request is {request}"
                             )
-                        time.sleep(10)
+                        await asyncio.sleep(1)
             except httpx.RequestError as e:
                 raise RuntimeError(f"Failed to decode: {e}") from e

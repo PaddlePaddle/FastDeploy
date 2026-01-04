@@ -50,6 +50,7 @@ class TestGeneration(unittest.TestCase):
                 model=MODEL_NAME,
                 max_num_batched_tokens=4096,
                 tensor_parallel_size=1,
+                lm_head_fp32=True,
                 engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT")),
                 cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT")),
             )

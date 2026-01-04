@@ -140,7 +140,7 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
-    if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
+    if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)
         return
@@ -207,6 +207,13 @@ class WeightsMapper:
 
     def apply(self, weight_name):
         return self._map_name(weight_name)
+
+
+def remap_weight_keys(weights_iterator, mapper: dict):
+    return (
+        (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
+        for key, value in weights_iterator
+    )
 
 
 def process_weights_before_loading(
@@ -281,7 +288,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
@@ -298,6 +304,10 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if tp_row_bias:
+            loaded_weight = loaded_weight / fd_config.parallel_config.tensor_parallel_size
+
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:
@@ -306,7 +316,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        h2d_copy(dst=param, src=loaded_weight)
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
 
     return fn
 
@@ -347,6 +358,9 @@ def is_paddle_support_new_h2d():
 
     code = """
 import paddle
+import resource
+
+resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 try:
     dst = paddle.zeros([2, 4], dtype='bfloat16')
     src = paddle.ones([2, 2], dtype='bfloat16', device='cpu')
@@ -365,8 +379,9 @@ def h2d_copy(dst, src, blocking=True):
     if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
         # For non-GPU devices, data is transferred to device (H2D) in advance.
         src = get_tensor(src)
-    if not dst._is_initialized():
-        dst.initialize()
+    if len(src.shape) == 1:
+        # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+        src = get_tensor(src)
     dst.copy_(src, blocking)
 
 
@@ -375,7 +390,7 @@ def v1_loader_support(fd_config):
 
     def _get_unsupported_quant():
         if current_platform.is_cuda():
-            return {"w4a8", "w4afp8", "wint2"}
+            return {"w4a8", "wint2"}
         elif current_platform.is_xpu():
             return {"w4a8", "w8a8"}
         return set()

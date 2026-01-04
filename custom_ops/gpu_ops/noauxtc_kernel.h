@@ -547,7 +547,7 @@ __global__ void group_idx_and_topk_idx_kernel(
 
   if (case_id < num_tokens) {
     // calculate group_idx
-    int32_t target_num_min = WARP_SIZE - n_group + topk_group;
+    int32_t want_neg_inf_num = WARP_SIZE - n_group + topk_group;
     if (lane_id < n_group &&
         (isfinite(cuda_cast<float, T>(
             group_scores[lane_id]))))  // The check is necessary to avoid
@@ -556,20 +556,24 @@ __global__ void group_idx_and_topk_idx_kernel(
       value = group_scores[lane_id];
     }
 
-    int count_equal_to_top_value = WARP_SIZE - n_group;
-    int pre_count_equal_to_top_value = 0;
+    int neg_inf_num = WARP_SIZE - n_group;
+    int last_neg_inf_num = 0;
     // Use loop to find the largset top_group
-    while (count_equal_to_top_value < target_num_min) {
+    while (neg_inf_num < want_neg_inf_num) {
       __syncwarp();  // Ensure all threads have valid data before reduction
       topk_group_value = cg::reduce(tile, value, cg::greater<T>());
       if (value == topk_group_value) {
         value = neg_inf<T>();
       }
-      pre_count_equal_to_top_value = count_equal_to_top_value;
-      count_equal_to_top_value =
+      last_neg_inf_num = neg_inf_num;
+
+      neg_inf_num =
           __popc(__ballot_sync(FULL_WARP_MASK, (value == neg_inf<T>())));
     }
-    num_equalto_topkth_group = target_num_min - pre_count_equal_to_top_value;
+    // There is a possible case:
+    // may have many different group holding the same score!
+    // but we only accept some of them!
+    num_equalto_topkth_group = want_neg_inf_num - last_neg_inf_num;
   }
   __syncthreads();
 
@@ -969,33 +973,12 @@ void invokeNoAuxTcRedundant(T* scores,
   int64_t num_cases = num_tokens * n_group;
   int64_t topk_with_k2_num_blocks = (num_cases - 1) / NUM_WARPS_PER_BLOCK + 1;
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0, stream>>>(
       group_scores,
       scores_with_bias,
       num_cases,
       n_group,
       num_experts / n_group);
-#else
-  auto* kernel_instance1 = &topk_with_k2_kernel<T>;
-  cudaLaunchConfig_t config;
-  config.gridDim = topk_with_k2_num_blocks;
-  config.blockDim = BLOCK_SIZE;
-  config.dynamicSmemBytes = 0;
-  config.stream = stream;
-  cudaLaunchAttribute attrs[1];
-  attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = false;
-  config.numAttrs = 1;
-  config.attrs = attrs;
-  cudaLaunchKernelEx(&config,
-                     kernel_instance1,
-                     group_scores,
-                     scores_with_bias,
-                     num_cases,
-                     n_group,
-                     num_experts / n_group);
-#endif
 
   int64_t topk_with_k_group_num_blocks =
       (num_tokens - 1) / NUM_WARPS_PER_BLOCK + 1;
@@ -1003,7 +986,6 @@ void invokeNoAuxTcRedundant(T* scores,
       warp_topk::calc_smem_size_for_block_wide<T, int32_t>(NUM_WARPS_PER_BLOCK,
                                                            topk);
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   group_idx_and_topk_idx_redundant_kernel<T>
       <<<topk_with_k_group_num_blocks,
          BLOCK_SIZE,
@@ -1025,32 +1007,6 @@ void invokeNoAuxTcRedundant(T* scores,
                    num_experts / n_group,
                    routed_scaling_factor,
                    redundant_ep_rank_num_plus_one);
-#else
-  auto* kernel_instance2 = &group_idx_and_topk_idx_kernel<T, IdxT>;
-  config.gridDim = topk_with_k_group_num_blocks;
-  config.blockDim = BLOCK_SIZE;
-  config.dynamicSmemBytes = dynamic_smem_in_bytes;
-  config.stream = stream;
-  attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = false;
-  config.numAttrs = 1;
-  config.attrs = attrs;
-  cudaLaunchKernelEx(&config,
-                     kernel_instance2,
-                     scores,
-                     group_scores,
-                     topk_values,
-                     topk_indices,
-                     scores_with_bias,
-                     num_tokens,
-                     n_group,
-                     topk_group,
-                     topk,
-                     num_experts,
-                     num_experts / n_group,
-                     renormalize,
-                     routed_scaling_factor);
-#endif
 }
 
 #define INSTANTIATE_NOAUX_TC(T, IdxT)                                      \

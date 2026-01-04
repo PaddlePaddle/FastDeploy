@@ -14,11 +14,12 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
@@ -240,6 +241,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Marlin compute Fused MoE.
@@ -273,6 +275,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 True,  # apply_norm_weight,
                 False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         block_size_m = 64
 
@@ -350,8 +355,5 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         ffn_out.reshape_([token_num, -1, hidden_size])
         ffn_out = ffn_out.sum(axis=1)
-
-        if layer.reduce_results and layer.tp_size > 1:
-            ffn_out = tensor_model_parallel_all_reduce(ffn_out)
 
         return ffn_out
