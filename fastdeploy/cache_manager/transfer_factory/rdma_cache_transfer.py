@@ -30,15 +30,17 @@ class RDMACommManager:
     def __init__(
         self,
         splitwise_role,
-        rank,
         gpu_id,
         cache_k_ptr_list,
         cache_v_ptr_list,
         max_block_num,
         block_bytes,
         rdma_port,
-        prefill_tp_size,
-        prefill_tp_idx,
+        cache_k_scale_ptr_list=[],
+        cache_v_scale_ptr_list=[],
+        scale_block_bytes=0,
+        prefill_tp_size=1,
+        prefill_tp_idx=0,
     ):
         try:
             import os
@@ -88,6 +90,9 @@ class RDMACommManager:
             cache_v_ptr_list,
             max_block_num,
             block_bytes,
+            cache_k_scale_ptr_list,
+            cache_v_scale_ptr_list,
+            scale_block_bytes,
             prefill_tp_size,
             prefill_tp_idx,
         )

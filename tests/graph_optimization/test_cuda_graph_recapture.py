@@ -112,6 +112,7 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
         model_config.max_model_len = 5120
+        model_config.architectures = ["test_model"]
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,
