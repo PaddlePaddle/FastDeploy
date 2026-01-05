@@ -21,6 +21,7 @@ import traceback
 import uuid
 from copy import copy
 from http import HTTPStatus
+import asyncio
 
 import numpy as np
 from filelock import FileLock
@@ -51,6 +52,7 @@ from fastdeploy.utils import (
     api_server_logger,
     to_tensor,
 )
+from fastdeploy.engine.request import ControlRequest, ControlResponse
 
 
 class EngineClient:
@@ -512,6 +514,24 @@ class EngineClient:
 
         return True, ""
 
+    async def run_control_method(self, request: ControlRequest):
+        api_server_logger.info(f"Start Run Control Method: {request}")
+        self.zmq_client.send_json(request.to_dict())
+        request_id = request.request_id
+        dealer, response_queue = await self.connection_manager.get_connection(request_id)
+        dealer.write([b"", request_id.encode("utf-8")])
+        try:
+            response = await asyncio.wait_for(response_queue.get(), timeout=600)
+            print(response)
+            response = ControlResponse.from_dict(response[0])
+            api_server_logger.info(f"End Run Control Method: {response}")
+            return response
+        except asyncio.TimeoutError:
+            error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
+            api_server_logger.error(f"Error Run Control Method: {error_response}")
+            return error_response
+
+        
     def is_workers_alive(self):
         """
         Check the health of the model server by checking whether all workers are alive.

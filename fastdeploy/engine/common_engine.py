@@ -38,7 +38,7 @@ import zmq
 from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, ControlRequest, RequestOutput, RequestType
+from fastdeploy.engine.request import Request, ControlRequest, ControlResponse, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.eplb.utils import init_eplb_signals
@@ -1145,32 +1145,26 @@ class EngineService:
         try:
             self.llm_logger.info(f"Processing control request {request_id}: {method}")
             
-            # Dynamically map method name to handler method
             handler_name = f"_control_{method}"
             handler = getattr(self, handler_name, None)
             if handler is None or not callable(handler):
-                error_msg = f"Unknown control method: {method}"
-                self.llm_logger.error(errmsg)
-                self._send_error_response(request_id, 400, error_msg)
+                error_result = ControlResponse(request_id, 400, f"unknown control method:{method}")
+                self.llm_logger.error(str(error_result))
+                self.send_response_server.send_response(request_id, [error_result])
                 return
             
-            # Dynamically call the handler method with provided arguments
-            error_code, error_msg = handler(args)
-            if error_code == 0:
-                self.llm_logger.error(f"Control method {method} failed: {error_msg}")
-                self._send_error_response(request_id, error_msg, error_code)
-                return
-
+            result = handler(args)
             self.llm_logger.info(f"Control method {method} success.")
-            succ_result = RequestOutput(request_id=request_id, finished=True)
+            succ_result = ControlResponse(request_id, 200, "Success", result)
             self.send_response_server.send_response(request_id, [succ_result])
             
         except Exception as e:
             error_msg = f"Control method {method} failed: {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
-            self._send_error_response(request_id, 500, error_msg)
+            error_result = ControlResponse(request_id, 500, error_msg)
+            self.send_response_server.send_response(request_id, [error_result])
 
-    def _control_pause(self, args: dict) -> dict:
+    def _control_pause(self, args: dict) -> dict | None:
         """暂停请求生成
 
         Args:
@@ -1182,7 +1176,43 @@ class EngineService:
                 - error_msg: 错误信息，成功时为空字符串
         """
         self.llm_logger.info(f"Pause Request Generation")
-        return 0, ""
+        return None
+
+    def _control_resume(self, args: dict) -> dict | None:
+        """恢复暂停的请求生成
+
+        Args:
+            args: 控制参数字典，恢复生成相关的配置参数
+
+        Returns:
+            dict | None: 返回结果字典或None，包含恢复操作的状态信息
+        """
+        self.llm_logger.info(f"Resume Request Generation")
+        return None
+
+    def _control_is_paused(self, args: dict) -> bool:
+        """检查是否暂停了请求生成
+
+        Args:
+            args: 控制参数字典，检查是否暂停相关的配置参数
+
+        Returns:
+            bool: 是否暂停了请求生成
+        """
+        self.llm_logger.info(f"Check if Request Generation is Paused")
+        return {"is_paused": self.is_paused}
+
+    def _control_update_weights(self, args: dict) -> dict | None:
+        """更新模型权重
+
+        Args:
+            args: 控制参数字典，更新权重相关的配置参数
+
+        Returns:
+            dict | None: 返回结果字典或None，包含更新权重的操作结果信息
+        """
+        self.llm_logger.info(f"Update Model Weights")
+        return None
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(

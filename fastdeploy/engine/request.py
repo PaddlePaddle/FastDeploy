@@ -21,6 +21,7 @@ import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
+from fastapi.responses import JSONResponse
 
 import numpy as np
 from typing_extensions import TypeVar
@@ -86,7 +87,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
         reasoning_max_tokens: Optional[int] = None,
-        trace_carrier: dict = dict(),
+        trace_carrier: Optional[Dict[str, Any]] = None,
         dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
         image_start: int = 0,
@@ -204,13 +205,16 @@ class Request:
             # if mm_positions is not of type ImagePosition, convert to ImagePosition
             try:
                 for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
-                    d["multimodal_inputs"]["mm_positions"][i] = (
-                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
-                    )
-            except Exception as e:
+                    if not isinstance(mm_pos, ImagePosition):
+                        if not isinstance(mm_pos, dict):
+                            raise ValueError(f"Invalid mm_positions format at index {i}")
+                        d["multimodal_inputs"]["mm_positions"][i] = ImagePosition(**mm_pos)
+            except (ValueError, TypeError, KeyError) as e:
                 data_processor_logger.error(
-                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                    f"Convert mm_positions to ImagePosition failed - {type(e).__name__}: {e}\n"
+                    f"Input data: {d['multimodal_inputs']['mm_positions']}"
                 )
+                raise
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -469,6 +473,67 @@ class ControlRequest:
             return False
             
         return True
+
+class ControlResponse:
+    """
+    Response for control opeartions
+    """
+    def __init__(
+        self, 
+        request_id: str, 
+        error_code: int = 200, 
+        error_message: Optional[str] = None,
+        result: Optional[dict] = None,
+        finished: bool = True) -> None:
+        self.request_id = request_id
+        self.finished = finished
+        self.error_message = error_message
+        self.result = result
+        self.error_code = error_code
+
+    def to_dict(self) -> dict:
+        """Convert ControlResponse into a serializable dict."""
+        return {
+            "request_id": self.request_id,
+            "finished": self.finished,
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+            "result": self.result
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        """Create ControlResponse instance from dictionary."""
+        return cls(
+            request_id=d["request_id"],
+            finished=d.get("finished", True),
+            error_code=d.get("error_code", 200),
+            error_message=d.get("error_message"),
+            result=d.get("result")
+        )
+
+    def to_api_json_response(self) -> JSONResponse:
+        """Convert ControlResponse into a JSONResponse."""
+        status = "success" if self.error_code == 200 else "error"
+        content = {
+            "request_id": self.request_id,
+            "status": status,
+            "error_message": self.error_message,
+            "result": self.result
+        }
+        return JSONResponse(status_code=self.error_code, content=content)
+
+    def __repr__(self) -> str:
+        """Provide a clean representation of the control response."""
+        return (
+            f"ControlResponse("
+            f"request_id={self.request_id}, "
+            f"finished={self.finished}, "
+            f"error_code={self.error_code}, "
+            f"error_message={self.error_message}, "
+            f"result={self.result}"
+            f")"
+        )
 
 
 @dataclass(slots=True)
@@ -905,8 +970,8 @@ class PoolingRequestOutput(Generic[_O]):
     prompt_token_ids: list[int]
     finished: bool
     metrics: Optional[RequestMetrics] = (None,)
-    error_code: Optional[int] = (200,)
-    error_msg: Optional[str] = (None,)
+    error_code: Optional[int] = 200
+    error_msg: Optional[str] = None
 
     def __repr__(self):
         return (
