@@ -48,7 +48,7 @@ void MoeFastHardamardWrapper(const T *x_data,
         (hadamard_block_size < 128) ? 128 : hadamard_block_size;
 
     const int VecSize = effective_block_size / kThreads;
-    const int logN = int(ceil(std::log2(effective_block_size)));
+    const int logN = int(ceil(std::log2(kThreads * VecSize)));
     constexpr int kNChunks = 1;
 
     DISPATCH_SP_VS(VecSize, VEC_SIZE, {DISPATCH_SP_logN(logN, kLogN, {
