@@ -1,0 +1,21 @@
+instances:
+  - role: "prefill"
+    host_ip: 127.0.0.1
+    port: 8097
+    connector_port: 8001
+    engine_worker_queue_port: 8002
+    transfer_protocol:
+      - ipc
+      - rdma
+    rdma_ports: [7100, "7101"]
+    device_ids: [0, "1"]
+  - role: "decode"
+    host_ip: 127.0.0.1
+    port: 8098
+    connector_port: 8001
+    engine_worker_queue_port: 8002
+    transfer_protocol:
+      - ipc
+      - rdma
+    rdma_ports: ["7100", "7101"]
+    device_ids: ["0", "1"]
