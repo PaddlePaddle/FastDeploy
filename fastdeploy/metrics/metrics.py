@@ -131,7 +131,8 @@ class MetricsManager:
 
     num_requests_running: "Gauge"
     num_requests_waiting: "Gauge"
-    num_requests_swapped: "Gauge"
+    num_requests_preempted: "Gauge"
+    num_requests_enqueued: "Gauge"
     time_to_first_token: "Histogram"
     time_per_output_token: "Histogram"
     request_inference_time: "Histogram"
@@ -142,7 +143,7 @@ class MetricsManager:
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
     request_success_total: "Counter"
-    request_swapped_total: "Counter"
+    request_preempted_total: "Counter"
     spec_decode_draft_acceptance_rate: "Gauge"
     spec_decode_efficiency: "Gauge"
     spec_decode_num_accepted_tokens_total: "Gauge"
@@ -150,11 +151,11 @@ class MetricsManager:
     spec_decode_num_emitted_tokens_total: "Gauge"
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
-    # for YIYAN Adapter
     prefix_cache_token_num: "Counter"
     prefix_gpu_cache_token_num: "Counter"
     prefix_cpu_cache_token_num: "Counter"
     prefix_ssd_cache_token_num: "Counter"
+    prefix_storage_cache_token_num: "Counter"
     batch_size: "Gauge"
     max_batch_size: "Gauge"
     available_gpu_block_num: "Gauge"
@@ -200,13 +201,19 @@ class MetricsManager:
         "num_requests_waiting": {
             "type": Gauge,
             "name": "fastdeploy:num_requests_waiting",
-            "description": "Number of requests currently waiting",
+            "description": "Number of requests already scheduled but not yet running",
             "kwargs": {},
         },
-        "num_requests_swapped": {
+        "num_requests_preempted": {
             "type": Gauge,
-            "name": "fastdeploy:request_rescheduled_total",
-            "description": "Total number of preempted requests",
+            "name": "fastdeploy:num_requests_preempted",
+            "description": "Number of requests preempted and waiting to be rescheduled",
+            "kwargs": {},
+        },
+        "num_requests_enqueued": {
+            "type": Gauge,
+            "name": "fastdeploy:num_requests_enqueued",
+            "description": "Number of requests already enqueued but not yet scheduled",
             "kwargs": {},
         },
         "gpu_cache_usage_perc": {
@@ -380,9 +387,9 @@ class MetricsManager:
             "description": "Total number of successfully processed requests",
             "kwargs": {},
         },
-        "request_swapped_total": {
+        "request_preempted_total": {
             "type": Counter,
-            "name": "fastdeploy:request_rescheduled_total",
+            "name": "fastdeploy:request_preempted_total",
             "description": "Total number of preempted requests",
             "kwargs": {},
         },
@@ -409,6 +416,12 @@ class MetricsManager:
             "type": Counter,
             "name": "fastdeploy:prefix_ssd_cache_token_num",
             "description": "Total number of cached tokens on SSD",
+            "kwargs": {},
+        },
+        "prefix_storage_cache_token_num": {
+            "type": Counter,
+            "name": "fastdeploy:prefix_storage_cache_token_num",
+            "description": "Total number of cached tokens on Storage",
             "kwargs": {},
         },
         "requests_number": {

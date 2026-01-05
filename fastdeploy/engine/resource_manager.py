@@ -310,15 +310,16 @@ class ResourceManager:
                 break
 
         # record batch size here
-        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        used_blocks = set()
+        for task in self.tasks_list:
+            used_blocks.union(task.block_tables) if task else None
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(used_blocks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         llm_logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
         llm_logger.info(f"{self.info()}")
-        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
 
         return processed_tasks
 

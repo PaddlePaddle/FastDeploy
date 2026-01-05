@@ -744,7 +744,7 @@ class EngineService:
                 else:
                     continue
 
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
+                main_process_metrics.num_requests_enqueued.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
                 err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
@@ -798,6 +798,7 @@ class EngineService:
                     return
 
                 if tasks:
+                    main_process_metrics.num_requests_enqueued.dec(len(tasks))
                     self.llm_logger.debug(
                         f"Engine has fetched tasks from {self.scheduler.__class__.__name__}: {[task.request_id for task in tasks]}"
                     )
@@ -1105,7 +1106,7 @@ class EngineService:
                             added_requests.pop(request_id)
 
                     if failed is None:
-                        main_process_metrics.num_requests_waiting.inc(1)
+                        main_process_metrics.num_requests_enqueued.inc(1)
                         continue
 
                     self._send_error_response(request_id, failed)
