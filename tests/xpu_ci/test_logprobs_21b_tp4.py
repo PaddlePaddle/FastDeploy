@@ -82,7 +82,7 @@ def test_logprobs_mode(xpu_env):
             "model": "default",
             "messages": [{"role": "user", "content": "你好,你是谁?"}],
             "temperature": 1,
-            "top_p": 1.0,
+            "top_p": 0,
             "max_tokens": 64,
             "stream": False,
             "logprobs": True,
