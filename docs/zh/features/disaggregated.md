@@ -30,8 +30,11 @@ LLM大模型推理分为Prefill和Decode两个阶段，分别为计算密集型�
 * 启动PD实例，PD实例会注册到Router
 * 用户请求发送到Router
 * Router根据PD实例的负载情况为请求选择合适的PD实例对
-* Router将请求转发至选定的PD实例
-* Router接收PD实例的生成结果，并返回给用户
+* Router将请求发给选定的PD实例
+* P实例收到请求后向D实例申请Cache Block
+* P实例推理生成首token，同时layerwise传输Cache给D实例，完成后将首token发送给Router和D实例
+* D实例收到请求和首token后，继续生成后续token，发送给Router
+* Router接收PD实例的生成结果，返回给用户
 
 高性能版本Router正在开发中，敬请期待。
 
@@ -51,7 +54,7 @@ apt-get install -y librdmacm-dev libibverbs-dev iproute2
 ./mlnxofedinstall --user-space-only --skip-distro-check --without-fw-update --force --without-ucx-cuda
 ```
 
-拉取FastDeploy最新代码，编译安装。
+拉取FastDeploy最新代码，编译安装（最新release 2.3和2.4版本还没有最新分离式部署的功能特性）。
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
@@ -108,16 +111,18 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 
 **具体说明**
 
-分离式部署启动Prefill/Decode实例的参数说明：
+分离式部署启动Prefill/Decode实例的参数说明如下，其他参数设置和mixed部署类似，具体参考[文档](../../zh/parameters.md)：
 * `--splitwise-role`: 指定实例角色，可选值为`prefill`，`decode`和`mixed`，默认是`mixed`
-* `--cache-transfer-protocol`: 指定KV Cache传输协议，可选值为`rdma`和`ipc`，默认是`rdma`和`ipc`，如果PD实例是在同一台机器，优先使用`ipc`传输
+* `--cache-transfer-protocol`: 指定KV Cache传输协议，可选值为`rdma`和`ipc`，默认是`rdma,ipc`；PD实例在同一台机器，支持两种传输方式，优先使用`ipc`传输；PD实例不在同一台机器，只支持`rdma`传输；如果使用rdma传输，需要确保多台机器的RDMA网络互通
 * `--rdma-comm-ports`: 指定RDMA通信端口，多个端口用逗号隔开，端口数量需要和dp_size*tp_size相同；可以不指定，FD内部会找空闲的端口
-* `--pd-comm-port`: 指定PD实例的交互接口，多个端口用逗号隔开，端口数量需要和dp_size相同；如果不指定，FD内部会找空闲的端口
-* `--router`：指定Router的接口
+* `--pd-comm-port`: 指定PD实例的交互接口，多个端口用逗号隔开，端口数量需要和dp_size相同；可以不指定，FD内部会找空闲的端口
+* `--router`：指定Router的服务地址
 
-如果Prefill和Decode实例部署在不同机器上，需要确保多台机器的RDMA网络互通。
-如果想手动指定RDMA网卡，可以设置`KVCACHE_RDMA_NICS`环境变量，多个网卡名用逗号隔开，Fastdeploy提供了检测RDMA网卡的脚本`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
-如果不设置`KVCACHE_RDMA_NICS`环境变量, Fastdeploy内部会自动检测可用的RDMA网卡。
+注意：
+* 如果想手动指定RDMA网卡，可以设置`KVCACHE_RDMA_NICS`环境变量，多个网卡名用逗号隔开，Fastdeploy提供了检测RDMA网卡的脚本`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。如果不设置`KVCACHE_RDMA_NICS`环境变量, Fastdeploy内部会自动检测可用的RDMA网卡。
+* 分离式部署也可以使用[benchmark](../../../benchmarks/)工具向Router服务发请求，开启`--pd-metrics`参数可以统计到更多分析指标。
+* 根据Decode实例的显存资源和最大处理请求数`max_num_seqs`来调整请求并发，如果请求并发很高但是Decode资源不足，Prefill会为特定请求持续向Decode申请资源，导致Prefill资源利用率过低；设置`export PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES=0'来关闭该行为，特定请求遇到Decode资源不足会直接向Router返回错误。
+* 分离式部署支持多种并行策略，如果使用DP并行，必须使用`python -m fastdeploy.entrypoints.openai.multi_api_server`来启动服务。
 
 **Examples示例**
 

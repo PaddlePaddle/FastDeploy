@@ -140,8 +140,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
     # The ENDPOINT of bos storing the features while multi_modal infer
     "ENCODE_FEATURE_ENDPOINT": lambda: os.getenv("ENCODE_FEATURE_ENDPOINT"),
-    # Enable offline perf test mode for PD disaggregation
-    "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
+    # Whether the Prefill instance continuously requests Decode resources in PD disaggregation
+    "PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES": lambda: int(
+        os.getenv("PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", "1")
+    ),
     "FD_ENABLE_E2W_TENSOR_CONVERT": lambda: int(os.getenv("FD_ENABLE_E2W_TENSOR_CONVERT", "0")),
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),

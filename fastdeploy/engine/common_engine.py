@@ -808,7 +808,7 @@ class EngineService:
                         # start async preprocess
                         self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
-                    if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
+                    if envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
