@@ -55,7 +55,7 @@ paddle::Tensor run_impl(MMArgs args) {
     return D;
   }
 
-  auto arguments = MacheteKernel::create_arguments(stream,  //
+  auto arguments = MacheteKernel::create_arguments(stream,
                                                    args.A,
                                                    args.B,
                                                    D,
