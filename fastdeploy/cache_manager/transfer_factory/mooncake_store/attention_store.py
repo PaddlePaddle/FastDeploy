@@ -128,7 +128,7 @@ class AttentionStore(KVCacheStorage):
                 gpu_block_ids,
                 timeout,
             )
-            logger.debug(f"[READ END] task_id: {task_id} read_blocks={num}")
+            logger.debug(f"[READ END] task_id: {task_id} read_blocks: {num}")
         except AttentionStoreSDKError:
             logger.error(
                 f"[READ ERROR] failed to execute sdk read, task_id: {task_id}, traceback:\n{traceback.format_exc()}"

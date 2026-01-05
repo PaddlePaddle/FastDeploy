@@ -22,7 +22,6 @@ import queue
 import threading
 import time
 import traceback
-from math import prod
 from typing import List
 
 import numpy as np
@@ -155,13 +154,16 @@ class CacheTransferManager:
         self.block_size = self.key_cache_shape[2]
         self.head_dim = self.key_cache_shape[3]
 
+        # compute cache bytes
+        self.cache_dtype = args.cache_dtype
+        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
+
         # extract other arg values
         self.n_ranks = args.mp_num
         self.rank = args.rank
         self.device = args.device_id
         self.num_layers = args.num_layers
         self.ipc_suffix = args.ipc_suffix
-        self.cache_dtype = args.cache_dtype
         self.local_data_parallel_id = args.local_data_parallel_id
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
@@ -241,7 +243,7 @@ class CacheTransferManager:
                 shard_num=self.n_ranks,
                 layer_num=self.num_layers + self.num_extra_layers,
                 block_token_size=self.block_size,
-                bytes_per_shard_layer_per_block=prod(self.key_cache_shape[1:]),
+                bytes_per_shard_layer_per_block=self.head_num * self.block_size * self.head_dim * self.cache_bytes,
                 device_id=self.device,
                 dp_id=self.local_data_parallel_id,
             )
@@ -263,17 +265,15 @@ class CacheTransferManager:
         buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
         """
         layer_num = self.num_layers + self.num_extra_layers
-        head_num = self.key_cache_shape[1]
-        block_size = self.key_cache_shape[2]
-        head_dim = self.key_cache_shape[3]
-        block_num = (args.max_model_len + block_size - 1) // block_size
+        block_num = (args.max_model_len + self.block_size - 1) // self.block_size
         logger.info(
             f"Creating cache buffer for storage with shape: "
-            f"[{block_num}, {layer_num}, {head_num}, {block_size}, {head_dim}]"
+            f"[{block_num}, {layer_num}, {self.head_num}, {self.block_size}, {self.head_dim}]"
         )
 
-        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
-        self.storage_buffer_stride_bytes = layer_num * head_num * block_size * head_dim * self.cache_bytes
+        self.storage_buffer_stride_bytes = (
+            layer_num * self.head_num * self.block_size * self.head_dim * self.cache_bytes
+        )
         total_bytes = block_num * self.storage_buffer_stride_bytes * 2  # key and value
 
         logger.info(f"Creating cpu buffer cache for alllayers: {total_bytes / 1024 ** 3:.2f}GB")
@@ -566,8 +566,8 @@ class CacheTransferManager:
                 try:
                     valid_gpu_block_ids = self._run_read_storage(
                         task.task_id,
-                        task.token_ids,
-                        task.start_read_block_idx + match_block_num,
+                        task.token_ids[: match_block_num * self.block_size],
+                        task.start_read_block_idx,
                         k_cache_keys,
                         v_cache_keys,
                         gpu_block_ids,
