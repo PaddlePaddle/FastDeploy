@@ -369,6 +369,7 @@ def ping(raw_request: Request) -> Response:
 
 @app.post("/v1/pause")
 async def pause(request: Request) -> Response:
+    # todo: support wait_for_inflight_requests(default False), clear_cache(default True) arguments
     request_id = f"control-{uuid.uuid4()}"
     control_request = ControlRequest(request_id, "pause")
     control_response = await app.state.engine_client.run_control_method(control_request)
