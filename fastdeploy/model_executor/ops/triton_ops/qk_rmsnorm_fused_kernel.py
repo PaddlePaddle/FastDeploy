@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import paddle
 import triton
 import triton.language as tl
 
@@ -24,7 +23,6 @@ from fastdeploy.utils import ceil_div
 @triton.jit
 def qk_rmsnorm_fused_kernel(
     x_ptr,
-    y_ptr,
     q_weight_ptr,
     k_weight_ptr,
     M,
@@ -68,7 +66,7 @@ def qk_rmsnorm_fused_kernel(
     q_out = q_hat * q_w[None, :]
 
     tl.store(
-        y_ptr + row_base + head_ids[:, None] * head_dim + offs_d[None, :],
+        q_ptrs,
         q_out,
         mask=q_mask[:, None],
     )
@@ -86,20 +84,8 @@ def qk_rmsnorm_fused_kernel(
     k_out = k_hat * k_w[None, :]
 
     tl.store(
-        y_ptr + row_base + q_size + head_ids[:, None] * head_dim + offs_d[None, :],
+        k_ptrs,
         k_out,
-        mask=kv_mask[:, None],
-    )
-
-    # -------------------
-    # V copy
-    # -------------------
-    v_ptrs = x_ptr + row_base + q_size + kv_size + head_ids[:, None] * head_dim + offs_d[None, :]
-
-    v = tl.load(v_ptrs, mask=kv_mask[:, None], other=0.0)
-    tl.store(
-        y_ptr + row_base + q_size + kv_size + head_ids[:, None] * head_dim + offs_d[None, :],
-        v,
         mask=kv_mask[:, None],
     )
 
@@ -119,15 +105,12 @@ def qk_rmsnorm_fused(
     num_q_heads = q_size // head_dim
     num_kv_heads = kv_size // head_dim
 
-    y = paddle.empty_like(qkv_out)
-
     BLOCK_HEADS = 4 if num_q_heads <= 32 else 8
 
     grid = (M * ceil_div(num_q_heads, BLOCK_HEADS),)
 
     qk_rmsnorm_fused_kernel[grid](
         x_ptr=qkv_out,
-        y_ptr=y,
         q_weight_ptr=q_norm_weight,
         k_weight_ptr=k_norm_weight,
         M=M,
@@ -140,4 +123,4 @@ def qk_rmsnorm_fused(
         BLOCK_HEADS=BLOCK_HEADS,
         num_warps=2,
     )
-    return y
+    return qkv_out
