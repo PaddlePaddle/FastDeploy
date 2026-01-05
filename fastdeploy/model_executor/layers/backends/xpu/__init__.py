@@ -18,9 +18,12 @@ xpu backend methods
 
 from .moe.fused_moe import XPUMoEMethod, XPUWeightOnlyMoEMethod
 from .quantization.weight_only import XPUWeightOnlyLinearMethod
+from .xpu_attn_backend import XPUAttentionBackend, XPUAttentionMetadata
 
 __all__ = [
     "XPUWeightOnlyLinearMethod",
     "XPUMoEMethod",
     "XPUWeightOnlyMoEMethod",
+    "XPUAttentionBackend",
+    "XPUAttentionMetadata",
 ]
