@@ -17,7 +17,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
+from fastdeploy.input.text_processor import DataProcessor
 
 
 class MockReasoningParser:
@@ -25,11 +25,11 @@ class MockReasoningParser:
         return "think_start"
 
 
-class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
+class TestDataProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
-        # 创建 Ernie4_5Processor 实例的模拟对象
-        with patch.object(Ernie4_5Processor, "__init__", return_value=None) as mock_init:
-            self.processor = Ernie4_5Processor("model_path")
+        # 创建 DataProcessor 实例的模拟对象
+        with patch.object(DataProcessor, "__init__", return_value=None) as mock_init:
+            self.processor = DataProcessor("model_path")
             mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
         # 设置必要的属性
@@ -116,7 +116,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         kwargs = {"enable_thinking": True}
 
-        with patch("fastdeploy.input.ernie4_5_processor.data_processor_logger"):
+        with patch("fastdeploy.input.text_processor.data_processor_logger"):
             result = self.processor.process_response_dict_normal(response_dict, **kwargs)
 
         self.mock_reasoning_parser.extract_reasoning_content.assert_called_once()

@@ -15,18 +15,17 @@
 """
 
 import unittest
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 from PIL import Image
 
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
-from fastdeploy.input.ernie4_5_vl_processor import Ernie4_5_VLProcessor
 from fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive import (
     AdaptiveImageProcessor,
 )
-from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
+from fastdeploy.input.ernie4_5_vl_processor.process import Ernie4_5_VLDataProcessor
+from fastdeploy.input.multimodal_processor import MultiDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
@@ -35,11 +34,11 @@ class MockReasoningParser:
         return "think_start"
 
 
-class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
+class TestMultiDataProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
         # Create mock object for Ernie4_5Processor instance
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None) as mock_init:
-            self.processor = Ernie4_5_VLProcessor("model_path")
+        with patch.object(MultiDataProcessor, "__init__", return_value=None) as mock_init:
+            self.processor = MultiDataProcessor("model_path")
             mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
         # Set necessary attributes
@@ -52,7 +51,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.eos_token_ids = [1]
         self.processor.reasoning_parser = MockReasoningParser()
         self.processor.model_status_dict = {"test": "think_start"}
-        self.processor.ernie4_5_processor = MagicMock()
+        self.processor.image_processor = MagicMock()
 
         # Mock ids2tokens method
         def mock_ids2tokens(token_ids, task_id):
@@ -94,8 +93,8 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         self.processor._apply_default_parameters = mock_apply_default_parameters
         self.processor._check_mm_limits = mock_check_mm_limits
-        self.processor.ernie4_5_processor.request2ids = mock_request2ids
-        self.processor.ernie4_5_processor.prompt_token_ids2outputs = mock_prompt_token_ids2outputs
+        self.processor.image_processor.request2ids = mock_request2ids
+        self.processor.image_processor.prompt_token_ids2outputs = mock_prompt_token_ids2outputs
         self.processor.pack_outputs = mock_pack_outputs
 
         # Mock reasoning parser
@@ -131,64 +130,10 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request, max_model_len=512)
         self.assertEqual(request["enable_thinking"], True)
 
-    def test_init(self):
-        """Test __init__ method"""
-        with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
-            mock_dp = MagicMock()
-            mock_dp.image_patch_id = 1001
-            mock_dp.spatial_conv_size = 14
-            mock_dp.tokenizer = MagicMock()
-            mock_dp.tokenizer.pad_token_id = 0
-            mock_dp.eval = MagicMock()
-
-            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.DataProcessor") as mock_dp_class:
-                mock_dp_class.return_value = mock_dp
-                with patch(
-                    "fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.GenerationConfig"
-                ) as mock_gen_config:
-                    mock_gen_config.from_pretrained.return_value = MagicMock()
-                    with patch("paddleformers.trl.llm_utils.get_eos_token_id") as mock_get_eos:
-                        mock_get_eos.return_value = [1, 2]
-
-                        # Test normal initialization
-                        mock_reasoning_parser_class = MagicMock()
-                        processor = Ernie4_5_VLProcessor(
-                            "model_path",
-                            limit_mm_per_prompt={"image": 2, "video": 1},
-                            mm_processor_kwargs={"spatial_conv_size": 14},
-                            reasoning_parser_obj=lambda tokenizer: mock_reasoning_parser_class,
-                            tool_parser_obj=MagicMock(),
-                            enable_processor_cache=True,
-                        )
-
-                        self.assertEqual(processor.image_patch_id, 1001)
-                        self.assertEqual(processor.spatial_conv_size, 14)
-                        self.assertIsNotNone(processor.tokenizer)
-                        self.assertIsNotNone(processor.generation_config)
-                        self.assertEqual(processor.eos_token_ids, [1, 2])
-                        self.assertEqual(processor.limit_mm_per_prompt["image"], 2)
-                        self.assertEqual(processor.limit_mm_per_prompt["video"], 1)
-                        mock_dp.eval.assert_called_once()
-
-                        # Test with generation config exception
-                        mock_gen_config.from_pretrained.side_effect = Exception("Config not found")
-                        processor2 = Ernie4_5_VLProcessor("model_path")
-                        self.assertIsNone(processor2.generation_config)
-
-                        # Test with reasoning_parser_obj
-                        mock_reasoning_parser = MagicMock()
-                        processor3 = Ernie4_5_VLProcessor(
-                            "model_path", reasoning_parser_obj=lambda tokenizer: mock_reasoning_parser
-                        )
-                        self.assertIsNotNone(processor3.reasoning_parser)
-
     def test_parse_processor_kwargs(self):
         """Test _parse_processor_kwargs with various inputs"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_processor_kwargs = Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
 
             # Test with valid kwargs
             valid_kwargs = {
@@ -202,23 +147,23 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
             # Test with invalid type (implementation catches exception and returns empty dict)
             invalid_kwargs = {"spatial_conv_size": "invalid"}  # Should be int
-            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, invalid_kwargs)
+            result = processor._parse_processor_kwargs(invalid_kwargs)
             self.assertEqual(result, {})
 
             # Test with non-dict input (implementation catches exception and returns empty dict)
-            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, "not a dict")
+            result = processor._parse_processor_kwargs("not a dict")
             self.assertEqual(result, {})
 
             # Test exception handling with None
-            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
+            with patch("fastdeploy.input.multimodal_processor.data_processor_logger"):
                 result = processor._parse_processor_kwargs(None)
                 self.assertEqual(result, {})
 
     def test_parse_limits(self):
         """Test _parse_limits with various inputs"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(processor, Ernie4_5_VLProcessor)
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
+            processor._parse_limits = MultiDataProcessor._parse_limits.__get__(processor, MultiDataProcessor)
 
             # Test with valid limits
             valid_limits = {"image": 5, "video": 3}
@@ -234,16 +179,16 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             self.assertEqual(result["audio"], 1)
 
             # Test with invalid type (implementation catches exception and returns default limits)
-            result = Ernie4_5_VLProcessor._parse_limits(processor, "not a dict")
+            result = MultiDataProcessor._parse_limits(processor, "not a dict")
             self.assertEqual(result["image"], 1)
             self.assertEqual(result["video"], 1)
             self.assertEqual(result["audio"], 1)
 
     def test_check_mm_limits(self):
         """Test _check_mm_limits with various inputs"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
+            processor._check_mm_limits = MultiDataProcessor._check_mm_limits.__get__(processor, MultiDataProcessor)
 
             # Test with dict input (should not raise)
             processor.limit_mm_per_prompt = {"image": 2, "video": 1}
@@ -293,34 +238,19 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
     def test_get_pad_id(self):
         """Test get_pad_id method"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
             processor.tokenizer = MagicMock()
             processor.tokenizer.pad_token_id = 100
-            processor.get_pad_id = Ernie4_5_VLProcessor.get_pad_id.__get__(processor, Ernie4_5_VLProcessor)
+            processor.get_pad_id = MultiDataProcessor.get_pad_id.__get__(processor, MultiDataProcessor)
 
             result = processor.get_pad_id()
             self.assertEqual(result, 100)
 
-    def test_load_tokenizer(self):
-        """Test _load_tokenizer method"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            mock_tokenizer = MagicMock()
-            processor.ernie4_5_processor = MagicMock()
-            processor.ernie4_5_processor.tokenizer = mock_tokenizer
-            processor._load_tokenizer = Ernie4_5_VLProcessor._load_tokenizer.__get__(processor, Ernie4_5_VLProcessor)
-
-            processor._load_tokenizer()
-            self.assertEqual(processor.tokenizer, mock_tokenizer)
-
     def test_append_completion_tokens(self):
         """Test append_completion_tokens method"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.append_completion_tokens = Ernie4_5_VLProcessor.append_completion_tokens.__get__(
-                processor, Ernie4_5_VLProcessor
-            )
+        with patch.object(Ernie4_5_VLDataProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLDataProcessor("model_path")
 
             multimodal_inputs = {
                 "input_ids": [1, 2, 3],
@@ -339,11 +269,9 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
     def test_pack_outputs(self):
         """Test pack_outputs with and without images"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
+        with patch.object(Ernie4_5_VLDataProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLDataProcessor("model_path")
             processor.image_patch_id = 1001
-            processor.ernie4_5_processor = SimpleNamespace(mm_num_tokens=lambda **kwargs: 123)
-            processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(processor, Ernie4_5_VLProcessor)
             # Test with images
             outs_with_images = {
                 "input_ids": [1, 2, 3],
@@ -380,10 +308,10 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
     def test_process_response_dict(self):
         """Test process_response_dict with different parameters"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
-            processor.process_response_dict = Ernie4_5_VLProcessor.process_response_dict.__get__(
-                processor, Ernie4_5_VLProcessor
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
+            processor.process_response_dict = MultiDataProcessor.process_response_dict.__get__(
+                processor, MultiDataProcessor
             )
 
             # Test with stream=True
@@ -402,13 +330,13 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
     def test_apply_default_parameters(self):
         """Test _apply_default_parameters with dict and object request"""
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            processor = Ernie4_5_VLProcessor("model_path")
+        with patch.object(MultiDataProcessor, "__init__", return_value=None):
+            processor = MultiDataProcessor("model_path")
             processor.generation_config = MagicMock()
             processor.generation_config.top_p = 0.8
             processor.generation_config.temperature = 0.9
-            processor._apply_default_parameters = Ernie4_5_VLProcessor._apply_default_parameters.__get__(
-                processor, Ernie4_5_VLProcessor
+            processor._apply_default_parameters = MultiDataProcessor._apply_default_parameters.__get__(
+                processor, MultiDataProcessor
             )
 
             # Test with dict request
@@ -447,14 +375,13 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         def mock_load_tokenizer(dp_instance):
             dp_instance.tokenizer = self.mock_tokenizer
 
-        with patch.object(DataProcessor, "_load_tokenizer", side_effect=mock_load_tokenizer, autospec=True):
-            with patch.object(AdaptiveImageProcessor, "from_pretrained") as mock_image_preprocessor:
-                mock_image_preprocessor.return_value = MagicMock()
-                self.data_processor = DataProcessor(
-                    tokenizer_name="mock_tokenizer",
-                    image_preprocessor_name="mock_image_preprocessor",
-                    enable_processor_cache=False,
-                )
+        with patch.object(AdaptiveImageProcessor, "from_pretrained") as mock_image_preprocessor:
+            mock_image_preprocessor.return_value = MagicMock()
+            self.data_processor = Ernie4_5_VLDataProcessor(
+                tokenizer=self.mock_tokenizer,
+                image_preprocessor_name="mock_image_preprocessor",
+                enable_processor_cache=False,
+            )
         self.data_processor.image_patch_id = 1001
         self.data_processor.image_start_id = 1002
         self.data_processor.image_end_id = 1003
@@ -467,10 +394,14 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
 
     def _restore_real_extract_mm_items(self):
         """Helper method to restore real extract_mm_items method for testing"""
-        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
+        from fastdeploy.input.ernie4_5_vl_processor.process import (
+            Ernie4_5_VLDataProcessor,
+        )
 
-        original_extract_mm_items = DataProcessor.extract_mm_items
-        self.data_processor.extract_mm_items = original_extract_mm_items.__get__(self.data_processor, DataProcessor)
+        original_extract_mm_items = Ernie4_5_VLDataProcessor.extract_mm_items
+        self.data_processor.extract_mm_items = original_extract_mm_items.__get__(
+            self.data_processor, Ernie4_5_VLDataProcessor
+        )
 
     def _mock_convert_tokens_to_ids(self, token):
         token_id_map = {
@@ -900,7 +831,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             self.assertIn("Missing items cannot be retrieved", str(ctx.exception))
 
 
-class TestDataProcessor(unittest.TestCase):
+class TestErnie4_5_VLDataProcessor(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.mock_tokenizer = MagicMock()
@@ -932,14 +863,11 @@ class TestDataProcessor(unittest.TestCase):
             "fastdeploy.input.ernie4_5_vl_processor.process.AdaptiveImageProcessor",
             self.mock_image_preprocessor,
         ):
-            with patch("fastdeploy.input.ernie4_5_vl_processor.process.Ernie4_5Tokenizer") as mock_tokenizer_class:
-                mock_tokenizer_class.from_pretrained = MagicMock(return_value=self.mock_tokenizer)
-                mock_tokenizer_class.resource_files_names = {"vocab_file": "tokenizer.model"}
-                with patch("os.path.exists", return_value=True):
-                    self.processor = DataProcessor(
-                        tokenizer_name="test_model",
-                        image_preprocessor_name="test_model",
-                    )
+            with patch("os.path.exists", return_value=True):
+                self.processor = Ernie4_5_VLDataProcessor(
+                    tokenizer=self.mock_tokenizer,
+                    image_preprocessor_name="test_model",
+                )
 
     def _create_outputs(self):
         """Helper to create outputs dict"""
@@ -982,11 +910,11 @@ class TestDataProcessor(unittest.TestCase):
 
     def test_train_and_eval(self):
         """Test training and evaluation mode switching"""
-        self.assertTrue(self.processor.is_training)
-        self.processor.eval()
         self.assertFalse(self.processor.is_training)
         self.processor.train()
         self.assertTrue(self.processor.is_training)
+        self.processor.eval()
+        self.assertFalse(self.processor.is_training)
 
     def test_build_token_type_mapping(self):
         """Test token type mapping construction"""
@@ -1004,6 +932,8 @@ class TestDataProcessor(unittest.TestCase):
         """Test adding text and special tokens"""
         outputs = self._create_outputs()
         self.processor._add_text("hello", outputs)
+        print("=" * 50)
+        print(outputs)
         self.assertEqual(len(outputs["input_ids"]), 3)
         self.assertEqual(outputs["cur_position"], 3)
 

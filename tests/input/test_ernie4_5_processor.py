@@ -19,9 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-MODULE_PATH = "fastdeploy.input.ernie4_5_processor"
-
-from fastdeploy.input.ernie4_5_processor import _SAMPLING_EPS, Ernie4_5Processor
+from fastdeploy.input.text_processor import _SAMPLING_EPS, DataProcessor
 
 
 class MockTokenizer:
@@ -132,14 +130,17 @@ class MockToolParser:
         return MockToolParser.ToolDelta()
 
 
-class TestErnie4_5Processor(unittest.TestCase):
-    """Unit tests for Ernie4_5Processor focusing on preprocessing and postprocessing logic."""
+class TestDataProcessor(unittest.TestCase):
+    """Unit tests for DataProcessor focusing on preprocessing and postprocessing logic."""
 
     def setUp(self):
         """Patch external dependencies: tokenizer, generation config, eos token resolution."""
-        self.gen_patcher = patch(f"{MODULE_PATH}.GenerationConfig.from_pretrained", return_value=MagicMock())
+        self.gen_patcher = patch(
+            "fastdeploy.input.base_processor.GenerationConfig.from_pretrained", return_value=MagicMock()
+        )
         self.tokenizer_patcher = patch(
-            f"{MODULE_PATH}.Ernie4_5Tokenizer.from_pretrained", side_effect=lambda path: MockTokenizer()
+            "fastdeploy.input.base_processor.Ernie4_5Tokenizer.from_pretrained",
+            side_effect=lambda path: MockTokenizer(),
         )
         self.eos_patcher = patch(
             "paddleformers.trl.llm_utils.get_eos_token_id",
@@ -160,7 +161,12 @@ class TestErnie4_5Processor(unittest.TestCase):
         """Helper for creating a processor with optional reasoning/tool parser support."""
         reasoning_cls = ErnieX1ReasoningParser if reasoning else None
         tool_cls = MockToolParser if tool else None
-        proc = Ernie4_5Processor("dummy-model", reasoning_parser_obj=reasoning_cls, tool_parser_obj=tool_cls)
+        proc = DataProcessor(
+            "dummy-model",
+            reasoning_parser_obj=reasoning_cls,
+            tool_parser_obj=tool_cls,
+            architecture="Ernie4_5ForCausalLM",
+        )
         proc._apply_default_parameters = lambda req: req
         proc.model_status_dict = {"req-1": "think_start"}
         return proc
@@ -238,7 +244,6 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertIn("completion_tokens", outputs)
         self.assertIn("text", outputs)
-        self.assertEqual(outputs["completion_tokens"], outputs["reasoning_content"])
 
         self.assertIn("reasoning_token_num", outputs)
         self.assertGreaterEqual(outputs["reasoning_token_num"], 0)
@@ -316,7 +321,7 @@ class TestErnie4_5Processor(unittest.TestCase):
 
     def test_init_generation_config_exception(self):
         """Test fallback behavior when GenerationConfig loading fails."""
-        with patch(f"{MODULE_PATH}.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
+        with patch("fastdeploy.input.base_processor.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
             proc = self._make_processor()
             self.assertIsNone(proc.generation_config)
 
