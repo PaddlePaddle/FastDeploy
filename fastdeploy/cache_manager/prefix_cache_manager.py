@@ -783,9 +783,15 @@ class PrefixCacheManager:
                         f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
                     )
                     start_time = time.time()
-                    storage_matched_block_ids = self.issue_prefetch_storage_task(
-                        req_id, no_match_block_keys, gpu_recv_storage_block_ids
+                    read_storage_task = ReadStorageTask(
+                        task_id=req_id,
+                        keys=no_match_block_keys,
+                        token_ids=input_token_ids,
+                        gpu_block_ids=gpu_recv_storage_block_ids,
+                        start_read_block_idx=match_token_num // block_size,
                     )
+                    logger.debug(f"issue read storage task: {read_storage_task}")
+                    storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
                     storage_matched_block_num = len(storage_matched_block_ids)
                     storage_match_token_num = storage_matched_block_num * block_size
                     cost_time = time.time() - start_time
@@ -1015,15 +1021,15 @@ class PrefixCacheManager:
 
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
-        task = WriteStorageTask(
+        write_storage_task = WriteStorageTask(
             task_id=req_id,
             keys=keys,
             token_ids=token_ids,
             gpu_block_ids=gpu_block_ids,
         )
-        logger.debug(f"issue write storage task: {task}")
+        logger.debug(f"issue write storage task: {write_storage_task}")
         tic = time.time()
-        self.issue_write_back_storage_task(task, is_sync=True)
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
