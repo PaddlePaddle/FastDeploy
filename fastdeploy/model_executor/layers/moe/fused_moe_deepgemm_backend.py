@@ -181,6 +181,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
+        # Note(ZKK):
+        # below code have many del, so ugly!
+        # but considering MoE Prefill will reach peak GPU memory,
+        # so here we manually del a var as soon as it's not used.
+
         # 4. Compute ffn
         if token_all_num > 0:
             logger.debug(f"token_all_num {token_all_num}")
