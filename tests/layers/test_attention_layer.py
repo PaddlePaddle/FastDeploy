@@ -124,7 +124,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "head_dim": 128,
             "hidden_size": 8192,
             "num_attention_heads": 64,
-            "num_key_value_heads": 8,
+            "num_key_value_heads": 64,
             "num_hidden_layers": 2,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
@@ -156,8 +156,8 @@ class TestAttentionPerformance(unittest.TestCase):
             quant_config=MixQuantConfig(
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
-                kv_cache_quant_type="float8_e4m3fn",
-                # kv_cache_quant_type=None,
+                #kv_cache_quant_type="float8_e4m3fn",
+                kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -302,56 +302,56 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
 
-        prefill_batch_size = 1
-        prefill_seq_len = 2048
+        # prefill_batch_size = 1
+        # prefill_seq_len = 2048
 
-        forward_meta, prefill_hidden_states = self.create_forward_meta(
-            batch_size=prefill_batch_size,
-            seq_len=prefill_seq_len,
-            mode=ForwardMode.EXTEND,
-            fd_config=self.fd_config,
-            attn_backend=self.attn_backend,
-            cache_quant_type_str=self.cache_quant_type_str,
-        )
-
-        self.attn_backend.init_attention_metadata(forward_meta)
-        self.attn_forward(forward_meta, prefill_hidden_states)
-
-        paddle.device.synchronize()
-
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
-        # p.start()
-        # p.step()
-
-        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        for i in range(test_steps):
-            start_events[i].record()
-
-            self.attn_forward(forward_meta, prefill_hidden_states)
-
-            end_events[i].record()
-        paddle.device.synchronize()
-
-        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        print(times[-5:])
-        # p.stop()
-
-        return
-
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # forward_meta, prefill_hidden_states = self.create_forward_meta(
+        #     batch_size=prefill_batch_size,
+        #     seq_len=prefill_seq_len,
+        #     mode=ForwardMode.EXTEND,
+        #     fd_config=self.fd_config,
+        #     attn_backend=self.attn_backend,
+        #     cache_quant_type_str=self.cache_quant_type_str,
         # )
 
-        # p.start()
-        # p.step()
+        # self.attn_backend.init_attention_metadata(forward_meta)
+        # self.attn_forward(forward_meta, prefill_hidden_states)
 
-        for decode_batch_size in [32, 16, 8, 4, 2]:
+        # paddle.device.synchronize()
+
+        # # import paddle.profiler as profiler
+        # # p = profiler.Profiler(
+        # #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        # #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # # )
+        # # p.start()
+        # # p.step()
+
+        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        # for i in range(test_steps):
+        #     start_events[i].record()
+
+        #     self.attn_forward(forward_meta, prefill_hidden_states)
+
+        #     end_events[i].record()
+        # paddle.device.synchronize()
+
+        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        # print(times[-5:])
+        # # p.stop()
+
+        # return
+
+        # # p = profiler.Profiler(
+        # #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        # #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # # )
+
+        # # p.start()
+        # # p.step()
+
+        for decode_batch_size in [2]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
                 seq_len=36 * 1024,
@@ -360,6 +360,16 @@ class TestAttentionPerformance(unittest.TestCase):
                 attn_backend=self.attn_backend,
                 cache_quant_type_str=self.cache_quant_type_str,
             )
+
+            print(forward_meta.cu_seqlens_q)
+
+            from paged_logits import indexer_mha_page_logits
+
+            weight = paddle.randn(hidden_states.shape, dtype="bfloat16")
+            weight = weight[:,:64].contiguous()
+
+            indexer_mha_page_logits(hidden_states, forward_meta.caches[0], weight, forward_meta.block_tables, forward_meta.cu_seqlens_q, forward_meta.seq_lens_decoder)
+            
 
             self.attn_backend.init_attention_metadata(forward_meta)
 
