@@ -583,28 +583,19 @@ class EPPrefillRunner(EPRunner):
         if buffer is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        if envs.FD_USE_UPSTREAM_DEEP_EP:
-            (
-                num_tokens_per_rank,
-                num_tokens_per_rdma_rank,
-                num_tokens_per_expert,
-                is_token_in_rank,
-                event,
-            ) = buffer.get_dispatch_layout(topk_idx, self.num_experts, async_finish=self.ep_engine.async_finish)
-        else:
-            (
-                num_tokens_per_rank,
-                num_tokens_per_rdma_rank,
-                num_tokens_per_expert,
-                is_token_in_rank,
-                event,
-            ) = buffer.get_dispatch_layout(
-                topk_idx,
-                self.num_experts,
-                previous_event=kwargs.get("previous_event", None),
-                allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
-                async_finish=self.ep_engine.async_finish,
-            )
+        (
+            num_tokens_per_rank,
+            num_tokens_per_rdma_rank,
+            num_tokens_per_expert,
+            is_token_in_rank,
+            event,
+        ) = buffer.get_dispatch_layout(
+            topk_idx,
+            self.num_experts,
+            previous_event=kwargs.get("previous_event", None),
+            allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
+            async_finish=self.ep_engine.async_finish,
+        )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
