@@ -342,7 +342,7 @@ class TestAttentionPerformance(unittest.TestCase):
         print(times[-5:])
         # p.stop()
 
-        return
+        # return
 
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
