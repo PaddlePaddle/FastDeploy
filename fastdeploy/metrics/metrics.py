@@ -393,7 +393,6 @@ class MetricsManager:
             "description": "Total number of preempted requests",
             "kwargs": {},
         },
-        # for YIYAN Adapter
         "prefix_cache_token_num": {
             "type": Counter,
             "name": "fastdeploy:prefix_cache_token_num",
