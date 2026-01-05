@@ -54,4 +54,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ## Troubleshooting
 
 For more details, please refer to:
-https://github.com/kvcache-ai/Mooncake/blob/main/doc/en/troubleshooting.md
+https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/troubleshooting/troubleshooting.md
