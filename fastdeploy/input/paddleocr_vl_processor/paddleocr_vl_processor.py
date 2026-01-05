@@ -314,4 +314,5 @@ class PaddleOCRVLProcessor(TextProcessor):
         outputs["image_patch_id"] = self.processor.image_token_id
         outputs["video_patch_id"] = self.processor.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+        outputs["mm_num_token_func"] = self.processor.mm_num_tokens
         return outputs
