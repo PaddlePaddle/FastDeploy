@@ -127,7 +127,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "hidden_size": 7168,
             "num_attention_heads": 56,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 1,
+            "num_hidden_layers": 2,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
