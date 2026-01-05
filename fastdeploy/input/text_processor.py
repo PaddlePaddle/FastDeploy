@@ -162,7 +162,7 @@ class DataProcessor(BaseDataProcessor):
                     request["prompt_tokens"] = prompt
                     request["prompt_token_ids"] = self.text2ids(
                         request["prompt"], max_model_len, add_special_tokens=add_special_tokens
-                    ).tolist()
+                    )
                     req_id = request.get("request_id", None)
                     data_processor_logger.info(
                         f"req_id:{req_id}, tokens:{prompt}, token_ids: {request['prompt_token_ids']}"
