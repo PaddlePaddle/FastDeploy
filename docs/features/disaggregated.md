@@ -131,7 +131,7 @@ Parameter description for starting Prefill/Decode instances in disaggregated dep
 
 If the Prefill and Decode instances are deployed on different machines, RDMA network connectivity between the machines must be ensured.
 To manually specify RDMA network interfaces, you can set the `KVCACHE_RDMA_NICS` environment variable. Multiple NICs should be separated by commas. FastDeploy provides a script to detect RDMA NICs automatically:
-`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, where `<device>` can be either `cpu` or `gpu`.
+`bash FastDeploy/scripts/get_rdma_nics.sh <device>`, where `<device>` can be either `cpu` or `gpu`.
 If the `KVCACHE_RDMA_NICS` environment variable is not set, FastDeploy will automatically detect available RDMA NICs internally.
 
 **Examples**

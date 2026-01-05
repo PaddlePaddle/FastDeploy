@@ -119,7 +119,7 @@ curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 * `--router`：指定Router的服务地址
 
 注意：
-* 如果想手动指定RDMA网卡，可以设置`KVCACHE_RDMA_NICS`环境变量，多个网卡名用逗号隔开，Fastdeploy提供了检测RDMA网卡的脚本`bash Fastdeploy/scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。如果不设置`KVCACHE_RDMA_NICS`环境变量, Fastdeploy内部会自动检测可用的RDMA网卡。
+* 如果想手动指定RDMA网卡，可以设置`KVCACHE_RDMA_NICS`环境变量，多个网卡名用逗号隔开，Fastdeploy提供了检测RDMA网卡的脚本`bash FastDeploy/scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。如果不设置`KVCACHE_RDMA_NICS`环境变量, Fastdeploy内部会自动检测可用的RDMA网卡。
 * 分离式部署也可以使用[benchmark](../../../benchmarks/)工具向Router服务发请求，开启`--pd-metrics`参数可以统计到更多分析指标。
 * 根据Decode实例的显存资源和最大处理请求数`max_num_seqs`来调整请求并发，如果请求并发很高但是Decode资源不足，Prefill会为特定请求持续向Decode申请资源，导致Prefill资源利用率过低；设置`export PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES=0'来关闭该行为，特定请求遇到Decode资源不足会直接向Router返回错误。
 * 分离式部署支持多种并行策略，如果使用DP并行，必须使用`python -m fastdeploy.entrypoints.openai.multi_api_server`来启动服务。
