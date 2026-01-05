@@ -213,6 +213,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # use_in_ep
                 token_all_num,
             )
+            assert permute_input.shape[0] == token_all_num
             del recv_x
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
