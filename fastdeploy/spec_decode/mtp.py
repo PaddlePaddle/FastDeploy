@@ -100,8 +100,7 @@ class MTPProposer(Proposer):
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
-        if current_platform.is_xpu():
-            self.role = "mixed"
+        self.pd_disaggregation_mode = fd_config.parallel_config.pd_disaggregation_mode
 
         if current_platform.is_xpu():
             self._propose = self._propose_xpu
@@ -218,10 +217,10 @@ class MTPProposer(Proposer):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                key_cache = self._share_external_data(key_cache, key_cache_name, key_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
+                value_cache = self._share_external_data(value_cache, val_cache_name, value_cache_shape)
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
@@ -763,6 +762,8 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
         self.forward_meta.attn_backend = self.attn_backends[0]
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -1036,6 +1037,7 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        # TODO(chenhuan09)：check multi step
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1253,3 +1255,9 @@ class MTPProposer(Proposer):
         else:
             raise NotImplementedError
         return cache_type
+
+    def _share_external_data(self, cache, cache_name, cache_shape):
+        if current_platform.is_xpu():
+            return share_external_data(cache, cache_name, cache_shape, False)
+        else:
+            return share_external_data(cache, cache_name, cache_shape)
