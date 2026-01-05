@@ -29,9 +29,9 @@ from conftest import (
     get_model_path,
     get_port_num,
     print_logs_on_failure,
-    start_server,
     restore_env,
     setup_logprobs_env,
+    start_server,
 )
 
 
@@ -80,9 +80,7 @@ def test_logprobs_mode(xpu_env):
 
         payload = {
             "model": "default",
-            "messages": [
-                {"role": "user", "content": "你好,你是谁?"}
-            ],
+            "messages": [{"role": "user", "content": "你好,你是谁?"}],
             "temperature": 1,
             "top_p": 1.0,
             "max_tokens": 64,
@@ -136,9 +134,7 @@ def test_logprobs_mode(xpu_env):
             assert isinstance(token_info["token"], str)
             assert isinstance(token_info["logprob"], (int, float))
             assert isinstance(token_info["bytes"], list)
-            assert token_info["top_logprobs"] is None or isinstance(
-                token_info["top_logprobs"], list
-            )
+            assert token_info["top_logprobs"] is None or isinstance(token_info["top_logprobs"], list)
 
         # ========================
         # prompt_logprobs（扩展字段）
