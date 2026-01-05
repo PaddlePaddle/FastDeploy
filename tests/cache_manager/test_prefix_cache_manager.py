@@ -989,7 +989,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 "mm_positions": [SimpleNamespace(offset=2, length=2)],
                 "mm_hashes": ["img"],
             },
-            num_total_tokens=4,
+            num_total_tokens=8,
             need_prefill_tokens=8,
         )
 
