@@ -25,6 +25,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -283,7 +284,7 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -451,7 +452,7 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:

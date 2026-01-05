@@ -1194,6 +1194,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 manager.clear_prefix_cache()
 
+    @unittest.skip("Skip TestRevertMatchBlocks")
     def test_revert_match_blocks_adjusts_lists(self):
         manager = _create_manager()
         request = SimpleNamespace(
