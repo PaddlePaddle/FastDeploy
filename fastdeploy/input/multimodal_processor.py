@@ -25,7 +25,7 @@ from fastdeploy.utils import data_processor_logger
 from .ernie4_5_vl_processor.process import Ernie4_5_VLDataProcessor
 from .paddleocr_vl_processor.process import Paddleocr_VLDataProcessor
 from .qwen3_vl_processor.process import Qwen3_VLDataProcessor
-from .qwen_vl_processor.process import Qwen2_VLDataProcessor
+from .qwen_vl_processor.process import Qwen_VLDataProcessor
 
 _SAMPLING_EPS = 1e-5
 
@@ -60,7 +60,7 @@ class MultiDataProcessor(DataProcessor):
         elif "Qwen3VL" in architecture:
             return Qwen3_VLDataProcessor(tokenizer, model_name_or_path, enable_processor_cache, **processor_kwargs)
         elif "Qwen2_5_VL" in architecture:
-            return Qwen2_VLDataProcessor(tokenizer, model_name_or_path, enable_processor_cache, **processor_kwargs)
+            return Qwen_VLDataProcessor(tokenizer, model_name_or_path, enable_processor_cache, **processor_kwargs)
         else:
             raise ValueError(f"Unsupported model processor architecture: {architecture}. ")
 

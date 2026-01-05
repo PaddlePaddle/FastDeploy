@@ -39,7 +39,7 @@ FPS_MIN_FRAMES = 4
 FPS_MAX_FRAMES = 768
 
 
-class Qwen2_VLDataProcessor:
+class Qwen_VLDataProcessor:
     """
     Processes multimodal inputs (text, images, videos) into model-ready formats.
 

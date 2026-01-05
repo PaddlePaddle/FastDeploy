@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import paddle
 import zmq
-from paddleformers.transformers import AutoTokenizer
 from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
@@ -139,14 +138,14 @@ class Qwen3_VLDataProcessor(MMBaseDataProcessor):
 
     def __init__(
         self,
-        model_path: str,
+        tokenizer=None,
+        model_path: str = "",
         enable_processor_cache: bool = False,
         video_min_frames: int = FPS_MIN_FRAMES,
         video_max_frames: int = FPS_MAX_FRAMES,
         video_target_frames: int = -1,
         video_fps: int = FPS,
         tokens_per_second: int = 2,
-        tokenizer=None,
         **kwargs,
     ) -> None:
         """
@@ -166,12 +165,7 @@ class Qwen3_VLDataProcessor(MMBaseDataProcessor):
         self.fps = video_fps
         self.frame_factor = FRAME_FACTOR
 
-        # Initialize tokenizer with left padding and fast tokenizer
-        if tokenizer is None:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left", use_fast=True)
-            self.tokenizer.ignored_index = -100  # Set ignored index for loss calculation
-        else:
-            self.tokenizer = tokenizer
+        self.tokenizer = tokenizer
 
         self.image_processor = ImageProcessor.from_pretrained(model_path)  # Initialize image processor
         self.enable_processor_cache = enable_processor_cache
@@ -672,3 +666,54 @@ class Qwen3_VLDataProcessor(MMBaseDataProcessor):
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
+
+    def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
+        """
+        Append completion tokens to existing outputs.
+
+        Args:
+            outputs: Current model outputs
+            completion_token_ids: completion tokens to append
+        """
+
+        num_tokens = len(completion_token_ids)
+        multimodal_inputs["input_ids"].extend(completion_token_ids)
+        multimodal_inputs["token_type_ids"].extend([0] * num_tokens)
+
+        pos_ids = self._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
+        multimodal_inputs["position_ids"].append(pos_ids)
+        multimodal_inputs["cur_position"] += num_tokens
+
+    def pack_outputs(self, outputs):
+        """
+        Prepare final output dictionary for model.
+
+        Args:
+            outputs: Intermediate processing outputs
+
+        Returns:
+            dict: Packed output dictionary with all required fields
+        """
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position ID
+
+        outputs["image_patch_id"] = self.image_token_id
+        outputs["video_patch_id"] = self.video_token_id
+        outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+
+        outputs["mm_num_token_func"] = self.mm_num_tokens
+
+        return outputs

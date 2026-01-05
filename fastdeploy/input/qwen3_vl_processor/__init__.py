@@ -14,10 +14,8 @@
 # limitations under the License.
 """
 
-from .process import DataProcessor
-from .qwen3_vl_processor import Qwen3VLProcessor
+from .process import Qwen3_VLDataProcessor
 
 __all__ = [
-    "DataProcessor",
-    "Qwen3VLProcessor",
+    "Qwen3_VLDataProcessor",
 ]
