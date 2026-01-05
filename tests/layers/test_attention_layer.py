@@ -262,7 +262,7 @@ class TestAttentionPerformance(unittest.TestCase):
             for j in range(allocated_blocks_per_seq):
                 block_tables[i, j] = i * allocated_blocks_per_seq + j
 
-        tmp_position_ids = paddle.arange(fd_config.model_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(max_model_len).reshape((1, -1))
         rope_emb = get_rope(
             rotary_dim=fd_config.model_config.head_dim,
             position_ids=tmp_position_ids,
@@ -271,7 +271,7 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
-        input_ids = paddle.zeros([batch_size, fd_config.model_config.max_model_len], dtype="int64")
+        input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
         token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, seq_lens_this_time, token_num
