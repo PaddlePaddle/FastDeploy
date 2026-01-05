@@ -106,27 +106,26 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
 
     def get_low_latency_buffer(self):
         """
-        Initialize XPU-compatible low latency buffer for decode phase.
+        Initialize low latency buffer for decode phase.
         Args:
             group: The MPI group object.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
             hidden_size: The hidden_size dimension of the model.
         """
-        # Get buffer size hint
+        # NOTES: the low-latency mode will consume much more space than the normal mode
+        # So we recommend that `num_max_dispatch_tokens_per_rank`
+        #   (the actual batch size in the decoding engine) should be less than 256
         num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
             self.num_max_dispatch_tokens_per_rank,
             self.hidden_size,
             self.ep_size,
             self.num_experts,
         )
-
         # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
-        if self.num_experts % self.ep_size != 0:
-            raise ValueError(f"num_experts({self.num_experts}) must be divisible by ep_size({self.ep_size})")
-
+        assert self.num_experts % self.ep_size == 0
         self.deepep_engine = deep_ep.Buffer(
             self.group,
-            0,  # num_nvl_bytes=0 for XPU
+            0,
             num_rdma_bytes,
             low_latency_mode=True,
             num_qps_per_rank=self.num_experts // self.ep_size,
@@ -143,7 +142,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         """
         Args:
             hidden_states: [token_num, hidden_size] 'bfloat16/int8'
-            topk_idx: [token_num, num_topk] 'int64', int32 in xpu
+            topk_idx: [token_num, num_topk] 'int64'
 
         Returns:
             recv_hidden_states: [num_local_experts,
@@ -156,7 +155,6 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             event: the event after executing the kernel (valid only if `async_finish` is set).
             hook: the receiving hook function (valid only if `return_recv_hook` is set).
         """
-
         return_recv_hook = True
         (
             packed_recv_x,
@@ -198,14 +196,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
 
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
-        # combined_hidden_states, _, combine_hook = self.deepep_engine.low_latency_combine(
-        #     hidden_states,
-        #     topk_idx,
-        #     topk_weights,
-        #     handle,
-        #     async_finish=False,
-        #     return_recv_hook=True,
-        # )
+
         return_recv_hook = True
         combined_hidden_states, event, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
@@ -377,7 +368,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         if buffer is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        # 获取详细的分发布局信息，与GPU版本对齐
         (
             num_tokens_per_rank,
             num_tokens_per_rdma_rank,
@@ -510,4 +500,5 @@ class XPUEPDecoderRunner(XPUEPRunner):
         )
         if combine_hook is not None:
             combine_hook()
+
         return combined_hidden_states
