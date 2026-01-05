@@ -214,7 +214,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             # up_gate_proj
             ffn_out = paddle.empty(
-                (permute_input.shape[0], getattr(layer, self.added_weight_attrs[0]).shape[1]),
+                (token_all_num, getattr(layer, self.added_weight_attrs[0]).shape[1]),
                 dtype=paddle.bfloat16,
             )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
@@ -236,7 +236,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             del ffn_out
             ffn_out = paddle.empty(
-                (ffn_out.shape[0], getattr(layer, self.added_weight_attrs[1]).shape[1]),
+                (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
             )
             deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous(
