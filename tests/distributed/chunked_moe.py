@@ -22,6 +22,7 @@ from paddle.distributed import fleet
 from fastdeploy.config import MoEPhase
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.input_batch import InputBatch
 
 
 class MockStructuredOutputsConfig:
@@ -127,7 +128,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.cudagraph_only_prefill = False
         model_runner.use_cudagraph = False
         model_runner.speculative_decoding = False
-        model_runner._init_share_inputs(mock_fd_config.scheduler_config.max_num_seqs)
+        model_runner.share_inputs = InputBatch(mock_fd_config)
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
 
