@@ -53,6 +53,7 @@ class _DummyCfg:
         self.speculative_config = types.SimpleNamespace(
             method=speculative_method,
             num_speculative_tokens=2,
+            enable_draft_logprob=True,
         )
         self.model_config = types.SimpleNamespace(enable_logprob=enable_logprob)
         self.scheduler_config = types.SimpleNamespace(name="default", splitwise_role="decode")

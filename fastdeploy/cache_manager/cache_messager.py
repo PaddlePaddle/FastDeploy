@@ -242,15 +242,14 @@ class CacheMessager:
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
-                    rank,
                     gpu_id,
                     cache_k_ptr_list,
                     cache_v_ptr_list,
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
                 )
 
         self.gpu_id = gpu_id
@@ -572,15 +571,14 @@ class CacheMessagerV1:
 
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
-                    rank,
                     gpu_id,
                     cache_k_ptr_list,
                     cache_v_ptr_list,
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
                 )
 
         self.gpu_id = gpu_id

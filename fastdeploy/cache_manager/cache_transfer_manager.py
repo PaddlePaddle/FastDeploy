@@ -490,7 +490,7 @@ class CacheTransferManager:
                 kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
                 result = self.storage_backend.batch_get(
                     keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
-                )  # TODO(liyonghua): impl for attention store
+                )
 
                 k_result, v_result = result[:block_num], result[block_num:]
                 success_block_num = 0
