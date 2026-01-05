@@ -371,7 +371,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
-            output += fmha_out_prefill
+            output = paddle.assign(fmha_out_prefill, output)
 
         if needs_decode:
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
@@ -402,7 +402,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
-            output += fmha_out_decode
+            output = paddle.assign(output + fmha_out_decode, output)
 
         return output
 
