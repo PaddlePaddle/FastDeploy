@@ -960,7 +960,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=4)
         block_size = 2
         manager.cache_config.disable_chunked_mm_input = False
-        input_ids = [1, 2, 3, 4]
+        input_ids = [1, 2, 3, 4, 5, 6, 7, 8]
         hash_input = get_hash_str(input_ids)
         hash_first = get_hash_str([1, 2])
         hash_second = get_hash_str([3, 4], [hash_first, "img"])
@@ -990,6 +990,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 "mm_hashes": ["img"],
             },
             num_total_tokens=4,
+            need_prefill_tokens=8,
         )
 
         match_gpu, match_cpu, swap_nodes, last_node, gpu_tokens, cpu_tokens = manager.mm_match_block(
@@ -1123,6 +1124,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 "mm_hashes": ["img"],
             },
             num_total_tokens=4,
+            need_prefill_tokens=4,
         )
 
         match_gpu, *_ = manager.mm_match_block(request, block_size)
