@@ -405,6 +405,8 @@ class GPUModelRunner(ModelRunnerBase):
             "cu_seqlens": [0],
             "encoder_cache_info": [],
             "feature_position_list": [],
+            "grid_thw_lst_batches": [],
+            "feature_position_list_batches": [],
         }
         rope_3d_position_ids = {
             "position_ids_idx": [],
@@ -498,6 +500,9 @@ class GPUModelRunner(ModelRunnerBase):
                         multi_vision_inputs["grid_thw_lst"].extend(
                             paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
                         )
+                        multi_vision_inputs["grid_thw_lst_batches"].append(
+                            paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
+                        )
                         multi_vision_inputs["cu_seqlens"].extend(
                             inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
                         )
@@ -517,8 +522,20 @@ class GPUModelRunner(ModelRunnerBase):
                                 dtype=paddle.int64,
                             )
                         )
-
+                        multi_vision_inputs["grid_thw_lst_batches"].append(
+                            paddle.to_tensor(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end],
+                                dtype=paddle.int64,
+                            )
+                        )
                     multi_vision_inputs["feature_position_list"].extend(
+                        self._get_feature_positions(
+                            mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                            prefill_start_index=request.prefill_start_index,
+                            prefill_end_index=request.prefill_end_index,
+                        )
+                    )
+                    multi_vision_inputs["feature_position_list_batches"].append(
                         self._get_feature_positions(
                             mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
                             prefill_start_index=request.prefill_start_index,
@@ -559,25 +576,27 @@ class GPUModelRunner(ModelRunnerBase):
                     if index != -1:
                         self.share_inputs["image_features_list"][idx] = merge_image_features[index]
         elif len(multi_vision_inputs["images_lst"]) > 0:
-            assert len(multi_vision_inputs["feature_position_list"]) == len(
-                multi_vision_inputs["grid_thw_lst"]
-            ), f"{multi_vision_inputs['feature_position_list']} != {multi_vision_inputs['grid_thw_lst']}"
-
-            merge_image_features, feature_idx, thw_idx = [], 0, 0
             image_features_output = self.extract_vision_features(multi_vision_inputs)
-            for feature_position in multi_vision_inputs["feature_position_list"]:
-                grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+            image_features_list = []
+            feature_idx = 0
+            for index, feature_position_item in enumerate(multi_vision_inputs["feature_position_list_batches"]):
+                grid_thw_lst = multi_vision_inputs["grid_thw_lst_batches"][index]
+                assert len(feature_position_item) == len(grid_thw_lst), f"{feature_position_item} != {grid_thw_lst}"
+                merge_image_features, thw_idx = [], 0
+                for feature_position in feature_position_item:
+                    grid_thw = grid_thw_lst[thw_idx]
+                    mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                    mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
-                feature_start = feature_position.offset
-                feature_end = feature_position.offset + feature_position.length
-                merge_image_features.append(mm_feature[feature_start:feature_end])
-                feature_idx += mm_token_lenght
-                thw_idx += 1
+                    feature_start = feature_position.offset
+                    feature_end = feature_position.offset + feature_position.length
+                    merge_image_features.append(mm_feature[feature_start:feature_end])
+                    feature_idx += mm_token_lenght
+                    thw_idx += 1
+                image_features_list.append(paddle.concat(merge_image_features, axis=0))
             for _, index in req_idx_img_index_map.items():
                 if index != -1:
-                    self.share_inputs["image_features_list"][idx] = merge_image_features[index]
+                    self.share_inputs["image_features_list"][idx] = image_features_list[index]
 
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
