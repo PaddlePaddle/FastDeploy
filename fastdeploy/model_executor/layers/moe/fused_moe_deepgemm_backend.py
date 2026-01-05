@@ -19,6 +19,8 @@ from typing import Callable
 import paddle
 
 paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+from typing import Tuple
+
 import deep_gemm
 from paddle import nn
 from paddle.distributed.communication import deep_ep
@@ -34,6 +36,35 @@ from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
+
+
+def ceil_div(x: int, y: int) -> int:
+    return (x + y - 1) // y
+
+
+def align(x: int, y: int) -> int:
+    return ceil_div(x, y) * y
+
+
+def ceil_to_ue8m0(x: paddle.Tensor):
+    return paddle.pow(paddle.full([1], 2.0, device=x.place), paddle.ceil(paddle.log2(x.abs())))
+
+
+def per_token_cast_to_fp8(x: paddle.Tensor, use_ue8m0: bool) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    # assert x.dim() == 2
+    ob, om, on = x.shape
+    x = x.view(-1, on)
+
+    m, n = x.shape
+    padded_n = align(n, 128)
+    x_padded = paddle.empty((m, padded_n), dtype=x.dtype, device=x.place).fill_(0)
+    x_padded[:, :n] = x
+    x_view = x_padded.view(m, -1, 128)
+    x_amax = x_view.abs().float().amax(dim=2).view(m, -1).clamp(1e-4)
+    sf = x_amax / 448.0
+    sf = ceil_to_ue8m0(sf) if use_ue8m0 else sf
+    x_q = (x_view * (1.0 / sf.unsqueeze(2))).to(paddle.float8_e4m3fn).view(m, padded_n)[:, :n].contiguous()
+    return x_q.view((ob, om, on)), sf.view((ob, om, padded_n // 128))
 
 
 class DeepGemmFusedMoeMethod(MoEMethodBase):
@@ -321,7 +352,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, use_fp8=True
         )
-
         # 3. Compute ffn
         assert isinstance(permute_input, tuple)
         up_gate_proj_out = paddle.empty(
@@ -361,24 +391,28 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             expected_m,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
-
         act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
 
-        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
-            act_out,
-            token_nums_per_expert,
-            self.quant_config.weight_block_size[0],
-        )
+        # act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
+        #     act_out,
+        #     token_nums_per_expert,
+        #     self.quant_config.weight_block_size[0],
+        # )
+        # scale = deep_gemm.utils.math.ceil_to_ue8m0(scale)
+        act_out_fp8, scale = per_token_cast_to_fp8(act_out, use_ue8m0=True)  # ======new add
+
+        scale = transform_scale_ue8m0(scale, mn=scale.shape[-2])
 
         deep_gemm.m_grouped_fp8_gemm_nt_masked(
-            (
-                act_out_fp8,
-                (
-                    self._cast_to_e8m0_with_rounding_up(scale)
-                    if self.quant_config.deepgemm_scale_ue8m0 and scale.dtype != paddle.int32
-                    else scale
-                ),
-            ),
+            # (
+            #     act_out_fp8,
+            #     (
+            #         self._cast_to_e8m0_with_rounding_up(scale)
+            #         if self.quant_config.deepgemm_scale_ue8m0 and scale.dtype != paddle.int32
+            #         else scale
+            #     ),
+            # ),
+            (act_out_fp8, scale),  # ====new add
             (
                 getattr(layer, self.added_weight_attrs[1]),
                 getattr(layer, self.added_scale_attrs[1]),
@@ -388,7 +422,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             expected_m,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
-
         # 4. EP combine
         return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
 
@@ -455,7 +488,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             False,  # use_in_ep
             -1,
         )
-
         if x.shape[0] == 0 or not self.quant_config.deepgemm_scale_ue8m0:
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
             permute_scale = permute_scale.transpose([1, 0])
@@ -474,6 +506,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
+
         # swiglu
         ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
@@ -499,6 +532,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
+
         # prmt back per rank
         tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
             ffn_out,
