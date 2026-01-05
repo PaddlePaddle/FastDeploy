@@ -69,6 +69,8 @@ else:
 
 from fastdeploy.worker.input_batch import (
     ProposerInputBatch,
+    recover_batch_index_for_output,
+    recover_batch_index_for_sampler_output,
     reorder_split_prefill_and_decode_form_index_to_batch_id,
 )
 
@@ -676,12 +678,17 @@ class MTPProposer(Proposer):
 
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
             skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+            recover_model_output_map = recover_batch_index_for_output(
+                self.model_inputs,
+                self.model_inputs.index_to_batch_id,
+                ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
+            )
             mtp_save_first_token(
-                self.model_inputs["base_model_draft_tokens"],
+                recover_model_output_map["base_model_draft_tokens"],
                 self.model_inputs["not_need_stop"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["prompt_lens"],
-                self.model_inputs["step_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_model_output_map["step_idx"],
                 self.local_rank,
                 self.parallel_config.use_ep,
                 skip_save,
@@ -830,16 +837,22 @@ class MTPProposer(Proposer):
                     and sampler_output.logprobs_tensors is not None
                 ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_model_output_map = recover_batch_index_for_output(
+                        self.model_inputs,
+                        self.model_inputs.index_to_batch_id,
+                        ["batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"],
+                    )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
-                        self.model_inputs["seq_lens_decoder"],
-                        self.model_inputs["prompt_lens"],
+                        recover_model_output_map["seq_lens_decoder"],
+                        recover_model_output_map["prompt_lens"],
                         4,  # mtype
                         self.local_rank,
                         self.parallel_config.use_ep,
@@ -923,13 +936,19 @@ class MTPProposer(Proposer):
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_model_output_map = recover_batch_index_for_output(
+                        self.model_inputs,
+                        self.model_inputs.index_to_batch_id,
+                        ["batch_token_num", "cu_batch_token_offset"],
+                    )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
                         4,  # mtype
                         self.local_rank,

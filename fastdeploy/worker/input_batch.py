@@ -605,7 +605,6 @@ class ProposerInputBatch(InputBatch):
             tensor[idx1] = tensor[idx2].clone()
             tensor[idx2] = temp
 
-        # self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
         swap_data(self.block_tables, i1, i2)
         swap_data(self.input_ids, i1, i2)
         swap_data(self.input_ids_cpu, i1, i2)
@@ -655,6 +654,7 @@ class ProposerInputBatch(InputBatch):
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, index_to_batch_id):
     swapped = set()
+    input_batch.index_to_batch_id = index_to_batch_id
     for i, target in index_to_batch_id.items():
         if i in swapped or target in swapped or i == target:
             continue
