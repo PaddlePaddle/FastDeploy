@@ -31,6 +31,7 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -71,7 +72,7 @@ def fancy_print(input_ids, tokenizer, image_patch_id=None):
     return res
 
 
-class Ernie4_5_VLDataProcessor:
+class Ernie4_5_VLDataProcessor(MMBaseDataProcessor):
     """
     Processes multimodal chat messages into model-ready inputs,
     handling text, images, and videos with 3D positional embeddings.
