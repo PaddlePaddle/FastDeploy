@@ -72,14 +72,14 @@ echo "卸载旧版本..."
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-# 安装PaddlePaddle
-echo "安装PaddlePaddle..."
-python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# 安装PaddlePaddle Release分支安装对应的paddle
+echo "安装release分支PaddlePaddle..."
+python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Xpu-P800-SelfBuiltPypiUse/latest/paddlepaddle_xpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
 # ============ 编译项目 ============
 
 echo "============================编译项目============================"
-bash custom_ops/xpu_ops/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1

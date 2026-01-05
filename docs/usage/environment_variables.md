@@ -88,5 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+
+    # Worker process health check timeout when waiting for responses in seconds (default: 30)
+    "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }
 ```
