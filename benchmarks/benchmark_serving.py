@@ -809,7 +809,7 @@ async def benchmark(
         process_pd_metrics(outputs, "gpu_cache_token_num", is_time=False)
         process_pd_metrics(outputs, "cpu_cache_token_num", is_time=False)
         process_pd_metrics(outputs, "storage_cache_token_num", is_time=False)
-        process_pd_metrics(outputs, "gpu_cpu_cache_prepare_time")
+        process_pd_metrics(outputs, "cpu_cache_prepare_time")
         process_pd_metrics(outputs, "storage_cache_prepare_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
