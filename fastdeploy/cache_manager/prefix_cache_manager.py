@@ -265,7 +265,7 @@ class PrefixCacheManager:
         else:
             kvcache_storage_backend_str = "none"
 
-        if self.cache_config.enable_hierarchical_cache or self.cache_config.kvcache_storage_backend:
+        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
