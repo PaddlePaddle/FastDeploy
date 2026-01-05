@@ -27,12 +27,9 @@ class BaseDataProcessor(ABC):
         self.model_status_dict = dict()
         self.tool_parser_dict = dict()
 
-        # 初始化核心组件
-        # self._init_config()
         self._init_tokenizer()
         self._init_generation_config()
 
-        # parser
         self.reasoning_parser = reasoning_parser_obj(self.tokenizer) if reasoning_parser_obj else None
         self.tool_parser_obj = tool_parser_obj
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
