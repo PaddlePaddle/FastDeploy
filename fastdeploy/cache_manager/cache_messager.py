@@ -248,8 +248,8 @@ class CacheMessager:
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
                 )
 
         self.gpu_id = gpu_id
@@ -577,8 +577,8 @@ class CacheMessagerV1:
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
                 )
 
         self.gpu_id = gpu_id

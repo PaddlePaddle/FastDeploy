@@ -44,6 +44,7 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
+        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -64,6 +65,7 @@ else:
         speculate_get_logits,
         speculate_save_output_topk,
         update_attn_mask_offsets,
+        set_data_ipc,
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -104,8 +106,7 @@ class MTPProposer(Proposer):
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
-        if current_platform.is_xpu():
-            self.role = "mixed"
+        self.pd_disaggregation_mode = fd_config.parallel_config.pd_disaggregation_mode
 
         if current_platform.is_xpu():
             self._propose = self._propose_xpu
@@ -216,13 +217,16 @@ class MTPProposer(Proposer):
                 self.num_main_model_layers,
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
+                logger.info(
+                    f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                key_cache = self._share_external_data(key_cache, key_cache_name, key_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
+                value_cache = self._share_external_data(value_cache, val_cache_name, value_cache_shape)
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
@@ -239,28 +243,50 @@ class MTPProposer(Proposer):
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
+                logger.info(f"..creating kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
                     shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"key_caches_{i}"], f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 self.cache_kvs[f"value_caches_{i}"] = paddle.full(
                     shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                set_data_ipc(
+                    self.cache_kvs[f"value_caches_{i}"], f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                )
+
                 if kv_cache_quant_type == "block_wise_fp8":
                     self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"key_cache_scales_{i}"],
+                        f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
                     self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
+                    set_data_ipc(
+                        self.cache_kvs[f"value_cache_scales_{i}"],
+                        f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}",
+                    )
+
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
@@ -592,6 +618,8 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
         self.forward_meta.attn_backend = self.attn_backends[0]
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -879,6 +907,7 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        # TODO(chenhuan09)：check multi step
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1108,3 +1137,9 @@ class MTPProposer(Proposer):
         Reorder inputs to split prefill and decode.
         """
         reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs, base_model_index_to_batch_id)
+
+    def _share_external_data(self, cache, cache_name, cache_shape):
+        if current_platform.is_xpu():
+            return share_external_data(cache, cache_name, cache_shape, False)
+        else:
+            return share_external_data(cache, cache_name, cache_shape)

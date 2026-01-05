@@ -227,5 +227,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # XPU MoE FFN quant type map
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
+
+    # Worker process health check timeout when waiting for responses in seconds (default: 30)
+    "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }
 ```
