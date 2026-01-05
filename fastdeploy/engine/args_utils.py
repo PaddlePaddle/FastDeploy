@@ -230,6 +230,14 @@ class EngineArgs:
     """
     Port for cache queue.
     """
+    kvcache_storage_backend: str = None
+    """
+    The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
+    """
+    write_policy: str = "write_through"
+    """
+    The policy of write cache to storage.
+    """
 
     # System configuration parameters
     use_warmup: int = 0
@@ -240,7 +248,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -523,7 +531,12 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_xpu()
+            and not current_platform.is_intel_hpu()
+            and not current_platform.is_maca()
+        ):
             self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -556,6 +569,17 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
+            # TODO XPU support PaddleOCR prefix caching
+            if current_platform.is_xpu():
+                self.enable_prefix_caching = False
+
+        if self.kvcache_storage_backend is not None:
+            if not self.enable_prefix_caching:
+                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         self.post_init_all_ports()
 
@@ -1016,6 +1040,22 @@ class EngineArgs:
             type=int,
             default=EngineArgs.static_decode_blocks,
             help="Static decoding blocks num.",
+        )
+
+        cache_group.add_argument(
+            "--kvcache-storage-backend",
+            type=nullable_str,
+            choices=["mooncake"],
+            default=EngineArgs.kvcache_storage_backend,
+            help="The storage backend for kvcache storage. Leave empty to disable.",
+        )
+
+        cache_group.add_argument(
+            "--write-policy",
+            type=str,
+            choices=["write_through"],
+            default=EngineArgs.write_policy,
+            help="KVCache write policy",
         )
 
         # Cluster system parameters group

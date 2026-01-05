@@ -1,0 +1,202 @@
+name: FastDeploy Linux GPU Build Task
+description: "FastDeploy packages build and upload"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "iregistry.baidu-int.com/tiangexiao/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.0.0-rc2"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      COMPILE_ARCH:
+        description: "Build GPU Archs"
+        required: true
+        type: string
+        default: "80,90"
+      WITH_NIGHTLY_BUILD:
+        description: "Enable nightly build mode (e.g. add date suffix to version)"
+        required: false
+        type: string
+        default: "OFF"
+      FD_VERSION:
+        description: "FastDeploy Package Version"
+        required: false
+        type: string
+        default: ""
+      PADDLEVERSION:
+        description: "Paddle Version Build Use"
+        required: false
+        type: string
+        default: ""
+      PADDLE_WHL_URL:
+        description: "Paddle Wheel Package URL"
+        required: false
+        type: string
+        default: ""
+      UPLOAD:
+        description: "Upload Package"
+        required: false
+        type: string
+        default: "ON"
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      wheel_path_rl:
+        description: "Output path of the generated wheel"
+        value: ${{ jobs.fd-build-rl.outputs.wheel_path_rl }}
+jobs:
+  fd-build-rl:
+    runs-on: [self-hosted, GPU-Build]
+    timeout-minutes: 360
+    outputs:
+      wheel_path_rl: ${{ steps.set_output.outputs.wheel_path_rl }}
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+            set -x
+            REPO="https://github.com/${{ github.repository }}.git"
+            FULL_REPO="${{ github.repository }}"
+            REPO_NAME="${FULL_REPO##*/}"
+            BASE_BRANCH="${{ github.base_ref }}"
+
+            # Clean the repository directory before starting
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            -e "REPO_NAME=${REPO_NAME}" \
+            ${docker_image} /bin/bash -c '
+              CLEAN_RETRIES=3
+              CLEAN_COUNT=0
+
+              while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
+                echo "Attempt $((CLEAN_COUNT+1)) to remove ${REPO_NAME}* ..."
+                rm -rf "${REPO_NAME}"* || true
+                sleep 2
+
+                # Check if anything matching ${REPO_NAME}* still exists
+                if ! ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                  echo "All ${REPO_NAME}* removed successfully"
+                  break
+                fi
+
+                CLEAN_COUNT=$((CLEAN_COUNT + 1))
+              done
+
+              if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
+                ls -ld "${REPO_NAME}"*
+                exit 1
+              fi
+            '
+
+            wget -q --no-proxy ${fd_archive_url}
+            tar -xf FastDeploy.tar.gz
+            rm -rf FastDeploy.tar.gz
+            cd FastDeploy
+            git config --global user.name "FastDeployCI"
+            git config --global user.email "fastdeploy_ci@example.com"
+            git log -n 3 --oneline
+      - name: FastDeploy Build
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          compile_arch: ${{ inputs.COMPILE_ARCH }}
+          fd_version: ${{ inputs.FD_VERSION }}
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          BRANCH_REF: ${{ github.ref_name }}
+          PADDLEVERSION: ${{ inputs.PADDLEVERSION }}
+          PADDLE_WHL_URL: ${{ inputs.PADDLE_WHL_URL }}
+          WITH_NIGHTLY_BUILD: ${{ inputs.WITH_NIGHTLY_BUILD }}
+        run: |
+            set -x
+            runner_name="${{ runner.name }}"
+            CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+            gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+
+            IFS='/' read -ra parts <<< "${GITHUB_WORKSPACE}"
+            len=${#parts[@]}
+            CCACHE_DEFAULT_DIR="/$(IFS=/; echo "${parts[*]:1:$((len-5))}")"
+            echo "$CCACHE_DEFAULT_DIR"
+
+            CACHE_DIR="${CACHE_DIR:-$CCACHE_DEFAULT_DIR}"
+            echo "CACHE_DIR is set to ${CACHE_DIR}"
+            if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+              touch "${CACHE_DIR}/gitconfig"
+            fi
+            PARENT_DIR=$(dirname "$WORKSPACE")
+            echo "PARENT_DIR:$PARENT_DIR"
+            docker run --rm --net=host \
+            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
+            -v $(pwd):/workspace -w /workspace \
+            -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+            -v "${CACHE_DIR}/.cache_rl:/root/.cache" \
+            -v "${CACHE_DIR}/.ccache_rl:/root/.ccache" \
+            -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+            -e TZ="Asia/Shanghai" \
+            -e "COMPILE_ARCH=${compile_arch}" \
+            -e "FD_VERSION=${fd_version}" \
+            -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            -e "PADDLEVERSION=${PADDLEVERSION}" \
+            -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
+            -e "BRANCH_REF=${BRANCH_REF}" \
+            -e "CCACHE_MAXSIZE=50G" \
+            --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+            if [[ -n "${FD_VERSION}" ]]; then
+              export FASTDEPLOY_VERSION=${FD_VERSION}
+              echo "Custom FastDeploy version: ${FASTDEPLOY_VERSION}"
+            fi
+
+            git config --global --add safe.directory /workspace/FastDeploy
+            chown -R $(whoami) /workspace/FastDeploy
+            cd FastDeploy
+
+            python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Paddle-RL-Compile/develop/latest/paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
+
+            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements.txt
+            python -m pip install wheel
+            # 编译RDMA
+            export FD_ENABLE_RDMA_COMPILE=1
+            bash build.sh 1 python false [${COMPILE_ARCH}]
+            ls ./dist/*.whl
+            '
+      - name: Package Upload
+        id: set_output
+        env:
+          compile_arch: ${{ inputs.COMPILE_ARCH }}
+        run: |
+            set -x
+            commit_id=${{ github.sha }}
+            branch_name=${{ github.ref_name }}
+            target_path=paddle-github-action/BRANCH/FastDeploy_RL/${branch_name}/${commit_id}/SM${compile_arch//,/_}
+
+            wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+            push_file=$(realpath bos_tools.py)
+            python --version
+            python -m pip install bce-python-sdk==0.9.29
+            cd FastDeploy/dist/
+            matches=($(ls fastdeploy*.whl))
+            if [ ${#matches[@]} -ne 1 ]; then
+              echo "Error: Found ${#matches[@]} matching files, expected exactly 1"
+              exit 1
+            fi
+            fd_wheel_name=${matches[0]}
+            echo "Found: $fd_wheel_name"
+            tree -L 3
+            python ${push_file} fastdeploy*.whl ${target_path}
+            target_path_stripped="${target_path#paddle-github-action/}"
+            WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+            echo "wheel_path_rl=${WHEEL_PATH}" >> $GITHUB_OUTPUT

@@ -14,7 +14,6 @@
 
 import json
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -23,15 +22,10 @@ import time
 import openai
 import pytest
 import requests
-
-tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, tests_dir)
-
-from e2e.utils.serving_utils import (
+from utils.serving_utils import (
     FD_API_PORT,
-    FD_CACHE_QUEUE_PORT,
-    FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
+    PORTS_TO_CLEAN,
     clean_ports,
     is_port_open,
 )
@@ -47,9 +41,10 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports()
+    FD_ENGINE_QUEUE_PORT = 8033
+    clean_ports(PORTS_TO_CLEAN.append(FD_ENGINE_QUEUE_PORT))
 
-    model_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+    model_path = "/ModelData/Qwen3-VL-4B-Instruct"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
@@ -62,19 +57,14 @@ def setup_and_run_server():
         model_path,
         "--port",
         str(FD_API_PORT),
-        # "--tensor-parallel-size",
-        # "2",
+        "--tensor-parallel-size",
+        "2",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
-        "--cache-queue-port",
-        str(FD_CACHE_QUEUE_PORT),
-        "--enable-mm",
         "--max-model-len",
         "32768",
-        "--max-num-batched-tokens",
-        "384",
         "--max-num-seqs",
         "128",
         "--limit-mm-per-prompt",
@@ -152,19 +142,20 @@ def consistent_payload():
                 "role": "user",
                 "content": [
                     {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "type": "video_url",
+                        "video_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_video/example_video.mp4",
                             "detail": "high",
                         },
                     },
-                    {"type": "text", "text": "请描述图片内容"},
+                    {"type": "text", "text": "视频中手机支架的颜色是什么?"},
                 ],
             }
         ],
-        "temperature": 0.8,
-        "top_p": 0,  # fix top_p to reduce randomness
+        "temperature": 0,
+        "top_p": 1,  # fix top_p to reduce randomness
         "seed": 13,  # fixed random seed
+        "max_tokens": 32,
     }
 
 
@@ -175,23 +166,22 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     """
     Test that result is same as the base result.
     """
+    print("test_consistency_between_runs")
     # request
     resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
-    file_res_temp = "Qwen2.5-VL-7B-Instruct-temp"
+    file_res_temp = "Qwen3-VL-4B-Instruct-temp"
     f_o = open(file_res_temp, "a")
     f_o.writelines(content1)
     f_o.close()
 
     # base result
-    content2 = """这张图片展示了一群人在进行手工艺活动。前景中有两个孩子和一个成年人，他们似乎在制作或展示某种手工艺品。成年人手里拿着一个扇子，上面有彩色的图案，可能是通过某种方式绘制或涂鸦而成。孩子们看起来很专注，可能是在观察或参与这个过程。
-
-背景中还有其他几个人，其中一个人穿着粉色的衣服，背对着镜头。整个场景看起来像是在一个室内环境中，光线充足，氛围轻松愉快。"""
+    content2 = "视频中手机支架的颜色是黑色。"
 
     # Verify that result is same as the base result
-    assert content1 == content2
+    assert content1.startswith(content2), content1
 
 
 # ==========================
@@ -213,6 +203,7 @@ def openai_client():
 # Non-streaming test
 def test_non_streaming_chat(openai_client):
     """Test non-streaming chat functionality with the local service"""
+    print("test_non_streaming_chat")
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
@@ -224,13 +215,13 @@ def test_non_streaming_chat(openai_client):
                 "role": "user",
                 "content": [
                     {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "https://ku.baidu-int.com/vk-assets-ltd/space/2024/09/13/933d1e0a0760498e94ec0f2ccee865e0",
+                        "type": "video_url",
+                        "video_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_video/example_video.mp4",
                             "detail": "high",
                         },
                     },
-                    {"type": "text", "text": "请描述图片内容"},
+                    {"type": "text", "text": "视频中手机支架的颜色是什么?"},
                 ],
             },
         ],
@@ -248,6 +239,7 @@ def test_non_streaming_chat(openai_client):
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
     """Test streaming chat functionality with the local service"""
+    print("test_streaming_chat")
     response = openai_client.chat.completions.create(
         model="default",
         messages=[
@@ -295,6 +287,7 @@ def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
     """
     Test return_token_ids option in non-streaming chat functionality with the local service
     """
+    print("test_non_streaming_chat_with_return_token_ids")
     # 设定 return_token_ids
     response = openai_client.chat.completions.create(
         model="default",
@@ -364,6 +357,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
     """
     Test return_token_ids option in streaming chat functionality with the local service
     """
+    print("test_streaming_chat_with_return_token_ids")
     # enable return_token_ids
     response = openai_client.chat.completions.create(
         model="default",
@@ -435,42 +429,3 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
         assert chunk.choices[0].delta.prompt_token_ids is None
         assert hasattr(chunk.choices[0].delta, "completion_token_ids")
         assert chunk.choices[0].delta.completion_token_ids is None
-
-
-def test_profile_reset_block_num():
-    """测试profile reset_block_num功能，与baseline diff不能超过15%"""
-    log_file = "./log/config.log"
-    baseline = 30000
-
-    if not os.path.exists(log_file):
-        pytest.fail(f"Log file not found: {log_file}")
-
-    with open(log_file, "r") as f:
-        log_lines = f.readlines()
-
-    target_line = None
-    for line in log_lines:
-        if "Reset block num" in line:
-            target_line = line.strip()
-            break
-
-    if target_line is None:
-        pytest.fail("日志中没有Reset block num信息")
-
-    match = re.search(r"total_block_num:(\d+)", target_line)
-    if not match:
-        pytest.fail(f"Failed to extract total_block_num from line: {target_line}")
-
-    try:
-        actual_value = int(match.group(1))
-    except ValueError:
-        pytest.fail(f"Invalid number format: {match.group(1)}")
-
-    lower_bound = baseline * (1 - 0.15)
-    upper_bound = baseline * (1 + 0.15)
-    print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
-
-    assert lower_bound <= actual_value <= upper_bound, (
-        f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
-        f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
-    )

@@ -17,7 +17,7 @@
 from typing import Optional
 
 import paddle
-from paddle.incubate.nn.functional import swiglu
+from paddle.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear
 
 try:

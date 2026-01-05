@@ -50,12 +50,9 @@ RECOVERY_STOP_SIGNAL = -3
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
 
-if current_platform.is_xpu():
-    MAX_BSZ = 128
-    K = 5
-else:
-    MAX_BSZ = 512
-    K = 20
+
+MAX_BSZ = 512
+K = 20
 
 
 class TokenProcessor:
@@ -80,6 +77,7 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
+        self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:
             if self.use_logprobs:
@@ -203,7 +201,7 @@ class TokenProcessor:
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
             for request_id in need_to_be_reschedule_req_ids:
-                if self.resource_manager.requests[request_id].idx >= (
+                if self.resource_manager.requests[request_id].idx > (
                     batch_size - 1
                 ):  # No more token generated for preempted request
                     self.resource_manager.reschedule_preempt_task(request_id)
@@ -449,7 +447,7 @@ class TokenProcessor:
             batch_result (list): batch results
         """
         try:
-            if self.cfg.speculative_config.method and self.use_logprobs:
+            if self.cfg.speculative_config.method and self.use_logprobs and self.enable_draft_logprob:
                 if mtype == 3:  # target
                     finished_batch_result, unfinished_batch_result = [], []
                     for r in batch_result:
