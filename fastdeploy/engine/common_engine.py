@@ -790,7 +790,7 @@ class EngineService:
         is_fetching = False
         buffered_req_info = {}
         req_info_lock = threading.Lock()
-        last_sched_batch_id, last_received_request_ids = -1, []
+        last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids = -1, [], []
 
         def _fetch_request():
             try:
@@ -955,6 +955,8 @@ class EngineService:
                     if envs.FD_ENABLE_BATCH_SCHEDULER:
                         with req_info_lock:
                             for task in tasks:
+                                if "batch_info" not in task.ic_req_data:
+                                    continue
                                 batch_info = json.loads(task.ic_req_data["batch_info"])
                                 self.llm_logger.info(f"sched batch info: {batch_info}")
                                 buffered_req_info[task.request_id] = batch_info
@@ -968,8 +970,10 @@ class EngineService:
                 all_buffered_req_info = []
                 dist.all_gather_object(all_buffered_req_info, buffered_req_info)
 
-                nonlocal last_sched_batch_id, last_received_request_ids
-                last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids = -1, [], []
+                nonlocal last_sched_batch_id, last_sched_batch_cnt, \
+                    last_received_request_ids, start_time
+                has_recv_data = last_sched_batch_id != -1
+                last_received_request_ids = []
                 # Find the latest scheduled batch
                 for local_info in all_buffered_req_info:
                     for _, sched_info in local_info.items():
@@ -979,8 +983,11 @@ class EngineService:
                 
                 # Currently no new reqs
                 if last_sched_batch_id == -1:
-                    return False
+                    # return False
+                    return True
                 
+                if not has_recv_data:
+                    start_time = time.time()
                 # Count req num of each DP instance
                 dp_size = len(last_sched_batch_cnt)
                 req_num_count = [0] * dp_size
@@ -995,6 +1002,7 @@ class EngineService:
                     if req_num_count[i] < last_sched_batch_cnt[i]:
                         flag = False
                         break
+                
                 if flag:
                     # All reqs in latest batch are received
                     last_received_request_ids = []
@@ -1140,7 +1148,7 @@ class EngineService:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
 
-            start_time = time.time()
+            last_sched_batch_id, last_sched_batch_cnt = -1, []
     
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
