@@ -54,6 +54,7 @@ class MockModelConfig:
     model_type = ["mock"]
     moe_phase = MoEPhase(phase="prefill")
     hidden_size = 1536
+    enable_mm = False
 
 
 class MockCacheConfig:
@@ -61,6 +62,10 @@ class MockCacheConfig:
     total_block_num = 256
     kv_cache_ratio = 0.9
     enc_dec_block_num = 2
+
+
+class MockSpecaulativeConfig:
+    method = None
 
 
 class MockFDConfig:
@@ -80,6 +85,8 @@ class MockFDConfig:
     scheduler_config = SchedulerConfig()
     structured_outputs_config = MockStructuredOutputsConfig()
     model_config = MockModelConfig()
+    cache_config = MockCacheConfig()
+    speculative_config = MockSpecaulativeConfig()
 
 
 class MockAttentionBackend:
