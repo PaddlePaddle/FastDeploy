@@ -284,7 +284,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -452,7 +454,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
