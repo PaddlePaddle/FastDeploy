@@ -1382,13 +1382,13 @@ class EngineService:
 
     def _register_to_router(self):
         """
-        Periodically send server information to the router for registeration, and it used
+        Periodically send server information to the router for registeration, and it is used
         as a heartbeat signal.
         """
 
         def _register():
             timeout = 5
-            sleep_seconds = 10
+            sleep_seconds = 5
             is_registered = False
 
             while True:
@@ -1397,6 +1397,8 @@ class EngineService:
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
+                        time.sleep(sleep_seconds)
+                        self.llm_logger.info("Wait for API service health and then register to router")
                         time.sleep(sleep_seconds)
                         continue
 
@@ -1419,11 +1421,11 @@ class EngineService:
                         time.sleep(sleep_seconds)
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
+                    time.sleep(sleep_seconds)
 
         if self.cfg.router_config.router is None:
             self.llm_logger.info("Router is not enabled, skip registering to router")
         else:
-            self.llm_logger.info("Start registering to router")
             register_thread = threading.Thread(target=_register, daemon=True)
             register_thread.start()
 
