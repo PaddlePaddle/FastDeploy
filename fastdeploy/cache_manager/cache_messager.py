@@ -224,10 +224,10 @@ class CacheMessager:
             scale_block_bytes = math.prod(key_cache_scale.shape[1:])
             if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
                 scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
             f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
-            f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype} \n"
         )
         self.block_bytes = block_bytes
         self.scale_block_bytes = scale_block_bytes
@@ -564,10 +564,10 @@ class CacheMessagerV1:
             scale_block_bytes = math.prod(key_cache_scale.shape[1:])
             if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
                 scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
             f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
-            f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype} \n"
         )
         self.block_bytes = block_bytes
         self.scale_block_bytes = scale_block_bytes
