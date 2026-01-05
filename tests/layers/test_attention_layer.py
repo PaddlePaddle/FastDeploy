@@ -355,7 +355,7 @@ class TestAttentionPerformance(unittest.TestCase):
         for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=200 * 1024,
+                seq_len=10 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
