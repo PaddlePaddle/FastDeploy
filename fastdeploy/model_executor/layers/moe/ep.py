@@ -23,7 +23,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 
 try:
-    if envs.FD_USE_UPSTREAM_DEEP_EP:
+    if envs.FD_USE_PFCC_DEEP_EP:
         paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
         import deep_ep
     else:
@@ -286,7 +286,7 @@ class DeepEPEngine:
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        if envs.FD_USE_UPSTREAM_DEEP_EP:
+        if envs.FD_USE_PFCC_DEEP_EP:
             (
                 packed_recv_x,
                 recv_expert_count,
