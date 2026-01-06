@@ -3,13 +3,8 @@ package handler
 import (
 	"context"
 	"math/rand"
-	"time"
 
 	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
-)
-
-var (
-	powerOfTwoSource = rand.NewSource(time.Now().UnixNano())
 )
 
 func PowerOfTwoSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
@@ -20,13 +15,12 @@ func PowerOfTwoSelectWorker(ctx context.Context, workers []string, message strin
 		return workers[0], nil
 	}
 
-	r := rand.New(powerOfTwoSource)
 	length := len(workers)
-	randomNum1 := r.Intn(length)
-	randomNum2 := r.Intn(length)
+	randomNum1 := rand.Intn(length)
+	randomNum2 := rand.Intn(length)
 
 	for randomNum2 == randomNum1 {
-		randomNum2 = r.Intn(length)
+		randomNum2 = rand.Intn(length)
 	}
 
 	worker1 := workers[randomNum1]

@@ -25,6 +25,7 @@ LOG_DATE=$(date +%Y%m%d_%H%M%S)
 FD_BIN_DIR="/usr/local/bin"
 FD_ROUTER_BIN="${FD_BIN_DIR}/fd-router"
 FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/FastDeploy/fd-router"
+FD_ROUTER_SHA256="67640aaeebdd886826d3534930b2154cd2c1441a26bc3f38c3af5f0aadba7c2d"
 
 ports=($P_PORT $D_PORT $ROUTER_PORT)
 check_ports "${ports[@]}" || {
@@ -34,14 +35,23 @@ check_ports "${ports[@]}" || {
 
 # check fd-router binary
 if [ ! -x "${FD_ROUTER_BIN}" ]; then
-    echo "⚠️ fd-router not found at ${FD_ROUTER_BIN}, downloading..."
+    echo "⚠️ fd-router not found, downloading..."
+
     mkdir -p "${FD_BIN_DIR}"
-    wget -q --no-proxy "${FD_ROUTER_URL}" -O "${FD_ROUTER_BIN}" || {
-        echo "❌ Failed to download fd-router"
+    TMP_BIN="${FD_ROUTER_BIN}.tmp"
+
+    wget -q --no-proxy "${FD_ROUTER_URL}" -O "${TMP_BIN}" || exit 1
+
+    echo "${FD_ROUTER_SHA256}  ${TMP_BIN}" | sha256sum -c - || {
+        echo "❌ Integrity check failed"
+        rm -f "${TMP_BIN}"
         exit 1
     }
+
+    mv "${TMP_BIN}" "${FD_ROUTER_BIN}"
     chmod +x "${FD_ROUTER_BIN}"
-    echo "fd-router downloaded successfully"
+
+    echo "fd-router installed and verified"
 else
     echo "fd-router already exists"
 fi

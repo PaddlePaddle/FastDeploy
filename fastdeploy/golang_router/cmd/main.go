@@ -29,6 +29,7 @@ func main() {
 
 	// Initialize logger
 	logger.Init(cfg.Log.Level, cfg.Log.Output)
+	defer logger.CloseLogFile()
 
 	// Initialize manager
 	manager.Init(cfg)
