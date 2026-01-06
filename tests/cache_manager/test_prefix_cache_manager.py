@@ -182,6 +182,7 @@ def _create_manager(
         local_rdma_comm_ports=None,
         kvcache_storage_backend=None,
         write_policy="write_through",
+        swap_space=4,
     )
     model_config = SimpleNamespace(
         num_attention_heads=1,
@@ -663,7 +664,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_launch_cache_manager_formats_value_cache_shape(self):
         manager = _create_manager()
-        manager.cache_config.enable_hierarchical_cache = False
 
         captured = {}
 

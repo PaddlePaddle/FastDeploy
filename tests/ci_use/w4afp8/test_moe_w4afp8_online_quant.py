@@ -49,6 +49,12 @@ W4AFP8_CONFIGS = [
         "model_name": "ERNIE-4.5-21B-A3B-PT",
         "model_subdir": "torch",
     },
+    {
+        "id": "w4afp8_default_v1",
+        "load_choices": "default_v1",
+        "model_name": "Qwen3-30B-A3B",
+        "model_subdir": "torch",
+    },
 ]
 
 

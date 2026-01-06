@@ -1048,7 +1048,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.forward_meta.kv_signal_sender = self.kv_signal_sender
+            self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
@@ -1376,7 +1376,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
-            self.kv_signal_sender = sender
+            self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
@@ -1415,9 +1415,6 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                 )
 
-            # 5. Speculative decode
-
-            # 6. Post Process
             prompt_logprobs_list = None
             if not self.speculative_decoding:
                 prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -1467,7 +1464,7 @@ class XPUModelRunner(ModelRunnerBase):
                     line_break_id=self.model_config.line_break_id,
                 )
 
-            # draft model propose
+            # 6. Draft model propose
             if self.speculative_method == "mtp":
                 self.proposer.run(full_hidden_states=model_output)
 
@@ -1478,8 +1475,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs,
                 self.cache_config.block_size,
                 self.cache_config.enc_dec_block_num,
-                self.speculative_decoding,
-                self.speculative_config.num_speculative_tokens,
+                self.fd_config.speculative_config,
+                self.fd_config.cache_config.enable_prefix_caching,
             )
         return None
 
