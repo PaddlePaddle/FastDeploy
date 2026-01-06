@@ -137,7 +137,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         topk_idx: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
-        quant_group_size: int = 128,
+        quant_group_size: int = -1,
     ):
         """
         Args:
@@ -173,9 +173,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             return_recv_hook=return_recv_hook,
             num_per_channel=quant_group_size,
         )
-        dispatch_hook() if return_recv_hook else event.current_stream_wait()
-        packed_recv_x = (packed_recv_x[0], packed_recv_x[1].contiguous()) if use_fp8 else packed_recv_x
-        return packed_recv_x, recv_expert_count, handle, dispatch_hook
+        return packed_recv_x, recv_expert_count, handle, event, dispatch_hook
 
     def low_latency_combine(
         self,
@@ -188,15 +186,6 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
-        if paddle.__version__ != "0.0.0" and paddle.__version__ <= "3.1.0":
-            # TODO(@wanglongzhi): Delete them when deepep in PaddlePaddle is fixed
-            # and when the default recommended version of PaddlePaddle is greater than 3.1.0
-            src_info, layout_range, num_max_dispatch_tokens_per_rank, num_experts = handle
-            handle = (src_info, layout_range, num_max_dispatch_tokens_per_rank, None, num_experts)
-
-        if self.deepep_engine is None:
-            raise RuntimeError("DeepEP buffer not initialized!")
-
         return_recv_hook = True
         combined_hidden_states, event, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
@@ -206,8 +195,7 @@ class DeepEPEngineLowLatency(DeepEPEngineBase):
             async_finish=not return_recv_hook,
             return_recv_hook=return_recv_hook,
         )
-        combine_hook() if return_recv_hook else event.current_stream_wait()
-        return combined_hidden_states, combine_hook
+        return combined_hidden_states, event, combine_hook
 
     def clean_low_latency_buffer(self):
         """
@@ -378,7 +366,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             topk_idx,
             self.ep_engine.num_experts,
             previous_event=kwargs.get("previous_event", None),
-            allocate_on_comm_stream=False,  # XPU暂时不支持流分配
+            allocate_on_comm_stream=False,
             async_finish=self.ep_engine.async_finish,
         )
 
@@ -463,14 +451,20 @@ class XPUEPDecoderRunner(XPUEPRunner):
     ):
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = expertwise_scale is not None
-        quant_group_size = kwargs.get("quant_group_size", 128)
+        quant_group_size = kwargs.get("quant_group_size", -1)
 
         (
             recv_hidden_states,
             recv_expert_count,
             handle,
+            event,
             dispatch_hook,
         ) = self.ep_engine.low_latency_dispatch(x, topk_idx, expertwise_scale, use_fp8, quant_group_size)
+
+        if dispatch_hook is not None:
+            dispatch_hook()
+        else:
+            event.current_stream_wait()
         # valid_token_num is optional:
         # - if valid_token_num is None, it means that we CANNOT accurately know
         #   the size of the tensor, but the advantage is that it can reduce
@@ -478,16 +472,14 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # - if valid_token_num is NOT None, it means that we CAN accurately know
         #   the size of the tensor, but the disadvantage is that it will interrupt
         #   the process of kernel launch.
-        valid_token_num = int(paddle.sum(recv_expert_count).numpy())
-        if valid_token_num is None and dispatch_hook is not None:
-            dispatch_hook()
-
-        if valid_token_num is None:
+        if recv_expert_count is None:
             valid_token_num = -1
+        else:
+            valid_token_num = paddle.sum(recv_expert_count).item()
 
         if isinstance(recv_hidden_states, tuple):
             recv_x = recv_hidden_states[0]
-            recv_x_scale = recv_hidden_states[1]
+            recv_x_scale = recv_hidden_states[1].contiguous()
         else:
             recv_x = recv_hidden_states
             recv_x_scale = None
@@ -495,10 +487,11 @@ class XPUEPDecoderRunner(XPUEPRunner):
         return recv_x, recv_x_scale, recv_expert_count, handle, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
-        combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
+        combined_hidden_states, event, combine_hook = self.ep_engine.low_latency_combine(
             ffn_out, topk_idx, topk_weights, handle
         )
         if combine_hook is not None:
             combine_hook()
-
+        else:
+            event.current_stream_wait()
         return combined_hidden_states
