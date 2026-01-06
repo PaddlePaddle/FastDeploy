@@ -1779,6 +1779,7 @@ class PrefixCacheManager:
                 prefix_block_key = [hash_value]
                 if hash_value in node.children:
                     node = node.children[hash_value]
+                    node.req_id_set.add(request.request_id)
                     continue
                 allocated_block_id = gpu_block_ids.pop(0)
                 node_id = self.node_id_pool.pop()
