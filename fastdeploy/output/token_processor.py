@@ -707,6 +707,11 @@ class TokenProcessor:
             tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
+                if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, meas preemption has happend in worker
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            self.resource_manager.reschedule_preempt_task(task_id)
+                    continue
                 if accept_num[i] == -3:
                     recovery_stop = True
                     if recovery_stop:
@@ -723,15 +728,6 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
-                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        if (
-                            task_id in self.resource_manager.to_be_rescheduled_request_id_set
-                            and len(token_ids) > 0
-                            and token_ids[-1] == PREEMPTED_TOKEN_ID
-                        ):
-                            self.resource_manager.reschedule_preempt_task(task_id)
-                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]

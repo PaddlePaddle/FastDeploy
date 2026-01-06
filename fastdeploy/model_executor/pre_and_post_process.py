@@ -21,7 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.config import PREEMPTED_TOKEN_ID, SpeculativeConfig
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
@@ -412,9 +412,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-    for preempted_idx in share_inputs["preempted_idx"]:
-        sampler_output.sampled_token_ids[preempted_idx] = PREEMPTED_TOKEN_ID
-    share_inputs["preempted_idx"] = []
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -433,6 +430,7 @@ def post_process_normal(
                     model_output.not_need_stop,
                     model_output.mp_rank,
                     save_each_rank,
+                    share_inputs["preempted_idx"],
                 )
             else:
                 save_output_topk(
@@ -442,6 +440,7 @@ def post_process_normal(
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
                     model_output.mp_rank,
+                    share_inputs["preempted_idx"],
                 )
 
 
@@ -509,6 +508,7 @@ def post_process_specualate(
                 model_output.mp_rank,
                 save_each_rank,
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
+                share_inputs["preempted_idx"],
             )
         else:
             speculate_save_output_topk(
@@ -524,6 +524,7 @@ def post_process_specualate(
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
+                share_inputs["preempted_idx"],
             )
 
     # Update pre_ids through accept tokens
