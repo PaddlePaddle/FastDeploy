@@ -16,6 +16,10 @@ from __future__ import annotations
 
 import json
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "MLA_ATTN"
+os.environ["FLAGS_flash_attn_version"] = "3"
+
 import shutil
 import tempfile
 import unittest
