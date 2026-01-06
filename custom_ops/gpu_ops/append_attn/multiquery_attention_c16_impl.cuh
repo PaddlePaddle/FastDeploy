@@ -918,7 +918,10 @@ void MultiQueryAppendAttention(
     int sm_count;
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
 
-    uint32_t chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
+    uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
+    if (!is_decoder) {
+      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
+    }
     const int num_chunks = div_up(max_dec_len, chunk_size);
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
@@ -1170,6 +1173,9 @@ void MultiQueryAppendAttention(
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
 
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
+    if (!is_decoder) {
+      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
+    }
 
     uint32_t attn_mask_len;
     if (attn_mask) {

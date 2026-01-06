@@ -2468,7 +2468,7 @@ __global__ void merge_multi_chunks_v2_kernel(
       seq_len_kv += seq_len_q;
     }
     const int num_chunks_this_seq = div_up(seq_len_kv, chunk_size);
-    if (num_chunks_this_seq <= 1) {
+    if (num_chunks_this_seq <= 1 || !ENABLE_PREFILL) {
       continue;
     }
 
