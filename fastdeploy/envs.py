@@ -152,6 +152,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
     "GLOBAL_LOGGING_INSTRUMENT": lambda: int(os.getenv("GLOBAL_LOGGING_INSTRUMENT", "0")),
+    # Timeout for worker process health check in seconds
+    "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }
 
 

@@ -90,12 +90,13 @@ class RolloutModel(nn.Layer):
         with quantization_context:
             with context:
                 model_cls = ModelRegistry.get_class(architectures)
-                model = model_cls(self.fd_config)
-            model.eval()
-            model.load_weights(weights_iterator)
+                self.tmp_model = model_cls(self.fd_config)
+            self.tmp_model.eval()
+            self.tmp_model.load_weights(weights_iterator)
             if self.fd_config.speculative_config.model_type != "mtp":
-                process_final_after_loading(model, self.fd_config)
-        self.rollout_model = model
+                process_final_after_loading(self.tmp_model, self.fd_config)
+        self.rollout_model = self.tmp_model
+        self.tmp_model = None
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Get parameter name mappings between rollout and training models."""

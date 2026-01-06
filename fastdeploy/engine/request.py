@@ -499,6 +499,7 @@ class RequestMetrics:
             "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
             "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
             "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
+            "speculate_metrics": self.speculate_metrics,
         }
 
     @classmethod
