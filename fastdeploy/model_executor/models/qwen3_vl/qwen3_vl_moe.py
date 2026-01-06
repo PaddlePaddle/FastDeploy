@@ -203,11 +203,7 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
                 if "mlp.experts" in loaded_weight_name:
                     continue
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                logger.info(
-                    f"[Qwen3Moe-VL] loaded_weight_name: {loaded_weight_name}, weight_name {weight_name}, param_name {param_name}, model_param_name {model_param_name} 1"
-                )
                 if model_param_name not in params_dict:
-                    logger.info(f"[Qwen3Moe-VL] {model_param_name} not in params_dict1")
                     continue
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
@@ -257,9 +253,6 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
                         if weight_name not in loaded_weight_name:
                             continue
                         model_param_name = loaded_weight_name.replace(weight_name, param_name)
-                        logger.info(
-                            f"[Qwen3Moe-VL] loaded_weight_name: {loaded_weight_name}, weight_name {weight_name}, param_name {param_name}, model_param_name {model_param_name} 3"
-                        )
                         if model_param_name not in params_dict:
                             continue
                         param = params_dict[model_param_name]
@@ -271,7 +264,6 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
                         continue
                     model_param_name = loaded_weight_name
                     if model_param_name not in params_dict:
-                        logger.info(f"[Qwen3Moe-VL] {model_param_name} not in params_dict2")
                         continue
                     param = params_dict[model_param_name]
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
