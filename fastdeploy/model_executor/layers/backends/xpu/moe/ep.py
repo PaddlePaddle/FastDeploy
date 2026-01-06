@@ -404,6 +404,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "previous_event": event,
         }
         fused_moe_out, _, event = buffer.combine(**combine_args)
+
         return fused_moe_out, event
 
 
@@ -494,4 +495,5 @@ class XPUEPDecoderRunner(XPUEPRunner):
             combine_hook()
         else:
             event.current_stream_wait()
+
         return combined_hidden_states
