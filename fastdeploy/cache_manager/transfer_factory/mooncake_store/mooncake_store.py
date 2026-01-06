@@ -50,7 +50,7 @@ class MooncakeStoreConfig:
         file_path = os.getenv("MOONCAKE_CONFIG_PATH")
 
         if file_path is None:
-            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME")
+            local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME", "localhost")
             metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
             global_segment_size = int(os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE))
             local_buffer_size = int(os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE))
@@ -63,7 +63,7 @@ class MooncakeStoreConfig:
             with open(file_path) as fin:
                 config = json.load(fin)
 
-            local_hostname = config.get("local_hostname")
+            local_hostname = config.get("local_hostname", "localhost")
             metadata_server = config.get("metadata_server")
             global_segment_size = config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE)
             local_buffer_size = config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE)
@@ -75,6 +75,8 @@ class MooncakeStoreConfig:
             # FIXME: use auto-select NICs in MooncakeStore will raise error and roll back to using TCP
             rdma_devices = get_rdma_nics()
             logger.info(f"No RDMA devices specified, defaulting to all available devices: {rdma_devices}")
+        if metadata_server is None or master_server_addr is None:
+            raise ValueError("Both MOONCAKE_METADATA_SERVER and MOONCAKE_MASTER_SERVER_ADDR must be provided.")
 
         return MooncakeStoreConfig(
             local_hostname=local_hostname,
