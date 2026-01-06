@@ -589,6 +589,11 @@ class DeepSeekV3Model(nn.Layer):
                 position_ids,
                 mask_encoder_batch,
             )
+        hidden_states = hidden_states + residual
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            hidden_states = self.norm.allgather(hidden_states, forward_meta.ids_remove_padding.shape[0])
+
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
