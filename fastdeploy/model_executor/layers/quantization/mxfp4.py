@@ -16,6 +16,7 @@
 
 import importlib
 import importlib.util
+import math
 from enum import Enum
 from typing import Callable, Optional
 
@@ -23,6 +24,7 @@ import paddle
 from paddle import nn
 
 from fastdeploy import envs
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 from fastdeploy.model_executor.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
@@ -127,12 +129,12 @@ class MXFP4Config(QuantConfigBase):
             raise NotImplementedError
 
 
-class MXFP4MoeMethod(QuantMethodBase):
+class MXFP4MoeMethod(MoEMethodBase):
     def __init__(
         self,
         quant_config: MXFP4Config,
     ) -> None:
-        super().__init__()
+        super().__init__(quant_config)
         self.quant_config = quant_config
         self.mxfp4_backend = get_mxfp4_backend()
 
@@ -141,9 +143,19 @@ class MXFP4MoeMethod(QuantMethodBase):
 
         block_size = 32
 
-        self.intermediate_size = layer.moe_intermediate_size
-        self.hidden_size = layer.hidden_size
-        self.num_experts = layer.num_local_experts
+        self.intermediate_size = layer.fd_config.model_config.intermediate_size
+        self.hidden_size = layer.fd_config.model_config.hidden_size
+        self.num_experts = layer.fd_config.model_config.num_local_experts
+
+        self.tp_rank = layer.tp_rank
+        self.tp_size = layer.tp_size
+        self.ep_size = layer.ep_size
+        self.ep_rank = layer.ep_rank
+
+        if self.ep_size > 1:
+            raise NotImplementedError("EP has not yet been implemented in MXFP4.")
+            assert self.num_experts % self.ep_size == 0, "only support num_experts divisible by ep_size"
+        self.num_local_experts = self.num_experts // self.ep_size
 
         self.up_gate_proj_weight_shape = [
             self.num_experts,
@@ -243,7 +255,7 @@ class MXFP4MoeMethod(QuantMethodBase):
 
         if layer.activation == "swigluoai":
             gemm1_alpha = layer.create_parameter(
-                shape=[self.num_experts],
+                shape=[self.num_local_experts],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(1.702),
             )
@@ -251,7 +263,7 @@ class MXFP4MoeMethod(QuantMethodBase):
             setattr(layer, "gemm1_alpha", gemm1_alpha)
 
             gemm1_beta = layer.create_parameter(
-                shape=[self.num_experts],
+                shape=[self.num_local_experts],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(1.0),
             )
@@ -259,7 +271,7 @@ class MXFP4MoeMethod(QuantMethodBase):
             setattr(layer, "gemm1_beta", gemm1_beta)
 
             gemm1_clamp_limit = layer.create_parameter(
-                shape=[self.num_experts],
+                shape=[self.num_local_experts],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(7.0),
             )
@@ -271,7 +283,12 @@ class MXFP4MoeMethod(QuantMethodBase):
 
         block_size = 32
 
-        intermediate_size_pad = self.intermediate_size
+        intermediate_size = self.intermediate_size
+        intermediate_size_block = intermediate_size // block_size
+        per_rank_intermediate_size_block = math.ceil(intermediate_size_block / self.tp_size)
+        per_rank_intermediate_size = per_rank_intermediate_size_block * block_size
+
+        intermediate_size_pad = per_rank_intermediate_size
         hidden_size_pad = self.hidden_size
 
         if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
@@ -283,26 +300,32 @@ class MXFP4MoeMethod(QuantMethodBase):
         self.intermediate_size_pad = intermediate_size_pad
         self.hidden_size_pad = hidden_size_pad
 
+        tp_rank_start = self.tp_rank * intermediate_size_pad
+        tp_rank_end = min((self.tp_rank + 1) * intermediate_size_pad, intermediate_size)
+
+        ep_rank_start = self.ep_rank * self.num_local_experts
+        ep_rank_end = (self.ep_rank + 1) * self.num_local_experts
+
         self.up_gate_proj_weight_shape = [
-            self.num_experts,
+            self.num_local_experts,
             intermediate_size_pad * 2,
             hidden_size_pad // 2,  # uint8
         ]
 
         self.down_proj_weight_shape = [
-            self.num_experts,
+            self.num_local_experts,
             hidden_size_pad,
             intermediate_size_pad // 2,  # uint8
         ]
 
         self.up_gate_proj_scale_shape = [
-            self.num_experts,
+            self.num_local_experts,
             intermediate_size_pad * 2,
             hidden_size_pad // block_size,
         ]
 
         self.down_proj_scale_shape = [
-            self.num_experts,
+            self.num_local_experts,
             hidden_size_pad,
             intermediate_size_pad // block_size,
         ]
@@ -314,7 +337,12 @@ class MXFP4MoeMethod(QuantMethodBase):
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        weight = get_padding_weight(layer.up_gate_proj_weight, self.up_gate_proj_weight_shape)
+        weight = layer.up_gate_proj_weight.reshape([self.num_experts, self.intermediate_size * 2, -1])
+        if self.ep_size > 1:
+            weight = weight[ep_rank_start:ep_rank_end, ...]
+        else:
+            weight = weight[:, 2 * tp_rank_start : 2 * tp_rank_end, ...]
+        weight = get_padding_weight(weight, self.up_gate_proj_weight_shape)
         gate_w, up_w = weight[:, ::2, :], weight[:, 1::2, :]
         up_gate_proj_weight_padding.copy_(paddle.concat([up_w, gate_w], axis=1), False)
         layer.up_gate_proj_weight._clear()
@@ -325,7 +353,12 @@ class MXFP4MoeMethod(QuantMethodBase):
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        weight = get_padding_weight(layer.down_proj_weight, self.down_proj_weight_shape)
+        weight = layer.down_proj_weight.reshape([self.num_experts, self.hidden_size, -1])
+        if self.ep_size > 1:
+            weight = weight[ep_rank_start:ep_rank_end, ...]
+        else:
+            weight = weight[..., tp_rank_start // 2 : tp_rank_end // 2]
+        weight = get_padding_weight(weight, self.down_proj_weight_shape)
         down_proj_weight_padding.copy_(weight, False)
         layer.down_proj_weight._clear()
         layer.down_proj_weight = down_proj_weight_padding
@@ -335,7 +368,12 @@ class MXFP4MoeMethod(QuantMethodBase):
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        weight = get_padding_weight(layer.up_gate_proj_scale, self.up_gate_proj_scale_shape)
+        weight = layer.up_gate_proj_scale
+        if self.ep_size > 1:
+            weight = weight[ep_rank_start:ep_rank_end, ...]
+        else:
+            weight = weight[:, 2 * tp_rank_start : 2 * tp_rank_end, ...]
+        weight = get_padding_weight(weight, self.up_gate_proj_scale_shape)
         gate_s, up_s = weight[:, ::2, :], weight[:, 1::2, :]
         up_gate_proj_scale = paddle.concat([up_s, gate_s], axis=1)
         up_gate_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(up_gate_proj_scale)
@@ -348,7 +386,12 @@ class MXFP4MoeMethod(QuantMethodBase):
             dtype=self.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        weight = get_padding_weight(layer.down_proj_scale, self.down_proj_scale_shape)
+        weight = layer.down_proj_scale
+        if self.ep_size > 1:
+            weight = weight[ep_rank_start:ep_rank_end, ...]
+        else:
+            weight = weight[..., tp_rank_start // block_size : tp_rank_end // block_size]
+        weight = get_padding_weight(weight, self.down_proj_scale_shape)
         down_proj_scale = weight
         down_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(down_proj_scale)
         down_proj_scale_padding.copy_(down_proj_scale_interleaved, False)
@@ -364,22 +407,33 @@ class MXFP4MoeMethod(QuantMethodBase):
 
         if layer.with_bias:
             up_gate_proj_bias_padding = layer.create_parameter(
-                shape=[self.num_experts, intermediate_size_pad * 2],
+                shape=[self.num_local_experts, intermediate_size_pad * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-            weight = get_padding_weight(layer.up_gate_proj_bias, [self.num_experts, self.intermediate_size_pad * 2])
+            weight = layer.up_gate_proj_bias
+            if self.ep_size > 1:
+                weight = weight[ep_rank_start:ep_rank_end, ...]
+            else:
+                weight = weight[:, 2 * tp_rank_start : 2 * tp_rank_end]
+            weight = get_padding_weight(weight, [self.num_local_experts, self.intermediate_size_pad * 2])
             gate_b, up_b = weight[:, ::2].cast("bfloat16"), weight[:, 1::2].cast("bfloat16")
             up_gate_proj_bias_padding.copy_(paddle.concat([up_b, gate_b], axis=-1), False)
             layer.up_gate_proj_bias._clear()
             layer.up_gate_proj_bias = up_gate_proj_bias_padding
 
             down_proj_bias_padding = layer.create_parameter(
-                shape=[self.num_experts, hidden_size_pad],
+                shape=[self.num_local_experts, hidden_size_pad],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-            weight = get_padding_weight(layer.down_proj_bias, [self.num_experts, self.hidden_size_pad])
+            weight = layer.down_proj_bias
+            if self.ep_size > 1:
+                weight = weight[ep_rank_start:ep_rank_end, ...]
+            else:
+                if self.tp_rank != 0:
+                    weight = paddle.zeros_like(weight)
+            weight = get_padding_weight(weight, [self.num_local_experts, self.hidden_size_pad])
             down_proj_bias_padding.copy_(weight.cast("bfloat16"), False)
             layer.down_proj_bias._clear()
             layer.down_proj_bias = down_proj_bias_padding
@@ -439,6 +493,9 @@ class MXFP4MoeMethod(QuantMethodBase):
                 cutlass_fused_moe as flashinfer_cutlass_fused_moe,
             )
 
+            # if x.shape[0] == 0:
+            #     return paddle.zeros([0, layer.hidden_size], dtype="bfloat16")
+
             x = paddle.nn.functional.pad(x, pad=[0, self.hidden_size_pad - x.shape[-1]], mode="constant", value=0)
 
             output = paddle.zeros_like(x, dtype="bfloat16")
@@ -455,15 +512,15 @@ class MXFP4MoeMethod(QuantMethodBase):
                 swiglu_alpha=layer.gemm1_alpha,
                 swiglu_beta=layer.gemm1_beta,
                 swiglu_limit=layer.gemm1_clamp_limit,
-                # tp_size=self.moe.tp_size,
-                # tp_rank=self.moe.tp_rank,
-                # ep_size=self.moe.ep_size,
-                # ep_rank=self.moe.ep_rank,
+                tp_size=self.tp_size,
+                tp_rank=self.tp_rank,
+                ep_size=self.ep_size,
+                ep_rank=self.ep_rank,
                 tune_max_num_tokens=8192,
                 **extra_kwargs,
             )
 
-            return output[..., : layer.hidden_size]
+            return output[..., : layer.hidden_size].clone()
 
     def process_loaded_weights(self, layer, weights):
         """Process the weight after loading.
@@ -471,3 +528,12 @@ class MXFP4MoeMethod(QuantMethodBase):
         This can be used for example, to transpose weights for computation.
         """
         return
+
+    def apply_tp(self, layer, x, gate, topk_ids_hookfunc=None):
+        return self.apply(layer, x, gate, topk_ids_hookfunc)
+
+    def apply_ep_prefill(self, layer, x, gate, topk_ids_hookfunc=None):
+        raise NotImplementedError("EP 尚未在 MXFP4 中实现")
+
+    def apply_ep_decode(self, layer, x, gate, topk_ids_hookfunc=None):
+        raise NotImplementedError("EP 尚未在 MXFP4 中实现")
