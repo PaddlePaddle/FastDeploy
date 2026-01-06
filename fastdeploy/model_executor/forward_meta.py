@@ -298,40 +298,64 @@ class HPUForwardMeta(ForwardMeta):
     block_tables: Optional[paddle.Tensor] = None
 
     #
-    block_groups: Optional[paddle.Tensor] = None
+    rotary_embs_encoder: Optional[paddle.Tensor] = None
 
     #
-    block_list: Optional[paddle.Tensor] = None
+    block_groups_encoder: Optional[paddle.Tensor] = None
 
     #
-    block_indices: Optional[paddle.Tensor] = None
+    block_list_encoder: Optional[paddle.Tensor] = None
 
     #
-    block_offsets: Optional[paddle.Tensor] = None
+    block_indices_encoder: Optional[paddle.Tensor] = None
 
     #
-    block_mapping: Optional[paddle.Tensor] = None
+    block_offsets_encoder: Optional[paddle.Tensor] = None
 
     #
-    attention_mask: Optional[paddle.Tensor] = None
+    block_mapping_encoder: Optional[paddle.Tensor] = None
 
     #
-    block_size: Optional[paddle.Tensor] = None
+    attention_mask_encoder: Optional[paddle.Tensor] = None
 
     #
-    batch_ids: Optional[paddle.Tensor] = None
+    batch_ids_encoder: Optional[paddle.Tensor] = None
 
     #
-    total_batch: Optional[paddle.Tensor] = None
+    total_batch_encoder: int = 0
 
     #
-    is_prompt: Optional[paddle.Tensor] = None
+    rotary_embs_decoder: Optional[paddle.Tensor] = None
+
+    #
+    block_groups_decoder: Optional[paddle.Tensor] = None
+
+    #
+    block_list_decoder: Optional[paddle.Tensor] = None
+
+    #
+    block_indices_decoder: Optional[paddle.Tensor] = None
+
+    #
+    block_offsets_decoder: Optional[paddle.Tensor] = None
+
+    #
+    block_mapping_decoder: Optional[paddle.Tensor] = None
+
+    #
+    attention_mask_decoder: Optional[paddle.Tensor] = None
+
+    #
+    batch_ids_decoder: Optional[paddle.Tensor] = None
+
+    #
+    total_batch_decoder: int = 0
 
     #
     attn_backend: "AttentionBackend_HPU" = None
 
     #
-    rotary_embs: Optional[paddle.Tensor] = None
+    block_size: Optional[paddle.Tensor] = None
 
     #
     caches: Optional[paddle.Tensor] = None
@@ -349,10 +373,12 @@ class HPUForwardMeta(ForwardMeta):
     def init_forward_meta(cls, share_inputs: Dict, attn_backend: "AttentionBackend_HPU"):
         """init forward meta"""
         # TODO(gongshaotian): delete this func
-        is_prompt = share_inputs["is_prompt"]
-        forward_mode = ForwardMode.DECODE
-        if is_prompt:
+        if share_inputs["total_batch_encoder"] > 0 and share_inputs["total_batch_decoder"] > 0:
+            forward_mode = ForwardMode.MIXED
+        elif share_inputs["total_batch_encoder"] > 0:
             forward_mode = ForwardMode.EXTEND
+        elif share_inputs["total_batch_decoder"] > 0:
+            forward_mode = ForwardMode.DECODE
         ret = cls(
             forward_mode=forward_mode,
             input_ids=share_inputs["input_ids"],
@@ -361,18 +387,26 @@ class HPUForwardMeta(ForwardMeta):
             seq_lens_decoder=share_inputs["seq_lens_decoder"],
             seq_lens_this_time=share_inputs["seq_lens_this_time"],
             block_tables=share_inputs["block_tables"],
-            block_groups=share_inputs["block_groups"],
-            block_list=share_inputs["block_list"],
-            block_indices=share_inputs["block_indices"],
-            block_offsets=share_inputs["block_offsets"],
-            block_mapping=share_inputs["block_mapping"],
-            attention_mask=share_inputs["block_bias"],
+            rotary_embs_encoder=share_inputs["rotary_embs_encoder"],
+            block_groups_encoder=share_inputs["block_groups_encoder"],
+            block_list_encoder=share_inputs["block_list_encoder"],
+            block_indices_encoder=share_inputs["block_indices_encoder"],
+            block_offsets_encoder=share_inputs["block_offsets_encoder"],
+            block_mapping_encoder=share_inputs["block_mapping_encoder"],
+            attention_mask_encoder=share_inputs["block_bias_encoder"],
+            total_batch_encoder=share_inputs["total_batch_encoder"],
+            batch_ids_encoder=share_inputs["batch_ids_encoder"],
+            rotary_embs_decoder=share_inputs["rotary_embs_decoder"],
+            block_groups_decoder=share_inputs["block_groups_decoder"],
+            block_list_decoder=share_inputs["block_list_decoder"],
+            block_indices_decoder=share_inputs["block_indices_decoder"],
+            block_offsets_decoder=share_inputs["block_offsets_decoder"],
+            block_mapping_decoder=share_inputs["block_mapping_decoder"],
+            attention_mask_decoder=share_inputs["block_bias_decoder"],
+            total_batch_decoder=share_inputs["total_batch_decoder"],
+            batch_ids_decoder=share_inputs["batch_ids_decoder"],
             block_size=share_inputs["block_size"],
-            total_batch=share_inputs["total_batch"],
-            batch_ids=share_inputs["batch_ids"],
-            is_prompt=share_inputs["is_prompt"],
             attn_backend=attn_backend,
-            rotary_embs=share_inputs["rotary_embs"],
             caches=share_inputs["caches"],
         )
         return ret
