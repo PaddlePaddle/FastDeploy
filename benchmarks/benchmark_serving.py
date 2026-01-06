@@ -491,8 +491,14 @@ async def benchmark(
         # 多ip按DP均分并发
         assert max_concurrency, "multi-IP 模式必须指定 max_concurrency"
         n_ip = len(ip_list)
-        concurrency_per_ip = max_concurrency // n_ip
-        concurrency_remainder = max_concurrency % n_ip
+        if max_concurrency < n_ip:
+            print(
+                f"[WARN] max_concurrency({max_concurrency}) < IP 数({n_ip})，"
+                f"已自动兜底为每个 IP 1 并发，"
+                f"实际总并发将变为 {n_ip}"
+            )
+        concurrency_per_ip = max(1, max_concurrency // n_ip)
+        concurrency_remainder = max(0, max_concurrency - concurrency_per_ip * n_ip)
 
         # 分配请求
         req_per_ip = len(input_requests) // n_ip
@@ -695,7 +701,7 @@ async def benchmark(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", value))
             result[f"p{p_word}_{metric_attribute_name}_ms"] = value
 
-    def process_pd_metrics(model_outputs, metric_key):
+    def process_pd_metrics(model_outputs, metric_key, is_time=True):
         # 收集所有该 metric 的数值
         values = []
         percentiles = []
@@ -712,24 +718,29 @@ async def benchmark(
             print(f"[WARN] metric_key '{metric_key}' not found in outputs.")
             return
 
-        arr = np.array(values) * 1000  # 秒 -> 毫秒
+        if is_time:
+            arr = np.array(values) * 1000  # 秒 -> 毫秒
+            suffix = "(ms)"
+        else:
+            arr = np.array(values)
+            suffix = ""
 
         print("{s:{c}^{n}}".format(s=metric_key, n=50, c="-"))
         print(
             "{:<40} {:<10.2f}".format(
-                f"Mean {metric_key} (ms):",
+                f"Mean {metric_key} {suffix}:",
                 np.mean(arr),
             )
         )
         print(
             "{:<40} {:<10.2f}".format(
-                f"Median {metric_key} (ms):",
+                f"Median {metric_key} {suffix}:",
                 np.median(arr),
             )
         )
         for p in percentiles:
             v = np.percentile(arr, p)
-            print("{:<40} {:<10.2f}".format(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms):", v))
+            print("{:<40} {:<10.2f}".format(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} {suffix}:", v))
             # print(f"P{str(int(p)) if int(p) == p else str(p)} {metric_key} (ms): {v:10.2f}")
         print(
             "{:<40} {:<10.2f}".format(
@@ -785,6 +796,7 @@ async def benchmark(
         process_pd_metrics(outputs, "prefill_prepare_cost_time")
         process_pd_metrics(outputs, "preprocess_cost_time")
         process_pd_metrics(outputs, "cache_in_scheduler_cost_time")
+        process_pd_metrics(outputs, "schedule_cost_time")
         process_pd_metrics(outputs, "ask_decode_resource_cost_time")
         process_pd_metrics(outputs, "prefill_first_token_infer_cost_time")
         process_pd_metrics(outputs, "wait_sending_cache_cost_time")
@@ -793,6 +805,12 @@ async def benchmark(
         process_pd_metrics(outputs, "decode_second_token_infer_cost_time")
         process_pd_metrics(outputs, "first_token_transmission_cost_time")
         process_pd_metrics(outputs, "second_token_transmission_cost_time")
+        process_pd_metrics(outputs, "mixed_schedule_cost_time")
+        process_pd_metrics(outputs, "gpu_cache_token_num", is_time=False)
+        process_pd_metrics(outputs, "cpu_cache_token_num", is_time=False)
+        process_pd_metrics(outputs, "storage_cache_token_num", is_time=False)
+        process_pd_metrics(outputs, "cpu_cache_prepare_time")
+        process_pd_metrics(outputs, "storage_cache_prepare_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("reasoning_len", "Reasoning Lenth", "思考长度")

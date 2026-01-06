@@ -35,6 +35,7 @@ from opentelemetry.propagate import extract
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
 from fastdeploy.entrypoints.chat_utils import load_chat_template
@@ -59,6 +60,12 @@ from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServin
 from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.entrypoints.openai.v1.serving_chat import (
+    OpenAIServingChat as OpenAIServingChatV1,
+)
+from fastdeploy.entrypoints.openai.v1.serving_completion import (
+    OpenAIServingCompletion as OpenAIServingCompletionV1,
+)
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
@@ -113,11 +120,21 @@ def load_engine():
 
     api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
-    engine = LLMEngine.from_engine_args(engine_args)
-    if not engine.start(api_server_pid=args.port):
-        api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
+    if envs.FD_ENABLE_ASYNC_LLM:
+        engine = AsyncLLM.from_engine_args(engine_args, pid=args.port)
+    else:
+        engine = LLMEngine.from_engine_args(engine_args)
+    started = False
+    if isinstance(engine, AsyncLLM):
+        started = asyncio.run(engine.start())
+    else:
+        started = engine.start(api_server_pid=args.port)
+    if not started:
+        api_server_logger.error(
+            "Failed to initialize FastDeploy LLM engine, service exit now!"
+            "Please check the log file for more details."
+        )
         return None
-
     llm_engine = engine
     return engine
 
@@ -175,6 +192,8 @@ async def lifespan(app: FastAPI):
 
     engine_args = EngineArgs.from_cli_args(args, skip_port_check=True)
     fd_config = engine_args.create_engine_config()
+    if envs.FD_ENABLE_ASYNC_LLM:
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = engine_args.engine_worker_queue_port[engine_args.local_data_parallel_id]
     engine_client = EngineClient(
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
@@ -190,23 +209,46 @@ async def lifespan(app: FastAPI):
         args.ips,
     )
     app.state.model_handler = model_handler
-    chat_handler = OpenAIServingChat(
-        engine_client,
-        app.state.model_handler,
-        pid,
-        args.ips,
-        args.max_waiting_time,
-        chat_template,
-        args.enable_mm_output,
-        args.tokenizer_base_url,
-    )
-    completion_handler = OpenAIServingCompletion(
-        engine_client,
-        app.state.model_handler,
-        pid,
-        args.ips,
-        args.max_waiting_time,
-    )
+    global llm_engine
+    if envs.FD_ENABLE_ASYNC_LLM:
+        await llm_engine.init_connections()
+        chat_handler = OpenAIServingChatV1(
+            llm_engine,
+            fd_config,
+            app.state.model_handler,
+            pid,
+            args.ips,
+            args.max_waiting_time,
+            chat_template,
+            args.enable_mm_output,
+            args.tokenizer_base_url,
+        )
+        completion_handler = OpenAIServingCompletionV1(
+            llm_engine,
+            fd_config,
+            app.state.model_handler,
+            pid,
+            args.ips,
+            args.max_waiting_time,
+        )
+    else:
+        chat_handler = OpenAIServingChat(
+            engine_client,
+            app.state.model_handler,
+            pid,
+            args.ips,
+            args.max_waiting_time,
+            chat_template,
+            args.enable_mm_output,
+            args.tokenizer_base_url,
+        )
+        completion_handler = OpenAIServingCompletion(
+            engine_client,
+            app.state.model_handler,
+            pid,
+            args.ips,
+            args.max_waiting_time,
+        )
 
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
@@ -227,12 +269,14 @@ async def lifespan(app: FastAPI):
     app.state.completion_handler = completion_handler
     app.state.embedding_handler = embedding_handler
     app.state.reward_handler = reward_handler
-    global llm_engine
-    if llm_engine is not None:
+
+    if llm_engine is not None and not isinstance(llm_engine, AsyncLLM):
         llm_engine.engine.data_processor = engine_client.data_processor
     yield
     # close zmq
     try:
+        if envs.FD_ENABLE_ASYNC_LLM:
+            await llm_engine.shutdown()
         await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess

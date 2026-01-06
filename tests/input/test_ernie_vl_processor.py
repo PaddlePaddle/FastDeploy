@@ -15,6 +15,7 @@
 """
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -341,8 +342,8 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
             processor.image_patch_id = 1001
+            processor.ernie4_5_processor = SimpleNamespace(mm_num_tokens=lambda **kwargs: 123)
             processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(processor, Ernie4_5_VLProcessor)
-
             # Test with images
             outs_with_images = {
                 "input_ids": [1, 2, 3],

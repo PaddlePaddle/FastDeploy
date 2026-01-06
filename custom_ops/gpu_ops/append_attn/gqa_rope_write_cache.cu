@@ -1377,23 +1377,25 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
 
   if (use_neox_rotary_style) {
     if (rotary_dim == head_dim) {
-      gqa_rotary_qk_split_variable_qwen3<data_t>(qkv_out.data<data_t>(),
-                                                 q.data<data_t>(),
-                                                 k.data<data_t>(),
-                                                 v.data<data_t>(),
-                                                 qkv.data<data_t>(),
-                                                 rotary_embs.data<float>(),
-                                                 batch_id_per_token.data<int>(),
-                                                 seq_lens_encoder.data<int>(),
-                                                 seq_lens_decoder.data<int>(),
-                                                 cu_seqlens_q.data<int>(),
-                                                 cu_seqlens_k.data<int>(),
-                                                 token_num,
-                                                 num_heads,
-                                                 kv_num_heads,
-                                                 max_seq_len,
-                                                 head_dim,
-                                                 stream);
+      gqa_rotary_qk_split_variable_qwen3<data_t>(
+          qkv_out.data<data_t>(),
+          q.data<data_t>(),
+          k.data<data_t>(),
+          v.data<data_t>(),
+          qkv.data<data_t>(),
+          rotary_embs.data<float>(),
+          batch_id_per_token.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          cu_seqlens_q.data<int>(),
+          cu_seqlens_k.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
+          head_dim,
+          rope_3d,
+          stream);
     } else {
       gqa_neox_partial_rotary_qk_split_variable<data_t>(
           qkv_out.data<data_t>(),
