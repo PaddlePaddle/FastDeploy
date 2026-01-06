@@ -77,13 +77,11 @@ def get_weight_iterator(model_path: str):
     else:
         weights_iterator = pdparams_weight_iterator(files_list)
 
-    for item in weights_iterator:
-        yield item
+    yield from weights_iterator
 
     kv_cache_scale_json_path = Path(model_path) / "kv_cache_scale.json"
     if kv_cache_scale_json_path.exists():
-        for item in kv_cache_scale_iterator(str(kv_cache_scale_json_path)):
-            yield item
+        yield from kv_cache_scale_iterator(str(kv_cache_scale_json_path))
 
 
 def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
