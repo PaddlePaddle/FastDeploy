@@ -10,7 +10,7 @@ all: prepare compile
 
 prepare:
 	git version     # 低于 2.17.1 可能不能正常工作
-	go env          
+	go env
 	go mod download || go mod download -x  # 下载 依赖
 
 #make compile

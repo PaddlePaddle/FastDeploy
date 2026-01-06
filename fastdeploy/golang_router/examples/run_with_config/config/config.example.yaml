@@ -20,4 +20,3 @@ manager:
 log:
   level: "info"  # debug, info, warn, error
   output: "file" # stdout, file
-
