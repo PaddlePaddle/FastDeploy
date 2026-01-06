@@ -1,8 +1,9 @@
 # fd-router
 
-【正在开发迭代中】一个高性能的 Go 语言路由框架，提供灵活的请求路由、中间件支持和健康检查功能。
+【正在开发迭代中】
+fd-router是一个高性能的 Go 语言路由框架，提供灵活的请求路由、中间件支持和健康检查功能。
 
-可相对于 FastDeploy GPU 推理进程独立运行, 通过 HTTP 协议与推理进程通信
+可独立于 FastDeploy GPU 推理进程运行, 通过 HTTP 协议与推理进程通信
 
 ## 功能特性
 
@@ -20,7 +21,7 @@
 
 - Go 1.21
 - 构建不依赖特定系统环境
-- 可在 FastDeploy 官方 Docker 环境中构建
+- 可直接在 FastDeploy 官方 Docker 环境中编译与运行
 
 ### 编译
 
@@ -30,7 +31,8 @@
 
 ### 配置
 
-1. 复制配置文件模板并修改(可选, 用于修改默认配置, 可参考examples/run_with_config目录)：
+1. 配置文件准备（可选）
+如需修改默认配置，可复制配置模板并进行调整（示例可参考 examples/run_with_config）：
 
 ```bash
 cp config/config.example.yaml config/config.yaml
@@ -59,12 +61,13 @@ manager:
   health-check-endpoint: /health # 健康检查接口
 
 log:
-  level: "info"  # 日志打印级别
-  output: "file" # 日志输出方式: stdout, file
+  level: "info"  # 日志打印级别: debug / info / warn / error
+  output: "file" # 日志输出方式: stdout / file
 
 ```
 
-3. 通过配置文件注册实例(可选, 用于启动时手动注册实例, 可参考examples/run_with_default_workers目录):
+3. 启动时注册实例（可选）
+支持通过配置文件在启动阶段注册推理实例（示例可参考 examples/run_with_default_workers）：
 
 ```bash
 cp config/config.example.yaml config/config.yaml
@@ -72,15 +75,33 @@ cp config/register.example.yaml config/register.yaml
 ```
 
 ### 运行
-
+本项目支持两种运行方式：直接运行源码 或 构建二进制文件后运行。
+方式一：直接运行源码
+在项目根目录下，使用 go run 启动服务：
 ```bash
 go run cmd/main.go
-
-# 或者使用二进制运行
+```
+该方式适用于本地开发与调试场景。
+方式二：构建并运行二进制文件
+1. 构建二进制文件
+通过构建脚本生成可执行文件：
+```bash
 ./build.sh
-
+```
+构建完成后，二进制文件将被安装到指定目录（默认为 /usr/local/bin，可通过修改 Makefile 中的 OUTDIR 进行调整）。
+2. 运行二进制文件
+可以通过运行脚本启动服务：
+```bash
 ./run.sh
 ```
+也可以直接执行构建生成的二进制文件，并手动指定启动参数（其中 --port 为必填参数）：
+```bash
+/usr/local/bin/fd-router \
+  --port 8080 \
+  --splitwise \
+  --config_path ./config/config.yaml
+```
+该方式更适合用于部署及生产环境。
 
 ## 项目结构
 

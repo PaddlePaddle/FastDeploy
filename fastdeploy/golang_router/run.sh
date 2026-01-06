@@ -7,5 +7,5 @@ if [ -n "$PID" ]; then
 fi
 
 echo "Starting new fd-router process..."
-nohup ./output/fd-router --port 8080 --splitwise > fd-router.log 2>&1 &
+nohup /usr/local/bin/fd-router --port 8080 --splitwise > fd-router.log 2>&1 &
 echo "fd-router started with PID: $!"

@@ -1,5 +1,5 @@
 HOMEDIR := $(shell pwd)
-OUTDIR  := $(HOMEDIR)/output
+OUTDIR  := /usr/local/bin
 
 export GOENV = $(HOMEDIR)/go.env
 
@@ -16,8 +16,6 @@ prepare:
 #make compile
 compile: build
 build:
-	rm -rf $(OUTDIR)
-	mkdir -p $(OUTDIR)
 	go build -o $(OUTDIR)/fd-router ./cmd
 
 # make test, test your code
