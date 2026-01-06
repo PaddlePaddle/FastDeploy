@@ -23,7 +23,8 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
     const int q_num_head,
     const int kv_num_head,
     const int max_model_len,
-    const int head_dim) {
+    const int head_dim,
+    const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadEmbT = AlignedVector<float, VecSize>;
   LoadEmbT cos_emb_vec;
@@ -84,7 +85,8 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
     }
 
     // TODO check this correct or not
-    int64_t new_emb_idx = emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * 2 * max_model_len * head_dim : emb_idx;
 
     if (hi < q_num_head + kv_num_head) {
       Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
@@ -126,6 +128,7 @@ void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
                                         const int kv_num_heads,
                                         const int max_model_len,
                                         const int head_dim,
+                                        const bool rope_3d,
                                         const cudaStream_t &stream) {
   assert(head_dim == 128 && "head_dim must be 128");
 
@@ -163,5 +166,6 @@ void gqa_rotary_qk_split_variable_qwen3(T *qkv_out,
       num_heads,
       kv_num_heads,
       max_model_len,
-      head_dim);
+      head_dim,
+      rope_3d);
 }

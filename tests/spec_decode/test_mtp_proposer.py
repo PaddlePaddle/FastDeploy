@@ -141,11 +141,17 @@ class TestMTPProposer(unittest.TestCase):
         # Test is_chunk_prefill_enabled
         self.assertTrue(proposer.is_chunk_prefill_enabled())
 
+    @patch("fastdeploy.spec_decode.mtp.IPCSignal")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_dummy_prefill_inputs_and_kv_cache(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_dummy_prefill_inputs_and_kv_cache(
+        self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls
+    ):
         """Test dummy_prefill_inputs and initialize_kv_cache with different branches"""
+        mock_ipc_signal = Mock()
+        mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
+        mock_ipc_signal_cls.return_value = mock_ipc_signal
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
@@ -180,11 +186,15 @@ class TestMTPProposer(unittest.TestCase):
         proposer.clear_mtp_cache()
         self.assertNotIn("caches", proposer.model_inputs)
 
+    @patch("fastdeploy.spec_decode.mtp.IPCSignal")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_update_mtp_block_num(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_update_mtp_block_num(self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls):
         """Test update_mtp_block_num"""
+        mock_ipc_signal = Mock()
+        mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
+        mock_ipc_signal_cls.return_value = mock_ipc_signal
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
@@ -200,11 +210,15 @@ class TestMTPProposer(unittest.TestCase):
         self.assertEqual(proposer.main_model_num_gpu_blocks, 20)
         self.assertIn("free_list", proposer.model_inputs)
 
+    @patch("fastdeploy.spec_decode.mtp.IPCSignal")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_insert_tasks_v1(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_insert_tasks_v1(self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls):
         """Test insert_tasks_v1 with different request types"""
+        mock_ipc_signal = Mock()
+        mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
+        mock_ipc_signal_cls.return_value = mock_ipc_signal
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
@@ -327,11 +341,17 @@ class TestMTPProposer(unittest.TestCase):
         request.disaggregate_info = None
         proposer.insert_prefill_inputs([request], 1)
 
+    @patch("fastdeploy.spec_decode.mtp.IPCSignal")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_forward_meta_and_exist_prefill(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_forward_meta_and_exist_prefill(
+        self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls
+    ):
         """Test _initialize_forward_meta, _initialize_forward_meta_xpu, and exist_prefill"""
+        mock_ipc_signal = Mock()
+        mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
+        mock_ipc_signal_cls.return_value = mock_ipc_signal
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
@@ -497,11 +517,17 @@ class TestMTPProposer(unittest.TestCase):
         ):
             proposer._run_impl(full_hidden_states)
 
+    @patch("fastdeploy.spec_decode.mtp.IPCSignal")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.spec_decode.mtp.get_rope")
-    def test_padding_cudagraph_inputs_and_empty_cache(self, mock_rope, mock_attn_backend, mock_model_loader):
+    def test_padding_cudagraph_inputs_and_empty_cache(
+        self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls
+    ):
         """Test padding_cudagraph_inputs and _empty_cache"""
+        mock_ipc_signal = Mock()
+        mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
+        mock_ipc_signal_cls.return_value = mock_ipc_signal
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
