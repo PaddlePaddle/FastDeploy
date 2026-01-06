@@ -478,7 +478,6 @@ class XPUModelRunner(ModelRunnerBase):
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
-        self.share_inputs["preempted_idx"] = []
 
         req_len = len(req_dicts)
         has_prefill_task = False
@@ -558,7 +557,7 @@ class XPUModelRunner(ModelRunnerBase):
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
-                self.share_inputs["preempted_idx"].append(idx)
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
@@ -1003,7 +1002,7 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
-        self.share_inputs["preempted_idx"] = []
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
