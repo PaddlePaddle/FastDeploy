@@ -643,6 +643,11 @@ class ResourceManagerV1(ResourceManager):
                     llm_logger.debug(
                         f"scheduler prefill task: {request} request.need_prefill_tokens {request.need_prefill_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                     )
+                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
+                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
+                    ):
+                        req_index += 1
+                        continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
