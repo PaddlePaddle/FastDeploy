@@ -1,0 +1,428 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import tempfile
+import unittest
+
+import numpy as np
+import paddle
+import paddle.device.cuda.graphs as graphs
+
+from fastdeploy.config import (
+    CacheConfig,
+    CommitConfig,
+    DeviceConfig,
+    EarlyStopConfig,
+    FDConfig,
+    GraphOptimizationConfig,
+    LoadConfig,
+    ModelConfig,
+    ParallelConfig,
+    SchedulerConfig,
+    SpeculativeConfig,
+)
+from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
+from fastdeploy.model_executor.layers.attention import (
+    AttentionBackend,
+    get_attention_backend,
+)
+from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+    allocate_launch_related_buffer,
+)
+from fastdeploy.model_executor.layers.quantization.mix_quant import MixQuantConfig
+from fastdeploy.model_executor.models.deepseek_v3 import DeepseekV3MLAAttention
+from fastdeploy.model_executor.ops.gpu import (
+    get_padding_offset,
+    get_position_ids_and_mask_encoder_batch,
+)
+from fastdeploy.worker.worker_process import init_distributed_environment
+
+if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
+    # (ZKK): CI machine.
+    os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+
+
+class TestAttentionPerformance(unittest.TestCase):
+    def setUp(self):
+        """
+        Set up the testing environment before each test.
+        This includes creating configurations, initializing the model,
+        and preparing a random state dictionary.
+        """
+        print("Setting up test environment...")
+        paddle.set_device("gpu")
+        paddle.set_default_dtype("bfloat16")
+        init_distributed_environment()
+
+        self.model_dir = self.create_model_config_json()
+        tp_size = paddle.distributed.get_world_size()
+
+        self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=tp_size)
+        self.fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        attn_cls = get_attention_backend()
+        self.attn_backend = attn_cls(
+            self.fd_config,
+            kv_num_heads=self.fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=self.fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=self.fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = self.fd_config.model_config.num_hidden_layers
+        self.attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            self.attention_layer[i] = DeepseekV3MLAAttention(self.fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
+            self.attention_layer[i].load_state_dict(state_dict)
+
+        def attn_forward(forward_meta, hidden_states):
+            for i in range(num_layers):
+                haha = self.attention_layer[i](
+                    forward_meta, hidden_states, forward_meta.position_ids, forward_meta.mask_encoder_batch
+                )
+
+            return haha
+
+        self.attn_forward = attn_forward
+
+        self.cache_quant_type_str = getattr(self.attention_layer[0].mla_attn, "cache_quant_type_str", "none")
+
+        self.position_ids_buffer = paddle.empty([self.fd_config.model_config.max_model_len], dtype=paddle.int32)
+        self.mask_encoder_batch_buffer = paddle.empty(
+            [self.fd_config.model_config.max_model_len, 1], dtype=paddle.int32
+        )
+
+        print("===== Initialization Complete =====")
+
+    def tearDown(self):
+        """
+        Clean up the environment after each test.
+        """
+        print("\nTearing down test environment...")
+        if os.path.exists(self.model_dir):
+            shutil.rmtree(self.model_dir)
+            print(f"Successfully removed temporary directory: {self.model_dir}")
+
+    # region Helper Functions
+    def create_model_config_json(self) -> str:
+        """
+        Creates a temporary directory and writes the model configuration to a 'config.json' file.
+        """
+        config_dict = {
+            "architectures": ["DeepseekV3ForCausalLM"],
+            "dtype": "bfloat16",
+            "max_position_embeddings": 128 * 1024,
+            "max_model_len": 128 * 1024,
+            "head_dim": 128,
+            "hidden_size": 7168,
+            "num_attention_heads": 128,
+            "num_key_value_heads": 128,
+            "num_hidden_layers": 40,
+            "q_lora_rank": 1536,
+            "kv_lora_rank": 512,
+            "qk_nope_head_dim": 128,
+            "qk_rope_head_dim": 64,
+            "v_head_dim": 128,
+            "rope_scaling": {
+                "beta_fast": 32,
+                "beta_slow": 1,
+                "factor": 40,
+                "mscale": 1.0,
+                "mscale_all_dim": 1.0,
+                "original_max_position_embeddings": 4096,
+                "type": "yarn",
+            },
+        }
+        model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
+        config_path = os.path.join(model_dir, "config.json")
+        with open(config_path, "w") as f:
+            json.dump(config_dict, f, indent=4)
+        print(f"Successfully created config.json at: {config_path}")
+        return model_dir
+
+    def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1):
+        """Creates a complete FDConfig from a model path."""
+        model_args = {"model": model_path, "dtype": "bfloat16"}
+        model_config = ModelConfig(model_args)
+        model_config.tensor_parallel_size = tensor_parallel_size
+        parallel_config = ParallelConfig({"tensor_parallel_size": tensor_parallel_size, "data_parallel_size": 1})
+        cache_config = CacheConfig(
+            {
+                "block_size": 64,
+                "model_cfg": model_config,
+                "tensor_parallel_size": tensor_parallel_size,
+            }
+        )
+        return FDConfig(
+            model_config=model_config,
+            cache_config=cache_config,
+            parallel_config=parallel_config,
+            scheduler_config=SchedulerConfig({}),
+            load_config=LoadConfig({}),
+            quant_config=MixQuantConfig(
+                dense_quant_type="block_wise_fp8",
+                moe_quant_type="block_wise_fp8",
+                kv_cache_quant_type=None,
+            ),
+            graph_opt_config=GraphOptimizationConfig({}),
+            commit_config=CommitConfig(),
+            device_config=DeviceConfig({}),
+            speculative_config=SpeculativeConfig({}),
+            early_stop_config=EarlyStopConfig({}),
+        )
+
+    def create_random_attention_state_dict(self, fd_config: FDConfig, prefix: str) -> dict:
+        """
+        Creates a state_dict with random weights for the Ernie4_5_Attention layer.
+        """
+        hidden_size = fd_config.model_config.hidden_size
+        tensor_dtype = getattr(paddle, fd_config.model_config.dtype)
+
+        q_lora_rank = fd_config.model_config.q_lora_rank
+        kv_lora_rank = fd_config.model_config.kv_lora_rank
+        qk_rope_head_dim = fd_config.model_config.qk_rope_head_dim
+        qk_nope_head_dim = fd_config.model_config.qk_nope_head_dim
+        v_head_dim = fd_config.model_config.v_head_dim
+        qk_head_dim = self.attention_layer[0].qk_head_dim
+
+        o_proj_input_dim = fd_config.model_config.num_attention_heads * v_head_dim
+        o_proj_weight_shape = [o_proj_input_dim, hidden_size]
+
+        o_proj_weight = paddle.randn(o_proj_weight_shape, dtype=tensor_dtype)
+
+        # 这个权重是做1536的rmsnorm！
+        q_a_layernorm = paddle.randn([q_lora_rank])
+
+        q_a_proj = paddle.randn([hidden_size, q_lora_rank])
+        kv_a_proj_with_mqa = paddle.randn([hidden_size, kv_lora_rank + qk_rope_head_dim])
+
+        kv_a_layernorm = paddle.randn([kv_lora_rank])
+
+        q_b_proj = paddle.randn([q_lora_rank, fd_config.model_config.num_attention_heads * qk_head_dim])
+        kv_b_proj = paddle.randn(
+            [kv_lora_rank, fd_config.model_config.num_key_value_heads * (qk_nope_head_dim + v_head_dim)]
+        )
+
+        state_dict = {
+            f"{prefix}.q_a_layernorm.weight": q_a_layernorm,
+            f"{prefix}.q_a_proj.weight": q_a_proj,
+            f"{prefix}.kv_a_proj_with_mqa.weight": kv_a_proj_with_mqa,
+            f"{prefix}.kv_a_layernorm.weight": kv_a_layernorm,
+            f"{prefix}.q_b_proj.weight": q_b_proj,
+            f"{prefix}.kv_b_proj.weight": kv_b_proj,
+            f"{prefix}.o_proj.weight": o_proj_weight,
+        }
+        return state_dict
+
+    def create_forward_meta(
+        self,
+        batch_size: int,
+        seq_len: int,
+        mode: ForwardMode,
+        fd_config: FDConfig,
+        attn_backend: AttentionBackend,
+        cache_quant_type_str: str = "none",
+    ) -> ForwardMeta:
+        """
+        Creates a high-fidelity ForwardMeta object.
+        """
+        if mode == ForwardMode.EXTEND:
+            seq_lens_encoder = paddle.full([batch_size], seq_len, dtype="int32")
+            seq_lens_decoder = paddle.zeros([batch_size], dtype="int32")
+            seq_lens_this_time = seq_lens_encoder
+        elif mode == ForwardMode.DECODE:
+            seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
+            seq_lens_decoder = paddle.full([batch_size], seq_len, dtype="int32")
+            seq_lens_this_time = paddle.ones([batch_size], dtype="int32")
+        else:
+            raise ValueError(f"Unsupported ForwardMode: {mode}")
+
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+        attn_backend_buffers = allocate_launch_related_buffer(
+            max_batch_size=batch_size,
+            max_model_len=fd_config.model_config.max_model_len,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+            decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            block_size=fd_config.cache_config.block_size,
+        )
+
+        block_size = fd_config.cache_config.block_size
+        max_model_len = fd_config.model_config.max_model_len
+        max_blocks_per_seq = (max_model_len + block_size - 1) // block_size
+        allocated_blocks_per_seq = seq_len // block_size + 1
+        allocated_num_blocks = allocated_blocks_per_seq * batch_size
+        num_layers = fd_config.model_config.num_hidden_layers
+        cache_type = fd_config.model_config.dtype
+
+        cache_shape = self.attn_backend.get_kv_cache_shape(allocated_num_blocks)
+        caches = []
+        for _ in range(num_layers):
+            key_cache = paddle.randint(0, 255, shape=cache_shape[0], dtype="int32").cast(cache_type)
+            caches.extend([key_cache])
+
+        block_tables = paddle.zeros(shape=(batch_size, max_blocks_per_seq), dtype="int32")
+        for i in range(batch_size):
+            for j in range(allocated_blocks_per_seq):
+                block_tables[i, j] = i * allocated_blocks_per_seq + j
+
+        input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
+        token_num = np.sum(seq_lens_this_time)
+        ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
+            input_ids, seq_lens_this_time, token_num
+        )
+
+        forward_meta = ForwardMeta(
+            ids_remove_padding=ids_remove_padding,
+            seq_lens_encoder=seq_lens_encoder,
+            seq_lens_decoder=seq_lens_decoder,
+            seq_lens_this_time=seq_lens_this_time,
+            cu_seqlens_q=cu_seqlens_q,
+            cu_seqlens_k=cu_seqlens_k,
+            batch_id_per_token=batch_id_per_token,
+            block_tables=block_tables,
+            caches=caches,
+            step_use_cudagraph=False,
+            attn_backend=attn_backend,
+            forward_mode=ForwardMode.MIXED,
+            **attn_backend_buffers,
+        )
+
+        hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
+
+        position_ids = self.position_ids_buffer[:token_num]
+        mask_encoder_batch = self.mask_encoder_batch_buffer[:token_num]
+
+        get_position_ids_and_mask_encoder_batch(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            position_ids,
+            mask_encoder_batch,
+        )
+
+        forward_meta.position_ids = position_ids
+        forward_meta.mask_encoder_batch = mask_encoder_batch
+
+        return forward_meta, hidden_states
+
+    def test_decode_performance_with_prefill(self):
+        # Test parameters
+        test_steps = 100
+
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
+
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=self.fd_config,
+            attn_backend=self.attn_backend,
+            cache_quant_type_str=self.cache_quant_type_str,
+        )
+
+        self.attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(forward_meta, prefill_hidden_states)
+
+        paddle.device.synchronize()
+
+        # import paddle.profiler as profiler
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+        # p.start()
+        # p.step()
+
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
+
+            self.attn_forward(forward_meta, prefill_hidden_states)
+
+            end_events[i].record()
+        paddle.device.synchronize()
+
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+        # p.stop()
+
+        # return
+
+        # import paddle.profiler as profiler
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+
+        # p.start()
+        # p.step()
+
+        for decode_batch_size in [10]:
+            forward_meta, hidden_states = self.create_forward_meta(
+                batch_size=decode_batch_size,
+                seq_len=80 * 1024,
+                mode=ForwardMode.DECODE,
+                fd_config=self.fd_config,
+                attn_backend=self.attn_backend,
+                cache_quant_type_str=self.cache_quant_type_str,
+            )
+
+            self.attn_backend.init_attention_metadata(forward_meta)
+
+            paddle.device.synchronize()
+
+            # 必须要先预热一次！因为预处理被放到了第一层再做了！
+            self.attn_forward(forward_meta, hidden_states)
+
+            attn_cuda_graphs = graphs.CUDAGraph()
+            attn_cuda_graphs.capture_begin()
+
+            self.attn_forward(forward_meta, hidden_states)
+
+            attn_cuda_graphs.capture_end()
+
+            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+            for i in range(test_steps):
+                start_events[i].record()
+
+                attn_cuda_graphs.replay()
+
+                end_events[i].record()
+            paddle.device.synchronize()
+
+            times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+            print(decode_batch_size)
+            print(times[-5:])
+
+            del forward_meta
+
+        # p.stop()
+
+
+if __name__ == "__main__":
+    unittest.main()
