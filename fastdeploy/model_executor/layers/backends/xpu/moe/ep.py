@@ -450,7 +450,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         **kwargs,
     ):
         expertwise_scale = kwargs.get("expertwise_scale", None)
-        use_fp8 = expertwise_scale is not None
+        use_fp8 = kwargs.get("use_fp8", False)
         quant_group_size = kwargs.get("quant_group_size", -1)
 
         (
