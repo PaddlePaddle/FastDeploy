@@ -34,6 +34,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.input_batch import InputBatch
 
 
 # Mock classes and constants needed for the test
@@ -43,17 +44,25 @@ class MockConfig:
         enable_logprob = False
         max_logprobs = -1
         logprobs_mode = "raw_logprobs"
+        enable_mm = False
 
     class SchedulerConfig:
         max_num_seqs = 6
 
+    class ParallelConfig:
+        enable_expert_parallel = False
+
     class CacheConfig:
         enable_prefix_caching = False
 
-    speculative_config = None
+    class SpecaulativeConfig:
+        method = None
+
+    speculative_config = SpecaulativeConfig()
     model_config = ModelConfig()
     scheduler_config = SchedulerConfig()
     cache_config = CacheConfig()
+    parallel_config = ParallelConfig()
 
 
 class MockTask:
@@ -148,13 +157,14 @@ class TestGPUPromptLogprobs(unittest.TestCase):
         cfg.model_config.ori_vocab_size = 128
         cfg.model_config.vocab_size = 128
         cfg.model_config.hidden_size = 64
+        cfg.speculative_config.method = None
 
         model_runner = GPUModelRunner.__new__(GPUModelRunner)
         model_runner.fd_config = cfg
         model_runner.scheduler_config = cfg.scheduler_config
         model_runner.ori_vocab_size = cfg.model_config.ori_vocab_size
-        model_runner.share_inputs = {}
-        model_runner.share_inputs["cu_seqlens_q"] = paddle.to_tensor([0, 1, 2, 3], dtype="int32")
+        model_runner.share_inputs = InputBatch(cfg)
+        model_runner.share_inputs.cu_seqlens_q = paddle.to_tensor([0, 1, 2, 3], dtype="int32")
         model_runner.sampler = Sampler(get_fd_config(batch_size=1))
 
         model_runner.model = FakeModel(cfg.model_config.vocab_size, cfg.model_config.hidden_size)

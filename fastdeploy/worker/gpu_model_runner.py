@@ -190,6 +190,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
+        self.share_inputs.init_share_inputs()
         increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )

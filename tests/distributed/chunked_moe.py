@@ -55,6 +55,9 @@ class MockModelConfig:
     moe_phase = MoEPhase(phase="prefill")
     hidden_size = 1536
     enable_mm = False
+    rope_theta = 1000
+    partial_rotary_factor = 0.5
+    architectures = ["mock"]
 
 
 class MockCacheConfig:
@@ -136,6 +139,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.use_cudagraph = False
         model_runner.speculative_decoding = False
         model_runner.share_inputs = InputBatch(mock_fd_config)
+        model_runner.share_inputs.init_share_inputs()
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
 

@@ -83,6 +83,7 @@ class InputBatch:
         """
         self.num_running_requests = 0
         self.running_requests_ids = []
+        self.fd_config: FDConfig = fd_config
         self.model_config: ModelConfig = fd_config.model_config
         self.cache_config: CacheConfig = fd_config.cache_config
         self.scheduler_config = fd_config.scheduler_config
@@ -90,10 +91,11 @@ class InputBatch:
         self.speculative_decoding = self.speculative_config.method is not None
         self.enable_mm = self.model_config.enable_mm
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
-
-        max_num_seqs = fd_config.scheduler_config.max_num_seqs
-
         self.index_to_batch_id = {}
+
+    def init_share_inputs(self):
+        max_num_seqs = self.scheduler_config.max_num_seqs
+
         self.pre_ids = paddle.full(
             [max_num_seqs, self.model_config.max_model_len],
             -1,
@@ -297,7 +299,7 @@ class InputBatch:
             self.image_features_list = None
 
         # For logits processors
-        self.logits_processors = build_logits_processors(fd_config)
+        self.logits_processors = build_logits_processors(self.fd_config)
         self.logits_processors_args = [{} for _ in range(max_num_seqs)]
         logger.info(f"Enabled logits processors: {self.logits_processors}")
 
@@ -443,69 +445,75 @@ class ProposerInputBatch(InputBatch):
         self.enable_mm = fd_config.model_config.enable_mm
         self.num_model_steps = fd_config.speculative_config.num_model_steps
         self.index_to_batch_id = {}
+        self.target_model_input_batch = target_model_input_batch
+        self.fd_config: FDConfig = fd_config
+        self.scheduler_config = fd_config.scheduler_config
+        self.model_config: ModelConfig = fd_config.model_config
+        self.cache_config: CacheConfig = fd_config.cache_config
+        self.speculative_config: SpeculativeConfig = fd_config.speculative_config
 
-        self.block_tables = paddle.clone(target_model_input_batch["block_tables"])
-        self.input_ids = paddle.clone(target_model_input_batch["input_ids"])
+    def init_share_inputs(self):
+        self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
+        self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
         self.input_ids_cpu = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs, fd_config.model_config.max_model_len],
+            shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
             fill_value=-1,
             dtype="int64",
         ).cpu()
-        self.seq_lens_this_time_buffer = paddle.clone(target_model_input_batch["seq_lens_this_time"])
+        self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
-        self.seq_lens_encoder = paddle.clone(target_model_input_batch["seq_lens_encoder"])
-        self.seq_lens_decoder = paddle.clone(target_model_input_batch["seq_lens_decoder"])
-        self.step_idx = paddle.clone(target_model_input_batch["step_idx"])
-        self.stop_flags = paddle.clone(target_model_input_batch["stop_flags"])
-        self.stop_nums = paddle.clone(target_model_input_batch["stop_nums"])
+        self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
+        self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
+        self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
+        self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
+        self.stop_nums = paddle.clone(self.target_model_input_batch["stop_nums"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
-        self.pre_ids = paddle.clone(target_model_input_batch["pre_ids"])
-        self.output_cum_offsets = paddle.clone(target_model_input_batch["output_cum_offsets"])
-        self.output_padding_offset = paddle.clone(target_model_input_batch["output_padding_offset"])
-        self.ids_remove_padding = paddle.clone(target_model_input_batch["ids_remove_padding"])
-        self.batch_id_per_token = paddle.clone(target_model_input_batch["batch_id_per_token"])
-        self.cu_seqlens_q = paddle.clone(target_model_input_batch["cu_seqlens_q"])
-        self.cu_seqlens_k = paddle.clone(target_model_input_batch["cu_seqlens_k"])
+        self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+        self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
+        self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+        self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
+        self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
+        self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
+        self.cu_seqlens_k = paddle.clone(self.target_model_input_batch["cu_seqlens_k"])
 
         self.target_hidden_states = paddle.full(
             [
-                fd_config.scheduler_config.max_num_batched_tokens
-                + fd_config.scheduler_config.max_extra_num_batched_tokens,
-                fd_config.model_config.hidden_size,
+                self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                self.model_config.hidden_size,
             ],
             0,
             dtype="bfloat16",
         )
 
-        tmp_position_ids = paddle.arange(fd_config.model_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
         from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 
         self.rope_emb = get_rope(
-            rotary_dim=fd_config.model_config.head_dim,
+            rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
-            base=fd_config.model_config.rope_theta,
-            model_config=fd_config.model_config,
+            base=self.model_config.rope_theta,
+            model_config=self.model_config,
         )
 
         # self.caches = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
-        self.prompt_lens = target_model_input_batch["prompt_lens"]
-        self.top_p = target_model_input_batch["top_p"]
-        self.top_k = target_model_input_batch["top_k"]
-        self.temperature = target_model_input_batch["temperature"]
-        self.eos_token_id = target_model_input_batch["eos_token_id"]
-        self.penalty_score = target_model_input_batch["penalty_score"]
-        self.frequency_score = target_model_input_batch["frequency_score"]
-        self.presence_score = target_model_input_batch["presence_score"]
-        self.infer_seed = target_model_input_batch["infer_seed"]
+        self.prompt_lens = self.target_model_input_batch["prompt_lens"]
+        self.top_p = self.target_model_input_batch["top_p"]
+        self.top_k = self.target_model_input_batch["top_k"]
+        self.temperature = self.target_model_input_batch["temperature"]
+        self.eos_token_id = self.target_model_input_batch["eos_token_id"]
+        self.penalty_score = self.target_model_input_batch["penalty_score"]
+        self.frequency_score = self.target_model_input_batch["frequency_score"]
+        self.presence_score = self.target_model_input_batch["presence_score"]
+        self.infer_seed = self.target_model_input_batch["infer_seed"]
 
-        self.max_dec_len = target_model_input_batch["max_dec_len"]
-        self.min_dec_len = target_model_input_batch["min_dec_len"]
+        self.max_dec_len = self.target_model_input_batch["max_dec_len"]
+        self.min_dec_len = self.target_model_input_batch["min_dec_len"]
 
-        self.bad_tokens = target_model_input_batch["bad_tokens"]
+        self.bad_tokens = self.target_model_input_batch["bad_tokens"]
 
         # Integraad_tokens"]te the updated results in model forward
-        self.base_model_draft_tokens = target_model_input_batch["draft_tokens"]
+        self.base_model_draft_tokens = self.target_model_input_batch["draft_tokens"]
         self.substep = 0
 
         # Declare AttentionBackend buffers
@@ -524,16 +532,16 @@ class ProposerInputBatch(InputBatch):
 
         # Input tokens
         self.draft_tokens = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs, fd_config.speculative_config.num_speculative_tokens + 1],
+            shape=[self.scheduler_config.max_num_seqs, self.speculative_config.num_speculative_tokens + 1],
             fill_value=-1,
             dtype="int64",
         )
 
-        self.encoder_block_lens = paddle.clone(target_model_input_batch["encoder_block_lens"])
+        self.encoder_block_lens = paddle.clone(self.target_model_input_batch["encoder_block_lens"])
         self.free_list = list(
             range(
-                fd_config.cache_config.total_block_num - 1,
-                int(fd_config.cache_config.total_block_num * fd_config.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -542,58 +550,50 @@ class ProposerInputBatch(InputBatch):
         self.free_list = paddle.to_tensor(self.free_list, dtype="int32")
         self.free_list_len = paddle.full(shape=[1], fill_value=self.free_list_len, dtype="int32")
 
-        self.is_block_step = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool"
-        )
-        self.batch_drop = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool"
-        )
-        self.used_list_len = paddle.full(shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
+        self.is_block_step = paddle.full(shape=[self.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool")
+        self.batch_drop = paddle.full(shape=[self.scheduler_config.max_num_seqs, 1], fill_value=False, dtype="bool")
+        self.used_list_len = paddle.full(shape=[self.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
 
         if self.num_model_steps > 1:
             self.last_seq_lens_this_time = paddle.full_like(
-                target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
+                self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
-        self.input_ids_len = paddle.zeros(shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype="int64").cpu()
-        self.temp_scaled_logprobs = target_model_input_batch["temp_scaled_logprobs"]
-        self.top_p_normalized_logprobs = target_model_input_batch["top_p_normalized_logprobs"]
-        self.accept_num = target_model_input_batch["accept_num"]
-        self.accept_tokens = target_model_input_batch["accept_tokens"]
-        self.draft_logits = target_model_input_batch["draft_logits"]
+        self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64").cpu()
+        self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
+        self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
+        self.accept_num = self.target_model_input_batch["accept_num"]
+        self.accept_tokens = self.target_model_input_batch["accept_tokens"]
+        self.draft_logits = self.target_model_input_batch["draft_logits"]
         self.first_token_hidden_states = paddle.full(
-            [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.hidden_size], -1
+            [self.scheduler_config.max_num_seqs, self.model_config.hidden_size], -1
         )
-        self.batch_token_num = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32"
-        )
-        self.next_token_num = paddle.full(shape=[fd_config.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
+        self.batch_token_num = paddle.full(shape=[self.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
+        self.next_token_num = paddle.full(shape=[self.scheduler_config.max_num_seqs], fill_value=0, dtype="int32")
         self.cu_batch_token_offset = paddle.full_like(
-            target_model_input_batch["cu_batch_token_offset"], fill_value=0, dtype="int32"
+            self.target_model_input_batch["cu_batch_token_offset"], fill_value=0, dtype="int32"
         )
         self.cu_next_token_offset = paddle.full(
-            shape=[fd_config.scheduler_config.max_num_seqs + 1], fill_value=0, dtype="int32"
+            shape=[self.scheduler_config.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
-        self.mask_rollback = paddle.full([fd_config.scheduler_config.max_num_seqs, 1], 0, dtype="int32")
+        self.mask_rollback = paddle.full([self.scheduler_config.max_num_seqs, 1], 0, dtype="int32")
         # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
         # using the target model's hidden states.
         self.recompute_token_num = paddle.full(
-            [fd_config.scheduler_config.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
+            [self.scheduler_config.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
         )
         # attn_mask
         if self.enable_mm:
             self.attn_mask_offsets = paddle.full(
-                shape=[fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len],
+                shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
                 fill_value=-1,
                 dtype="int32",
             )
             self.attn_mask_offsets_full = paddle.full(
-                [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.max_model_len], -1, dtype="int32"
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
             )
-            self.attn_mask_offsets_decoder = paddle.full(
-                [fd_config.scheduler_config.max_num_seqs, 1], -1, dtype="int32"
-            )
+            self.attn_mask_offsets_decoder = paddle.full([self.scheduler_config.max_num_seqs, 1], -1, dtype="int32")
             self.decode_states = paddle.full(
-                [fd_config.scheduler_config.max_num_seqs, fd_config.speculative_config.num_speculative_tokens + 1],
+                [self.scheduler_config.max_num_seqs, self.speculative_config.num_speculative_tokens + 1],
                 -1,
                 dtype="int32",
             )

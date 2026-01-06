@@ -117,6 +117,7 @@ class MTPProposer(Proposer):
 
         self.sampler = MTPSampler(fd_config)
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
+        self.model_inputs.init_share_inputs()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -184,7 +185,7 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"]
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
     def initialize_kv_cache(self, main_model_num_blocks, profile: bool = False):
         """
@@ -478,7 +479,7 @@ class MTPProposer(Proposer):
 
         # TODO(liuzichang): Solve splitewise-p bug to restore
         # self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"][:num_running_requests]
-        self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"]
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
@@ -499,7 +500,7 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            self.input_ids_len[idx] = length - 1
+            self.model_inputs.input_ids_len[idx] = length - 1
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -562,7 +563,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"]
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
     def _initialize_forward_meta(self, step_use_cudagraph: bool = False):
         """

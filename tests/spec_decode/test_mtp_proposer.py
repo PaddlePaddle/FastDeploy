@@ -114,7 +114,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_init_and_config_methods(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test initialization and config update methods"""
         mock_model = Mock()
@@ -143,7 +143,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_dummy_prefill_inputs_and_kv_cache(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test dummy_prefill_inputs and initialize_kv_cache with different branches"""
         mock_model = Mock()
@@ -182,7 +182,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_update_mtp_block_num(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test update_mtp_block_num"""
         mock_model = Mock()
@@ -202,7 +202,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_insert_tasks_v1(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test insert_tasks_v1 with different request types"""
         mock_model = Mock()
@@ -281,7 +281,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_insert_prefill_inputs(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test insert_prefill_inputs with different roles and chunked prefill"""
         mock_model = Mock()
@@ -329,7 +329,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_forward_meta_and_exist_prefill(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test _initialize_forward_meta, _initialize_forward_meta_xpu, and exist_prefill"""
         mock_model = Mock()
@@ -344,7 +344,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.initialize_kv_cache(main_model_num_blocks=10)
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
         # Test _initialize_forward_meta
         proposer._initialize_forward_meta(step_use_cudagraph=False)
@@ -366,7 +366,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.draft_model_preprocess")
     @patch("fastdeploy.spec_decode.mtp.eagle_get_hidden_states")
     def test_prepare_inputs_and_post_process(
@@ -387,7 +387,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         full_hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
         # Test _prepare_inputs
         proposer._prepare_inputs(full_hidden_states)
@@ -401,7 +401,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_update_task_chunk_prefill(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test update_task_chunk_prefill"""
         mock_model = Mock()
@@ -415,7 +415,7 @@ class TestMTPProposer(unittest.TestCase):
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
         task = Mock()
         task.idx = 0
@@ -437,7 +437,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.draft_model_postprocess")
     @patch("fastdeploy.spec_decode.mtp.mtp_step_paddle")
     def test_update_status(self, mock_mtp_step, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader):
@@ -455,7 +455,7 @@ class TestMTPProposer(unittest.TestCase):
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
         # Test with ENABLE_V1_KVCACHE_SCHEDULER=False
         with patch("fastdeploy.spec_decode.mtp.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
@@ -464,7 +464,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.hybrid_mtp_ngram")
     def test_extend_draft_token_and_run_impl(self, mock_ngram, mock_rope, mock_attn_backend, mock_model_loader):
         """Test _extend_draft_token_with_ngram_match and _run_impl"""
@@ -499,7 +499,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_padding_cudagraph_inputs_and_empty_cache(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Test padding_cudagraph_inputs and _empty_cache"""
         mock_model = Mock()
@@ -514,7 +514,7 @@ class TestMTPProposer(unittest.TestCase):
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.initialize_kv_cache(main_model_num_blocks=10)
-        proposer.model_inputs["seq_lens_this_time"] = proposer.seq_lens_this_time_buffer
+        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
         proposer._initialize_forward_meta()
 
         # Test padding_cudagraph_inputs with step_use_cudagraph=True
@@ -529,7 +529,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.current_platform")
     def test_cache_type_branches(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
         """Cover _get_cache_type CUDA/XPU/unsupported branches"""
@@ -565,7 +565,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_init_model_inputs_with_mm(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Init model inputs with enable_mm=True to cover attn_mask buffers"""
         mock_model = Mock()
@@ -586,7 +586,7 @@ class TestMTPProposer(unittest.TestCase):
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     def test_insert_tasks_v1_preempted(self, mock_rope, mock_attn_backend, mock_model_loader):
         """Cover RequestType.PREEMPTED branch in insert_tasks_v1"""
         mock_model = Mock()
@@ -618,7 +618,7 @@ class TestMTPProposer(unittest.TestCase):
         proposer.insert_tasks_v1([request], 1)
 
         self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
-        self.assertEqual(proposer.seq_lens_this_time_buffer[0].item(), 0)
+        self.assertEqual(proposer.model_inputs["seq_lens_this_time_buffer"][0].item(), 0)
 
 
 if __name__ == "__main__":
