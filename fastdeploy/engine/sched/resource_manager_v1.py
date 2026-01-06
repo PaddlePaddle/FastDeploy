@@ -653,6 +653,13 @@ class ResourceManagerV1(ResourceManager):
                         f"request.need_prefill_tokens {request.need_prefill_tokens},"
                         f"request.num_computed_tokens {request.num_computed_tokens}"
                     )
+                    if (
+                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
+                        req_index += 1
+                        continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
