@@ -42,6 +42,10 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
+
+if _TRITON_AVAILABLE:
+    from fastdeploy.model_executor.ops.triton_ops import qk_rmsnorm_fused
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
@@ -229,10 +233,21 @@ class Glm4MoeAttention(nn.Layer):
         qkv_out = self.qkv_proj(hidden_states)
 
         if self.use_qk_norm:
-            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
-            qkv_out = paddle.concat([q, k, v], axis=-1)
+            if _TRITON_AVAILABLE:
+                qkv_out = qk_rmsnorm_fused(
+                    qkv_out,
+                    self.q_norm.weight,
+                    self.k_norm.weight,
+                    self.fd_config.model_config.rms_norm_eps,
+                    self.q_size,
+                    self.kv_size,
+                    self.head_dim,
+                )
+            else:
+                q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
+                q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
+                k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
+                qkv_out = paddle.concat([q, k, v], axis=-1)
 
         atten_out = self.attn(
             qkv=qkv_out,

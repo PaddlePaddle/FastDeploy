@@ -28,7 +28,6 @@ paddle.seed(99)
 
 class TestQKNorm(unittest.TestCase):
     def setUp(self) -> None:
-        self.architectures = ["Qwen3MoeForCausalLM"]
         # Qwen3-30B-A3B TP1
         self.hidden_size = 2048
         self.num_attention_heads = 32
@@ -45,6 +44,15 @@ class TestQKNorm(unittest.TestCase):
         # self.num_hidden_layers = 94
         # self.head_dim = 128
         # self.rms_norm_eps = 1e-6
+        # self.tp_size = 4
+
+        #  # GLM_4.6 TP4
+        # self.hidden_size = 5120
+        # self.num_attention_heads = 96
+        # self.num_key_value_heads = 8
+        # self.num_hidden_layers = 92
+        # self.head_dim = 128
+        # self.rms_norm_eps = 1e-5
         # self.tp_size = 4
 
         self.num_kv_heads_replicas = max(1, self.tp_size // self.num_key_value_heads)
@@ -92,7 +100,7 @@ class TestQKNorm(unittest.TestCase):
         tester_paddle.benchmark(
             input_size=self.head_dim
             * (self.num_attention_heads // self.tp_size + 2 * self.num_key_value_heads // self.tp_size),
-            batch_sizes=[1, 8, 64, 128, 1024, 2048],
+            batch_sizes=[1, 8, 64, 128, 1024, 2048, 4096, 8192],
         )
 
     def test_qk_norm_fused_performance(self):
@@ -104,7 +112,7 @@ class TestQKNorm(unittest.TestCase):
         tester.benchmark(
             input_size=self.head_dim
             * (self.num_attention_heads // self.tp_size + 2 * self.num_key_value_heads // self.tp_size),
-            batch_sizes=[1, 8, 64, 128, 1024, 2048],
+            batch_sizes=[1, 8, 64, 128, 1024, 2048, 4096, 8192],
         )
 
     def test_qk_norm_result(self):
