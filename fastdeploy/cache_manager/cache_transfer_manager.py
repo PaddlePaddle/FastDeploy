@@ -59,6 +59,7 @@ def parse_args():
         default="mixed",
         help="splitwise role, can be decode, prefill or mixed",
     )
+    parser.add_argument("--model_id", type=str, default="default", help="model id")
     parser.add_argument("--rank", type=int, default=0, help="local tp rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--max_model_len", type=int, default=32768, help="max model length")
@@ -159,6 +160,7 @@ class CacheTransferManager:
         self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
 
         # extract other arg values
+        self.model_id = args.model_id
         self.n_ranks = args.mp_num
         self.rank = args.rank
         self.device = args.device_id
@@ -239,6 +241,7 @@ class CacheTransferManager:
         elif args.kvcache_storage_backend == "attention_store":
             logger.info("Start initialize attention store...")
             self.storage_backend = AttentionStore(
+                namespace=self.model_id,
                 shard_id=self.rank,
                 shard_num=self.n_ranks,
                 layer_num=self.num_layers + self.num_extra_layers,
