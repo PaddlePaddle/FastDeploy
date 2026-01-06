@@ -210,6 +210,7 @@ class ResourceManagerV1(ResourceManager):
             envs.FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
         )  # int
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
+        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
         self.can_relax_prefill_strategy = True
 
     def allocated_slots(self, request: Request):
@@ -306,6 +307,7 @@ class ResourceManagerV1(ResourceManager):
                 can_schedule = True
                 break
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
+        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
         self.can_relax_prefill_strategy = False
         return can_schedule
 
@@ -796,8 +798,9 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+                self.current_reserve_output_block_num_float -= self.decay_output_block_num
                 self.current_reserve_output_block_num = max(
-                    int(self.current_reserve_output_block_num - self.decay_output_block_num),
+                    int(self.current_reserve_output_block_num_float),
                     self.min_reserve_output_block_num,
                     0,
                 )
