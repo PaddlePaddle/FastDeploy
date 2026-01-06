@@ -217,6 +217,7 @@ class ModelConfig:
         self.revision = None
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
+        self.enable_vision_embedding_refactored = False
         self.enable_entropy = False
 
         self.partial_rotary_factor: float = 1.0

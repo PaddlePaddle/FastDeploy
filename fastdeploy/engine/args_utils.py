@@ -507,6 +507,10 @@ class EngineArgs:
     Configuration for eplb.
     """
 
+    enable_vision_embedding_refactored: bool = False
+    """
+    Flag to enable vision embedding refactored. Default is False (disabled).
+    """
     routing_replay_config: Optional[Dict[str, Any]] = None
     """
     Flag to rollout routing replay(r3)
@@ -882,6 +886,12 @@ class EngineArgs:
             nargs="+",
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
+        )
+        model_group.add_argument(
+            "--enable-vision-embedding-refactored",
+            action="store_true",
+            default=EngineArgs.enable_vision_embedding_refactored,
+            help="Flag to enable vision embedding refactored.",
         )
         model_group.add_argument(
             "--enable-entropy",

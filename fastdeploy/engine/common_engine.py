@@ -1718,6 +1718,7 @@ class EngineService:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_vision_embedding_refactored": self.cfg.model_config.enable_vision_embedding_refactored,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

@@ -879,7 +879,11 @@ def parse_args():
         default=None,
         help="EPLB Configuration.",
     )
-
+    parser.add_argument(
+        "--enable_vision_embedding_refactored",
+        action="store_true",
+        help="Enable vision embedding refactored.",
+    )
     parser.add_argument(
         "--routing_replay_config",
         type=json.loads,
