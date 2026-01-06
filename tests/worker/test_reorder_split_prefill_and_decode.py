@@ -92,6 +92,7 @@ class TestInputBatch:
         """Setup test fixtures"""
         self.fd_config = create_mock_config()
         self.input_batch = InputBatch(self.fd_config)
+        self.input_batch.init_share_inputs()
 
     def test_condense_basic(self):
         """Test basic condense functionality"""
@@ -216,6 +217,7 @@ class TestReorderSplitPrefillAndDecode:
     def test_reorder_decode_first(self):
         """Test reordering with decode requests first"""
         input_batch = InputBatch(self.fd_config)
+        input_batch.init_share_inputs()
         input_batch.num_running_requests = 4
 
         # Set prefill and decode flags - ensure tensor has correct number of elements
@@ -257,6 +259,7 @@ class TestReorderSplitPrefillAndDecode:
     def test_reorder_all_decode(self):
         """Test reordering when all requests are decode"""
         input_batch = InputBatch(self.fd_config)
+        input_batch.init_share_inputs()
         input_batch.num_running_requests = 3
 
         # All requests are decode
@@ -282,6 +285,7 @@ class TestReorderSplitPrefillAndDecode:
     def test_reorder_all_prefill(self):
         """Test reordering when all requests are prefill"""
         input_batch = InputBatch(self.fd_config)
+        input_batch.init_share_inputs()
         input_batch.num_running_requests = 3
 
         # All requests are prefill
