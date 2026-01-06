@@ -352,9 +352,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
-        buffer = self.ep_engine.deepep_engine
-        if buffer is None:
-            raise RuntimeError("DeepEP buffer not initialized!")
 
         (
             num_tokens_per_rank,
@@ -362,7 +359,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             num_tokens_per_expert,
             is_token_in_rank,
             event,
-        ) = buffer.get_dispatch_layout(
+        ) = self.ep_engine.deepep_engine.get_dispatch_layout(
             topk_idx,
             self.ep_engine.num_experts,
             previous_event=kwargs.get("previous_event", None),
@@ -383,7 +380,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "expert_alignment": expert_alignment,
             "previous_event": event,
         }
-        return buffer.dispatch(**dispatch_args)
+        return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
 
     def combine(
         self,
@@ -392,10 +389,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         recv_topk_weights: paddle.Tensor,
         event=None,
     ):
-        buffer = self.ep_engine.deepep_engine
-        if buffer is None:
-            raise RuntimeError("DeepEP buffer not initialized!")
-
         combine_args = {
             "x": tmp_ffn_out,
             "handle": handle,
@@ -403,7 +396,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "topk_weights": recv_topk_weights,
             "previous_event": event,
         }
-        fused_moe_out, _, event = buffer.combine(**combine_args)
+        fused_moe_out, _, event = self.ep_engine.deepep_engine.combine(**combine_args)
 
         return fused_moe_out, event
 
@@ -464,8 +457,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
 
         if dispatch_hook is not None:
             dispatch_hook()
-        else:
-            event.current_stream_wait()
+
         # valid_token_num is optional:
         # - if valid_token_num is None, it means that we CANNOT accurately know
         #   the size of the tensor, but the advantage is that it can reduce
@@ -493,7 +485,5 @@ class XPUEPDecoderRunner(XPUEPRunner):
         )
         if combine_hook is not None:
             combine_hook()
-        else:
-            event.current_stream_wait()
 
         return combined_hidden_states
