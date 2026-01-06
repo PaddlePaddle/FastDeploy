@@ -89,19 +89,27 @@ go run cmd/main.go
 ./build.sh
 ```
 构建完成后，二进制文件将被安装到指定目录（默认为 /usr/local/bin，可通过修改 Makefile 中的 OUTDIR 进行调整）。
+此外，也可以在项目根目录下手动构建二进制文件：
+```bash
+go build -o ./fd-router ./cmd
+```
+该方式便于本地测试或将二进制文件与配置文件一并分发。
 2. 运行二进制文件
 可以通过运行脚本启动服务：
 ```bash
 ./run.sh
 ```
-也可以直接执行构建生成的二进制文件，并手动指定启动参数（其中 --port 为必填参数）：
+运行脚本会自动处理常见启动参数及日志目录，适合标准化部署场景。
+也可以直接运行二进制文件，在项目根目录或二进制所在目录下执行：
 ```bash
-/usr/local/bin/fd-router \
+./fd-router \
   --port 8080 \
   --splitwise \
   --config_path ./config/config.yaml
 ```
-该方式更适合用于部署及生产环境。
+其中：
+- --port 为必填参数
+- 其他参数可根据实际需求配置
 
 ## 项目结构
 
