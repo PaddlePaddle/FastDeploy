@@ -1777,6 +1777,9 @@ class PrefixCacheManager:
                 prefix_block_key.extend(extra_keys)
                 hash_value = get_hash_str(current_block, prefix_block_key)
                 prefix_block_key = [hash_value]
+                if hash_value in node.children:
+                    node = node.children[hash_value]
+                    continue
                 allocated_block_id = gpu_block_ids.pop(0)
                 node_id = self.node_id_pool.pop()
                 unique_node_ids.append(node_id)
