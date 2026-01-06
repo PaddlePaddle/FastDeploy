@@ -106,6 +106,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 used_in_ep_low_latency,
             )
         else:
+
             ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
