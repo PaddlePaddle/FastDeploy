@@ -1525,9 +1525,6 @@ void MultiQueryAppendC8Attention(
     int sm_count;
     cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
     uint32_t chunk_size = static_cast<uint32_t>(max_partition_size);
-    if (!is_decoder) {
-      chunk_size = static_cast<uint32_t>(encoder_max_partition_size);
-    }
 
     const int num_chunks = div_up(max_seq_len, chunk_size);
     uint32_t attn_mask_len;
