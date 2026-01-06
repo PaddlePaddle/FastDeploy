@@ -140,7 +140,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "hidden_size": 7168,
             "num_attention_heads": 128,
             "num_key_value_heads": 128,
-            "num_hidden_layers": 40,
+            "num_hidden_layers": 61,
             "q_lora_rank": 1536,
             "kv_lora_rank": 512,
             "qk_nope_head_dim": 128,
@@ -201,6 +201,8 @@ class TestAttentionPerformance(unittest.TestCase):
         hidden_size = fd_config.model_config.hidden_size
         tensor_dtype = getattr(paddle, fd_config.model_config.dtype)
 
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+
         q_lora_rank = fd_config.model_config.q_lora_rank
         kv_lora_rank = fd_config.model_config.kv_lora_rank
         qk_rope_head_dim = fd_config.model_config.qk_rope_head_dim
@@ -208,7 +210,7 @@ class TestAttentionPerformance(unittest.TestCase):
         v_head_dim = fd_config.model_config.v_head_dim
         qk_head_dim = self.attention_layer[0].qk_head_dim
 
-        o_proj_input_dim = fd_config.model_config.num_attention_heads * v_head_dim
+        o_proj_input_dim = fd_config.model_config.num_attention_heads // tp_size * v_head_dim
         o_proj_weight_shape = [o_proj_input_dim, hidden_size]
 
         o_proj_weight = paddle.randn(o_proj_weight_shape, dtype=tensor_dtype)
@@ -221,9 +223,9 @@ class TestAttentionPerformance(unittest.TestCase):
 
         kv_a_layernorm = paddle.randn([kv_lora_rank])
 
-        q_b_proj = paddle.randn([q_lora_rank, fd_config.model_config.num_attention_heads * qk_head_dim])
+        q_b_proj = paddle.randn([q_lora_rank, fd_config.model_config.num_attention_heads // tp_size * qk_head_dim])
         kv_b_proj = paddle.randn(
-            [kv_lora_rank, fd_config.model_config.num_key_value_heads * (qk_nope_head_dim + v_head_dim)]
+            [kv_lora_rank, fd_config.model_config.num_key_value_heads // tp_size * (qk_nope_head_dim + v_head_dim)]
         )
 
         state_dict = {
@@ -260,15 +262,14 @@ class TestAttentionPerformance(unittest.TestCase):
         else:
             raise ValueError(f"Unsupported ForwardMode: {mode}")
 
-        tp_size = fd_config.parallel_config.tensor_parallel_size
         attn_backend_buffers = allocate_launch_related_buffer(
             max_batch_size=batch_size,
             max_model_len=fd_config.model_config.max_model_len,
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
             decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
-            num_heads=fd_config.model_config.num_attention_heads // tp_size,
-            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads,
+            kv_num_heads=fd_config.model_config.num_key_value_heads,
             block_size=fd_config.cache_config.block_size,
         )
 
@@ -388,7 +389,7 @@ class TestAttentionPerformance(unittest.TestCase):
         for decode_batch_size in [10]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=80 * 1024,
+                seq_len=10 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
