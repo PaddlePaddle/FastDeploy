@@ -52,8 +52,8 @@ class MooncakeStoreConfig:
         if file_path is None:
             local_hostname = os.environ.get("MOONCAKE_LOCAL_HOSTNAME")
             metadata_server = os.environ.get("MOONCAKE_METADATA_SERVER")
-            global_segment_size = os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)
-            local_buffer_size = os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)
+            global_segment_size = int(os.environ.get("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE))
+            local_buffer_size = int(os.environ.get("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE))
             protocol = os.environ.get("MOONCAKE_PROTOCOL", "rdma")
             rdma_devices = os.environ.get("MOONCAKE_RDMA_DEVICES", "")
             master_server_addr = os.environ.get("MOONCAKE_MASTER_SERVER_ADDR")

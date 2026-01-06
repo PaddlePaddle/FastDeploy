@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
+export MODEL_NAME="/work/models/PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
+# export MODEL_NAME="/work/models/qwen_32b"
 export MOONCAKE_CONFIG_PATH=./mooncake_config.json
 export FD_DEBUG=1
 
@@ -13,6 +14,7 @@ source ./utils.sh
 
 S0_PORT=52700
 S1_PORT=52800
+ROUTER_PORT=52900
 
 ports=(
     $S0_PORT $((S0_PORT + 1)) $((S0_PORT + 2)) $((S0_PORT + 3))
@@ -24,6 +26,13 @@ check_ports "${ports[@]}" || {
     exit 1
 }
 
+# Launch router
+export FD_LOG_DIR="log_router"
+rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
+nohup python -m fastdeploy.router.launch \
+    --port ${ROUTER_PORT} \
+    2>&1 >${FD_LOG_DIR}/nohup &
+
 # Launch MoonCake master
 nohup mooncake_master \
     --port=15001 \
@@ -34,7 +43,7 @@ nohup mooncake_master \
      2>&1 > log_master &
 
 # Launch FD server 0
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=3,5
 export FD_LOG_DIR="log_0"
 mkdir -p ${FD_LOG_DIR}
 echo "server 0 port: ${S0_PORT}"
@@ -45,13 +54,18 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        --metrics-port $((S0_PORT + 1)) \
        --engine-worker-queue-port $((S0_PORT + 2)) \
        --cache-queue-port $((S0_PORT + 3)) \
-       --max-model-len 32768 \
+       --max-model-len 131072 \
+       --num-gpu-blocks-override 6000 \
+       --tensor-parallel-size 2 \
        --max-num-seqs 32 \
        --kvcache-storage-backend mooncake \
+        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
+      #  --num-gpu-blocks-override 40000 \
+
 # Launch FD server 1
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=6,7
 export FD_LOG_DIR="log_1"
 mkdir -p ${FD_LOG_DIR}
 echo "server 1 port: ${S1_PORT}"
@@ -62,9 +76,12 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        --metrics-port $((S1_PORT + 1)) \
        --engine-worker-queue-port $((S1_PORT + 2)) \
        --cache-queue-port $((S1_PORT + 3)) \
-       --max-model-len 32768 \
+       --max-model-len 131072 \
+       --tensor-parallel-size 2 \
        --max-num-seqs 32 \
+       --num-gpu-blocks-override 6000 \
        --kvcache-storage-backend mooncake \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
 wait_for_health ${S0_PORT}
