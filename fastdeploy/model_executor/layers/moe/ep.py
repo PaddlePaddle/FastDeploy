@@ -472,7 +472,7 @@ class EPRunner:
                     expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
-                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
@@ -484,7 +484,7 @@ class EPRunner:
                     moe_topk=self.top_k,
                     apply_norm_weight=True,
                     enable_softmax_top_k_fused=False,
-                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
                 )
         else:
             if layer.topk_method == "noaux_tc":
