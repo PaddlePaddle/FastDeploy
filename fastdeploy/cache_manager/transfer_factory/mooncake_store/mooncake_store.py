@@ -65,8 +65,8 @@ class MooncakeStoreConfig:
 
             local_hostname = config.get("local_hostname", "localhost")
             metadata_server = config.get("metadata_server")
-            global_segment_size = config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE)
-            local_buffer_size = config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE)
+            global_segment_size = int(config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE))
+            local_buffer_size = int(config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE))
             protocol = config.get("protocol", "rdma")
             rdma_devices = config.get("rdma_devices", "")
             master_server_addr = config.get("master_server_addr")
