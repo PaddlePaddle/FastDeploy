@@ -429,3 +429,28 @@ def restore_pd_env(original_values):
             else:
                 os.environ[key] = original_values[key]
                 print(f"恢复环境变量: {key}={original_values[key]}")
+
+
+def setup_logprobs_env():
+    """
+    设置logprobs相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    env_vars = {
+        "FD_USE_GET_SAVE_OUTPUT_V1": "1",
+    }
+    os.system("sysctl -w kernel.msgmax=131072")
+    os.system("sysctl -w kernel.msgmnb=33554432")
+
+    # 保存原始值
+    original_values = {}
+    for key in env_vars:
+        original_values[key] = os.environ.get(key)
+
+    # 设置新值
+    for key, value in env_vars.items():
+        os.environ[key] = value
+        print(f"设置环境变量: {key}={value}")
+    return original_values
