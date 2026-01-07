@@ -250,8 +250,7 @@ class CacheTransferManager:
             suffix=args.engine_worker_queue_port,
             create=False,
         )
-        if self.fd_config.load_config.dynamic_load_weight:
-            threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
+        threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
     def _init_storage_buffer(self, args):
         """
