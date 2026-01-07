@@ -1368,37 +1368,6 @@ class PrefixCacheManager:
             cpu_match_token_num,
         )
 
-    def _roll_back_block(
-        self,
-        block_size: int,
-        matche_nodes: list,
-        match_gpu_block_ids: list,
-        match_cpu_block_ids: list,
-        match_node_ids: list,
-        swap_node_ids: list,
-        gpu_match_token_num: int,
-        cpu_match_token_num: int,
-    ):
-        revert_block = matche_nodes.pop()
-        revert_block_id = revert_block.block_id
-        if revert_block_id in match_gpu_block_ids:
-            match_gpu_block_ids.remove(revert_block_id)
-            match_node_ids.remove(revert_block.node_id)
-            gpu_match_token_num -= block_size
-        elif revert_block_id in match_cpu_block_ids:
-            match_cpu_block_ids.remove(revert_block_id)
-            match_node_ids.remove(revert_block.node_id)
-            cpu_match_token_num -= block_size
-        else:
-            raise Exception(
-                f"revert nodes error, nodes: {revert_block_id}, match_gpu_block_ids: {match_gpu_block_ids}, "
-                f"match_cpu_block_ids: {match_cpu_block_ids}"
-            )
-
-        if revert_block_id in swap_node_ids:
-            swap_node_ids.remove(revert_block_id)
-        return gpu_match_token_num, cpu_match_token_num
-
     def match_block(self, req_id, input_ids, block_size):
         """
         Args:
