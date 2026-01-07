@@ -4,6 +4,6 @@
     "global_segment_size":8589934592,
     "local_buffer_size":134217728,
     "protocol":"rdma",
-    "rdma_devices": "mlx5_1,mlx5_2,mlx5_3,mlx5_4",
+    "rdma_devices": "",
     "master_server_addr":"0.0.0.0:15001"
 }
