@@ -42,7 +42,12 @@ from fastdeploy.cache_manager.ops import (
 )
 from fastdeploy.cache_manager.transfer_factory import MooncakeStore
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    EngineCacheQueue,
+    IPCSignal,
+    KVCacheStatus,
+    ModelWeightsStatus,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
@@ -229,7 +234,7 @@ class CacheTransferManager:
         if args.write_policy not in ["write_through"]:
             raise ValueError(f"Invalid write policy: {args.write_policy}")
         self.write_policy = args.write_policy
-        
+
         # Initialize update/clear signals for RL
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -1033,9 +1038,7 @@ class CacheTransferManager:
             elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
-                    logger.info(
-                        f"Start restoring caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Start restoring caches {self.cache_ready_signal.value}")
                     # restore cpu cache
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
@@ -1044,9 +1047,7 @@ class CacheTransferManager:
 
                     # restore gpu cache and set cache_ready_signal
                     self._init_gpu_cache(args)
-                    logger.info(
-                        f"Finish restoring caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Finish restoring caches {self.cache_ready_signal.value}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
