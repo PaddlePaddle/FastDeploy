@@ -48,7 +48,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               const paddle::Tensor& not_need_stop,
                               const paddle::Tensor& seq_lens_decoder,
                               const paddle::Tensor& prompt_lens,
-                              paddle::Tensor& preempted_idx,
+                              const paddle::Tensor& preempted_idx,
                               int message_flag,  // Target: 3, Draft: 4
                               int64_t rank_id,
                               bool save_each_rank) {
@@ -143,7 +143,6 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     msg_sed.meta[3 + i] = cur_token_num;
     if (preempted_idx_data[i] == 1) {
       msg_sed.meta[3 + i] = -9;
-      preempted_idx_data[i] = 0;
     }
 
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];

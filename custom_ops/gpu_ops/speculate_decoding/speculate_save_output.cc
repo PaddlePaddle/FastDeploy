@@ -30,7 +30,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 const paddle::Tensor& not_need_stop,
                                 const paddle::Tensor& seq_lens_decoder,
                                 const paddle::Tensor& prompt_lens,
-                                paddle::Tensor& preempted_idx,
+                                const paddle::Tensor& preempted_idx,
                                 int64_t rank_id,
                                 int msg_queue_id,
                                 int save_each_rank,
@@ -112,7 +112,6 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
     }
     if (i - 2 < bsz && preempted_idx_data[i - 2] == 1) {
       msg_sed.mtext[i] = -9;
-      preempted_idx_data[i - 2] = 0;
     }
   }
   for (int i = MAX_BSZ + 2; i < MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ + 2; i++) {
@@ -140,7 +139,7 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& not_need_stop,
                                       const paddle::Tensor& seq_lens_decoder,
                                       const paddle::Tensor& prompt_lens,
-                                      paddle::Tensor& preempted_idx,
+                                      const paddle::Tensor& preempted_idx,
                                       int64_t rank_id,
                                       bool save_each_rank,
                                       bool skip_prefill) {
@@ -161,7 +160,7 @@ void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
                                        const paddle::Tensor& not_need_stop,
                                        const paddle::Tensor& seq_lens_decoder,
                                        const paddle::Tensor& prompt_lens,
-                                       paddle::Tensor& preempted_idx,
+                                       const paddle::Tensor& preempted_idx,
                                        int64_t rank_id,
                                        int msg_queue_id,
                                        bool save_each_rank,

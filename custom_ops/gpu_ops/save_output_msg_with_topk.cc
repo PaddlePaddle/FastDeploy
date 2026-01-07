@@ -39,7 +39,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
                      const paddle::Tensor& logprob_scores,     // [bsz, k+1]
                      const paddle::Tensor& ranks,
                      const paddle::Tensor& not_need_stop,
-                     paddle::Tensor& preempted_idx,
+                     const paddle::Tensor& preempted_idx,
                      int64_t rank_id) {
   if (rank_id > 0) {
     return;
@@ -127,7 +127,6 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
         msg_sed.mtext[offset + 2] = -9;
       }
     }
-    preempted_idx_data[i] = 0;
     msg_sed.mtext_ranks[i] = (int)ranks_data[i];
   }
 #ifdef SAVE_WITH_OUTPUT_DEBUG

@@ -16,7 +16,7 @@
 
 void save_kernel(const paddle::Tensor& x,
                  const paddle::Tensor& not_need_stop,
-                 paddle::Tensor& preempted_idx,
+                 const paddle::Tensor& preempted_idx,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
@@ -85,7 +85,6 @@ void save_kernel(const paddle::Tensor& x,
   for (int i = 2; i < bsz + 2; i++) {
     if (preempted_idx_data[i - 2] == 1) {
       msg_sed.mtext[i] = -9;
-      preempted_idx_data[i - 2] = 0;
     }
     msg_sed.mtext[i] = (int)x_data[i - 2];
   }
@@ -128,7 +127,7 @@ void SaveOutMmsg(const paddle::Tensor& x,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
-                       paddle::Tensor& preempted_idx,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank) {
   SaveOutMmsg(x, not_need_stop, preempted_idx, rank_id, 1, save_each_rank);
@@ -136,7 +135,7 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
 
 void SaveOutMmsgDynamic(const paddle::Tensor& x,
                         const paddle::Tensor& not_need_stop,
-                        paddle::Tensor& preempted_idx,
+                        const paddle::Tensor& preempted_idx,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank) {
