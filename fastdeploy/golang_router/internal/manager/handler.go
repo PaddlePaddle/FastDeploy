@@ -26,6 +26,7 @@ type WorkerInfo struct {
 	TransferProtocol      []string `json:"transfer_protocol"`
 	RdmaPorts             []string `json:"rdma_ports"`
 	DeviceIDs             []string `json:"device_ids"`
+	MetricsPort           string   `json:"metrics_port"`
 }
 
 var DefaultManager *Manager

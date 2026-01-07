@@ -22,6 +22,7 @@ type Scheduler struct {
 	IdCounterMap  map[string]*scheduler_common.Counter
 	tokenMap      map[string]*scheduler_common.TokenCounter
 	managerAPI    common.ManagerAPI
+	prefillCache  *prefillCacheStrategy
 	mu            sync.RWMutex
 }
 
@@ -33,9 +34,20 @@ type CounterPolicy struct {
 
 var DefaultScheduler *Scheduler
 var DefaultCounterPolicy *CounterPolicy
+var waitingWeight float64
 
 // Init initializes the scheduler with the given configuration and manager API
 func Init(cfg *config.Config, managerAPI common.ManagerAPI) {
+	prefillCfg := &schedulerConfigSnapshot{
+		balanceAbsThreshold: cfg.Scheduler.BalanceAbsThreshold,
+		balanceRelThreshold: cfg.Scheduler.BalanceRelThreshold,
+		hitRatioWeight:      cfg.Scheduler.HitRatioWeight,
+		loadBalanceWeight:   cfg.Scheduler.LoadBalanceWeight,
+		cacheBlockSize:      cfg.Scheduler.CacheBlockSize,
+		tokenizerURL:        cfg.Scheduler.TokenizerURL,
+		tokenizerTimeout:    time.Duration(cfg.Scheduler.TokenizerTimeoutSecs * float64(time.Second)),
+	}
+
 	scheduler := &Scheduler{
 		policy:        cfg.Scheduler.Policy,
 		prefillPolicy: cfg.Scheduler.PrefillPolicy,
@@ -43,10 +55,12 @@ func Init(cfg *config.Config, managerAPI common.ManagerAPI) {
 		IdCounterMap:  make(map[string]*scheduler_common.Counter),
 		tokenMap:      make(map[string]*scheduler_common.TokenCounter),
 		managerAPI:    managerAPI,
+		prefillCache:  newPrefillCacheStrategy(prefillCfg),
 	}
 	counterPolicy := &CounterPolicy{}
 	DefaultScheduler = scheduler
 	DefaultCounterPolicy = counterPolicy
+	waitingWeight = cfg.Scheduler.WaitingWeight
 }
 
 // SelectWorker selects a worker based on the specified policy and worker type
@@ -82,6 +96,10 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 	case "request_num":
 		// Decode/mixed: prioritize the instance with the smallest number of current requests
 		strategyFunc = RequestNumSelectWorker
+	case "fd_metrics_score":
+		strategyFunc = FDMetricsScoreSelectWorker
+	case "cache_aware":
+		strategyFunc = CacheAwarePrefillSelectWorker
 	default:
 		strategyFunc = RandomSelectWorker
 	}

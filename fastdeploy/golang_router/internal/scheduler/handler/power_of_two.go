@@ -3,8 +3,6 @@ package handler
 import (
 	"context"
 	"math/rand"
-
-	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
 )
 
 func PowerOfTwoSelectWorker(ctx context.Context, workers []string, message string) (string, error) {
@@ -37,8 +35,5 @@ func PowerOfTwoSelectWorker(ctx context.Context, workers []string, message strin
 	} else {
 		selectedURL = worker2
 	}
-
-	logger.Info("Power-of-two selection:%s=%d vs %s=%d -> selected %s", worker1, load1, worker2, load2, selectedURL)
-
 	return selectedURL, nil
 }

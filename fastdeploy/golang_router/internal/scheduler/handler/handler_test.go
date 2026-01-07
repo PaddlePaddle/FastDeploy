@@ -15,6 +15,10 @@ func (m *mockManagerAPI) GetHealthyURLs(ctx context.Context) []string {
 	return []string{"worker1", "worker2"}
 }
 
+func (m *mockManagerAPI) GetMetrics(ctx context.Context, url string) (int, int, int) {
+	return 0, 0, 0 // 返回默认值用于测试
+}
+
 func TestSchedulerInit(t *testing.T) {
 	cfg := &config.Config{
 		Scheduler: config.SchedulerConfig{

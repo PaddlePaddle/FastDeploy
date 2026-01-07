@@ -213,7 +213,7 @@ func MonitorInstanceHealthCore(ctx context.Context) {
 		return
 	}
 	// Concurrently check health status of all nodes (fix concurrent security issues)
-	allServers := GetAllMapServers(context.Background())
+	allServers := GetAllMapServers(ctx)
 	length := len(allServers)
 
 	resultCh := make(chan healthMonitorResult, length)
@@ -225,7 +225,7 @@ func MonitorInstanceHealthCore(ctx context.Context) {
 			defer wg.Done()
 			// Execute health check logic
 			baseURL := server.Url
-			isHealthy := CheckWorkerHealth(context.Background(), baseURL)
+			isHealthy := CheckWorkerHealth(ctx, baseURL)
 			resultCh <- healthMonitorResult{
 				id:        id,
 				worker:    server,
@@ -253,14 +253,14 @@ func MonitorInstanceHealthCore(ctx context.Context) {
 			case "mixed":
 				mixedToRemove = append(mixedToRemove, res.id)
 			}
-			go scheduler_handler.CleanupUnhealthyCounter(context.Background(), res.id)
+			go scheduler_handler.CleanupUnhealthyCounter(ctx, res.id)
 		}
 	}
 
 	// Remove unhealthy instances
-	RemoveServers(context.Background(), prefillToRemove, decodeToRemove, mixedToRemove)
+	RemoveServers(ctx, prefillToRemove, decodeToRemove, mixedToRemove)
 
-	ReadServers(context.Background())
+	ReadServers(ctx)
 }
 
 func MonitorInstanceHealth(ctx context.Context, intervalSecs float64) {

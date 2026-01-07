@@ -182,6 +182,7 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 		TransferProtocol:      instance.TransferProtocol,
 		RdmaPorts:             []string(instance.RDMAPorts),
 		DeviceIDs:             []string(instance.DeviceIDs),
+		MetricsPort:           string(instance.MetricsPort),
 	}
 
 	id := instance.URL()

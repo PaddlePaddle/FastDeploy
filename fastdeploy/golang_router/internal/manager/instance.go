@@ -144,6 +144,7 @@ type InstanceInfo struct {
 	TransferProtocol      []string        `json:"transfer_protocol,omitempty" yaml:"transfer_protocol,omitempty"`
 	RDMAPorts             IntToStringList `json:"rdma_ports,omitempty" yaml:"rdma_ports,omitempty"`
 	DeviceIDs             IntToStringList `json:"device_ids,omitempty" yaml:"device_ids,omitempty"`
+	MetricsPort           Port            `json:"metrics_port,omitempty" yaml:"metrics_port,omitempty"`
 }
 
 func isValidPort(p Port) bool {
@@ -208,6 +209,13 @@ func NewInstanceInfo(info *InstanceInfo) (*InstanceInfo, error) {
 	}
 	if err := validatePortList("rdma_ports", info.RDMAPorts); DefaultManager.splitwise && err != nil {
 		return nil, err
+	}
+	if info.MetricsPort == "" {
+		info.MetricsPort = info.Port
+	} else {
+		if !isValidPort(info.MetricsPort) {
+			return nil, fmt.Errorf("invalid metrics_port: %s", info.MetricsPort)
+		}
 	}
 	return info, nil
 }

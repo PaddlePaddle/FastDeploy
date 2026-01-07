@@ -42,7 +42,7 @@ func main() {
 
 	intervalSecs := cfg.Manager.HealthCheckIntervalSecs
 	go manager.MonitorInstanceHealth(context.Background(), intervalSecs)
-	intervalCleanupSecs := cfg.Scheduler.IntervalCleanupSecs
+	intervalCleanupSecs := cfg.Scheduler.EvictionIntervalSecs
 	go scheduler_handler.StartBackupCleanupTask(context.Background(), intervalCleanupSecs)
 
 	// Start server

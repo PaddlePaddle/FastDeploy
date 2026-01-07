@@ -32,10 +32,18 @@ type ManagerConfig struct {
 }
 
 type SchedulerConfig struct {
-	Policy              string  `yaml:"policy"`
-	PrefillPolicy       string  `yaml:"prefill-policy"`
-	DecodePolicy        string  `yaml:"decode-policy"`
-	IntervalCleanupSecs float64 `yaml:"interval-cleanup-secs"`
+	Policy               string  `yaml:"policy"`
+	PrefillPolicy        string  `yaml:"prefill-policy"`
+	DecodePolicy         string  `yaml:"decode-policy"`
+	EvictionIntervalSecs float64 `yaml:"eviction-interval-secs"`
+	CacheBlockSize       int     `yaml:"cache-block-size"`
+	TokenizerURL         string  `yaml:"tokenizer-url"`
+	TokenizerTimeoutSecs float64 `yaml:"tokenizer-timeout-secs"`
+	BalanceAbsThreshold  float64 `yaml:"balance-abs-threshold"`
+	BalanceRelThreshold  float64 `yaml:"balance-rel-threshold"`
+	HitRatioWeight       float64 `yaml:"hit-ratio-weight"`
+	LoadBalanceWeight    float64 `yaml:"load-balance-weight"`
+	WaitingWeight        float64 `yaml:"waiting-weight"`
 }
 
 type LogConfig struct {
@@ -86,8 +94,29 @@ func Load(configPath, listenPort string, isSplitwise bool) (*Config, error) {
 	if cfg.Manager.HealthSuccessThreshold == 0 {
 		cfg.Manager.HealthSuccessThreshold = 1
 	}
-	if cfg.Scheduler.IntervalCleanupSecs == 0 {
-		cfg.Scheduler.IntervalCleanupSecs = 60
+	if cfg.Scheduler.EvictionIntervalSecs == 0 {
+		cfg.Scheduler.EvictionIntervalSecs = 60
+	}
+	if cfg.Scheduler.CacheBlockSize == 0 {
+		cfg.Scheduler.CacheBlockSize = 64
+	}
+	if cfg.Scheduler.TokenizerTimeoutSecs == 0 {
+		cfg.Scheduler.TokenizerTimeoutSecs = 2
+	}
+	if cfg.Scheduler.HitRatioWeight == 0 {
+		cfg.Scheduler.HitRatioWeight = 1
+	}
+	if cfg.Scheduler.LoadBalanceWeight == 0 {
+		cfg.Scheduler.LoadBalanceWeight = 1
+	}
+	if cfg.Scheduler.BalanceAbsThreshold == 0 {
+		cfg.Scheduler.BalanceAbsThreshold = 1
+	}
+	if cfg.Scheduler.BalanceRelThreshold == 0 {
+		cfg.Scheduler.BalanceRelThreshold = 0.2
+	}
+	if cfg.Scheduler.WaitingWeight == 0 {
+		cfg.Scheduler.WaitingWeight = 1
 	}
 	return &cfg, nil
 }
