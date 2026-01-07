@@ -366,10 +366,7 @@ class ResourceManagerV1(ResourceManager):
         for idx in range(len(mm_inputs["mm_positions"])):
             position = mm_inputs["mm_positions"][idx]
             if position.offset < matched_token_num < position.offset + position.length:
-                llm_logger.debug(
-                    f"revert_chunked_mm_input, match token num: {matched_token_num}, revert tokens: {matched_token_num - position.offset}"
-                )
-                return matched_token_num - position.offset
+                return position.offset
             elif matched_token_num < position.offset:
                 break
         return matched_token_num
@@ -988,6 +985,7 @@ class ResourceManagerV1(ResourceManager):
                     request.skip_allocate = True
                 else:
                     request.num_computed_tokens = matched_token_num
+            llm_logger.info(f"request {request.request_id} num_computed_tokens: {request.num_computed_tokens}")
             return True
         except Exception as e:
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")

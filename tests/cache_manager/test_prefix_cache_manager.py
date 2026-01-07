@@ -821,17 +821,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIn(req_id, manager.leaf_req_map[new_leaf])
         self.assertEqual(task.num_cached_blocks, 2)
 
-    def test_is_chunked_mm_input_detects_overlap(self):
-        manager = _create_manager()
-        mm_inputs = {
-            "mm_positions": [SimpleNamespace(offset=2, length=3)],
-            "mm_hashes": ["img"],
-        }
-
-        chunked, idx = manager.is_chunked_mm_input(mm_inputs, matched_token_num=3)
-        self.assertTrue(chunked)
-        self.assertEqual(idx, 0)
-
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
         manager.cache_task_queue = _DummyEngineCacheQueue()
@@ -1195,34 +1184,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         with patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=SystemExit):
             with self.assertRaises(SystemExit):
                 manager.clear_prefix_cache()
-
-    @unittest.skip("Skip TestRevertMatchBlocks")
-    def test_revert_match_blocks_adjusts_lists(self):
-        manager = _create_manager()
-        request = SimpleNamespace(
-            request_id="revert",
-            multimodal_inputs={"mm_positions": [SimpleNamespace(offset=2, length=2)]},
-        )
-        node = BlockNode(120, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
-        matche_nodes = [node]
-        match_gpu = [0]
-        match_node_ids = [node.node_id]
-        swap_nodes = [node.block_id]
-        gpu_tokens, cpu_tokens, current = manager._revert_match_blocks(
-            request=request,
-            matched_token_num=4,
-            block_size=2,
-            chunk_idx=0,
-            match_node_ids=match_node_ids,
-            matche_nodes=matche_nodes,
-            match_gpu_block_ids=match_gpu,
-            match_cpu_block_ids=[],
-            gpu_match_token_num=4,
-            cpu_match_token_num=0,
-            swap_node_ids=swap_nodes,
-        )
-        self.assertEqual(gpu_tokens, 2)
-        self.assertEqual(current, manager.radix_tree_root)
 
 
 # Coverage-oriented tests. These are used to lightly exercise specific
