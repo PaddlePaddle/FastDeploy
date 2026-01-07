@@ -75,7 +75,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     constexpr int kTiles = K / kBlockK;
 
     using Kernel_traits = Kernel_traits<
-        kBlockM, kBlockN, kBlockK, kNWarps, kStages, kTiles,
+        kBlockM, kBlockN, 128, 64, kBlockK, kNWarps, kStages, kTiles,
         M, K, TokenPackSize, kGroupSize, kCluster, cutlass::float_e4m3_t,
         {cutlass_type}>;
     run_gemm<cutlass::float_e4m3_t, {cutlass_type},
