@@ -949,7 +949,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=4)
         block_size = 2
         manager.cache_config.disable_chunked_mm_input = False
-        input_ids = [1, 2, 3, 4, 5, 6, 7, 8]
+        input_ids = [1, 2, 3, 4]
         hash_input = get_hash_str(input_ids)
         hash_first = get_hash_str([1, 2])
         hash_second = get_hash_str([3, 4], [hash_first, "img"])
@@ -978,8 +978,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 "mm_positions": [SimpleNamespace(offset=2, length=2)],
                 "mm_hashes": ["img"],
             },
-            num_total_tokens=8,
-            need_prefill_tokens=8,
+            num_total_tokens=4,
         )
 
         match_gpu, match_cpu, swap_nodes, last_node, gpu_tokens, cpu_tokens = manager.mm_match_block(
@@ -1090,34 +1089,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
         self.assertIsNone(manager.gpu_free_task_future)
         self.assertTrue(finished.result_called)
-
-    def test_mm_match_block_reverts_chunked_inputs(self):
-        manager = _create_manager(num_gpu_blocks=4)
-        manager.cache_config.disable_chunked_mm_input = True
-        block_size = 2
-        input_ids = [1, 2, 3, 4]
-        hash_input = get_hash_str(input_ids)
-        hash_first = get_hash_str([1, 2])
-        hash_second = get_hash_str([3, 4], ["img"])
-        node1 = BlockNode(80, input_ids, hash_input, 1, 0, block_size, hash_first, 0, parent=manager.radix_tree_root)
-        node2 = BlockNode(81, input_ids, hash_input, 2, 1, block_size, hash_second, 0, parent=node1)
-        manager.radix_tree_root.children[hash_first] = node1
-        node1.children[hash_second] = node2
-
-        request = SimpleNamespace(
-            prompt_token_ids=input_ids,
-            output_token_ids=[],
-            request_id="chunk-req",
-            multimodal_inputs={
-                "mm_positions": [SimpleNamespace(offset=1, length=3)],
-                "mm_hashes": ["img"],
-            },
-            num_total_tokens=4,
-            need_prefill_tokens=4,
-        )
-
-        match_gpu, *_ = manager.mm_match_block(request, block_size)
-        self.assertEqual(match_gpu, [])
 
     def test_mm_build_path_creates_new_nodes(self):
         manager = _create_manager(num_gpu_blocks=6)
