@@ -14,8 +14,7 @@
 import os
 import re
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-file_dir = os.path.join(script_dir, "..", "gpu_ops", "w4afp8_gemm") + os.sep
+file_dir = "./gpu_ops/w4afp8_gemm/"
 
 gemm_template_head = """
 #pragma once
@@ -76,7 +75,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     constexpr int kTiles = K / kBlockK;
 
     using Kernel_traits = Kernel_traits<
-        kBlockM, kBlockN, kBlockK, kNWarps, kStages, kTiles,
+        kBlockM, kBlockN, 128, 64, kBlockK, kNWarps, kStages, kTiles,
         M, K, TokenPackSize, kGroupSize, kCluster, cutlass::float_e4m3_t,
         {cutlass_type}>;
     run_gemm<cutlass::float_e4m3_t, {cutlass_type},
