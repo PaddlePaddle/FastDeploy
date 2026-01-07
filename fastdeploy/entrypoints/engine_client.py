@@ -34,6 +34,7 @@ from fastdeploy.eplb.utils import RedundantExpertWorkload
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     IPCSignal,
+    KVCacheStatus,
     ModelWeightsStatus,
     PrefixTreeStatus,
     RearrangeExpertStatus,
@@ -79,6 +80,9 @@ class EngineClient:
         )
         self.max_model_len = self.fd_config.model_config.max_model_len
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
+        self.enable_cache_transfer = (
+            self.fd_config.cache_config.swap_space or self.fd_config.cache_config.kvcache_storage_backend
+        )
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
@@ -547,8 +551,12 @@ class EngineClient:
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
             api_server_logger.info(f"Start to update model weight {self.model_weights_status_signal.value[0]}")
-            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
+            while timeout >= 0:
                 api_server_logger.info(f"..updating model weights {self.model_weights_status_signal.value[0]}")
+                weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
+                cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
+                if weight_updated and (not self.enable_cache_transfer or cache_updated):
+                    break
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
@@ -582,8 +590,12 @@ class EngineClient:
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
             api_server_logger.info(f"Start to clear model weight {self.model_weights_status_signal.value[0]}")
-            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
+            while timeout >= 0:
                 api_server_logger.info(f"..clearing model weights {self.model_weights_status_signal.value[0]}")
+                weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
+                cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
+                if weight_cleared and (not self.enable_cache_transfer or cache_cleared):
+                    break
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
