@@ -500,6 +500,7 @@ class LLMEngine:
         start gpu worker service
 
         """
+        console_logger.debug("Start worker process...")
         log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
