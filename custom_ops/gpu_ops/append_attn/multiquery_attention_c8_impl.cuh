@@ -1497,7 +1497,6 @@ void MultiQueryAppendC8Attention(
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
     dim3 blocks(32, num_warps);
     if (num_chunks <= 0) {
-      printf("num_chunks <= 0 :%d\n", num_chunks);
       auto nosplit_kv_kernel =
           multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
                                                          uint8_t,
