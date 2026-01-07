@@ -154,11 +154,11 @@ def main():
     device_count = 0
     if current_platform.is_cuda():
         if os.getenv("CUDA_VISIBLE_DEVICES") is None:
-            raise ValueError("Please set CUDA_VISIBLE_DEVICES when launching Multi API Server.")
+            raise ValueError("Please manually set CUDA_VISIBLE_DEVICES when launching multi-api-server.")
         device_count = len(os.getenv("CUDA_VISIBLE_DEVICES").split(","))
     elif current_platform.is_xpu():
         if os.getenv("XPU_VISIBLE_DEVICES") is None:
-            raise ValueError("Please set XPU_VISIBLE_DEVICES when launching Multi API Server.")
+            raise ValueError("Please manually set XPU_VISIBLE_DEVICES when launching multi-api-server.")
         device_count = len(os.getenv("XPU_VISIBLE_DEVICES").split(","))
 
     processes = start_servers(
