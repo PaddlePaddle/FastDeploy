@@ -430,9 +430,9 @@ def post_process_normal(
                 save_output(
                     sampler_output.sampled_token_ids,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                     save_each_rank,
-                    share_inputs["preempted_idx"],
                 )
             else:
                 save_output_topk(
@@ -441,8 +441,8 @@ def post_process_normal(
                     sampler_output.logprobs_tensors.logprobs,
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
-                    model_output.mp_rank,
                     share_inputs["preempted_idx"],
+                    model_output.mp_rank,
                 )
 
 
@@ -507,10 +507,10 @@ def post_process_specualate(
                 model_output.not_need_stop,
                 model_output.seq_lens_decoder,
                 model_output.prompt_lens,
+                share_inputs["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
-                share_inputs["preempted_idx"],
             )
         else:
             speculate_save_output_topk(
@@ -523,10 +523,10 @@ def post_process_specualate(
                 model_output.not_need_stop,
                 model_output.seq_lens_decoder,
                 model_output.prompt_lens,
+                share_inputs["preempted_idx"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
-                share_inputs["preempted_idx"],
             )
 
     # Update pre_ids through accept tokens
