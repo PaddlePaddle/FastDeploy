@@ -24,6 +24,7 @@ from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
     UnquantizedFusedMoEMethod,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 
 class HpuMoEMethod(UnquantizedFusedMoEMethod):
@@ -295,6 +296,19 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        extra_weight_attrs = {
+            **(extra_weight_attrs or {}),
+            "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1},
+        }
+        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        extra_scale_attrs = {
+            **(extra_weight_attrs or {}),
+            "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "up": 0, "down": None},
+        }
+        set_weight_attrs(layer.down_proj_in_scale, extra_scale_attrs)
+        set_weight_attrs(layer.up_gate_proj_weight_scale, extra_scale_attrs)
+        set_weight_attrs(layer.down_proj_weight_scale, extra_scale_attrs)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -323,6 +337,9 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
 
             setattr(layer, weights_name, weights_list)
             setattr(layer, scales_name, scales_list)
+
+    def process_weights_after_loading(self, layer):
+        return
 
     def init_ep(self, layer: nn.Layer) -> None:
         """
