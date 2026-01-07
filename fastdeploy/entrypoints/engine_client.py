@@ -528,9 +528,6 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
-            if self.fd_config.cache_config.swap_space:
-                return False, "hierarchical cache updating is not supported"
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
@@ -566,9 +563,6 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
-            if self.fd_config.cache_config.swap_space:
-                return False, "hierarchical cache clearing is not supported"
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
