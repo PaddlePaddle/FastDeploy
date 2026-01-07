@@ -74,10 +74,18 @@ server:
   splitwise: true # true代表开启pd分离模式,false代表开启非pd分离模式
 
 scheduler:
-  policy: "request_num" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num
-  prefill-policy: "process_tokens" # pd分离模式下prefill节点调度策略
-  decode-policy: "request_num" # pd分离模式下decode节点调度策略
-  interval-cleanup-secs: 60 # cache-aware策略清理过期cache的间隔时间
+  policy: "power_of_two" # 调度策略(可选): random, power_of_two, round_robin, process_tokens, request_num
+  prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略
+  decode-policy: "fd_metrics_score" # pd分离模式下decode节点调度策略
+  eviction-interval-secs: 60 # cache-aware策略清理过期cache的间隔时间
+  balance-abs-threshold: 1 # cache-aware策略绝对阈值
+  balance-rel-threshold: 0.2 # cache-aware策略相对阈值
+  hit-ratio-weight: 1.0 # cache-aware策略命中率权重
+  load-balance-weight: 0.05 # cache-aware策略负载均衡权重
+  cache-block-size: 4 # cache-aware策略cache block大小
+  tokenizer-url: "http://0.0.0.0:8098" # tokenizer服务地址(可选)
+  tokenizer-timeout-secs: 2 # tokenizer服务超时时间
+  waiting-weight: 10 # cache-aware策略等待权重
 
 manager:
   health-failure-threshold: 3 # 健康检查失败次数,超过次数后认为节点不健康
@@ -85,6 +93,7 @@ manager:
   health-check-timeout-secs: 5 # 健康检查超时时间
   health-check-interval-secs: 5 # 健康检查间隔时间
   health-check-endpoint: /health # 健康检查接口
+  register-path: "config/register.yaml" # 推理实例注册配置文件路径(可选)
 
 log:
   level: "info"  # 日志打印级别: debug / info / warn / error
