@@ -1547,42 +1547,42 @@ class PrefixCacheManager:
         if has_modified_cpu_lru_leaf_heap:
             heapq.heapify(self.cpu_lru_leaf_heap)
 
-        if self.cache_config.disable_chunked_mm_input:
-            if gpu_match_token_num + cpu_match_token_num == request.need_prefill_tokens:
-                # when a full hit is achieved, roll back one block_size
-                try:
-                    gpu_match_token_num, cpu_match_token_num = self._roll_back_block(
-                        block_size=block_size,
-                        matche_nodes=matche_nodes,
-                        match_gpu_block_ids=match_gpu_block_ids,
-                        match_cpu_block_ids=match_cpu_block_ids,
-                        match_node_ids=match_node_ids,
-                        swap_node_ids=swap_node_ids,
-                        gpu_match_token_num=gpu_match_token_num,
-                        cpu_match_token_num=cpu_match_token_num,
-                    )
-                except Exception as e:
-                    logger.error(f"req_id {request.request_id} revert block error: {e}")
-            matched_token_num = gpu_match_token_num + cpu_match_token_num
-            is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
-            if is_chunked:
-                (
-                    gpu_match_token_num,
-                    cpu_match_token_num,
-                    current_match_node,
-                ) = self._revert_match_blocks(
-                    request=request,
-                    matched_token_num=matched_token_num,
-                    block_size=block_size,
-                    chunk_idx=chunk_idx,
-                    match_node_ids=match_node_ids,
-                    matche_nodes=matche_nodes,
-                    match_gpu_block_ids=match_gpu_block_ids,
-                    match_cpu_block_ids=match_cpu_block_ids,
-                    gpu_match_token_num=gpu_match_token_num,
-                    cpu_match_token_num=cpu_match_token_num,
-                    swap_node_ids=swap_node_ids,
-                )
+        # if self.cache_config.disable_chunked_mm_input:
+        #     if gpu_match_token_num + cpu_match_token_num == request.need_prefill_tokens:
+        #         # when a full hit is achieved, roll back one block_size
+        #         try:
+        #             gpu_match_token_num, cpu_match_token_num = self._roll_back_block(
+        #                 block_size=block_size,
+        #                 matche_nodes=matche_nodes,
+        #                 match_gpu_block_ids=match_gpu_block_ids,
+        #                 match_cpu_block_ids=match_cpu_block_ids,
+        #                 match_node_ids=match_node_ids,
+        #                 swap_node_ids=swap_node_ids,
+        #                 gpu_match_token_num=gpu_match_token_num,
+        #                 cpu_match_token_num=cpu_match_token_num,
+        #             )
+        #         except Exception as e:
+        #             logger.error(f"req_id {request.request_id} revert block error: {e}")
+        #     matched_token_num = gpu_match_token_num + cpu_match_token_num
+        #     is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
+        #     if is_chunked:
+        #         (
+        #             gpu_match_token_num,
+        #             cpu_match_token_num,
+        #             current_match_node,
+        #         ) = self._revert_match_blocks(
+        #             request=request,
+        #             matched_token_num=matched_token_num,
+        #             block_size=block_size,
+        #             chunk_idx=chunk_idx,
+        #             match_node_ids=match_node_ids,
+        #             matche_nodes=matche_nodes,
+        #             match_gpu_block_ids=match_gpu_block_ids,
+        #             match_cpu_block_ids=match_cpu_block_ids,
+        #             gpu_match_token_num=gpu_match_token_num,
+        #             cpu_match_token_num=cpu_match_token_num,
+        #             swap_node_ids=swap_node_ids,
+        #         )
 
         logger.info(f"match_block: req_id {request.request_id} matched nodes: {match_node_ids}")
         return (
