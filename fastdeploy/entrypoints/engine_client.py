@@ -547,18 +547,6 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
-            if self.fd_config.cache_config.enable_hierarchical_cache:
-                return False, "hierarchical cache updating is not supported"
-
-            # if self.enable_prefix_caching or self.enable_splitwise:
-            #     # kv_cache_status_signal: CLEARED -> UPDATING -> NORMAL
-            #     if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED:
-            #         self.kv_cache_status_signal.value[0] = KVCacheStatus.UPDATING
-            #         api_server_logger.info(f"Start to update kv cache {self.kv_cache_status_signal.value[0]}")
-            #         while self.kv_cache_status_signal.value[0] != KVCacheStatus.NORMAL:
-            #             api_server_logger.info(f"..updating kv cache {self.kv_cache_status_signal.value[0]}")
-            #             time.sleep(1)
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
@@ -594,17 +582,6 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
-            if self.fd_config.cache_config.enable_hierarchical_cache:
-                return False, "hierarchical cache clearing is not supported"
-            # if self.enable_prefix_caching or self.enable_splitwise:
-            #     # kv_cache_status_signal: NORMAL -> CLEARING -> CLEARED
-            #     if self.kv_cache_status_signal.value[0] ==  KVCacheStatus.NORMAL:
-            #         self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
-            #         api_server_logger.info(f"Start to clear kv cache {self.kv_cache_status_signal.value[0]}")
-            #         while self.kv_cache_status_signal.value[0] != KVCacheStatus.CLEARED:
-            #             api_server_logger.info(f"..clearing kv cache {self.kv_cache_status_signal.value[0]}")
-            #             time.sleep(1)
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
