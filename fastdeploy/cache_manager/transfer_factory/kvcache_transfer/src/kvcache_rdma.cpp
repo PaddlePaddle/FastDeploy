@@ -52,6 +52,9 @@ RDMACommunicator::RDMACommunicator(std::string& role,
                                    std::vector<int64_t> local_value_cache,
                                    int block_number,
                                    int block_bytes,
+                                   std::vector<int64_t> local_key_cache_scale,
+                                   std::vector<int64_t> local_value_cache_scale,
+                                   int scale_block_bytes,
                                    int prefill_tp_size,
                                    int prefill_tp_idx)
     : splitwise_role(role),
@@ -59,8 +62,12 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       port(port),
       local_cache_key_ptr_layer_head_(std::move(local_key_cache)),
       local_cache_value_ptr_layer_head_(std::move(local_value_cache)),
+      local_cache_key_scale_ptr_layer_head_(std::move(local_key_cache_scale)),
+      local_cache_value_scale_ptr_layer_head_(
+          std::move(local_value_cache_scale)),
       block_number(block_number),
       block_size_byte(block_bytes),
+      scale_block_size_byte(scale_block_bytes),
       prefill_tp_size(prefill_tp_size),
       prefill_tp_idx(prefill_tp_idx),
       RDMACommunicator_status(0),
@@ -87,6 +94,24 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       has_value_cache_ = true;
       if (local_cache_value_ptr_layer_head_.size() != layer_number) {
         throw std::runtime_error("Key and Value cache layer number mismatch!");
+      }
+    }
+    if (local_cache_key_scale_ptr_layer_head_.empty()) {
+      has_key_scale_ = false;
+    } else {
+      has_key_scale_ = true;
+      if (local_cache_key_scale_ptr_layer_head_.size() != layer_number) {
+        throw std::runtime_error(
+            "Key and Key Scale cache layer number mismatch!");
+      }
+    }
+    if (local_cache_value_scale_ptr_layer_head_.empty()) {
+      has_value_scale_ = false;
+    } else {
+      has_value_scale_ = true;
+      if (local_cache_value_scale_ptr_layer_head_.size() != layer_number) {
+        throw std::runtime_error(
+            "Key and Value Scale cache layer number mismatch!");
       }
     }
 
@@ -133,12 +158,21 @@ void RDMACommunicator::resize_vectors() {
   if (has_value_cache_) {
     local_cache_value_ptr_per_layer.resize(layer_number);
   }
+  if (has_key_scale_) {
+    local_cache_key_scale_ptr_per_layer.resize(layer_number);
+  }
+  if (has_value_scale_) {
+    local_cache_value_scale_ptr_per_layer.resize(layer_number);
+  }
 }
 
 void RDMACommunicator::assign_pointers() {
   // Validate block configuration
   if (block_number <= 0 || block_size_byte <= 0) {
     throw std::runtime_error("Invalid block configuration");
+  }
+  if (has_key_scale_ && scale_block_size_byte <= 0) {
+    throw std::runtime_error("Invalid scale block configuration");
   }
 
   // Assign pointers for each layer and block
@@ -158,6 +192,22 @@ void RDMACommunicator::assign_pointers() {
       local_cache_value_ptr_per_layer[layer_idx].resize(block_number);
     }
 
+    if (has_key_scale_) {
+      if (local_cache_key_scale_ptr_layer_head_[layer_idx] == 0) {
+        throw std::runtime_error("Invalid key cache scale pointer for layer " +
+                                 std::to_string(layer_idx));
+      }
+      local_cache_key_scale_ptr_per_layer[layer_idx].resize(block_number);
+    }
+
+    if (has_value_scale_) {
+      if (local_cache_value_scale_ptr_layer_head_[layer_idx] == 0) {
+        throw std::runtime_error("Invalid VALUE cache pointer for layer " +
+                                 std::to_string(layer_idx));
+      }
+      local_cache_value_scale_ptr_per_layer[layer_idx].resize(block_number);
+    }
+
     // Calculate and assign block pointers
     for (int block_idx = 0; block_idx < block_number; ++block_idx) {
       local_cache_key_ptr_per_layer[layer_idx][block_idx] =
@@ -169,6 +219,18 @@ void RDMACommunicator::assign_pointers() {
             reinterpret_cast<void*>(
                 local_cache_value_ptr_layer_head_[layer_idx] +
                 block_idx * block_size_byte);
+      }
+      if (has_key_scale_) {
+        local_cache_key_scale_ptr_per_layer[layer_idx][block_idx] =
+            reinterpret_cast<void*>(
+                local_cache_key_scale_ptr_layer_head_[layer_idx] +
+                block_idx * scale_block_size_byte);
+      }
+      if (has_value_scale_) {
+        local_cache_value_scale_ptr_per_layer[layer_idx][block_idx] =
+            reinterpret_cast<void*>(
+                local_cache_value_scale_ptr_layer_head_[layer_idx] +
+                block_idx * scale_block_size_byte);
       }
     }
   }
@@ -284,6 +346,7 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
           ERR("accept() failed: %s", strerror(errno));
           continue;
         }
+        LOGD("Accepted connection on server socket");
 
         if (fcntl(connfd, F_SETFL, fcntl(connfd, F_GETFL, 0) | O_NONBLOCK) <
             0) {
@@ -313,10 +376,15 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
         connectionContexts[connfd] = ctx;
         ctx->conn.layer_number = layer_number;
         ctx->conn.block_number = block_number;
-        ctx->conn.block_byte_size = block_size_byte;
+        ctx->conn.block_size_byte = block_size_byte;
         ctx->conn.local_cache_key_ptr_per_layer = local_cache_key_ptr_per_layer;
         ctx->conn.local_cache_value_ptr_per_layer =
             local_cache_value_ptr_per_layer;
+        ctx->conn.scale_block_size_byte = scale_block_size_byte;
+        ctx->conn.local_cache_key_scale_ptr_per_layer =
+            local_cache_key_scale_ptr_per_layer;
+        ctx->conn.local_cache_value_scale_ptr_per_layer =
+            local_cache_value_scale_ptr_per_layer;
 
         std::lock_guard<std::mutex> lock(mutex_);
         if (!server_mr_register_per_layer(ctx)) {
@@ -367,7 +435,8 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
           continue;
         }
 
-        server_exchange_mr(ctx, has_value_cache_);
+        server_exchange_mr(ctx);
+        INFO("connect successfully");
       } else {
         auto ctx_iter = connectionContexts.find(event_fd);
         if (ctx_iter == connectionContexts.end()) {
@@ -556,7 +625,11 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   ctx->conn.url = url;
   ctx->conn.layer_number = layer_number;
   ctx->conn.block_number = block_number;
-  ctx->conn.block_byte_size = block_size_byte;
+  ctx->conn.block_size_byte = block_size_byte;
+  ctx->conn.scale_block_size_byte = scale_block_size_byte;
+  ctx->conn.has_value_cache = has_value_cache_;
+  ctx->conn.has_key_scale = has_key_scale_;
+  ctx->conn.has_value_scale = has_value_scale_;
   if (dest_tp_size > 0)
     ctx->conn.decode_tp_size = dest_tp_size;
   else
@@ -569,7 +642,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   }
   // Register memory regions
   if (!client_mr_register_per_layer(ctx)) {
-    ERR("server_mr_register_per_layer failed");
+    ERR("client_mr_register_per_layer failed");
     return static_cast<int>(ConnStatus::kError);
   }
 
@@ -583,7 +656,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
     ERR("Couldn't getexchange port infodestinations");
     return static_cast<int>(ConnStatus::kError);
   } else {
-    client_exchange_mr(ctx, has_value_cache_);
+    client_exchange_mr(ctx);
   }
 
   // Allocate RDMA read and register read buffers
@@ -636,7 +709,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   ctx->conn.connected = 1;
   conn_map[url] = ctx;
 
-  WARN("connect end ....");
+  INFO("connect successfully");
   return static_cast<int>(ConnStatus::kConnected);
 }
 
@@ -781,6 +854,12 @@ bool RDMACommunicator::client_mr_register_per_layer(RdmaContext* ctx) {
   if (has_value_cache_) {
     write_mr_value_list.resize(list_size, nullptr);
   }
+  if (has_key_scale_) {
+    write_mr_key_scale_list.resize(list_size, nullptr);
+  }
+  if (has_value_scale_) {
+    write_mr_value_scale_list.resize(list_size, nullptr);
+  }
 
   const uint32_t access_flags =
       IBV_ACCESS_LOCAL_WRITE |
@@ -812,6 +891,36 @@ bool RDMACommunicator::client_mr_register_per_layer(RdmaContext* ctx) {
                                  access_flags);
       if (!write_mr_value_list[i]) goto fail;
     }
+
+    if (has_key_scale_) {
+      void* key_scale_ptr =
+          reinterpret_cast<void*>(local_cache_key_scale_ptr_layer_head_[i]);
+      size_t scale_size =
+          static_cast<size_t>(scale_block_size_byte) * block_number;
+
+      write_mr_key_scale_list[i] =
+          register_memory_region(ctx->pd,
+                                 key_scale_ptr,
+                                 scale_size,
+                                 "client_key_scale_" + std::to_string(i),
+                                 access_flags);
+      if (!write_mr_key_scale_list[i]) goto fail;
+    }
+
+    if (has_value_scale_) {
+      void* value_scale_ptr =
+          reinterpret_cast<void*>(local_cache_value_scale_ptr_layer_head_[i]);
+      size_t scale_size =
+          static_cast<size_t>(scale_block_size_byte) * block_number;
+
+      write_mr_value_scale_list[i] =
+          register_memory_region(ctx->pd,
+                                 value_scale_ptr,
+                                 scale_size,
+                                 "client_value_scale_" + std::to_string(i),
+                                 access_flags);
+      if (!write_mr_value_scale_list[i]) goto fail;
+    }
   }
 
   return true;
@@ -825,9 +934,17 @@ fail:
   for (auto* mr : write_mr_value_list) {
     if (mr) ibv_dereg_mr(mr);
   }
+  for (auto* mr : write_mr_key_scale_list) {
+    if (mr) ibv_dereg_mr(mr);
+  }
+  for (auto* mr : write_mr_value_scale_list) {
+    if (mr) ibv_dereg_mr(mr);
+  }
 
   write_mr_key_list.clear();
   write_mr_value_list.clear();
+  write_mr_key_scale_list.clear();
+  write_mr_value_scale_list.clear();
   return false;
 }
 
@@ -843,9 +960,12 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     ERR("Invalid RDMA context");
     return false;
   }
+  LOGD("Start server memory region registration...");
 
   write_cache_key_server_mr_list.clear();
   write_cache_value_server_mr_list.clear();
+  write_cache_key_scale_server_mr_list.clear();
+  write_cache_value_scale_server_mr_list.clear();
 
   const uint32_t access_flags =
       IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ;
@@ -862,23 +982,68 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     }
     write_cache_key_server_mr_list.push_back(key_mr);
 
+    struct ibv_mr* value_mr = nullptr;
+    struct ibv_mr* key_scale_mr = nullptr;
+    struct ibv_mr* value_scale_mr = nullptr;
+
     if (has_value_cache_) {
       void* val_ptr =
           reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
-      struct ibv_mr* value_mr = register_memory_region(
+      value_mr = register_memory_region(
           ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
       if (!value_mr) {
         ERR("Failed to register value MR at layer %d", i);
-        ibv_dereg_mr(key_mr);
         goto fail;
       }
       write_cache_value_server_mr_list.push_back(value_mr);
+    }
+
+    if (has_key_scale_) {
+      void* key_scale_ptr =
+          reinterpret_cast<void*>(local_cache_key_scale_ptr_layer_head_[i]);
+      size_t scale_size =
+          static_cast<size_t>(scale_block_size_byte) * block_number;
+
+      key_scale_mr = register_memory_region(ctx->pd,
+                                            key_scale_ptr,
+                                            scale_size,
+                                            "key_scale_" + std::to_string(i),
+                                            access_flags);
+      if (!key_scale_mr) {
+        ERR("Failed to register key scale MR at layer %d", i);
+        goto fail;
+      }
+      write_cache_key_scale_server_mr_list.push_back(key_scale_mr);
+    }
+
+    if (has_value_scale_) {
+      void* value_scale_ptr =
+          reinterpret_cast<void*>(local_cache_value_scale_ptr_layer_head_[i]);
+      size_t scale_size =
+          static_cast<size_t>(scale_block_size_byte) * block_number;
+
+      value_scale_mr =
+          register_memory_region(ctx->pd,
+                                 value_scale_ptr,
+                                 scale_size,
+                                 "value_scale_" + std::to_string(i),
+                                 access_flags);
+      if (!value_scale_mr) {
+        ERR("Failed to register value scale MR at layer %d", i);
+        goto fail;
+      }
+      write_cache_value_scale_server_mr_list.push_back(value_scale_mr);
     }
   }
 
   ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
   ctx->conn.write_cache_value_server_mr_list = write_cache_value_server_mr_list;
+  ctx->conn.write_cache_key_scale_server_mr_list =
+      write_cache_key_scale_server_mr_list;
+  ctx->conn.write_cache_value_scale_server_mr_list =
+      write_cache_value_scale_server_mr_list;
 
+  LOGD("Finish server memory region registration");
   return true;
 
 fail:
@@ -888,9 +1053,17 @@ fail:
   for (auto* mr : write_cache_value_server_mr_list) {
     if (mr) ibv_dereg_mr(mr);
   }
+  for (auto* mr : write_cache_key_scale_server_mr_list) {
+    if (mr) ibv_dereg_mr(mr);
+  }
+  for (auto* mr : write_cache_value_scale_server_mr_list) {
+    if (mr) ibv_dereg_mr(mr);
+  }
 
   write_cache_key_server_mr_list.clear();
   write_cache_value_server_mr_list.clear();
+  write_cache_key_scale_server_mr_list.clear();
+  write_cache_value_scale_server_mr_list.clear();
   return false;
 }
 
@@ -936,8 +1109,12 @@ int RDMACommunicator::write_cache(const std::string& ip,
 
   std::vector<uint64_t> cache_key_remote_addr(block_num);
   std::vector<uint64_t> cache_value_remote_addr(block_num);
+  std::vector<uint64_t> cache_key_scale_remote_addr(block_num);
+  std::vector<uint64_t> cache_value_scale_remote_addr(block_num);
   std::vector<uint64_t> crc_cache_key_remote_addr(block_num);
   std::vector<uint64_t> crc_cache_value_remote_addr(block_num);
+  std::vector<uint64_t> crc_cache_key_scale_remote_addr(block_num);
+  std::vector<uint64_t> crc_cache_value_scale_remote_addr(block_num);
 
   uint32_t cache_key_rkey =
       ctx->conn.write_cache_key_remote_rkey_list[layer_idx];
@@ -946,13 +1123,28 @@ int RDMACommunicator::write_cache(const std::string& ip,
   if (has_value_cache_) {
     cache_value_rkey = ctx->conn.write_cache_value_remote_rkey_list[layer_idx];
   }
+  uint32_t cache_key_scale_rkey = 0;
+  if (has_key_scale_) {
+    cache_key_scale_rkey =
+        ctx->conn.write_cache_key_scale_remote_rkey_list[layer_idx];
+  }
+  uint32_t cache_value_scale_rkey = 0;
+  if (has_value_scale_) {
+    cache_value_scale_rkey =
+        ctx->conn.write_cache_value_scale_remote_rkey_list[layer_idx];
+  }
 
-  uint32_t crc_cache_key_rkey, crc_cache_value_rkey;
+  // uint32_t crc_cache_key_rkey, crc_cache_value_rkey;
   bool pd_tp_size_is_same = prefill_tp_size == ctx->conn.decode_tp_size;
   uint64_t offset_in_block =
       pd_tp_size_is_same ? 0 : block_size_byte * prefill_tp_idx;
   uint64_t total_block_size_byte =
       pd_tp_size_is_same ? block_size_byte : block_size_byte * prefill_tp_size;
+  uint64_t offset_in_scale_block =
+      pd_tp_size_is_same ? 0 : scale_block_size_byte * prefill_tp_idx;
+  uint64_t total_scale_block_size_byte =
+      pd_tp_size_is_same ? scale_block_size_byte
+                         : scale_block_size_byte * prefill_tp_size;
 
   for (size_t block_index = 0; block_index < block_num; ++block_index) {
     char* char_ptr = static_cast<char*>(
@@ -968,21 +1160,74 @@ int RDMACommunicator::write_cache(const std::string& ip,
           char_ptr + remote_block_ids[block_index] * total_block_size_byte +
           offset_in_block));
     }
+    if (has_key_scale_) {
+      char_ptr = static_cast<char*>(
+          ctx->conn.write_cache_key_scale_remote_ptr_list[layer_idx]);
+      cache_key_scale_remote_addr[block_index] = (uint64_t(
+          char_ptr +
+          remote_block_ids[block_index] * total_scale_block_size_byte +
+          offset_in_scale_block));
+    }
+    if (has_value_scale_) {
+      char_ptr = static_cast<char*>(
+          ctx->conn.write_cache_value_scale_remote_ptr_list[layer_idx]);
+      cache_value_scale_remote_addr[block_index] = (uint64_t(
+          char_ptr +
+          remote_block_ids[block_index] * total_scale_block_size_byte +
+          offset_in_scale_block));
+    }
   }
 
   ctx->conn.wc_target_count = 0;
-  int loop_count = has_value_cache_ ? 2 : 1;
-  for (int i = 0; i < loop_count; ++i) {
-    bool is_key = (i == 0);
-    uint32_t rkey = (is_key ? cache_key_rkey : cache_value_rkey);
-    std::vector<uint64_t>& remote_addr =
-        (is_key ? cache_key_remote_addr : cache_value_remote_addr);
+
+  // Send key data
+  if (!post_block_send(ctx,
+                       layer_idx,
+                       local_block_ids,
+                       "key",
+                       cache_key_remote_addr,
+                       cache_key_rkey,
+                       ip,
+                       port)) {
+    return -1;
+  }
+
+  // Send value data if exists
+  if (has_value_cache_) {
     if (!post_block_send(ctx,
                          layer_idx,
                          local_block_ids,
-                         is_key,
-                         remote_addr,
-                         rkey,
+                         "value",
+                         cache_value_remote_addr,
+                         cache_value_rkey,
+                         ip,
+                         port)) {
+      return -1;
+    }
+  }
+
+  // Send key scale data if exists
+  if (has_key_scale_) {
+    if (!post_block_send(ctx,
+                         layer_idx,
+                         local_block_ids,
+                         "key_scale",
+                         cache_key_scale_remote_addr,
+                         cache_key_scale_rkey,
+                         ip,
+                         port)) {
+      return -1;
+    }
+  }
+
+  // Send value scale data if exists
+  if (has_value_scale_) {
+    if (!post_block_send(ctx,
+                         layer_idx,
+                         local_block_ids,
+                         "value_scale",
+                         cache_value_scale_remote_addr,
+                         cache_value_scale_rkey,
                          ip,
                          port)) {
       return -1;
@@ -1011,7 +1256,7 @@ bool RDMACommunicator::post_block_send(
     struct RdmaContext* ctx,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    bool is_key,
+    const std::string data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey,
     const std::string& ip,
@@ -1020,9 +1265,10 @@ bool RDMACommunicator::post_block_send(
   assert(block_num > 0 && "block_num must be > 0");
 
   bool success = execute_rdma_writes(
-      ctx, layer_idx, local_block_ids, is_key, remote_addr, rkey);
+      ctx, layer_idx, local_block_ids, data_type, remote_addr, rkey);
 
-  if (success) {
+  // FIXME: read verification for key_scale and value_scale
+  if (success && (data_type == "key" || data_type == "value")) {
     if (KVCacheConfig::getInstance().is_gdrcopy_flush_enabled()) {
       const size_t last_idx = block_num - 1;
       success = execute_read_verification(
@@ -1037,7 +1283,7 @@ bool RDMACommunicator::execute_rdma_writes(
     struct RdmaContext* ctx,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    bool is_key,
+    const std::string data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey) {
   auto block_num = local_block_ids.size();
@@ -1048,7 +1294,7 @@ bool RDMACommunicator::execute_rdma_writes(
                          send_wr_list,
                          layer_idx,
                          local_block_ids,
-                         is_key,
+                         data_type,
                          remote_addr,
                          rkey);
 
@@ -1085,25 +1331,32 @@ void RDMACommunicator::prepare_write_requests(
     struct ibv_send_wr* send_wr_list,
     int layer_idx,
     const std::vector<int64_t>& local_block_ids,
-    bool is_key,
+    const std::string data_type,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey) {
-  if (!is_key) {
-    assert(!write_mr_value_list.empty() &&
-           "Trying to process Value Cache but it is empty!");
-  }
   auto block_num = local_block_ids.size();
+
+  auto ptr_per_layer = local_cache_key_ptr_per_layer;
+  auto mr_list = write_mr_key_list;
+  auto length = block_size_byte;
+  if (data_type == "value") {
+    ptr_per_layer = local_cache_value_ptr_per_layer;
+    mr_list = write_mr_value_list;
+  } else if (data_type == "key_scale") {
+    ptr_per_layer = local_cache_key_scale_ptr_per_layer;
+    mr_list = write_mr_key_scale_list;
+    length = scale_block_size_byte;
+  } else if (data_type == "value_scale") {
+    ptr_per_layer = local_cache_value_scale_ptr_per_layer;
+    mr_list = write_mr_value_scale_list;
+    length = scale_block_size_byte;
+  }
 
   for (size_t i = 0; i < block_num; ++i) {
     sge_list[i].addr =
-        (uintptr_t)(is_key
-                        ? local_cache_key_ptr_per_layer[layer_idx]
-                                                       [local_block_ids[i]]
-                        : local_cache_value_ptr_per_layer[layer_idx]
-                                                         [local_block_ids[i]]);
-    sge_list[i].length = block_size_byte;
-    sge_list[i].lkey = (is_key ? write_mr_key_list[layer_idx]->lkey
-                               : write_mr_value_list[layer_idx]->lkey);
+        (uintptr_t)(ptr_per_layer[layer_idx][local_block_ids[i]]);
+    sge_list[i].length = length;
+    sge_list[i].lkey = mr_list[layer_idx]->lkey;
 
     size_t idx = i % RDMA_WR_LIST_MAX_SIZE;
     send_wr_list[i].wr_id = i;

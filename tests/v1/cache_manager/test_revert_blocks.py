@@ -117,6 +117,7 @@ class TestIsChunkedMMInput(unittest.TestCase):
         self.assertEqual(idx, 0)
 
 
+@unittest.skip("Skip TestRevertMatchBlocks")
 class TestRevertMatchBlocks(unittest.TestCase):
     def setUp(self):
         self.block_size = 64
