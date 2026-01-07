@@ -905,7 +905,7 @@ __global__ void permute_x_fp8_kernel(
         if constexpr (std::is_same_v<ScaleT, int>) {
           for (int s = tid; s < (hidden_size_scale + 3) / 4; s += blockDim.x) {
             permute_scale[s * permute_scale_stride0 + dst_token_idx] =
-                scale[s * padded_num_rows + s_token_idx];
+                scale[s * num_rows + s_token_idx];
           }
         } else {
           for (int s = tid; s < hidden_size_scale; s += blockDim.x) {

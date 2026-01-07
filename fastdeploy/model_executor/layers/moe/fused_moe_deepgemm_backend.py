@@ -27,6 +27,9 @@ from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    transform_scale_ue8m0,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.worker.tbo import let_another_thread_run
@@ -190,8 +193,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 2. Dynamic compute blockwise quantization scales
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-            x, self.quant_config.weight_block_size[0], use_ue8m0=self.quant_config.deepgemm_scale_ue8m
+            x, self.quant_config.weight_block_size[0], use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
         )
+        x_scale_tensor = x_scale_tensor[: x.shape[0]]
 
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
@@ -263,7 +267,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             # down_proj
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-                ffn_out, self.quant_config.weight_block_size[0], use_ue8m0=self.quant_config.deepgemm_scale_ue8m
+                ffn_out, self.quant_config.weight_block_size[0], use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
             )
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor[: ffn_in_x.shape[0]]
 
