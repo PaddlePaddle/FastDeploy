@@ -157,6 +157,7 @@ class CacheMessager:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
+        self.cache_dtype = cache_dtype
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
@@ -217,11 +218,19 @@ class CacheMessager:
         block_bytes = math.prod(cache_shape[1:])
         if key_cache.dtype == paddle.bfloat16 or key_cache.dtype == paddle.float16:
             block_bytes *= 2
+
+        scale_block_bytes = 0
+        if cache_dtype == "block_wise_fp8":
+            scale_block_bytes = math.prod(key_cache_scale.shape[1:])
+            if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
+                scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
-            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
+            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
         )
         self.block_bytes = block_bytes
+        self.scale_block_bytes = scale_block_bytes
 
         # 3. initialize the messager
         for protocol in transfer_protocol:
@@ -250,6 +259,9 @@ class CacheMessager:
                     rdma_port,
                     prefill_tp_size=nranks,
                     prefill_tp_idx=rank,
+                    cache_k_scale_ptr_list=k_scale_ptr_list,
+                    cache_v_scale_ptr_list=v_scale_ptr_list,
+                    scale_block_bytes=scale_block_bytes,
                 )
 
         self.gpu_id = gpu_id
@@ -405,7 +417,7 @@ class CacheMessager:
                             item["status"] = "finished"
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(decode_idx)
-                        logger.info(f"finish write cache {item['request_id']}")
+                        logger.info(f"finish write cache {item['request_id']}, cache dtype: {self.cache_dtype}")
                         self.engine_worker_queue.finish_send_cache_barrier.wait()
                         self.engine_worker_queue.put_finished_req([[item["request_id"], item["status"]]])
                         logger.info(f"put write cache {item['request_id']}, status {item['status']}")
@@ -482,6 +494,7 @@ class CacheMessagerV1:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
+        self.cache_dtype = cache_dtype
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
@@ -545,11 +558,19 @@ class CacheMessagerV1:
         block_bytes = math.prod(cache_shape[1:])
         if key_cache.dtype == paddle.bfloat16:
             block_bytes *= 2
+
+        scale_block_bytes = 0
+        if cache_dtype == "block_wise_fp8":
+            scale_block_bytes = math.prod(key_cache_scale.shape[1:])
+            if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
+                scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
-            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
+            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
         )
         self.block_bytes = block_bytes
+        self.scale_block_bytes = scale_block_bytes
 
         # 3. initialize the messager
         for protocol in transfer_protocol:
@@ -579,6 +600,9 @@ class CacheMessagerV1:
                     rdma_port,
                     prefill_tp_size=nranks,
                     prefill_tp_idx=rank,
+                    cache_k_scale_ptr_list=k_scale_ptr_list,
+                    cache_v_scale_ptr_list=v_scale_ptr_list,
+                    scale_block_bytes=scale_block_bytes,
                 )
 
         self.gpu_id = gpu_id
@@ -787,7 +811,8 @@ class CacheMessagerV1:
                                         if "error" not in task["status"]:
                                             task["status"] = "finished"
                                             logger.info(
-                                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end} need_prefill_tokens {task['need_prefill_tokens']}"
+                                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end}, "
+                                                f"need_prefill_tokens {task['need_prefill_tokens']}, cache dtype: {self.cache_dtype}"
                                             )
                                     else:
                                         task["sended_layer_id"] = -1

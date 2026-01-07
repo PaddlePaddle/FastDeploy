@@ -38,6 +38,11 @@
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
+    case 5: {                                                                  \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 5;                               \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
     case 6: {                                                                  \
       constexpr size_t NUM_EXPERTS_PER_RANK = 6;                               \
       __VA_ARGS__                                                              \
@@ -958,7 +963,6 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
           token_nums_per_expert_cumsum->data<int64_t>(),
           token_nums_per_expert_padded_cumsum->data<int64_t>(),
           m_indices->data<int>());
-  CUDA_CHECK(cudaGetLastError());
 }
 
 std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(

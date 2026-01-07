@@ -362,6 +362,10 @@ std::vector<paddle::Tensor> GetInferParam(
 
 void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag);
 
+void GetOutputEPStatic(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag);
+
 void GetOutputDynamic(const paddle::Tensor& x,
                       int64_t rank_id,
                       bool wait_flag,
@@ -839,7 +843,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "get_output function");
 
   m.def("get_output_ep",
-        &GetOutputStatic,
+        &GetOutputEPStatic,
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
