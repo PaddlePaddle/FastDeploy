@@ -65,8 +65,6 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   auto logprob_ranks_cpu = logprob_ranks.copy_to(paddle::CPUPlace(), false);
   auto token_num_per_batch_cpu =
       token_num_per_batch.copy_to(paddle::CPUPlace(), false);
-  auto cu_batch_token_offset_cpu =
-      cu_batch_token_offset.copy_to(paddle::CPUPlace(), false);
   auto seq_lens_decoder_cpu =
       seq_lens_decoder.copy_to(paddle::CPUPlace(), true);
   auto prompt_lens_cpu = prompt_lens.copy_to(paddle::CPUPlace(), true);
@@ -75,9 +73,16 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   float* logprob_scores_data = logprob_scores_cpu.data<float>();
   int64_t* logprob_ranks_data = logprob_ranks_cpu.data<int64_t>();
   int* token_num_per_batch_data = token_num_per_batch_cpu.data<int>();
-  int* cu_batch_token_offset_data = cu_batch_token_offset_cpu.data<int>();
   int* seq_lens_decoder_data = seq_lens_decoder_cpu.data<int>();
   int64_t* prompt_lens_data = prompt_lens_cpu.data<int64_t>();
+
+  int bsz = token_num_per_batch.shape()[0];
+  std::vector<int> cu_batch_token_offset_vec = std::vector<int>(bsz + 1, 0);
+  int tmp_acc = 0;
+  for (int i = 1; i < bsz + 1; i++) {
+    tmp_acc += token_num_per_batch_data[i - 1];
+    cu_batch_token_offset_vec[i] = tmp_acc;
+  }
 
   static struct msgdata msg_sed;
   int msg_queue_id = 1;
@@ -131,7 +136,6 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   msg_sed.meta[0] = not_need_stop.data<bool>()[0] ? inference_msg_id_from_env
                                                   : -inference_msg_id_from_env;
   msg_sed.meta[1] = message_flag;
-  int bsz = token_num_per_batch.shape()[0];
   msg_sed.meta[2] = bsz;
   int max_num_logprobs = logprob_token_ids.shape()[1];
   for (int i = 0; i < bsz; i++) {
@@ -143,7 +147,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     }
     msg_sed.meta[3 + i] = cur_token_num;
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];
-    int token_offset = cu_batch_token_offset_data[i];
+    int token_offset = cu_batch_token_offset_vec[i];
     for (int j = 0; j < cur_token_num; j++) {
       auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (K + 1)];
       auto* cur_scores = &cur_batch_msg_sed->scores[j * (K + 1)];
