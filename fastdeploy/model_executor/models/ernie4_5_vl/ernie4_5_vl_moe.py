@@ -546,7 +546,7 @@ class Ernie4_5_VLModel(nn.Layer):
         if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
             hidden_states = self.norm.allgather(hidden_states, forward_meta.ids_remove_padding.shape[0])
 
-        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+        out = self.norm(hidden_states, forward_meta=forward_meta)[0]
 
         return out
 
