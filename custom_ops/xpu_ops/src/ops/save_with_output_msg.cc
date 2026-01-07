@@ -17,15 +17,8 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "msg_utils.h"
 #include "paddle/extension.h"
-
-#define MAX_BSZ 256
-
-// #define SAVE_WITH_OUTPUT_DEBUG
-struct msgdata {
-  long mtype;
-  int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
-};
 
 // #define SAVE_WITH_OUTPUT_DEBUG
 void SaveOutMmsg(const paddle::Tensor &x,
@@ -122,7 +115,7 @@ void SaveOutMmsgStatic(const paddle::Tensor &x,
                        paddle::Tensor &preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank) {
-  SaveOutMmsg(x, not_need_stop, rank_id, 1, save_each_rank);
+  SaveOutMmsg(x, not_need_stop, preempted_idx, rank_id, 1, save_each_rank);
 }
 
 void SaveOutMmsgDynamic(const paddle::Tensor &x,
@@ -131,7 +124,8 @@ void SaveOutMmsgDynamic(const paddle::Tensor &x,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank) {
-  SaveOutMmsg(x, not_need_stop, rank_id, msg_queue_id, save_each_rank);
+  SaveOutMmsg(
+      x, not_need_stop, preempted_idx, rank_id, msg_queue_id, save_each_rank);
 }
 
 PD_BUILD_OP(save_output)

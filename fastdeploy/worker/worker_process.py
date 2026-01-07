@@ -282,7 +282,8 @@ class PaddleDisWorkerProc:
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
-        return model_weights_signal_tensor.item()
+        value = model_weights_signal_tensor.numpy()[0]
+        return int(value)
 
     def _tp_barrier_wait(self):
         if current_platform.is_xpu():
@@ -1031,6 +1032,11 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
+        # TODO XPU support PaddleOCR prefix caching
+        if current_platform.is_xpu():
+            fd_config.cache_config.enable_prefix_caching = False
+            fd_config.cache_config.max_encoder_cache = 0
+
     return fd_config
 
 

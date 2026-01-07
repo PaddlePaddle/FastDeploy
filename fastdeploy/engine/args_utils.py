@@ -531,7 +531,12 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_xpu()
+            and not current_platform.is_intel_hpu()
+            and not current_platform.is_maca()
+        ):
             self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -564,6 +569,9 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
+            # TODO XPU support PaddleOCR prefix caching
+            if current_platform.is_xpu():
+                self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
             if not self.enable_prefix_caching:
