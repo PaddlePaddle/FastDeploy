@@ -52,7 +52,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
   auto prompt_lens_cpu = prompt_lens.copy_to(paddle::CPUPlace(), true);
   int* seq_lens_decoder_data = seq_lens_decoder_cpu.data<int>();
   int64_t* prompt_lens_data = prompt_lens_cpu.data<int64_t>();
-  int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
+  const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
 
   if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {

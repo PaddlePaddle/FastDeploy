@@ -53,7 +53,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
   int64_t* logprob_token_ids_data = logprob_token_ids_cpu.data<int64_t>();
   float* logprob_scores_data = logprob_scores_cpu.data<float>();
   int64_t* ranks_data = ranks_cpu.data<int64_t>();
-  int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
+  const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
   static struct msgdata msg_sed;
   int msg_queue_id = 1;
   if (const char* inference_msg_queue_id_env_p =

@@ -76,7 +76,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   int* cu_batch_token_offset_data = cu_batch_token_offset_cpu.data<int>();
   int* seq_lens_decoder_data = seq_lens_decoder_cpu.data<int>();
   int64_t* prompt_lens_data = prompt_lens_cpu.data<int64_t>();
-  int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
+  const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
 
   static struct msgdata msg_sed;
   int msg_queue_id = 1;

@@ -22,7 +22,7 @@ void save_kernel(const paddle::Tensor& x,
                  bool save_each_rank) {
   const int64_t* x_data = x.data<int64_t>();
   static struct msgdata msg_sed;
-  int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
+  const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
 
   if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {
@@ -103,7 +103,7 @@ void save_kernel(const paddle::Tensor& x,
 
 void SaveOutMmsg(const paddle::Tensor& x,
                  const paddle::Tensor& not_need_stop,
-                 paddle::Tensor& preempted_idx,
+                 const paddle::Tensor& preempted_idx,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
