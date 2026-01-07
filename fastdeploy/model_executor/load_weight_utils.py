@@ -249,7 +249,11 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
 
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
         for j in get_expert_ranges(fd_config):
-            j = j % fd_config.model_config.moe_num_experts
+            # Map redundant expert IDs back to actual expert IDs for weight loading
+            moe_num_experts = fd_config.model_config.moe_num_experts
+            if isinstance(moe_num_experts, list):
+                moe_num_experts = moe_num_experts[0]
+            j = j % moe_num_experts
             up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
 
