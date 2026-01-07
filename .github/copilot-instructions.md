@@ -49,4 +49,4 @@ submitButton.enabled = isValidEmail(user.email);
 - Please check the description information of the Pull Request. At a minimum, it should explain why these modifications are being made in this Pull Request and what problem is being solved. If the committer hasn't written the corresponding information or the information is incomplete, prompt the committer to make modifications.
 
 ## Language
-- For repository members, please reply directly in Simplified Chinese; for external Contributors, reply in English.
+- 对于所有提交的PR，你提交的评论都使用中文语言，但需要注意，代码中的注释仍然需要使用英文

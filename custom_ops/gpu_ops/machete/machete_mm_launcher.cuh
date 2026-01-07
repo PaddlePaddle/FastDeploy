@@ -38,10 +38,6 @@ std::vector<std::string> supported_schedules_dispatch(
 
 template <typename MacheteKernel>
 paddle::Tensor run_impl(MMArgs args) {
-  // const at::cuda::OptionalCUDAGuard device_guard(device_of(args.A));
-
-  // auto device = args.A.device();
-  // auto stream = at::cuda::getCurrentCUDAStream(device.index());
   auto place = args.A.place();
   cudaStream_t stream = args.A.stream();
 
@@ -50,26 +46,31 @@ paddle::Tensor run_impl(MMArgs args) {
   int K = args.A.shape()[1];
 
   // Allocate output
-  paddle::Tensor D = paddle::empty(
-      {M, N},
-      equivalent_scalar_type_v<typename MacheteKernel::ElementD>,
-      place);
+  paddle::Tensor D =
+      paddle::empty({M, N},
+                    equivalent_scalar_type_v<typename MacheteKernel::ElementD>,
+                    place);
 
-  auto arguments = MacheteKernel::create_arguments(
-      stream,  //
-      args.A, args.B, D, args.maybe_group_scales, args.maybe_group_zeros,
-      args.maybe_group_size, args.maybe_channel_scales,
-      args.maybe_token_scales);
+  if (M == 0) {
+    return D;
+  }
+
+  auto arguments = MacheteKernel::create_arguments(stream,
+                                                   args.A,
+                                                   args.B,
+                                                   D,
+                                                   args.maybe_group_scales,
+                                                   args.maybe_group_zeros,
+                                                   args.maybe_group_size,
+                                                   args.maybe_channel_scales,
+                                                   args.maybe_token_scales);
   PD_CHECK(MacheteKernel::can_implement(arguments),
-              "Machete kernel cannot be run with these arguments");
+           "Machete kernel cannot be run with these arguments");
 
   size_t workspace_size = MacheteKernel::get_workspace_size(arguments);
   int S = static_cast<int>(workspace_size);
-  // phi::Allocator* allocator = paddle::GetAllocator(place);
-  // auto workspace = allocator->Allocate(workspace_size);
-  // MacheteKernel::run(arguments, workspace->ptr(), stream);
-  // paddle::Tensor workspace = paddle::empty({S}, paddle::DataType::UINT8, place);
-  paddle::Tensor workspace = GetEmptyTensor({S}, paddle::DataType::UINT8, place);
+  paddle::Tensor workspace =
+      GetEmptyTensor({S}, paddle::DataType::UINT8, place);
   MacheteKernel::run(arguments, workspace.data(), stream);
 
   return D;

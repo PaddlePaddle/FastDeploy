@@ -531,7 +531,12 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_xpu()
+            and not current_platform.is_intel_hpu()
+            and not current_platform.is_maca()
+        ):
             self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():

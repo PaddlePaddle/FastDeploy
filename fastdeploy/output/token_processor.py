@@ -77,6 +77,7 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
+        self.enable_draft_logprob = self.cfg.speculative_config.enable_draft_logprob
 
         if self.speculative_decoding:
             if self.use_logprobs:
@@ -446,7 +447,7 @@ class TokenProcessor:
             batch_result (list): batch results
         """
         try:
-            if self.cfg.speculative_config.method and self.use_logprobs:
+            if self.cfg.speculative_config.method and self.use_logprobs and self.enable_draft_logprob:
                 if mtype == 3:  # target
                     finished_batch_result, unfinished_batch_result = [], []
                     for r in batch_result:

@@ -110,19 +110,24 @@ pip install dist/*.whl
 |------|--------|------|
 | `KVCACHE_GDRCOPY_FLUSH_ENABLE` | false | 为Ampere GPU启用GDRCopy刷新 |
 
-# 设置RDMA GID索引
+设置RDMA GID索引
+
 export KVCACHE_RDMA_GID_INDEX=3
 
-# 设置RDMA IB设备列表
+设置RDMA IB设备列表
+
 export KVCACHE_RDMA_NICS=mlx5_0,mlx5_1,mlx5_2
 
-# 指定网络接口
+指定网络接口
+
 export KVCACHE_SOCKET_IFNAME=eth0
 
-# 启用调试模式
+启用调试模式
+
 export KVCACHE_DEBUG=1
 
-# 设置日志文件
+设置日志文件
+
 export KVCACHE_DEBUG_FILE=/var/log/kvcache_debug.log
 export KVCACHE_ERROR_FILE=/var/log/kvcache_error.log
 
