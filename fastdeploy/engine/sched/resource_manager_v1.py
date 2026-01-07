@@ -360,6 +360,12 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
+        if (
+            current_platform.is_intel_hpu()
+            and request.need_prefill_tokens - request.num_computed_tokens > token_budget
+            and token_budget > self.config.cache_config.block_size
+        ):
+            num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
         if not self.config.model_config.enable_mm:
@@ -653,6 +659,13 @@ class ResourceManagerV1(ResourceManager):
                         f"request.need_prefill_tokens {request.need_prefill_tokens},"
                         f"request.num_computed_tokens {request.num_computed_tokens}"
                     )
+                    if (
+                        current_platform.is_intel_hpu()
+                        and request.need_prefill_tokens - request.num_computed_tokens
+                        >= self.config.cache_config.block_size
+                        and token_budget < self.config.cache_config.block_size
+                    ):
+                        continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
@@ -718,6 +731,13 @@ class ResourceManagerV1(ResourceManager):
                                 self._free_blocks(request)
                                 break
 
+                        if (
+                            current_platform.is_intel_hpu()
+                            and request.need_prefill_tokens - request.num_computed_tokens
+                            >= self.config.cache_config.block_size
+                            and token_budget < self.config.cache_config.block_size
+                        ):
+                            continue
                         # Allocate blocks for the tokens that does not hit cache
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
