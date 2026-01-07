@@ -491,9 +491,11 @@ class CacheTransferManager:
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
                 kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+                start_time = time.time()
                 result = self.storage_backend.batch_get(
                     keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
                 )
+                read_cost_time = time.time() - start_time
 
                 k_result, v_result = result[:block_num], result[block_num:]
                 success_block_num = 0
@@ -505,6 +507,7 @@ class CacheTransferManager:
                 valid_cpu_block_ids = cpu_block_ids[:success_block_num]
 
                 mode = 1  # cpu ==> gpu
+                start_time = time.time()
                 swap_cache_layout(
                     self.gpu_cache_k_tensors,
                     self.storage_key_read_buffer,
@@ -523,6 +526,10 @@ class CacheTransferManager:
                     self.device,
                     mode,
                 )
+                swap_cost_time = time.time() - start_time
+                logger.debug(
+                    f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
+                )
 
             elif self.storage_backend_type == "attention_store":
                 key_cache = []
@@ -530,10 +537,16 @@ class CacheTransferManager:
                 for i in range(self.num_layers + self.num_extra_layers):
                     key_cache.append(self.gpu_cache_kvs[f"key_caches_{i}_rank{self.rank}.device{self.device}"])
                     val_cache.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{self.rank}.device{self.device}"])
+
+                start_time = time.time()
                 read_block_num = self.storage_backend.read(
                     task_id, key_cache, val_cache, token_ids, gpu_block_ids, start_read_block_idx, timeout
                 )
+                read_cost_time = time.time() - start_time
                 valid_gpu_block_ids = gpu_block_ids[:read_block_num]
+                logger.debug(
+                    f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
+                )
 
             return valid_gpu_block_ids
 
@@ -616,6 +629,7 @@ class CacheTransferManager:
                     self.key_cache_shape[3],
                 ]
                 mode = 0  # gpu ==> cpu
+                start_time = time.time()
                 swap_cache_layout(
                     self.gpu_cache_k_tensors,
                     self.storage_key_write_buffer,
@@ -634,6 +648,7 @@ class CacheTransferManager:
                     self.device,
                     mode,
                 )
+                swap_cost_time = time.time() - start_time
 
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
@@ -645,7 +660,14 @@ class CacheTransferManager:
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
                 kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+
+                start_time = time.time()
                 self.storage_backend.batch_set(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
+                write_cost_time = time.time() - start_time
+
+                logger.debug(
+                    f"_run_write_back_storage, swap_cost_time: {swap_cost_time:.6f}s, write_cost_time: {write_cost_time:.6f}s"
+                )
                 return block_num
 
             elif self.storage_backend_type == "attention_store":
@@ -654,9 +676,13 @@ class CacheTransferManager:
                 for i in range(self.num_layers + self.num_extra_layers):
                     key_cache.append(self.gpu_cache_kvs[f"key_caches_{i}_rank{self.rank}.device{self.device}"])
                     val_cache.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{self.rank}.device{self.device}"])
+
+                start_time = time.time()
                 write_block_num = self.storage_backend.write(
                     task_id, key_cache, val_cache, token_ids, gpu_block_ids, start_write_block_idx, timeout
                 )
+                write_cost_time = time.time() - start_time
+                logger.debug(f"_run_write_back_storage, write_cost_time: {write_cost_time:.6f}s")
                 return write_block_num
 
         except Exception as e:
@@ -1107,7 +1133,7 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     if args.mp_num > 1:
-        logger = get_logger("cache_transfer", f"cache_transfer.log.{rank_id}")
+        logger = get_logger("cache_transfer", f"cache_transfer_{rank_id}.log")
     else:
         logger = get_logger("cache_transfer", "cache_transfer.log")
 
