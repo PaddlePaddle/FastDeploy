@@ -20,13 +20,17 @@
 #include "msg_utils.h"
 #include "paddle/extension.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 // #define SAVE_WITH_OUTPUT_DEBUG
 void SaveOutMmsg(const paddle::Tensor& x,
                  const paddle::Tensor& not_need_stop,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
-  if (!save_each_rank && rank_id > 0) {
+  if (rank_id > 0) {
     return;
   }
   auto x_cpu = x.copy_to(paddle::CPUPlace(), false);
@@ -119,14 +123,14 @@ void SaveOutMmsgDynamic(const paddle::Tensor& x,
   SaveOutMmsg(x, not_need_stop, rank_id, msg_queue_id, save_each_rank);
 }
 
-PD_BUILD_OP(save_output)
+PD_BUILD_STATIC_OP(save_output)
     .Inputs({"x", "not_need_stop"})
     .Attrs({"rank_id: int64_t", "save_each_rank: bool"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
     .SetKernelFn(PD_KERNEL(SaveOutMmsgStatic));
 
-PD_BUILD_OP(save_output_dynamic)
+PD_BUILD_STATIC_OP(save_output_dynamic)
     .Inputs({"x", "not_need_stop"})
     .Attrs({"rank_id: int64_t", "msg_queue_id: int", "save_each_rank: bool"})
     .Outputs({"x_out"})
