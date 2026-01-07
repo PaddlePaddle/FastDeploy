@@ -1191,7 +1191,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_dummy_or_profile_run: bool = False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             if self.enable_mm and self.share_inputs["image_features_list"] is not None:
@@ -1247,7 +1247,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
-
+        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
@@ -1261,9 +1261,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update bad tokens len
         max_bad_tokens_len = max(self.share_inputs["bad_tokens_len"])
-
-        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-        self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
+        # Initialize forward meta data
+        self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1296,7 +1295,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
     def _process_reorder(self) -> None:
-        if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
+        if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             if (
                 self.enable_mm
                 and not envs.ENABLE_V1_KVCACHE_SCHEDULER
@@ -1821,11 +1820,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         while True:
             # 1. Initialize forward meta and attention meta data
-            # Initialize forward meta data
-            self.initialize_forward_meta(is_dummy_or_profile_run=True)
-
-            self._prepare_inputs()
-
+            self._prepare_inputs(is_dummy_or_profile_run=True)
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
@@ -2121,11 +2116,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
-        # Initialize forward meta data
-        self.initialize_forward_meta(is_dummy_or_profile_run=False)
-
         # Reorder inputs to split prefill and decode tokens
-
         self._process_reorder()
 
         self._prepare_inputs()
