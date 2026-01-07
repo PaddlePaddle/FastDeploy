@@ -78,6 +78,19 @@ class IPCCommManager:
         local_value_cache_scale_list,
         cache_dtype,
     ):
+        """
+        Args:
+            rank_id_: Rank id of the current process.
+            gpu_idx_: Local GPU index used for cache communication.
+            local_key_cache_tensor_list: List of local key cache tensors, one per layer.
+            local_value_cache_tensor_list: List of local value cache tensors, one per layer.
+            local_key_cache_scale_list: List of per-layer scale tensors for key caches,
+                used when cache quantization (e.g. dy-fp8) is enabled.
+            local_value_cache_scale_list: List of per-layer scale tensors for value caches,
+                used when cache quantization (e.g. dy-fp8) is enabled.
+            cache_dtype: String indicating the data type/format of the cache
+                (for example, "bfloat16" or "block_wise_fp8").
+        """
         self.rank_id = rank_id_
         self.gpu_idx = gpu_idx_
         self.cache_dtype = cache_dtype
@@ -135,7 +148,7 @@ class IPCCommManager:
                 False,
             )
             if self.cache_dtype == "block_wise_fp8":
-                logger.info(f"IPC write cache scales for layer: {layer_idx}")
+                logger.debug(f"IPC write cache scales for layer: {layer_idx}")
                 ipc_sent_key_value_cache_by_remote_ptr(
                     self.local_key_cache_scale_list[layer_idx],
                     self.local_value_cache_scale_list[layer_idx],
