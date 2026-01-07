@@ -136,7 +136,6 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   msg_sed.meta[0] = not_need_stop.data<bool>()[0] ? inference_msg_id_from_env
                                                   : -inference_msg_id_from_env;
   msg_sed.meta[1] = message_flag;
-  int bsz = token_num_per_batch.shape()[0];
   msg_sed.meta[2] = bsz;
   int max_num_logprobs = logprob_token_ids.shape()[1];
   for (int i = 0; i < bsz; i++) {
