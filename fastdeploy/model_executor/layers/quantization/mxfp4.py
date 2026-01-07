@@ -25,9 +25,11 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
-from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 from fastdeploy.model_executor.utils import set_weight_attrs
 from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 from fastdeploy.utils import get_logger
 
 from ..moe import FusedMoE
