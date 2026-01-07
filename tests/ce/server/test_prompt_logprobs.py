@@ -320,7 +320,7 @@ def test_stream_with_prompt_logprobs_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        # "return_token_ids":True
+        "return_token_ids":True
     }
 
     payload = build_request_payload(TEMPLATE, data)
@@ -336,9 +336,10 @@ def test_stream_with_prompt_logprobs_completions():
             break
 
         result_chunk = json.loads(decoded)
-        # completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
-        # if completion_token_ids:
-        if not first_packet:
+        print(result_chunk)
+        completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
+        if completion_token_ids:
+        # if not first_packet:
             assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
@@ -346,11 +347,11 @@ def test_stream_with_prompt_logprobs_completions():
                     assert prompt_logprobs is None
                 else:
                     top = list(prompt_logprobs.values())
-                    # token_id = int(list(prompt_logprobs.keys())[0])
+                    token_id = int(list(prompt_logprobs.keys())[0])
                     assert top[0]["decoded_token"] is not None
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
-                    # assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
+                    assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
             first_packet = False
 
 
@@ -466,16 +467,17 @@ def test_error_with_prompt_logprobs():
             {"role": "user", "content": "牛顿的三大运动定律是什么？"},
         ],
         "max_tokens": 3,
-        "prompt_logprobs": 15,
+        "prompt_logprobs": 25,
     }
 
     # 构建请求并发送
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(URL, payload)
     resp_json = response.json()
+    print(json.dumps(resp_json, ensure_ascii=False))
 
     assert (
-        "Number of prompt_logprobs requested (15) exceeds maximum allowed value (10)" in resp_json["error"]["message"]
+        "Number of prompt_logprobs requested (25) exceeds maximum allowed value (20)" in resp_json["error"]["message"]
     )
 
 
