@@ -465,21 +465,24 @@ class GPUModelRunner(ModelRunnerBase):
                         f"request {request.request_id} start process encoder info, image_start_idx: {image_start_idx} "
                         f"grid_thw_list: {grid_thw_list}, feature_positions: {feature_positions}, mm_hashes_list: {mm_hashes_list}"
                     )
+                    encoder_cache_info_per_req = []
+                    grid_thw_lst_per_req = []
                     for i, mm_hash in enumerate(mm_hashes_list):
                         image_offset = np.prod(grid_thw_list[i])
                         logger.debug(
                             f"run idx {i} with mm_hash {mm_hash} image_offset: {image_offset} grid_thw: {grid_thw_list[i]}"
                         )
                         if mm_hash in self.encoder_cache:
-                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], True))
+                            encoder_cache_info_per_req.append((mm_hash, feature_positions[i], True))
                             continue
 
-                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
+                        encoder_cache_info_per_req.append((mm_hash, feature_positions[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
                                 inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
                             )
                             multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
+                            grid_thw_lst_per_req.append(paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64))
                             multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
                             multi_vision_inputs["vit_position_ids_lst"].append(vit_position_ids_list[i])
                         else:
@@ -492,7 +495,10 @@ class GPUModelRunner(ModelRunnerBase):
                             multi_vision_inputs["grid_thw_lst"].append(
                                 paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64)
                             )
+                            grid_thw_lst_per_req.append(paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64))
                         image_start_idx += image_offset
+                    multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_lst_per_req)
+                    multi_vision_inputs["encoder_cache_info"].append(encoder_cache_info_per_req)
                 else:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         multi_vision_inputs["images_lst"].append(
@@ -543,7 +549,6 @@ class GPUModelRunner(ModelRunnerBase):
                             prefill_end_index=request.prefill_end_index,
                         )
                     )
-
         if self.encoder_cache is not None:
             if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
                 image_features_output = None
@@ -551,31 +556,34 @@ class GPUModelRunner(ModelRunnerBase):
                     image_features_output = self.extract_vision_features(multi_vision_inputs)
 
                 logger.debug(f"encoder_cache_info: {multi_vision_inputs['encoder_cache_info']}")
-                merge_image_features, feature_idx, thw_idx = [], 0, 0
-                for mm_hash, feature_position, use_cache in multi_vision_inputs["encoder_cache_info"]:
-                    if use_cache:
-                        assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
-                        mm_feature = self.encoder_cache[mm_hash].cuda()
-                    else:
-                        assert (
-                            image_features_output is not None
-                        ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                        mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                feature_idx = 0
+                image_features_list = []
+                for index, encoder_cache_info in enumerate(multi_vision_inputs["encoder_cache_info"]):
+                    merge_image_features, thw_idx = [], 0
+                    for mm_hash, feature_position, use_cache in encoder_cache_info:
+                        if use_cache:
+                            assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
+                            mm_feature = self.encoder_cache[mm_hash].cuda()
+                        else:
+                            assert (
+                                image_features_output is not None
+                            ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
+                            grid_thw = multi_vision_inputs["grid_thw_lst_batches"][index][thw_idx]
+                            mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
-                        # add feature to encoder cache
-                        self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                        feature_idx += mm_token_lenght
-                        thw_idx += 1
+                            # add feature to encoder cache
+                            self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
+                            feature_idx += mm_token_lenght
+                            thw_idx += 1
 
-                    feature_start = feature_position.offset
-                    feature_end = feature_position.offset + feature_position.length
-                    merge_image_features.append(mm_feature[feature_start:feature_end])
-
+                        feature_start = feature_position.offset
+                        feature_end = feature_position.offset + feature_position.length
+                        merge_image_features.append(mm_feature[feature_start:feature_end])
+                    image_features_list.append(paddle.concat(merge_image_features, axis=0))
                 for idx, index in req_idx_img_index_map.items():
                     if index != -1:
-                        self.share_inputs["image_features_list"][idx] = merge_image_features[index]
+                        self.share_inputs["image_features_list"][idx] = image_features_list[index]
         elif len(multi_vision_inputs["images_lst"]) > 0:
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             image_features_list = []
