@@ -429,7 +429,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """
         compute logits
         """
