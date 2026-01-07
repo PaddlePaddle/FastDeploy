@@ -115,6 +115,12 @@ def setup_and_run_server():
                 for line in f:
                     print(line, end="")
             print("=====test output end=====")
+            print("=====test work output start {}=====".format(t))
+            # 输出测试日志
+            with open("log/workerlog.0", "r") as f:
+                for line in f:
+                    print(line, end="")
+            print("=====test work output end=====")
 
     else:
         print("[TIMEOUT] API server failed to start in 10 minutes. Cleaning up...")

@@ -105,7 +105,7 @@ def setup_and_run_server():
     #         print(f"API server is up on port {FD_API_PORT}")
     #         break
     #     time.sleep(1)
-    for t in range(13 * 60):
+    for t in range(15 * 60):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
             break
@@ -119,6 +119,12 @@ def setup_and_run_server():
                 for line in f:
                     print(line, end="")
             print("=====test output end=====")
+            print("=====test work output start {}=====".format(t))
+            # 输出测试日志
+            with open("log/workerlog.0", "r") as f:
+                for line in f:
+                    print(line, end="")
+            print("=====test work output end=====")
     else:
         print("[TIMEOUT] API server failed to start in 10 minutes. Cleaning up...")
         try:
