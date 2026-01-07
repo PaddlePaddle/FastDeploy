@@ -100,11 +100,21 @@ def setup_and_run_server():
         )
 
     # Wait up to 10 minutes for API server to be ready
-    for _ in range(10 * 60):
+    for t in range(13 * 60):
         if is_port_open("127.0.0.1", FD_API_PORT):
             print(f"API server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
+        if t == 1 * 60:
+            print("1 minute passed")
+        if t == 6 * 60 or t == 10 * 60:
+            print("=====test output start {}=====".format(t))
+            # 输出测试日志
+            with open(log_path, "r") as f:
+                for line in f:
+                    print(line, end="")
+            print("=====test output end=====")
+
     else:
         print("[TIMEOUT] API server failed to start in 10 minutes. Cleaning up...")
         try:
