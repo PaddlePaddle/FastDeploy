@@ -399,7 +399,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             ),
         )
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """
         compute logits
         """
