@@ -54,6 +54,9 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   if (!save_each_rank && rank_id > 0) {
     return;
   }
+
+  int max_draft_tokens = sampled_token_ids.shape()[1];
+
   auto sampled_token_ids_cpu =
       sampled_token_ids.copy_to(paddle::CPUPlace(), false);
   auto logprob_token_ids_cpu =
@@ -146,7 +149,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
       auto* cur_scores = &cur_batch_msg_sed->scores[j * (K + 1)];
       for (int k = 0; k < K + 1; k++) {
         if (k == 0) {
-          cur_tokens[k] = (int)sampled_token_ids_data[token_offset + j];
+          cur_tokens[k] = (int)sampled_token_ids_data[i * max_draft_tokens + j];
           cur_scores[k] = logprob_scores_data[(token_offset + j) * (K + 1) + k];
         } else if (k < max_num_logprobs) {
           cur_tokens[k] =
