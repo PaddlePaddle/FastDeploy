@@ -353,6 +353,21 @@ class ResourceManagerV1(ResourceManager):
 
         return False
 
+    def revert_chunked_mm_input(self, mm_inputs, matched_token_num):
+        """
+        revert mm_inputs that is chunked
+        """
+        if mm_inputs is None or "mm_positions" not in mm_inputs or len(mm_inputs["mm_positions"]) == 0:
+            return matched_token_num
+
+        for idx in range(len(mm_inputs["mm_positions"])):
+            position = mm_inputs["mm_positions"][idx]
+            if position.offset < matched_token_num < position.offset + position.length:
+                return position.offset
+            elif matched_token_num < position.offset:
+                break
+        return matched_token_num
+
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
@@ -904,11 +919,20 @@ class ResourceManagerV1(ResourceManager):
             main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
             main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
 
-            if matched_token_num == request.need_prefill_tokens:
-                request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
-                request.skip_allocate = True
+            if self.config.cache_config.disable_chunked_mm_input:
+                if matched_token_num == request.need_prefill_tokens:
+                    matched_token_num = matched_token_num - self.config.cache_config.block_size
+                    request.skip_allocate = True
+                request.num_computed_tokens = self.revert_chunked_mm_input(
+                    request.multimodal_inputs, matched_token_num
+                )
             else:
-                request.num_computed_tokens = matched_token_num
+                if matched_token_num == request.need_prefill_tokens:
+                    request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
+                    request.skip_allocate = True
+                else:
+                    request.num_computed_tokens = matched_token_num
+            llm_logger.info(f"request {request.request_id} num_computed_tokens: {request.num_computed_tokens}")
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
