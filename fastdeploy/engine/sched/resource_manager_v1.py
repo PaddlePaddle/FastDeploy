@@ -709,6 +709,14 @@ class ResourceManagerV1(ResourceManager):
                         >= self.config.cache_config.block_size
                         and token_budget < self.config.cache_config.block_size
                     ):
+                        req_index += 1
+                        continue
+                    if (
+                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
+                        req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
