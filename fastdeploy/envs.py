@@ -161,6 +161,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0")
     ),
+    "GLOBAL_LOGGING_INSTRUMENT": lambda: int(os.getenv("GLOBAL_LOGGING_INSTRUMENT", "0")),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }

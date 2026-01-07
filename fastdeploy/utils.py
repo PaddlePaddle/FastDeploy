@@ -1046,7 +1046,7 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
-trace_logger = FastDeployLogger().get_trace_logger("trace_logger", "trace_logger.log")
+trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 
 
