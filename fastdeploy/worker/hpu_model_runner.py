@@ -53,7 +53,13 @@ from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 hpu_model_runner_profile_logger = get_logger("hpu_model_runner_profile", "hpu_model_runner_profile.log")
 
 
-def post_process_hpu(sampled_token_ids: paddle.Tensor, model_output: ModelOutputData, is_warmuping: bool) -> None:
+def post_process_hpu(
+    sampled_token_ids: paddle.Tensor,
+    model_output: ModelOutputData,
+    is_warmuping: bool,
+    is_chunk_step: paddle.Tensor,
+    enable_chunked_prefill: bool,
+) -> None:
     """Post-processing steps after completing a single token generation."""
     start_time = time.time()
 
@@ -86,6 +92,11 @@ def post_process_hpu(sampled_token_ids: paddle.Tensor, model_output: ModelOutput
     if is_warmuping:
         return
     start_time = time.time()
+    if enable_chunked_prefill:
+        sampled_token_ids = sampled_token_ids.cpu()
+        for i in range(is_chunk_step.shape[0]):
+            if is_chunk_step[i]:
+                sampled_token_ids[i] = -1
     save_output(
         sampled_token_ids,
         model_output.not_need_stop,
@@ -207,6 +218,32 @@ def rebuild_padding_v3_1(
             output_data[i] = tmp_out[i, seq_len - 1]
     elif is_prompt is False:
         output_data[0 : batch_ids.shape[0], :] = tmp_out[: batch_ids.shape[0], :]
+
+    return output_data
+
+
+def rebuild_padding_mixed_v3_1(
+    tmp_out,
+    batch_ids_encoder,
+    total_batch_encoder,
+    batch_ids_decoder,
+    total_batch_decoder,
+    seq_lens_encoder,
+):
+    dim_emb = tmp_out.shape[-1]
+    output_data = paddle.zeros((total_batch_encoder + total_batch_decoder, dim_emb))
+
+    encoder_chunk_len = int((tmp_out.shape[0] - total_batch_decoder) / total_batch_encoder)
+    position = 0
+    for i in range(batch_ids_encoder.shape[0]):
+        encoder_id = batch_ids_encoder[i].item()
+        seq_len = seq_lens_encoder[encoder_id].item()
+        output_data[position] = tmp_out[i * encoder_chunk_len + seq_len - 1]
+        position += 1
+
+    for i in range(batch_ids_decoder.shape[0]):
+        output_data[position] = tmp_out[i - total_batch_decoder]
+        position += 1
 
     return output_data
 
@@ -526,7 +563,7 @@ class HPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
-                # self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -793,6 +830,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["bad_tokens"] = paddle.full([1], -1, dtype="int64")
         self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
+        self.share_inputs["is_chunk_step"] = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32").cpu()
         self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32").cpu()
         self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32").cpu()
@@ -886,17 +924,26 @@ class HPUModelRunner(ModelRunnerBase):
         from fastdeploy.model_executor.ops.intel_hpu import prepare_block_metadata
 
         (
-            ids_remove_padding,
-            rotary_embs,
-            block_groups,
-            block_list,
-            block_indices,
-            block_offsets,
-            block_mapping,
-            attention_mask,
-            batch_ids,
-            total_batch,
-            is_prompt,
+            ids_remove_padding_encoder,
+            rotary_embs_encoder,
+            block_groups_encoder,
+            block_list_encoder,
+            block_indices_encoder,
+            block_offsets_encoder,
+            block_mapping_encoder,
+            _,
+            batch_ids_encoder,
+            total_batch_encoder,
+            ids_remove_padding_decoder,
+            rotary_embs_decoder,
+            block_groups_decoder,
+            block_list_decoder,
+            block_indices_decoder,
+            block_offsets_decoder,
+            block_mapping_decoder,
+            attention_mask_decoder,
+            batch_ids_decoder,
+            total_batch_decoder,
         ) = prepare_block_metadata(
             self.share_inputs["input_ids"],
             self.share_inputs["rope_emb"],
@@ -906,27 +953,43 @@ class HPUModelRunner(ModelRunnerBase):
             self.cache_config.block_size,
             self.model_config.dtype,
             self.scheduler_config.max_num_batched_tokens,
+            self.cache_config.enable_chunked_prefill,
         )
-        is_prompt = is_prompt.item() == 1 if is_prompt.item() > 0 else None
-        if is_prompt is True:
-            attention_mask = None
-        # cum_offsets = None
-        self.share_inputs["ids_remove_padding"] = ids_remove_padding
-        self.share_inputs["rotary_embs"] = rotary_embs
-        self.share_inputs["block_groups"] = block_groups
-        self.share_inputs["block_list"] = block_list
-        self.share_inputs["block_indices"] = block_indices
-        self.share_inputs["block_offsets"] = block_offsets
-        self.share_inputs["block_mapping"] = block_mapping
-        self.share_inputs["block_bias"] = attention_mask
+        self.share_inputs["ids_remove_padding_encoder"] = ids_remove_padding_encoder
+        self.share_inputs["rotary_embs_encoder"] = rotary_embs_encoder
+        self.share_inputs["block_groups_encoder"] = block_groups_encoder
+        self.share_inputs["block_list_encoder"] = block_list_encoder
+        self.share_inputs["block_indices_encoder"] = block_indices_encoder
+        self.share_inputs["block_offsets_encoder"] = block_offsets_encoder
+        self.share_inputs["block_mapping_encoder"] = block_mapping_encoder
+        self.share_inputs["block_bias_encoder"] = None
+        self.share_inputs["batch_ids_encoder"] = batch_ids_encoder
+        self.share_inputs["total_batch_encoder"] = int(total_batch_encoder.item())
+        self.share_inputs["ids_remove_padding_decoder"] = ids_remove_padding_decoder
+        self.share_inputs["rotary_embs_decoder"] = rotary_embs_decoder
+        self.share_inputs["block_groups_decoder"] = block_groups_decoder
+        self.share_inputs["block_list_decoder"] = block_list_decoder
+        self.share_inputs["block_indices_decoder"] = block_indices_decoder
+        self.share_inputs["block_offsets_decoder"] = block_offsets_decoder
+        self.share_inputs["block_mapping_decoder"] = block_mapping_decoder
+        self.share_inputs["block_bias_decoder"] = attention_mask_decoder
+        self.share_inputs["batch_ids_decoder"] = batch_ids_decoder
+        self.share_inputs["total_batch_decoder"] = int(total_batch_decoder.item())
         self.share_inputs["block_size"] = self.cache_config.block_size
-        self.share_inputs["batch_ids"] = batch_ids
-        self.share_inputs["total_batch"] = total_batch.item()
-        self.share_inputs["is_prompt"] = is_prompt
+
+        if total_batch_encoder.item() > 0 and total_batch_decoder.item():
+            self.share_inputs["ids_remove_padding"] = paddle.concat(
+                (ids_remove_padding_encoder, ids_remove_padding_decoder), axis=0
+            )
+        elif total_batch_encoder.item() > 0:
+            self.share_inputs["ids_remove_padding"] = ids_remove_padding_encoder
+        elif total_batch_decoder.item():
+            self.share_inputs["ids_remove_padding"] = ids_remove_padding_decoder
         self.initialize_forward_meta()
 
     def _prepare_sampler_inputs(self, sampled_ids) -> None:
-        if self.forward_meta.total_batch == self.share_inputs["temperature"].shape[0]:
+        total_batch = self.forward_meta.total_batch_encoder + self.forward_meta.total_batch_decoder
+        if total_batch == self.share_inputs["temperature"].shape[0]:
             self.sampling_metadata = SamplingMetadata(
                 temperature=self.share_inputs["temperature"],
                 top_p=self.share_inputs["top_p"],
@@ -973,7 +1036,7 @@ class HPUModelRunner(ModelRunnerBase):
                 self.share_inputs["penalty_score"],
                 self.share_inputs["min_dec_len"],
                 sampled_ids,
-                self.forward_meta.total_batch,
+                total_batch,
             )
 
             self.sampling_metadata = SamplingMetadata(
@@ -1176,7 +1239,11 @@ class HPUModelRunner(ModelRunnerBase):
             )
 
             post_process_hpu(
-                sampled_token_ids=sampled_token_ids, model_output=model_output_data, is_warmuping=self.is_warmuping
+                sampled_token_ids=sampled_token_ids,
+                model_output=model_output_data,
+                is_warmuping=self.is_warmuping,
+                is_chunk_step=self.share_inputs["is_chunk_step"],
+                enable_chunked_prefill=self.cache_config.enable_chunked_prefill,
             )
 
             # 7. Updata 'infer_seed' and step_cuda()
@@ -1385,6 +1452,61 @@ class HPUModelRunner(ModelRunnerBase):
                 self.update_warmup_inputs(requests, is_decode=True)
                 self.execute_model()
                 logger.info(f"Warmup decode_batch: {decode_batch}, decode_block_num: {decode_block_num} done")
+        if self.cache_config.enable_chunked_prefill:
+            for decode_batch in decode_batchs[::4]:
+                for decode_block_num in decode_block_nums[::4]:
+                    if decode_block_num < decode_batch:
+                        continue
+                    if decode_block_num // decode_batch * self.cache_config.block_size > warmup_max_model_len:
+                        continue
+                    blocks = [decode_block_num // decode_batch for _ in range(decode_batch)]
+                    remain_block_num = decode_block_num % decode_batch
+                    b = 0
+                    while remain_block_num > 0:
+                        blocks[b] += 1
+                        remain_block_num -= 1
+                        b += 1
+                    if blocks[0] * self.cache_config.block_size > warmup_max_model_len:
+                        continue
+                    prefill_batch = 1  # limit to prefill_batch = 1 when warmup chunked prefill
+                    if prefill_batch + decode_batch > self.scheduler_config.max_num_seqs:
+                        continue
+                    for prefill_length_with_context in prefill_length_with_contexts[::4]:
+                        for context_len in range(
+                            0, prefill_length_with_context, self.cache_config.block_size * prefill_context_block_step
+                        ):
+                            prefill_length = prefill_length_with_context - context_len
+                            logger.info(
+                                f"warmup mixed_batch: warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length}, context_len: {context_len}, decode_batch: {decode_batch}, decode_block_num: {decode_block_num} start"
+                            )
+                            requests_prefill = [
+                                {
+                                    "idx": 0,
+                                    "input_ids": [5] * (prefill_length_with_context - context_len - 1),
+                                    "block_tables": list(
+                                        range(prefill_length_with_context // self.cache_config.block_size)
+                                    ),
+                                    "eos_token_ids": [2],
+                                }
+                            ]
+                            self.update_warmup_inputs(requests_prefill, is_decode=False)
+                            requests_decode = [
+                                {
+                                    "idx": i + 1,
+                                    "input_ids": [5] * (blocks[i] * self.cache_config.block_size - 1),
+                                    "block_tables": list(range(blocks[i])),
+                                    "eos_token_ids": [2],
+                                }
+                                for i in range(decode_batch)
+                            ]
+                            self.update_warmup_inputs(requests_decode, is_decode=True)
+                            self.execute_model()
+                            logger.info(
+                                f"warmup mixed_batch: warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length}, context_len: {context_len}, decode_batch: {decode_batch}, decode_block_num: {decode_block_num} done"
+                            )
+                            # when disable prefix caching, only run context_len = 0 for each prefill_batch
+                            if not self.cache_config.enable_prefix_caching:
+                                break
         self.share_inputs["not_need_stop"][0] = False
         logger.info("Warmup bucket done")
 
@@ -1439,18 +1561,39 @@ class HPUModelRunner(ModelRunnerBase):
         end_time = time.time()
         execution_time = (end_time - start_time) * 1000
         hpu_model_runner_profile_logger.info(
-            f"Model execution time(ms): {execution_time}, BT={real_bs}, block_list_shape={self.share_inputs['block_list'].shape}, block_indices_shape={self.share_inputs['block_indices'].shape}"
+            f"Model execution time(ms): {execution_time}, BT={real_bs}, block_list_encoder_shape={self.share_inputs['block_list_encoder'].shape}, block_indices_encoder_shape={self.share_inputs['block_indices_encoder'].shape}"
+        )
+        hpu_model_runner_profile_logger.info(
+            f"Model execution time(ms): {execution_time}, BT={real_bs}, block_list_decoder_shape={self.share_inputs['block_list_decoder'].shape}, block_indices_decoder_shape={self.share_inputs['block_indices_decoder'].shape}"
         )
 
         start_time = time.time()
         start_time0 = time.time()
-        hiddden_states = rebuild_padding_v3_1(
-            model_output,
-            self.forward_meta.batch_ids,
-            self.forward_meta.total_batch,
-            self.forward_meta.seq_lens_encoder,
-            self.forward_meta.is_prompt,
-        )
+        if self.forward_meta.total_batch_encoder > 0 and self.forward_meta.total_batch_decoder > 0:
+            hiddden_states = rebuild_padding_mixed_v3_1(
+                model_output,
+                self.forward_meta.batch_ids_encoder,
+                self.forward_meta.total_batch_encoder,
+                self.forward_meta.batch_ids_decoder,
+                self.forward_meta.total_batch_decoder,
+                self.forward_meta.seq_lens_encoder,
+            )
+        elif self.forward_meta.total_batch_encoder > 0:
+            hiddden_states = rebuild_padding_v3_1(
+                model_output,
+                self.forward_meta.batch_ids_encoder,
+                self.forward_meta.total_batch_encoder,
+                self.forward_meta.seq_lens_encoder,
+                True,
+            )
+        elif self.forward_meta.total_batch_decoder > 0:
+            hiddden_states = rebuild_padding_v3_1(
+                model_output,
+                self.forward_meta.batch_ids_decoder,
+                self.forward_meta.total_batch_decoder,
+                self.forward_meta.seq_lens_encoder,
+                False,
+            )
         end_time0 = time.time()
         execution_time0 = (end_time0 - start_time0) * 1000
         hpu_model_runner_profile_logger.info(f"RebuildPadding execution time(ms): {execution_time0}, BT={real_bs}")
@@ -1464,11 +1607,19 @@ class HPUModelRunner(ModelRunnerBase):
         # data = np.random.rand(self.scheduler_config.max_num_seqs, self.model_config.vocab_size).astype(np.float32)
         # logits = paddle.to_tensor(data, dtype='bfloat16')
         start_time2 = time.time()
-        self._prepare_sampler_inputs(self.forward_meta.batch_ids)
+        if self.forward_meta.total_batch_encoder > 0 and self.forward_meta.total_batch_decoder > 0:
+            batch_ids = paddle.concat(
+                (self.forward_meta.batch_ids_encoder, self.forward_meta.batch_ids_decoder), axis=0
+            )
+        elif self.forward_meta.total_batch_encoder > 0:
+            batch_ids = self.forward_meta.batch_ids_encoder
+        elif self.forward_meta.total_batch_decoder > 0:
+            batch_ids = self.forward_meta.batch_ids_decoder
+        self._prepare_sampler_inputs(batch_ids)
         sampled_token_ids = self.sampler(
             logits,
             self.sampling_metadata,
-            self.forward_meta.batch_ids,
+            batch_ids,
             self.forward_meta.seq_lens_encoder.shape[0],
             self.rank,
             self.local_rank,
@@ -1514,7 +1665,11 @@ class HPUModelRunner(ModelRunnerBase):
         # else:
         #     skip_save_output = False
         post_process_hpu(
-            sampled_token_ids=sampled_token_ids, model_output=model_output_data, is_warmuping=self.is_warmuping
+            sampled_token_ids=sampled_token_ids,
+            model_output=model_output_data,
+            is_warmuping=self.is_warmuping,
+            is_chunk_step=self.share_inputs["is_chunk_step"],
+            enable_chunked_prefill=self.cache_config.enable_chunked_prefill,
         )
         end_time3 = time.time()
         execution_time3 = (end_time3 - start_time3) * 1000
