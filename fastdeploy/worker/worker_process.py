@@ -490,7 +490,7 @@ class PaddleDisWorkerProc:
                     max_occupied_batch_index = int(bsz)
                     req_dicts.extend(req_dict)
 
-                # Count prefill requests and scheduled requests
+                # Count prefill requests in current batch
                 num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
                 num_scheduled_requests = len(req_dicts)
                 scheduled_request_ids = [req.request_id for req in req_dicts]
