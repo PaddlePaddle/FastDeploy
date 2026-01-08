@@ -41,16 +41,13 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
-
-if _TRITON_AVAILABLE:
-    from fastdeploy.model_executor.ops.triton_ops import qk_rmsnorm_fused
+from fastdeploy.model_executor.layers.normalization import QKRMSNorm, RMSNorm
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
 
 
 class Glm4MoeMLP(nn.Layer):
@@ -209,20 +206,31 @@ class Glm4MoeAttention(nn.Layer):
             rms_norm_eps=fd_config.model_config.rms_norm_eps,
         )
         if self.use_qk_norm:
-            self.q_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.q_norm",
-                begin_norm_axis=2,
-            )
-            self.k_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.k_norm",
-                begin_norm_axis=2,
-            )
+            self.qk_norm_fused = _TRITON_AVAILABLE
+            if self.qk_norm_fused:
+                self.qk_norm = QKRMSNorm(
+                    fd_config,
+                    head_dim=self.head_dim,
+                    q_size=self.q_size,
+                    kv_size=self.kv_size,
+                    eps=fd_config.model_config.rms_norm_eps,
+                    prefix=prefix,
+                )
+            else:
+                self.q_norm = RMSNorm(
+                    fd_config,
+                    hidden_size=self.head_dim,
+                    eps=fd_config.model_config.rms_norm_eps,
+                    prefix=f"{prefix}.q_norm",
+                    begin_norm_axis=2,
+                )
+                self.k_norm = RMSNorm(
+                    fd_config,
+                    hidden_size=self.head_dim,
+                    eps=fd_config.model_config.rms_norm_eps,
+                    prefix=f"{prefix}.k_norm",
+                    begin_norm_axis=2,
+                )
 
     def forward(
         self,
@@ -233,16 +241,8 @@ class Glm4MoeAttention(nn.Layer):
         qkv_out = self.qkv_proj(hidden_states)
 
         if self.use_qk_norm:
-            if _TRITON_AVAILABLE:
-                qkv_out = qk_rmsnorm_fused(
-                    qkv_out,
-                    self.q_norm.weight,
-                    self.k_norm.weight,
-                    self.fd_config.model_config.rms_norm_eps,
-                    self.q_size,
-                    self.kv_size,
-                    self.head_dim,
-                )
+            if self.qk_norm_fused:
+                qkv_out = self.qk_norm(qkv_out)
             else:
                 q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
                 q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
@@ -416,6 +416,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
+        self.qk_norm_fused = _TRITON_AVAILABLE
 
     @classmethod
     def name(self):
@@ -447,6 +448,11 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
         ]
+
+        if self.qk_norm_fused:
+            stacked_params_mapping.append(("qk_norm.q_weight", "q_norm.weight", None))
+            stacked_params_mapping.append(("qk_norm.k_weight", "k_norm.weight", None))
+
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
             num_experts=self.fd_config.model_config.n_routed_experts,

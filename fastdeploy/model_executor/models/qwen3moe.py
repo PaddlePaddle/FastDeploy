@@ -45,6 +45,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
 
 
 class Qwen3MoeBlock(nn.Layer):
@@ -313,6 +314,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
+        self.qk_norm_fused = _TRITON_AVAILABLE
 
     @classmethod
     def name(self):
@@ -356,6 +358,9 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
+        if self.qk_norm_fused:
+            stacked_params_mapping.append(("qk_norm.q_weight", "q_norm.weight", None))
+            stacked_params_mapping.append(("qk_norm.k_weight", "k_norm.weight", None))
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)

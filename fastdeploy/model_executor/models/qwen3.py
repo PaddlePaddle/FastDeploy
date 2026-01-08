@@ -33,17 +33,14 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
-from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
-
-if _TRITON_AVAILABLE:
-    from fastdeploy.model_executor.ops.triton_ops import qk_rmsnorm_fused
+from fastdeploy.model_executor.layers.normalization import QKRMSNorm, RMSNorm
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
 )
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
 from fastdeploy.transformer_utils.config import get_pooling_config
 
 
@@ -61,6 +58,10 @@ class Qwen3Attention(nn.Layer):
 
         self.fd_config = fd_config
         self.head_dim = fd_config.model_config.head_dim
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+        num_kv_heads_replicas = max(1, tp_size // fd_config.model_config.num_key_value_heads)
+        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // tp_size
+        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // tp_size
 
         self.qkv_proj = QKVParallelLinear(fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
 
@@ -79,25 +80,32 @@ class Qwen3Attention(nn.Layer):
             use_neox_rotary_style=True,
         )
 
-        self.q_norm = RMSNorm(
-            fd_config,
-            hidden_size=self.head_dim,
-            eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.q_norm",
-            begin_norm_axis=2,
-        )
-        self.k_norm = RMSNorm(
-            fd_config,
-            hidden_size=self.head_dim,
-            eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.k_norm",
-            begin_norm_axis=2,
-        )
+        self.qk_norm_fused = _TRITON_AVAILABLE
 
-        tp_size = fd_config.parallel_config.tensor_parallel_size
-        num_kv_heads_replicas = max(1, tp_size // fd_config.model_config.num_key_value_heads)
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // tp_size
-        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // tp_size
+        if self.qk_norm_fused:
+            self.qk_norm = QKRMSNorm(
+                fd_config,
+                head_dim=self.head_dim,
+                q_size=self.q_size,
+                kv_size=self.kv_size,
+                eps=fd_config.model_config.rms_norm_eps,
+                prefix=prefix,
+            )
+        else:
+            self.q_norm = RMSNorm(
+                fd_config,
+                hidden_size=self.head_dim,
+                eps=fd_config.model_config.rms_norm_eps,
+                prefix=f"{prefix}.q_norm",
+                begin_norm_axis=2,
+            )
+            self.k_norm = RMSNorm(
+                fd_config,
+                hidden_size=self.head_dim,
+                eps=fd_config.model_config.rms_norm_eps,
+                prefix=f"{prefix}.k_norm",
+                begin_norm_axis=2,
+            )
 
     def load_state_dict(self, state_dict):
         """ """
@@ -114,16 +122,8 @@ class Qwen3Attention(nn.Layer):
     ):
         """ """
         qkv_out = self.qkv_proj(hidden_states)
-        if _TRITON_AVAILABLE:
-            qkv_out = qk_rmsnorm_fused(
-                qkv_out,
-                self.q_norm.weight,
-                self.k_norm.weight,
-                self.fd_config.model_config.rms_norm_eps,
-                self.q_size,
-                self.kv_size,
-                self.head_dim,
-            )
+        if self.qk_norm_fused:
+            qkv_out = self.qk_norm(qkv_out)
         else:
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
 
@@ -263,6 +263,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
+        self.qk_norm_fused = _TRITON_AVAILABLE
 
     @classmethod
     def name(self):
@@ -295,6 +296,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
         ]
+        if self.qk_norm_fused:
+            stacked_params_mapping.append(("qk_norm.q_weight", "q_norm.weight", None))
+            stacked_params_mapping.append(("qk_norm.k_weight", "k_norm.weight", None))
 
         params_dict = dict(self.named_parameters())
         model_path = self.fd_config.model_config.model

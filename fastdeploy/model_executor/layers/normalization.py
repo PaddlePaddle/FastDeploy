@@ -29,8 +29,98 @@ else:
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.ops.triton_ops import qk_rmsnorm_fused
 
 from .utils import get_tensor
+
+
+class QKRMSNorm(nn.Layer):
+    """
+    Normalization layer.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        head_dim: int,
+        q_size: int,
+        kv_size: int,
+        eps: float = 1e-5,
+        prefix: str = "",
+        dtype: str = None,
+    ) -> None:
+        super().__init__()
+        self.fd_config = fd_config
+        self.prefix: str = prefix
+        self.head_dim: int = head_dim
+        self.q_weight_key: Optional[str] = f"{prefix}.q_norm.weight"
+        self.k_weight_key: Optional[str] = f"{prefix}.k_norm.weight"
+        self.eps: float = eps
+        if current_platform.is_cuda():
+            self.norm_func: Callable = qk_rmsnorm_fused
+        else:
+            raise NotImplementedError(f"Only CUDA platform is supported now, but got {current_platform}.")
+
+        self._norm_weight_dtype = dtype
+        if self._norm_weight_dtype is None:
+            self._norm_weight_dtype = self._helper.get_default_dtype()
+        else:
+            assert dtype in [
+                "float32",
+                "bfloat16",
+                "float16",
+            ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
+
+        self.q_size = q_size
+        self.kv_size = kv_size
+
+        self.init_weight()
+
+    def init_weight(self):
+        """
+        Initialize the weights and biases.
+        """
+        self.q_weight = self.create_parameter(
+            shape=[self.head_dim],
+            default_initializer=nn.initializer.Constant(value=1.0),
+            dtype=self._norm_weight_dtype,
+        )
+        self.k_weight = self.create_parameter(
+            shape=[self.head_dim],
+            default_initializer=nn.initializer.Constant(value=1.0),
+            dtype=self._norm_weight_dtype,
+        )
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight).astype(self._norm_weight_dtype)
+        param.copy_(loaded_weight, False)
+
+    def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
+        """
+        Load the checkpoint state dictionary into the layer.
+
+        Args:
+            state_dict (dict): A dictionary containing the checkpoint weights and biases.
+        """
+
+        q_weight_tensor = get_tensor(state_dict.pop(self.q_weight_key))
+        self.q_weight.set_value(q_weight_tensor.astype(self._norm_weight_dtype))
+        k_weight_tensor = get_tensor(state_dict.pop(self.k_weight_key))
+        self.k_weight.set_value(k_weight_tensor.astype(self._norm_weight_dtype))
+
+    def forward(
+        self,
+        x,
+    ) -> paddle.Tensor:
+        return self.norm_func(
+            x,
+            self.q_weight,
+            self.k_weight,
+            self.eps,
+            self.q_size,
+            self.kv_size,
+            self.head_dim,
+        )
 
 
 class RMSNorm(nn.Layer):
