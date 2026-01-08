@@ -553,7 +553,7 @@ class TokenProcessor:
         )
 
         # Log
-        spec_logger.debug(
+        spec_logger.info(
             f"req_id: {result.request_id}, total_step: {req_total_step}, "
             f"accept_ratio: {accept_ratio}, average_accept_lenght: {req_avg_accept_length},"
             f"accepted_tokens: {req_accepted_tokens}, rejected_tokens: {req_rejected_tokens}"
