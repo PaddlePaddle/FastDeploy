@@ -18,21 +18,23 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
-#include <iostream>
 #include <array>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <unordered_map>
 #include <vector>
 
-#define CUDACHECK(cmd)                                              \
-  do {                                                              \
-    cudaError_t e = cmd;                                            \
-    if (e != cudaSuccess) {                                         \
-      printf("Failed: Cuda error %s:%d '%s'\n", __FILE__, __LINE__, \
-             cudaGetErrorString(e));                                \
-      exit(EXIT_FAILURE);                                           \
-    }                                                               \
+#define CUDACHECK(cmd)                          \
+  do {                                          \
+    cudaError_t e = cmd;                        \
+    if (e != cudaSuccess) {                     \
+      printf("Failed: Cuda error %s:%d '%s'\n", \
+             __FILE__,                          \
+             __LINE__,                          \
+             cudaGetErrorString(e));            \
+      exit(EXIT_FAILURE);                       \
+    }                                           \
   } while (0)
 
 namespace paddle {
@@ -188,7 +190,8 @@ static DINLINE FlagType ld_flag_volatile(FlagType* flag_addr) {
 // semantic is used to enforce memory access order before and after this
 // barrier.
 template <int ngpus, bool is_start, bool need_fence = false>
-DINLINE void multi_gpu_barrier(const RankSignals& sg, Signal* self_sg,
+DINLINE void multi_gpu_barrier(const RankSignals& sg,
+                               Signal* self_sg,
                                int rank) {
   if constexpr (!is_start) __syncthreads();
   static_assert(
@@ -205,10 +208,12 @@ DINLINE void multi_gpu_barrier(const RankSignals& sg, Signal* self_sg,
         &self_sg->peer_counter[val % 2][blockIdx.x][threadIdx.x];
     if constexpr (need_fence) {
       st_flag_release(peer_counter_ptr, val);
-      while (ld_flag_acquire(self_counter_ptr) != val);
+      while (ld_flag_acquire(self_counter_ptr) != val) {
+      }
     } else {
       st_flag_volatile(peer_counter_ptr, val);
-      while (ld_flag_volatile(self_counter_ptr) != val);
+      while (ld_flag_volatile(self_counter_ptr) != val) {
+      }
     }
   }
   if constexpr (is_start || need_fence) __syncthreads();
@@ -225,9 +230,45 @@ DINLINE P packed_reduce(const P* ptrs[], int idx) {
 }
 
 template <typename T, int ngpus>
+__global__ void __launch_bounds__(512, 1) decode_alltoall_transpose_kernel(
+    RankData* _dp,  // [tp_size, m / tp_size, part_hidden_size]
+    RankSignals sg,
+    Signal* self_sg,
+    T* __restrict__ result,  // [m / tp_size, part_hidden_size * tp_size]
+    const int rank,
+    const int token_num,
+    const int hidden_size,
+    const int size) {
+  using P = typename packed_t<T>::P;
+  using A = typename packed_t<T>::A;
+  // note: we don't reorder the address so the accumulation order is the same
+  // for all ranks, ensuring bitwise identical results
+  const int hidden_size_p = hidden_size / packed_t<T>::P::size;
+  const int part_hidden_size_p = hidden_size_p / ngpus;
+  const int rank_token_id = token_num / ngpus * rank;
+  auto dp = *_dp;
+  multi_gpu_barrier<ngpus, true>(sg, self_sg, rank);
+  // alltoall and transpose
+  for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < size;
+       idx += gridDim.x * blockDim.x) {
+    const int token_idx = idx / hidden_size_p;
+    const int src_token_idx = token_idx + rank_token_id;
+    const int src_rank = (idx % hidden_size_p) / part_hidden_size_p;
+    const int src_idx =
+        src_token_idx * part_hidden_size_p + (idx % part_hidden_size_p);
+    ((P*)result)[idx] = ((const P**)&dp.ptrs[0])[src_rank][src_idx];
+  }
+  multi_gpu_barrier<ngpus, false>(sg, self_sg, rank);
+}
+
+template <typename T, int ngpus>
 __global__ void __launch_bounds__(512, 1)
-    cross_device_reduce_1stage(RankData* _dp, RankSignals sg, Signal* self_sg,
-                               T* __restrict__ result, int rank, int size) {
+    cross_device_reduce_1stage(RankData* _dp,
+                               RankSignals sg,
+                               Signal* self_sg,
+                               T* __restrict__ result,
+                               int rank,
+                               int size) {
   using P = typename packed_t<T>::P;
   using A = typename packed_t<T>::A;
   // note: we don't reorder the address so the accumulation order is the same
@@ -249,8 +290,12 @@ DINLINE P* get_tmp_buf(Signal* sg) {
 
 template <typename T, int ngpus>
 __global__ void __launch_bounds__(512, 1)
-    cross_device_reduce_2stage(RankData* _dp, RankSignals sg, Signal* self_sg,
-                               T* __restrict__ result, int rank, int size) {
+    cross_device_reduce_2stage(RankData* _dp,
+                               RankSignals sg,
+                               Signal* self_sg,
+                               T* __restrict__ result,
+                               int rank,
+                               int size) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = gridDim.x * blockDim.x;
   using P = typename packed_t<T>::P;
@@ -338,8 +383,12 @@ class CustomAllreduce {
    * Note: this class does not own any device memory. Any required buffers
    * are passed in from the constructor.
    */
-  CustomAllreduce(Signal** signals, void* rank_data, size_t rank_data_sz,
-                  int rank, int world_size, bool full_nvlink = true)
+  CustomAllreduce(Signal** signals,
+                  void* rank_data,
+                  size_t rank_data_sz,
+                  int rank,
+                  int world_size,
+                  bool full_nvlink = true)
       : rank_(rank),
         world_size_(world_size),
         full_nvlink_(full_nvlink),
@@ -434,11 +483,93 @@ class CustomAllreduce {
         }
       }
     }
-    CUDACHECK(cudaMemcpy(d_rank_data_base_, rank_data.data(),
+    CUDACHECK(cudaMemcpy(d_rank_data_base_,
+                         rank_data.data(),
                          sizeof(RankData) * num_buffers,
                          cudaMemcpyHostToDevice));
     d_rank_data_base_ += num_buffers;
     graph_unreg_buffers_.clear();
+  }
+
+  /**
+   * alltoall and transpose in decode.
+   */
+  template <typename T>
+  void decode_alltoall_transpose(cudaStream_t stream,
+                                 T* input,
+                                 T* output,
+                                 int token_num,
+                                 int part_hidden_size,
+                                 int size,
+                                 int threads = 512,
+                                 int block_limit = 36) {
+    auto d = packed_t<T>::P::size;
+    int hidden_size = part_hidden_size * world_size_;
+    if (size % d != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input length to "
+          "be multiple "
+          "of " +
+          std::to_string(d));
+    if (size / d % world_size_ != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input length to "
+          "be multiple "
+          "of " +
+          std::to_string(d) + " and " + std::to_string(world_size_));
+    if (token_num % world_size_ != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input token_num "
+          "to be multiple "
+          "of " +
+          std::to_string(world_size_));
+    if (block_limit > kMaxBlocks)
+      throw std::runtime_error("max supported block limit is " +
+                               std::to_string(kMaxBlocks) + ". Got " +
+                               std::to_string(block_limit));
+
+    RankData* ptrs;
+    cudaStreamCaptureStatus status;
+    CUDACHECK(cudaStreamIsCapturing(stream, &status));
+    if (status == cudaStreamCaptureStatusActive) {
+      ptrs = d_rank_data_base_ + graph_unreg_buffers_.size();
+      graph_unreg_buffers_.push_back(input);
+    } else {
+      auto it = buffers_.find(input);
+      if (it == buffers_.end())
+        throw std::runtime_error(
+            "buffer address " +
+            std::to_string(reinterpret_cast<uint64_t>(input)) +
+            " is not registered!");
+      ptrs = it->second;
+    }
+
+    size /= d;
+    auto bytes = size * sizeof(typename packed_t<T>::P);
+    int blocks = std::min(block_limit, (size + threads - 1) / threads);
+#define KL(ngpus, name)                           \
+  name<T, ngpus><<<blocks, threads, 0, stream>>>( \
+      ptrs, sg_, self_sg_, output, rank_, token_num, hidden_size, size);
+
+#define REDUCE_CASE(ngpus)                       \
+  case ngpus: {                                  \
+    KL(ngpus, decode_alltoall_transpose_kernel); \
+    break;                                       \
+  }
+
+    switch (world_size_) {
+      REDUCE_CASE(2)
+      REDUCE_CASE(4)
+      REDUCE_CASE(6)
+      REDUCE_CASE(8)
+      default:
+        throw std::runtime_error(
+            "custom allreduce only supports num gpus in (2,4,6,8). Actual num "
+            "gpus = " +
+            std::to_string(world_size_));
+    }
+#undef REDUCE_CASE
+#undef KL
   }
 
   /**
@@ -451,8 +582,12 @@ class CustomAllreduce {
    * guess is that too many SMs will cause contention on NVLink bus.
    */
   template <typename T>
-  void allreduce(cudaStream_t stream, T* input, T* output, int size,
-                 int threads = 512, int block_limit = 36) {
+  void allreduce(cudaStream_t stream,
+                 T* input,
+                 T* output,
+                 int size,
+                 int threads = 512,
+                 int block_limit = 36) {
     auto d = packed_t<T>::P::size;
     if (size % d != 0)
       throw std::runtime_error(
@@ -483,9 +618,9 @@ class CustomAllreduce {
     size /= d;
     auto bytes = size * sizeof(typename packed_t<T>::P);
     int blocks = std::min(block_limit, (size + threads - 1) / threads);
-#define KL(ngpus, name)                                                       \
-  name<T, ngpus><<<blocks, threads, 0, stream>>>(ptrs, sg_, self_sg_, output, \
-                                                 rank_, size);
+#define KL(ngpus, name)                           \
+  name<T, ngpus><<<blocks, threads, 0, stream>>>( \
+      ptrs, sg_, self_sg_, output, rank_, size);
 
 #define REDUCE_CASE(ngpus)                            \
   case ngpus: {                                       \
@@ -517,15 +652,13 @@ class CustomAllreduce {
 #undef KL
   }
 
-  void clear_ipc_handles(){
+  void clear_ipc_handles() {
     for (auto [_, ptr] : ipc_handles_) {
       CUDACHECK(cudaIpcCloseMemHandle(ptr));
     }
     ipc_handles_.clear();
   }
 
-  ~CustomAllreduce() {
-    clear_ipc_handles();
-  }
+  ~CustomAllreduce() { clear_ipc_handles(); }
 };
 }  // namespace paddle

@@ -75,7 +75,7 @@ class GpuWorker(WorkerBase):
             ):
                 from fastdeploy.distributed.communication import use_custom_allreduce
 
-                use_custom_allreduce()
+                use_custom_allreduce(self.fd_config.parallel_config.tp_group)
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
 
