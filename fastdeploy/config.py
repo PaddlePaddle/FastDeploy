@@ -1849,11 +1849,6 @@ class FDConfig:
                 f"should be larger than or equal to block_size: {self.cache_config.block_size}"
             )
 
-        assert self.scheduler_config.max_num_batched_tokens % self.cache_config.block_size == 0, (
-            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be a multiple of "
-            f"block_size: {self.cache_config.block_size}"
-        )
-
         if self.max_num_partial_prefills > 1:
             assert (
                 self.cache_config.enable_chunked_prefill is True
