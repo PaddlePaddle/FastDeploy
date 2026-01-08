@@ -416,7 +416,6 @@ class PaddleDisWorkerProc:
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = int((tp_size + 7) // 8)
-        req_ids = []
         max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
