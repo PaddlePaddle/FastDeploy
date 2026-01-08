@@ -40,7 +40,6 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer, Qwen2MLP
-from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE
 from fastdeploy.transformer_utils.config import get_pooling_config
 
 
@@ -80,42 +79,21 @@ class Qwen3Attention(nn.Layer):
             use_neox_rotary_style=True,
         )
 
-        self.qk_norm_fused = _TRITON_AVAILABLE
-
-        if self.qk_norm_fused:
-            self.qk_norm = QKRMSNorm(
-                fd_config,
-                head_dim=self.head_dim,
-                q_size=self.q_size,
-                kv_size=self.kv_size,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=prefix,
-            )
-        else:
-            self.q_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.q_norm",
-                begin_norm_axis=2,
-            )
-            self.k_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.k_norm",
-                begin_norm_axis=2,
-            )
+        self.qk_norm = QKRMSNorm(
+            fd_config,
+            head_dim=self.head_dim,
+            q_size=self.q_size,
+            kv_size=self.kv_size,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=prefix,
+            begin_norm_axis=2,
+        )
 
     def load_state_dict(self, state_dict):
         """ """
         self.qkv_proj.load_state_dict(state_dict)
         self.o_proj.load_state_dict(state_dict)
-        if self.qk_norm_fused:
-            self.qk_norm.load_state_dict(state_dict)
-        else:
-            self.q_norm.load_state_dict(state_dict)
-            self.k_norm.load_state_dict(state_dict)
+        self.qk_norm.load_state_dict(state_dict)
         self.attn.load_state_dict(state_dict)
 
     def forward(
@@ -125,21 +103,7 @@ class Qwen3Attention(nn.Layer):
     ):
         """ """
         qkv_out = self.qkv_proj(hidden_states)
-        if self.qk_norm_fused:
-            qkv_out = self.qk_norm(qkv_out)
-        else:
-            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-
-            q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
-            q_by_head = self.q_norm(q_by_head)[0]
-            q = q_by_head.reshape(q.shape)
-
-            k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
-            k_by_head = self.k_norm(k_by_head)[0]
-            k = k_by_head.reshape(k.shape)
-
-            qkv_out = paddle.concat([q, k, v], axis=-1)
-
+        qkv_out = self.qk_norm(qkv_out)
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
@@ -266,7 +230,6 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
-        self.qk_norm_fused = _TRITON_AVAILABLE
 
     @classmethod
     def name(self):
@@ -298,10 +261,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             ("up_gate_proj", "up_proj", "up"),
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
+            ("qk_norm.q_norm", "q_norm", None),
+            ("qk_norm.k_norm", "k_norm", None),
         ]
-        if self.qk_norm_fused:
-            stacked_params_mapping.append(("qk_norm.q_weight", "q_norm.weight", None))
-            stacked_params_mapping.append(("qk_norm.k_weight", "k_norm.weight", None))
 
         params_dict = dict(self.named_parameters())
         model_path = self.fd_config.model_config.model
