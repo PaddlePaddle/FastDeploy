@@ -102,6 +102,12 @@ class EngineCacheQueue:
             self.swap_to_gpu_barrier2_init = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
+            self.swap_storage_to_gpu_barrier_init = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.swap_to_storage_barrier_init = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
 
             # Register shared objects with proxy types
             QueueManager.register(
@@ -148,7 +154,14 @@ class EngineCacheQueue:
                 "get_swap_to_gpu_barrier2",
                 callable=lambda idx: self.swap_to_gpu_barrier2_init[idx],
             )
-
+            QueueManager.register(
+                "get_swap_storage_to_gpu_barrier",
+                callable=lambda idx: self.swap_storage_to_gpu_barrier_init[idx],
+            )
+            QueueManager.register(
+                "get_swap_to_storage_barrier",
+                callable=lambda idx: self.swap_to_storage_barrier_init[idx],
+            )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
 
@@ -175,6 +188,8 @@ class EngineCacheQueue:
             QueueManager.register("get_swap_to_cpu_barrier2")
             QueueManager.register("get_swap_to_gpu_barrier1")
             QueueManager.register("get_swap_to_gpu_barrier2")
+            QueueManager.register("get_swap_storage_to_gpu_barrier")
+            QueueManager.register("get_swap_to_storage_barrier")
 
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
@@ -194,6 +209,8 @@ class EngineCacheQueue:
         self.swap_to_cpu_barrier2 = self.manager.get_swap_to_cpu_barrier2(self.local_data_parallel_id)
         self.swap_to_gpu_barrier1 = self.manager.get_swap_to_gpu_barrier1(self.local_data_parallel_id)
         self.swap_to_gpu_barrier2 = self.manager.get_swap_to_gpu_barrier2(self.local_data_parallel_id)
+        self.swap_storage_to_gpu_barrier = self.manager.get_swap_storage_to_gpu_barrier(self.local_data_parallel_id)
+        self.swap_to_storage_barrier = self.manager.get_swap_to_storage_barrier(self.local_data_parallel_id)
         self.total_num: int = (1 << self.num_client) - 1
 
         if not is_server:
@@ -241,7 +258,7 @@ class EngineCacheQueue:
             self.task_lock.acquire()
         self.task_sync_value.set(0)
         self.transfer_task_queue.append(item)
-        logger.info(f"put_transfer_task: put swap task {item[-1]} to queue successful")
+        logger.info(f"put_transfer_task: put swap task {item} to queue successful")
         self.task_lock.release()
 
     def get_transfer_task(self):

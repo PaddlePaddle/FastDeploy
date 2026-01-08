@@ -156,6 +156,19 @@ jobs:
       FD_VERSION: 0.0.0
       PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
 
+  build_sm8090_rl:
+    name: BUILD_SM8090_RL
+    needs: [clone, ce_job_pre_check]
+    if: ${{ needs.ce_job_pre_check.outputs.sm8090_match == 'true' }}
+    uses: ./.github/workflows/_build_linux_rl.yml
+    with:
+      DOCKER_IMAGE: iregistry.baidu-int.com/tiangexiao/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.0.0-rc2
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "80,90"
+      WITH_NIGHTLY_BUILD: OFF
+      FD_VERSION: 0.0.0
+      PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Paddle-RL-Compile/develop/latest/paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
+
   build_sm8689:
     name: BUILD_SM8689
     needs: [clone, ce_job_pre_check]
@@ -213,6 +226,52 @@ jobs:
           base_prefix="paddle-qa/"
           commit_path_stripped="${target_paths[0]#${base_prefix}}"
           latest_path_stripped="${target_paths[3]#${base_prefix}}"
+          WHEEL_PATH="https://paddle-qa.bj.bcebos.com/${commit_path_stripped}/${filename}"
+          WHEEL_PATH_LATEST="https://paddle-qa.bj.bcebos.com/${latest_path_stripped}/${filename}"
+
+          echo "commit wheel url is ${WHEEL_PATH}"
+          echo "latest wheel url is ${WHEEL_PATH_LATEST}"
+
+  ce_upload_sm8090_rl:
+    environment: CodeSync
+    name: CE_UPLOAD_RL
+    needs: build_sm8090_rl
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ secrets.BOS_AK }}
+      SK: ${{ secrets.BOS_SK }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }}
+      COMPILE_ARCH: "80,90"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Wheel Info Show and Upload
+        run: |
+          echo "The wheel is located at: ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }}"
+          wget -q --no-check-certificate ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }}
+          filename=$(basename ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }})
+
+          commit_id=${{ github.sha }}
+          branch_name=${{ github.ref_name }}
+
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+
+          target_paths=(
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_8090/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_8090/${branch_name}/latest"
+          )
+
+          for target_path in "${target_paths[@]}"; do
+            echo "Uploading ${filename} to ${target_path}"
+            python "${push_file}" "${filename}" "${target_path}"
+          done
+
+          base_prefix="paddle-qa/"
+          commit_path_stripped="${target_paths[0]#${base_prefix}}"
+          latest_path_stripped="${target_paths[1]#${base_prefix}}"
           WHEEL_PATH="https://paddle-qa.bj.bcebos.com/${commit_path_stripped}/${filename}"
           WHEEL_PATH_LATEST="https://paddle-qa.bj.bcebos.com/${latest_path_stripped}/${filename}"
 

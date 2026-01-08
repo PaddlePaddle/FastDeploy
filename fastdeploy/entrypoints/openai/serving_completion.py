@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import inspect
 import itertools
 import time
 import traceback
@@ -24,6 +25,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -74,6 +76,7 @@ class OpenAIServingCompletion:
         else:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
+        self._is_process_response_dict_async = None
         api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
@@ -282,7 +285,7 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -314,10 +317,7 @@ class OpenAIServingCompletion:
                         aggregated_prompt_logprobs_tensors[rid] = output_prompt_logprobs_tensors
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
-
-                    self.engine_client.data_processor.process_response_dict(
-                        data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    await self._call_process_response_dict(data, request, stream=False)
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
 
@@ -455,7 +455,7 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -505,9 +505,7 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(
-                        res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    await self._call_process_response_dict(res, request, stream=True)
                     if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
@@ -548,7 +546,9 @@ class OpenAIServingCompletion:
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
-                        prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
+                        prompt_logprobs=(
+                            clamp_prompt_logprobs(prompt_logprobs_res) if not request.return_token_ids else None
+                        ),
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
@@ -761,6 +761,20 @@ class OpenAIServingCompletion:
             choices=choices,
             usage=usage,
         )
+
+    async def _call_process_response_dict(self, res, request, stream):
+        if self._is_process_response_dict_async is None:
+            self._is_process_response_dict_async = inspect.iscoroutinefunction(
+                self.engine_client.data_processor.process_response_dict
+            )
+        if self._is_process_response_dict_async:
+            await self.engine_client.data_processor.process_response_dict(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
+        else:
+            self.engine_client.data_processor.process_response_dict(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
 
     def _create_completion_logprobs(
         self,

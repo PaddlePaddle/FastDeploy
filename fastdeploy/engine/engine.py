@@ -500,6 +500,7 @@ class LLMEngine:
         start gpu worker service
 
         """
+        console_logger.debug("Start worker process...")
         log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
@@ -576,6 +577,10 @@ class LLMEngine:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+
+        # TODO (iluvatar): remove aftet paddle fix launch error
+        if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
+            arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,

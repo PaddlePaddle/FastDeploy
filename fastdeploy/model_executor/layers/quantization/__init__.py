@@ -36,6 +36,19 @@ QUANTIZATION_METHODS: List[str] = [
 ]
 
 
+def _compute_hadamard_block_size(moe_intermediate_size: int, tp_size: int) -> int:
+    if moe_intermediate_size % tp_size != 0:
+        raise ValueError(
+            f"moe_intermediate_size ({moe_intermediate_size}) must be divisible by " f"tp_size ({tp_size})"
+        )
+
+    shard_size = moe_intermediate_size // tp_size
+    block_size = shard_size & (-shard_size)
+    block_size = min(block_size, 512)
+
+    return block_size
+
+
 def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     if args.quantization is not None and isinstance(args.quantization, str):
         args.quantization = parse_quantization(args.quantization)
@@ -88,7 +101,13 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         elif quant_config_name == "w4afp8":
             quantization_config["dense_quant_type"] = "block_wise_fp8"
             quantization_config["moe_quant_type"] = "w4afp8"
-            quantization_config["hadamard_block_size"] = 512
+            tp_size = getattr(args, "tensor_parallel_size", 1)
+            moe_intermediate_size = getattr(model_config, "moe_intermediate_size", None)
+            if moe_intermediate_size is not None:
+                hadamard_block_size = _compute_hadamard_block_size(moe_intermediate_size, tp_size)
+                quantization_config["hadamard_block_size"] = hadamard_block_size
+            else:
+                quantization_config["hadamard_block_size"] = 512
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
     else:

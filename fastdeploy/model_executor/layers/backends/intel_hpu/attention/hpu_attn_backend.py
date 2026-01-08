@@ -301,10 +301,10 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 src,
                 qkv_proj.weight,
                 qkv_proj.bias,
-                forward_meta.rotary_embs,
+                forward_meta.rotary_embs_encoder,
                 self.head_dim,
                 self.num_heads,
-                forward_meta.total_batch,
+                forward_meta.total_batch_encoder,
                 transpose=False,
                 use_neox_style=layer.use_neox_rotary_style,
                 measurement_mode=True,
@@ -315,7 +315,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 src,
                 qkv_proj.weight,
                 qkv_proj.bias,
-                forward_meta.rotary_embs,
+                forward_meta.rotary_embs_encoder,
                 getattr(qkv_proj, "act_scale", None),
                 getattr(qkv_proj, "weight_scale", None),
                 getattr(layer, "q_scale", None),
@@ -325,7 +325,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 k_norm.weight if k_norm is not None else None,
                 self.head_dim,
                 self.num_heads,
-                forward_meta.total_batch,
+                forward_meta.total_batch_encoder,
                 transpose=False,
                 use_neox_style=layer.use_neox_rotary_style,
                 epsilon=1e-6,
@@ -337,13 +337,13 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         value_states = key_value_states_reshape[1]
         k_cache = forward_meta.caches[2 * layer.layer_id]
         v_cache = forward_meta.caches[2 * layer.layer_id + 1]
-        index_copy_(k_cache, forward_meta.block_indices, key_states, 0)
-        index_copy_(v_cache, forward_meta.block_indices, value_states, 0)
+        index_copy_(k_cache, forward_meta.block_indices_encoder, key_states, 0)
+        index_copy_(v_cache, forward_meta.block_indices_encoder, value_states, 0)
 
-        if forward_meta.block_list.shape == forward_meta.block_indices.shape:
+        if forward_meta.block_list_encoder.shape == forward_meta.block_indices_encoder.shape:
             if forward_meta.measurement_mode:
                 o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
-                out_linear_out = fused_sdpa_proj_ref(
+                out_linear_out_encoder = fused_sdpa_proj_ref(
                     query_states,
                     key_value_states,
                     forward_meta.attn_mask,
@@ -355,7 +355,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                     o_act_scale_key=o_proj_act_scale_key,
                 )
             else:
-                out_linear_out = fused_sdpa_proj(
+                out_linear_out_encoder = fused_sdpa_proj(
                     query_states,
                     key_value_states,
                     forward_meta.attn_mask,
@@ -374,19 +374,19 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                     softmax_mode=0,
                 )
         else:
-            key_states_with_context = k_cache.index_select(forward_meta.block_list)
-            val_states_with_context = v_cache.index_select(forward_meta.block_list)
+            key_states_with_context = k_cache.index_select(forward_meta.block_list_encoder)
+            val_states_with_context = v_cache.index_select(forward_meta.block_list_encoder)
             key_value_states_with_context = paddle.stack(
                 [key_states_with_context, val_states_with_context], axis=0
             ).reshape([kv, B, -1, M, H])
             if forward_meta.attn_mask is None:
                 forward_meta.attn_mask = get_attention_mask(
-                    forward_meta.seq_lens_encoder[forward_meta.batch_ids],
-                    forward_meta.seq_lens_decoder[forward_meta.batch_ids],
+                    forward_meta.seq_lens_encoder[forward_meta.batch_ids_encoder],
+                    forward_meta.seq_lens_decoder[forward_meta.batch_ids_encoder],
                     query_states.shape[0],
                     query_states.shape[1],
                 )
-            out_linear_out = fused_sdpa_proj(
+            out_linear_out_encoder = fused_sdpa_proj(
                 query_states,
                 key_value_states_with_context,
                 forward_meta.attn_mask,
@@ -410,9 +410,9 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 tensor_model_parallel_all_reduce_custom,
             )
 
-            tensor_model_parallel_all_reduce_custom(out_linear_out)
+            tensor_model_parallel_all_reduce_custom(out_linear_out_encoder)
 
-        return out_linear_out
+        return out_linear_out_encoder
 
     def forward_decode(
         self,
@@ -436,17 +436,17 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         if forward_meta.measurement_mode:
             qkv_proj_act_scale_key = qkv_proj.weight_key.replace("weight", "activation_scale")
             o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
-            out_linear_out = fused_block_attention_ref(
+            out_linear_out_decoder = fused_block_attention_ref(
                 src,
-                forward_meta.rotary_embs,
+                forward_meta.rotary_embs_decoder,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
-                forward_meta.block_groups,
-                forward_meta.block_list,
-                forward_meta.block_mapping,
-                forward_meta.attention_mask,
-                forward_meta.block_indices,
-                forward_meta.block_offsets,
+                forward_meta.block_groups_decoder,
+                forward_meta.block_list_decoder,
+                forward_meta.block_mapping_decoder,
+                forward_meta.attention_mask_decoder,
+                forward_meta.block_indices_decoder,
+                forward_meta.block_offsets_decoder,
                 qkv_proj.weight,
                 qkv_proj.bias,
                 o_proj.weight,
@@ -460,17 +460,17 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 o_act_scale_key=o_proj_act_scale_key,
             )
         else:
-            out_linear_out = fused_block_attention(
+            out_linear_out_decoder = fused_block_attention(
                 src,
-                forward_meta.rotary_embs,
+                forward_meta.rotary_embs_decoder,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
-                forward_meta.block_groups,
-                forward_meta.block_list,
-                forward_meta.block_mapping,
-                forward_meta.attention_mask,
-                forward_meta.block_indices,
-                forward_meta.block_offsets,
+                forward_meta.block_groups_decoder,
+                forward_meta.block_list_decoder,
+                forward_meta.block_mapping_decoder,
+                forward_meta.attention_mask_decoder,
+                forward_meta.block_indices_decoder,
+                forward_meta.block_offsets_decoder,
                 qkv_proj.weight,
                 qkv_proj.bias,
                 o_proj.weight,
@@ -498,5 +498,227 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 tensor_model_parallel_all_reduce_custom,
             )
 
-            tensor_model_parallel_all_reduce_custom(out_linear_out)
-        return out_linear_out
+            tensor_model_parallel_all_reduce_custom(out_linear_out_decoder)
+        return out_linear_out_decoder
+
+    def forward_mixed(
+        self,
+        src,
+        qkv_proj: QKVParallelLinear,
+        o_proj: RowParallelLinear,
+        layer: Attention,
+        forward_meta,
+        q_norm: RMSNorm = None,
+        k_norm: RMSNorm = None,
+    ):
+        encoder_num = forward_meta.total_batch_encoder
+        decoder_num = forward_meta.total_batch_decoder
+
+        out_linear_out_encoder = None
+        if encoder_num > 0:
+            from fastdeploy.model_executor.ops.intel_hpu import (
+                fused_qkv_rope,
+                fused_qkv_rope_ref,
+                fused_sdpa_proj,
+                fused_sdpa_proj_ref,
+                index_copy_,
+            )
+
+            if forward_meta.measurement_mode:
+                qkv_proj_act_scale_key = qkv_proj.weight_key.replace("weight", "activation_scale")
+                query_states, key_value_states = fused_qkv_rope_ref(
+                    src[0 : src.shape[0] - decoder_num],
+                    qkv_proj.weight,
+                    qkv_proj.bias,
+                    forward_meta.rotary_embs_encoder,
+                    self.head_dim,
+                    self.num_heads,
+                    forward_meta.total_batch_encoder,
+                    transpose=False,
+                    use_neox_style=layer.use_neox_rotary_style,
+                    measurement_mode=True,
+                    qkv_act_scale_key=qkv_proj_act_scale_key,
+                )
+            else:
+                query_states, key_value_states = fused_qkv_rope(
+                    src[0 : src.shape[0] - decoder_num],
+                    qkv_proj.weight,
+                    qkv_proj.bias,
+                    forward_meta.rotary_embs_encoder,
+                    getattr(qkv_proj, "act_scale", None),
+                    getattr(qkv_proj, "weight_scale", None),
+                    getattr(layer, "q_scale", None),
+                    getattr(layer, "cache_k_scale", None),
+                    getattr(layer, "cache_v_scale", None),
+                    q_norm.weight if q_norm is not None else None,
+                    k_norm.weight if k_norm is not None else None,
+                    self.head_dim,
+                    self.num_heads,
+                    forward_meta.total_batch_encoder,
+                    transpose=False,
+                    use_neox_style=layer.use_neox_rotary_style,
+                    epsilon=1e-6,
+                )
+
+            kv, B, BP_BS, M, H = key_value_states.shape
+            key_value_states_reshape = key_value_states.reshape([kv, -1, forward_meta.block_size, M, H])
+            key_states = key_value_states_reshape[0]
+            value_states = key_value_states_reshape[1]
+            k_cache = forward_meta.caches[2 * layer.layer_id]
+            v_cache = forward_meta.caches[2 * layer.layer_id + 1]
+            index_copy_(k_cache, forward_meta.block_indices_encoder, key_states, 0)
+            index_copy_(v_cache, forward_meta.block_indices_encoder, value_states, 0)
+
+            if forward_meta.block_list_encoder.shape == forward_meta.block_indices_encoder.shape:
+                if forward_meta.measurement_mode:
+                    o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
+                    out_linear_out_encoder = fused_sdpa_proj_ref(
+                        query_states,
+                        key_value_states,
+                        forward_meta.attn_mask,
+                        o_proj.weight,
+                        scaling_factor=self.head_dim**-0.5,
+                        causal=True,
+                        softmax_mode=0,
+                        measurement_mode=True,
+                        o_act_scale_key=o_proj_act_scale_key,
+                    )
+                else:
+                    out_linear_out_encoder = fused_sdpa_proj(
+                        query_states,
+                        key_value_states,
+                        forward_meta.attn_mask,
+                        None,
+                        o_proj.weight,
+                        getattr(layer, "q_out_scale", None),
+                        getattr(layer, "cache_k_out_scale", None),
+                        getattr(layer, "cache_v_out_scale", None),
+                        getattr(layer, "s_scale", None),
+                        getattr(o_proj, "act_scale", None),
+                        getattr(layer, "s_out_scale", None),
+                        getattr(o_proj, "act_scale_inv", None),
+                        getattr(o_proj, "weight_scale", None),
+                        scaling_factor=self.head_dim**-0.5,
+                        causal=True,
+                        softmax_mode=0,
+                    )
+            else:
+                key_states_with_context = k_cache.index_select(forward_meta.block_list_encoder)
+                val_states_with_context = v_cache.index_select(forward_meta.block_list_encoder)
+                key_value_states_with_context = paddle.stack(
+                    [key_states_with_context, val_states_with_context], axis=0
+                ).reshape([kv, B, -1, M, H])
+                if forward_meta.attn_mask is None:
+                    forward_meta.attn_mask = get_attention_mask(
+                        forward_meta.seq_lens_encoder[forward_meta.batch_ids_encoder],
+                        forward_meta.seq_lens_decoder[forward_meta.batch_ids_encoder],
+                        query_states.shape[0],
+                        query_states.shape[1],
+                    )
+
+                out_linear_out_encoder = fused_sdpa_proj(
+                    query_states,
+                    key_value_states_with_context,
+                    forward_meta.attn_mask,
+                    None,
+                    o_proj.weight,
+                    getattr(layer, "q_out_scale", None),
+                    getattr(layer, "cache_k_out_scale", None),
+                    getattr(layer, "cache_v_out_scale", None),
+                    getattr(layer, "s_scale", None),
+                    getattr(o_proj, "act_scale", None),
+                    getattr(layer, "s_out_scale", None),
+                    getattr(o_proj, "act_scale_inv", None),
+                    getattr(o_proj, "weight_scale", None),
+                    scaling_factor=self.head_dim**-0.5,
+                    causal=False,
+                    softmax_mode=0,
+                )
+
+            if self.tp_size > 1:
+                from fastdeploy.distributed.communication import (
+                    tensor_model_parallel_all_reduce_custom,
+                )
+
+                tensor_model_parallel_all_reduce_custom(out_linear_out_encoder)
+            if decoder_num == 0:
+                return out_linear_out_encoder
+
+        out_linear_out_decoder = None
+        if decoder_num > 0:
+            from fastdeploy.model_executor.ops.intel_hpu import (
+                fused_block_attention,
+                fused_block_attention_ref,
+            )
+
+            if forward_meta.measurement_mode:
+                qkv_proj_act_scale_key = qkv_proj.weight_key.replace("weight", "activation_scale")
+                o_proj_act_scale_key = o_proj.weight_key.replace("weight", "activation_scale")
+                out_linear_out_decoder = fused_block_attention_ref(
+                    src[-decoder_num:],
+                    forward_meta.rotary_embs_decoder,
+                    forward_meta.caches[2 * layer.layer_id],
+                    forward_meta.caches[2 * layer.layer_id + 1],
+                    forward_meta.block_groups_decoder,
+                    forward_meta.block_list_decoder,
+                    forward_meta.block_mapping_decoder,
+                    forward_meta.attention_mask_decoder,
+                    forward_meta.block_indices_decoder,
+                    forward_meta.block_offsets_decoder,
+                    qkv_proj.weight,
+                    qkv_proj.bias,
+                    o_proj.weight,
+                    self.head_dim,
+                    self.num_heads,
+                    scaling_factor=self.head_dim**-0.5,
+                    transpose=False,
+                    use_neox_style=layer.use_neox_rotary_style,
+                    measurement_mode=True,
+                    qkv_act_scale_key=qkv_proj_act_scale_key,
+                    o_act_scale_key=o_proj_act_scale_key,
+                )
+            else:
+                out_linear_out_decoder = fused_block_attention(
+                    src[-decoder_num:],
+                    forward_meta.rotary_embs_decoder,
+                    forward_meta.caches[2 * layer.layer_id],
+                    forward_meta.caches[2 * layer.layer_id + 1],
+                    forward_meta.block_groups_decoder,
+                    forward_meta.block_list_decoder,
+                    forward_meta.block_mapping_decoder,
+                    forward_meta.attention_mask_decoder,
+                    forward_meta.block_indices_decoder,
+                    forward_meta.block_offsets_decoder,
+                    qkv_proj.weight,
+                    qkv_proj.bias,
+                    o_proj.weight,
+                    q_norm.weight if q_norm is not None else None,
+                    k_norm.weight if k_norm is not None else None,
+                    getattr(qkv_proj, "act_scale", None),
+                    getattr(qkv_proj, "weight_scale", None),
+                    getattr(layer, "q_scaling_scale", None),
+                    getattr(layer, "cache_k_scale", None),
+                    getattr(layer, "s_scale", None),
+                    getattr(layer, "cache_v_scale", None),
+                    getattr(o_proj, "act_scale", None),
+                    getattr(o_proj, "weight_scale", None),
+                    self.head_dim,
+                    self.num_heads,
+                    scaling_factor=self.head_dim**-0.5,
+                    transpose=False,
+                    use_neox_style=layer.use_neox_rotary_style,
+                    epsilon=1e-6,
+                )
+
+            # all_reduce
+            if self.tp_size > 1:
+                from fastdeploy.distributed.communication import (
+                    tensor_model_parallel_all_reduce_custom,
+                )
+
+                tensor_model_parallel_all_reduce_custom(out_linear_out_decoder)
+
+            if encoder_num == 0:
+                return out_linear_out_decoder
+
+        return paddle.concat((out_linear_out_encoder, out_linear_out_decoder), axis=0)
