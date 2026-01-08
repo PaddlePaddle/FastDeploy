@@ -213,12 +213,8 @@ class GptOssModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-
-        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
-            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
-
-        return out
+        hidden_states = self.norm(hidden_states, residual)[0]
+        return hidden_states
 
 
 @ModelRegistry.register_model_class(
