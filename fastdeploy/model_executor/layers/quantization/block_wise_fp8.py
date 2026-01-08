@@ -245,14 +245,10 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         if x.shape[0] == 0:
             return linear_out
 
-        if not self.quant_config.deepgemm_scale_ue8m0:
-            x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-                x, self.quant_config.weight_block_size[0]
-            )
-            x_scale_tensor = x_scale_tensor[: x.shape[0], ...]
-        else:
-            x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
-            x_scale_tensor = transform_scale_ue8m0(x_scale_tensor, mn=x.shape[-2])
+        x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
+            x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
+        )
+        x_scale_tensor = x_scale_tensor[: x.shape[0], ...]
 
         deep_gemm.fp8_gemm_nt(
             (x, x_scale_tensor),

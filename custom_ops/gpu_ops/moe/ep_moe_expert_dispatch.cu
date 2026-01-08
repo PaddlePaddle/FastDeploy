@@ -817,6 +817,7 @@ __global__ void permute_x_fp8_kernel(
     const int token_nums_this_rank_padded,
     const int64_t hidden_size,
     const int permute_scale_stride0,
+    const int use_in_ep,
     T* permute_x,  // [token_nums_this_rank, hidden_size]
     ScaleT* permute_scale,
     int* permute_indices_per_token,  // [moe_topk, num_rows]
@@ -903,10 +904,20 @@ __global__ void permute_x_fp8_kernel(
         }
         // cp scale
         if constexpr (std::is_same_v<ScaleT, int>) {
-          for (int s = tid; s < (hidden_size_scale + 3) / 4; s += blockDim.x) {
-            permute_scale[s * permute_scale_stride0 + dst_token_idx] =
-                scale[s * padded_num_rows + s_token_idx];
+          if (use_in_ep) {  // in ep , scale is row-major
+            for (int s = tid; s < (hidden_size_scale + 3) / 4;
+                 s += blockDim.x) {
+              permute_scale[s * permute_scale_stride0 + dst_token_idx] =
+                  scale[s + s_token_idx * ((hidden_size_scale + 3) / 4)];
+            }
+          } else {  // not in ep , scale is column-major
+            for (int s = tid; s < (hidden_size_scale + 3) / 4;
+                 s += blockDim.x) {
+              permute_scale[s * permute_scale_stride0 + dst_token_idx] =
+                  scale[s * padded_num_rows + s_token_idx];
+            }
           }
+
         } else {
           for (int s = tid; s < hidden_size_scale; s += blockDim.x) {
             permute_scale[s * permute_scale_stride0 + dst_token_idx] =
@@ -931,6 +942,7 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
                             const int hidden_size,
                             const int num_experts_per_rank,
                             const int permute_scale_stride0,
+                            const bool use_in_ep,
                             paddle::Tensor* permute_input,
                             paddle::Tensor* permute_scale,
                             paddle::Tensor* permute_indices_per_token,
@@ -962,6 +974,7 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
           token_nums_this_rank_padded,
           hidden_size,
           permute_scale_stride0,
+          use_in_ep,
           permute_input->data<phi::dtype::float8_e4m3fn>(),
           permute_scale->data<ScaleT>(),
           permute_indices_per_token->data<int>(),
@@ -1052,6 +1065,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                                     hidden_size,
                                     num_experts_per_rank,
                                     permute_scale_stride0,
+                                    use_in_ep,
                                     &permute_input,
                                     &permute_scale,
                                     &permute_indices_per_token,
@@ -1088,6 +1102,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                                   hidden_size,
                                   num_experts_per_rank,
                                   permute_scale_stride0,
+                                  use_in_ep,
                                   &permute_input,
                                   &permute_scale,
                                   &permute_indices_per_token,
