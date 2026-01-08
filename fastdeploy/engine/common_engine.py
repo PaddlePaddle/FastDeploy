@@ -81,6 +81,9 @@ class EngineService:
         """
         self.cfg = cfg
         self.use_async_llm = use_async_llm
+        
+        self.is_paused = False # pause request generation
+        self._pause_cond = threading.Condition()
 
         if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
@@ -760,6 +763,8 @@ class EngineService:
 
         def _fetch_request():
             try:
+                with self._pause_cond:
+                    self._pause_cond.wait_for(lambda: not self.is_paused)
                 nonlocal is_fetching
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
@@ -923,6 +928,8 @@ class EngineService:
                 is_fetching = False
 
         while self.running:
+            with self._pause_cond:
+                self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
                 if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
@@ -1087,6 +1094,11 @@ class EngineService:
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
                         self.llm_logger.debug(f"Receive request from api server: {request}")
+
+                        if self.is_paused:
+                            self.llm_logger.warning(f"Engine is paused, drop request: {request}")
+                            self._send_error_response(request.request_id, "Request is aborted since LLM Engine is paused.")
+                            continue
                     except Exception as e:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
                         err_msg = str(e)
@@ -1143,7 +1155,7 @@ class EngineService:
         request_id = control_req.request_id
         
         try:
-            self.llm_logger.info(f"Processing control request {request_id}: {method}")
+            self.llm_logger.info(f"START run control method {request_id}: {method}")
             
             handler_name = f"_control_{method}"
             handler = getattr(self, handler_name, None)
@@ -1154,12 +1166,12 @@ class EngineService:
                 return
             
             result = handler(args)
-            self.llm_logger.info(f"Control method {method} success.")
+            self.llm_logger.info(f"SUCCESS run control method {method}.")
             succ_result = ControlResponse(request_id, 200, "Success", result)
             self.send_response_server.send_response(request_id, [succ_result])
             
         except Exception as e:
-            error_msg = f"Control method {method} failed: {str(e)}"
+            error_msg = f"Failed run control method {method}: {str(e)}"
             self.llm_logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
             self.send_response_server.send_response(request_id, [error_result])
@@ -1175,7 +1187,45 @@ class EngineService:
                 - error_code: 错误代码，0表示成功，非0表示失败
                 - error_msg: 错误信息，成功时为空字符串
         """
-        self.llm_logger.info(f"Pause Request Generation")
+        with self._pause_cond:
+            if self.is_paused:
+                self.llm_logger.info("Pause Request Generation: already paused.")
+            self.is_paused = True
+
+        self.llm_logger.info(f"Start Abort Running Requests")
+
+        self.resource_manager.log_status()
+        # preempted all running reqs. preempted reqs will be append to ResourceManager.waiting queue
+        timeout, count = 60, 0
+        while self.engine_worker_queue.exist_tasks():
+            time.sleep(0.001)
+            count += 1
+            if count >= timeout * 1000:
+                break
+        if count >= timeout * 1000:
+            error_msg = f"wait engine_worker_queue tasks empty timeout after {timeout} seconds, worker may Hanged"
+            self.llm_logger.info(error_msg)
+            raise Exception(error_msg)
+        running_reqs = self.resource_manager.preempted_all()
+        if len(running_reqs) > 0:
+            self.llm_logger.info(f"Total {len(running_reqs)} requests need to be aborted.")
+            self.resource_manager.get_real_bsz()
+            self.engine_worker_queue.put_tasks((running_reqs, self.resource_manager.real_bsz))
+            self.resource_manager.wait_worker_inflight_requests_finish(timeout=60)
+        self.resource_manager.log_status()
+        self.engine_worker_queue.clear_data()
+        self.token_processor.clear_data()
+        #self.resource_manager.clear_data()
+        self.resource_manager.log_status()
+
+        # abort inflight requests to user
+        inflight_requests = [req.raw for req in self.scheduler.requests.values()]
+        self.llm_logger.info(f"Start Abort Inflight Requests, total {len(inflight_requests)} waiting requests")
+        for req in inflight_requests:
+            self._send_error_response(req.request_id, "Request is aborted since LLM Engine is paused.")
+        self.scheduler.reset()
+
+        self.resource_manager.cache_manager.reset()
         return None
 
     def _control_resume(self, args: dict) -> dict | None:
@@ -1187,7 +1237,13 @@ class EngineService:
         Returns:
             dict | None: 返回结果字典或None，包含恢复操作的状态信息
         """
-        self.llm_logger.info(f"Resume Request Generation")
+        self.llm_logger.info(f"START Resume Request Generation")
+        with self._pause_cond:
+            if not self.is_paused:
+                self.llm_logger.info("Resume Request Generation: not paused.")
+            self.is_paused = False
+            self._pause_cond.notify_all()
+        self.llm_logger.info(f"END Resume Request Generation")
         return None
 
     def _control_is_paused(self, args: dict) -> bool:
@@ -1199,8 +1255,9 @@ class EngineService:
         Returns:
             bool: 是否暂停了请求生成
         """
-        self.llm_logger.info(f"Check if Request Generation is Paused")
-        return {"is_paused": self.is_paused}
+        self.llm_logger.info(f"LLM Engine request generation is paused: {self.is_paused}")
+        with self._pause_cond:
+            return {"is_paused": self.is_paused}
 
     def _control_update_weights(self, args: dict) -> dict | None:
         """更新模型权重
