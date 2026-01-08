@@ -49,6 +49,7 @@ from fastdeploy.eplb.async_expert_loader import (
     load_tensor_from_shm_mem,
 )
 from fastdeploy.eplb.experts_manager import RedundantExpertManager
+from fastdeploy.engine.request import RequestType
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
@@ -489,10 +490,14 @@ class PaddleDisWorkerProc:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
 
+                # Count prefill and decode requests accurately
+                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                num_decode_requests = len(req_dicts) - num_prefill_requests
                 req_ids = [req.request_id for req in req_dicts]
                 logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                    f"Rank: {self.local_rank}, batch_slot_position: {num_running_requests}, "
+                    f"num_prefill_requests: {num_prefill_requests}, num_decode_requests: {num_decode_requests}, "
+                    f"total_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
 
                 # Process prefill inputs
