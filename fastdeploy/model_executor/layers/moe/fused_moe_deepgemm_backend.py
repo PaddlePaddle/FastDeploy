@@ -508,6 +508,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
             )
+            logger.info(f"layer.layer_idx : {layer.layer_idx}")
+            logger.info(f"topk_ids : {topk_ids}")
+            from .moe_balance_analyser import get_moe_analyser
+
+            analyser = get_moe_analyser(
+                num_layers=layer.fd_config.model_config.num_hidden_layers, num_moe_expert=layer.num_local_experts
+            )
+            analyser.update(layer.layer_idx, topk_ids)
+
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,

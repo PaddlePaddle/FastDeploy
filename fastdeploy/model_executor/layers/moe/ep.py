@@ -478,6 +478,12 @@ class EPRunner:
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                 )
+                from .moe_balance_analyser import get_moe_analyser
+
+                analyser = get_moe_analyser(
+                    num_layers=layer.fd_config.model_config.num_hidden_layers, num_moe_expert=layer.num_local_experts
+                )
+                analyser.update(layer.layer_idx, topk_idx)
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                     gate_out,
