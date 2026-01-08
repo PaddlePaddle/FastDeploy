@@ -253,7 +253,8 @@ void run_gemm(const InputType *A,
       (max_tokens + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
-  static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
+  static_assert(WeightScaleGroup == 64 || WeightScaleGroup == 128 ||
+                WeightScaleGroup == K);
 
   typename CollectiveMainloop::Params mainloop_params =
       CollectiveMainloop::to_underlying_arguments(

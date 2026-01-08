@@ -119,7 +119,8 @@ std::vector<paddle::Tensor> W4AFp8GemmWeightConvert(
         paddle::empty(weight.shape(), paddle::DataType::INT8, weight.place());
     const int block_dim = 256;
     const int original_numel = original_k * original_n;
-    const int grid_size = (original_numel + block_dim - 1) / block_dim;
+    const int numel = original_k * original_n / 4;
+    const int grid_size = (numel + block_dim - 1) / block_dim;
 
     weight_permute_interleave_kernelw4afp8<<<grid_size, block_dim>>>(
         weight.data<int8_t>(),

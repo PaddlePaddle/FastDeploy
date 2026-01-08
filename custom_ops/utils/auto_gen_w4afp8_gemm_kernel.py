@@ -68,7 +68,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     constexpr static int kBlockN = {N};
     constexpr static int kGroupSize = {GROUPSIZE};
     constexpr static int kBlockM = 128;
-    constexpr static int kBlockK = 128;
+    constexpr static int kBlockK = {BLOCKK};
     constexpr static int kNWarps = 4 + kBlockM / 16;
     constexpr static int kStages = 5;
     constexpr int kCluster = 1;
@@ -96,6 +96,9 @@ gemm_case = [
     [2560, 768, 64, 0, 128],
     [768, 2048, 128, 0, 128],
     [2048, 384, 128, 0, 128],
+    # tp=4 support for Qwen3-30B-A3B (hidden_size=2048, moe_intermediate_size=768)
+    [384, 2048, 128, 0, 128],  # up_gate_proj: M=2*768/4=384, K=2048
+    [2048, 192, 128, 0, 64],  # down_proj: M=2048, K=768/4=192, group_size=64
 ]
 
 dtype = ["BF16"]
@@ -122,6 +125,16 @@ def get_cutlass_type(type):
         return "cutlass::bfloat16_t"
     elif type == "FP16":
         return "cutlass::half_t"
+
+
+def get_block_k(k):
+    """Calculate appropriate kBlockK based on K dimension"""
+    if k % 128 == 0:
+        return 128
+    elif k % 64 == 0:
+        return 64
+    else:
+        raise ValueError(f"K={k} is not divisible by 128 or 64")
 
 
 template_head_file = open(f"{file_dir}w4afp8_gemm_template.h", "w")
@@ -156,6 +169,7 @@ for type in dtype:
                     TYPE=type,
                     PADDING=case[3],
                     GROUPSIZE=case[4],
+                    BLOCKK=get_block_k(case[1]),
                     cutlass_type=get_cutlass_type(type),
                 )
             )
