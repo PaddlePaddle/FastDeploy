@@ -15,21 +15,26 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-// status == 0: 正常生成阶段
-// status == 1: 替换阶段
-// status == 2: 替换结束阶段
-// status == 3: 思考结束阶段
+// limit_think_status:
+// 0：思考生成阶段
+// 1：注入第 1 个 token：\n
+// 2：注入第 2 个 token：</think>
+// 3：注入第 3 个 token：\n
+// 4：注入第 4 个 token：\n
+// 5：思考结束，进入回复阶段
 __global__ void speculate_limit_thinking_content_length_kernel_v2(
     int64_t* next_tokens,
     const int* max_think_lens,
     int64_t* step_idx,
+    const int64_t* eos_token_ids,
     int* limit_think_status,
     int* accept_num,
     const bool* stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id,
     const int tokens_per_step,
-    const int bs) {
+    const int bs,
+    const int eos_token_id_len) {
   int bid = threadIdx.x;
   if (bid >= bs) return;
 
@@ -41,7 +46,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v2(
   if (max_think_len < 0) return;
   int current_limit_think_status = limit_think_status[bid];
   // 如果在回复阶段, 或者已经触发停止标志, 则直接返回, 无需多余执行.
-  if (current_limit_think_status == 3 || stop_flags[bid]) {
+  if (current_limit_think_status == 5 || stop_flags[bid]) {
     return;
   }
 
@@ -58,48 +63,47 @@ __global__ void speculate_limit_thinking_content_length_kernel_v2(
     bool condition_triggered = false;
 
     // ======================= 思考阶段控制 =======================
-    // 阶段 1: 仍在思考 (status == 0), 检查是否需要强制结束
-    // 阶段 2: 在替换 (status == 1), 检查是否替换结束
-    if (current_limit_think_status <= 1) {
-      // 当开启思考长度控制时，检查是否超时
-      if (current_step == max_think_len) {
-        // 强制将当前token替换为结束思考的token
-        next_token = line_break_id;
-        current_limit_think_status = 1;
-        condition_triggered = true;  // 因为修改了token，需要截断
-      } else if (current_step == max_think_len + 1) {
-        // 强制将当前token替换为结束思考的token
-        next_token = think_end_id;
-        current_limit_think_status = 1;
-        condition_triggered = true;  // 因为修改了token，需要截断
-      } else if (current_step == max_think_len + 2) {
-        // 强制将当前token替换为结束思考的token
-        next_token = line_break_id;
-        current_limit_think_status = 1;
-        condition_triggered = true;  // 因为修改了token，需要截断
-      } else if (current_step == max_think_len + 3) {
-        // 强制将当前token替换为结束思考的token
-        next_token = line_break_id;
-        // 将状态推进到 1, 表示 "正在结束思考"
-        current_limit_think_status = 2;
-        condition_triggered = true;  // 因为修改了token，需要截断
+    // ======================= 思考阶段控制 =======================
+    // A) 超长触发：到达 max_think_len 时开始注入（从本 step 起输出 \n）
+    if (current_limit_think_status == 0 && current_step == max_think_len) {
+      current_limit_think_status = 1;
+    }
+    // B) 新增：思考阶段提前输出 eos，开始注入（从本 step 起覆盖 eos 为 \n）
+    if (current_limit_think_status == 0) {
+      for (int i = 0; i < eos_token_id_len; i++) {
+        if (eos_token_ids[i] == next_token) {
+          current_limit_think_status = 1;
+          break;
+        }
       }
     }
 
-    // ======================= 思考结束处理 =======================
-    // 阶段 3: 检查是否已满足结束思考的条件 (status == 0 || status == 2)
-    // 这种情况会处理两种场景:
-    // 1. status == 0: 模型可能自己生成了 </think>
-    // 2. status == 2: 上一阶段强制注入了 \n</think>\n\n
-    if (current_limit_think_status == 0) {
-      if (next_token == think_end_id) {
-        // 确认思考结束，将状态推进到 3 (响应阶段)
-        current_limit_think_status = 3;
-      }
-    }
-    if (current_limit_think_status == 2) {
-      // 确认思考结束，将状态推进到 3 (响应阶段)
+    if (current_limit_think_status == 1) {
+      // 强制将当前token替换为结束思考的token
+      next_token = line_break_id;
+      current_limit_think_status = 2;
+      condition_triggered = true;  // 因为修改了token，需要截断
+    } else if (current_limit_think_status == 2) {
+      // 强制将当前token替换为结束思考的token
+      next_token = think_end_id;
       current_limit_think_status = 3;
+      condition_triggered = true;  // 因为修改了token，需要截断
+    } else if (current_limit_think_status == 3) {
+      // 强制将当前token替换为结束思考的token
+      next_token = line_break_id;
+      current_limit_think_status = 4;
+      condition_triggered = true;  // 因为修改了token，需要截断
+    } else if (current_limit_think_status == 4) {
+      // 强制将当前token替换为结束思考的token
+      next_token = line_break_id;
+      // 将状态推进到 1, 表示 "正在结束思考"
+      current_limit_think_status = 5;
+      condition_triggered = true;  // 因为修改了token，需要截断
+    } else {
+      if (next_token == think_end_id) {
+        // 模型可能自己生成了 </think>
+        current_limit_think_status = 5;
+      }
     }
 
     next_tokens[token_idx] = next_token;
@@ -127,22 +131,26 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
     const paddle::Tensor& stop_flags,
+    const paddle::Tensor &eos_token_ids,
     const int64_t think_end_id,
     const int64_t line_break_id) {
   const int batch_size = next_tokens.shape()[0];
+  const int eos_token_id_len = eos_token_ids.shape()[0];
   const int tokens_per_step = next_tokens.shape()[1];
 
   speculate_limit_thinking_content_length_kernel_v2<<<1, 1024>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
+      eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_think_status.data<int>()),
       const_cast<int*>(accept_num.data<int>()),
       stop_flags.data<bool>(),
       think_end_id,
       line_break_id,
       tokens_per_step,
-      batch_size);
+      batch_size,
+      eos_token_id_len);
 }
 
 PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v2)
@@ -151,7 +159,8 @@ PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v2)
              "step_idx",
              "limit_think_status",
              "accept_num",
-             "stop_flags"})
+             "stop_flags",
+             "eos_token_ids"})
     .Attrs({"think_end_id: int64_t", "line_break_id: int64_t"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
