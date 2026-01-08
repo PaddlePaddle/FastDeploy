@@ -325,7 +325,10 @@ class Ernie4_5_MTPModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.mtp_block[i](forward_meta, hidden_states, residual)
 
-        hidden_states = self.norm(hidden_states, residual)[0]
+        hidden_states = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            hidden_states = self.norm.allgather(hidden_states, forward_meta.ids_remove_padding.shape[0])
 
         return hidden_states
 
@@ -396,7 +399,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             ),
         )
 
-    def compute_logits(self, hidden_states: paddle.Tensor):
+    def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """
         compute logits
         """
