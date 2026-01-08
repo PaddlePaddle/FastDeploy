@@ -85,7 +85,18 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
 """
 
 # [M, K, Number of experts, token Padding Size, weight K group size]
-gemm_case = [[256, 256, 2, 0, 128], [512, 256, 2, 0, 128]]
+gemm_case = [
+    [256, 256, 2, 0, 128], 
+    [512, 256, 2, 0, 128],
+    [7168, 7168, 6, 8192, 128], # num_max_dispatch_tokens_per_rank=128
+    [7168, 3584, 6, 8192, 128], # num_max_dispatch_tokens_per_rank=128
+    [7168, 7168, 6, 10240, 128], # num_max_dispatch_tokens_per_rank=160
+    [7168, 3584, 6, 10240, 128], # num_max_dispatch_tokens_per_rank=160
+    [7168, 7168, 6, 12288, 128], # num_max_dispatch_tokens_per_rank=192
+    [7168, 3584, 6, 12288, 128], # num_max_dispatch_tokens_per_rank=192
+    [7168, 7168, 6, 16384, 128], # num_max_dispatch_tokens_per_rank=256
+    [7168, 3584, 6, 16384, 128], # num_max_dispatch_tokens_per_rank=256
+]
 
 dtype = ["BF16"]
 
