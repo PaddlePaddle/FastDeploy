@@ -47,6 +47,7 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
+        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
