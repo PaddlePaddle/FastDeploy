@@ -14,7 +14,8 @@
 import os
 import re
 
-file_dir = "./gpu_ops/w4afp8_gemm/"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_dir = os.path.join(script_dir, "..", "gpu_ops", "w4afp8_gemm") + os.sep
 
 gemm_template_head = """
 #pragma once
