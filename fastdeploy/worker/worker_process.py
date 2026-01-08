@@ -42,6 +42,7 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.engine.request import RequestType
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -49,7 +50,6 @@ from fastdeploy.eplb.async_expert_loader import (
     load_tensor_from_shm_mem,
 )
 from fastdeploy.eplb.experts_manager import RedundantExpertManager
-from fastdeploy.engine.request import RequestType
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
