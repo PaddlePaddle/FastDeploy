@@ -240,7 +240,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
         assert limit_think_status.numpy()[0] == 1
 
-        # Test step == max_think_len + 3 (inject third \n and finish)
+        # Test step == max_think_len + 3 (inject third \n and move to status 2)
         next_tokens = paddle.to_tensor([[100]], dtype="int64")
         step_idx = paddle.to_tensor([[8]], dtype="int64")
         limit_think_status = paddle.to_tensor([1], dtype="int32")
@@ -249,7 +249,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
             next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
-        assert limit_think_status.numpy()[0] == 3  # Move to status 3
+        assert limit_think_status.numpy()[0] == 2  # Move to status 2 (injection complete)
 
     def test_model_naturally_generates_think_end_id(self):
         """Test when model naturally generates think_end_id"""
@@ -271,7 +271,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         assert limit_think_status.numpy()[0] == 3
 
     def test_status_2_to_status_3_transition(self):
-        """Test transition from status 2 (replacement done) to status 3 (thinking ended)"""
+        """Test transition from status 2 (injection complete) to status 3 (thinking ended)"""
         next_tokens = paddle.to_tensor([[100]], dtype="int64")
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[9]], dtype="int64")
@@ -285,7 +285,8 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
             next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
-        # Verify: status changed to 3
+        # Verify: status changed from 2 to 3, token unchanged
+        assert next_tokens.numpy()[0, 0] == 100  # Token unchanged
         assert limit_think_status.numpy()[0] == 3
 
     def test_disabled_feature_negative_max_think_len(self):

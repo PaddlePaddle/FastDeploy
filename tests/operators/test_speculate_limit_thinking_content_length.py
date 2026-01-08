@@ -402,7 +402,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         assert next_tokens.numpy()[0, 0] == 888
         assert limit_think_status.numpy()[0] == 1
 
-        # Step 4: at max_think_len+3, inject third \n and move to status 3
+        # Step 4: at max_think_len+3, inject third \n and move to status 2
         next_tokens = paddle.to_tensor([[400]], dtype="int64")
         step_idx = paddle.to_tensor([8], dtype="int64")
         limit_think_status = paddle.to_tensor([1], dtype="int32")
@@ -419,7 +419,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             line_break_id,
         )
         assert next_tokens.numpy()[0, 0] == 888
-        assert limit_think_status.numpy()[0] == 3
+        assert limit_think_status.numpy()[0] == 2  # Move to status 2 (injection complete)
 
     def test_model_naturally_generates_think_end_id(self):
         """Test when model naturally generates think_end_id"""
@@ -448,7 +448,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         assert limit_think_status.numpy()[0] == 3
 
     def test_status_2_to_status_3_transition(self):
-        """Test transition from status 2 to status 3"""
+        """Test transition from status 2 (injection complete) to status 3 (thinking ended)"""
         next_tokens = paddle.to_tensor([[100]], dtype="int64")
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([10], dtype="int64")
@@ -470,7 +470,8 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             line_break_id,
         )
 
-        # Verify: status 2 -> 3
+        # Verify: status 2 -> 3, token unchanged
+        assert next_tokens.numpy()[0, 0] == 100  # Token unchanged
         assert limit_think_status.numpy()[0] == 3
 
     def test_disabled_feature_negative_max_think_len(self):
