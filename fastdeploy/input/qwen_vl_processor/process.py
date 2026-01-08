@@ -549,7 +549,7 @@ class DataProcessor(MMBaseDataProcessor):
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,
-                fps=fps,
+                fps=-1 if num_frames > 0 else fps,  # num_frames first,
                 num_frames=num_frames,
             )
 
