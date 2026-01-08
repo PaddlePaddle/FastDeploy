@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ def setup_and_run_server():
     print("Pre-test port cleanup...")
     clean_ports()
 
-    model_path = "/ModelData/Qwen3-VL-4B-Instruct"
+    model_path = "/ModelData/Qwen3-VL-30B-A3B-Instruct"
 
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
@@ -177,7 +177,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     f_o.close()
 
     # base result
-    content2 = "视频中手机支架的颜色是黑色。"
+    content2 = "根据您提供的视频帧，我们可以观"
 
     # Verify that result is same as the base result
     assert content1.startswith(content2), content1
