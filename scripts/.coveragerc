@@ -45,3 +45,4 @@ omit =
     */fastdeploy/worker/iluvatar*.py
     */fastdeploy/**/xpu/*
     */fastdeploy/worker/xpu*.py
+    */fastdeploy/golang_router/*
