@@ -884,7 +884,7 @@ class MTPProposer(Proposer):
                 )
 
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hidden_states)
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 if self.enable_logprob and substep == 0:
                     first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
