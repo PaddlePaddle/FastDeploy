@@ -59,7 +59,9 @@ elif current_platform.is_maca():
         set_stop_value_multi_ends,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
+        speculate_step_system_cache,
         step_paddle,
+        step_system_cache,
         update_inputs,
         update_inputs_v1,
     )

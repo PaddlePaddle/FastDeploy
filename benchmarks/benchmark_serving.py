@@ -491,8 +491,14 @@ async def benchmark(
         # 多ip按DP均分并发
         assert max_concurrency, "multi-IP 模式必须指定 max_concurrency"
         n_ip = len(ip_list)
-        concurrency_per_ip = max_concurrency // n_ip
-        concurrency_remainder = max_concurrency % n_ip
+        if max_concurrency < n_ip:
+            print(
+                f"[WARN] max_concurrency({max_concurrency}) < IP 数({n_ip})，"
+                f"已自动兜底为每个 IP 1 并发，"
+                f"实际总并发将变为 {n_ip}"
+            )
+        concurrency_per_ip = max(1, max_concurrency // n_ip)
+        concurrency_remainder = max(0, max_concurrency - concurrency_per_ip * n_ip)
 
         # 分配请求
         req_per_ip = len(input_requests) // n_ip
@@ -803,7 +809,7 @@ async def benchmark(
         process_pd_metrics(outputs, "gpu_cache_token_num", is_time=False)
         process_pd_metrics(outputs, "cpu_cache_token_num", is_time=False)
         process_pd_metrics(outputs, "storage_cache_token_num", is_time=False)
-        process_pd_metrics(outputs, "gpu_cpu_cache_prepare_time")
+        process_pd_metrics(outputs, "cpu_cache_prepare_time")
         process_pd_metrics(outputs, "storage_cache_prepare_time")
     process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
