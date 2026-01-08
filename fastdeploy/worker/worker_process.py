@@ -234,6 +234,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init kv_cache_status
+        kv_cache_status_data = np.zeros(shape=[1], dtype=np.int32)
+        self.kv_cache_status = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -462,6 +472,7 @@ class PaddleDisWorkerProc:
                     )
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
+                    self.kv_cache_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
                         # model_weights_signal

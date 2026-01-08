@@ -668,16 +668,6 @@ class CacheTransferManager:
             return
         logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
         while True:
-            # sync worker status to cache transfer manager
-            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
-            elif self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.UPDATING
-            elif self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
-            elif self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-
             # handle cache clearing/restoring
             if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
@@ -715,7 +705,7 @@ class CacheTransferManager:
 
                     # reset kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
-                    logger.info("All ranks finish clearing caches")
+                    logger.info(f"All ranks finish clearing caches {self.cache_ready_signal.value}")
 
                     logger.info("Waiting for model_weights_status to be cleared..")
                     while self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
@@ -744,7 +734,7 @@ class CacheTransferManager:
                         time.sleep(0.1)
 
                     # set kv_cache_status_signal
-                    logger.info("All ranks finish restoring caches")
+                    logger.info(f"All ranks finish restoring caches {self.cache_ready_signal.value}")
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                     logger.info("Waiting for model_weights_status to be normal..")
