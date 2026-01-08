@@ -28,6 +28,11 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
     )
 
     def get_entropy(logits):
+        # Check for -inf values in logits
+        if paddle.any(paddle.isinf(logits) & (logits < 0)):
+            data_processor_logger.debug("Detected -inf values in logits, clipping to minimum value")
+            logits = paddle.clip(logits, min=1e-9)
+
         a0 = logits - paddle.max(logits, axis=-1, keepdim=True)
         ea0 = paddle.exp(a0)
         z0 = paddle.sum(ea0, axis=-1, keepdim=True)
@@ -78,6 +83,11 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
         accepted_logits[i] = logits[accepted_idx[i]]
 
     def get_entropy(logits):
+        # Check for -inf values in logits
+        if paddle.any(paddle.isinf(logits) & (logits < 0)):
+            data_processor_logger.debug("Detected -inf values in logits, clipping to minimum value")
+            logits = paddle.clip(logits, min=1e-9)
+
         a0 = logits - paddle.max(logits, axis=-1, keepdim=True)
         ea0 = paddle.exp(a0)
         z0 = paddle.sum(ea0, axis=-1, keepdim=True)
