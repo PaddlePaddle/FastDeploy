@@ -466,7 +466,12 @@ class FusedMoE(nn.Layer):
             down_proj_expert_weight_key (str): The key of down_proj expert weight.
         """
         logical_expert_ids = [
-            i % self.fd_config.model_config.moe_num_experts
+            i
+            % (
+                self.fd_config.model_config.moe_num_experts[0]
+                if isinstance(self.fd_config.model_config.moe_num_experts, list)
+                else self.fd_config.model_config.moe_num_experts
+            )
             for i in range(
                 self.expert_id_offset,
                 self.expert_id_offset + self.num_local_experts,
