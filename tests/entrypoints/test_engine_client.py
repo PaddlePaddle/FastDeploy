@@ -24,6 +24,12 @@ import numpy as np
 import pytest
 
 from fastdeploy.entrypoints.engine_client import EngineClient
+from fastdeploy.inter_communicator import (
+    KVCacheStatus,
+    ModelWeightsStatus,
+    PrefixTreeStatus,
+    RearrangeExpertStatus,
+)
 from fastdeploy.utils import EngineError, ParameterError
 
 
@@ -197,9 +203,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         with (
             patch("fastdeploy.entrypoints.engine_client.IPCSignal"),
             patch("fastdeploy.entrypoints.engine_client.DealerConnectionManager"),
-            patch("fastdeploy.entrypoints.engine_client.InputPreprocessor"),
-            patch("fastdeploy.entrypoints.engine_client.FileLock"),
-            patch("fastdeploy.entrypoints.engine_client.StatefulSemaphore"),
             patch.multiple(
                 "fastdeploy.entrypoints.engine_client",
                 InputPreprocessor=Mock(return_value=mock_input_processor),
@@ -211,7 +214,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
                 current_platform=mock_platform,
                 envs=mock_envs,
             ),
-            patch("fastdeploy.metrics.metrics.main_process_metrics", Mock()),
             patch("os.getenv", return_value="50"),
         ):
             self.engine_config = DummyConfig(
@@ -331,6 +333,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_config.cache_config = MagicMock()  # Add cache_config
         mock_config.cache_config.enable_prefix_caching = False
         mock_config.cache_config.max_processor_cache = 0
+        mock_config.cache_config.swap_space = False  # Critical: must be False for update/clear tests
         mock_config.limit_mm_per_prompt = 5  # Add this attribute
         mock_config.mm_processor_kwargs = {}  # Add this attribute
         mock_config.structured_outputs_config = MagicMock()  # Add this
@@ -350,51 +353,48 @@ class TestEngineClientValidParameters(unittest.TestCase):
                     with patch("fastdeploy.entrypoints.engine_client.FileLock") as mock_filelock:
                         mock_filelock.return_value = MagicMock()
 
-                        with patch("fastdeploy.config.ModelConfig") as mock_model_config_class:
-                            mock_model_config_class.return_value = mock_model_config
+                        with patch(
+                            "fastdeploy.entrypoints.engine_client.InputPreprocessor"
+                        ) as mock_input_processor:
+                            mock_input_processor_instance = MagicMock()
+                            mock_input_processor_instance.create_processor.return_value = mock_data_processor
+                            mock_input_processor.return_value = mock_input_processor_instance
 
-                            with patch(
-                                "fastdeploy.entrypoints.engine_client.InputPreprocessor"
-                            ) as mock_input_processor:
-                                mock_input_processor_instance = MagicMock()
-                                mock_input_processor_instance.create_processor.return_value = mock_data_processor
-                                mock_input_processor.return_value = mock_input_processor_instance
+                            # Create EngineClient with minimal required parameters
+                            self.engine_client = EngineClient(
+                                pid=1234,
+                                port=8080,
+                                fd_config=mock_config,
+                                workers=1,
+                            )
 
-                                # Create EngineClient with minimal required parameters
-                                self.engine_client = EngineClient(
-                                    pid=1234,
-                                    port=8080,
-                                    fd_config=mock_config,
-                                    workers=1,
-                                )
-
-                                # Set up mock attributes for TestEngineClientValidParameters class
-                                self.engine_client.zmq_client = Mock()
-                                self.engine_client.zmq_client.send_json = Mock()
-                                self.engine_client.zmq_client.send_pyobj = Mock()
-                                self.engine_client.max_logprobs = 20
-                                self.engine_client.enable_logprob = True
-                                self.engine_client.ori_vocab_size = 1000
-                                self.engine_client.enable_prefix_caching = False
-                                self.engine_client.enable_splitwise = False
-                                self.engine_client.disable_prefix_mm = False
-                                self.engine_client.max_model_len = 1024
-                                self.engine_client.enable_mm = False
-                                self.engine_client.config = mock_config
-                                self.engine_client.max_chips_per_node = 8
-                                self.engine_client.tensor_parallel_size = 1
-                                self.engine_client.is_master = True
-                                self.engine_client.worker_healthy_live_signal = Mock()
-                                self.engine_client.worker_healthy_live_signal.value = np.array([0])
-                                self.engine_client.model_weights_status_signal = Mock()
-                                self.engine_client.model_weights_status_signal.value = np.array([0])
-                                self.engine_client.clear_update_lock = Mock()
-                                self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
-                                self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
-                                self.engine_client.kv_cache_status_signal = Mock()
-                                self.engine_client.kv_cache_status_signal.value = np.array([0])
-                                self.engine_client.prefix_tree_status_signal = Mock()
-                                self.engine_client.prefix_tree_status_signal.value = np.array([0])
+                            # Set up mock attributes for TestEngineClientValidParameters class
+                            self.engine_client.zmq_client = Mock()
+                            self.engine_client.zmq_client.send_json = Mock()
+                            self.engine_client.zmq_client.send_pyobj = Mock()
+                            self.engine_client.max_logprobs = 20
+                            self.engine_client.enable_logprob = True
+                            self.engine_client.ori_vocab_size = 1000
+                            self.engine_client.enable_prefix_caching = False
+                            self.engine_client.enable_splitwise = False
+                            self.engine_client.disable_prefix_mm = False
+                            self.engine_client.max_model_len = 1024
+                            self.engine_client.enable_mm = False
+                            self.engine_client.config = mock_config
+                            self.engine_client.max_chips_per_node = 8
+                            self.engine_client.tensor_parallel_size = 1
+                            self.engine_client.is_master = True
+                            self.engine_client.worker_healthy_live_signal = Mock()
+                            self.engine_client.worker_healthy_live_signal.value = np.array([0])
+                            self.engine_client.model_weights_status_signal = Mock()
+                            self.engine_client.model_weights_status_signal.value = np.array([0])
+                            self.engine_client.clear_update_lock = Mock()
+                            self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
+                            self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
+                            self.engine_client.kv_cache_status_signal = Mock()
+                            self.engine_client.kv_cache_status_signal.value = np.array([0])
+                            self.engine_client.prefix_tree_status_signal = Mock()
+                            self.engine_client.prefix_tree_status_signal.value = np.array([0])
 
     def test_max_logprobs_valid_values(self):
         """Test valid max_logprobs values"""
@@ -761,12 +761,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
             "stop_seqs_len": list(range(25)),  # Exceeds default limit
         }
 
-        with patch("fastdeploy.entrypoints.engine_client.envs") as mock_envs:
-            mock_envs.FD_MAX_STOP_SEQS_NUM = 20
-            mock_envs.FD_STOP_SEQS_MAX_LEN = 100
-
-            with self.assertRaises(Exception):  # EngineError
-                await self.engine_client.add_requests(task)
+        with self.assertRaises(Exception):  # EngineError
+            await self.engine_client.add_requests(task)
 
     async def test_add_requests_with_n_parameter_multiple_requests(self):
         """Test add_requests with n parameter for multiple requests."""
@@ -912,146 +908,115 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_is_workers_alive_normal(self):
         """Test is_workers_alive returns True when weights are normal."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.NORMAL = 0
-            self.engine_client.model_weights_status_signal.value = np.array([0])
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
 
-            result, message = self.engine_client.is_workers_alive()
+        result, message = self.engine_client.is_workers_alive()
 
-            self.assertTrue(result)
-            self.assertEqual(message, "")
+        self.assertTrue(result)
+        self.assertEqual(message, "")
 
     def test_is_workers_alive_no_weights(self):
         """Test is_workers_alive returns False when no weights."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.NORMAL = 0
-            self.engine_client.model_weights_status_signal.value = np.array([1])
+        self.engine_client.model_weights_status_signal.value = np.array([1])
 
-            result, message = self.engine_client.is_workers_alive()
+        result, message = self.engine_client.is_workers_alive()
 
-            self.assertFalse(result)
-            self.assertEqual(message, "No model weight enabled")
+        self.assertFalse(result)
+        self.assertEqual(message, "No model weight enabled")
 
     def test_update_model_weight_already_normal(self):
         """Test update_model_weight when weights are already normal."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.NORMAL = 0
-            self.engine_client.model_weights_status_signal.value = np.array([0])
+        # Use real enum value instead of mock
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
 
-            result, message = self.engine_client.update_model_weight()
+        result, message = self.engine_client.update_model_weight()
 
-            self.assertTrue(result)
-            self.assertEqual(message, "")
+        self.assertTrue(result)
+        self.assertEqual(message, "")
 
     def test_update_model_weight_already_updating(self):
         """Test update_model_weight when already updating."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.NORMAL = 0
-            mock_status.UPDATING = 1
-            self.engine_client.model_weights_status_signal.value = np.array([1])
+        # Use real enum value
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.UPDATING])
 
-            result, message = self.engine_client.update_model_weight()
+        result, message = self.engine_client.update_model_weight()
 
-            self.assertFalse(result)
-            self.assertEqual(message, "worker is updating model weight already")
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is updating model weight already")
 
     def test_update_model_weight_clearing(self):
         """Test update_model_weight when clearing weights."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.NORMAL = 0
-            mock_status.CLEARING = -1
-            self.engine_client.model_weights_status_signal.value = np.array([-1])
+        # Use real enum value
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARING])
 
-            result, message = self.engine_client.update_model_weight()
+        result, message = self.engine_client.update_model_weight()
 
-            self.assertFalse(result)
-            self.assertEqual(message, "worker is clearing model weight, cannot update now")
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is clearing model weight, cannot update now")
 
     def test_update_model_weight_timeout(self):
         """Test update_model_weight timeout scenario."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            with patch("fastdeploy.entrypoints.engine_client.KVCacheStatus") as mock_kv_status:
-                with patch("fastdeploy.entrypoints.engine_client.PrefixTreeStatus") as mock_prefix_status:
-                    mock_status.NORMAL = 0
-                    mock_status.UPDATING = 1
-                    mock_status.CLEARED = -2
-                    mock_kv_status.NORMAL = 0
-                    mock_kv_status.UPDATING = 1
-                    mock_kv_status.CLEARED = -2
-                    mock_prefix_status.NORMAL = 0
-                    mock_prefix_status.UPDATING = 1
-                    mock_prefix_status.CLEARED = -2
+        # No need to mock enum classes, use real values directly
+        self.engine_client.enable_prefix_caching = True
 
-                    self.engine_client.enable_prefix_caching = True
-                    # Start with CLEARED status to enter the updating loop
-                    self.engine_client.model_weights_status_signal.value = np.array([-2])
-                    self.engine_client.kv_cache_status_signal.value = np.array([-2])  # Start as CLEARED
-                    self.engine_client.prefix_tree_status_signal.value = np.array([-2])  # Start as CLEARED
+        # Start with CLEARED status to enter the updating loop
+        # Create mutable numpy arrays that can be modified during test
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
+        self.engine_client.kv_cache_status_signal.value = np.array([KVCacheStatus.CLEARED])
 
-                    result, message = self.engine_client.update_model_weight(timeout=1)
+        # For prefix_tree, set to NORMAL to avoid getting stuck in prefix tree loop
+        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.NORMAL])
 
-                    self.assertFalse(result)
-                    self.assertEqual(message, "Update model weight timeout")
+        result, message = self.engine_client.update_model_weight(timeout=1)
+
+        self.assertFalse(result)
+        self.assertEqual(message, "Update model weight timeout")
 
     def test_clear_load_weight_already_cleared(self):
         """Test clear_load_weight when weights are already cleared."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.CLEARED = -2
-            self.engine_client.model_weights_status_signal.value = np.array([-2])
+        # Use real enum value instead of mock
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
 
-            result, message = self.engine_client.clear_load_weight()
+        result, message = self.engine_client.clear_load_weight()
 
-            self.assertTrue(result)
-            self.assertEqual(message, "")
+        self.assertTrue(result)
+        self.assertEqual(message, "")
 
     def test_clear_load_weight_already_clearing(self):
         """Test clear_load_weight when already clearing."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.CLEARED = -2
-            mock_status.CLEARING = -1
-            self.engine_client.model_weights_status_signal.value = np.array([-1])
+        # Use real enum value
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARING])
 
-            result, message = self.engine_client.clear_load_weight()
+        result, message = self.engine_client.clear_load_weight()
 
-            self.assertFalse(result)
-            self.assertEqual(message, "worker is clearing model weight already")
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is clearing model weight already")
 
     def test_clear_load_weight_updating(self):
         """Test clear_load_weight when updating weights."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            mock_status.CLEARED = -2
-            mock_status.CLEARING = -1
-            mock_status.UPDATING = 1
-            self.engine_client.model_weights_status_signal.value = np.array([1])
+        # Use real enum value
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.UPDATING])
 
-            result, message = self.engine_client.clear_load_weight()
+        result, message = self.engine_client.clear_load_weight()
 
-            self.assertFalse(result)
-            self.assertEqual(message, "worker is updating model weight, cannot clear now")
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is updating model weight, cannot clear now")
 
     def test_clear_load_weight_timeout(self):
         """Test clear_load_weight timeout scenario."""
-        with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
-            with patch("fastdeploy.entrypoints.engine_client.KVCacheStatus") as mock_kv_status:
-                with patch("fastdeploy.entrypoints.engine_client.PrefixTreeStatus") as mock_prefix_status:
-                    mock_status.NORMAL = 0
-                    mock_status.CLEARED = -2
-                    mock_status.CLEARING = -1
-                    mock_kv_status.CLEARED = -2
-                    mock_kv_status.CLEARING = -1
-                    mock_prefix_status.CLEARED = -2
-                    mock_prefix_status.CLEARING = -1
+        # No need to mock enum classes, use real values directly
+        self.engine_client.enable_prefix_caching = True
 
-                    self.engine_client.enable_prefix_caching = True
-                    # Start with NORMAL status to enter the clearing loop
-                    self.engine_client.model_weights_status_signal.value = np.array([0])
-                    self.engine_client.kv_cache_status_signal.value = np.array([0])  # Start as NORMAL
-                    self.engine_client.prefix_tree_status_signal.value = np.array([0])  # Start as NORMAL
+        # Start with NORMAL status to enter the clearing loop
+        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
 
-                    result, message = self.engine_client.clear_load_weight(timeout=1)
+        # For prefix_tree, set to CLEARED to avoid getting stuck in prefix tree loop
+        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.CLEARED])
 
-                    self.assertFalse(result)
-                    self.assertEqual(message, "Clear model weight timeout")
+        result, message = self.engine_client.clear_load_weight(timeout=1)
+
+        self.assertFalse(result)
+        self.assertEqual(message, "Clear model weight timeout")
 
     def test_check_model_weight_status(self):
         """Test check_model_weight_status returns correct status."""
@@ -1258,21 +1223,16 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         self.engine_client.config = mock_config
         self.engine_client.rearrange_experts_signal = Mock()
-        self.engine_client.rearrange_experts_signal.value = np.array([0])  # FREE status
+        self.engine_client.rearrange_experts_signal.value = np.array([RearrangeExpertStatus.FREE.value])
 
-        with patch("fastdeploy.entrypoints.engine_client.RearrangeExpertStatus") as mock_status:
-            mock_status_instance = Mock()
-            mock_status_instance.name = "FREE"
-            mock_status.return_value = mock_status_instance
+        request_dict = {"user": "test_user", "passwd": "test_pass", "action": ""}
 
-            request_dict = {"user": "test_user", "passwd": "test_pass", "action": ""}
+        content, status_code = await self.engine_client.check_redundant(request_dict)
 
-            content, status_code = await self.engine_client.check_redundant(request_dict)
-
-            self.assertEqual(content["code"], 0)
-            self.assertEqual(content["msg"], "ok")
-            self.assertEqual(content["status"], "FREE")
-            self.assertEqual(status_code, 200)
+        self.assertEqual(content["code"], 0)
+        self.assertEqual(content["msg"], "ok")
+        self.assertEqual(content["status"], "FREE")
+        self.assertEqual(status_code, 200)
 
     def test_init_eplb_signals_non_zero_rank(self):
         """Test init_eplb_signals returns early for non-zero tensor parallel rank."""
@@ -1560,23 +1520,18 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.fd_config = mock_config
 
         # Setup signals
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([0]))
+        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
         self.engine_client.rearrange_experts_ips_size_signal = Mock(value=np.array([0]))
         self.engine_client.signal_update_weight_from_tensor_array = Mock(value=np.array([0]))
         self.engine_client.shm_rearrange_experts_ips_list = Mock()
         self.engine_client.shm_rearrange_experts_ips_list.shm.buf = bytearray(1024)
 
-        with patch("fastdeploy.entrypoints.engine_client.RearrangeExpertStatus") as mock_status:
-            mock_status.FREE = Mock(value=0)
-            mock_status_instance = Mock(name="FREE")
-            mock_status.return_value = mock_status_instance
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "", "ips": ["10.0.0.1:8000", "10.0.0.2:8000"]}
+        )
 
-            content, status_code = await self.engine_client.rearrange_experts(
-                {"user": "test_user", "passwd": "test_pass", "action": "", "ips": ["10.0.0.1:8000", "10.0.0.2:8000"]}
-            )
-
-            self.assertEqual(content["code"], 0)
-            self.assertEqual(status_code, 200)
+        self.assertEqual(content["code"], 0)
+        self.assertEqual(status_code, 200)
 
     async def test_rearrange_experts_recv_expert_weight(self):
         """Test rearrange_experts recv_expert_weight action."""
@@ -1635,27 +1590,22 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_config = create_mock_fd_config(enable_eplb=True, eplb_shm_size=10)
         self.engine_client.config = mock_config
         self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([0]))
+        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
         self.engine_client.shm_rearrange_experts_ips_list = Mock()
         self.engine_client.shm_rearrange_experts_ips_list.shm.buf = bytearray(10)
 
-        with patch("fastdeploy.entrypoints.engine_client.RearrangeExpertStatus") as mock_status:
-            mock_status.FREE = Mock(value=0)
-            mock_status_instance = Mock(name="FREE")
-            mock_status.return_value = mock_status_instance
+        content, status_code = await self.engine_client.rearrange_experts(
+            {
+                "user": "test_user",
+                "passwd": "test_pass",
+                "action": "",
+                "ips": ["10.0.0.1:8000", "10.0.0.2:8000"],  # > 10 bytes
+            }
+        )
 
-            content, status_code = await self.engine_client.rearrange_experts(
-                {
-                    "user": "test_user",
-                    "passwd": "test_pass",
-                    "action": "",
-                    "ips": ["10.0.0.1:8000", "10.0.0.2:8000"],  # > 10 bytes
-                }
-            )
-
-            self.assertEqual(content["code"], 1)
-            self.assertIn("max limit", content["msg"])
-            self.assertEqual(status_code, 500)
+        self.assertEqual(content["code"], 1)
+        self.assertIn("max limit", content["msg"])
+        self.assertEqual(status_code, 500)
 
     async def test_add_requests_preprocessing_exception(self):
         """Test add_requests with preprocessing error raises EngineError."""
