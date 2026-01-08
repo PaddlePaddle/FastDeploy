@@ -86,15 +86,17 @@ class TestAttentionPerformance(unittest.TestCase):
         )
 
         num_layers = self.fd_config.model_config.num_hidden_layers
+
+        real_weight_layers = num_layers // 2 + 1
         self.attention_layer = [None] * num_layers
-        for i in range(num_layers):
+        for i in range(real_weight_layers):
             self.attention_layer[i] = Ernie4_5_Attention(self.fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
             self.attention_layer[i].load_state_dict(state_dict)
 
         def attn_forward(forward_meta, hidden_states):
             for i in range(num_layers):
-                hidden_states = self.attention_layer[i](forward_meta, hidden_states)
+                hidden_states = self.attention_layer[i % real_weight_layers](forward_meta, hidden_states)
 
             return hidden_states
 
@@ -124,10 +126,10 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_position_embeddings": 201 * 1024,
             "max_model_len": 201 * 1024,
             "head_dim": 128,
-            "hidden_size": 7168,
+            "hidden_size": 6144,
             "num_attention_heads": 56,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 2,
+            "num_hidden_layers": 61,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -248,9 +250,12 @@ class TestAttentionPerformance(unittest.TestCase):
         cache_shape = (allocated_num_blocks, kv_num_heads_tp, block_size, head_dim)
         scale_shape = (allocated_num_blocks, kv_num_heads_tp, block_size)
         caches = []
-        for _ in range(num_layers):
-            key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
-            value_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
+
+        for layer_id in range(num_layers):
+            # 这里只用了少量层，其他层复用最开始的几层，以此来增大batch测试
+            if layer_id // 2 == 0:
+                key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
+                value_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
             caches.extend([key_cache, value_cache])
             if cache_quant_type_str == "block_wise_fp8":
                 key_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
@@ -355,7 +360,7 @@ class TestAttentionPerformance(unittest.TestCase):
         for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=10 * 1024,
+                seq_len=16 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
@@ -387,6 +392,7 @@ class TestAttentionPerformance(unittest.TestCase):
             paddle.device.synchronize()
 
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+            print(decode_batch_size)
             print(times[-5:])
 
             del forward_meta
