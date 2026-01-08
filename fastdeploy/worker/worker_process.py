@@ -482,14 +482,37 @@ class PaddleDisWorkerProc:
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
-                    self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
-                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
-                    # 只有不关闭通信组时，清理权重后需要额外等待（否则信号量会同步混乱）
-                    if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
-                        while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                            time.sleep(0.01)
-                        continue
+                    if self.model_weights_signal[0] == ModelWeightsStatus.UPDATING:
+                        logger.info(
+                            f"Rank: {self.local_rank} has updated parameters. {self.model_weights_status.value[0]}"
+                        )
+                        self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                    elif self.model_weights_signal[0] == ModelWeightsStatus.CLEARING:
+                        logger.info(
+                            f"Rank: {self.local_rank} has cleared parameters. {self.model_weights_status.value[0]}"
+                        )
+                        # 如果不关闭通信组，清理权重后将推理进程统一阻塞在下面的循环中，否则信号量可能同步混乱；直到下次权重更新时唤醒
+                        if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                            if self.ranks > 1:  # 所有 Rank 同时入睡，监听下次的更新信号
+                                paddle.distributed.barrier()
+                            while self.model_weights_signal[0] != ModelWeightsStatus.UPDATING:
+                                self.model_weights_signal[0] = self.model_weights_status.value[0]
+                                logger.info(
+                                    f"Rank {self.local_rank}: before broadcast self.model_weights_signal[0]={self.model_weights_signal[0]}"
+                                )
+                                if self.ranks > 1:
+                                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                                        src=0, group=None
+                                    )
+                                logger.info(
+                                    f"Rank {self.local_rank}:  after broadcast self.model_weights_signal[0]={self.model_weights_signal[0]}"
+                                )
+                                time.sleep(1)
+                            self.model_weights_status.value[0] = (
+                                ModelWeightsStatus.UPDATING
+                            )  # 所有 Rank 已同步唤醒，启动权重更新流程
+                            continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
