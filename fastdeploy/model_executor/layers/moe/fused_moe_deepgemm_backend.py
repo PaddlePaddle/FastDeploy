@@ -38,16 +38,6 @@ from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 
-def dump_tensor(name, x):
-    print(f"\n[{name}]")
-    print("  type      :", type(x))
-    print("  shape     :", tuple(x.shape))
-    print("  dtype     :", x.dtype)
-    print("  place     :", x.place)
-    print("  stop_grad :", x.stop_gradient)
-    print("  strides   :", x.strides)
-
-
 def ceil_div(x: int, y: int) -> int:
     return (x + y - 1) // y
 
