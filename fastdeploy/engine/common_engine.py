@@ -225,10 +225,6 @@ class EngineService:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-        # Set cache manager signal
-        if self.cfg.scheduler_config.splitwise_role != "mixed":
-            self.launched_cache_manager_signal.value[0] = 1
-
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
