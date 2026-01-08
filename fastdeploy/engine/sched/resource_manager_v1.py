@@ -376,11 +376,17 @@ class ResourceManagerV1(ResourceManager):
         if mm_inputs is None or "mm_positions" not in mm_inputs or len(mm_inputs["mm_positions"]) == 0:
             return matched_token_num
 
-        for idx in range(len(mm_inputs["mm_positions"])):
-            position = mm_inputs["mm_positions"][idx]
+        position_idx = len(mm_inputs["mm_positions"]) - 1
+        while matched_token_num > 0 and position_idx >= 0:
+            position = mm_inputs["mm_positions"][position_idx]
             if position.offset < matched_token_num < position.offset + position.length:
-                return position.offset
+                matched_token_num = (
+                    position.offset // self.config.cache_config.block_size
+                ) * self.config.cache_config.block_size
+                position_idx -= 1
             elif matched_token_num < position.offset:
+                position_idx -= 1
+            elif matched_token_num >= position.offset + position.length:
                 break
         return matched_token_num
 
@@ -950,17 +956,9 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
-            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
             request.skip_allocate = False
-
-            # Report the number of cached tokens to Prometheus metrics
-            main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
-
             if self.config.cache_config.disable_chunked_mm_input:
                 if matched_token_num == request.need_prefill_tokens:
                     matched_token_num = matched_token_num - self.config.cache_config.block_size
@@ -974,7 +972,27 @@ class ResourceManagerV1(ResourceManager):
                     request.skip_allocate = True
                 else:
                     request.num_computed_tokens = matched_token_num
-            llm_logger.info(f"request {request.request_id} num_computed_tokens: {request.num_computed_tokens}")
+
+            if request.num_cached_tokens != request.num_computed_tokens:
+                revert_tokens_num = request.num_cached_tokens - request.num_computed_tokens
+                llm_logger.info(
+                    f"request {request.request_id} num_cached_tokens: {request.num_cached_tokens}, revert_tokens_num: {revert_tokens_num}"
+                )
+
+                revert_block_idx = revert_tokens_num // self.config.cache_config.block_size
+                for block_idx in range(len(common_block_ids) - 1, revert_block_idx, -1):
+                    if common_block_ids[block_idx] in hit_info["match_gpu_block_ids"]:
+                        hit_info["gpu_match_token_num"] -= self.config.cache_config.block_size
+                    elif common_block_ids[block_idx] in hit_info["match_cpu_block_ids"]:
+                        hit_info["cpu_match_token_num"] -= self.config.cache_config.block_size
+
+            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
+
+            # Report the number of cached tokens to Prometheus metrics
+            main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
+            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:

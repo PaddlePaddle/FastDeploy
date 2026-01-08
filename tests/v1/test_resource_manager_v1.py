@@ -190,6 +190,7 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         model_cfg.max_model_len = 5120
         model_cfg.architectures = ["test_model"]
         cache_cfg.bytes_per_layer_per_block = 1
+        cache_cfg.block_size = 64
         parallel_cfg = ParallelConfig(args)
         scheduler_cfg = SchedulerConfig(args)
         graph_opt_cfg = engine_args.create_graph_optimization_config()
@@ -214,58 +215,58 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         self.request.multimodal_inputs = {}
 
     def test_revert_chunked_mm_input_none_input(self):
-        result = self.manager.revert_chunked_mm_input(None, 10)
-        self.assertEqual(result, 10)
+        result = self.manager.revert_chunked_mm_input(None, 64)
+        self.assertEqual(result, 64)
 
     def test_revert_chunked_mm_input_no_mm_positions(self):
         mm_inputs = {"other_field": "value"}
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 10)
-        self.assertEqual(result, 10)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 128)
+        self.assertEqual(result, 128)
 
     def test_revert_chunked_mm_input_empty_positions(self):
         mm_inputs = {"mm_positions": []}
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 10)
-        self.assertEqual(result, 10)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 128)
+        self.assertEqual(result, 128)
 
     def test_revert_chunked_mm_input_matched_in_chunk(self):
         mm_inputs = {
             "mm_positions": [
-                ImagePosition(offset=5, length=10),
-                ImagePosition(offset=20, length=10),
+                ImagePosition(offset=40, length=100),
+                ImagePosition(offset=200, length=80),
             ]
         }
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 8)
-        self.assertEqual(result, 5)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 192)
 
     def test_revert_chunked_mm_input_matched_in_second_chunk(self):
         mm_inputs = {
             "mm_positions": [
-                ImagePosition(offset=5, length=10),
-                ImagePosition(offset=20, length=10),
+                ImagePosition(offset=100, length=100),
+                ImagePosition(offset=200, length=80),
             ]
         }
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 25)
-        self.assertEqual(result, 20)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 64)
 
     def test_revert_chunked_mm_input_before_first_chunk(self):
         mm_inputs = {
             "mm_positions": [
-                ImagePosition(offset=5, length=10),
-                ImagePosition(offset=20, length=10),
+                ImagePosition(offset=60, length=100),
+                ImagePosition(offset=180, length=100),
             ]
         }
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 3)
-        self.assertEqual(result, 3)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 0)
 
     def test_revert_chunked_mm_input_after_last_chunk(self):
         mm_inputs = {
             "mm_positions": [
                 ImagePosition(offset=5, length=10),
-                ImagePosition(offset=20, length=10),
+                ImagePosition(offset=200, length=56),
             ]
         }
-        result = self.manager.revert_chunked_mm_input(mm_inputs, 35)
-        self.assertEqual(result, 35)
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 256)
 
 
 if __name__ == "__main__":
