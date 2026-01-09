@@ -16,8 +16,8 @@
 
 import numpy as np
 
-from fastdeploy.input.v1.text_processor import DataProcessor as TextProcessor
 from fastdeploy.input.utils import process_stop_token_ids
+from fastdeploy.input.v1.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor

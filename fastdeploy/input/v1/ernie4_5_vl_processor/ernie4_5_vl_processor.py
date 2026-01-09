@@ -19,8 +19,8 @@ import traceback
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy.input.v1.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
+from fastdeploy.input.v1.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
