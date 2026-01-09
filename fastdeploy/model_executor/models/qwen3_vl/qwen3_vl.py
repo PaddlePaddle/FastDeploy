@@ -28,6 +28,9 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.decorator import (
+    support_graph_optimization,
+)
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
@@ -45,7 +48,7 @@ from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
 
 
-# @support_graph_optimization
+@support_graph_optimization
 class Qwen3_VLModel(nn.Layer):
     """Language backbone for Qwen3-VL."""
 
@@ -98,7 +101,6 @@ class Qwen3_VLModel(nn.Layer):
         self,
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
         deepstack_inputs: Optional[List[paddle.Tensor]] = None,
     ) -> paddle.Tensor:
@@ -127,6 +129,14 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         super().__init__(fd_config)
         self.visual = self._init_vision_model(fd_config.model_config)
         self.model = Qwen3_VLModel(fd_config=fd_config)
+
+        # Persistent buffers for CUDA graphs.
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._buffer_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
+
         # token ids (convenience aliases)
         self.image_token_id = fd_config.model_config.image_token_id
         self.video_token_id = fd_config.model_config.video_token_id
@@ -143,20 +153,21 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         self.deepstack_input_embeds: Optional[List[paddle.Tensor]] = None
         if self.use_deepstack:
             dtype = fd_config.model_config.dtype
-            cache_tokens = fd_config.scheduler_config.max_num_batched_tokens
+            # Persistent buffers for CUDA graphs.
+            # Note that the current multimodal model does not limit the number of tokens
+            # per batch to max_num_batched_tokens, so we use model_config.max_model_len here
+            buffer_seq_len = fd_config.model_config.max_model_len
+            # self.deepstack_input_embeds = [
+            #     paddle.zeros([fd_config.scheduler_config.max_num_batched_tokens, self.context_hidden_size], dtype=dtype)
+            #     for _ in range(self.deepstack_num_level)
+            # ]
             self.deepstack_input_embeds = [
-                paddle.zeros([cache_tokens, self.context_hidden_size], dtype=dtype)
+                paddle.zeros([buffer_seq_len, self.context_hidden_size], dtype=dtype)
                 for _ in range(self.deepstack_num_level)
             ]
 
         self.visual_dim = vision_config.out_hidden_size
         self.multiscale_dim = self.visual_dim * self.deepstack_num_level
-
-        # self._input_embeddings = paddle.zeros(
-        # 	[fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
-        # 	dtype=fd_config.model_config.dtype,
-        # )
-
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
@@ -253,16 +264,23 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
 
     def _set_deepstack_input_embeds(self, deepstack_input_embeds: paddle.Tensor) -> None:
         num_tokens = deepstack_input_embeds.shape[1]
-        if num_tokens > self.deepstack_input_embeds[0].shape[0]:
-            self.deepstack_input_embeds = [
-                paddle.zeros(
-                    num_tokens,
-                    self.context_hidden_size,
-                    dtype=self.deepstack_input_embeds[0].dtype,
-                    # device=self.deepstack_input_embeds[0].place,
-                )
-                for _ in range(self.deepstack_num_level)
-            ]
+        # Expanding self.deepstack_input_embeds is not allowed,
+        # otherwise the CUDA graph will access illegal addresses
+        assert num_tokens <= self.deepstack_input_embeds[0].shape[0], (
+            f"num_tokens ({num_tokens}) is greater than the current "
+            f"max size of deepstack_input_embeds ({self.deepstack_input_embeds[0].shape[0]})"
+        )
+        # Expanding self.deepstack_input_embeds
+        # if num_tokens > self.deepstack_input_embeds[0].shape[0]:
+        #     self.deepstack_input_embeds = [
+        #         paddle.zeros(
+        #             num_tokens,
+        #             self.context_hidden_size,
+        #             dtype=self.deepstack_input_embeds[0].dtype,
+        #             # device=self.deepstack_input_embeds[0].place,
+        #         )
+        #         for _ in range(self.deepstack_num_level)
+        #     ]
         for idx in range(self.deepstack_num_level):
             self.deepstack_input_embeds[idx][:num_tokens].copy_(deepstack_input_embeds[idx], False)
 
@@ -344,10 +362,13 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
         if self.use_deepstack:
             deepstack_inputs = self._get_deepstack_input_embeds(input_embeddings.shape[0])
 
+        if forward_meta.step_use_cudagraph:
+            self._buffer_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._buffer_input_embeddings
+
         hidden_states = self.model(
             input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
-            image_features=image_features,
             forward_meta=forward_meta,
             deepstack_inputs=deepstack_inputs,
         )

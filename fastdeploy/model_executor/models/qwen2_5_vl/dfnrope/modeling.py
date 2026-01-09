@@ -351,31 +351,14 @@ class VisionRotaryEmbedding(nn.Layer):
         super().__init__()
         self.dim = dim
         self.theta = theta
-        inv_freq = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2, dtype="float32") / dim)
-        self.register_buffer("inv_freq", inv_freq, persistable=False)
-        self._seq_len_cached = 0
-        self._freqs_cached = None
-
-    def update_freqs_cache(self, seqlen: int) -> None:
-        if seqlen > self._seq_len_cached:
-            seqlen *= 2
-            self._seq_len_cached = seqlen
-            self.inv_freq = 1.0 / (self.theta ** (paddle.arange(0, self.dim, 2, dtype="float32") / self.dim))
-            seq = paddle.arange(seqlen, dtype=self.inv_freq.dtype)
-            freqs = paddle.outer(seq, self.inv_freq)
-            self._freqs_cached = freqs
+        inv_freq = 1.0 / (self.theta ** (paddle.arange(0, self.dim, 2, dtype="float32") / self.dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     def forward(self, seqlen: int) -> paddle.Tensor:
-        """_summary_
-
-        Args:
-            seqlen (int): _description_
-
-        Returns:
-            paddle.Tensor: _description_
-        """
-        self.update_freqs_cache(seqlen)
-        return self._freqs_cached[:seqlen]
+        self.inv_freq = 1.0 / (self.theta ** (paddle.arange(0, self.dim, 2, dtype="float32") / self.dim))
+        seq = paddle.arange(seqlen, dtype=self.inv_freq.dtype)
+        freqs = paddle.outer(seq, self.inv_freq)
+        return freqs
 
 
 class Qwen2RMSNorm(nn.Layer):
