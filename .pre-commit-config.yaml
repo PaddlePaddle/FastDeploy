@@ -64,3 +64,4 @@ repos:
   - id: detect-private-key
   - id: check-symlinks
   - id: check-added-large-files
+    args: ["--maxkb=1024"]

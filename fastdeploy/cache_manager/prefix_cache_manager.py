@@ -265,40 +265,41 @@ class PrefixCacheManager:
         else:
             kvcache_storage_backend_str = "none"
 
-        for i in range(tensor_parallel_size):
-            launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth "
-                + visible_devices
-                + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
-                + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
-                + f" {sys.executable} {py_path}"
-                + f" --device_id {int(device_ids[i])}"
-                + f" --rank {i}"
-                + f" --splitwise_role {self.splitwise_role}"
-                + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
-                + f" --mp_num {tensor_parallel_size}"
-                + f" --cache_dtype {cache_config.cache_dtype}"
-                + f" --key_cache_shape {key_cache_shape}"
-                + val_cache_arg_str
-                + f" --cache_queue_port {cache_config.local_cache_queue_port}"
-                + f" --enable_splitwise {int(self.enable_splitwise)}"
-                + f" --pod_ip {pod_ip}"
-                + f" --engine_worker_queue_port {engine_worker_queue_port}"
-                + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                + f" --ipc_suffix {ipc_suffix}"
-                + f" --protocol {cache_config.cache_transfer_protocol}"
-                + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
-                + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" --default_dtype '{self.config.model_config.dtype}'"
-                + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
-                + f" --write_policy {cache_config.write_policy}"
-                + f" --max_model_len {self.config.model_config.max_model_len}"
-                + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
-            )
-            logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
-            cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+        if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
+            for i in range(tensor_parallel_size):
+                launch_cmd = (
+                    "FLAGS_allocator_strategy=auto_growth "
+                    + visible_devices
+                    + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
+                    + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                    + f" {sys.executable} {py_path}"
+                    + f" --device_id {int(device_ids[i])}"
+                    + f" --rank {i}"
+                    + f" --splitwise_role {self.splitwise_role}"
+                    + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
+                    + f" --mp_num {tensor_parallel_size}"
+                    + f" --cache_dtype {cache_config.cache_dtype}"
+                    + f" --key_cache_shape {key_cache_shape}"
+                    + val_cache_arg_str
+                    + f" --cache_queue_port {cache_config.local_cache_queue_port}"
+                    + f" --enable_splitwise {int(self.enable_splitwise)}"
+                    + f" --pod_ip {pod_ip}"
+                    + f" --engine_worker_queue_port {engine_worker_queue_port}"
+                    + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
+                    + f" --ipc_suffix {ipc_suffix}"
+                    + f" --protocol {cache_config.cache_transfer_protocol}"
+                    + f" --local_data_parallel_id {self.local_data_parallel_id}"
+                    + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
+                    + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                    + f" --default_dtype '{self.config.model_config.dtype}'"
+                    + (" --create_cache_tensor" if create_cache_tensor else "")
+                    + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
+                    + f" --write_policy {cache_config.write_policy}"
+                    + f" --max_model_len {self.config.model_config.max_model_len}"
+                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                )
+                logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
+                cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
 
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
@@ -308,13 +309,14 @@ class PrefixCacheManager:
             while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 
-        exit_code = cache_manager_processes[-1].poll()
-        if exit_code is None:
-            logger.info("Launch cache transfer manager successful")
-        else:
-            logger.info(
-                "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-            )
+        if cache_manager_processes:
+            exit_code = cache_manager_processes[-1].poll()
+            if exit_code is None:
+                logger.info("Launch cache transfer manager successful")
+            else:
+                logger.info(
+                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
+                )
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
@@ -698,6 +700,9 @@ class PrefixCacheManager:
                     "gpu_match_token_num": 0,
                     "cpu_match_token_num": 0,
                     "storage_match_token_num": 0,
+                    "match_gpu_block_ids": [],
+                    "gpu_recv_block_ids": [],
+                    "match_storage_block_ids": [],
                     "cpu_cache_prepare_time": 0,
                     "storage_cache_prepare_time": 0,
                 }
@@ -812,6 +817,9 @@ class PrefixCacheManager:
                 metrics["gpu_match_token_num"] = gpu_match_token_num
                 metrics["cpu_match_token_num"] = cpu_match_token_num
                 metrics["storage_match_token_num"] = storage_match_token_num
+                metrics["match_gpu_block_ids"] = match_gpu_block_ids
+                metrics["gpu_recv_block_ids"] = gpu_recv_block_ids
+                metrics["match_storage_block_ids"] = match_storage_block_ids
                 self.metrics._update_history_hit_metrics()
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
@@ -1396,66 +1404,6 @@ class PrefixCacheManager:
                 hash_keys.append(mm_inputs["mm_hashes"][img_idx])
         return len(mm_inputs["mm_positions"]) - 1, hash_keys
 
-    def _revert_match_blocks(
-        self,
-        request,
-        matched_token_num: int,
-        block_size: int,
-        chunk_idx: int,
-        match_node_ids: list,
-        matche_nodes: list,
-        match_gpu_block_ids: list,
-        match_cpu_block_ids: list,
-        gpu_match_token_num: int,
-        cpu_match_token_num: int,
-        swap_node_ids: list,
-    ):
-        # position = request.multimodal_inputs["mm_positions"][chunk_idx]
-        # revert_tokens = matched_token_num - position.offset
-        # TODO(chengyanfu): fix when is_chunked_mm_input=True, revert all matched tokens
-        revert_tokens = matched_token_num
-        match_block_ids = [node.block_id for node in matche_nodes]
-        logger.warning(
-            f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_block_ids}"
-        )
-        while revert_tokens >= block_size:
-            if len(matche_nodes) == 0:
-                logger.error(f"req_id {request.request_id} revert nodes error, tokens: {revert_tokens}")
-                break
-            revert_tokens -= block_size
-            revert_block = matche_nodes.pop()
-            revert_block_id = revert_block.block_id
-            if revert_block_id in match_gpu_block_ids:
-                match_gpu_block_ids.remove(revert_block_id)
-                match_node_ids.remove(revert_block.node_id)
-                gpu_match_token_num -= block_size
-            elif revert_block_id in match_cpu_block_ids:
-                match_cpu_block_ids.remove(revert_block_id)
-                match_node_ids.remove(revert_block.node_id)
-                cpu_match_token_num -= block_size
-            else:
-                logger.error(
-                    f"req_id {request.request_id} revert nodes error, nodes: {revert_block_id}, "
-                    f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
-                )
-                break
-            if revert_block_id in swap_node_ids:
-                swap_node_ids.remove(revert_block_id)
-
-        if revert_tokens > 0:
-            last_block_id = matche_nodes[-1].block_id
-            if last_block_id in match_gpu_block_ids:
-                gpu_match_token_num -= revert_tokens
-            elif last_block_id in match_cpu_block_ids:
-                cpu_match_token_num -= revert_tokens
-            else:
-                logger.error(
-                    f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
-                    f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
-                )
-        current_node = self.radix_tree_root if len(matche_nodes) == 0 else matche_nodes[-1]
-        return gpu_match_token_num, cpu_match_token_num, current_node
-
     def mm_match_block(self, request, block_size):
         """
         Match and retrieve cached blocks for multimodal requests using a radix tree structure.
@@ -1547,28 +1495,6 @@ class PrefixCacheManager:
             heapq.heapify(self.gpu_lru_leaf_heap)
         if has_modified_cpu_lru_leaf_heap:
             heapq.heapify(self.cpu_lru_leaf_heap)
-
-        if self.cache_config.disable_chunked_mm_input:
-            matched_token_num = gpu_match_token_num + cpu_match_token_num
-            is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
-            if is_chunked:
-                (
-                    gpu_match_token_num,
-                    cpu_match_token_num,
-                    current_match_node,
-                ) = self._revert_match_blocks(
-                    request=request,
-                    matched_token_num=matched_token_num,
-                    block_size=block_size,
-                    chunk_idx=chunk_idx,
-                    match_node_ids=match_node_ids,
-                    matche_nodes=matche_nodes,
-                    match_gpu_block_ids=match_gpu_block_ids,
-                    match_cpu_block_ids=match_cpu_block_ids,
-                    gpu_match_token_num=gpu_match_token_num,
-                    cpu_match_token_num=cpu_match_token_num,
-                    swap_node_ids=swap_node_ids,
-                )
 
         logger.info(f"match_block: req_id {request.request_id} matched nodes: {match_node_ids}")
         return (

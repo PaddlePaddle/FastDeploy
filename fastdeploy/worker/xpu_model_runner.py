@@ -173,6 +173,10 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
+        # Postprocess Env params
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
+
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
         # Initialize ZMQ client for async output
@@ -1436,7 +1440,7 @@ class XPUModelRunner(ModelRunnerBase):
                 # 投机解码
                 full_hidden_states=model_output if self.speculative_decoding else None,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(

@@ -277,7 +277,7 @@ class XPUEPRunner:
                 moe_topk=self.top_k,
                 apply_norm_weight=True,  # apply_norm_weight
                 enable_softmax_top_k_fused=False,
-                redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
             )
         else:
             topk_idx, topk_weights = fastdeploy.model_executor.ops.xpu.moe_topk_select(
