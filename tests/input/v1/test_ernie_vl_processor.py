@@ -24,12 +24,12 @@ from PIL import Image
 from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.v1.ernie4_5_vl_processor import Ernie4_5_VLProcessor
 from fastdeploy.input.v1.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive import (
     AdaptiveImageProcessor,
 )
 from fastdeploy.input.v1.ernie4_5_vl_processor.process import DataProcessor
-from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
 class MockReasoningParser:
@@ -145,7 +145,9 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
             mock_dp.tokenizer.pad_token_id = 0
             mock_dp.eval = MagicMock()
 
-            with patch("fastdeploy.input.v1.ernie4_5_vl_processor.ernie4_5_vl_processor.DataProcessor") as mock_dp_class:
+            with patch(
+                "fastdeploy.input.v1.ernie4_5_vl_processor.ernie4_5_vl_processor.DataProcessor"
+            ) as mock_dp_class:
                 mock_dp_class.return_value = mock_dp
                 with patch(
                     "fastdeploy.input.v1.ernie4_5_vl_processor.ernie4_5_vl_processor.GenerationConfig"
