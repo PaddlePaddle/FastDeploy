@@ -21,7 +21,6 @@ from typing import List, Optional
 
 import numpy as np
 import paddle
-import time
 from paddle import nn
 
 from fastdeploy import envs
@@ -156,7 +155,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
-        self.forward_meta: XPUForwardMeta = None
+        self.forward_meta: ForwardMeta = None
 
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
@@ -1320,6 +1319,7 @@ class XPUModelRunner(ModelRunnerBase):
                 logger.info(
                     f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
                 )
+            print(f"-"*100)
         except RuntimeError as e:
             if "out of memory" in str(e):
                 raise RuntimeError(
@@ -1499,6 +1499,7 @@ class XPUModelRunner(ModelRunnerBase):
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
+        print(f"-"*100)
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """

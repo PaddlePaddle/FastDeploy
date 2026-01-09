@@ -97,7 +97,7 @@ def try_match_architecture_defaults(
 
 def can_use_cuda_graph():
     return (
-        paddle.is_compiled_with_cuda() or is_compiled_with_xpu()
+        paddle.is_compiled_with_cuda() or paddle.is_compiled_with_xpu()
     ) and not paddle.is_compiled_with_rocm()
 
 class MoEPhase:

@@ -15,7 +15,7 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -254,6 +254,39 @@ class XPUForwardMeta(ForwardMeta):
     pos_emb_type: Optional[str] = "NORMAL"
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
+
+    def copy_from(self, other: 'XPUForwardMeta', skip_keys: Optional[list] = None):
+        """
+        从另一个 XPUForwardMeta 对象中同步属性。
+        """
+        if skip_keys is None:
+            skip_keys = []
+
+        # 使用 fields(self) 确保获取当前类的所有字段
+        for field in fields(self):
+            name = field.name
+            
+            if name in skip_keys:
+                continue
+                
+            if not hasattr(other, name):
+                continue
+
+            src_val = getattr(other, name)
+            dst_val = getattr(self, name)
+
+            # 同步逻辑
+            if isinstance(src_val, paddle.Tensor):
+                if isinstance(dst_val, paddle.Tensor):
+                    # 只有目标也是 Tensor 且已存在时才 copy_
+                    dst_val.copy_(src_val, False)
+                else:
+                    # 如果目标是 None，则直接引用（无法原地 copy 到 None）
+                    setattr(self, name, src_val)
+            else:
+                # 处理非 Tensor 属性（str, int, bool 等）
+                setattr(self, name, src_val)
+        return self
 
 
 @dataclass
