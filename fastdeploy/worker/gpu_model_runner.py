@@ -1548,7 +1548,8 @@ class GPUModelRunner(ModelRunnerBase):
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
         )
-
+        if envs.FD_ATTENTION_BACKEND == "DECODE_APPEND_ATTN":
+            attn_backend.init_buffer(self.scheduler_config.max_num_seqs)
         self.attn_backends.append(attn_backend)
 
     def _dummy_pooler_run_task(

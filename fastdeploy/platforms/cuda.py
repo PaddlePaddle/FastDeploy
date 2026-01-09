@@ -58,6 +58,9 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
+        elif selected_backend == _Backend.DECODE_APPEND_ATTN:
+            logger.info("Using DECODE APPEND ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.DecodeAppendAttentionBackend"
         elif selected_backend == _Backend.MLA_ATTN:
             logger.info("Using MLA ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.MLAAttentionBackend"
