@@ -308,9 +308,10 @@ void GetBlockShapeAndSplitKVBlock(
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 
+  const bool mla_backend = checkAttentionBackend();
+
   // decoder
   if (max_dec_len_this_time > 0) {
-    const bool mla_backend = checkAttentionBackend();
     if (mla_backend && group_size <= 64) {
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
@@ -387,6 +388,8 @@ void GetBlockShapeAndSplitKVBlock(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
     }
   }
+  // mla_backend not need run the following code.
+  if (mla_backend) return;
 
   // encoder
   if (max_enc_len_this_time > 0) {
