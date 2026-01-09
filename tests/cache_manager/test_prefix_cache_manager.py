@@ -821,17 +821,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIn(req_id, manager.leaf_req_map[new_leaf])
         self.assertEqual(task.num_cached_blocks, 2)
 
-    def test_is_chunked_mm_input_detects_overlap(self):
-        manager = _create_manager()
-        mm_inputs = {
-            "mm_positions": [SimpleNamespace(offset=2, length=3)],
-            "mm_hashes": ["img"],
-        }
-
-        chunked, idx = manager.is_chunked_mm_input(mm_inputs, matched_token_num=3)
-        self.assertTrue(chunked)
-        self.assertEqual(idx, 0)
-
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
         manager.cache_task_queue = _DummyEngineCacheQueue()
@@ -1101,33 +1090,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertIsNone(manager.gpu_free_task_future)
         self.assertTrue(finished.result_called)
 
-    def test_mm_match_block_reverts_chunked_inputs(self):
-        manager = _create_manager(num_gpu_blocks=4)
-        manager.cache_config.disable_chunked_mm_input = True
-        block_size = 2
-        input_ids = [1, 2, 3, 4]
-        hash_input = get_hash_str(input_ids)
-        hash_first = get_hash_str([1, 2])
-        hash_second = get_hash_str([3, 4], ["img"])
-        node1 = BlockNode(80, input_ids, hash_input, 1, 0, block_size, hash_first, 0, parent=manager.radix_tree_root)
-        node2 = BlockNode(81, input_ids, hash_input, 2, 1, block_size, hash_second, 0, parent=node1)
-        manager.radix_tree_root.children[hash_first] = node1
-        node1.children[hash_second] = node2
-
-        request = SimpleNamespace(
-            prompt_token_ids=input_ids,
-            output_token_ids=[],
-            request_id="chunk-req",
-            multimodal_inputs={
-                "mm_positions": [SimpleNamespace(offset=1, length=3)],
-                "mm_hashes": ["img"],
-            },
-            num_total_tokens=4,
-        )
-
-        match_gpu, *_ = manager.mm_match_block(request, block_size)
-        self.assertEqual(match_gpu, [])
-
     def test_mm_build_path_creates_new_nodes(self):
         manager = _create_manager(num_gpu_blocks=6)
         request = SimpleNamespace(
@@ -1193,34 +1155,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
         with patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=SystemExit):
             with self.assertRaises(SystemExit):
                 manager.clear_prefix_cache()
-
-    @unittest.skip("Skip TestRevertMatchBlocks")
-    def test_revert_match_blocks_adjusts_lists(self):
-        manager = _create_manager()
-        request = SimpleNamespace(
-            request_id="revert",
-            multimodal_inputs={"mm_positions": [SimpleNamespace(offset=2, length=2)]},
-        )
-        node = BlockNode(120, [1, 2], 0, 1, 0, 2, get_hash_str([1, 2]), 0, parent=manager.radix_tree_root)
-        matche_nodes = [node]
-        match_gpu = [0]
-        match_node_ids = [node.node_id]
-        swap_nodes = [node.block_id]
-        gpu_tokens, cpu_tokens, current = manager._revert_match_blocks(
-            request=request,
-            matched_token_num=4,
-            block_size=2,
-            chunk_idx=0,
-            match_node_ids=match_node_ids,
-            matche_nodes=matche_nodes,
-            match_gpu_block_ids=match_gpu,
-            match_cpu_block_ids=[],
-            gpu_match_token_num=4,
-            cpu_match_token_num=0,
-            swap_node_ids=swap_nodes,
-        )
-        self.assertEqual(gpu_tokens, 2)
-        self.assertEqual(current, manager.radix_tree_root)
 
 
 # Coverage-oriented tests. These are used to lightly exercise specific

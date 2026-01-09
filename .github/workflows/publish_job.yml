@@ -202,6 +202,32 @@ jobs:
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
 
+  build_sm8090_cu129:
+    name: BUILD_SM8090_cu129
+    needs: [ clone, publish_pre_check ]
+    uses: ./.github/workflows/_build_linux_cu129.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "80,90"
+      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+
+  build_sm8689_cu129:
+    name: BUILD_SM8689_cu129
+    needs: [ clone, publish_pre_check ]
+    uses: ./.github/workflows/_build_linux_cu129.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89"
+      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+
   paddle_pypi_upload_sm8090:
     environment: PaddleSourceUpload
     name: PADDLE_PYPI_UPLOAD_8090

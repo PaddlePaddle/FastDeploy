@@ -42,6 +42,7 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.engine.request import RequestType
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -410,7 +411,7 @@ class PaddleDisWorkerProc:
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
-        num_running_requests = 0
+        max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
@@ -486,17 +487,22 @@ class PaddleDisWorkerProc:
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
+                    max_occupied_batch_index = int(bsz)
                     req_dicts.extend(req_dict)
 
-                req_ids = [req.request_id for req in req_dicts]
+                # Count prefill requests in current batch
+                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                num_scheduled_requests = len(req_dicts)
+                scheduled_request_ids = [req.request_id for req in req_dicts]
                 logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                    f"num_scheduled_requests: {num_scheduled_requests}, "
+                    f"scheduled_request_ids: {scheduled_request_ids}"
                 )
 
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 self._tp_barrier_wait() if tp_size > 1 else None
@@ -507,7 +513,7 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, num_running_requests)
+            self.worker.execute_model(req_dicts, max_occupied_batch_index)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 

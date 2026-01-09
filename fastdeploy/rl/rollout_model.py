@@ -51,6 +51,9 @@ from fastdeploy.model_executor.models.qwen3_vl.qwen3_vl import (
     Qwen3VLForConditionalGeneration,
     Qwen3VLPretrainedModel,
 )
+from fastdeploy.model_executor.models.qwen3_vl.qwen3_vl_moe import (
+    Qwen3VLMoeForConditionalGeneration,
+)
 from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3MoeForCausalLM,
     Qwen3MoePretrainedModel,
@@ -604,6 +607,75 @@ class Qwen3VLForConditionalGenerationRL(Qwen3VLForConditionalGeneration, BaseRLM
                 self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.up_gate_proj.{ph}"] = (
                     f"{base_name}.{layer_idx}.mlp.gate_up_fused_proj.{ph}"
                 )
+
+        for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
+
+
+class Qwen3VLMoeForConditionalGenerationRL(Qwen3VLMoeForConditionalGeneration, BaseRLModel):
+    """
+    Qwen3VLMoeForConditionalGenerationRL
+    """
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Qwen3VLMoeForConditionalGenerationRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Qwen3VLMoeForConditionalGenerationRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        # Initialize mapping dictionary
+        self._update_base_mappings("model")
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx: int):
+            # MoE specific mappings
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            )
+
+            if self.fd_config.model_config.moe_use_aux_free:
+                self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.experts.gate_correction_bias"] = (
+                    f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
+                )
+
+            # MoE experts mappings
+            for expert_idx in range(self.fd_config.model_config.num_experts):
+                for ph in place_holders:
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
+                    if up_gate_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[up_gate_proj_key] = []
+                    self.infer_to_train_mapping[up_gate_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
+
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.experts.down_proj_weight"
+                    if down_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[down_proj_key] = []
+                    self.infer_to_train_mapping[down_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
 
         for layer_idx in range(self.fd_config.model_config.num_hidden_layers):
             _add_layer_mappings(layer_idx)
