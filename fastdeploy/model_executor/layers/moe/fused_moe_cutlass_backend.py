@@ -1034,10 +1034,23 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             quant_weight_list = []
             scale_list = []
 
+            # Determine group_size based on weight dimensions (for tp=4 support)
+            # Kernel constraint: group_size must divide in_features evenly
+            sample_weight = getattr(layer, weight_name)[0]
+            in_features = sample_weight.shape[0]  # weight shape is [in_features, out_features]
+            if in_features % 128 == 0:
+                group_size = 128
+            elif in_features % 64 == 0:
+                # For tp=4 cases like Qwen3-30B-A3B where in_features=192 (768/4)
+                group_size = 64
+            else:
+                # Fallback to per-channel quantization (group_size = K)
+                group_size = in_features
+
             for expert_id in range(layer.num_local_experts):
                 expert_weight = getattr(layer, weight_name)[expert_id]
 
-                quant_weight, weight_scale = group_wise_int4_weight_quantize(expert_weight, group_size=128)
+                quant_weight, weight_scale = group_wise_int4_weight_quantize(expert_weight, group_size=group_size)
 
                 quant_weight = pack(quant_weight.transpose([1, 0]), bits=4)
 
@@ -1066,19 +1079,19 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             processed_scale = stacked_scale / (448 * 7 * 2 ** (-9))
 
             if len(processed_scale.shape) == 3:
-                if weight_type == "gate_up" and processed_scale.shape[-1] * 128 != layer.hidden_size:
+                if weight_type == "gate_up" and processed_scale.shape[-1] * group_size != layer.hidden_size:
                     assert (
-                        layer.hidden_size // 128 % processed_scale.shape[-1] == 0
-                    ), "weight_scale_group_size must be a multiple of 128"
+                        layer.hidden_size // group_size % processed_scale.shape[-1] == 0
+                    ), f"weight_scale_group_size must be a multiple of {group_size}"
                     processed_scale = processed_scale.repeat_interleave(
-                        layer.hidden_size // 128 // processed_scale.shape[-1], axis=-1
+                        layer.hidden_size // group_size // processed_scale.shape[-1], axis=-1
                     )
-                elif weight_type == "down" and processed_scale.shape[-1] * 128 != layer.moe_intermediate_size:
+                elif weight_type == "down" and processed_scale.shape[-1] * group_size != layer.moe_intermediate_size:
                     assert (
-                        layer.moe_intermediate_size // 128 % processed_scale.shape[-1] == 0
-                    ), "weight_scale_group_size must be a multiple of 128"
+                        layer.moe_intermediate_size // group_size % processed_scale.shape[-1] == 0
+                    ), f"weight_scale_group_size must be a multiple of {group_size}"
                     processed_scale = processed_scale.repeat_interleave(
-                        layer.moe_intermediate_size // 128 // processed_scale.shape[-1], axis=-1
+                        layer.moe_intermediate_size // group_size // processed_scale.shape[-1], axis=-1
                     )
 
                 origin_shape = processed_scale.shape
@@ -1086,7 +1099,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 processed_scale = processed_scale.reshape([-1, processed_scale.shape[-1]])
                 processed_scale = w4afp8_gemm_scale_permute(processed_scale)
                 processed_scale = processed_scale.reshape(
-                    [origin_shape[0], origin_shape[2], origin_shape[1] // 128, 128]
+                    [origin_shape[0], origin_shape[2], origin_shape[1] // group_size, group_size]
                 )
                 processed_scale = processed_scale.transpose([0, 2, 1, 3])
             else:
@@ -1172,7 +1185,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
             layer.extract_moe_ffn_weights(state_dict)
         )
-
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
         up_gate_proj_weight_scales = []

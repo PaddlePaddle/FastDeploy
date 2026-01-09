@@ -235,12 +235,15 @@ class Ernie4_5_MoE(nn.Layer):
         hidden_states: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
+        print("hidden_states", hidden_states)
+        print("self.gate", self.gate)
+        for name, param in self.experts.named_parameters():
+            print(f"  name:{name}: {param}")
         out = self.experts(
             x=hidden_states,
             gate=self.gate,
             forward_meta=forward_meta,
         )
-
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -779,11 +782,6 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         ),
         WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.quant_weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight_scale",
             True,
             tsm.PairFused,
         ),

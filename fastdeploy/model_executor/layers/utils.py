@@ -153,14 +153,19 @@ def rotate_model(
             )
             for expert_idx in range(moe_num_experts)
         ]
+        # print("expert_list",expert_list)
         moe_weight = paddle.concat(expert_list, axis=-1)  # [moe_intermediate_size, hidden_size * moe_num_experts]
+        # print("moe_weight",moe_weight)
         new_moe_weight = Q_ffn2.cast("float32").T @ moe_weight.to(Q_ffn2.place)
+        # print("new_moe_weight",new_moe_weight)
         for expert_idx in range(moe_num_experts):
             rotated_weight = new_moe_weight[:, expert_idx * hidden_size : (expert_idx + 1) * hidden_size]
             expert_idx_local = ep_rank * moe_num_experts + expert_idx
             state_dict[f"ernie.{prefix_layer_name}.{layer_idx}.mlp.experts.{expert_idx_local}.down_proj.weight"] = (
                 rotated_weight.cpu()
             )
+            # print(f"ernie.{prefix_layer_name}.{layer_idx}.mlp.experts.{expert_idx_local}.down_proj.weight")
+            # print("expert_idx_local",expert_idx_local)
         del moe_weight, new_moe_weight, rotated_weight
         paddle.device.cuda.empty_cache()
     return Q_ffn2.cpu()
