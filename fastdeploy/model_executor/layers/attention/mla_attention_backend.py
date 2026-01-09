@@ -127,8 +127,6 @@ class MLAAttentionBackend(AttentionBackend):
         self.num_heads: int = num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
-        self.encoder_block_shape_q: int = encoder_block_shape_q
-        self.decoder_block_shape_q: int = decoder_block_shape_q
 
         # For Multi Head Latent Attention
         self.kv_lora_rank: int = fd_config.model_config.kv_lora_rank
@@ -200,8 +198,8 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
-            self.encoder_block_shape_q,
-            self.decoder_block_shape_q,
+            -1,  # not need.
+            -1,  # not need.
             -1,  # not need.
             self.block_size,
         )
