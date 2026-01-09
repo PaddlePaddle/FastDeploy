@@ -44,8 +44,8 @@ class OpenAIServingReward(ZmqOpenAIServing):
 
     @override
     def _request_to_dict(self, ctx: ServeContext):
+        request: ChatRewardRequest = ctx.request
         if not envs.ENABLE_V1_DATA_PROCESSOR:
-            request: ChatRewardRequest = ctx.request
             request_dict = super()._request_to_dict(ctx)
             if hasattr(request, "to_pooling_params"):
                 pooling_params: PoolingParams = request.to_pooling_params()
@@ -53,7 +53,6 @@ class OpenAIServingReward(ZmqOpenAIServing):
                 request_dict["pooling_params"] = pooling_params.to_dict()
             return request_dict
         else:
-            request: ChatRewardRequest = ctx.request
             request_obj = None
             if hasattr(request, "to_pooling_params"):
                 pooling_params: PoolingParams = request.to_pooling_params()
