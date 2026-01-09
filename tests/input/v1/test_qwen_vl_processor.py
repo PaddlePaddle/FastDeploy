@@ -21,8 +21,8 @@ import numpy as np
 from PIL import Image
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen3_vl_processor import Qwen3VLProcessor
-from fastdeploy.input.qwen3_vl_processor.process import sample_frames
+from fastdeploy.input.v1.qwen_vl_processor import QwenVLProcessor
+from fastdeploy.input.v1.qwen_vl_processor.process_video import sample_frames
 
 
 def mock_pil_image(height, width):
@@ -76,7 +76,7 @@ def mock_read_frames(height: int, width: int, nums_frame: int, fps: int):
     return frames, meta
 
 
-class TestQwen3VLProcessor(unittest.TestCase):
+class TestQwenVLProcessor(unittest.TestCase):
     """
     Unit tests for Qwen Vision-Language Processor functionality
     """
@@ -102,16 +102,19 @@ class TestQwen3VLProcessor(unittest.TestCase):
         self.patcher_parse_video.start()
 
         self.patcher_read_frames = patch(
-            "fastdeploy.input.qwen3_vl_processor.process.DataProcessor._load_and_process_video",
+            "fastdeploy.input.v1.qwen_vl_processor.process.DataProcessor._load_and_process_video",
             return_value=mock_read_frames(480, 640, 5, 2),
         )
         self.patcher_read_frames.start()
 
-        mm_processor_kwargs = {"video_max_frames": 10, "video_min_frames": 1}
+        mm_processor_kwargs = {
+            "video_max_frames": 10,
+            "video_min_frames": 1,
+        }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        self.model_name_or_path = "/ModelData/Qwen3-VL-4B-Instruct"
-        self.processor = Qwen3VLProcessor(
+        self.model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+        self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=self.model_name_or_path,
             limit_mm_per_prompt=limit_mm_per_prompt,
@@ -151,7 +154,7 @@ class TestQwen3VLProcessor(unittest.TestCase):
         }
 
         request = Request.from_dict(message)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
@@ -163,7 +166,7 @@ class TestQwen3VLProcessor(unittest.TestCase):
             result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
 
-    def test_process_request_dict(self):
+    def test_process_request_obj(self):
         """
         Test processing of dictionary-format request with multimodal input
 
@@ -189,18 +192,40 @@ class TestQwen3VLProcessor(unittest.TestCase):
                 }
             ],
         }
+        request = Request.from_dict(request)
 
-        result = self.processor.process_request_dict(request, 1024 * 100)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
-        self.assertEqual(result["prompt_token_ids_len"], result["multimodal_inputs"]["position_ids"].shape[0])
-        self.assertEqual(result["prompt_token_ids_len"], result["multimodal_inputs"]["token_type_ids"].shape[0])
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
+        self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
         self.assertEqual(
-            result["multimodal_inputs"]["images"].shape[0],
-            sum(map(lambda x: x.prod(), result["multimodal_inputs"]["grid_thw"])),
+            result.multimodal_inputs["images"].shape[0],
+            sum(map(lambda x: x.prod(), result.multimodal_inputs["grid_thw"])),
         )
         self.assertEqual(
-            result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
+            result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
+
+    def test_process_request_obj_enable_thinking(self):
+        num_completion_token_ids = 10
+        request = {
+            "request_id": "12345",
+            "completion_token_ids": [1] * num_completion_token_ids,
+            "stop": ["stop", "eof"],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Hello"},
+                    ],
+                }
+            ],
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+        request = Request.from_dict(request)
+
+        result = self.processor.process_request_obj(request, 100)
+        self.assertEqual(result.enable_thinking, False)
 
     def test_prompt(self):
         """
@@ -224,7 +249,7 @@ class TestQwen3VLProcessor(unittest.TestCase):
         }
 
         request = Request.from_dict(prompt)
-        result = self.processor.process_request(request, 1024 * 100)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["position_ids"].shape[0])
         self.assertEqual(result.prompt_token_ids_len, result.multimodal_inputs["token_type_ids"].shape[0])
@@ -264,25 +289,26 @@ class TestQwen3VLProcessor(unittest.TestCase):
                 }
             ],
         }
-        result = self.processor.process_request_dict(request, 1024 * 100)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024 * 100)
 
         # Create equivalent request in prompt format
         prompt = {
             "request_id": "12345",
-            "prompt": request["prompt_tokens"],
+            "prompt": request.prompt_tokens,
             "multimodal_data": {
                 "image": [mock_pil_image(480, 640)],
                 "video": [{"video": b"123"}],
             },
         }
         request2 = Request.from_dict(prompt)
-        result2 = self.processor.process_request(request2, 1024 * 100)
+        result2 = self.processor.process_request_obj(request2, 1024 * 100)
 
         # Verify both processing methods produce identical results
-        self.assertEqual(result["prompt_token_ids"], result2.prompt_token_ids)
-        self.assertTrue(np.equal(result["multimodal_inputs"]["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
+        self.assertEqual(result.prompt_token_ids, result2.prompt_token_ids)
+        self.assertTrue(np.equal(result.multimodal_inputs["grid_thw"], result2.multimodal_inputs["grid_thw"]).all())
         self.assertTrue(
-            np.equal(result["multimodal_inputs"]["position_ids"], result2.multimodal_inputs["position_ids"]).all()
+            np.equal(result.multimodal_inputs["position_ids"], result2.multimodal_inputs["position_ids"]).all()
         )
 
     def test_apply_chat_template(self):
@@ -335,86 +361,41 @@ class TestQwen3VLProcessor(unittest.TestCase):
                 }
             ],
         }
+        request = Request.from_dict(request)
 
         # Process request through the processor
-        self.processor.process_request_dict(request, 1024 * 100)
-        prompt2 = request["prompt_tokens"]
+        self.processor.process_request_obj(request, 1024 * 100)
+        prompt2 = request.prompt_tokens
 
         # Verify both methods produce identical prompt strings
         self.assertEqual(prompt, prompt2)
 
-    def test_add_processed_image(self):
-        """
-        Test DataProcessor._add_processed_image via Qwen3VLProcessor
-        """
-        merge_size = self.processor.processor.image_processor.merge_size
-
-        # shape[0] must be divisible by merge_size^2
-        num_tokens = 4
-        img = np.zeros(
-            (num_tokens * merge_size * merge_size, 3, 3),
-            dtype=np.float32,
-        )
-        meta = {
-            "thw": (1, 8, 8),
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
         }
-        uuid = "test-image-uuid"
+        request = Request.from_dict(request)
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_obj(request, max_model_len=512)
+        self.assertEqual(request.enable_thinking, True)
 
-        img_cache = (img, meta)
-
-        outputs = {
-            "mm_positions": [],
-            "input_ids": [],
-            "token_type_ids": [],
-            "position_ids": [],
-            "cur_position": 5,
-            "images": [],
-            "mm_hashes": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "fps": [],
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
         }
-
-        # -----------------------
-        # mock vision position computation
-        # -----------------------
-        dp = self.processor.processor
-        dp.image_patch_id = dp.image_token_id
-        dp._compute_vision_positions = MagicMock(return_value=np.array([[10, 11, 12]], dtype=np.int64))
-
-        dp._add_processed_image(img_cache, outputs, uuid)
-
-        # ---- input_ids / token_type_ids ----
-        self.assertEqual(len(outputs["input_ids"]), num_tokens)
-        self.assertEqual(
-            outputs["input_ids"],
-            [self.processor.image_patch_id] * num_tokens,
-        )
-
-        # ---- mm_positions ----
-        self.assertEqual(len(outputs["mm_positions"]), 1)
-        mm_pos = outputs["mm_positions"][0]
-        self.assertEqual(mm_pos.length, num_tokens)
-
-        # ---- vision positions ----
-        dp._compute_vision_positions.assert_called_once_with(5, 1, 8, 8, 0)
-        np.testing.assert_array_equal(
-            outputs["position_ids"][0],
-            np.array([[10, 11, 12]], dtype=np.int64),
-        )
-        self.assertEqual(outputs["cur_position"], 13)
-
-        # ---- image payload ----
-        self.assertEqual(len(outputs["images"]), 1)
-        np.testing.assert_array_equal(outputs["images"][0], img)
-
-        self.assertEqual(outputs["mm_hashes"], [uuid])
-        np.testing.assert_array_equal(
-            outputs["grid_thw"][0],
-            np.array([[1, 8, 8]]),
-        )
-        self.assertEqual(outputs["image_type_ids"], [0])
-        self.assertEqual(outputs["fps"], [0])
+        request = Request.from_dict(request)
+        self.processor.process_request_obj(request, max_model_len=512)
+        self.assertEqual(request.enable_thinking, True)
 
     def test_parse_processor_kwargs_valid(self):
         """Test _parse_processor_kwargs with valid input"""
@@ -519,19 +500,20 @@ class TestQwen3VLProcessor(unittest.TestCase):
             self.processor._check_mm_limits(mm_data)
         self.assertIn("Too many video items", str(context.exception))
 
-    def test_process_request_dict_with_prompt(self):
-        """Test process_request_dict with prompt format"""
+    def test_process_request_obj_with_prompt(self):
+        """Test process_request_obj with prompt format"""
         request = {
             "request_id": "12345",
             "prompt": "Test prompt",
             "multimodal_data": {"image": [mock_pil_image(10, 10)]},
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("prompt_token_ids", result)
-        self.assertIn("multimodal_inputs", result)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(len(result.prompt_token_ids), 0)
+        self.assertGreater(len(result.multimodal_inputs), 0)
 
-    def test_process_request_dict_with_messages(self):
-        """Test process_request_dict with messages format"""
+    def test_process_request_obj_with_messages(self):
+        """Test process_request_obj with messages format"""
         request = {
             "request_id": "12345",
             "messages": [
@@ -541,83 +523,86 @@ class TestQwen3VLProcessor(unittest.TestCase):
                 }
             ],
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("prompt_token_ids", result)
-        self.assertIn("multimodal_inputs", result)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(len(result.prompt_token_ids), 0)
+        self.assertGreater(len(result.multimodal_inputs), 0)
 
-    def test_process_request_dict_invalid_format(self):
-        """Test process_request_dict with invalid format"""
+    def test_process_request_obj_invalid_format(self):
+        """Test process_request_obj with invalid format"""
         request = {"request_id": "12345"}
+        request = Request.from_dict(request)
         with self.assertRaises(ValueError) as context:
-            self.processor.process_request_dict(request, 1024)
+            self.processor.process_request_obj(request, 1024)
         self.assertIn("must contain 'prompt', or 'messages'", str(context.exception))
 
-    def test_process_request_dict_with_bad_words(self):
-        """Test process_request_dict with bad_words"""
+    def test_process_request_obj_with_bad_words(self):
+        """Test process_request_obj with bad_words"""
         request = {
             "request_id": "12345",
             "prompt": "Test prompt",
             "bad_words": ["bad", "word"],
             "bad_words_token_ids": [100, 200],
         }
-        result = self.processor.process_request_dict(request, 1024)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
         # Verify bad_words_token_ids is set
-        self.assertIn("bad_words_token_ids", result)
-        self.assertIsNotNone(result["bad_words_token_ids"])
+        self.assertIsNotNone(result.sampling_params.bad_words_token_ids)
 
-    def test_process_request_dict_invalid_chat_template_kwargs(self):
-        """Test process_request_dict with invalid chat_template_kwargs"""
+    def test_process_request_obj_invalid_chat_template_kwargs(self):
+        """Test process_request_obj with invalid chat_template_kwargs"""
         request = {
             "request_id": "12345",
             "messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}],
-            "chat_template_kwargs": "invalid",
         }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = "invalid"
         with self.assertRaises(ValueError) as context:
-            self.processor.process_request_dict(request, 1024)
+            self.processor.process_request_obj(request, 1024)
         self.assertIn("must be a dict", str(context.exception))
 
-    def test_process_request_dict_with_completion_token_ids(self):
-        """Test process_request_dict with completion_token_ids"""
-        request = {
-            "request_id": "12345",
-            "prompt": "Test",
-            "completion_token_ids": [1, 2, 3],
-        }
-        result = self.processor.process_request_dict(request, 1024)
+    def test_process_request_obj_with_completion_token_ids(self):
+        """Test process_request_obj with completion_token_ids"""
+        request = {"request_id": "12345", "prompt": "Test"}
+        request = Request.from_dict(request)
+        request.completion_token_ids = [1, 2, 3]
+        result = self.processor.process_request_obj(request, 1024)
         # Verify completion tokens are appended
-        self.assertGreater(len(result["prompt_token_ids"]), 3)
+        self.assertGreater(len(result.prompt_token_ids), 3)
 
-    def test_process_request_dict_prompt_truncation(self):
-        """Test process_request_dict with prompt truncation"""
+    def test_process_request_obj_prompt_truncation(self):
+        """Test process_request_obj with prompt truncation"""
         # Create a long prompt that exceeds max_model_len
         long_prompt = "Test " * 1000
         request = {
             "request_id": "12345",
             "prompt": long_prompt,
         }
-        result = self.processor.process_request_dict(request, 100)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 100)
         # Verify prompt is truncated
-        self.assertLessEqual(len(result["prompt_token_ids"]), 99)
+        self.assertLessEqual(len(result.prompt_token_ids), 99)
 
-    def test_process_request_dict_default_max_tokens(self):
-        """Test process_request_dict sets default max_tokens"""
+    def test_process_request_obj_default_max_tokens(self):
+        """Test process_request_obj sets default max_tokens"""
         request = {
             "request_id": "12345",
             "prompt": "Test",
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertIn("max_tokens", result)
-        self.assertGreater(result["max_tokens"], 0)
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertGreater(result.sampling_params.max_tokens, 0)
 
-    def test_process_request_dict_enable_thinking_false(self):
-        """Test process_request_dict sets enable_thinking to False"""
+    def test_process_request_obj_enable_thinking_false(self):
+        """Test process_request_obj sets enable_thinking to False"""
         request = {
             "request_id": "12345",
             "prompt": "Test",
             "enable_thinking": True,
         }
-        result = self.processor.process_request_dict(request, 1024)
-        self.assertFalse(result["enable_thinking"])
+        request = Request.from_dict(request)
+        result = self.processor.process_request_obj(request, 1024)
+        self.assertFalse(result.enable_thinking)
 
     def test_append_completion_tokens(self):
         """Test append_completion_tokens method"""
