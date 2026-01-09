@@ -1442,7 +1442,6 @@ class XPUModelRunner(ModelRunnerBase):
                     in_capturing=True,
                 )
                 logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
-            print("-" * 100)
         except RuntimeError as e:
             if "out of memory" in str(e):
                 raise RuntimeError(
