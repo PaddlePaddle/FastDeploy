@@ -1,5 +1,5 @@
-name: FastDeploy Linux GPU Build Task
-description: "FastDeploy packages build and upload"
+name: FastDeploy Linux GPU FD_ROUTER Build Task
+description: "FastDeploy FD_ROUTER build and upload"
 
 on:
   workflow_call:
@@ -49,15 +49,15 @@ on:
         type: string
         default: ""
     outputs:
-      wheel_path:
+      fd_router_path:
         description: "Output path of the generated wheel"
-        value: ${{ jobs.fd-build.outputs.wheel_path }}
+        value: ${{ jobs.fd-build.outputs.fd_router_path }}
 jobs:
-  fd-build:
+  fd-router-build:
     runs-on: [self-hosted, h20-1567419-build-0]
     timeout-minutes: 360
     outputs:
-      wheel_path: ${{ steps.set_output.outputs.wheel_path }}
+      fd_router_path: ${{ steps.set_output.outputs.fd_router_path }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -107,7 +107,7 @@ jobs:
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
-      - name: FastDeploy Build
+      - name: FastDeploy FD_ROUTER Build
         shell: bash
         env:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
@@ -167,25 +167,13 @@ jobs:
               echo "Date Only: $DATE_ONLY"
               export FASTDEPLOY_VERSION="${FASTDEPLOY_VERSION}.dev${DATE_ONLY}"
             fi
-            # 针对不同分支和tag使用不同的PaddlePaddle安装包
-            if [[ "${PADDLE_WHL_URL}" != "" ]];then
-              python -m pip install ${PADDLE_WHL_URL}
-            elif [[ "${PADDLEVERSION}" != "" ]];then
-              python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
-            else
-              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-            fi
+            cd fastdeploy/golang_router
+            go --version
 
-            pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-
-            python -m pip install --upgrade pip
-            python -m pip install -r requirements.txt
-            python -m pip install wheel
-            # 编译RDMA
-            export FD_ENABLE_RDMA_COMPILE=1
-            bash build.sh 1 python false [${COMPILE_ARCH}]
-            ls ./dist/*.whl
+            bash ./build.sh
+            ls ./output/*
             '
+
       - name: Package Upload
         id: set_output
         env:
@@ -195,30 +183,30 @@ jobs:
             if [[ "${{ github.event_name }}" == "pull_request" ]];then
               commit_id=${{ github.event.pull_request.head.sha }}
               pr_num=${{ github.event.pull_request.number }}
-              target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
+              target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}
             elif [[ "${{ github.ref_type }}" == "tag" ]]; then
               commit_id=${{ github.sha }}
               tag_name=${{ github.ref_name }}
-              target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}/SM${compile_arch//,/_}
+              target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}
             else
               commit_id=${{ github.sha }}
               branch_name=${{ github.ref_name }}
-              target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/SM${compile_arch//,/_}
+              target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}
             fi
             wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
             push_file=$(realpath bos_tools.py)
             python --version
             python -m pip install bce-python-sdk==0.9.29
-            cd FastDeploy/dist/
-            matches=($(ls fastdeploy*.whl))
+            cd FastDeploy/fastdeploy/golang_router/output
+            matches=($(ls fd-router))
             if [ ${#matches[@]} -ne 1 ]; then
               echo "Error: Found ${#matches[@]} matching files, expected exactly 1"
               exit 1
             fi
-            fd_wheel_name=${matches[0]}
-            echo "Found: $fd_wheel_name"
-            tree -L 3
-            python ${push_file} fastdeploy*.whl ${target_path}
+            fd-router_name=${matches[0]}
+            echo "Found: $fd-router_name"
+
+            python ${push_file} fd-router ${target_path}
             target_path_stripped="${target_path#paddle-github-action/}"
-            WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
-            echo "wheel_path=${WHEEL_PATH}" >> $GITHUB_OUTPUT
+            FD_ROUTER_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd-router_name}
+            echo "fd_router_path=${FD_ROUTER_PATH}" >> $GITHUB_OUTPUT
