@@ -257,28 +257,27 @@ jobs:
       - name: Fd-Router Info Show and Upload
         if: github.ref_name == 'develop' || github.ref_type == 'tag'
         run: |
-          echo "The wheel is located at: ${{ needs.build_fd_router.outputs.fd_router_path }}"
+          echo "The fd_router is located at: ${{ needs.build_fd_router.outputs.fd_router_path }}"
           wget -q --no-check-certificate ${{ needs.build_fd_router.outputs.fd_router_path }}
           filename=$(basename ${{ needs.build_fd_router.outputs.fd_router_path }})
 
           commit_id=${{ github.sha }}
-          branch_name=${{ github.ref_name }}
 
           wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
 
           if [[ "${{ github.ref_name }}" == "develop" ]];then
+            branch_name=${{ github.ref_name }}
             target_paths=(
               "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${branch_name}/${commit_id}"
               "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${branch_name}/latest"
             )
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG_NAME="${GITHUB_REF##*/}"
-            TAG_VERSION="${TAG_NAME#v}"
+            tag_name=${{ github.ref_name }}
             target_paths=(
-              "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${TAG_VERSION}/${commit_id}"
-              "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${TAG_VERSION}/latest"
+              "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${tag_name}/${commit_id}"
+              "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/${tag_name}/latest"
             )
           else
             echo "Not develop or tag, do nothing"
