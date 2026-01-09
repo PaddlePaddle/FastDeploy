@@ -531,7 +531,12 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_xpu()
+            and not current_platform.is_intel_hpu()
+            and not current_platform.is_maca()
+        ):
             self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -564,6 +569,9 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
+            # TODO XPU support PaddleOCR prefix caching
+            if current_platform.is_xpu():
+                self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
             if not self.enable_prefix_caching:
@@ -1366,7 +1374,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if current_platform.is_cuda() and self.splitwise_role == "mixed":
+            if (current_platform.is_cuda() or current_platform.is_maca()) and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1376,7 +1384,10 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if current_platform.is_maca():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

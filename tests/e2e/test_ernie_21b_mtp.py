@@ -347,6 +347,7 @@ def test_mtp_accept_ratio(api_url):
         "rejected_tokens": 23,
         "accept_ratio": 0.4122137404580153,
         "average_accept_length": 1.7012987012987013,
+        "accepted_tokens_per_head": [77, 54],
         "accept_ratio_per_head": [0.7012987012987013],
     }
 

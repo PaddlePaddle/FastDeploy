@@ -905,34 +905,65 @@ def version():
     return content
 
 
+def get_version_info():
+    """
+    Read version.txt file and parse version information, returning as a dict structure.
+
+    Returns:
+        dict: A dictionary containing version information, or None if the file does not exist
+        The dictionary contains the following keys:
+        - 'fastdeploy_commit': FastDeploy GIT COMMIT ID
+        - 'paddle_version': Paddle version
+        - 'paddle_commit': Paddle GIT COMMIT ID
+        - 'cuda_version': CUDA version
+        - 'cxx_version': CXX compiler version
+        - 'fastdeploy_version': fastdeploy version
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    version_file_path = os.path.join(current_dir, "version.txt")
+
+    try:
+        with open(version_file_path, "r") as f:
+            content = f.read()
+    except FileNotFoundError:
+        return None
+
+    version_info = {}
+    try:
+        lines = content.strip().split("\n")
+        for line in lines:
+            if line.startswith("fastdeploy GIT COMMIT ID:"):
+                version_info["fastdeploy_commit"] = line.split("fastdeploy GIT COMMIT ID:")[1].strip()
+            elif line.startswith("Paddle version:"):
+                version_info["paddle_version"] = line.split("Paddle version:")[1].strip()
+            elif line.startswith("Paddle GIT COMMIT ID:"):
+                version_info["paddle_commit"] = line.split("Paddle GIT COMMIT ID:")[1].strip()
+            elif line.startswith("CUDA version:"):
+                version_info["cuda_version"] = line.split("CUDA version:")[1].strip()
+            elif line.startswith("CXX compiler version:"):
+                version_info["cxx_version"] = line.split("CXX compiler version:")[1].strip()
+            elif line.startswith("fastdeploy version:"):
+                version_info["fastdeploy_version"] = line.split("fastdeploy version:")[1].strip()
+    except Exception as e:
+        console_logger.error(f"Failed to parse version info from version.txt: {e}")
+        return None
+
+    return version_info if version_info else None
+
+
 def current_package_version():
     """
-    读取version.txt文件,解析出fastdeploy version对应的版本号
+    Read version.txt file and parse the fastdeploy version number.
 
     Args:
     Returns:
-        str: fastdeploy版本号,如果解析失败返回Unknown
+        str: fastdeploy version number, or "Unknown" if parsing fails
     """
-    fd_version = "Unknown"
-    try:
-        content = version()
-        if content == "Unknown":
-            return fd_version
+    version_info = get_version_info()
+    if version_info is None:
+        return "Unknown"
 
-        # 按行分割内容
-        lines = content.strip().split("\n")
-        # 查找包含"fastdeploy version:"的行
-        for line in lines:
-            if line.startswith("fastdeploy version:"):
-                # 提取版本号部分
-                fd_version = line.split("fastdeploy version:")[1].strip()
-                return fd_version
-        llm_logger.warning("fastdeploy version not found in version.txt")
-        # 如果没有找到对应的行，返回None
-        return fd_version
-    except Exception as e:
-        llm_logger.error(f"Failed to parse fastdeploy version from version.txt: {e}")
-        return fd_version
+    return version_info.get("fastdeploy_version", "Unknown")
 
 
 class DeprecatedOptionWarning(argparse.Action):
@@ -1047,7 +1078,6 @@ def check_download_links(bos_client, links, timeout=1):
 def init_bos_client():
     from baidubce.auth.bce_credentials import BceCredentials
     from baidubce.bce_client_configuration import BceClientConfiguration
-    from baidubce.exception import BceHttpClientError, BceServerError
     from baidubce.services.bos.bos_client import BosClient
 
     cfg = BceClientConfiguration(
@@ -1058,14 +1088,12 @@ def init_bos_client():
     try:
         client = BosClient(cfg)
         client.list_buckets()
-    except BceServerError as e:
-        if e.status_code == 403:
-            raise Exception("BOS authentication failed: Invalid AK/SK") from e
-        raise Exception(f"BOS connection failed: {str(e)}") from e
-    except BceHttpClientError as e:
-        raise Exception(f"Invalid BOS endpoint configuration: {str(e)}") from e
     except Exception as e:
-        raise Exception(f"BOS client validation error: {str(e)}") from e
+        raise Exception(
+            "Create BOSClient Error, Please check your ENV [ ENCODE_FEATURE_BOS_AK, ENCODE_FEATURE_BOS_SK, ENCODE_FEATURE_ENDPOINT ] \n"
+            f"Current ENV AK: {envs.ENCODE_FEATURE_BOS_AK}, SK: {envs.ENCODE_FEATURE_BOS_SK}, Endpoint: {envs.ENCODE_FEATURE_ENDPOINT} \n"
+            f"{str(e)}"
+        )
     return client
 
 
@@ -1126,7 +1154,7 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
-trace_logger = FastDeployLogger().get_trace_logger("trace_logger", "trace_logger.log")
+trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
 

@@ -25,7 +25,7 @@ import numpy as np
 
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import ImagePosition, Request
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 
 
@@ -44,6 +44,7 @@ class TestResourceManagerV1(unittest.TestCase):
         speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
         model_cfg.max_model_len = 5120
+        model_cfg.architectures = ["test_model"]
         cache_cfg.bytes_per_layer_per_block = 1
         parallel_cfg = ParallelConfig(args)
         scheduler_cfg = SchedulerConfig(args)
@@ -186,6 +187,102 @@ class TestResourceManagerV1(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIn("Failed after 1 retries for bos://bucket-name/path/to/object1", self.request.error_message)
         self.assertEqual(self.request.error_code, 530)
+
+
+class TestRevertChunkedMMInput(unittest.TestCase):
+    def setUp(self):
+        max_num_seqs = 2
+        engine_args = EngineArgs(
+            max_num_seqs=max_num_seqs,
+            num_gpu_blocks_override=102,
+            max_num_batched_tokens=3200,
+        )
+        args = asdict(engine_args)
+
+        cache_cfg = CacheConfig(args)
+        model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
+        speculative_cfg = SimpleNamespace(method=None)
+        model_cfg.print = print
+        model_cfg.max_model_len = 5120
+        model_cfg.architectures = ["test_model"]
+        cache_cfg.bytes_per_layer_per_block = 1
+        cache_cfg.block_size = 64
+        parallel_cfg = ParallelConfig(args)
+        scheduler_cfg = SchedulerConfig(args)
+        graph_opt_cfg = engine_args.create_graph_optimization_config()
+
+        fd_config = FDConfig(
+            model_config=model_cfg,
+            cache_config=cache_cfg,
+            parallel_config=parallel_cfg,
+            graph_opt_config=graph_opt_cfg,
+            speculative_config=speculative_cfg,
+            scheduler_config=scheduler_cfg,
+        )
+        self.manager = ResourceManagerV1(
+            max_num_seqs=max_num_seqs, config=fd_config, tensor_parallel_size=8, splitwise_role="mixed"
+        )
+        req_dict = {
+            "request_id": "test_request",
+            "multimodal_inputs": {},
+        }
+        self.request = Request.from_dict(req_dict)
+        self.request.async_process_futures = []
+        self.request.multimodal_inputs = {}
+
+    def test_revert_chunked_mm_input_none_input(self):
+        result = self.manager.revert_chunked_mm_input(None, 64)
+        self.assertEqual(result, 64)
+
+    def test_revert_chunked_mm_input_no_mm_positions(self):
+        mm_inputs = {"other_field": "value"}
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 128)
+        self.assertEqual(result, 128)
+
+    def test_revert_chunked_mm_input_empty_positions(self):
+        mm_inputs = {"mm_positions": []}
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 128)
+        self.assertEqual(result, 128)
+
+    def test_revert_chunked_mm_input_matched_in_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=40, length=100),
+                ImagePosition(offset=200, length=80),
+            ]
+        }
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 192)
+
+    def test_revert_chunked_mm_input_matched_in_second_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=100, length=100),
+                ImagePosition(offset=200, length=80),
+            ]
+        }
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 64)
+
+    def test_revert_chunked_mm_input_before_first_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=60, length=100),
+                ImagePosition(offset=180, length=100),
+            ]
+        }
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 0)
+
+    def test_revert_chunked_mm_input_after_last_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=5, length=10),
+                ImagePosition(offset=200, length=56),
+            ]
+        }
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
+        self.assertEqual(result, 256)
 
 
 if __name__ == "__main__":
