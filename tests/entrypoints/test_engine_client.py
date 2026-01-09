@@ -353,9 +353,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
                     with patch("fastdeploy.entrypoints.engine_client.FileLock") as mock_filelock:
                         mock_filelock.return_value = MagicMock()
 
-                        with patch(
-                            "fastdeploy.entrypoints.engine_client.InputPreprocessor"
-                        ) as mock_input_processor:
+                        with patch("fastdeploy.entrypoints.engine_client.InputPreprocessor") as mock_input_processor:
                             mock_input_processor_instance = MagicMock()
                             mock_input_processor_instance.create_processor.return_value = mock_data_processor
                             mock_input_processor.return_value = mock_input_processor_instance
