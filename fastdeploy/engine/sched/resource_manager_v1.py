@@ -200,6 +200,19 @@ class ResourceManagerV1(ResourceManager):
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
+        self.init_reserve_output_block_num = (
+            envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # int
+        self.decay_output_block_num = (
+            envs.FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # float
+        self.min_reserve_output_block_num = (
+            envs.FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+        )  # int
+        self.current_reserve_output_block_num = self.init_reserve_output_block_num
+        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
+        self.can_relax_prefill_strategy = True
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -293,6 +306,9 @@ class ResourceManagerV1(ResourceManager):
                 # The request can be scheduled.
                 can_schedule = True
                 break
+        self.current_reserve_output_block_num = self.init_reserve_output_block_num
+        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
+        self.can_relax_prefill_strategy = False
         return can_schedule
 
     def _update_mm_hashes(self, request):
@@ -360,11 +376,17 @@ class ResourceManagerV1(ResourceManager):
         if mm_inputs is None or "mm_positions" not in mm_inputs or len(mm_inputs["mm_positions"]) == 0:
             return matched_token_num
 
-        for idx in range(len(mm_inputs["mm_positions"])):
-            position = mm_inputs["mm_positions"][idx]
+        position_idx = len(mm_inputs["mm_positions"]) - 1
+        while matched_token_num > 0 and position_idx >= 0:
+            position = mm_inputs["mm_positions"][position_idx]
             if position.offset < matched_token_num < position.offset + position.length:
-                return position.offset
+                matched_token_num = (
+                    position.offset // self.config.cache_config.block_size
+                ) * self.config.cache_config.block_size
+                position_idx -= 1
             elif matched_token_num < position.offset:
+                position_idx -= 1
+            elif matched_token_num >= position.offset + position.length:
                 break
         return matched_token_num
 
@@ -525,6 +547,19 @@ class ResourceManagerV1(ResourceManager):
                 self.cache_manager.update_cache_blocks(
                     request, self.config.cache_config.block_size, request.num_total_tokens - 1
                 )
+
+    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
+        if self.can_relax_prefill_strategy:
+            can_schedule_block_num_threshold = num_chunk_new_block
+        else:
+            can_schedule_block_num_threshold = (
+                request.need_prefill_tokens + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
+            if self.config.speculative_config.method is not None:
+                can_schedule_block_num_threshold = min(
+                    can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
+                )
+        return can_schedule_block_num_threshold
 
     def schedule(self):
         """
@@ -706,8 +741,11 @@ class ResourceManagerV1(ResourceManager):
 
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                            request, num_new_block
+                        )
                         # Allocate blocks to prefill
-                        if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                        if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
                                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
@@ -751,8 +789,11 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                            request, num_new_block
+                        )
                         # Allocate blocks to prefill
-                        if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                        if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
                                 request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
                             self.waiting.popleft()
@@ -778,7 +819,14 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
-
+                self.current_reserve_output_block_num_float -= self.decay_output_block_num
+                self.current_reserve_output_block_num = max(
+                    int(self.current_reserve_output_block_num_float),
+                    self.min_reserve_output_block_num,
+                    0,
+                )
+                if self.current_reserve_output_block_num == 0:
+                    self.can_relax_prefill_strategy = True
             self.update_metrics()
 
             return scheduled_reqs, error_reqs
@@ -908,17 +956,9 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
-            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
             request.skip_allocate = False
-
-            # Report the number of cached tokens to Prometheus metrics
-            main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
-
             if self.config.cache_config.disable_chunked_mm_input:
                 if matched_token_num == request.need_prefill_tokens:
                     matched_token_num = matched_token_num - self.config.cache_config.block_size
@@ -932,7 +972,27 @@ class ResourceManagerV1(ResourceManager):
                     request.skip_allocate = True
                 else:
                     request.num_computed_tokens = matched_token_num
-            llm_logger.info(f"request {request.request_id} num_computed_tokens: {request.num_computed_tokens}")
+
+            if request.num_cached_tokens != request.num_computed_tokens:
+                revert_tokens_num = request.num_cached_tokens - request.num_computed_tokens
+                llm_logger.info(
+                    f"request {request.request_id} num_cached_tokens: {request.num_cached_tokens}, revert_tokens_num: {revert_tokens_num}"
+                )
+
+                revert_block_idx = revert_tokens_num // self.config.cache_config.block_size
+                for block_idx in range(len(common_block_ids) - 1, revert_block_idx, -1):
+                    if common_block_ids[block_idx] in hit_info["match_gpu_block_ids"]:
+                        hit_info["gpu_match_token_num"] -= self.config.cache_config.block_size
+                    elif common_block_ids[block_idx] in hit_info["match_cpu_block_ids"]:
+                        hit_info["cpu_match_token_num"] -= self.config.cache_config.block_size
+
+            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
+
+            # Report the number of cached tokens to Prometheus metrics
+            main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
+            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
+            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
             request.cache_prepare_time = time.time() - cache_prepare_time
             return True
         except Exception as e:
