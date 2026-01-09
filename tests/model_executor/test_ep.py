@@ -460,7 +460,7 @@ def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
         top_k=2,
         routed_scaling_factor=1.0,
         gate_correction_bias=None,
-        fd_config=SimpleNamespace(model_config=SimpleNamespace(redundant_experts_num=0)),
+        fd_config=SimpleNamespace(eplb_config=SimpleNamespace(redundant_experts_num=0)),
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 

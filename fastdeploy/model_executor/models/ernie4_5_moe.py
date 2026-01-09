@@ -400,7 +400,7 @@ class Ernie4_5_Model(nn.Layer):
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                redundant_experts_num=fd_config.eplb_config.redundant_experts_num,
                 ep_size=fd_config.parallel_config.expert_parallel_size,
             )
 
