@@ -47,7 +47,7 @@ Golang-Router 已支持 cache-aware 调度，在请求级调度框架内引入 t
 
 - Go 1.21
 - 构建不依赖特定系统环境
-- 可直接在 FastDeploy 官方 Docker 环境中编译与运行
+- 将在 FastDeploy 2.5 版本发布后，支持通过官方 Docker 环境进行编译运行。
 
 ### 编译
 
@@ -111,37 +111,56 @@ cp config/register.example.yaml config/register.yaml
 
 ### 运行
 本项目支持两种运行方式：直接运行源码 或 构建二进制文件后运行。
+
 方式一：直接运行源码
+
 在项目根目录下，使用 go run 启动服务：
+
 ```bash
 go run cmd/main.go
 ```
+
 该方式适用于本地开发与调试场景。
+
 方式二：构建并运行二进制文件
+
 1. 构建二进制文件
+
 通过构建脚本生成可执行文件：
+
 ```bash
 ./build.sh
 ```
+
 构建完成后，二进制文件将被安装到指定目录（默认为 /usr/local/bin，可通过修改 Makefile 中的 OUTDIR 进行调整）。
+
 此外，也可以在项目根目录下手动构建二进制文件：
+
 ```bash
 go build -o ./fd-router ./cmd
 ```
+
 该方式便于本地测试或将二进制文件与配置文件一并分发。
+
 2. 运行二进制文件
+
 可以通过运行脚本启动服务：
+
 ```bash
 ./run.sh
 ```
+
 运行脚本会自动处理常见启动参数及日志目录，适合标准化部署场景。
+
 也可以直接运行二进制文件，在项目根目录或二进制所在目录下执行：
+
 ```bash
 ./fd-router \
   --port 8080 \
   --splitwise \
   --config_path ./config/config.yaml
 ```
+
 其中：
 - --port 为必填参数
 - 其他参数可根据实际需求配置
