@@ -48,8 +48,6 @@ std::vector<paddle::Tensor> AdjustBatch(
     const paddle::optional<paddle::Tensor>& output_padding_offset,
     int max_input_length);
 
-// std::vector<paddle::Tensor> AddTen(const paddle::Tensor& x);
-
 void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
                           const paddle::Tensor& seq_lens_this_time_tensor,
                           const paddle::Tensor& seq_lens_decoder_tensor,
