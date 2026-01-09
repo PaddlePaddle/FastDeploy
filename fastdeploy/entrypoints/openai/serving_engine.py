@@ -229,7 +229,7 @@ class ZmqOpenAIServing(OpenAIServing):
         self.chat_template = chat_template
         self.engine_client = engine_client
 
-    def _request_to_obj(self, ctx: ServeContext):
+    def _request_to_dict(self, ctx: ServeContext):
         request = ctx.request
         if hasattr(request, "to_dict_for_infer"):
             request_dict = request.to_dict_for_infer(ctx.request_id)
@@ -241,31 +241,31 @@ class ZmqOpenAIServing(OpenAIServing):
         self._process_chat_template_kwargs(request_dict)
         return request_dict
 
-    def _request_to_batch_objs(self, ctx: ServeContext):
+    def _request_to_batch_dicts(self, ctx: ServeContext):
         """Convert multiple requests to dictionary form"""
-        return [self._request_to_obj(ctx)]
+        return [self._request_to_dict(ctx)]
 
     @override
     async def _preprocess(self, ctx: ServeContext):
         """Preprocess the request into engine format"""
-        request_objs = self._request_to_batch_objs(ctx)
-        ctx.preprocess_requests = request_objs
-        for request_obj in request_objs:
-            api_server_logger.info(f"batch add request_id: {request_obj.request_id}, request: {request_obj}")
-            await self.engine_client.format_and_add_data(request_obj)
+        request_dicts = self._request_to_batch_dicts(ctx)
+        ctx.preprocess_requests = request_dicts
+        for request_dict in request_dicts:
+            api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
+            await self.engine_client.format_and_add_data(request_dict)
 
-    def _process_chat_template_kwargs(self, request):
+    def _process_chat_template_kwargs(self, request_dict):
         """Add default values to chat template kwargs"""
-        if not getattr(request, "chat_template", None):
-            setattr(request, "chat_template", self.chat_template)
-        chat_template_kwargs = getattr(request, "chat_template_kwargs", None) or {}
+        if "chat_template" not in request_dict:
+            request_dict["chat_template"] = self.chat_template
+        chat_template_kwargs = request_dict.get("chat_template_kwargs") or {}
         chat_template_kwargs.update(
             {
-                "chat_template": getattr(request, "chat_template", None),
-                "add_stop_sequences": getattr(request, "add_stop_sequences", None),
+                "chat_template": request_dict.get("chat_template"),
+                "add_stop_sequences": request_dict.get("add_stop_sequences"),
             }
         )
-        setattr(request, "chat_template_kwargs", chat_template_kwargs)
+        request_dict["chat_template_kwargs"] = chat_template_kwargs
 
     @override
     async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[dict]:
@@ -277,16 +277,16 @@ class ZmqOpenAIServing(OpenAIServing):
                 request_id, num_choices
             )
             for pr in ctx.preprocess_requests:
-                dealer.write([b"", pr.request_id.encode("utf-8")])
+                dealer.write([b"", pr["request_id"].encode("utf-8")])
             # if self.engine_client.check_model_weight_status():
             #     raise ValueError("Engine is clearing model weight")
             while num_choices > 0:
-                request_outputs = await asyncio.wait_for(request_output_queue.get(), timeout=60)
-                for request_output in request_outputs:
-                    api_server_logger.debug(f"Received RequestOutput: {request_output}")
-                    if getattr(request_output, "finished", None) is True:
+                request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
+                for request_output_dict in request_output_dicts:
+                    api_server_logger.debug(f"Received RequestOutput: {request_output_dict}")
+                    if request_output_dict["finished"] is True:
                         num_choices -= 1
-                    yield request_output
+                    yield request_output_dict
 
         except Exception as e:
             raise ValueError(f"Error processing response: {str(e)}")

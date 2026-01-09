@@ -1074,7 +1074,6 @@ class EngineService:
                             request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
-                        self.llm_logger.debug(f"Receive request: {request}")
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))

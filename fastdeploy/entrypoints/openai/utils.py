@@ -127,8 +127,8 @@ class DealerConnectionManager:
                 response = ForkingPickler.loads(raw_data[-1])
                 _zmq_metrics_stats = ZMQMetricsStats()
                 _zmq_metrics_stats.msg_recv_total += 1
-                if getattr(response, "zmq_send_time", None):
-                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response.zmq_send_time
+                if "zmq_send_time" in response:
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
                 address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
                 main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
 

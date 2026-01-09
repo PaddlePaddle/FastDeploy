@@ -14,13 +14,12 @@
 # limitations under the License.
 """
 
-import time
 from collections.abc import AsyncGenerator
 
 from typing_extensions import override
 
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import Request, RewardRequestOutput
+from fastdeploy.engine.request import PoolingRequestOutput, RewardRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatRewardData,
     ChatRewardRequest,
@@ -42,28 +41,24 @@ class OpenAIServingReward(ZmqOpenAIServing):
         super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time, chat_template)
 
     @override
-    def _request_to_obj(self, ctx: ServeContext):
+    def _request_to_dict(self, ctx: ServeContext):
         request: ChatRewardRequest = ctx.request
-        request_obj = None
+        request_dict = super()._request_to_dict(ctx)
         if hasattr(request, "to_pooling_params"):
             pooling_params: PoolingParams = request.to_pooling_params()
             pooling_params.verify("reward", self.cfg.model_config)
-            request_obj = Request.from_generic_request(
-                req=request, request_id=ctx.request_id, pooling_params=pooling_params
-            )
-            request_obj.metrics.arrival_time = time.time()
-            super()._process_chat_template_kwargs(request_obj)
-        return request_obj
+            request_dict["pooling_params"] = pooling_params.to_dict()
+        return request_dict
 
     @override
-    def _request_to_batch_objs(self, ctx: ServeContext):
+    def _request_to_batch_dicts(self, ctx: ServeContext):
         """
         Convert the request into dictionary format that can be sent to the inference server
         """
-        request_obj = self._request_to_obj(ctx)
-        request_obj.request_id = f"{ctx.request_id}_0"
-        request_objs = [request_obj]
-        return request_objs
+        request_dict = self._request_to_dict(ctx)
+        request_dict["request_id"] = f"{ctx.request_id}_0"
+        request_dicts = [request_dict]
+        return request_dicts
 
     async def create_reward(self, request: ChatRewardRequest):
         """
@@ -96,7 +91,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         """Generate final reward response"""
         api_server_logger.info(f"[{ctx.request_id}] Reward RequestOutput received:{request_output}")
 
-        base = request_output
+        base = PoolingRequestOutput.from_dict(request_output)
         reward_res = RewardRequestOutput.from_base(base)
 
         data = ChatRewardData(
