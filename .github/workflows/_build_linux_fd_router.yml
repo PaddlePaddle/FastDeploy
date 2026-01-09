@@ -172,6 +172,7 @@ jobs:
 
             bash ./build.sh
             ls /usr/local/bin/fd-router*
+            cp -r /usr/local/bin/fd-router* ./
             '
 
       - name: Package Upload
@@ -198,9 +199,9 @@ jobs:
             python --version
             python -m pip install bce-python-sdk==0.9.29
 
-            cd /usr/local/bin || exit 1
+            cd FastDeploy/fastdeploy/golang_router
             if [ ! -f fd-router ]; then
-              echo "Error: fd-router not found in /usr/local/bin"
+              echo "Error: fd-router not found in FastDeploy/fastdeploy/golang_router"
               exit 1
             fi
 
