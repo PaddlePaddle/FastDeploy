@@ -146,16 +146,16 @@ class OpenAIServingChat:
             max_tokens = None
             try:
                 if not envs.ENABLE_V1_DATA_PROCESSOR:
-                    request_obj = request.to_dict_for_infer(f"{request_id}_0")
+                    current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 else:
-                    request_obj = Request.from_generic_request(request, request_id=f"{request_id}_0")
-                if "chat_template" not in request_obj:
-                    request_obj["chat_template"] = self.chat_template
-                request_obj["metrics"]["arrival_time"] = time.time()
+                    current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                if "chat_template" not in current_req_dict:
+                    current_req_dict["chat_template"] = self.chat_template
+                current_req_dict["metrics"]["arrival_time"] = time.time()
                 # preprocess the req_dict
-                prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)
-                prompt_tokens = request_obj.get("prompt_tokens")
-                max_tokens = request_obj.get("max_tokens")
+                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
+                prompt_tokens = current_req_dict.get("prompt_tokens")
+                max_tokens = current_req_dict.get("max_tokens")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
