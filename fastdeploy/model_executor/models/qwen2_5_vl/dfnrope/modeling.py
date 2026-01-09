@@ -351,12 +351,8 @@ class VisionRotaryEmbedding(nn.Layer):
         super().__init__()
         self.dim = dim
         self.theta = theta
-        self.rope_init()
-
-    def rope_init(self):
-        arange = paddle.arange(0, self.dim, 2, dtype="float32")
-        inv_freq = 1.0 / (self.theta ** (arange / self.dim))
-        self.register_buffer("inv_freq", inv_freq.astype(paddle.get_default_dtype()), persistable=False)
+        inv_freq = 1.0 / (self.theta ** (paddle.arange(0, self.dim, 2, dtype="float32", device="cpu") / self.dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     def forward(self, seqlen: int) -> paddle.Tensor:
         seq = paddle.arange(seqlen, dtype=self.inv_freq.dtype)
