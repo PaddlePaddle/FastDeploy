@@ -148,6 +148,8 @@ class MLAAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
+        self.useless_tensor = paddle.randn([1]).cast("int32")
+
         if self.flash_attn_func is None:
             prop = paddle.device.cuda.get_device_properties()
             cc = prop.major * 10 + prop.minor
@@ -186,15 +188,15 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
-            forward_meta.decoder_batch_ids,  # decoder_batch_ids_per_ctax
-            forward_meta.decoder_tile_ids_per_batch,  # decoder_chunk_ids_per_ctax_each_batch
-            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            self.useless_tensor,  # not used in mla
             forward_meta.decoder_num_blocks_device,
             forward_meta.decoder_chunk_size_device,
             forward_meta.max_len_tensor_cpu,
-            forward_meta.encoder_batch_ids,
-            forward_meta.encoder_tile_ids_per_batch,
-            forward_meta.encoder_num_blocks_x_cpu,
+            self.useless_tensor,  # not used in mla
+            self.useless_tensor,  # not used in mla
+            self.useless_tensor,  # not used in mla
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
