@@ -700,6 +700,9 @@ class PrefixCacheManager:
                     "gpu_match_token_num": 0,
                     "cpu_match_token_num": 0,
                     "storage_match_token_num": 0,
+                    "match_gpu_block_ids": [],
+                    "gpu_recv_block_ids": [],
+                    "match_storage_block_ids": [],
                     "cpu_cache_prepare_time": 0,
                     "storage_cache_prepare_time": 0,
                 }
@@ -814,6 +817,9 @@ class PrefixCacheManager:
                 metrics["gpu_match_token_num"] = gpu_match_token_num
                 metrics["cpu_match_token_num"] = cpu_match_token_num
                 metrics["storage_match_token_num"] = storage_match_token_num
+                metrics["match_gpu_block_ids"] = match_gpu_block_ids
+                metrics["gpu_recv_block_ids"] = gpu_recv_block_ids
+                metrics["match_storage_block_ids"] = match_storage_block_ids
                 self.metrics._update_history_hit_metrics()
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
