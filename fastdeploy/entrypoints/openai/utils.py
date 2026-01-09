@@ -132,7 +132,7 @@ class DealerConnectionManager:
                 address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
                 main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
 
-                request_id = response[-1].request_id
+                request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
                 elif "reward" == request_id[:6]:
@@ -142,7 +142,7 @@ class DealerConnectionManager:
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
-                        if response[-1].finished:
+                        if response[-1]["finished"]:
                             self.request_num[request_id] -= 1
                             if self.request_num[request_id] == 0:
                                 self._update_load(conn_index, -1)

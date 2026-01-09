@@ -16,6 +16,7 @@
 
 import numpy as np
 
+from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
@@ -74,6 +75,25 @@ class PaddleOCRVLProcessor(TextProcessor):
         )
         self.image_patch_id = self.processor.image_patch_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
+
+    def process_request(self, request, max_model_len=None, **kwargs):
+        """
+        Process incoming request and generate model inputs.
+
+        Args:
+            request: Input request object
+            max_model_len (int, optional): Maximum context length
+            **kwargs: Additional processing parameters
+
+        Returns:
+            Request: Processed request with model inputs
+        """
+        task = request.to_dict()
+        task["enable_thinking"] = kwargs.get("enable_thinking", False)
+        self.process_request_dict(task, max_model_len)
+        request = Request.from_dict(task)
+        request = self._apply_default_parameters(request)
+        return request
 
     def _parse_processor_kwargs(self, kwargs):
         """
@@ -172,7 +192,7 @@ class PaddleOCRVLProcessor(TextProcessor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_obj(self, request, max_model_len=None, **kwargs):
+    def process_request_dict(self, request, max_model_len=None):
         """
         Process request dictionary into model inputs.
 
@@ -188,57 +208,55 @@ class PaddleOCRVLProcessor(TextProcessor):
         """
 
         request = self._apply_default_parameters(request)
-        if not request.eos_token_ids:
-            request.eos_token_ids = self.eos_token_ids
+        if not request.get("eos_token_ids"):
+            request["eos_token_ids"] = self.eos_token_ids
 
         # processing stop_sequences and stop_token_ids
         process_stop_token_ids(request, self.update_stop_seq)
 
-        if request.prompt:
-            multimodal_data = request.multimodal_data
+        if request.get("prompt"):
+            multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
                 multimodal_data = {}
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request.prompt, images, videos)
+            outputs = self.processor.text2ids(request["prompt"], images, videos)
 
-        elif request.messages:
-            messages = request.messages
+        elif request.get("messages"):
+            messages = request["messages"]
             self._check_mm_limits(messages)
             outputs = self.processor.request2ids(request)
 
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.metadata
+        metadata = request.get("metadata")
         # Handle continuation of previous generation by appending existing tokens
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
 
-        request.prompt_token_ids = outputs["input_ids"].tolist()
-        request.prompt_token_ids_len = len(request.prompt_token_ids)
-        request.multimodal_inputs = outputs
+        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
+        request["multimodal_inputs"] = outputs
 
         # Handle prompt truncation if exceeds model context length
-        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
-            request.prompt_token_ids = request.prompt_token_ids[
+        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
+            request["prompt_token_ids"] = request["prompt_token_ids"][
                 : max_model_len - 1
             ]  # Leave space for at least 1 new token
 
         # Set default max_tokens if not specified
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(
-                1, max_model_len - len(request.prompt_token_ids)
-            )  # Ensure at least 1 token
+        if request.get("max_tokens") is None:
+            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
 
-        if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
-            request.sampling_params.top_p = _SAMPLING_EPS
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
-            parts = request.request_id.split("_")
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            parts = request["request_id"].split("_")
             if len(parts) > 1:
                 real_req_id = parts[0]
                 index = int(parts[1])
@@ -246,8 +264,8 @@ class PaddleOCRVLProcessor(TextProcessor):
                 for idx in range(index * n, (index + 1) * n):
                     self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             else:
-                self.model_status_dict[request.request_id] = model_status
-            request.enable_thinking = model_status == "think_start"
+                self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
 
         return request
 

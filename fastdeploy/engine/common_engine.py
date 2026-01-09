@@ -1051,7 +1051,10 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                err, data = self.recv_request_server.receive_pyobj_once(block)
+                if not self.cfg.model_config.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
+                    err, data = self.recv_request_server.receive_json_once(block)
+                else:
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     # The message "Context was terminated" is normal when closing a ZMQ context
                     if "Context was terminated" in str(err):
@@ -1062,29 +1065,24 @@ class EngineService:
                         self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
 
-                request, insert_task = None, []
+                request, insert_task = data, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     err_msg = None
                     try:
-                        request = data
+                        if not envs.ENABLE_V1_DATA_PROCESSOR:
+                            request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         self.llm_logger.debug(f"Receive request: {request}")
-                        trace_print(
-                            LoggingEventName.PREPROCESSING_END, data.request_id, data.user if data.user else ""
-                        )
-                        trace_print(
-                            LoggingEventName.REQUEST_SCHEDULE_START, data.request_id, data.user if data.user else ""
-                        )
-                        trace_print(
-                            LoggingEventName.REQUEST_QUEUE_START, data.request_id, data.user if data.user else ""
-                        )
+                        trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
                         self.llm_logger.debug(f"Receive request from api server: {request}")
                     except Exception as e:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
                         err_msg = str(e)
-                        results.append((data.request_id, err_msg))
+                        results.append((data["request_id"], err_msg))
 
                     if self.guided_decoding_checker is not None and err_msg is None:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)

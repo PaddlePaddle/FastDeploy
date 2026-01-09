@@ -19,8 +19,7 @@ import traceback
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy.engine.request import Request
-from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
+from fastdeploy.input.v1.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
@@ -102,28 +101,14 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         def set_value(req, key, value):
             value = getattr(self.generation_config, key, value)
-            if isinstance(req, dict):
-                if key not in req:
-                    req[key] = value
-            else:
-                if req.get(key) is None:
-                    req.set(key, value)
+            if getattr(req.sampling_params, key) is None:
+                setattr(req.sampling_params, key, value)
 
         set_value(request, "top_p", 0.7)
         set_value(request, "temperature", 1.0)
         set_value(request, "repetition_penalty", 1.0)
         set_value(request, "frequency_penalty", 0.0)
         set_value(request, "presence_penalty", 0.0)
-        return request
-
-    def process_request(self, request, max_model_len=None, **kwargs):
-        """process the input data"""
-        task = request.to_dict()
-        task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-
         return request
 
     def _parse_processor_kwargs(self, kwargs):
@@ -201,91 +186,97 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_dict(self, request, max_model_len=None):
+    def process_request_dict(self, request, max_model_len=None, **kwargs):
         """process the input data"""
 
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
+        if not request.eos_token_ids:
+            request.eos_token_ids = self.eos_token_ids
 
         # processing stop_sequences and stop_token_ids
         process_stop_token_ids(request, self.update_stop_seq)
 
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
+        bad_words = request.sampling_params.bad_words
+        bad_words_token_ids = request.sampling_params.bad_words_token_ids
         if bad_words:
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
+            request.sampling_params.bad_words_token_ids = bad_words_token_ids
 
-        if request.get("prompt_token_ids"):
-            messages = request.get("messages")
+        if request.prompt_token_ids:
+            messages = request.messages
             if messages:
                 self._check_mm_limits(messages)
-            request.setdefault("enable_thinking", True)
+            if getattr(request, "enable_thinking") is None:
+                setattr(request, "enable_thinking", True)
             outputs = self.ernie4_5_processor.prompt_token_ids2outputs(request)
-        elif request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
+        elif request.prompt:
+            multimodal_data = request.multimodal_data
             if multimodal_data is None:
                 multimodal_data = {}
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            request["prompt_tokens"] = request.get("prompt")
-            outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
-        elif request.get("messages"):
-            messages = request["messages"]
+            request.prompt_tokens = request.prompt
+            outputs = self.ernie4_5_processor.text2ids(request.prompt, images, videos)
+        elif request.messages:
+            messages = request.messages
             self._check_mm_limits(messages)
-            chat_template_kwargs = request.get("chat_template_kwargs")
+            chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
+            if not chat_template_kwargs:
+                chat_template_kwargs = request.chat_template_kwargs
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request or request[k] is None:
-                            request[k] = v
+                        if getattr(request, k, None) is None:
+                            setattr(request, k, v)
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             outputs = self.ernie4_5_processor.request2ids(request)
+            delattr(request, "chat_template_kwargs")
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        if request.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, request["completion_token_ids"])
+        if request.completion_token_ids:
+            self.append_completion_tokens(outputs, request.completion_token_ids)
 
         outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = (
+        request.prompt_token_ids = (
             outputs["input_ids"].tolist()
-            if ("prompt_token_ids" not in request or not request["prompt_token_ids"])
-            else request["prompt_token_ids"]
+            if not getattr(request, "prompt_token_ids", None)
+            else request.prompt_token_ids
         )
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["multimodal_inputs"] = outputs
+        request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.multimodal_inputs = outputs
 
         # 截断超过长度限制的prompt
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
+            request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
 
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+        if request.sampling_params.max_tokens is None:
+            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
         else:
-            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
-        if request.get("reasoning_max_tokens") is None:
-            request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
+            request.sampling_params.max_tokens = min(
+                max_model_len - len(request.prompt_token_ids), request.sampling_params.max_tokens
+            )
+        if request.sampling_params.reasoning_max_tokens is None:
+            request.sampling_params.reasoning_max_tokens = max(int(request.sampling_params.max_tokens * 0.8), 1)
+            request.reasoning_max_tokens = request.sampling_params.reasoning_max_tokens
         data_processor_logger.info(f"Processed request {request}")
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
+            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+            parts = request.request_id.split("_")
             if len(parts) > 1:
                 real_req_id = parts[0]
                 index = int(parts[1])
-                n = request.get("n", 1)
+                n = request.sampling_params.n or 1
                 for idx in range(index * n, (index + 1) * n):
                     self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
-        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
-            request["top_p"] = _SAMPLING_EPS
-
+                self.model_status_dict[request.request_id] = model_status
+            request.enable_thinking = model_status == "think_start"
+        if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
+            request.sampling_params.top_p = _SAMPLING_EPS
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

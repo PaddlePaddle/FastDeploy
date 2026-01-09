@@ -16,7 +16,7 @@
 """
 
 import pickle
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -24,7 +24,7 @@ import zmq
 from paddleformers.transformers import AutoTokenizer
 from PIL import Image
 
-from fastdeploy.engine.request import ImagePosition
+from fastdeploy.engine.request import ImagePosition, Request
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
@@ -34,6 +34,11 @@ from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
 from .process_video import sample_frames
+
+FRAME_FACTOR = 2
+FPS = 2.0
+FPS_MIN_FRAMES = 4
+FPS_MAX_FRAMES = 768
 
 
 class DataProcessor(MMBaseDataProcessor):
@@ -58,10 +63,10 @@ class DataProcessor(MMBaseDataProcessor):
         self,
         model_path: str,
         enable_processor_cache: bool = False,
-        video_min_frames: int = 4,
-        video_max_frames: int = 768,
+        video_min_frames: int = FPS_MIN_FRAMES,
+        video_max_frames: int = FPS_MAX_FRAMES,
         video_target_frames: int = -1,
-        video_fps: int = -1,
+        video_fps: int = FPS,
         tokens_per_second: int = 2,
         tokenizer=None,
         **kwargs,
@@ -81,6 +86,7 @@ class DataProcessor(MMBaseDataProcessor):
         self.max_frames = video_max_frames
         self.target_frames = video_target_frames
         self.fps = video_fps
+        self.frame_factor = FRAME_FACTOR
 
         # Initialize tokenizer with left padding and fast tokenizer
         if tokenizer is None:
@@ -96,14 +102,13 @@ class DataProcessor(MMBaseDataProcessor):
         self.temporal_conv_size = self.image_processor.temporal_patch_size
 
         # Special tokens and IDs
-        self.image_token = "<|IMAGE_PLACEHOLDER|>"
+        self.image_token = "<|image_pad|>"
         self.video_token = "<|video_pad|>"
 
         self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
         self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
-        self.image_patch_id = self.image_token_id
 
-        self.vision_start = "<|IMAGE_START|>"
+        self.vision_start = "<|vision_start|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
 
         self.tokens_per_second = tokens_per_second
@@ -171,13 +176,11 @@ class DataProcessor(MMBaseDataProcessor):
             "fps": [],
             "mm_positions": [],
             "mm_hashes": [],
-            "vit_seqlen": [],
-            "vit_position_ids": [],
         }
 
         # Define placeholders and their lengths
-        IMAGE_PLACEHOLDER = self.image_token
-        VIDEO_PLACEHOLDER = self.video_token
+        IMAGE_PLACEHOLDER = "<|image_pad|>"
+        VIDEO_PLACEHOLDER = "<|video_pad|>"
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
 
@@ -222,7 +225,7 @@ class DataProcessor(MMBaseDataProcessor):
         return outputs
 
     def request2ids(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Request, tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat request with multimodal messages into model inputs.
@@ -238,7 +241,7 @@ class DataProcessor(MMBaseDataProcessor):
         """
 
         # Parse and validate chat messages
-        messages = parse_chat_messages(request.get("messages"))
+        messages = parse_chat_messages(request.messages)
         mm_items = []
         for msg in messages:
             role = msg.get("role")
@@ -289,14 +292,14 @@ class DataProcessor(MMBaseDataProcessor):
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
 
-        chat_template_kwargs = request.get("chat_template_kwargs", {})
+        chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
         prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
-            add_generation_prompt=request.get("add_generation_prompt", True),
+            add_generation_prompt=request.add_generation_prompt if request.add_generation_prompt is not None else True,
             **chat_template_kwargs,
         )
-        request["prompt_tokens"] = prompt
+        request.prompt_tokens = prompt
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
@@ -389,15 +392,13 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].append(0)
 
-        # position_ids
         t, h, w = grid_thw
         pos_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, 0)
+
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
+
         outputs["fps"].append(0)
-        numel = h * w
-        outputs["vit_seqlen"].append(numel)
-        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _add_processed_image(self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
         img, meta = img_cache
@@ -434,11 +435,13 @@ class DataProcessor(MMBaseDataProcessor):
         """
         ret = self.image_processor.preprocess(images=frames)
 
-        num_tokens = ret["image_grid_thw"].prod() // self.image_processor.merge_size**2
-        grid_thw = ret["image_grid_thw"].tolist()
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
+        grid_thw = ret["grid_thw"].tolist()
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.video_token_id] * num_tokens)
+        # Hack code. In order to adapt to the framework, only image_token can be passed
+        # The correct way should be to use [self.video_token_id] * num_tokens
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += int(num_tokens)
 
@@ -457,10 +460,8 @@ class DataProcessor(MMBaseDataProcessor):
 
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
+
         outputs["fps"].append(fps)
-        numel = h * w
-        outputs["vit_seqlen"].append(numel)
-        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _add_processed_video(self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
         frames, meta = frames_cache
@@ -544,7 +545,7 @@ class DataProcessor(MMBaseDataProcessor):
 
             # Sample frames according to specifications
             frame_indices = sample_frames(
-                frame_factor=self.temporal_conv_size,  # Ensure divisible by temporal patch size
+                frame_factor=self.frame_factor,  # Ensure divisible by temporal patch size
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,
@@ -588,35 +589,3 @@ class DataProcessor(MMBaseDataProcessor):
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
-
-    def apply_chat_template(self, request):
-        """
-        Apply chat template to convert messages into token sequence.
-
-        Args:
-            request: Dictionary containing chat messages
-
-        Returns:
-            List of token IDs
-
-        Raises:
-            ValueError: If model doesn't support chat templates
-        """
-        if self.tokenizer.chat_template is None:
-            raise ValueError("This model does not support chat_template.")
-
-        raw_prompt = self.tokenizer.apply_chat_template(
-            request["messages"],
-            tokenize=False,
-            add_generation_prompt=request.get("add_generation_prompt", True),
-            chat_template=request.get("chat_template", None),
-        )
-        prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
-        request["text_after_process"] = raw_prompt
-
-        tokens = self.tokenizer.tokenize(prompt_token_str)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(
-            f"req_id:{request.get('request_id', ''), } prompt: {raw_prompt} tokens: {tokens}, token_ids: {token_ids}"
-        )
-        return token_ids

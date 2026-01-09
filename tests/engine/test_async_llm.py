@@ -22,7 +22,6 @@ import weakref
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
-from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import EngineError
 
@@ -306,7 +305,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that raises exception
             mock_data_processor = Mock()
-            mock_data_processor.process_response_obj.side_effect = Exception("Decode error")
+            mock_data_processor.process_response_dict.side_effect = Exception("Decode error")
             processor = AsyncOutputProcessor(mock_data_processor)
 
             # Create response dict without text field
@@ -320,14 +319,13 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
-            response = RequestOutput.from_dict(response_dict)
 
             # Process the output
-            result = processor._process_output(response)
+            result = processor._process_output(response_dict)
 
             # Verify text was set to empty string on error
-            self.assertTrue(hasattr(result, "outputs"))
-            self.assertEqual(result.outputs.text, None)
+            self.assertIn("outputs", result)
+            self.assertEqual(result["outputs"].get("text", ""), "")
 
             return True
 
@@ -344,7 +342,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that returns None
             mock_data_processor = Mock()
-            mock_data_processor.process_response_obj.return_value = None
+            mock_data_processor.process_response_dict.return_value = None
             processor = AsyncOutputProcessor(mock_data_processor)
 
             # Create response dict without text field
@@ -358,14 +356,13 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
-            response = RequestOutput.from_dict(response_dict)
 
             # Process the output
-            result = processor._process_output(response)
+            result = processor._process_output(response_dict)
 
             # Verify text was set to empty string when processor returns None
-            self.assertTrue(hasattr(result, "outputs"))
-            self.assertEqual(result.outputs.text, None)
+            self.assertIn("outputs", result)
+            self.assertEqual(result["outputs"].get("text", ""), "")
 
             return True
 
@@ -597,7 +594,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Mock data_processor to raise exception
             with patch.object(self.engine, "data_processor") as mock_processor:
-                mock_processor.process_request_obj.side_effect = RuntimeError("Processing failed")
+                mock_processor.process_request_dict.side_effect = RuntimeError("Processing failed")
 
                 try:
                     await self.engine.add_request("test_id", "test prompt", SamplingParams(max_tokens=10))
@@ -662,12 +659,13 @@ class TestAsyncLLMEngine(unittest.TestCase):
             metrics = RequestMetrics(arrival_time=0.0)
             completion = CompletionOutput(index=0, send_idx=0, token_ids=[], text="")
             ro = RequestOutput(request_id="cmpl-test_0", outputs=completion, finished=True, metrics=metrics)
+            ro_dict = ro.to_dict()
 
             engine = self.engine
 
             # Mock connection_manager and response queue
             mock_queue = AsyncMock()
-            mock_queue.get.return_value = [ro]
+            mock_queue.get.return_value = [ro_dict]
             mock_dealer = AsyncMock()
             mock_cm = AsyncMock()
             mock_cm.get_connection.return_value = (mock_dealer, mock_queue)

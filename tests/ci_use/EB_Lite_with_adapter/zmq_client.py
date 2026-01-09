@@ -15,7 +15,6 @@
 import threading
 import time
 import uuid
-from multiprocessing.reduction import ForkingPickler
 from threading import Event
 
 import msgpack
@@ -42,10 +41,7 @@ class LLMReqClient:
         self.response_socket_lock = threading.Lock()
 
     def send_request(self, req_data):
-        # self.send_req_client.send_json(req_data)
-        envelope = {"__meta": {"send_ts": time.perf_counter()}, "data": req_data}
-        serialized_data = ForkingPickler.dumps(envelope)
-        self.send_req_client.send(serialized_data, copy=False, flags=0)
+        self.send_req_client.send_json(req_data)
 
     def request_result(self, req_id):
         with self.response_socket_lock:

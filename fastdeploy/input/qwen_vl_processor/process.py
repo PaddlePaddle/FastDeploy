@@ -16,7 +16,7 @@
 """
 
 import pickle
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -24,7 +24,7 @@ import zmq
 from paddleformers.transformers import AutoTokenizer
 from PIL import Image
 
-from fastdeploy.engine.request import ImagePosition, Request
+from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
@@ -225,7 +225,7 @@ class DataProcessor(MMBaseDataProcessor):
         return outputs
 
     def request2ids(
-        self, request: Request, tgts: List[str] = None
+        self, request: Dict[str, Any], tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat request with multimodal messages into model inputs.
@@ -241,7 +241,7 @@ class DataProcessor(MMBaseDataProcessor):
         """
 
         # Parse and validate chat messages
-        messages = parse_chat_messages(request.messages)
+        messages = parse_chat_messages(request.get("messages"))
         mm_items = []
         for msg in messages:
             role = msg.get("role")
@@ -292,14 +292,14 @@ class DataProcessor(MMBaseDataProcessor):
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
 
-        chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
+        chat_template_kwargs = request.get("chat_template_kwargs", {})
         prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
-            add_generation_prompt=request.add_generation_prompt if request.add_generation_prompt is not None else True,
+            add_generation_prompt=request.get("add_generation_prompt", True),
             **chat_template_kwargs,
         )
-        request.prompt_tokens = prompt
+        request["prompt_tokens"] = prompt
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
@@ -549,7 +549,7 @@ class DataProcessor(MMBaseDataProcessor):
                 min_frames=min_frames,
                 max_frames=max_frames,
                 metadata=meta,
-                fps=fps,
+                fps=-1 if num_frames > 0 else fps,  # num_frames first,
                 num_frames=num_frames,
             )
 

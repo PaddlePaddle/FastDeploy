@@ -145,14 +145,17 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                request_obj = Request.from_generic_request(request, request_id=f"{request_id}_0")
-                if request_obj.chat_template is None:
-                    request_obj.chat_template = self.chat_template
-                request_obj.metrics.arrival_time = time.time()
+                if not envs.ENABLE_V1_DATA_PROCESSOR:
+                    request_obj = request.to_dict_for_infer(f"{request_id}_0")
+                else:
+                    request_obj = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                if "chat_template" not in request_obj:
+                    request_obj["chat_template"] = self.chat_template
+                request_obj["metrics"]["arrival_time"] = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)
-                prompt_tokens = request_obj.prompt_tokens
-                max_tokens = request_obj.sampling_params.max_tokens
+                prompt_tokens = request_obj.get("prompt_tokens")
+                max_tokens = request_obj.get("max_tokens")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -287,15 +290,15 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = int(res.request_id.split("_")[-1])
-                    if res.error_code != 200:
-                        raise ValueError("{}".format(res.error_msg))
+                    idx = int(res["request_id"].split("_")[-1])
+                    if res.get("error_code", 200) != 200:
+                        raise ValueError("{}".format(res["error_msg"]))
 
-                    if inference_start_time[idx] == 0 and res.metrics and res.metrics.first_token_time:
-                        arrival_time = res.metrics.first_token_time
-                        inference_start_time[idx] = res.metrics.inference_start_time
+                    if inference_start_time[idx] == 0:
+                        arrival_time = res["metrics"]["first_token_time"]
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res.metrics.engine_recv_latest_token_time - inference_start_time[idx]
+                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -334,8 +337,8 @@ class OpenAIServingChat:
                             else:
                                 choice.delta.content = ""
 
-                            if res.outputs.get("audio_content", None) is not None:
-                                choice.delta.audio_content = res.outputs.audio_content
+                            if res["outputs"].get("audio_content", None) is not None:
+                                choice.delta.audio_content = res["outputs"]["audio_content"]
 
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
@@ -363,14 +366,14 @@ class OpenAIServingChat:
                             api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
                         first_iteration = False
 
-                    output = res.outputs
-                    output_top_logprobs = output.top_logprobs
-                    output_draft_top_logprobs = output.draft_top_logprobs
-                    previous_num_tokens[idx] += len(output.token_ids)
-                    if getattr(output, "num_image_tokens", None):
+                    output = res["outputs"]
+                    output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
+                    previous_num_tokens[idx] += len(output["token_ids"])
+                    if output.get("num_image_tokens"):
                         previous_num_tokens[idx] += output.get("num_image_tokens")
                         num_image_tokens[idx] += output.get("num_image_tokens")
-                    reasoning_num_tokens[idx] += output.get("reasoning_token_num") or 0
+                    reasoning_num_tokens[idx] += output.get("reasoning_token_num", 0)
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -392,7 +395,7 @@ class OpenAIServingChat:
                                 request.include_logprobs_decode_token,
                             )
 
-                    output_speculate_metrics = res.metrics.speculate_metrics
+                    output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
                     delta_message = DeltaMessage(
                         reasoning_content="",
@@ -402,15 +405,15 @@ class OpenAIServingChat:
                     )
 
                     if response_processor.enable_multimodal_content():
-                        delta_message.multimodal_content = output.multipart
+                        delta_message.multimodal_content = output["multipart"]
                     else:
-                        delta_message.content = output.text
+                        delta_message.content = output["text"]
 
                     if output.get("audio_content", None) is not None:
-                        delta_message.audio_content = output.audio_content
+                        delta_message.audio_content = output["audio_content"]
 
-                    if not res.finished and output.enable_parser:
-                        delta_message_output = output.delta_message
+                    if not res["finished"] and output["enable_parser"]:
+                        delta_message_output = output["delta_message"]
                         if delta_message_output is None:
                             continue
                         delta_message.content = delta_message_output.content or ""
@@ -427,11 +430,11 @@ class OpenAIServingChat:
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if res.finished:
-                        trace_carrier = res.trace_carrier
+                    if res["finished"]:
+                        trace_carrier = res.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = res.metrics.engine_recv_latest_token_time
+                            start_time = res["metrics"]["engine_recv_latest_token_time"]
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -439,10 +442,12 @@ class OpenAIServingChat:
                                 int(time.time() * 1e9),
                                 thread_finish_flag=True,
                             )
-                            if hasattr(res, "trace_carrier"):
-                                delattr(res, "trace_carrier")
+                            if "trace_carrier" in res:
+                                del res["trace_carrier"]
                         num_choices -= 1
-                        main_process_metrics.e2e_request_latency.observe(time.time() - res.metrics.request_start_time)
+                        main_process_metrics.e2e_request_latency.observe(
+                            time.time() - res["metrics"]["request_start_time"]
+                        )
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
                             if tool_called[idx]:
@@ -450,19 +455,19 @@ class OpenAIServingChat:
                         else:
                             choice.finish_reason = "length"
 
-                        if res.error_msg is not None and "Recover" in res.error_msg:
+                        if res.get("error_msg") is not None and "Recover" in res["error_msg"]:
                             choice.finish_reason = "recover_stop"
 
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
-                        chunk.metrics = res.metrics
+                        chunk.metrics = res["metrics"]
 
                     if request.return_token_ids:
                         if response_processor.enable_multimodal_content():
-                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(output.token_ids)
+                            choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
                         else:
-                            choice.delta.completion_token_ids = list(output.token_ids)
+                            choice.delta.completion_token_ids = list(output["token_ids"])
                         choice.delta.completion_tokens = output.get("completion_tokens")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
@@ -477,10 +482,10 @@ class OpenAIServingChat:
                         )
                     choices.append(choice)
 
-                    if len(choices) == max_streaming_response_tokens or res.finished:
+                    if len(choices) == max_streaming_response_tokens or res["finished"]:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        if res.finished:
+                        if res["finished"]:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
@@ -594,15 +599,15 @@ class OpenAIServingChat:
                 )
                 async for data in generator:
                     if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data.error_msg))
-                    idx = int(data.request_id.split("_")[-1])
+                        raise ValueError("{}".format(data["error_msg"]))
+                    idx = int(data["request_id"].split("_")[-1])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
-                    previous_num_tokens[idx] += len(data.outputs.token_ids)
-                    completion_token_ids[idx].extend(data.outputs.token_ids)
+                    previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
+                    completion_token_ids[idx].extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
-                    output = data.outputs
-                    output_top_logprobs = output.top_logprobs
-                    output_draft_top_logprobs = output.draft_top_logprobs
+                    output = data["outputs"]
+                    output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     if output_top_logprobs is not None:
                         num_top_logprobs = (
                             request.top_logprobs if request.top_logprobs != -1 else self.engine_client.ori_vocab_size
@@ -639,12 +644,12 @@ class OpenAIServingChat:
                         )
                         if prompt_logprobs_res:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
-                    speculate_metrics[idx] = getattr(data.metrics, "speculate_metrics", None)
-                    if data.finished:
+                    speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
+                    if data["finished"]:
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = data.metrics.engine_recv_latest_token_time
+                            start_time = data["metrics"]["engine_recv_latest_token_time"]
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -652,13 +657,13 @@ class OpenAIServingChat:
                                 int(time.time() * 1e9),
                                 thread_finish_flag=True,
                             )
-                            if hasattr(data, "trace_carrier"):
-                                delattr(data, "trace_carrier")
+                            if "trace_carrier" in data:
+                                del data["trace_carrier"]
                         num_choices -= 1
-                        reasoning_num_tokens[idx] = data.outputs.get("reasoning_token_num") or 0
-                        if data.outputs.get("image_token_num", None):
-                            previous_num_tokens[idx] += data.outputs.get("image_token_num", 0)
-                            num_image_tokens[idx] = data.outputs.get("image_token_num", None) or 0
+                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
+                        if data["outputs"].get("image_token_num"):
+                            previous_num_tokens[idx] += data["outputs"].get("image_token_num")
+                            num_image_tokens[idx] = data["outputs"].get("image_token_num")
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
@@ -715,7 +720,7 @@ class OpenAIServingChat:
 
     async def _create_chat_completion_choice(
         self,
-        data: RequestOutput,
+        data: RequestOutput | dict,
         request: ChatCompletionRequest,
         prompt_token_ids: list,
         prompt_tokens: str,
@@ -732,11 +737,13 @@ class OpenAIServingChat:
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
-        idx = int(data.request_id.split("_")[-1])
-        output = data.outputs
+        idx = int(data["request_id"].split("_")[-1])
+        output = data["outputs"]
 
-        if data is not None and data.metrics and data.metrics.request_start_time:
-            main_process_metrics.e2e_request_latency.observe(time.time() - data.metrics.request_start_time)
+        if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
+            main_process_metrics.e2e_request_latency.observe(
+                time.time() - data.get("metrics").get("request_start_time")
+            )
         message = ChatMessage(
             role="assistant",
             reasoning_content=output.get("reasoning_content"),
@@ -749,10 +756,10 @@ class OpenAIServingChat:
         if response_processor.enable_multimodal_content():
             message.multimodal_content = output.get("multipart")
         else:
-            message.content = output.text
+            message.content = output["text"]
 
         if output.get("audio_content", None) is not None:
-            message.audio_content = output.audio_content
+            message.audio_content = output["audio_content"]
 
         logprobs_full_res = None
         draft_logprobs_full_res = None
@@ -776,7 +783,7 @@ class OpenAIServingChat:
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if data.get("error_msg", None) is not None and "Recover" in data.error_msg:
+        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(

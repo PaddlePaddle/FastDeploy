@@ -38,7 +38,7 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import EngineError, llm_logger
+from fastdeploy.utils import EngineError, envs, llm_logger
 
 
 class AsyncOutputProcessor:
@@ -54,12 +54,12 @@ class AsyncOutputProcessor:
 
     def _process_output(
         self,
-        response_item: RequestOutput,
+        response_item: RequestOutput | Dict[str, Any],
         stream: bool = True,
         enable_thinking: bool = False,
         include_stop_str_in_output: bool = False,
     ) -> Dict[str, Any]:
-        """Process a single response dict via data_processor.process_response_obj.
+        """Process a single response dict via data_processor.process_response_dict.
 
         This mirrors the behavior of ChatResponseProcessor in the OpenAI serving
         path: operate on a dict representation and return a dict. On any error
@@ -68,7 +68,7 @@ class AsyncOutputProcessor:
         """
 
         try:
-            processed = self.data_processor.process_response_obj(
+            processed = self.data_processor.process_response_dict(
                 response_item,
                 stream=stream,
                 enable_thinking=enable_thinking,
@@ -76,17 +76,17 @@ class AsyncOutputProcessor:
             )
             # Some processors may return None when there is no valid text.
             if processed is None:
-                outputs = getattr(response_item, "outputs", {}) or {}
-                if not hasattr(outputs, "text"):
-                    setattr(outputs, "text", "")
-                    setattr(response_item, "outputs", outputs)
+                outputs = response_item.get("outputs") or {}
+                if "text" not in outputs:
+                    outputs["text"] = ""
+                    response_item["outputs"] = outputs
                 return response_item
             return processed
         except Exception:
-            outputs = getattr(response_item, "outputs", {}) or {}
-            if not hasattr(outputs, "text"):
-                setattr(outputs, "text", "")
-                setattr(response_item, "outputs", outputs)
+            outputs = response_item.get("outputs") or {}
+            if "text" not in outputs:
+                outputs["text"] = ""
+                response_item["outputs"] = outputs
             return response_item
 
 
@@ -400,32 +400,31 @@ class AsyncLLM(EngineServiceClient):
         try:
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
-            prompt = Request.from_dict(prompt)
 
-            if inspect.iscoroutinefunction(self.data_processor.process_request_obj):
-                request = await self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
+            if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
+                request = await self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
             else:
-                request = self.data_processor.process_request_obj(prompt, self.cfg.model_config.max_model_len)
+                request = self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
 
-            request.prompt_token_ids_len = len(request.prompt_token_ids)
+            request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 
             # Cache prompt metadata for later enrichment of async responses
-            req_id = request.request_id
+            req_id = request.get("request_id")
             self._prompt_metadata[req_id] = {
-                "prompt_token_ids": request.prompt_token_ids,
-                "prompt_tokens": request.prompt_tokens,
+                "prompt_token_ids": request.get("prompt_token_ids"),
+                "prompt_tokens": request.get("prompt_tokens"),
             }
-            request.need_prefill_tokens = request.prompt_token_ids_len
+            request["need_prefill_tokens"] = request["prompt_token_ids_len"]
 
             if not is_preprocessed:
-                request.metrics.preprocess_start_time = arrival_time
-                input_ids_len = request.prompt_token_ids_len
+                request["metrics"]["preprocess_start_time"] = arrival_time
+                input_ids_len = request["prompt_token_ids_len"]
 
-                request.sampling_params.max_tokens = min(
-                    self.cfg.model_config.max_model_len - input_ids_len, request.sampling_params.max_tokens
+                request["max_tokens"] = min(
+                    self.cfg.model_config.max_model_len - input_ids_len, request.get("max_tokens")
                 )
 
-                min_tokens = request.sampling_params.min_tokens or 1
+                min_tokens = request.get("min_tokens", 1)
                 if input_ids_len + min_tokens >= self.cfg.model_config.max_model_len:
                     error_msg = (
                         f"Input text is too long, length of prompt token({input_ids_len}) "
@@ -434,13 +433,18 @@ class AsyncLLM(EngineServiceClient):
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-                request.metrics.preprocess_end_time = time.time()
-                preprocess_cost_time = request.metrics.preprocess_end_time - request.metrics.preprocess_start_time
+                request["metrics"]["preprocess_end_time"] = time.time()
+                preprocess_cost_time = (
+                    request["metrics"]["preprocess_end_time"] - ["metrics"]["preprocess_start_timerequest"]
+                )
                 llm_logger.info(
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
-            self.request_client.send_pyobj(request)
+            if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
+                self.request_client.send_pyobj(request)
+            else:
+                self.request_client.send_json(request)
 
         except EngineError:
             raise
@@ -520,31 +524,35 @@ class AsyncLLM(EngineServiceClient):
                 response_list = await response_queue.get()
 
                 for response_item in response_list:
-                    req_id = getattr(response_item, "request_id", "")
+                    if (
+                        isinstance(response_item, dict) or isinstance(response_item, Request)
+                    ) and "request_id" in response_item:
+                        req_id = response_item.get("request_id")
 
-                    # First, use output_processor to post-process the raw dict
-                    if hasattr(self, "output_processor"):
-                        processed_output = self.output_processor._process_output(
-                            response_item,
-                            stream=stream,
-                            enable_thinking=enable_thinking,
-                            include_stop_str_in_output=include_stop_str_in_output,
-                        )
-                    else:
-                        processed_output = response_item
+                        # First, use output_processor to post-process the raw dict
+                        if hasattr(self, "output_processor"):
+                            processed_output = self.output_processor._process_output(
+                                response_item,
+                                stream=stream,
+                                enable_thinking=enable_thinking,
+                                include_stop_str_in_output=include_stop_str_in_output,
+                            )
+                        else:
+                            processed_output = response_item
+                        if not envs.ENABLE_V1_DATA_PROCESSOR:
+                            processed_output = RequestOutput.from_dict(processed_output)
+                        # Enrich outputs with prompt metadata on the first packet
+                        if req_id:
+                            prompt_meta = self._prompt_metadata.get(req_id)
+                            if prompt_meta is not None and processed_output.outputs.send_idx == 0:
+                                processed_output.prompt_token_ids = prompt_meta.get("prompt_token_ids")
+                                processed_output.prompt = prompt_meta.get("prompt_tokens")
+                                self._prompt_metadata.pop(req_id, None)
 
-                    # Enrich outputs with prompt metadata on the first packet
-                    if req_id:
-                        prompt_meta = self._prompt_metadata.get(req_id)
-                        if prompt_meta is not None and processed_output.outputs.send_idx == 0:
-                            processed_output.prompt_token_ids = prompt_meta.get("prompt_token_ids")
-                            processed_output.prompt = prompt_meta.get("prompt_tokens")
-                            self._prompt_metadata.pop(req_id, None)
+                        if processed_output.finished:
+                            remaining -= 1
 
-                    if processed_output.finished:
-                        remaining -= 1
-
-                    yield processed_output
+                        yield processed_output
 
         except GeneratorExit:
             llm_logger.info(f"Request {conn_request_id} generator exit (outer)")

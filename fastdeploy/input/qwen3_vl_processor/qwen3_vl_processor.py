@@ -16,6 +16,7 @@
 
 import numpy as np
 
+from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
 
@@ -72,6 +73,25 @@ class Qwen3VLProcessor(TextProcessor):
         )
         self.image_patch_id = self.processor.image_token_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
+
+    def process_request(self, request, max_model_len=None, **kwargs):
+        """
+        Process incoming request and generate model inputs.
+
+        Args:
+            request: Input request object
+            max_model_len (int, optional): Maximum context length
+            **kwargs: Additional processing parameters
+
+        Returns:
+            Request: Processed request with model inputs
+        """
+        task = request.to_dict()
+        task["enable_thinking"] = kwargs.get("enable_thinking", False)
+        self.process_request_dict(task, max_model_len)
+        request = Request.from_dict(task)
+        request = self._apply_default_parameters(request)
+        return request
 
     def _parse_processor_kwargs(self, kwargs):
         """
@@ -170,88 +190,85 @@ class Qwen3VLProcessor(TextProcessor):
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
-    def process_request_obj(self, request, max_model_len=None, **kwargs):
+    def process_request_dict(self, request, max_model_len=None):
         """
         Process request dictionary into model inputs.
 
         Args:
-            request Request: Input request dictionary
+            request (dict): Input request dictionary
             max_model_len (int, optional): Maximum context length
 
         Returns:
-            Request: Processed request with model inputs
+            dict: Processed request with model inputs
 
         Raises:
             ValueError: If request format is invalid
         """
 
         request = self._apply_default_parameters(request)
-        if not request.eos_token_ids:
-            request.eos_token_ids = self.eos_token_ids
+        if not request.get("eos_token_ids"):
+            request["eos_token_ids"] = self.eos_token_ids
 
-        stop_sequences = request.sampling_params.stop
+        stop_sequences = request.get("stop", [])
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request.sampling_params.stop_token_ids = stop_seqs
-            request.sampling_params.stop_seqs_len = stop_seqs_len
+            request["stop_token_ids"] = stop_seqs
+            request["stop_seqs_len"] = stop_seqs_len
 
-        bad_words = request.sampling_params.bad_words
-        bad_words_token_ids = request.sampling_params.bad_words_token_ids
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
         if bad_words:
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request.sampling_params.bad_words_token_ids = bad_words_token_ids
+            request["bad_words_token_ids"] = bad_words_token_ids
 
-        if request.prompt:
-            multimodal_data = request.multimodal_data
+        if request.get("prompt"):
+            multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
                 multimodal_data = {}
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request.prompt, images, videos)
+            outputs = self.processor.text2ids(request["prompt"], images, videos)
 
-        elif request.messages:
-            messages = request.messages
+        elif request.get("messages"):
+            messages = request["messages"]
             self._check_mm_limits(messages)
-            chat_template_kwargs = request.chat_template_kwargs
+            chat_template_kwargs = request.get("chat_template_kwargs")
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if getattr(request, k, None) is None:
-                            setattr(request, k, v)
+                        if k not in request or request[k] is None:
+                            request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            if request.enable_thinking is None:
-                request.enable_thinking = kwargs.get("enable_thinking", False)
+            request.setdefault("enable_thinking", False)
             outputs = self.processor.request2ids(request)
-            delattr(request, "chat_template_kwargs")
+
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
         # Handle continuation of previous generation by appending existing tokens
-        if request.completion_token_ids:
-            self.append_completion_tokens(outputs, request.completion_token_ids)
+        if request.get("completion_token_ids"):
+            self.append_completion_tokens(outputs, request["completion_token_ids"])
 
         # qwen25_vl not support thinking
-        request.enable_thinking = False
+        request["enable_thinking"] = False
 
         outputs = self.pack_outputs(outputs)
 
-        request.prompt_token_ids = outputs["input_ids"].tolist()
-        request.prompt_token_ids_len = len(request.prompt_token_ids)
-        request.multimodal_inputs = outputs
+        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
+        request["multimodal_inputs"] = outputs
 
         # Handle prompt truncation if exceeds model context length
-        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
-            request.prompt_token_ids = request.prompt_token_ids[
+        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
+            request["prompt_token_ids"] = request["prompt_token_ids"][
                 : max_model_len - 1
             ]  # Leave space for at least 1 new token
 
         # Set default max_tokens if not specified
-        if request.sampling_params.max_tokens is None:
-            request.sampling_params.max_tokens = max(
-                1, max_model_len - len(request.prompt_token_ids)
-            )  # Ensure at least 1 token
+        if request.get("max_tokens") is None:
+            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
         data_processor_logger.info(f"Processed request {request}")
 
         return request

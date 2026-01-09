@@ -513,6 +513,34 @@ class Request:
         except Exception as e:
             return f"<Request repr failed: {e}>"
 
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.sampling_params, key):
+            return getattr(self.sampling_params, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        if hasattr(self.sampling_params, key):
+            setattr(self.sampling_params, key, value)
+        else:
+            setattr(self, key, value)
+
+    def __delitem__(self, key):
+        try:
+            if hasattr(self.sampling_params, key):
+                delattr(self.sampling_params, key)
+            else:
+                delattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+    def __contains__(self, key: str) -> bool:
+        if hasattr(self.sampling_params, key):
+            return True
+        return hasattr(self, key)
+
 
 @dataclass(slots=True)
 class CompletionOutput:
@@ -595,6 +623,16 @@ class CompletionOutput:
             return default_value
 
     def set(self, key: str, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
         if hasattr(self, key):
             setattr(self, key, value)
 
@@ -739,6 +777,21 @@ class RequestMetrics:
         # for compatibility with old metrics
         self.llm_engine_recv_req_timestamp = self.engine_get_req_time
         self.llm_engine_send_req_to_engine_timestamp = self.inference_start_time
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
 
 
 class RequestOutput:
@@ -938,6 +991,45 @@ class RequestOutput:
             setattr(self.metrics, key, value)
         else:
             setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.outputs, key):
+            return getattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            return getattr(self.metrics, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        if hasattr(self.outputs, key):
+            setattr(self.outputs, key, value)
+        elif hasattr(self.metrics, key):
+            setattr(self.metrics, key, value)
+        else:
+            setattr(self, key, value)
+
+    def __delitem__(self, key):
+        try:
+            if hasattr(self, key):
+                delattr(self, key)
+            elif hasattr(self.outputs, key):
+                delattr(self.outputs, key)
+            elif hasattr(self.metrics, key):
+                delattr(self.metrics, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+    def __contains__(self, key: str) -> bool:
+        if hasattr(self, key):
+            return True
+        elif hasattr(self.outputs, key):
+            return True
+        elif hasattr(self.metrics, key):
+            return True
+        else:
+            return False
 
 
 @dataclass
