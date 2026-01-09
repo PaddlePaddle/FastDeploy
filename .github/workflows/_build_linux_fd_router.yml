@@ -197,16 +197,16 @@ jobs:
             push_file=$(realpath bos_tools.py)
             python --version
             python -m pip install bce-python-sdk==0.9.29
-            cd /usr/local/bin/
-            matches=($(ls fd-router))
-            if [ ${#matches[@]} -ne 1 ]; then
-              echo "Error: Found ${#matches[@]} matching files, expected exactly 1"
+
+            cd /usr/local/bin || exit 1
+            if [ ! -f fd-router ]; then
+              echo "Error: fd-router not found in /usr/local/bin"
               exit 1
             fi
-            fd-router_name=${matches[0]}
-            echo "Found: $fd-router_name"
+
+            echo "Found: fd-router"
 
             python ${push_file} fd-router ${target_path}
             target_path_stripped="${target_path#paddle-github-action/}"
-            FD_ROUTER_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd-router_name}
+            FD_ROUTER_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/fd-router
             echo "fd_router_path=${FD_ROUTER_PATH}" >> $GITHUB_OUTPUT
