@@ -606,7 +606,12 @@ class EngineArgs:
                     console_logger.info(f"Using `{name}`: {ports}")
 
             if not self.skip_port_check:
-                for port in ports:
+                cur_dp_ports = ports[
+                    num_cur_dp_ports
+                    * self.local_data_parallel_id : num_cur_dp_ports
+                    * (self.local_data_parallel_id + 1)
+                ]
+                for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             console_logger.debug(f"post init {name}: {ports}")
