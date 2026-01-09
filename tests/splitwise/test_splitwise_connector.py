@@ -493,7 +493,7 @@ def test_check_decode_allocated_times_out(monkeypatch):
     monkeypatch.setattr("fastdeploy.splitwise.splitwise_connector.time.sleep", lambda *_: None)
 
     ok, msg = connector.check_decode_allocated(task)
-    assert (ok, msg) == (False, "timeout")
+    assert (ok, msg) == (False, "prefill waits for decode resource timeout")
     assert "req-timeout" not in connector.current_request_ids
 
 

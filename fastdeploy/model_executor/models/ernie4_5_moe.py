@@ -400,7 +400,7 @@ class Ernie4_5_Model(nn.Layer):
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                redundant_experts_num=fd_config.eplb_config.redundant_experts_num,
                 ep_size=fd_config.parallel_config.expert_parallel_size,
             )
 
@@ -476,6 +476,9 @@ class Ernie4_5_Model(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)

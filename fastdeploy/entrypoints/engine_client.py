@@ -34,7 +34,6 @@ from fastdeploy.eplb.utils import RedundantExpertWorkload
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     IPCSignal,
-    KVCacheStatus,
     ModelWeightsStatus,
     PrefixTreeStatus,
     RearrangeExpertStatus,
@@ -529,6 +528,19 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
+            if self.fd_config.cache_config.swap_space:
+                return False, "hierarchical cache updating is not supported"
+
+            if self.enable_prefix_caching:
+                # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
+                if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
+                    self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
+                    api_server_logger.info(f"Start to update prefix tree {self.prefix_tree_status_signal.value[0]}")
+                    while self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                        api_server_logger.info(f"..updating prefix tree {self.prefix_tree_status_signal.value[0]}")
+                        time.sleep(1)
+
+            # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
@@ -537,34 +549,13 @@ class EngineClient:
                 return False, "worker is clearing model weight, cannot update now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
-            if self.enable_prefix_caching or self.enable_splitwise:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.UPDATING
-            if self.enable_prefix_caching:
-                self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
-            api_server_logger.info(f"start update model weight {self.model_weights_status_signal.value}")
-            all_updated = False
-            while timeout >= 0 and not all_updated:
-                api_server_logger.info(
-                    f"Updating model weights.. "
-                    f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
-                    f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
-                    f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
-                )
-                weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
-                cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
-                prefix_updated = self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL
-                if self.enable_prefix_caching or self.enable_splitwise:
-                    if self.enable_prefix_caching:
-                        all_updated = weight_updated and cache_updated and prefix_updated
-                    else:
-                        all_updated = weight_updated and cache_updated
-                else:
-                    all_updated = weight_updated
+            api_server_logger.info(f"Start to update model weight {self.model_weights_status_signal.value[0]}")
+            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
+                api_server_logger.info(f"..updating model weights {self.model_weights_status_signal.value[0]}")
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
                 return False, "Update model weight timeout"
-            time.sleep(1)
             return True, ""
 
     def clear_load_weight(self, timeout=300):
@@ -575,6 +566,19 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
+            if self.fd_config.cache_config.swap_space:
+                return False, "hierarchical cache clearing is not supported"
+
+            if self.enable_prefix_caching:
+                # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
+                if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
+                    self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
+                    api_server_logger.info(f"Start to clear prefix tree {self.prefix_tree_status_signal.value[0]}")
+                    while self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
+                        api_server_logger.info(f"..clearing prefix tree {self.prefix_tree_status_signal.value[0]}")
+                        time.sleep(1)
+
+            # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 return True, ""
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
@@ -583,36 +587,13 @@ class EngineClient:
                 return False, "worker is updating model weight, cannot clear now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
-            if self.enable_prefix_caching or self.enable_splitwise:
-                self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
-            if self.enable_prefix_caching:
-                self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
-
-            api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
-            all_cleared = False
-            while timeout >= 0 and not all_cleared:
-                api_server_logger.info(
-                    f"Clearing model weights.. "
-                    f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
-                    f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
-                    f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
-                )
-                weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
-                cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
-                prefix_cleared = self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED
-                if self.enable_prefix_caching or self.enable_splitwise:
-                    if self.enable_prefix_caching:
-                        all_cleared = weight_cleared and cache_cleared and prefix_cleared
-                    else:
-                        all_cleared = weight_cleared and cache_cleared
-                else:
-                    all_cleared = weight_cleared
+            api_server_logger.info(f"Start to clear model weight {self.model_weights_status_signal.value[0]}")
+            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
+                api_server_logger.info(f"..clearing model weights {self.model_weights_status_signal.value[0]}")
                 time.sleep(1)
                 timeout -= 1
-
             if timeout < 0:
                 return False, "Clear model weight timeout"
-            time.sleep(1)
             return True, ""
 
     def check_model_weight_status(self):
@@ -626,6 +607,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
+        content, status_code = None, HTTPStatus.OK
         eplb_config = self.fd_config.eplb_config
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
@@ -728,6 +710,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
+        content, status_code = None, HTTPStatus.OK
         eplb_config = self.fd_config.eplb_config
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}

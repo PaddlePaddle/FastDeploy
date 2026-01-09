@@ -367,6 +367,15 @@ void GetOutputDynamic(const paddle::Tensor& x,
                       bool wait_flag,
                       int msg_queue_id);
 
+void GetOutputEPStatic(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag);
+
+void GetOutputEPDynamic(const paddle::Tensor& x,
+                        int64_t rank_id,
+                        bool wait_flag,
+                        int msg_queue_id);
+
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& cum_offsets,
                                              const paddle::Tensor& token_num,
@@ -838,13 +847,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output function");
 
-  m.def("get_output_ep",
-        &GetOutputStatic,
-        py::arg("x"),
-        py::arg("rank_id"),
-        py::arg("wait_flag"),
-        "get_output_ep function");
-
   m.def("get_output_dynamic",
         &GetOutputDynamic,
         py::arg("x"),
@@ -853,8 +855,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("msg_queue_id"),
         "get_output_dynamic function");
 
+  m.def("get_output_ep",
+        &GetOutputEPStatic,
+        py::arg("x"),
+        py::arg("rank_id"),
+        py::arg("wait_flag"),
+        "get_output_ep function");
+
   m.def("get_output_ep_dynamic",
-        &GetOutputDynamic,
+        &GetOutputEPDynamic,
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),

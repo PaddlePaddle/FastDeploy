@@ -173,6 +173,10 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
+        # Postprocess Env params
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
+
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
         # Initialize ZMQ client for async output
@@ -1048,7 +1052,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.forward_meta.kv_signal_sender = self.kv_signal_sender
+            self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
@@ -1376,7 +1380,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
-            self.kv_signal_sender = sender
+            self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
@@ -1415,9 +1419,6 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                 )
 
-            # 5. Speculative decode
-
-            # 6. Post Process
             prompt_logprobs_list = None
             if not self.speculative_decoding:
                 prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -1439,7 +1440,7 @@ class XPUModelRunner(ModelRunnerBase):
                 # 投机解码
                 full_hidden_states=model_output if self.speculative_decoding else None,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1462,12 +1463,13 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=is_dummy_run,
+                    save_each_rank=self.parallel_config.data_parallel_size > 0,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
                 )
 
-            # draft model propose
+            # 6. Draft model propose
             if self.speculative_method == "mtp":
                 self.proposer.run(full_hidden_states=model_output)
 
@@ -1478,8 +1480,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs,
                 self.cache_config.block_size,
                 self.cache_config.enc_dec_block_num,
-                self.speculative_decoding,
-                self.speculative_config.num_speculative_tokens,
+                self.fd_config.speculative_config,
+                self.fd_config.cache_config.enable_prefix_caching,
             )
         return None
 
@@ -1499,10 +1501,9 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache(profile=True)
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
+        self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
@@ -1518,10 +1519,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        self.initialize_kv_cache()
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(
