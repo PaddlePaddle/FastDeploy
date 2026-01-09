@@ -65,29 +65,6 @@ from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
 
 
-import paddle
-from dataclasses import asdict, is_dataclass
-
-def print_xpu_meta(meta_obj):
-    print(f"--- {meta_obj.__class__.__name__} Attributes ---")
-    
-    # 将 dataclass 转换为字典
-    meta_dict = asdict(meta_obj)
-    print("-" * 40)
-    for key, value in meta_dict.items():
-        if isinstance(value, paddle.Tensor):
-            print(f"key : {key}: value.data_ptr {value.data_ptr()}")
-        if key in ["block_tables"] or "block_tables" in key:
-            continue
-        print(f"{key}: {value}")
-        # 针对 paddle.Tensor 做特殊处理，避免打印大量数值
-
-    print("-" * 40)
-
-# 使用示例
-# meta = XPUForwardMeta(cum_offsets=paddle.ones([2, 3]), pos_emb_type="NORMAL")
-# print_xpu_meta(meta)
-
 
 class XPUModelRunner(ModelRunnerBase):
     """ """
@@ -162,12 +139,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
 
-        # self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
-
-        # # Cuda Graph
-        # self.graph_opt_level = self.graph_opt_config.graph_opt_level
-        # self.use_cudagraph = False
-        # self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
@@ -998,7 +969,6 @@ class XPUModelRunner(ModelRunnerBase):
        
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
-        # print(f"prepare input ======= self.cudagraph_only_prefill : {self.cudagraph_only_prefill}, only_decode_use_cudagraph : {only_decode_use_cudagraph}")
 
         self.forward_meta.step_use_cudagraph = (
             only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
@@ -1403,69 +1373,40 @@ class XPUModelRunner(ModelRunnerBase):
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.kv_signal_sender = create_kv_signal_sender()
         # 1. Prepare inputs of model and decoder.
-        # start_time = time.perf_counter()
         self._prepare_inputs(is_dummy_run=is_dummy_run)
-        # end_time = time.perf_counter()
-        # prepare_time = end_time - start_time
-        # print(f"模型prepare_time的执行时间：{prepare_time:.6f} 秒")
+
         if is_dummy_run:
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
-        # self.forward_meta.step_use_cudagraph = True
-        # in_capture表示本step是不是使用cudagraph
-        # print(f"in_capturing: {in_capturing}, step_use_cudagraph: {self.forward_meta.step_use_cudagraph}")
-        # start_time = time.perf_counter()
+        # 2. Padding inputs for cuda grph
         self.padding_cudagraph_inputs()
-        # end_time = time.perf_counter()
-        # model_pre_time = end_time - start_time
-        # print(f"模型前处理的执行时间：{model_pre_time:.6f} 秒")
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
-        # start_time = time.perf_counter()
         if not self.not_need_stop() and not is_dummy_run:
             self._execute_empty_input(self.forward_meta)
             return None
-        # end_time = time.perf_counter()
-        # _execute_empty_input_time = end_time - start_time
-        # print(f"_execute_empty_input_time的执行时间：{_execute_empty_input_time:.6f} 秒")
-        # 2. Padding inputs for cuda grph
+
+
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
             )
         else:
-            # start_time = time.perf_counter()
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            # end_time = time.perf_counter()
-            # execution_time = end_time - start_time
-            # print(f"模型推理的执行时间：{execution_time:.6f} 秒")
 
-        # start_time = time.perf_counter()
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
-        # end_time = time.perf_counter()
-        # model_post_time = end_time - start_time
-        # print(f"模型后处理的执行时间：{model_post_time:.6f} 秒")
 
-        # start_time = time.perf_counter()
         hidden_states = xpu_process_output(
             model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
         )
-        # end_time = time.perf_counter()
-        # hidden_states_time = end_time - start_time
-        # print(f"模型hidden_states_time处理的执行时间：{hidden_states_time:.6f} 秒")
         # 4. Compute logits, Sample
-        # start_time = time.perf_counter()
         logits = self.model.compute_logits(hidden_states)
-        # end_time = time.perf_counter()
-        # logits_time = end_time - start_time
-        # print(f"模型logits_time处理的执行时间：{logits_time:.6f} 秒")
-        # start_time = time.perf_counter()
         sampler_output = None
         if not self.speculative_decoding:
             sampler_output = self.sampler(logits, self.sampling_metadata)
@@ -1476,12 +1417,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.model_config.max_model_len,
                 self.share_inputs,
             )
-        # end_time = time.perf_counter()
-        # sample_time = end_time - start_time
-        # print(f"模型sample_time处理的执行时间：{sample_time:.6f} 秒")
-
         # 5. Speculative decode
-        # start_time = time.perf_counter()
         # 6. Post Process
         model_output_data = ModelOutputData(
             next_tokens=self.share_inputs["next_tokens"],
@@ -1511,10 +1447,6 @@ class XPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
-        # end_time = time.perf_counter()
-        # model_output_data_time = end_time - start_time
-        # print(f"模型model_output_data_time处理的执行时间：{model_output_data_time:.6f} 秒")
-        # start_time = time.perf_counter()
         if self.speculative_decoding:
             # base model post process
             xpu_post_process_specualate(model_output_data, False, is_dummy_run)
@@ -1528,9 +1460,7 @@ class XPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
             )
-        # end_time = time.perf_counter()
-        # xpu_post_process_normal_time = end_time - start_time
-        # print(f"模型xpu_post_process_normal_time理的执行时间：{xpu_post_process_normal_time:.6f} 秒")
+
 
         # draft model propose
         if self.speculative_method == "mtp":
@@ -1539,7 +1469,6 @@ class XPUModelRunner(ModelRunnerBase):
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        # start_time = time.perf_counter()
         step_xpu(
             self.share_inputs,
             self.cache_config.block_size,
@@ -1547,9 +1476,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.speculative_decoding,
             self.speculative_config.num_speculative_tokens,
         )
-        # end_time = time.perf_counter()
-        # step_xpu_time = end_time - start_time
-        # print(f"模型step_xpu_time理的执行时间：{step_xpu_time:.6f} 秒")
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             destroy_kv_signal_sender(self.kv_signal_sender)
