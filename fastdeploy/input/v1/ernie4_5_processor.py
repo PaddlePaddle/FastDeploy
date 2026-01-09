@@ -78,6 +78,93 @@ class Ernie4_5Processor(BaseDataProcessor):
         if reasoning_parser_obj:
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
 
+    def process_request(self, request, max_model_len=None, **kwargs):
+        """
+        Preprocess the request
+
+        Args:
+            request (Dict): may contain text and messages fields
+
+        Returns:
+            bool: Whether preprocessing is successful
+            str: error message
+        """
+        data_processor_logger.info(f"Start processing request: {request}")
+        request = self._apply_default_parameters(request)
+        if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
+            request.eos_token_ids = self.eos_token_ids
+
+        # processing stop_sequences and stop_token_ids
+        process_stop_token_ids(request, self.update_stop_seq)
+
+        # processing bad_words
+        bad_words = request.get("bad_words")
+        bad_words_token_ids = request.get("bad_words_token_ids")
+        if bad_words:
+            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
+            request["bad_words_token_ids"] = bad_words_token_ids
+
+        # processing prompt_token_ids
+        if request.prompt_token_ids is None or len(request.prompt_token_ids) == 0:
+            if request.prompt is not None:
+                # prompt = request.prompt if request.prompt is not None else request.messages[0]
+                prompt = request.prompt
+                assert isinstance(prompt, str) or (
+                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
+                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
+
+                if isinstance(prompt, list):  # if prompt is a token id list
+                    request.prompt_token_ids = prompt
+                else:
+                    tokens = self.tokenizer.tokenize(prompt)
+                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                    request.prompt_token_ids = token_ids
+                    data_processor_logger.debug(
+                        f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
+                    )
+            elif request.messages is not None:
+                task = request.to_dict()
+                chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
+                if chat_template_kwargs:
+                    if isinstance(chat_template_kwargs, dict):
+                        for k, v in chat_template_kwargs.items():
+                            if k not in task or task[k] is None:
+                                task[k] = v
+                    else:
+                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
+            else:
+                raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
+
+        if len(request.prompt_token_ids) == 0:
+            raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
+
+        # truncate prompts that exceed the length limit
+        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
+            request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        if request.get("max_tokens") is None:
+            request.set("max_tokens", max(1, max_model_len - len(request.prompt_token_ids)))
+        if request.get("temperature") < _SAMPLING_EPS:
+            # zero temperature is equivalent to greedy sampling
+            request.set("temperature", 1)
+        if request.get("top_p") < _SAMPLING_EPS:
+            request.set("top_p", _SAMPLING_EPS)
+        if self.reasoning_parser:
+            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+            parts = request.request_id.split("_")
+            if len(parts) > 1:
+                real_req_id = parts[0]
+                index = int(parts[1])
+                n = request.get("n", 1)
+                for idx in range(index * n, (index + 1) * n):
+                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+            else:
+                self.model_status_dict[request.request_id] = model_status
+            request.enable_thinking = model_status == "think_start"
+
+        data_processor_logger.info(f"Processed request: {request}")
+        return request
+
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
@@ -164,6 +251,46 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.enable_thinking = model_status == "think_start"
         data_processor_logger.info(f"Processed request: {request}")
         return request
+
+    def process_response(self, response_dict, **kwargs):
+        """
+        Preprocess the response
+
+        Args:
+            response_dict (Dict): response for engine, contain ids fields
+
+        Returns:
+            Dict: response contain text fields
+        """
+        req_id = response_dict.request_id
+        token_ids = response_dict.outputs.token_ids
+
+        response_dict.usage = {"completion_tokens": response_dict.outputs.index + 1}
+        if token_ids[-1] == self.tokenizer.eos_token_id:
+            token_ids = token_ids[:-1]
+        full_text = self.tokenizer.decode(token_ids)
+        if self.reasoning_parser:
+            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                full_text,
+                response_dict,
+                self.model_status_dict[req_id],
+            )
+            response_dict.outputs.text = text
+            response_dict.outputs.reasoning_content = reasoning_content
+        else:
+            response_dict.outputs.text = full_text
+        if self.tool_parser_obj:
+            tool_parser = self.tool_parser_obj(self.tokenizer)
+            tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+            if tool_call_info.tools_called:
+                response_dict.outputs.tool_calls = tool_call_info.tool_calls
+                response_dict.outputs.text = tool_call_info.content
+        if req_id in self.model_status_dict:
+            del self.model_status_dict[req_id]
+        data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
+        if response_dict.outputs.text == "" and response_dict.outputs.reasoning_content == "":
+            return None
+        return response_dict
 
     def process_response_dict(self, response_dict, stream, **kwargs):
         """

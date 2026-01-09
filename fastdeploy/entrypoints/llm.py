@@ -30,7 +30,6 @@ from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
@@ -564,7 +563,7 @@ class LLM:
                         continue
 
                     result = self.req_output.pop(req_id)
-                    result = self.llm_engine.data_processor.process_response_obj_normal(response_obj=result)
+                    result = self.llm_engine.data_processor.process_response(result)
 
                     # filter logprobs
                     if result.outputs.top_logprobs is not None and topk_logprobs is not None:
@@ -732,7 +731,7 @@ class LLM:
             if chat_template_kwargs:
                 enable_thinking = chat_template_kwargs.get("enable_thinking", False)
 
-            # Construct response_dict format and call process_response_obj_streaming
+            # Construct response_dict format and call process_response_dict_streaming
             response_dict = {
                 "request_id": current_result.request_id,
                 "finished": current_result.finished,
@@ -740,14 +739,13 @@ class LLM:
                     "token_ids": new_token_ids,
                 },
             }
-            response_obj = RequestOutput.from_dict(response_dict)
 
-            processed_response = self.llm_engine.data_processor.process_response_obj_streaming(
-                response_obj, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
+            processed_response = self.llm_engine.data_processor.process_response_dict_streaming(
+                response_dict, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
             )
 
             # Extract incremental text
-            incremental_result.outputs.text = processed_response.outputs.text
+            incremental_result.outputs.text = processed_response["outputs"]["text"]
 
         # Set the prompt
         if isinstance(prompts, list):

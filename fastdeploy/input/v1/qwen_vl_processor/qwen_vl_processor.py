@@ -16,6 +16,7 @@
 
 import numpy as np
 
+from fastdeploy.engine.request import Request
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.input.v1.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
@@ -170,6 +171,25 @@ class QwenVLProcessor(TextProcessor):
                 limit = self.limit_mm_per_prompt[modality]
                 if len(data) > limit:
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
+
+    def process_request(self, request, max_model_len=None, **kwargs):
+        """
+        Process incoming request and generate model inputs.
+
+        Args:
+            request: Input request object
+            max_model_len (int, optional): Maximum context length
+            **kwargs: Additional processing parameters
+
+        Returns:
+            Request: Processed request with model inputs
+        """
+        task = request.to_dict()
+        task["enable_thinking"] = kwargs.get("enable_thinking", False)
+        self.process_request_dict(task, max_model_len)
+        request = Request.from_dict(task)
+        request = self._apply_default_parameters(request)
+        return request
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """
