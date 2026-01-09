@@ -14,7 +14,8 @@
 import os
 import re
 
-file_dir = "./gpu_ops/w4afp8_gemm/"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_dir = os.path.join(script_dir, "..", "gpu_ops", "w4afp8_gemm") + os.sep
 
 gemm_template_head = """
 #pragma once
@@ -95,6 +96,26 @@ gemm_case = [
     [2560, 768, 64, 0, 128],
     [768, 2048, 128, 0, 128],
     [2048, 384, 128, 0, 128],
+    [7168, 7168, 6, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 3584, 6, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 7168, 6, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 3584, 6, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 7168, 6, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 3584, 6, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 7168, 6, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 3584, 6, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 7168, 6, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 3584, 6, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 7168, 7, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 3584, 7, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 7168, 7, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 3584, 7, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 7168, 7, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 3584, 7, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 7168, 7, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 3584, 7, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 7168, 7, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 3584, 7, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
 ]
 
 dtype = ["BF16"]

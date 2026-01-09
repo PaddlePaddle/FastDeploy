@@ -74,7 +74,9 @@ python -m pip uninstall fastdeploy-xpu -y
 
 # 安装PaddlePaddle
 echo "安装PaddlePaddle..."
-python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# 20260109 由于主框架xhpc版本更新导致报错，暂时锁死paddle版本到20260107
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.4.0.dev20260107-cp310-cp310-linux_x86_64.whl
 
 # ============ 编译项目 ============
 

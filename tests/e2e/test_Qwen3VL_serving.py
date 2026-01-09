@@ -24,8 +24,8 @@ import pytest
 import requests
 from utils.serving_utils import (
     FD_API_PORT,
+    FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    PORTS_TO_CLEAN,
     clean_ports,
     is_port_open,
 )
@@ -41,8 +41,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_ENGINE_QUEUE_PORT = 8033
-    clean_ports(PORTS_TO_CLEAN.append(FD_ENGINE_QUEUE_PORT))
+    clean_ports()
 
     model_path = "/ModelData/Qwen3-VL-4B-Instruct"
 

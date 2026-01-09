@@ -44,3 +44,4 @@ msgspec
 einops
 setproctitle
 aistudio_sdk
+flashinfer-python-paddle
