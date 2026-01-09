@@ -256,7 +256,7 @@ def test_unstream_with_prompt_logprobs_chunk_chat():
     data = {
         "stream": False,
         "messages": [
-            {"role": "user", "content": "!hello! " },
+            {"role": "user", "content": "!hello! " * (8 * 1024)},
         ],
         "max_tokens": 1,
         "prompt_logprobs": 1,
@@ -265,7 +265,7 @@ def test_unstream_with_prompt_logprobs_chunk_chat():
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(URL, payload)
     resp_json = response.json()
-    print(json.dumps(resp_json, ensure_ascii=False))
+    # print(json.dumps(resp_json, ensure_ascii=False))
 
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] is not None
