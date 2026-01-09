@@ -249,6 +249,40 @@ def test_unstream_with_prompt_logprobs_zero_completions():
             assert token_id in resp_json["choices"][0]["prompt_token_ids"]
 
 
+def test_unstream_with_prompt_logprobs_chunk_chat():
+    """
+    测试chunk切分的能力是否正常
+    """
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "user", "content": "!hello! " },
+        ],
+        "max_tokens": 1,
+        "prompt_logprobs": 1,
+    }
+    # 构建请求并发送
+    payload = build_request_payload(TEMPLATE, data)
+    response = send_request(URL, payload)
+    resp_json = response.json()
+    print(json.dumps(resp_json, ensure_ascii=False))
+
+    # 校验返回内容与概率信息
+    assert resp_json["choices"][0]["message"]["content"] is not None
+    # assert resp_json["usage"]["prompt_tokens"] == 7
+    assert resp_json["usage"]["completion_tokens"] == 1
+    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
+        if i == 0:
+            assert prompt_logprobs is None
+        else:
+            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
+            assert top[0]["rank"] == 1
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
+            for i in range(len(top)):
+                assert top[i]["logprob"] < 0
+                assert top[i]["decoded_token"].encode("utf-8")
+
+
 def test_unstream_with_prompt_logprobs_chunk():
     """
     测试chunk切分的能力是否正常
@@ -269,7 +303,16 @@ def test_unstream_with_prompt_logprobs_chunk():
     assert resp_json["choices"][0]["text"] is not None
     # assert resp_json["usage"]["prompt_tokens"] == 7
     assert resp_json["usage"]["completion_tokens"] == 1
-    assert resp_json["choices"][0]["prompt_logprobs"] is None
+    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
+        if i == 0:
+            assert prompt_logprobs is None
+        else:
+            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
+            assert top[0]["rank"] == 1
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
+            for i in range(len(top)):
+                assert top[i]["logprob"] < 0
+                assert top[i]["decoded_token"].encode("utf-8")
 
 
 def test_unstream_with_prompt_logprobs_none_completions():
