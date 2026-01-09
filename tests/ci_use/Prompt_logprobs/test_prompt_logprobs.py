@@ -481,7 +481,7 @@ def test_stream_with_prompt_logprobs_completions():
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
                     assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
-            first_packet = False
+            # first_packet = False
 
 
 def test_unstream_with_prompt_logprobs_list_completions():
