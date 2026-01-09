@@ -92,18 +92,19 @@ class TestAttentionPerformance(unittest.TestCase):
         )
 
         num_layers = self.fd_config.model_config.num_hidden_layers
+        real_weight_layers = num_layers // 10 + 1
+
         self.attention_layer = [None] * num_layers
-        for i in range(num_layers):
+        for i in range(real_weight_layers):
             self.attention_layer[i] = DeepseekV3MLAAttention(self.fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
             self.attention_layer[i].load_state_dict(state_dict)
 
         def attn_forward(forward_meta, hidden_states):
             for i in range(num_layers):
-                haha = self.attention_layer[i](
+                haha = self.attention_layer[i % real_weight_layers](
                     forward_meta, hidden_states, forward_meta.position_ids, forward_meta.mask_encoder_batch
                 )
-
             return haha
 
         self.attn_forward = attn_forward
@@ -138,8 +139,8 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_model_len": 128 * 1024,
             "head_dim": 128,
             "hidden_size": 7168,
-            "num_attention_heads": 128,
-            "num_key_value_heads": 128,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 64,
             "num_hidden_layers": 61,
             "q_lora_rank": 1536,
             "kv_lora_rank": 512,
@@ -269,7 +270,7 @@ class TestAttentionPerformance(unittest.TestCase):
             decoder_block_shape_q=16,
             decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
             num_heads=fd_config.model_config.num_attention_heads,
-            kv_num_heads=fd_config.model_config.num_key_value_heads,
+            kv_num_heads=1,
             block_size=fd_config.cache_config.block_size,
         )
 
@@ -283,8 +284,10 @@ class TestAttentionPerformance(unittest.TestCase):
 
         cache_shape = self.attn_backend.get_kv_cache_shape(allocated_num_blocks)
         caches = []
-        for _ in range(num_layers):
-            key_cache = paddle.randint(0, 255, shape=cache_shape[0], dtype="int32").cast(cache_type)
+        for layer_id in range(num_layers):
+            # 这里只用了少量层，其他层复用最开始的几层，以此来增大batch测试
+            if layer_id // 1 == 0:
+                key_cache = paddle.randint(0, 255, shape=cache_shape[0], dtype="int32").cast(cache_type)
             caches.extend([key_cache])
 
         block_tables = paddle.zeros(shape=(batch_size, max_blocks_per_seq), dtype="int32")
@@ -377,19 +380,20 @@ class TestAttentionPerformance(unittest.TestCase):
 
         # return
 
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
+        import paddle.profiler as profiler
 
-        # p.start()
-        # p.step()
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
 
-        for decode_batch_size in [10]:
+        p.start()
+        p.step()
+
+        for decode_batch_size in [1]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=10 * 1024,
+                seq_len=8 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
@@ -426,7 +430,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
             del forward_meta
 
-        # p.stop()
+        p.stop()
 
 
 if __name__ == "__main__":
