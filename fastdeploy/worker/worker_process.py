@@ -568,7 +568,6 @@ class PaddleDisWorkerProc:
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            # self.fd_config.cache_config.total_block_num = 100
             num_blocks_local = self.fd_config.cache_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
 

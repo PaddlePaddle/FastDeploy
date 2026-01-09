@@ -95,6 +95,10 @@ def try_match_architecture_defaults(
             return suffix, (default_runner_type, default_convert_type)
     return None
 
+def can_use_cuda_graph():
+    return (
+        paddle.is_compiled_with_cuda() or is_compiled_with_xpu()
+    ) and not paddle.is_compiled_with_rocm()
 
 class MoEPhase:
     """
@@ -1735,9 +1739,9 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        # if not current_platform.is_cuda():
-        #     self.graph_opt_config.use_cudagraph = False
-        #     logger.info("CUDAGraph currently only support on GPU!")
+        if not can_use_cuda_graph():
+            self.graph_opt_config.use_cudagraph = False
+            logger.info("Current Platfrom can not support CUDAGraph, CUDAGraph currently only support on GPU and XPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
             if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
                 self.parallel_config.use_sequence_parallel_moe = False

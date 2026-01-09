@@ -184,11 +184,6 @@ class XpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        # print(f"self.fd_config.graph_opt_config.graph_opt_level： {self.fd_config.graph_opt_config.graph_opt_level}")
-        # if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
-        #     self.model_runner.sot_warmup()
-        # if self.fd_config.graph_opt_config.graph_opt_level >= 1:
-        #     self.model_runner.vision_encoder_compile()
         # Trigger cuda graph capture
         if self.model_runner.use_cudagraph:
             self.model_runner.capture_model()
