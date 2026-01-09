@@ -124,9 +124,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
 
-        self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
-        self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.encoder_block_shape_q: int = encoder_block_shape_q
@@ -202,7 +200,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.kv_num_blocks_x_cpu,
             self.encoder_block_shape_q,
             self.decoder_block_shape_q,
-            self.group_size,
+            -1,  # not need.
             self.block_size,
         )
         # MLA
