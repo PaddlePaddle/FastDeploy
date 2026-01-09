@@ -48,6 +48,8 @@ std::vector<paddle::Tensor> AdjustBatch(
     const paddle::optional<paddle::Tensor>& output_padding_offset,
     int max_input_length);
 
+// std::vector<paddle::Tensor> AddTen(const paddle::Tensor& x);
+
 void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
                           const paddle::Tensor& seq_lens_this_time_tensor,
                           const paddle::Tensor& seq_lens_decoder_tensor,
@@ -75,6 +77,14 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -606,6 +616,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("decoder_context_len_cache_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("prefix_len_cpu"),
+        py::arg("encoder_seq_lod_xpu"),
+        py::arg("decoder_seq_lod_xpu"),
+        py::arg("encoder_kv_lod_xpu"),
+        py::arg("encoder_batch_map_xpu"), 
+        py::arg("decoder_context_len_xpu"),
+        py::arg("decoder_context_len_cache_xpu"),
+        py::arg("decoder_batch_map_xpu"),
+        py::arg("prefix_len_xpu"),
         py::arg("k_scales"),
         py::arg("v_scales"),
         py::arg("k_scales_inv"),

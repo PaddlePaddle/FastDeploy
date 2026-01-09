@@ -107,7 +107,8 @@ def xpu_pre_process(
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
 
-    share_inputs["ids_remove_padding"] = None  # set this after adjust batch
+    # share_inputs["ids_remove_padding"] = None  # set this after adjust batch
+    share_inputs["ids_remove_padding"].zero_()
     share_inputs["cum_offsets"] = cum_offsets
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
@@ -126,7 +127,7 @@ def xpu_pre_process(
         cu_seqlens_k=share_inputs["cu_seqlens_k"],
         block_tables=share_inputs["block_tables"],
         caches=share_inputs["caches"],
-    )
+    )   
 
     (
         xpu_forward_meta.encoder_batch_map,
@@ -176,11 +177,58 @@ def xpu_pre_process(
 
     adjusted_input = adjusted_input.squeeze(1)
 
-    share_inputs["ids_remove_padding"] = adjusted_input
-    xpu_forward_meta.ids_remove_padding = adjusted_input
+    # share_inputs["ids_remove_padding"] = adjusted_input
+    share_inputs["ids_remove_padding"].copy_(adjusted_input, False)
+    # xpu_forward_meta.ids_remove_padding = adjusted_input
+    xpu_forward_meta.ids_remove_padding.copy_(adjusted_input, False)
     # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
     xpu_forward_meta.is_profiling = is_profiling
-    return xpu_forward_meta
+    if forward_meta is None:
+        return xpu_forward_meta
+    else:
+        forward_meta.ids_remove_padding.copy_(xpu_forward_meta.ids_remove_padding, False)
+        forward_meta.rotary_embs.copy_(xpu_forward_meta.rotary_embs, False)
+        # forward_meta.attn_backend.copy_(xpu_forward_meta.attn_backend, False)
+        forward_meta.seq_lens_encoder.copy_(xpu_forward_meta.seq_lens_encoder, False)
+        forward_meta.seq_lens_decoder.copy_(xpu_forward_meta.seq_lens_decoder, False)
+        forward_meta.seq_lens_this_time.copy_(xpu_forward_meta.seq_lens_this_time, False)
+        forward_meta.cum_offsets.copy_(xpu_forward_meta.cum_offsets, False)
+        forward_meta.batch_id_per_token.copy_(xpu_forward_meta.batch_id_per_token, False)
+        forward_meta.cu_seqlens_q.copy_(xpu_forward_meta.cu_seqlens_q, False)
+        forward_meta.cu_seqlens_k.copy_(xpu_forward_meta.cu_seqlens_k, False)
+        forward_meta.block_tables.copy_(xpu_forward_meta.block_tables, False)
+        forward_meta.caches = xpu_forward_meta.caches
+        forward_meta.encoder_batch_map.copy_(xpu_forward_meta.encoder_batch_map, False)
+        forward_meta.decoder_batch_map.copy_(xpu_forward_meta.decoder_batch_map, False)
+        forward_meta.encoder_batch_idx.copy_(xpu_forward_meta.encoder_batch_idx, False)
+        forward_meta.decoder_batch_idx.copy_(xpu_forward_meta.decoder_batch_idx, False)
+        forward_meta.encoder_seq_lod.copy_(xpu_forward_meta.encoder_seq_lod, False)
+        forward_meta.decoder_seq_lod.copy_(xpu_forward_meta.decoder_seq_lod, False)
+        forward_meta.encoder_kv_lod.copy_(xpu_forward_meta.encoder_kv_lod, False)
+        forward_meta.prefix_len.copy_(xpu_forward_meta.prefix_len, False)
+        forward_meta.decoder_context_len.copy_(xpu_forward_meta.decoder_context_len, False)
+        forward_meta.decoder_context_len_cache.copy_(xpu_forward_meta.decoder_context_len_cache, False)
+        forward_meta.prefix_block_tables.copy_(xpu_forward_meta.prefix_block_tables, False)
+        forward_meta.encoder_batch_map_cpu.copy_(xpu_forward_meta.encoder_batch_map_cpu, False)
+        forward_meta.decoder_batch_map_cpu.copy_(xpu_forward_meta.decoder_batch_map_cpu, False)
+        forward_meta.encoder_batch_idx_cpu.copy_(xpu_forward_meta.encoder_batch_idx_cpu, False)
+        forward_meta.decoder_batch_idx_cpu.copy_(xpu_forward_meta.decoder_batch_idx_cpu, False)
+        forward_meta.encoder_seq_lod_cpu.copy_(xpu_forward_meta.encoder_seq_lod_cpu, False)
+        forward_meta.decoder_seq_lod_cpu.copy_(xpu_forward_meta.decoder_seq_lod_cpu, False)
+        forward_meta.encoder_kv_lod_cpu.copy_(xpu_forward_meta.encoder_kv_lod_cpu, False)
+        forward_meta.prefix_len_cpu.copy_(xpu_forward_meta.prefix_len_cpu, False)
+        forward_meta.decoder_context_len_cpu.copy_(xpu_forward_meta.decoder_context_len_cpu, False)
+        forward_meta.decoder_context_len_cache_cpu.copy_(xpu_forward_meta.decoder_context_len_cache_cpu, False)
+        forward_meta.len_info_cpu.copy_(xpu_forward_meta.len_info_cpu, False)
+        forward_meta.enc_batch.copy_(xpu_forward_meta.len_info_cpu[0], False)
+        forward_meta.dec_batch.copy_(xpu_forward_meta.len_info_cpu[1], False)
+        forward_meta.total_enc_len.copy_(xpu_forward_meta.len_info_cpu[2], False)
+        # forward_meta.is_profiling.copy_(xpu_forward_meta.is_profiling, False)
+        forward_meta.is_profiling = xpu_forward_meta.is_profiling
+        share_inputs["ids_remove_padding"].copy_(adjusted_input, False)
+        forward_meta.ids_remove_padding.copy_(adjusted_input, False)
+        return forward_meta
+
 
 
 def xpu_process_output(

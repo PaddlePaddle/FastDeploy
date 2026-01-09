@@ -79,6 +79,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -200,14 +208,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     vsl.usual_lod_vp = {
         const_cast<int32_t*>(encoder_seq_lod_cpu.data<int32_t>()),
         enc_batch + 1,
-        nullptr};
+        const_cast<int32_t*>(encoder_seq_lod_xpu.data<int32_t>())};
     vsl.kv_lod_vp = {const_cast<int32_t*>(encoder_kv_lod_cpu.data<int32_t>()),
                      enc_batch + 1,
-                     nullptr};
+                     const_cast<int32_t*>(encoder_kv_lod_xpu.data<int32_t>())};
     vsl.slot_mapping_vp = {
         const_cast<int32_t*>(encoder_batch_map_cpu.data<int32_t>()),
         enc_batch,
-        nullptr};  // real batch
+        const_cast<int32_t*>(encoder_batch_map_xpu.data<int32_t>())};  // real batch
     param.max_valid_seqlen = max_enc_len;
     param.max_kv_valid_seqlen = max_kv_len;
     // setting for prefix cache
@@ -227,7 +235,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     baidu::xpu::api::VectorParam<int32_t> prefix_lens_vp{
         const_cast<int32_t*>(prefix_len_cpu.data<int32_t>()),
         enc_batch,
-        nullptr};
+        const_cast<int32_t*>(prefix_len_xpu.data<int32_t>())};
 
     float* fake_perhead_scale = nullptr;
     if (is_cache_int8 && has_zp && is_prefix_cache) {
@@ -523,20 +531,20 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       api::VectorParam<int32_t> decoder_context_len_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // use for speculative_attention_decoder seq_len in
+          const_cast<int32_t*>(decoder_context_len_xpu.data<int32_t>())};  // use for speculative_attention_decoder seq_len in
                      // MTP
       api::VectorParam<int32_t> decoder_context_len_cache_vp = {
           const_cast<int32_t*>(decoder_context_len_cache_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // use for split rope enc as prefix cache len in MTP
+          const_cast<int32_t*>(decoder_context_len_cache_xpu.data<int32_t>())};  // use for split rope enc as prefix cache len in MTP
       api::VectorParam<int32_t> decoder_batch_map_vp = {
           const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // real batch
+          const_cast<int32_t*>(decoder_batch_map_xpu.data<int32_t>())};  // real batch
       api::VectorParam<int32_t> decoder_seq_lod_vp = {
           const_cast<int32_t*>(decoder_seq_lod_cpu.data<int32_t>()),
           dec_batch + 1,
-          nullptr};  // use for split rope enc as lod in MTP
+          const_cast<int32_t*>(decoder_seq_lod_xpu.data<int32_t>())};  // use for split rope enc as lod in MTP
 
       // rope + cache
       int ret = 0;
@@ -742,11 +750,11 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       vsl.usual_lod_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};
+          const_cast<int32_t*>(decoder_context_len_xpu.data<int32_t>())};
       vsl.slot_mapping_vp = {
           const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // real batch
+          const_cast<int32_t*>(decoder_batch_map_xpu.data<int32_t>())};  // real batch
 
       xftblock::Tensor q_buf(
           rt_guard, KV_BUF_TYPE, {total_dec_len, hidden_dim}, false, false);
@@ -982,6 +990,14 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -1011,6 +1027,14 @@ std::vector<paddle::Tensor> BlockAttn(
                                      decoder_context_len_cache_cpu, \
                                      decoder_batch_map_cpu,         \
                                      prefix_len_cpu,                \
+                                     encoder_seq_lod_xpu,           \
+                                     decoder_seq_lod_xpu,           \
+                                     encoder_kv_lod_xpu,            \
+                                     encoder_batch_map_xpu,         \
+                                     decoder_context_len_xpu,       \
+                                     decoder_context_len_cache_xpu, \
+                                     decoder_batch_map_xpu,         \
+                                     prefix_len_xpu,                \
                                      k_scales,                      \
                                      v_scales,                      \
                                      k_scales_inv,                  \
@@ -1077,6 +1101,14 @@ PD_BUILD_STATIC_OP(block_attn)
              "decoder_context_len_cache_cpu",
              "decoder_batch_map_cpu",
              "prefix_len_cpu",
+             "encoder_seq_lod_xpu",
+             "decoder_seq_lod_xpu",
+             "encoder_kv_lod_xpu",
+             "encoder_batch_map_xpu",
+             "decoder_context_len_xpu",
+             "decoder_context_len_cache_xpu",
+             "decoder_batch_map_xpu",
+             "prefix_len_xpu",
              paddle::Optional("k_scales"),
              paddle::Optional("v_scales"),
              paddle::Optional("k_scales_inv"),
