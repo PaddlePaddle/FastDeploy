@@ -220,7 +220,7 @@ class TestXPUPlatform(unittest.TestCase):
 
     def test_get_attention_backend_cls(self):
         """Verify NATIVE_ATTN returns correct XPU backend class"""
-        expected_cls = "fastdeploy.model_executor.layers.attention.XPUAttentionBackend"
+        expected_cls = "fastdeploy.model_executor.layers.backends.xpu.XPUAttentionBackend"
         self.assertEqual(XPUPlatform.get_attention_backend_cls(_Backend.NATIVE_ATTN), expected_cls)
 
 
