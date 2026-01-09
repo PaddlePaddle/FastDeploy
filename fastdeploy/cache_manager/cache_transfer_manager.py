@@ -707,15 +707,15 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
 
-            k_cache_keys = k_cache_keys[match_block_num:]
-            v_cache_keys = v_cache_keys[match_block_num:]
-            gpu_block_ids = gpu_block_ids[match_block_num:]
-            cpu_block_ids = cpu_block_ids[match_block_num:]
             if match_block_num >= len(k_cache_keys):
                 logger.info(f"No uncached keys found for task {task.task_id}")
                 gpu_block_ids = []
             else:
                 try:
+                    k_cache_keys = k_cache_keys[match_block_num:]
+                    v_cache_keys = v_cache_keys[match_block_num:]
+                    gpu_block_ids = gpu_block_ids[match_block_num:]
+                    cpu_block_ids = cpu_block_ids[match_block_num:]
                     # TODO: support timeout with actual block count
                     write_block_num = self._run_write_back_storage(
                         task.task_id,
