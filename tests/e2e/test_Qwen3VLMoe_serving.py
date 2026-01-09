@@ -171,10 +171,6 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
-    file_res_temp = "Qwen3-VL-4B-Instruct-temp"
-    f_o = open(file_res_temp, "a")
-    f_o.writelines(content1)
-    f_o.close()
 
     # base result
     content2 = "根据您提供的视频帧，我们可以观"
