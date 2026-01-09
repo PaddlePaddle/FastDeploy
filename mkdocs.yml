@@ -2,7 +2,7 @@ site_name: 'FastDeploy : Large Language Model Deployment'
 repo_url: https://github.com/PaddlePaddle/FastDeploy
 repo_name: FastDeploy
 
-copyright: Copyright &copy; 2025 Maintained by FastDeploy
+copyright: Copyright &copy; 2026 Maintained by FastDeploy
 
 theme:
   name: material
