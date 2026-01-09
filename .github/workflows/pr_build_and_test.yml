@@ -19,7 +19,7 @@ jobs:
 #    needs: clone
 #    uses: ./.github/workflows/_build_linux.yml
 #    with:
-#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux-ciuse
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
 #      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
 #      COMPILE_ARCH: "90"
 #      WITH_NIGHTLY_BUILD: "OFF"
@@ -30,7 +30,7 @@ jobs:
     needs: clone
     uses: ./.github/workflows/_build_linux_fd_router.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux-ciuse
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
@@ -44,7 +44,7 @@ jobs:
 #      - name: Print wheel path
 #        run: |
 #          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
-
+#
 #  unittest_coverage:
 #    name: Run FastDeploy Unit Tests and Coverage
 #    needs: [clone,build]
@@ -56,7 +56,7 @@ jobs:
 #      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 #    secrets:
 #      github-token: ${{ secrets.GITHUB_TOKEN }}
-
+#
 #  logprob_test:
 #    name: Run FastDeploy LogProb Tests
 #    needs: [build]
@@ -66,7 +66,7 @@ jobs:
 #      PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
 #      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
 #      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-
+#
 #  pre_ce_test:
 #    name: Extracted partial CE model tasks to run in CI.
 #    needs: [clone,build]
@@ -76,7 +76,7 @@ jobs:
 #      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
 #      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
 #      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-
+#
 #  base_test:
 #    name: Run Base Tests
 #    needs: [clone,build]

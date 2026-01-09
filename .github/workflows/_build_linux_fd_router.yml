@@ -8,7 +8,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -51,10 +51,10 @@ on:
     outputs:
       fd_router_path:
         description: "Output path of the generated wheel"
-        value: ${{ jobs.fd-build.outputs.fd_router_path }}
+        value: ${{ jobs.fd-router-build.outputs.fd_router_path }}
 jobs:
   fd-router-build:
-    runs-on: [self-hosted, h20-1567419-build-0]
+    runs-on: [self-hosted, GPU-Build-Cu129]
     timeout-minutes: 360
     outputs:
       fd_router_path: ${{ steps.set_output.outputs.fd_router_path }}
