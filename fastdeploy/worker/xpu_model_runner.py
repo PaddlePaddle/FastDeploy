@@ -393,7 +393,6 @@ class XPUModelRunner(ModelRunnerBase):
         """
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
-            logger.info("11111111111")
             self.initialize_kv_cache()
 
         req_len = len(req_dicts)
@@ -1189,7 +1188,6 @@ class XPUModelRunner(ModelRunnerBase):
                     This list is crafted to maximize the total number of blocks.
         """
         max_dec_len = expected_decode_len + 1
-        # Assuming every single batch has a same input length
         input_length = min(num_tokens // batch_size, self.model_config.max_model_len - max_dec_len)
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1239,7 +1237,10 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Use dummy inputs to run before formal execution.
         Args:
-            num_tokens: Expected number of tokens generated
+            num_tokens: Number of the input tokens
+            batch_size: Batch size
+            expected_decode_len: Expected decode length
+            in_capturing: Is cuda graph in capturing state
         """
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
             num_tokens=num_tokens,
@@ -1304,9 +1305,6 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Trigger CUDA Graph capture for all shapes in 'CudaGraphConfig.cudagraph_capture_sizes'
         """
-        # if not self.use_cudagraph:
-        #     logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
-        #     return
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
@@ -1314,7 +1312,7 @@ class XPUModelRunner(ModelRunnerBase):
         try:
             for batch_size in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
-                    num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+                    num_tokens=self.scheduler_config.max_num_batched_tokens,
                     batch_size=batch_size,
                     expected_decode_len=expected_decode_len,
                     in_capturing=True,
@@ -1329,12 +1327,6 @@ class XPUModelRunner(ModelRunnerBase):
                     f"with the capture sizes {capture_sizes}. Please try "
                     "lowering `max_num_seqs` or `gpu_memory_utilization` when "
                     "initializing the engine."
-                ) from e
-            if "CUDA error(700)" in str(e):
-                raise RuntimeError(
-                    "CUDA error(700), an illegal memory access was encountered, "
-                    "when warming up CUDAGraph. Please try to set the startup parameter: "
-                    "--graph-optimization-config '{\"use_cudagraph\": false}' to close CUDAGraph"
                 ) from e
             else:
                 raise e
