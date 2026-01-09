@@ -184,6 +184,9 @@ class XPUAttentionBackend(AttentionBackend):
         k_zp = getattr(self, "cache_k_zp", None)
         v_zp = getattr(self, "cache_v_zp", None)
 
+        if layer.use_neox_rotary_style:
+            forward_meta.pos_emb_type = "NEOX"
+
         from fastdeploy.model_executor.ops.xpu import block_attn
 
         res = block_attn(
