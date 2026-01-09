@@ -368,14 +368,14 @@ def test_stream_with_prompt_logprobs_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        #"return_token_ids":True
+        "return_token_ids":True
     }
 
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(COMPLETIONS_URL, payload)
 
     result_chunk = {}
-    first_packet = True
+    # first_packet = True
     for line in response.iter_lines():
         if not line:
             continue
@@ -385,9 +385,9 @@ def test_stream_with_prompt_logprobs_completions():
 
         result_chunk = json.loads(decoded)
         print(result_chunk)
-        #completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
-        #if completion_token_ids:
-        if not first_packet:
+        completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
+        if completion_token_ids:
+        # if not first_packet:
             assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
@@ -399,8 +399,8 @@ def test_stream_with_prompt_logprobs_completions():
                     assert top[0]["decoded_token"] is not None
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
-                    #assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
-            first_packet = False
+                    assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
+            # first_packet = False
 
 
 def test_unstream_with_prompt_logprobs_list_completions():
