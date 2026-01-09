@@ -14,16 +14,16 @@ jobs:
     name: FD-Clone-Linux
     uses: ./.github/workflows/_clone_linux.yml
 
-  build:
-    name: FD-Build-Linux
-    needs: clone
-    uses: ./.github/workflows/_build_linux.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux-ciuse
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "90"
-      WITH_NIGHTLY_BUILD: "OFF"
-      FD_VERSION: "0.0.0"
+#  build:
+#    name: FD-Build-Linux
+#    needs: clone
+#    uses: ./.github/workflows/_build_linux.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux-ciuse
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      COMPILE_ARCH: "90"
+#      WITH_NIGHTLY_BUILD: "OFF"
+#      FD_VERSION: "0.0.0"
 
   build_fd_router:
     name: FD-ROUTER-Build-Linux
@@ -36,14 +36,14 @@ jobs:
       WITH_NIGHTLY_BUILD: "OFF"
       FD_VERSION: "0.0.0"
 
-  resultshow:
-    name: Use Build Output
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Print wheel path
-        run: |
-          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
+#  resultshow:
+#    name: Use Build Output
+#    needs: build
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Print wheel path
+#        run: |
+#          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
 
 #  unittest_coverage:
 #    name: Run FastDeploy Unit Tests and Coverage

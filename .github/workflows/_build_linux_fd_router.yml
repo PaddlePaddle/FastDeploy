@@ -171,7 +171,7 @@ jobs:
             go --version
 
             bash ./build.sh
-            ls ./output/*
+            ls /usr/local/bin/fd-router*
             '
 
       - name: Package Upload
@@ -197,7 +197,7 @@ jobs:
             push_file=$(realpath bos_tools.py)
             python --version
             python -m pip install bce-python-sdk==0.9.29
-            cd FastDeploy/fastdeploy/golang_router/output
+            cd /usr/local/bin/
             matches=($(ls fd-router))
             if [ ${#matches[@]} -ne 1 ]; then
               echo "Error: Found ${#matches[@]} matching files, expected exactly 1"
