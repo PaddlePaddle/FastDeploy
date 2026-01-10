@@ -449,7 +449,7 @@ def test_stream_with_prompt_logprobs_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        "return_token_ids":True
+        "return_token_ids": True,
     }
 
     response = send_request(COMPLETIONS_URL, data)
@@ -466,7 +466,7 @@ def test_stream_with_prompt_logprobs_completions():
         result_chunk = json.loads(decoded)
         completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
         if completion_token_ids:
-        # if not first_packet:
+            # if not first_packet:
             assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
