@@ -128,7 +128,7 @@ template <typename CollectiveMainloop,
           typename Ktraits,
           bool CAUSAL,
           int SM_COUNT = 132,
-          bool USE_REG_EALLOC = false,
+          bool USE_REG_EALLOC = true,
           bool USE_FIXED_BLOCK = true>
 __global__ void __launch_bounds__(
     Ktraits::NUM_WARPS *cutlass::NumThreadsPerWarp, 1)
@@ -218,7 +218,7 @@ __global__ void __launch_bounds__(
   if (warp_group_idx == 0) {
     // producer
     if constexpr (USE_REG_EALLOC) {
-      cutlass::arch::warpgroup_reg_dealloc<72>();
+      cutlass::arch::warpgroup_reg_dealloc<88>();
     }
     const uint32_t warp_idx_in_warpgroup =
         __shfl_sync(0xffffffff, warp_idx % 4, 0);
@@ -271,7 +271,7 @@ __global__ void __launch_bounds__(
   } else {
     // consumer
     if constexpr (USE_REG_EALLOC) {
-      cutlass::arch::warpgroup_reg_alloc<216>();
+      cutlass::arch::warpgroup_reg_alloc<208>();
     }
     PipelineStateQ smem_pipe_read_q;
     PipelineState smem_pipe_read_kv;
@@ -348,7 +348,7 @@ __global__ void __launch_bounds__(
 template <typename KernelTraits,
           bool CAUSAL,
           typename Params,
-          bool USE_REG_EALLOC = false,
+          bool USE_REG_EALLOC = true,
           bool USE_FIXED_BLOCK = true>
 cudaError_t BatchMLAWithPagedKVCacheKernelTraitsDispatched(
     Params &params, cudaStream_t stream) {
@@ -474,7 +474,7 @@ template <uint32_t HEAD_DIM_QK,
           uint32_t HEAD_DIM_VO,
           typename NV_TYPE,
           typename Params,
-          bool USE_REG_EALLOC = false,
+          bool USE_REG_EALLOC = true,
           bool USE_FIXED_BLOCK = true>
 cudaError_t BatchMLAWithPagedKVCacheDispatched(Params &params,
                                                cudaStream_t stream) {

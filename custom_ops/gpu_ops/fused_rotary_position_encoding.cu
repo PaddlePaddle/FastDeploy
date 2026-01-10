@@ -102,10 +102,10 @@ void FusedRotaryPositionEncoding(
   int64_t query_stride = num_heads * head_size;
   int64_t key_stride = num_kv_heads * head_size;
 
-  if (num_tokens > 65535) {
-    PD_THROW(
-        "apply_rotary_embedding_kernel launch failed when num_tokens > 65535.");
-  }
+  // if (num_tokens > 65535) {
+  //   PD_THROW(
+  //       "apply_rotary_embedding_kernel launch failed when num_tokens > 65535.");
+  // }
 
   dim3 grid(num_tokens);
   dim3 block(std::min<int64_t>(num_heads * rot_dim / 2, 512));
