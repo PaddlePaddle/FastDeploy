@@ -463,7 +463,7 @@ class Ernie4_5_VLModel(nn.Layer):
         token_num, hidden_dim = hidden_states.shape
 
         # -----------------------
-        image_mask = ids_remove_padding == self.im_patch_id
+        image_mask = ids_remove_padding >= self.im_patch_id
         image_token_num = image_mask.sum()
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
@@ -475,8 +475,10 @@ class Ernie4_5_VLModel(nn.Layer):
             )
             text_input = fake_hidden_states
 
+        if (ids_remove_padding == self.im_patch_id).sum() > 0:
+            hidden_states[ids_remove_padding == self.im_patch_id] = image_features.cast(self._dtype)
+
         if image_token_num > 0:
-            hidden_states[image_mask] = image_features.cast(self._dtype)
             text_input = paddle.ones(
                 shape=[text_token_num, hidden_dim],
                 dtype=self._dtype,
