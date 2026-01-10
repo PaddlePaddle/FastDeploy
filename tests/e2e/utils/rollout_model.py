@@ -65,6 +65,8 @@ def compare_strings_line_by_line(a: str, b: str) -> bool:
     """
     a_lines = a.splitlines()
     b_lines = b.splitlines()
+    for l in b_lines:
+        print(l)
 
     if len(a_lines) != len(b_lines):
         print(f"❌ Mismatch in number of lines: expected {len(a_lines)}, but got {len(b_lines)}.")
