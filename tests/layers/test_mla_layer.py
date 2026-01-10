@@ -84,11 +84,11 @@ class TestAttentionPerformance(unittest.TestCase):
         attn_cls = get_attention_backend()
         self.attn_backend = attn_cls(
             self.fd_config,
-            kv_num_heads=self.fd_config.model_config.num_key_value_heads // tp_size,
+            kv_num_heads=-1,
             num_heads=self.fd_config.model_config.num_attention_heads // tp_size,
             head_dim=self.fd_config.model_config.head_dim,
-            encoder_block_shape_q=64,
-            decoder_block_shape_q=16,
+            encoder_block_shape_q=-1,
+            decoder_block_shape_q=-1,
         )
 
         num_layers = self.fd_config.model_config.num_hidden_layers
@@ -390,10 +390,10 @@ class TestAttentionPerformance(unittest.TestCase):
         p.start()
         p.step()
 
-        for decode_batch_size in [1]:
+        for decode_batch_size in [10]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=8 * 1024,
+                seq_len=16 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
@@ -431,6 +431,7 @@ class TestAttentionPerformance(unittest.TestCase):
             del forward_meta
 
         p.stop()
+        # p.summary(sorted_by=paddle.profiler.SortedKeys.GPUTotal)
 
 
 if __name__ == "__main__":
