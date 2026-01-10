@@ -15,7 +15,6 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-
 template <typename T, bool IS_NEOX>
 inline __device__ void apply_token_rotary_embedding_kernel(
     T* __restrict__ arr,
@@ -42,7 +41,6 @@ inline __device__ void apply_token_rotary_embedding_kernel(
   arr[x_index] = x * cos - y * sin;
   arr[y_index] = y * cos + x * sin;
 }
-
 
 template <typename T, bool IS_NEOX>
 __global__ void apply_rotary_embedding_kernel(
@@ -84,7 +82,6 @@ __global__ void apply_rotary_embedding_kernel(
   }
 }
 
-
 void FusedRotaryPositionEncoding(
     paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or
                             // [num_tokens, num_heads * head_size]
@@ -101,11 +98,6 @@ void FusedRotaryPositionEncoding(
   int rot_dim = cos_sin_cache.dims()[1];
   int64_t query_stride = num_heads * head_size;
   int64_t key_stride = num_kv_heads * head_size;
-
-  // if (num_tokens > 65535) {
-  //   PD_THROW(
-  //       "apply_rotary_embedding_kernel launch failed when num_tokens > 65535.");
-  // }
 
   dim3 grid(num_tokens);
   dim3 block(std::min<int64_t>(num_heads * rot_dim / 2, 512));
