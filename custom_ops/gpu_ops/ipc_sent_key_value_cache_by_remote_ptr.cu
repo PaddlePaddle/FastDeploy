@@ -248,7 +248,7 @@ void SentKeyValueByRemotePtr(const paddle::Tensor& local_key_tensor,
   getNvidiaGPUMemoryUsage(__LINE__);
   int64_t block_idx_stride =
       kv_num_head_local * block_size_local * hidden_size_local;
-  if (is_scale == true) {
+  if (is_scale) {
     block_idx_stride = kv_num_head_local * block_size_local;
   }
   auto local_key_tensor_ptr = local_key_tensor.data();

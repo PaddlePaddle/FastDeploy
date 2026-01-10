@@ -607,6 +607,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
+        content, status_code = None, HTTPStatus.OK
         eplb_config = self.fd_config.eplb_config
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
@@ -709,6 +710,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
+        content, status_code = None, HTTPStatus.OK
         eplb_config = self.fd_config.eplb_config
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
