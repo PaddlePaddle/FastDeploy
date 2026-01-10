@@ -44,4 +44,5 @@ void DisPatchW4AFp8GemmWrapper(const InputType* input,
                                const int64_t M,
                                const int64_t K,
                                const int WeightScaleGroup,
-                               cudaStream_t stream);
+                               cudaStream_t stream,
+                               const int max_tokens_per_expert = -1);

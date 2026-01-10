@@ -57,7 +57,8 @@ void DisPatchW4AFp8Gemm(const cutlass::float_e4m3_t* input,
                         const int64_t M,
                         const int64_t K,
                         const int WeightScaleGroup,
-                        cudaStream_t stream) {
+                        cudaStream_t stream,
+                        const int max_tokens_per_expert = -1) {
   int kBlockN = 256;
   if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
     GEMM_SWITCH_BF16(M,
@@ -73,7 +74,8 @@ void DisPatchW4AFp8Gemm(const cutlass::float_e4m3_t* input,
                      input_dequant_scale,
                      tokens,
                      max_tokens,
-                     stream)
+                     stream,
+                     max_tokens_per_expert)
   } else {
     PD_THROW("Only supported dtype in ['BFLOAT16'].");
   }
@@ -173,7 +175,8 @@ void DisPatchW4AFp8GemmWrapper(const InputType* input,
                                const int64_t M,
                                const int64_t K,
                                const int WeightScaleGroup,
-                               cudaStream_t stream) {
+                               cudaStream_t stream,
+                               const int max_tokens_per_expert) {
   using InType = typename NVTraits<InputType>::data_t;
   using OutType = typename NVTraits<OutputType>::data_t;
   DisPatchW4AFp8Gemm(reinterpret_cast<const InType*>(input),
@@ -188,7 +191,8 @@ void DisPatchW4AFp8GemmWrapper(const InputType* input,
                      M,
                      K,
                      WeightScaleGroup,
-                     stream);
+                     stream,
+                     max_tokens_per_expert);
 }
 
 PD_BUILD_STATIC_OP(w4afp8_gemm_scale_permute)
@@ -227,7 +231,8 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, __nv_bfloat16>(
     const int64_t M,
     const int64_t K,
     const int WeightScaleGroup,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int max_tokens_per_expert);
 
 template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, half>(
     const __nv_fp8_e4m3* input,
@@ -242,4 +247,5 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, half>(
     const int64_t M,
     const int64_t K,
     const int WeightScaleGroup,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int max_tokens_per_expert);

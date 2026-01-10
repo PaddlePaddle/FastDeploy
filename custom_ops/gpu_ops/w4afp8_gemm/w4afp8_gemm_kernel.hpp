@@ -317,7 +317,8 @@ void run_gemm(const InputType *A,
               const float *input_dequant_scale,
               const int64_t *tokens,
               const int max_tokens,
-              cudaStream_t stream) {
+              cudaStream_t stream,
+              const int max_tokens_per_expert = -1) {
   using ElementOutput = typename Kernel_traits::ElementOutput;
   using Element = typename Kernel_traits::Element;
   using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
@@ -325,8 +326,19 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  const int N_nums =
-      (max_tokens + Kernel_traits::kBlockN1 - 1) / Kernel_traits::kBlockN1;
+  // 优化：对于 token_padding_size == 0 的情况，使用 max_tokens_per_expert 计算
+  // grid.y 避免启动大量无效 block (原来是 max_tokens 导致 grid.y 过大)
+  int effective_tokens;
+  if constexpr (TokenPackSize == 0) {
+    // 如果传入了有效的 max_tokens_per_expert，使用它；否则回退到估算
+    effective_tokens = (max_tokens_per_expert > 0)
+                           ? max_tokens_per_expert
+                           : (max_tokens + Experts - 1) / Experts;
+  } else {
+    effective_tokens = max_tokens;
+  }
+  const int N_nums = (effective_tokens + Kernel_traits::kBlockN1 - 1) /
+                     Kernel_traits::kBlockN1;
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
   static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
