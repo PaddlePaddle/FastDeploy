@@ -381,10 +381,8 @@ def test_unstream_with_prompt_logprobs_chunk_chat():
         "prompt_logprobs": 1,
     }
     # 构建请求并发送
-    payload = build_request_payload(TEMPLATE, data)
-    response = send_request(URL, payload)
+    response = send_request(URL, data)
     resp_json = response.json()
-    print(json.dumps(resp_json, ensure_ascii=False))
 
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] is not None
