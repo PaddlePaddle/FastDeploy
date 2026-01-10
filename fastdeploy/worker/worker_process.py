@@ -478,8 +478,18 @@ class PaddleDisWorkerProc:
                     for request in req_dicts:
                         if request.task_type.value == RequestType.PREFILL.value:
                             tmp_need_cached_prefills.append(request)
+                        if request.task_type.value == RequestType.PREEMPTED.value:
+                            preempted_ieq_id = request.request_id
+                            for tasks in attention_dp_cached_prefill_tasks:
+                                for task in tasks:
+                                    if task[0].request_id == preempted_ieq_id:
+                                        tasks.remove(task)
+
+                for tasks in attention_dp_cached_prefill_tasks:
+                    if tasks == []:
+                        attention_dp_cached_prefill_tasks.remove(tasks)
                 if tmp_need_cached_prefills:
-                    attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
+                    attention_dp_cached_prefill_tasks.append([tmp_need_cached_prefills, num_running_requests])
                 for request in tmp_need_cached_prefills:
                     req_dicts.remove(request)
                 # judge whether all ranks have prefill tasks
@@ -491,24 +501,27 @@ class PaddleDisWorkerProc:
                 if if_only_prefill:  # all ranks have prefill tasks
                     # add a prefill task to current step
                     if len(attention_dp_cached_prefill_tasks) > 0:
-                        req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                        tmp_tasks = attention_dp_cached_prefill_tasks.pop(0)
+                        req_dicts.extend(tmp_tasks[0])
+                        pre_num_running_requests = tmp_tasks[1]
                     attention_dp_wait_prefill_iters = 0
                 else:
                     # wait until all ranks have prefill tasks or reached timeout
                     attention_dp_wait_prefill_iters += 1
                     if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
                         if len(attention_dp_cached_prefill_tasks) > 0:
-                            req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                            tmp_tasks = attention_dp_cached_prefill_tasks.pop(0)
+                            req_dicts.extend(tmp_tasks[0])
+                            pre_num_running_requests = tmp_tasks[1]
                         attention_dp_wait_prefill_iters = 0
 
             if len(req_dicts) > 0:
                 req_ids = [req.request_id for req in req_dicts]
                 # Process prefill inputs
                 if self.fd_config.enable_attention_dp_balance:  # real_bsz may be different with scheduler's view
-                    self.worker.preprocess_new_task(req_dicts, None)
-                    num_running_requests = self.worker.get_real_bsz()
-                else:
-                    self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                    num_running_requests = max(pre_num_running_requests, num_running_requests)
+
+                self.worker.preprocess_new_task(req_dicts, num_running_requests)
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"

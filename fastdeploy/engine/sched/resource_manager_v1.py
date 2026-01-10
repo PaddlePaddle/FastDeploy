@@ -320,6 +320,12 @@ class ResourceManagerV1(ResourceManager):
             num_decoding_req_nums = 0
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
+                if self.config.enable_attention_dp_balance:
+                    if (
+                        request.num_computed_tokens == request.need_prefill_tokens
+                        and len(request.output_token_ids) == 0
+                    ):
+                        continue
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
