@@ -17,6 +17,7 @@
 import math
 from typing import Optional, Tuple
 
+import numpy as np
 import paddle
 from paddle import nn
 
@@ -517,3 +518,64 @@ def get_rope_3d(
 
     rotary_emb_3d = rotary_emb3d_layer(position_ids)
     return rotary_emb_3d
+
+
+class Ernie5RotaryEmbedding3D:
+    """
+    Ernie5RotaryEmbedding3D
+    """
+
+    def __init__(
+        self,
+        rotary_dim,
+        base,
+        partial_rotary_factor,
+        max_position,
+        mrope_section,
+        freq_allocation,
+    ):
+        self.rotary_dim = rotary_dim
+        self.point_num = rotary_dim // 2
+        self.base = base
+        self.paritial_rotary_factor = partial_rotary_factor
+        self.max_position = max_position
+        self.freq_allocation = freq_allocation
+        self.mrope_section = mrope_section
+        self.position_axis()
+
+    def position_axis(self):
+        """
+        position_axis
+        """
+        using_position_axis = []
+        assert len(self.mrope_section) == 3
+        assert (self.point_num - self.mrope_section[0]) % sum(self.mrope_section[1:]) == 0
+        for i, n in enumerate(self.mrope_section[1:]):
+            using_position_axis.extend([i + 1] * n)
+        using_position_axis = using_position_axis * (
+            (self.point_num - self.mrope_section[0]) // sum(self.mrope_section[1:])
+        )
+        using_position_axis.extend([0] * self.mrope_section[0])
+        self.using_position_axis = paddle.Tensor(np.array(using_position_axis))
+
+    def get_rope_emb(self, position_ids):
+        """
+        get_rope_emb
+        """
+        reql_max_seq_len = position_ids.shape[1]
+        rot_emb = paddle.zeros(
+            (position_ids.shape[0], 2, 1, self.max_position, 1, self.rotary_dim // 2), dtype="float32"
+        )
+
+        # position_ids_3d: [bsz, seq_len, 3]
+        expand_position_ids = paddle.index_select(position_ids, self.using_position_axis, axis=-1)
+
+        freqs = 1.0 / (self.base ** (paddle.arange(0, self.rotary_dim, 2) / float(self.rotary_dim)))  # d//2
+        # print(f"freqs: {freqs.cpu().numpy().tolist()}")
+        freqs = paddle.expand(
+            freqs, shape=[expand_position_ids.shape[0], expand_position_ids.shape[1], self.rotary_dim // 2]
+        )  # B, N, 1, d//2
+        freqs = (expand_position_ids.astype("float32") * freqs).unsqueeze(-2).unsqueeze(1).unsqueeze(1)
+        rotary_emb = paddle.concat([paddle.cos(freqs), paddle.sin(freqs)], axis=1)
+        rot_emb[:, :, :, :reql_max_seq_len, ...] = rotary_emb
+        return rot_emb
