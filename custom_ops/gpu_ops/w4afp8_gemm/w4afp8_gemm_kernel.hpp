@@ -326,11 +326,13 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  // 优化：对于 token_padding_size == 0 的情况，使用 max_tokens_per_expert 计算
-  // grid.y 避免启动大量无效 block (原来是 max_tokens 导致 grid.y 过大)
+  // Optimization: For token_padding_size == 0 cases, use max_tokens_per_expert
+  // to calculate grid.y to avoid launching many idle blocks (previously
+  // max_tokens caused grid.y too large)
   int effective_tokens;
   if constexpr (TokenPackSize == 0) {
-    // 如果传入了有效的 max_tokens_per_expert，使用它；否则回退到估算
+    // If valid max_tokens_per_expert is provided, use it; otherwise fallback to
+    // estimation
     effective_tokens = (max_tokens_per_expert > 0)
                            ? max_tokens_per_expert
                            : (max_tokens + Experts - 1) / Experts;
