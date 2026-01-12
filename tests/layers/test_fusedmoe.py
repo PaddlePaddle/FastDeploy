@@ -26,6 +26,7 @@ from paddle.distributed import fleet
 
 from fastdeploy.config import (
     CacheConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -473,6 +474,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             # quant_config=WINT8Config({}),
             # quant_config=WINT4Config({}),
             scheduler_config=SchedulerConfig({}),
+            eplb_config=EPLBConfig({}),
             cache_config=CacheConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
