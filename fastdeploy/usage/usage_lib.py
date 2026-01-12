@@ -16,11 +16,14 @@
 
 import datetime
 import json
+import multiprocessing
 import os
 import platform
 import re
 import subprocess
 import time
+from collections.abc import Sequence
+from concurrent.futures.process import ProcessPoolExecutor
 from pathlib import Path
 from threading import Thread
 from typing import Any
@@ -79,31 +82,39 @@ def cuda_is_initialized() -> bool:
     return paddle.device.cuda.device_count() > 0
 
 
-def get_gpu_info():
-    """
-    Simplified GPU information retrieval function
+def cuda_get_device_properties(device, names: Sequence[str], init_cuda=False) -> tuple[Any, ...]:
+    """Get specified CUDA device property values without initializing CUDA in
+    the current process."""
+    if init_cuda or cuda_is_initialized():
+        try:
+            props = paddle.device.cuda.get_device_properties(device)
+            result = []
+            for name in names:
+                if name == "major":
+                    value = props.major
+                elif name == "minor":
+                    value = props.minor
+                elif name == "name":
+                    value = props.name
+                elif name == "total_memory":
+                    value = props.total_memory
+                elif name == "multi_processor_count":
+                    value = props.multi_processor_count
+                else:
+                    value = getattr(props, name)
+                result.append(value)
+            return tuple(result)
+        except Exception as e:
+            api_server_logger.debug(f"Warning: Failed to get CUDA properties: {e}")
+            return tuple([None] * len(names))
 
-    Returns:
-        tuple: (gpu_name: str, memory_mb: int)
-    """
+    # Run in subprocess to avoid initializing CUDA as a side effect.
     try:
-        cmd = ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits", "-i", "0"]
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-
-        if result.returncode == 0:
-            output = result.stdout.strip()
-            if output:
-                name, memory = output.split(",")
-                gpu_name = name.strip()
-                memory_str = memory.strip()
-                memory_mb = int(float(memory_str) * 1024 * 1024)
-                return gpu_name, memory_mb
-
-        return "unknown", 0
-
-    except Exception:
-        return "unknown", 0
+        mp_ctx = multiprocessing.get_context("spawn")
+    except ValueError:
+        mp_ctx = multiprocessing.get_context()
+    with ProcessPoolExecutor(max_workers=1, mp_context=mp_ctx) as executor:
+        return executor.submit(cuda_get_device_properties, device, names, True).result()
 
 
 def get_xpu_model():
@@ -284,7 +295,7 @@ class UsageMessage:
     def _report_usage_once(self, fd_config: FDConfig, extra_kvs: dict[str, Any]):
         if current_platform.is_cuda_alike():
             self.gpu_num = cuda_device_count()
-            self.gpu_type, self.gpu_memory_per_device = get_gpu_info()
+            self.gpu_type, self.gpu_memory_per_device = cuda_get_device_properties(0, ("name", "total_memory"))
         if current_platform.is_xpu():
             self.gpu_num = xpu_device_count()
             self.gpu_type = get_xpu_model()
