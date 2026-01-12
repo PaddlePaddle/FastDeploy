@@ -23,33 +23,6 @@
 #include "swigluoai.h"
 #include "w4afp8_gemm/w4afp8_gemm.h"
 
-// 从 tokens_expert_prefix_sum 计算每个 expert 的最大 tokens 数
-// prefix_sum: [tokens_0, tokens_0+tokens_1, ..., sum(all)] 长度为 num_experts
-// 返回 max(tokens_i) for i in [0, num_experts)
-inline int ComputeMaxTokensPerExpert(const int64_t* prefix_sum_device,
-                                     int num_experts,
-                                     cudaStream_t stream) {
-  if (num_experts <= 0) return 0;
-
-  // 从 GPU 拷贝到 CPU（prefix_sum 通常很小，只有 num_experts 个元素）
-  std::vector<int64_t> prefix_sum(num_experts);
-  cudaMemcpyAsync(prefix_sum.data(),
-                  prefix_sum_device,
-                  num_experts * sizeof(int64_t),
-                  cudaMemcpyDeviceToHost,
-                  stream);
-  cudaStreamSynchronize(stream);  // 需要同步以获取数据
-
-  // 计算每个 expert 的 tokens 数并找最大值
-  int64_t max_tokens = prefix_sum[0];  // expert 0 的 tokens
-  for (int i = 1; i < num_experts; i++) {
-    int64_t tokens_i = prefix_sum[i] - prefix_sum[i - 1];
-    max_tokens = std::max(max_tokens, tokens_i);
-  }
-
-  return static_cast<int>(max_tokens);
-}
-
 template <paddle::DataType T>
 void MoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::Tensor& tokens_expert_prefix_sum,
@@ -232,11 +205,11 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                                             : weight_scale_tensor.dims()[3];
     const float* input_dequant_scale =
         up_proj_in_scale ? up_proj_in_scale.get().data<float>() : nullptr;
-    // 对于 token_padding_size == 0 的情况，计算每个 expert 的最大 tokens
-    // 数用于优化 grid.y
+    // For token_padding_size == 0 case, compute the maximum number of tokens
+    // per expert to optimize grid.y
     const int max_tokens_per_expert_for_opt =
         used_in_ep_low_latency
-            ? -1  // 有 padding 模式下不需要此优化
+            ? -1  // No need for this optimization in padding mode
             : static_cast<int>((permute_input.dims()[0] + num_experts - 1) /
                                num_experts);
     DisPatchW4AFp8GemmWrapper(
@@ -453,11 +426,11 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                                             ? inter_size / 2
                                             : weight_scale_tensor.dims()[3];
 
-    // 对于 token_padding_size == 0 的情况，计算每个 expert 的最大 tokens
-    // 数用于优化 grid.y
+    // For token_padding_size == 0 case, compute the maximum number of tokens
+    // per expert to optimize grid.y
     const int max_tokens_per_expert_for_opt_down =
         used_in_ep_low_latency
-            ? -1  // 有 padding 模式下不需要此优化
+            ? -1  // No need for this optimization in padding mode
             : static_cast<int>((act_out_tensor.dims()[0] + num_experts - 1) /
                                num_experts);
     DisPatchW4AFp8GemmWrapper(
