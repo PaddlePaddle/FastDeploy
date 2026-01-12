@@ -7,8 +7,8 @@ apt-get install -y psmisc
 python -m pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 python -m pip install -r requirements.txt
-# python -m pip install jsonschema aistudio_sdk==0.3.5
-# python -m pip install xgrammar==0.1.19 torch==2.6.0
+python -m pip install jsonschema aistudio_sdk==0.3.5
+python -m pip install xgrammar==0.1.19 torch==2.9.1
 
 failed_files=()
 run_path="$DIR/../tests/ci_use/"
