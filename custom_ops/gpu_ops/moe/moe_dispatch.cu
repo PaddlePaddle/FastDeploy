@@ -24,6 +24,60 @@
 
 #include "helper.h"
 
+__global__ void compute_max_tokens_from_prefix_sum_kernel(
+    const int64_t *prefix_sum, int64_t *max_tokens_output, int num_experts) {
+  extern __shared__ int64_t sdata[];
+
+  int tid = threadIdx.x;
+  int64_t local_max = 0;
+
+  // 每个线程处理一个或多个 expert（支持 num_experts > blockDim.x）
+  for (int i = tid; i < num_experts; i += blockDim.x) {
+    int64_t tokens =
+        (i == 0) ? prefix_sum[0] : (prefix_sum[i] - prefix_sum[i - 1]);
+    local_max = max(local_max, tokens);
+  }
+
+  sdata[tid] = local_max;
+  __syncthreads();
+
+  // Tree reduction 求最大值
+  for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+    if (tid < s) {
+      sdata[tid] = max(sdata[tid], sdata[tid + s]);
+    }
+    __syncthreads();
+  }
+
+  if (tid == 0) {
+    *max_tokens_output = sdata[0];
+  }
+}
+
+// 辅助函数：启动 kernel 计算 max_tokens_per_expert
+inline void compute_max_tokens_from_prefix_sum(const int64_t *prefix_sum,
+                                               int64_t *max_tokens_output,
+                                               int num_experts,
+                                               cudaStream_t stream) {
+  if (num_experts <= 0) {
+    cudaMemsetAsync(max_tokens_output, 0, sizeof(int64_t), stream);
+    return;
+  }
+
+  // 选择合适的 block size（power of 2，且足够覆盖 num_experts）
+  int block_size = 32;
+  while (block_size < num_experts && block_size < 1024) {
+    block_size *= 2;
+  }
+  block_size = min(block_size, 1024);
+
+  compute_max_tokens_from_prefix_sum_kernel<<<1,
+                                              block_size,
+                                              block_size * sizeof(int64_t),
+                                              stream>>>(
+      prefix_sum, max_tokens_output, num_experts);
+}
+
 template <paddle::DataType T>
 void MoeDispatchKernel(
     const paddle::Tensor &input,
@@ -42,7 +96,8 @@ void MoeDispatchKernel(
     paddle::Tensor *topk_weight,
     paddle::Tensor *topk_idx,
     paddle::Tensor *expert_idx_per_token,
-    paddle::Tensor *dequant_scale) {
+    paddle::Tensor *dequant_scale,
+    paddle::Tensor *max_tokens_per_expert) {
   using namespace phi;
 
   if (num_rows == 0) {
@@ -215,6 +270,11 @@ void MoeDispatchKernel(
                                    expert_num,
                                    tokens_expert_prefix_sum->data<int64_t>(),
                                    stream);
+
+  compute_max_tokens_from_prefix_sum(tokens_expert_prefix_sum->data<int64_t>(),
+                                     max_tokens_per_expert->data<int64_t>(),
+                                     expert_num,
+                                     stream);
 }
 
 std::vector<paddle::Tensor> MoeExpertDispatch(
@@ -277,14 +337,22 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
   auto expert_idx_per_token =
       GetEmptyTensor({num_rows * moe_topk}, paddle::DataType::INT32, place);
 
+  auto max_tokens_per_expert =
+      GetEmptyTensor({1}, paddle::DataType::INT64, place);
+
   if (token_rows == 0) {
+    cudaMemsetAsync(max_tokens_per_expert.data<int64_t>(),
+                    0,
+                    sizeof(int64_t),
+                    input.stream());
     return {permute_input,
             tokens_expert_prefix_sum,
             permute_indices_per_token,
             topk_weight,
             topk_idx,
             expert_idx_per_token,
-            dequant_scale};
+            dequant_scale,
+            max_tokens_per_expert};
   }
 
   switch (input_type) {
@@ -305,7 +373,8 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                     &topk_weight,
                                                     &topk_idx,
                                                     &expert_idx_per_token,
-                                                    &dequant_scale);
+                                                    &dequant_scale,
+                                                    &max_tokens_per_expert);
       break;
     case paddle::DataType::FLOAT16:
       MoeDispatchKernel<paddle::DataType::FLOAT16>(input,
@@ -324,7 +393,8 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                    &topk_weight,
                                                    &topk_idx,
                                                    &expert_idx_per_token,
-                                                   &dequant_scale);
+                                                   &dequant_scale,
+                                                   &max_tokens_per_expert);
       break;
     default:
       PD_THROW("Unsupported data type for MoeDispatchKernel");
@@ -335,7 +405,8 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
           topk_weight,
           topk_idx,
           expert_idx_per_token,
-          dequant_scale};
+          dequant_scale,
+          max_tokens_per_expert};
 }
 
 std::vector<std::vector<int64_t>> MoeExpertDispatchInferShape(
@@ -361,7 +432,8 @@ std::vector<std::vector<int64_t>> MoeExpertDispatchInferShape(
           {num_rows, moe_topk},
           {num_rows, moe_topk},
           {permuted_rows},
-          {num_rows}};
+          {num_rows},
+          {1}};
 }
 
 std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
@@ -375,7 +447,8 @@ std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
           paddle::DataType::FLOAT32,
           paddle::DataType::INT32,
           paddle::DataType::INT32,
-          paddle::DataType::FLOAT32};
+          paddle::DataType::FLOAT32,
+          paddle::DataType::INT64};
 }
 
 /**
@@ -438,7 +511,8 @@ PD_BUILD_STATIC_OP(moe_expert_dispatch)
               "topk_weight",
               "topk_idx",
               "expert_idx_per_token",
-              "dequant_scale"})
+              "dequant_scale",
+              "max_tokens_per_expert"})
     .Attrs({"moe_topk:int",
             "group_moe:bool",
             "moe_quant_type:std::string",
