@@ -30,6 +30,8 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
+from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.glm4_moe import Glm4MoeDecoderLayer
@@ -86,9 +88,9 @@ class Glm4MTPPretrainedModel(PretrainedModel):
             base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
 
             # MLP Layer
-            base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
-            base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
-            base_actions["layers.0.mlp.down_proj.weight"] = partial(fn, is_column=False)
+            # base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
+            # base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
+            # base_actions["layers.0.mlp.down_proj.weight"] = partial(fn, is_column=False)
 
             # Moe Layer
             for expert_idx in range(config.n_routed_experts):
@@ -107,7 +109,7 @@ class Glm4MTPPretrainedModel(PretrainedModel):
 
             return final_actions
 
-        mappings = get_tensor_parallel_split_mappings(config.num_nextn_predict_layers, config.num_hidden_layers)
+        mappings = get_tensor_parallel_split_mappings(config.num_nextn_predict_layers, config.start_layer_index)
         return mappings
 
 
@@ -176,6 +178,7 @@ class Glm4MTPLayer(nn.Layer):
         self.mtp_block = Glm4MoeDecoderLayer(
             fd_config,
             prefix=prefix,
+            is_mtp=True,
         )
 
     def forward(
@@ -214,7 +217,7 @@ class Glm4MTPModel(nn.Layer):
     ) -> None:
         super().__init__()
 
-        self.mtp_start_layer_idx = fd_config.model_config.num_hidden_layers
+        self.mtp_start_layer_idx = fd_config.model_config.start_layer_index
         self.num_mtp_layers = fd_config.model_config.num_nextn_predict_layers
 
         assert self.num_mtp_layers == 1, f"Currently only supports single MTP layer, but got {self.num_mtp_layers}"
@@ -235,7 +238,7 @@ class Glm4MTPModel(nn.Layer):
                     fd_config,
                     prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{i}",
                 )
-                for i in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers)
+                for i in range(0, self.num_mtp_layers)
             }
         )
 
@@ -250,7 +253,7 @@ class Glm4MTPModel(nn.Layer):
             inputs_embedding = self.embed_tokens(ids_remove_padding)
 
         # NOTE(wangyanpeng04): Currently only supports single MTP layer
-        hidden_states = self.layers[(0)](
+        hidden_states = self.layers[str(0)](
             ids_remove_padding,
             previous_hidden_states,
             inputs_embedding,
@@ -282,6 +285,8 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
         self.lm_head = fd_config.speculative_config.sharing_model.lm_head
+        self.mtp_start_layer_idx = fd_config.model_config.start_layer_index
+        self.num_mtp_layers = fd_config.model_config.num_nextn_predict_layers
 
     @classmethod
     def name(self):
@@ -297,11 +302,45 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         """
 
         from fastdeploy.model_executor.models.glm4_moe import Glm4MoeForCausalLM
+        from fastdeploy.model_executor.utils import remap_weight_keys
+
+        template = {
+            "enorm": "enorm",
+            "hnorm": "hnorm",
+            "eh_proj": "eh_proj.linear",
+            "shared_head.norm": "shared_head.norm",
+            "shared_head.head": "shared_head.head.linear",
+            "self_attn.q_proj": "mtp_block.self_attn.q_proj",
+            "self_attn.k_proj": "mtp_block.self_attn.k_proj",
+            "self_attn.v_proj": "mtp_block.self_attn.v_proj",
+            "self_attn.o_proj": "mtp_block.self_attn.o_proj",
+            "mlp.experts": "mtp_block.mlp.experts",
+            "input_layernorm": "mtp_block.input_layernorm",
+            "post_attention_layernorm": "mtp_block.post_attention_layernorm",
+        }
+        remap = {
+            f"layers.{self.mtp_start_layer_idx}.embed_tokens": "embed_tokens.embeddings",
+        }
+
+        for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers):
+            for key, value in template.items():
+                remap[f"layers.{mtp_layer_id}.{key}"] = f"layers.{mtp_layer_id - self.mtp_start_layer_idx}.{value}"
+
+        weights_iterator = remap_weight_keys(
+            weights_iterator,
+            remap,
+            include_keys=[
+                f"layers.{mtp_layer_id}"
+                for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers)
+            ],
+        )
 
         Glm4MoeForCausalLM.load_weights(
             self,
             weights_iterator,
         )
+
+        print(f"[Glm4MTPForCausalLM] model state_dict: {self.state_dict()}")
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
