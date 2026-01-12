@@ -485,6 +485,7 @@ class MTPProposer(Proposer):
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
+            partial_rotary_factor=self.model_config.partial_rotary_factor,
         )
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency

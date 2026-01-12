@@ -17,9 +17,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, Union
 
-import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
@@ -133,7 +131,7 @@ class SharedHead(nn.Module):
             prefix=f"{prefix}.shared_head.head",
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         # NOTE(wangyanpeng04): This does NOT go through head layer, only through norm layer
         return self.norm(hidden_states)
 
@@ -199,7 +197,7 @@ class Glm4MTPLayer(nn.Layer):
         )
 
         hidden_states = self.eh_proj(inputs_embedding)
-        hidden_states, residual = self.mtp_block(forward_meta, hidden_states, residual)
+        hidden_states, residual = self.mtp_block(forward_meta, hidden_states, residual=None)
 
         hidden_states = residual + hidden_states
         return hidden_states
@@ -314,7 +312,7 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             "self_attn.k_proj": "mtp_block.self_attn.k_proj",
             "self_attn.v_proj": "mtp_block.self_attn.v_proj",
             "self_attn.o_proj": "mtp_block.self_attn.o_proj",
-            "mlp.experts": "mtp_block.mlp.experts",
+            "mlp": "mtp_block.mlp",
             "input_layernorm": "mtp_block.input_layernorm",
             "post_attention_layernorm": "mtp_block.post_attention_layernorm",
         }
@@ -322,9 +320,13 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             f"layers.{self.mtp_start_layer_idx}.embed_tokens": "embed_tokens.embeddings",
         }
 
-        for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers):
-            for key, value in template.items():
+        for key, value in template.items():
+            for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers):
                 remap[f"layers.{mtp_layer_id}.{key}"] = f"layers.{mtp_layer_id - self.mtp_start_layer_idx}.{value}"
+
+        print("[Glm4MTPForCausalLM] remap")
+        for k, v in remap.items():
+            print(f"[Glm4MTPForCausalLM] {k}: {v}")
 
         weights_iterator = remap_weight_keys(
             weights_iterator,
@@ -367,7 +369,11 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
-        self.model.layers[0].mlp.fused_moe(hidden_states=fake_hidden_states, forward_meta=forward_meta)
+        self.model.layers[str(0)].mtp_block.mlp.experts(
+            fake_hidden_states,
+            self.model.layers[str(0)].mtp_block.mlp.gate,
+            forward_meta,
+        )
 
     def forward(
         self,
