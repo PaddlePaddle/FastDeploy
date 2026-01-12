@@ -32,7 +32,8 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
-    paddle.compat.enable_torch_proxy()
+    # 加一个scope
+    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
     from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
     from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
@@ -579,7 +580,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
-    def apply(self, layer, x, gate):
+    def apply(self, layer, x, gate, topk_ids_hookfunc=None,):
         """
         flashinfer nvfp4 fusedmoe for Model Optimizer
         """
@@ -591,6 +592,9 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             True,  # apply_norm_weight,
             False,
         )
+        
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids)
 
         output_dtype = x.dtype
         x_sf = None
