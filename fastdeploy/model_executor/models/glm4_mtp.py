@@ -324,9 +324,9 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers):
                 remap[f"layers.{mtp_layer_id}.{key}"] = f"layers.{mtp_layer_id - self.mtp_start_layer_idx}.{value}"
 
-        print("[Glm4MTPForCausalLM] remap")
-        for k, v in remap.items():
-            print(f"[Glm4MTPForCausalLM] {k}: {v}")
+        # print("[Glm4MTPForCausalLM] remap")
+        # for k, v in remap.items():
+        #     print(f"[Glm4MTPForCausalLM] {k}: {v}")
 
         weights_iterator = remap_weight_keys(
             weights_iterator,
@@ -342,7 +342,7 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             weights_iterator,
         )
 
-        print(f"[Glm4MTPForCausalLM] model state_dict: {self.state_dict()}")
+        # print(f"[Glm4MTPForCausalLM] model state_dict: {self.state_dict()}")
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
@@ -351,7 +351,7 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         """
         assert False, "glm4_mtp only support --load-choices default_v1."
 
-    def compute_logits(self, hidden_state: paddle.Tensor):
+    def compute_logits(self, hidden_state: paddle.Tensor, forward_meta: ForwardMeta):
         """
         compute_logits
         """
