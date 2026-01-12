@@ -549,15 +549,17 @@ class TokenProcessor:
             rejected_tokens=req_rejected_tokens,
             accept_ratio=req_accept_ratio,
             average_accept_length=req_avg_accept_length,
+            accepted_tokens_per_head=accept_num_list[: self.cfg.speculative_config.num_speculative_tokens + 1],
             accept_ratio_per_head=accept_ratio_per_head[: self.cfg.speculative_config.num_speculative_tokens],
         )
 
         # Log
-        spec_logger.debug(
+        spec_logger.info(
             f"req_id: {result.request_id}, total_step: {req_total_step}, "
-            f"accept_ratio: {accept_ratio}, average_accept_lenght: {req_avg_accept_length},"
-            f"accepted_tokens: {req_accepted_tokens}, rejected_tokens: {req_rejected_tokens}"
-            f"accept_ratio_per_head: {accept_ratio_per_head}"
+            f"accept_ratio: {accept_ratio}, average_accept_length: {req_avg_accept_length}, "
+            f"accepted_tokens: {req_accepted_tokens}, rejected_tokens: {req_rejected_tokens}, "
+            f"accepted_tokens_per_head: {accept_num_list[: self.cfg.speculative_config.num_speculative_tokens + 1]}, "
+            f"accept_ratio_per_head: {accept_ratio_per_head[: self.cfg.speculative_config.num_speculative_tokens]}"
         )
 
         # Clear request record
