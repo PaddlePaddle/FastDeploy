@@ -21,6 +21,7 @@ import inspect
 import json
 import os
 import pickle
+import re
 import time
 from contextlib import ExitStack
 from functools import wraps
@@ -38,6 +39,10 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.linear import KVBatchLinear
 from fastdeploy.model_executor.utils import multi_switch_config_context
+
+
+def natural_key(s: str):
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
 
 def pdparams_weight_iterator(paddle_file_list: list[str]):
@@ -400,7 +405,7 @@ def get_all_weights_file(model_path: str):
         safe_model_path = model_path / "model.safetensors"
         if safe_model_path.exists():
             with safe_open(safe_model_path, framework="np", device="cpu") as f:
-                key_name_list = sorted(f.keys())
+                key_name_list = sorted(f.keys(), key=natural_key)
             ordered_weight_map = {key: "model.safetensors" for key in key_name_list}
             is_key_ordered = True
             files_list = [str(safe_model_path)]
@@ -410,8 +415,10 @@ def get_all_weights_file(model_path: str):
             with index_file.open("r") as f:
                 weight_map = json.load(f)["weight_map"]
             keys = list(weight_map.keys())
-            is_key_ordered = keys == sorted(keys)
-            ordered_weight_map = {key: str(model_path / weight_map[key]) for key in sorted(weight_map.keys())}
+            is_key_ordered = keys == sorted(keys, key=natural_key)
+            ordered_weight_map = {
+                key: str(model_path / weight_map[key]) for key in sorted(weight_map.keys(), key=natural_key)
+            }
             weight_files_in_index = {str(model_path / weight_map[name]) for name in weight_map}
             files_list = sorted(weight_files_in_index)
             return files_list, ordered_weight_map, use_safetensors, is_key_ordered
