@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import paddle
 
-from fastdeploy.engine.request import CompletionOutput
 from fastdeploy.entrypoints.openai.serving_completion import (
     CompletionRequest,
     OpenAIServingCompletion,
@@ -83,8 +82,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_call"
-        output = {"tool_calls": "tool_calls"}
-        output = CompletionOutput.from_dict(output)
+        output = {"tool_call": "tool_call"}
         # 调用calc_finish_reason方法
         result = serving_completion.calc_finish_reason(None, 100, output, False)
         # 断言结果为"tool_calls"
@@ -121,7 +119,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         openai_serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         final_res_batch: List[RequestOutput] = [
             {
-                "request_id": "test_0",
                 "outputs": {
                     "token_ids": [1, 2, 3],
                     "text": " world!",
@@ -131,10 +128,10 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     },
                     "reasoning_token_num": 10,
                 },
+                "output_token_ids": 3,
                 "metrics": {},
             },
             {
-                "request_id": "test_0",
                 "outputs": {
                     "token_ids": [4, 5, 6],
                     "text": " world!",
@@ -144,12 +141,10 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     },
                     "reasoning_token_num": 20,
                 },
+                "output_token_ids": 3,
                 "metrics": {},
             },
         ]
-        final_res_batch = [RequestOutput.from_dict(item) for item in final_res_batch]
-        for item in final_res_batch:
-            item.output_token_ids = 3
 
         request: CompletionRequest = Mock()
         request.prompt = "Hello, world!"
@@ -444,11 +439,11 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock the data_processor methods
         mock_engine_client.data_processor.process_logprob_response = Mock(side_effect=lambda x, **kwargs: f"token_{x}")
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -486,7 +481,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -545,7 +539,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock the data_processor methods
         mock_engine_client.data_processor.process_logprob_response = Mock(side_effect=lambda x, **kwargs: f"token_{x}")
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -580,7 +574,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -641,7 +634,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -683,7 +676,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -747,7 +739,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -778,7 +770,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -844,7 +835,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     continue
                 parsed_result = json.loads(result)
 
-            print(parsed_result)
             choice = parsed_result["choices"][0]
 
             # Check for prompt_logprobs
@@ -882,7 +872,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -920,7 +910,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -975,7 +964,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -1009,7 +998,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -1063,7 +1051,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -1105,7 +1093,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
@@ -1162,7 +1149,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.data_processor.process_logprob_response = Mock(
             side_effect=lambda x, **kwargs: f"token_{x[0] if isinstance(x, list) else x}"
         )
-        mock_engine_client.data_processor.process_response_obj = Mock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
 
         # Mock connection manager get_connection method
         mock_dealer = Mock()
@@ -1193,7 +1180,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "finished": True,
             }
         ]
-        mock_response_data = [RequestOutput.from_dict(item) for item in mock_response_data]
 
         mock_response_queue.get.return_value = mock_response_data
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)

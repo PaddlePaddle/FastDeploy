@@ -52,7 +52,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
-                self.response_data,
+                self.response_data.to_dict(),
             ]
         )
         self.mock_engine_client.connection_manager.get_connection = AsyncMock(
@@ -75,7 +75,6 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
     async def test_create_embedding_success(self):
         # Setup
         request = EmbeddingChatRequest(
-            request_id="test_request_id",
             model="text-embedding-ada-002",
             messages=[
                 {"role": "user", "content": "Hello"},
@@ -90,7 +89,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         # Assert
         self.assertEqual(result.data[0].embedding, self.response_data.outputs.data)
 
-    def test_request_to_batch_objs(self):
+    def test_request_to_batch_dicts(self):
         test_cases = [
             ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1_0"]),
             ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1_0"]),
@@ -110,18 +109,18 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
                     model_name="request.model",
                     request_id="req-1",
                 )
-                result = self.embedding_service._request_to_batch_objs(ctx)
+                result = self.embedding_service._request_to_batch_dicts(ctx)
                 self.assertEqual(len(result), len(expected_prompts))
                 for r, prompt, rid in zip(result, expected_prompts, expected_ids):
                     # print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
-                    self.assertEqual(r.prompt, prompt)
-                    self.assertEqual(r.request_id, rid)
+                    self.assertEqual(r["prompt"], prompt)
+                    self.assertEqual(r["request_id"], rid)
 
         # 测试非 EmbeddingCompletionRequest 输入
         with self.subTest(name="non-embedding request"):
             with self.assertRaises(AttributeError):
                 ctx = ServeContext(request={"foo": "bar"}, model_name="request.model", request_id="req-1")
-                result = self.embedding_service._request_to_batch_objs(ctx)
+                result = self.embedding_service._request_to_batch_dicts(ctx)
 
 
 if __name__ == "__main__":

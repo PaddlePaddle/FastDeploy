@@ -271,9 +271,7 @@ class LLMEngine:
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
-        request = self.engine.data_processor.process_request_obj(
-            request, self.cfg.model_config.max_model_len, **kwargs
-        )
+        request = self.engine.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -669,13 +667,15 @@ class LLMEngine:
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
-                processed = self.engine.data_processor.process_response_obj(response_obj=result, stream=stream)
+                processed = self.engine.data_processor.process_response(result)
+                if processed is None:
+                    continue
                 output = processed.to_dict()
                 yield output
 
             # Exit loop if termination condition is met
             if is_end:
-                processed = self.engine.data_processor.process_response_obj(response_obj=result, stream=stream)
+                processed = self.engine.data_processor.process_response(result)
                 output = processed.to_dict()
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:

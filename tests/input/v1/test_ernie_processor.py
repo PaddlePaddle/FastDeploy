@@ -89,7 +89,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 验证结果
         self.assertEqual(result.outputs.completion_tokens, "delta_text")
 
-    def test_process_request_obj(self):
+    def test_process_request_dict(self):
         request_dict = {
             "request_id": "123",
             "messages": [{"role": "user", "content": "Hello!"}],
@@ -100,7 +100,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         request = Request.from_dict(request_dict)
         request.chat_template_kwargs = {"chat_template": "Hello!"}
-        result = self.processor.process_request_obj(request, 100)
+        result = self.processor.process_request_dict(request, 100)
         self.assertEqual(result.prompt_token_ids, [1])
 
     def test_process_response_obj_normal(self):
@@ -143,7 +143,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.reasoning_parser = MagicMock()
         self.processor.reasoning_parser.get_model_status.return_value = "think_start"
         self.processor.model_status_dict = {}
-        self.processor.process_request_obj(request, max_model_len=512)
+        self.processor.process_request_dict(request, max_model_len=512)
         self.assertEqual(request.enable_thinking, True)
 
         request = {
@@ -154,7 +154,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "top_p": 0.9,
         }
         request = Request.from_dict(request)
-        self.processor.process_request_obj(request, max_model_len=512)
+        self.processor.process_request_dict(request, max_model_len=512)
         self.assertEqual(request.enable_thinking, True)
 
 

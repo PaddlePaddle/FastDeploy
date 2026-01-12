@@ -556,6 +556,7 @@ class CompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
+        req_dict["metrics"] = {}
 
         # parse request model into dict
         if self.suffix is not None:

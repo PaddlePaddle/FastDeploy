@@ -17,7 +17,6 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 
 
@@ -25,8 +24,8 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.mock_data_processor = MagicMock()
-        self.mock_data_processor.process_response_obj = MagicMock(
-            side_effect=lambda response_obj, **_: {"processed": True, "raw": response_obj}
+        self.mock_data_processor.process_response_dict = MagicMock(
+            side_effect=lambda response_dict, **_: {"processed": True, "raw": response_dict}
         )
 
     async def asyncSetUp(self):
@@ -44,8 +43,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
     async def test_text_only_mode(self):
         """不开启 multimodal 时，直接走 data_processor"""
         processor = ChatResponseProcessor(self.mock_data_processor)
-        request_outputs = [{"request_id": "test_0", "outputs": {"text": "hello", "token_ids": [100]}}]
-        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
+        request_outputs = [{"outputs": {"text": "hello"}}]
 
         results = [
             r
@@ -54,9 +52,9 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
             )
         ]
 
-        self.mock_data_processor.process_response_obj.assert_called_once()
+        self.mock_data_processor.process_response_dict.assert_called_once()
         self.assertEqual(results[0]["processed"], True)
-        self.assertEqual(results[0]["raw"].outputs.text, "hello")
+        self.assertEqual(results[0]["raw"]["outputs"]["text"], "hello")
 
     async def test_audio_tts(self):
         """不开启 multimodal，直接走 data_processor"""
@@ -67,7 +65,6 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
             {"request_id": "req1", "outputs": {"decode_type": 2, "token_ids": [11, 22]}},
             {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [2]}},
         ]
-        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
 
         results = [
             r
@@ -77,9 +74,9 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         ]
 
         self.assertEqual(results[0]["processed"], True)
-        self.assertEqual(results[0]["raw"].outputs.token_ids, [1])
+        self.assertEqual(results[0]["raw"]["outputs"]["token_ids"], [1])
         self.assertEqual(results[1]["processed"], True)
-        self.assertEqual(results[1]["raw"].outputs.token_ids, [2])
+        self.assertEqual(results[1]["raw"]["outputs"]["token_ids"], [2])
 
     async def test_streaming_text_and_image(self):
         """流式模式下：text → image → text"""
@@ -88,7 +85,6 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
             {"request_id": "req1", "outputs": {"decode_type": 1, "token_ids": [[11, 22]]}},
             {"request_id": "req1", "outputs": {"decode_type": 0, "token_ids": [101032], "text": "done"}},
         ]
-        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
 
         results = [
             r
@@ -98,25 +94,24 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         ]
 
         # 第一个 yield：text
-        text_part = results[0].outputs.multipart[0]
+        text_part = results[0]["outputs"]["multipart"][0]
         self.assertEqual(text_part["type"], "text")
         self.assertEqual(text_part["text"], "hi")
 
         # 第二个 yield：image（token_ids 被拼起来了）
-        image_part = results[1].outputs.multipart[0]
+        image_part = results[1]["outputs"]["multipart"][0]
         self.assertEqual(image_part["type"], "image")
         self.assertEqual(image_part["url"], "http://image.url/test.png")
-        self.assertEqual(results[1].outputs.token_ids, [[[11, 22]]])
+        self.assertEqual(results[1]["outputs"]["token_ids"], [[[11, 22]]])
 
         # 第三个 yield：text
-        text_part = results[2].outputs.multipart[0]
+        text_part = results[2]["outputs"]["multipart"][0]
         self.assertEqual(text_part["type"], "text")
         self.assertEqual(text_part["text"], "done")
 
     async def test_streaming_buffer_accumulation(self):
         """流式模式：decode_type=1 只累积 buffer，不 yield"""
         request_outputs = [{"request_id": "req2", "outputs": {"decode_type": 1, "token_ids": [[33, 44]]}}]
-        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
 
         results = [
             r
@@ -135,7 +130,6 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
             {"request_id": "req3", "outputs": {"decode_type": 1, "token_ids": [[55, 66]]}},
             {"request_id": "req3", "outputs": {"decode_type": 0, "token_ids": [2], "text": "bye"}},  # eos_token_id
         ]
-        request_outputs = [RequestOutput.from_dict(o) for o in request_outputs]
 
         results = [
             r
@@ -146,7 +140,7 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
 
         # 只在最后一个输出 yield
         self.assertEqual(len(results), 1)
-        multipart = results[0].outputs.multipart
+        multipart = results[0]["outputs"]["multipart"]
 
         self.assertEqual(multipart[0]["type"], "text")
         self.assertEqual(multipart[0]["text"], "hello")

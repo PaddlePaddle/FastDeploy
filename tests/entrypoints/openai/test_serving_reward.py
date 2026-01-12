@@ -46,7 +46,7 @@ class TestOpenAIServingReward(unittest.IsolatedAsyncioTestCase):
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
-                self.response_data,
+                self.response_data.to_dict(),
             ]
         )
 
@@ -70,7 +70,6 @@ class TestOpenAIServingReward(unittest.IsolatedAsyncioTestCase):
     async def test_create_reward_success(self):
         # Setup
         request = ChatRewardRequest(
-            request_id="test_request_id",
             model="text-reward-ada-002",
             messages=[
                 {"role": "user", "content": "Hello"},

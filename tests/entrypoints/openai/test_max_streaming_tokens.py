@@ -20,7 +20,6 @@ import unittest
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
 
-from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponseChoice,
@@ -112,48 +111,89 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [1],
+                    "text": "a",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [2],
+                    "text": "b",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [3], "text": "c", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [3],
+                    "text": "c",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [4], "text": "d", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [4],
+                    "text": "d",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [5], "text": "e", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [5],
+                    "text": "e",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [6], "text": "f", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [6],
+                    "text": "f",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
+                "outputs": {
+                    "token_ids": [7],
+                    "text": "g",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "enable_parser": False,
+                },
                 "metrics": {"engine_recv_latest_token_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                 "finished": True,
             },
         ]
-        response_data = [RequestOutput.from_dict(data) for data in response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -229,13 +269,25 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                    "outputs": {
+                        "token_ids": [1],
+                        "text": "a",
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                        "enable_parser": False,
+                    },
                     "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                     "finished": False,
                 },
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
+                    "outputs": {
+                        "token_ids": [2],
+                        "text": "b",
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                        "enable_parser": False,
+                    },
                     "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
                     "finished": False,
                 },
@@ -243,7 +295,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
+                    "outputs": {
+                        "token_ids": [7],
+                        "text": "g",
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                        "enable_parser": False,
+                    },
                     "metrics": {
                         "engine_recv_latest_token_time": 0.7,
                         "first_token_time": None,
@@ -252,9 +310,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "finished": True,
                 }
             ],
-        ]
-        response_data = [
-            [RequestOutput.from_dict(data) for data in response_data_list] for response_data_list in response_data
         ]
 
         mock_response_queue = AsyncMock()
@@ -344,7 +399,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "metrics": {},
             },
         ]
-        final_response_data = [RequestOutput.from_dict(x) for x in final_response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = [
@@ -399,7 +453,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         self.assertEqual(mock_response_queue.get.call_count, 2)
 
-        self.assertEqual(self.engine_client.data_processor.process_response_obj.call_count, len(final_response_data))
+        self.assertEqual(self.engine_client.data_processor.process_response_dict.call_count, len(final_response_data))
 
         self.completion_serving.request_output_to_completion_response.assert_called_once()
 
@@ -424,8 +478,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     },
                     "num_cached_tokens": 3,
                     "finished": True,
+                    "previous_num_tokens": 2,
                 },
-                "previous_num_tokens": 2,
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=10, n=2
                 ),
@@ -453,8 +507,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     },
                     "num_cached_tokens": 0,
                     "finished": True,
+                    "previous_num_tokens": 1,
                 },
-                "previous_num_tokens": 1,
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=1, n=2
                 ),
@@ -486,14 +540,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         max_tokens_list = [10, 1]
 
         for idx, case in enumerate(test_cases):
-            resp_data = RequestOutput.from_dict(case["test_data"])
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                data=resp_data,
+                data=case["test_data"],
                 request=case["mock_request"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
-                previous_num_tokens=case["previous_num_tokens"],
+                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 num_cached_tokens=num_cached_tokens,
                 num_input_image_tokens=num_input_image_tokens,
                 num_input_video_tokens=num_input_video_tokens,
@@ -538,7 +591,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": True,
             },
         ]
-        response_data = [RequestOutput.from_dict(item) for item in response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = response_data
@@ -553,19 +605,22 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         async def mock_process_response_chat(response, stream, include_stop_str_in_output):
             delta_msg_mock = Mock()
-            delta_msg_mock.content = response.outputs.text
-            if response.outputs.text == "a":
+            delta_msg_mock.content = response["outputs"]["text"]
+            if response["outputs"]["text"] == "a":
                 delta_msg_mock.reasoning_content = "Thinking for a"
-            elif response.outputs.text == "bc":
+            elif response["outputs"]["text"] == "bc":
                 delta_msg_mock.reasoning_content = "Thinking for bc"
             delta_msg_mock.tool_calls = None
-            response.outputs.delta_message = delta_msg_mock
+            response["outputs"]["delta_message"] = delta_msg_mock
+            response["outputs"]["enable_parser"] = False
 
             reasoning_content = (
                 delta_msg_mock.reasoning_content if (delta_msg_mock and delta_msg_mock.reasoning_content) else None
             )
             reasoning_tokens = reasoning_content.split() if reasoning_content else []
-            response.outputs.reasoning_token_num = len(reasoning_tokens)
+            response["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+
+            response["outputs"]["num_cached_tokens"] = response.get("num_cached_tokens", 0)
 
             yield response
 
@@ -573,7 +628,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
         mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "Ernie45VLThinkingReasoningParser")
         mock_processor_instance.data_processor = Mock(
-            process_response_obj=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
+            process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
         )
         mock_response_processor.return_value = mock_processor_instance
 
@@ -648,7 +703,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                    "outputs": {
+                        "token_ids": [10],
+                        "text": "a",
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                        "enable_parser": False,
+                    },
                     "metrics": {
                         "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
@@ -661,7 +722,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
+                    "outputs": {
+                        "token_ids": [2],
+                        "text": "bc",
+                        "top_logprobs": None,
+                        "draft_top_logprobs": None,
+                        "enable_parser": False,
+                    },
                     "metrics": {
                         "engine_recv_latest_token_time": 0.3,
                         "first_token_time": 0.1,
@@ -671,9 +738,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "finished": True,
                 }
             ],
-        ]
-        response_data = [
-            [RequestOutput.from_dict(item) for item in response_data_list] for response_data_list in response_data
         ]
 
         mock_response_queue = AsyncMock()
@@ -699,7 +763,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         generator = self.completion_serving.completion_stream_generator(
             request=request,
             num_choices=1,
-            request_id="test-request-id_0",
+            request_id="test-request-id",
             created_time=1620000000,
             model_name="test-model",
             prompt_batched_token_ids=[[10, 20, 30]],
@@ -712,7 +776,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             chunks.append(chunk)
             if "[DONE]" in chunk:
                 break
-
         parsed_chunks = []
         for chunk_str in chunks:
             if chunk_str.startswith("data: ") and chunk_str.endswith("\n\n"):
@@ -757,7 +820,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         )
 
     @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
-    async def test_completion_full_generator_async_process_response_obj(self, mock_logger):
+    async def test_completion_full_generator_async_process_response_dict(self, mock_logger):
         final_response_data = [
             {
                 "request_id": "test_request_id_0",
@@ -778,7 +841,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "metrics": {},
             },
         ]
-        final_response_data = [RequestOutput.from_dict(data) for data in final_response_data]
 
         mock_response_queue = AsyncMock()
         mock_response_queue.get.side_effect = [
@@ -809,7 +871,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
         prompt_tokens_list = ["Hello", "Hello"]
 
-        self.engine_client.data_processor.process_response_obj = AsyncMock()
+        self.engine_client.data_processor.process_response_dict = AsyncMock()
 
         actual_response = await self.completion_serving.completion_full_generator(
             request=request,
@@ -823,15 +885,15 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(actual_response, expected_completion_response)
-        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_obj))
+        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict))
 
-        self.engine_client.data_processor.process_response_obj.assert_awaited()
+        self.engine_client.data_processor.process_response_dict.assert_awaited()
 
-        actual_call_times = self.engine_client.data_processor.process_response_obj.call_count
+        actual_call_times = self.engine_client.data_processor.process_response_dict.call_count
         expected_call_times = len(final_response_data)
         self.assertEqual(actual_call_times, expected_call_times)
 
-        call_args_list = self.engine_client.data_processor.process_response_obj.call_args_list
+        call_args_list = self.engine_client.data_processor.process_response_dict.call_args_list
         self.assertEqual(len(call_args_list), expected_call_times)
 
         for idx, data in enumerate(final_response_data):
@@ -841,7 +903,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             self.assertEqual(kwargs.get("include_stop_str_in_output"), request.include_stop_str_in_output)
 
     @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
-    async def test_completion_stream_generator_async_process_response_obj(self, mock_logger):
+    async def test_completion_stream_generator_async_process_response_dict(self, mock_logger):
         final_response_data = [
             [
                 {
@@ -853,6 +915,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "a",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
+                        "enable_parser": False,
                     },
                     "finished": False,
                     "metrics": {
@@ -873,6 +936,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "b",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
+                        "enable_parser": False,
                     },
                     "finished": False,
                     "metrics": {
@@ -893,6 +957,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "g",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
+                        "enable_parser": False,
                     },
                     "finished": True,
                     "metrics": {
@@ -903,10 +968,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "error_code": 200,
                 }
             ],
-        ]
-        final_response_data = [
-            [RequestOutput.from_dict(item) for item in response_data_list]
-            for response_data_list in final_response_data
         ]
 
         mock_response_queue = AsyncMock()
@@ -929,7 +990,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             max_tokens=100,
         )
 
-        self.engine_client.data_processor.process_response_obj = AsyncMock()
+        self.engine_client.data_processor.process_response_dict = AsyncMock()
 
         generator = self.completion_serving.completion_stream_generator(
             request=request,
@@ -949,17 +1010,17 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 break
         self.assertGreater(len(chunks), 0)
 
-        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_obj))
-        self.engine_client.data_processor.process_response_obj.assert_awaited()
+        self.assertTrue(inspect.iscoroutinefunction(self.engine_client.data_processor.process_response_dict))
+        self.engine_client.data_processor.process_response_dict.assert_awaited()
 
         flat_response_data = []
         for sub_list in final_response_data:
             flat_response_data.extend(sub_list)
         expected_call_times = len(flat_response_data)
-        actual_call_times = self.engine_client.data_processor.process_response_obj.call_count
+        actual_call_times = self.engine_client.data_processor.process_response_dict.call_count
         self.assertEqual(actual_call_times, expected_call_times)
 
-        call_args_list = self.engine_client.data_processor.process_response_obj.call_args_list
+        call_args_list = self.engine_client.data_processor.process_response_dict.call_args_list
         self.assertEqual(len(call_args_list), expected_call_times)
 
         for idx, data in enumerate(flat_response_data):
