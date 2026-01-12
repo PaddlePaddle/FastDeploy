@@ -358,6 +358,8 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             ("up_gate_proj", "up_proj", "up"),
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
+            ("qk_norm.q_norm", "q_norm", None),
+            ("qk_norm.k_norm", "k_norm", None),
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
