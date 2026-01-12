@@ -17,30 +17,27 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "msg_utils.h"
 #include "paddle/extension.h"
 
-#define MAX_BSZ 256
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 // #define SAVE_WITH_OUTPUT_DEBUG
-struct msgdata {
-  long mtype;
-  int mtext[MAX_BSZ + 2];  // stop_flag, bsz, tokens
-};
-
-// #define SAVE_WITH_OUTPUT_DEBUG
-void SaveOutMmsg(const paddle::Tensor &x,
-                 const paddle::Tensor &not_need_stop,
+void SaveOutMmsg(const paddle::Tensor& x,
+                 const paddle::Tensor& not_need_stop,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
-  if (!save_each_rank && rank_id > 0) {
+  if (rank_id > 0) {
     return;
   }
   auto x_cpu = x.copy_to(paddle::CPUPlace(), false);
-  int64_t *x_data = x_cpu.data<int64_t>();
+  int64_t* x_data = x_cpu.data<int64_t>();
   static struct msgdata msg_sed;
 
-  if (const char *inference_msg_queue_id_env_p =
+  if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {
     std::string inference_msg_queue_id_env_str(inference_msg_queue_id_env_p);
     int inference_msg_queue_id_from_env =
@@ -57,7 +54,7 @@ void SaveOutMmsg(const paddle::Tensor &x,
 #endif
   }
   int inference_msg_id_from_env = 1;
-  if (const char *inference_msg_id_env_p = std::getenv("INFERENCE_MSG_ID")) {
+  if (const char* inference_msg_id_env_p = std::getenv("INFERENCE_MSG_ID")) {
     std::string inference_msg_id_env_str(inference_msg_id_env_p);
     inference_msg_id_from_env = std::stoi(inference_msg_id_env_str);
     if (inference_msg_id_from_env == 2) {
@@ -111,29 +108,29 @@ void SaveOutMmsg(const paddle::Tensor &x,
   return;
 }
 
-void SaveOutMmsgStatic(const paddle::Tensor &x,
-                       const paddle::Tensor &not_need_stop,
+void SaveOutMmsgStatic(const paddle::Tensor& x,
+                       const paddle::Tensor& not_need_stop,
                        int64_t rank_id,
                        bool save_each_rank) {
   SaveOutMmsg(x, not_need_stop, rank_id, 1, save_each_rank);
 }
 
-void SaveOutMmsgDynamic(const paddle::Tensor &x,
-                        const paddle::Tensor &not_need_stop,
+void SaveOutMmsgDynamic(const paddle::Tensor& x,
+                        const paddle::Tensor& not_need_stop,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank) {
   SaveOutMmsg(x, not_need_stop, rank_id, msg_queue_id, save_each_rank);
 }
 
-PD_BUILD_OP(save_output)
+PD_BUILD_STATIC_OP(save_output)
     .Inputs({"x", "not_need_stop"})
     .Attrs({"rank_id: int64_t", "save_each_rank: bool"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
     .SetKernelFn(PD_KERNEL(SaveOutMmsgStatic));
 
-PD_BUILD_OP(save_output_dynamic)
+PD_BUILD_STATIC_OP(save_output_dynamic)
     .Inputs({"x", "not_need_stop"})
     .Attrs({"rank_id: int64_t", "msg_queue_id: int", "save_each_rank: bool"})
     .Outputs({"x_out"})

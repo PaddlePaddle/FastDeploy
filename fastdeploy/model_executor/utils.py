@@ -390,7 +390,7 @@ def v1_loader_support(fd_config):
 
     def _get_unsupported_quant():
         if current_platform.is_cuda():
-            return {"w4a8", "w4afp8", "wint2"}
+            return {"w4a8", "wint2"}
         elif current_platform.is_xpu():
             return {"w4a8", "w8a8"}
         return set()
@@ -403,8 +403,9 @@ def v1_loader_support(fd_config):
         or current_platform.is_xpu()
         or current_platform.is_iluvatar()
         or current_platform.is_maca()
+        or current_platform.is_intel_hpu()
     ):
-        _err_msg("v1loader currently only support backends gpu, xpu, iluvatar and maca")
+        _err_msg("v1loader currently only support backends gpu, xpu, intel_hpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):

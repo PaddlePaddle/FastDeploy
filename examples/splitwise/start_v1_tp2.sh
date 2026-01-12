@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-# Test splitwise deployment
-# There are two methods for splitwise deployment:
-# v0: using splitwise_scheduler or dp_scheduler
-# v1: using local_scheduler + router
-
 # prepare environment
 export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1

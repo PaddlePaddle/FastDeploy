@@ -48,5 +48,6 @@ submitButton.enabled = isValidEmail(user.email);
 - Please check the title of the Pull Request. It needs to follow the format of [CLASS]Title, for example, [BugFix] Fix memory leak of data processor. If the title is incorrect, provide suggestions on how the committer should modify it.
 - Please check the description information of the Pull Request. At a minimum, it should explain why these modifications are being made in this Pull Request and what problem is being solved. If the committer hasn't written the corresponding information or the information is incomplete, prompt the committer to make modifications.
 
-## Language
-- For repository members, please reply directly in Simplified Chinese; for external Contributors, reply in English.
+## Others
+- 对于所有提交的PR，你提交的评论都使用中文语言，但需要注意，代码中的注释仍然需要使用英文
+- 在你提交Pull Request时，需要注意代码风格要满足本Repo的设定，commit代码前需要`pip install pre-commit==4.2.0`并且执行`pre-commit install`

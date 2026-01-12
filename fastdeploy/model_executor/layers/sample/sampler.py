@@ -30,6 +30,7 @@ from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
 )
+from fastdeploy.model_executor.layers.sample.logprobs import batched_count_greater_than
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
@@ -466,7 +467,7 @@ class Sampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -659,7 +660,11 @@ class SpeculativeSampler(nn.Layer):
         top_p_logprob = None
         top_p_token_mask = None
 
-        if top_p_normalized_logprobs is not None and share_inputs is not None:
+        if (
+            top_p_normalized_logprobs is not None
+            and share_inputs is not None
+            and sampling_metadata.top_p_normalized_logprobs_flag
+        ):
             real_token_top_p = (
                 sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(batch_token_num).unsqueeze(1)
             )
@@ -709,7 +714,7 @@ class SpeculativeSampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -834,15 +839,15 @@ class SpeculativeSampler(nn.Layer):
                 raw_logprobs = target_logits.clone()
 
         logprobs_tensors = None
-        token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
-            token_ids = paddle.concat(
-                [share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]] for i in range(real_bsz)]
-            )
+            token_ids = share_inputs["accept_tokens"]
+            idx = paddle.arange(share_inputs["accept_tokens"].shape[1], dtype="int32")
+            mask = idx < share_inputs["accept_num"].unsqueeze(1)
+            token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
-            sampled_token_ids=token_ids,
+            sampled_token_ids=share_inputs["accept_tokens"],
             logprobs_tensors=logprobs_tensors,
             token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
@@ -949,6 +954,7 @@ class MTPSampler(nn.Layer):
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
+        self.enable_draft_logprob = fd_config.speculative_config.enable_draft_logprob
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
@@ -1001,7 +1007,11 @@ class MTPSampler(nn.Layer):
         top_p_logprob = None
         top_p_token_mask = None
 
-        if top_p_normalized_logprobs is not None and share_inputs is not None:
+        if (
+            top_p_normalized_logprobs is not None
+            and share_inputs is not None
+            and sampling_metadata.top_p_normalized_logprobs_flag
+        ):
             real_token_top_p = (
                 sampling_metadata.top_p[:real_bsz]
                 .squeeze(1)
@@ -1055,7 +1065,7 @@ class MTPSampler(nn.Layer):
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
-        token_ranks = (logprobs >= token_logprobs).sum(-1)
+        token_ranks = batched_count_greater_than(logprobs, token_logprobs)
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -1078,7 +1088,7 @@ class MTPSampler(nn.Layer):
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        if num_logprobs is not None and share_inputs["substep"] == 0:
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
             real_token_num = share_inputs["batch_token_num"][:real_bsz].sum()
             if self.logprobs_mode == "raw_logprobs":
                 raw_logprobs = self.compute_logprobs(
@@ -1109,7 +1119,7 @@ class MTPSampler(nn.Layer):
 
         token_ids = None
         logprobs_tensors = None
-        if num_logprobs is not None and share_inputs["substep"] == 0:
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
             token_ids = paddle.empty(real_token_num, dtype="int64")
             speculate_insert_first_token(
                 token_ids,

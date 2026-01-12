@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import re
 from typing import List, Optional
@@ -40,8 +41,19 @@ def main():
     parser.add_argument("--log-dir", type=str, required=True)
     parser.add_argument("--drop-ratio", "-d", type=float, default=0.1)
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument("--start-id", "-s", type=int)
+    parser.add_argument("--end-id", "-e", type=int)
     args = parser.parse_args()
-    entropy_values = extract_entropy_values(os.path.join(args.log_dir, "data_processor.log"))
+    log_files = glob.glob(os.path.join(args.log_dir, "data_processor.log.*"))
+    if not log_files:
+        print(f"No log files found in {args.log_dir}")
+        return
+
+    entropy_values = []
+    for log_file in log_files:
+        entropy_values.extend(extract_entropy_values(log_file))
+    if args.start_id and args.end_id:
+        entropy_values = entropy_values[args.start_id : args.end_id]
     average_entropy, filtered_vals = calculate_average(entropy_values, args.drop_ratio)
 
     print(f"{len(entropy_values)} entropy values were found")

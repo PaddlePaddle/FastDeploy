@@ -17,7 +17,6 @@ S1_PORT=52800
 ports=(
     $S0_PORT $((S0_PORT + 1)) $((S0_PORT + 2)) $((S0_PORT + 3))
     $S1_PORT $((S1_PORT + 1)) $((S1_PORT + 2)) $((S1_PORT + 3))
-    $ROUTER_PORT
 )
 check_ports "${ports[@]}" || {
     echo "❌ Some ports are in use. Please release them."

@@ -75,6 +75,10 @@ def stop_processes():
     commands = [
         "ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'multiprocessing' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'fastdeploy' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: master' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: worker' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
     ]
@@ -434,3 +438,52 @@ def restore_pd_env(original_values):
             else:
                 os.environ[key] = original_values[key]
                 print(f"恢复环境变量: {key}={original_values[key]}")
+
+
+def setup_pd_ep_env():
+    """
+    设置PD分离+EP相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    original_values_pd = setup_pd_env()
+    original_values_ep = setup_ep_env()
+    original_values = {**original_values_pd, **original_values_ep}
+    return original_values
+
+
+def restore_pd_ep_env(original_values):
+    """
+    恢复PD分离相关环境变量
+
+    Args:
+        original_values: setup_ep_env()返回的原始环境变量值
+    """
+    restore_env(original_values)
+    restore_pd_env(original_values)
+
+
+def setup_logprobs_env():
+    """
+    设置logprobs相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    env_vars = {
+        "FD_USE_GET_SAVE_OUTPUT_V1": "1",
+    }
+    os.system("sysctl -w kernel.msgmax=131072")
+    os.system("sysctl -w kernel.msgmnb=33554432")
+
+    # 保存原始值
+    original_values = {}
+    for key in env_vars:
+        original_values[key] = os.environ.get(key)
+
+    # 设置新值
+    for key, value in env_vars.items():
+        os.environ[key] = value
+        print(f"设置环境变量: {key}={value}")
+    return original_values

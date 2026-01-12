@@ -110,7 +110,11 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
+        if moe_quant_type == "w4a8" or (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and not fd_config.quant_config.moe_dynamic_quant
+        ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -120,6 +124,19 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
                 "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
                 "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and fd_config.quant_config.moe_dynamic_quant
+        ):
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
             }
         elif moe_quant_type == "w4w2":
             weight_key_map = {
@@ -223,6 +240,7 @@ class Ernie4_5_MoE(nn.Layer):
             gate=self.gate,
             forward_meta=forward_meta,
         )
+
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -382,7 +400,7 @@ class Ernie4_5_Model(nn.Layer):
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                redundant_experts_num=fd_config.eplb_config.redundant_experts_num,
                 ep_size=fd_config.parallel_config.expert_parallel_size,
             )
 
@@ -458,6 +476,9 @@ class Ernie4_5_Model(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)

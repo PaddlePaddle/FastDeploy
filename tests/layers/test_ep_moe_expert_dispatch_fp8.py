@@ -16,10 +16,12 @@ class TestFusedMoE(unittest.TestCase):
 
     def test_ffn(self):
         paddle.seed(10)
-        num_rows = 2
-        recv_x = paddle.randn([num_rows, 4096], dtype="bfloat16").cast(paddle.float8_e4m3fn)
-        recv_x_scale = paddle.randn([num_rows, 4096 // 128]).cast("float32")
+        num_rows = 128
+        hidden_size = 7168
+        recv_x = paddle.randn([num_rows, hidden_size], dtype="bfloat16").cast(paddle.float8_e4m3fn)
+        recv_x_scale = paddle.randn([num_rows, hidden_size // 128]).cast("float32")
         local_num_experts = 8
+
         gate_out = paddle.randn([num_rows, local_num_experts], dtype="float32")
         recv_topk_idx = paddle.topk(gate_out, k=8, axis=-1)[1]
         recv_topk_idx[:, 3:5] = -1

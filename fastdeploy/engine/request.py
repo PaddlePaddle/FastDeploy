@@ -115,6 +115,7 @@ class Request:
         # model specific token ids: end of sentence token ids
         self.eos_token_ids = eos_token_ids
         self.num_cached_tokens = 0
+        self.num_cached_blocks = 0
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -528,7 +529,7 @@ class RequestMetrics:
     gpu_cache_token_num: Optional[int] = 0
     cpu_cache_token_num: Optional[int] = 0
     storage_cache_token_num: Optional[int] = 0
-    gpu_cpu_cache_prepare_time: Optional[float] = None
+    cpu_cache_prepare_time: Optional[float] = None
     storage_cache_prepare_time: Optional[float] = None
 
     def __post_init__(self):

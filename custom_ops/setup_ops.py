@@ -493,6 +493,7 @@ elif paddle.is_compiled_with_cuda():
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
+        cc_compile_args += ["-DENABLE_FLASH_MASK_ATTENTION"]
         sources += find_end_files("gpu_ops/moba_attn/moba_decoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_encoder_attn/", ".cu")
         sources += find_end_files("gpu_ops/moba_attn/moba_process/", ".cu")
@@ -636,31 +637,65 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
         "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
         "gpu_ops/sample_kernels/min_p_sampling_from_probs.cu",
+        "gpu_ops/get_data_ptr_ipc.cu",
+        "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
+        "gpu_ops/unset_data_ipc.cu",
+        "gpu_ops/swap_cache_batch.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
-        "metax_ops/apply_rope_qkv.cu",
         "metax_ops/cache_kv_with_rope.cu",
+        "metax_ops/cpp_extensions.cc",
+        "metax_ops/split_merge_qkv.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
     sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
 
+    metax_extra_compile_args = {
+        "cxx": ["-O3"],
+        "nvcc": [
+            "-O3",
+            "-Ithird_party/nlohmann_json/include",
+            "-Igpu_ops",
+            "-DPADDLE_DEV",
+            "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
+        ],
+    }
+
+    def get_maca_version(version_file: str = "/opt/maca/Version.txt") -> list[int]:
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                version_str = f.readline().strip()
+                target_version = [int(part) for part in version_str.split(":")[1].split(".")]
+        except Exception as e:
+            print(f"Trigger exception: {type(e).__name__} - {e}")
+            raise
+        return target_version
+
+    maca_version = get_maca_version(f"{maca_path}/Version.txt")
+    if len(maca_version) == 4:
+        major_version = maca_version[0]
+        minor_version = maca_version[1]
+        patch_version = maca_version[2]
+        build_version = maca_version[3]
+
+        cur_maca_version = (
+            ((major_version & 0xFF) << 24)
+            | ((minor_version & 0xFF) << 16)
+            | ((patch_version & 0xFF) << 8)
+            | ((build_version & 0xFF) << 0)
+        )
+        metax_extra_compile_args["nvcc"].append(f"-DMACA_VERSION={cur_maca_version}")
+    else:
+        raise ValueError(f"MACA version invalid - {maca_version}")
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
-            extra_compile_args={
-                "cxx": ["-O3"],
-                "nvcc": [
-                    "-O3",
-                    "-Ithird_party/nlohmann_json/include",
-                    "-Igpu_ops",
-                    "-DPADDLE_DEV",
-                    "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
-                ],
-            },
+            extra_compile_args=metax_extra_compile_args,
             library_dirs=[os.path.join(maca_path, "lib")],
             extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[

@@ -55,7 +55,7 @@ if [ ${check_error} != 0 ];then
     echo "Your PR code style check failed."
     echo "Please install pre-commit locally and set up git hook scripts:"
     echo ""
-    echo "    pip install pre-commit==4.2.0"
+    echo "    pip install pre-commit==4.2.0 clang-format==13.0.0"
     echo "    pre-commit install"
     echo ""
     if [[ $num_diff_files -le 100 ]];then
