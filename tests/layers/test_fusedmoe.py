@@ -484,7 +484,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            self.fd_config.scheduler_config.splitwise_role = "mixed"
+            self.fd_config.scheduler_config.splitwise_role = "decode"
             self.fd_config.model_config.moe_phase.phase = "decode"
 
         weight_key_map = {
