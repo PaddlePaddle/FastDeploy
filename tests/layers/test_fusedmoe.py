@@ -546,7 +546,7 @@ class TestFusedMoE(unittest.TestCase):
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 4096
         self.moe_intermediate_size = 2048
-        self.moe_num_experts = 160
+        self.moe_num_experts = 64
         self.moe_k = 8
         self.num_layers = 2
         self.num_attention_heads = -1
