@@ -202,6 +202,7 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
 
+          apt-get install -y psmisc
           python -m pip uninstall torch -y
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
