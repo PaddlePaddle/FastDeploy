@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash 
 
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
