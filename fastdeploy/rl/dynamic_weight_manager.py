@@ -290,9 +290,6 @@ class DynamicWeightManager:
                 model_runner.update_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     time.sleep(0.01)
-                if kv_cache_status:
-                    while kv_cache_status.value[0] != ModelWeightsStatus.NORMAL:
-                        time.sleep(0.01)
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
@@ -302,9 +299,6 @@ class DynamicWeightManager:
                 model_runner.clear_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
                     time.sleep(0.01)
-                if kv_cache_status:
-                    while kv_cache_status.value[0] != ModelWeightsStatus.CLEARED:
-                        time.sleep(0.01)
                 logger.info("finished clearing checkpoint")
             else:
                 time.sleep(0.01)
