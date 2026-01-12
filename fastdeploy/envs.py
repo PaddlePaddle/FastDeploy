@@ -157,7 +157,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to collect user information
     "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
     # Usage stats server url
-    "FD_USAGE_STATS_SERVER": lambda: os.getenv("FD_USAGE_STATS_SERVER", "fd-stats.baidu-int.com"),
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
     # Usage stats source
     "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
     # Usage stats config root
