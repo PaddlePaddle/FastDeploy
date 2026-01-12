@@ -561,13 +561,15 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
-            ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
-            ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.activation_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
             ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
             ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
             ("act_scale", "in_scale", None, None),
             ("attn.q_scale", "q_matmul.in_scale", None, None),
             ("attn.s_scale", "s_matmul.in_scale", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
             ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
         ]
 

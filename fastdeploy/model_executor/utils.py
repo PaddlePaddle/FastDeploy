@@ -491,7 +491,6 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     fp8_suffix_map = {
         ckpt_weight_suffix: "weight",
         ckpt_scale_suffix: "weight_scale_inv",
-        ckpt_act_suffix: "in_scale",
     }
     tensor_wise_fp8_suffix_map = {
         ckpt_weight_suffix: "weight",
