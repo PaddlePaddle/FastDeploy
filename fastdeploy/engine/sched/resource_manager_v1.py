@@ -979,7 +979,7 @@ class ResourceManagerV1(ResourceManager):
                     f"request {request.request_id} num_cached_tokens: {request.num_cached_tokens}, revert_tokens_num: {revert_tokens_num}"
                 )
 
-                revert_block_idx = revert_tokens_num // self.config.cache_config.block_size
+                revert_block_idx = len(common_block_ids) - revert_tokens_num // self.config.cache_config.block_size - 1
                 for block_idx in range(len(common_block_ids) - 1, revert_block_idx, -1):
                     if common_block_ids[block_idx] in hit_info["match_gpu_block_ids"]:
                         hit_info["gpu_match_token_num"] -= self.config.cache_config.block_size
