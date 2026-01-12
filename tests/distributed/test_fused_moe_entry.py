@@ -22,7 +22,7 @@ def test_fused_moe_launch():
     test_fused_moe
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    chunked_moe_script = os.path.join(current_dir, "../layers/test_fusedmoe.py")
+    py_script = os.path.join(current_dir, "../layers/test_fusedmoe.py")
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
     command = [
         sys.executable,
@@ -36,7 +36,7 @@ def test_fused_moe_launch():
         "1",
         "--rank",
         "0",
-        chunked_moe_script,
+        py_script,
     ]
 
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
