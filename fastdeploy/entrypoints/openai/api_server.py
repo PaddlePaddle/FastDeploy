@@ -600,7 +600,7 @@ def launch_api_server() -> None:
         "bind": f"{args.host}:{args.port}",
         "workers": args.workers,
         "worker_class": "uvicorn.workers.UvicornWorker",
-        "loglevel": "info",
+        "loglevel": "warning",
         "graceful_timeout": args.timeout_graceful_shutdown,
         "timeout": args.timeout,
     }
