@@ -24,17 +24,69 @@ EP4TP1在线服务测试 - Expert Parallel + Tensor Parallel
 """
 
 
+import subprocess
+import time
+
 import openai
 import pytest
 from conftest import (
+    cleanup_resources,
     download_and_build_xdeepep,
     get_model_path,
     get_port_num,
     print_logs_on_failure,
     restore_env,
     setup_ep_env,
-    start_server,
+    stop_processes,
 )
+
+
+def wait_for_health_check(port, timeout=900, interval=10):
+    """
+    等待服务健康检查通过
+
+    Args:
+        timeout: 超时时间(秒), 默认15分钟
+        interval: 检查间隔(秒), 默认10秒
+
+    Returns:
+        bool: 服务是否启动成功
+    """
+    health_endpoint = f"http://0.0.0.0:{port}/health"
+    start_time = time.time()
+
+    print(f"开始服务端口{port}健康检查,最长等待时间:{timeout}秒")
+
+    # 第一阶段: 等待 /health 返回 200
+    while True:
+        elapsed = int(time.time() - start_time)
+
+        # 超时判断
+        if elapsed >= timeout:
+            print(f"\n服务启动超时:经过 {timeout//60} 分钟服务仍未启动!")
+            return False
+
+        # 发送健康检查请求
+        try:
+            result = subprocess.run(
+                f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {health_endpoint}',
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+            http_code = result.stdout.strip()
+        except Exception:
+            http_code = "000"
+
+        print(f"\r服务端口{port}健康检查中... 已等待 {elapsed} 秒,当前状态码:{http_code}", end="", flush=True)
+
+        if http_code == "200":
+            print(f"\n端口{port}健康检查通过!耗时 {elapsed} 秒")
+            break
+
+        time.sleep(interval)
+
+    return True
 
 
 def test_ep4tp1_online(xpu_env):
@@ -49,46 +101,77 @@ def test_ep4tp1_online(xpu_env):
     # 设置EP环境变量
     original_env = setup_ep_env()
 
+    stop_processes()
+
+    cleanup_resources()
+
     try:
         # 获取配置
-        port_num = get_port_num()
         model_path = get_model_path()
+        port_num = get_port_num()
+        router_port = port_num
+        server_ports = [port_num + 1, port_num + 2, port_num + 3, port_num + 4]
+        metrics_ports = [port_num + 11, port_num + 12, port_num + 13, port_num + 14]
+        engine_worker_queue_ports = [port_num + 21, port_num + 22, port_num + 23, port_num + 24]
 
-        # 构建服务器启动参数
-        server_args = [
-            "--model",
-            f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        # start router
+        router_cmd = [
+            "python",
+            "-m",
+            "fastdeploy.router.launch",
             "--port",
-            str(port_num),
-            "--tensor-parallel-size",
-            "1",
-            "--enable-expert-parallel",
-            "--enable-prefix-caching",
-            "--data-parallel-size",
+            str(router_port),
+        ]
+        print(f"Router start command: {' '.join(router_cmd)}")
+        with open("router.log", "w") as log_file:
+            subprocess.Popen(router_cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
+        time.sleep(1)
+
+        # start server
+        server_cmd = [
+            "python",
+            "-m",
+            "fastdeploy.entrypoints.openai.multi_api_server",
+            "--ports",
+            f"{','.join([str(i) for i in server_ports])}",
+            "--num-servers",
             "4",
+            "--metrics-ports",
+            f"{','.join([str(i) for i in metrics_ports])}",
+            "--args",
+            "--model",
+            f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
+            "--engine-worker-queue-port",
+            f"{','.join([str(i) for i in engine_worker_queue_ports])}",
             "--max-model-len",
             "32768",
             "--max-num-seqs",
             "64",
+            "--data-parallel-size",
+            "4",
+            "--tensor-parallel-size",
+            "1",
+            "--enable-expert-parallel",
             "--quantization",
             "wint4",
-            "--engine-worker-queue-port",
-            f"{port_num + 10},{port_num + 20},{port_num + 30},{port_num + 40}",
-            "--metrics-port",
-            str(port_num + 2),
-            "--cache-queue-port",
-            str(port_num + 47873),
-            "--gpu-memory-utilization",
-            "0.9",
+            "--enable-prefix-caching",
+            "--router",
+            f"0.0.0.0:{router_port}",
         ]
+        print(f"服务启动命令: {' '.join(server_cmd)}")
+        with open("server.log", "w") as log_file:
+            subprocess.Popen(server_cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
 
-        # 启动服务器
-        if not start_server(server_args):
-            pytest.fail("EP4TP1在线服务启动失败")
+        ports_to_check = [router_port] + server_ports
+        for port_to_check in ports_to_check:
+            if not wait_for_health_check(port_to_check):
+                print_logs_on_failure()
+                stop_processes()
+                pytest.fail("EP4TP1服务启动失败")
 
         # 执行测试
         ip = "0.0.0.0"
-        client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
+        client = openai.Client(base_url=f"http://{ip}:{router_port}/v1", api_key="EMPTY_API_KEY")
 
         # 非流式对话
         response = client.chat.completions.create(
