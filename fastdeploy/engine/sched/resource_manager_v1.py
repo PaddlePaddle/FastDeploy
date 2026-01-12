@@ -353,7 +353,7 @@ class ResourceManagerV1(ResourceManager):
                         token_st += h * w // 4
             inputs["mm_positions"] = new_mm_positions
             inputs["mm_hashes"] = new_mm_hashes
-        else:
+        elif inputs.get("mm_positions", None) is None or inputs.get("mm_hashes", None) is None:
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
@@ -958,6 +958,7 @@ class ResourceManagerV1(ResourceManager):
                         hit_info["gpu_match_token_num"] -= self.config.cache_config.block_size
                     elif common_block_ids[block_idx] in hit_info["match_cpu_block_ids"]:
                         hit_info["cpu_match_token_num"] -= self.config.cache_config.block_size
+                llm_logger.debug(f"request {request.request_id} block hit info: {hit_info}")
 
             request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
             request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
