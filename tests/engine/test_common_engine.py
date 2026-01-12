@@ -440,11 +440,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
             def receive_json_once(self, block):
                 self.call_count += 1
-                # 第一次返回错误，之后停止 engine
                 if self.call_count == 1:
                     return self.msg, None
                 else:
-                    # 第二次调用时停止 engine
                     eng.running = False
                     return None, None
 
