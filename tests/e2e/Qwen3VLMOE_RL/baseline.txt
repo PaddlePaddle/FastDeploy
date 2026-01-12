@@ -1033,8 +1033,6 @@ model.layers.8.self_attn.qk_norm.k_norm.weight
 model.layers.8.self_attn.qk_norm.k_norm.weight:model.layers.8.self_attn.qk_norm.k_norm.weight
 model.layers.8.self_attn.qk_norm.q_norm.weight
 model.layers.8.self_attn.qk_norm.q_norm.weight:model.layers.8.self_attn.qk_norm.q_norm.weight
-/usr/local/lib/python3.10/site-packages/coverage/control.py:958: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.1/messages.html#warning-no-data-collected
-  self._warn("No data was collected.", slug="no-data-collected")
 model.layers.8.self_attn.qkv_proj.weight
 model.layers.8.self_attn.qkv_proj.weight:model.layers.8.self_attn.qkv_proj.weight
 model.layers.8.self_attn.qkv_proj.weight_scale
