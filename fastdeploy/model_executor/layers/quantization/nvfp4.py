@@ -580,7 +580,13 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
-    def apply(self, layer, x, gate, topk_ids_hookfunc=None,):
+    def apply(
+        self,
+        layer,
+        x,
+        gate,
+        topk_ids_hookfunc=None,
+    ):
         """
         flashinfer nvfp4 fusedmoe for Model Optimizer
         """
@@ -592,7 +598,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             True,  # apply_norm_weight,
             False,
         )
-        
+
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids)
 
