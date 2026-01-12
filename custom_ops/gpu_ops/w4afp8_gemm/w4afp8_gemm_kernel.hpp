@@ -317,7 +317,8 @@ void run_gemm(const InputType *A,
               const float *input_dequant_scale,
               const int64_t *tokens,
               const int max_tokens,
-              cudaStream_t stream) {
+              cudaStream_t stream,
+              const int64_t *max_tokens_per_expert = nullptr) {
   using ElementOutput = typename Kernel_traits::ElementOutput;
   using Element = typename Kernel_traits::Element;
   using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;

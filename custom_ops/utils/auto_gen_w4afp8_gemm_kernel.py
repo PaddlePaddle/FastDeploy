@@ -41,7 +41,8 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     const float * input_dequant_scale,
     const int64_t *tokens,
     const int64_t max_tokens,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int64_t *max_tokens_per_expert = nullptr);
 """
 
 gemm_template_cu_head = """
@@ -59,7 +60,8 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
         const float * input_dequant_scale,
         const int64_t *tokens,
         const int64_t max_tokens,
-        cudaStream_t stream) {{
+        cudaStream_t stream,
+        const int64_t *max_tokens_per_expert) {{
 
     constexpr static int M = {M};
     constexpr static int K = {K};

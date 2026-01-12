@@ -27,6 +27,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                  // each group
     const paddle::Tensor& weight_scale,
     const paddle::optional<paddle::Tensor>& input_dequant_scale,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const int64_t token_padding_size,
     const int64_t max_tokens,
     const bool is_bfloat16);

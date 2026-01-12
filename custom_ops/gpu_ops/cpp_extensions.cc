@@ -330,6 +330,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
