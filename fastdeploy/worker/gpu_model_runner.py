@@ -2501,7 +2501,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.cache_config.block_size,
                 save_each_rank=self.parallel_config.use_ep,
                 speculative_decoding=self.speculative_decoding,
-                skip_save_output=skip_save_output or self.parallel_config.tensor_parallel_rank > 0,
+                skip_save_output=skip_save_output,
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
