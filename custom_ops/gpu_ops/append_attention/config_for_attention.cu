@@ -137,8 +137,8 @@ __global__ void config_decode_attn(const int *__restrict__ seq_lens_this_time,
         chunk_size_best = min_chunk_size * (i + 1);
       }
     } else {
-      chunk_size_best = min_chunk_size;
-      num_block_all_best = num_block_all_shared[0];
+      chunk_size_best = min_chunk_size * block_size;
+      num_block_all_best = num_block_all_shared[block_size - 1];
       for (int i = block_size - 1; i >= 0; i--) {
         if (num_block_all_shared[i] > config_gridx) {
           break;
