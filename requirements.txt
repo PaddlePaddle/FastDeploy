@@ -45,3 +45,4 @@ einops
 setproctitle
 aistudio_sdk
 py-cpuinfo
+flashinfer-python-paddle
