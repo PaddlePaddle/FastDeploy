@@ -2810,6 +2810,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
+    def update_weights(self):
+        logger.info("GPU Model Runner update weights inplace")
+
     def padding_cudagraph_inputs(self) -> None:
         """
         Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.

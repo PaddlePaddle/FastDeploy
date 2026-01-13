@@ -28,6 +28,7 @@ import threading
 import time
 import traceback
 import weakref
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
@@ -50,6 +51,7 @@ from fastdeploy.inter_communicator import (
     ZmqIpcServer,
     ZmqTcpServer,
 )
+from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
@@ -82,15 +84,23 @@ class EngineService:
         self.cfg = cfg
         self.use_async_llm = use_async_llm
         
-        self.is_paused = False # pause request generation
-        self._pause_cond = threading.Condition()
-
         if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
                 "fastdeploy", f"fastdeploy_dprank{self.cfg.parallel_config.local_data_parallel_id}.log"
             )
         else:
             self.llm_logger = llm_logger
+
+        self.is_paused = False # pause request generation
+        self._pause_cond = threading.Condition()
+
+        self._ctrl_worker_output_queues = []
+        tp_size = cfg.parallel_config.tensor_parallel_size
+        dp_index = cfg.parallel_config.local_data_parallel_id
+        for rank in range(tp_size):
+            name = f"ctrl_w2e_rank{rank+tp_size*dp_index}"
+            self.llm_logger.info(f"Init Worker Control Output Queue: {name}(consumer)")
+            self._ctrl_worker_output_queues.append(FMQ().queue(name, "consumer"))
 
         self.scheduler = cfg.scheduler_config.scheduler()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
@@ -1072,7 +1082,7 @@ class EngineService:
                     break
 
                 if ControlRequest.is_control_request(data):
-                    try:
+                    try: #todo: run control request async, do not block request generation
                         control_req = ControlRequest.from_dict(data)
                         self.run_control_method(control_req)
                     except Exception as e:
@@ -1151,7 +1161,6 @@ class EngineService:
             - If no handler exists, returns error with available methods
         """
         method = control_req.get_method()
-        args = control_req.get_args()
         request_id = control_req.request_id
         
         try:
@@ -1165,7 +1174,7 @@ class EngineService:
                 self.send_response_server.send_response(request_id, [error_result])
                 return
             
-            result = handler(args)
+            result = handler(control_req)
             self.llm_logger.info(f"SUCCESS run control method {method}.")
             succ_result = ControlResponse(request_id, 200, "Success", result)
             self.send_response_server.send_response(request_id, [succ_result])
@@ -1176,7 +1185,7 @@ class EngineService:
             error_result = ControlResponse(request_id, 500, error_msg)
             self.send_response_server.send_response(request_id, [error_result])
 
-    def _control_pause(self, args: dict) -> dict | None:
+    def _control_pause(self, control_request: ControlRequest) -> dict | None:
         """暂停请求生成
 
         Args:
@@ -1187,6 +1196,11 @@ class EngineService:
                 - error_code: 错误代码，0表示成功，非0表示失败
                 - error_msg: 错误信息，成功时为空字符串
         """
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            raise Exception(f"pause only supported in ENABLE_V1_KVCACHE_SCHEDULER")
+        if self.cfg.scheduler_config.name != "local":
+            raise Exception(f"pause only supported in local scheduler, current {self.cfg.scheduler_config.name}")
+
         with self._pause_cond:
             if self.is_paused:
                 self.llm_logger.info("Pause Request Generation: already paused.")
@@ -1212,14 +1226,12 @@ class EngineService:
             self.resource_manager.get_real_bsz()
             self.engine_worker_queue.put_tasks((running_reqs, self.resource_manager.real_bsz))
             self.resource_manager.wait_worker_inflight_requests_finish(timeout=60)
-        self.resource_manager.log_status()
-        self.engine_worker_queue.clear_data()
+        #self.engine_worker_queue.clear_data()
         self.token_processor.clear_data()
-        #self.resource_manager.clear_data()
         self.resource_manager.log_status()
 
         # abort inflight requests to user
-        inflight_requests = [req.raw for req in self.scheduler.requests.values()]
+        inflight_requests = self.scheduler.get_inflight_requests()
         self.llm_logger.info(f"Start Abort Inflight Requests, total {len(inflight_requests)} waiting requests")
         for req in inflight_requests:
             self._send_error_response(req.request_id, "Request is aborted since LLM Engine is paused.")
@@ -1228,7 +1240,7 @@ class EngineService:
         self.resource_manager.cache_manager.reset()
         return None
 
-    def _control_resume(self, args: dict) -> dict | None:
+    def _control_resume(self, control_request: ControlRequest) -> dict | None:
         """恢复暂停的请求生成
 
         Args:
@@ -1246,7 +1258,7 @@ class EngineService:
         self.llm_logger.info(f"END Resume Request Generation")
         return None
 
-    def _control_is_paused(self, args: dict) -> bool:
+    def _control_is_paused(self, control_request: ControlRequest) -> bool:
         """检查是否暂停了请求生成
 
         Args:
@@ -1259,7 +1271,7 @@ class EngineService:
         with self._pause_cond:
             return {"is_paused": self.is_paused}
 
-    def _control_update_weights(self, args: dict) -> dict | None:
+    def _control_update_weights(self, control_request: ControlRequest) -> dict | None:
         """更新模型权重
 
         Args:
@@ -1269,7 +1281,32 @@ class EngineService:
             dict | None: 返回结果字典或None，包含更新权重的操作结果信息
         """
         self.llm_logger.info(f"Update Model Weights")
-        return None
+        with self._pause_cond:
+            if self.is_paused is False:
+                error_msg = f"Pause LLM Engine first before calling updating weights"
+                self.llm_logger.error(error_msg)
+                raise Exception(error_msg)
+        return self._call_worker(control_request, 60)
+
+    def _call_worker(self, control_request: ControlRequest, timeout: int):
+        request_id = control_request.request_id
+        self.engine_worker_queue.put_tasks(([control_request], 1))
+
+        responses = []
+        for output_queue in self._ctrl_worker_output_queues:
+            msg = asyncio.run(output_queue.get(timeout=timeout*1000)) # todo: fix timeout when tp > 1
+            if msg is None:
+                raise Exception("Worker Update Weights Timeouted after 600s")
+            response: ControlResponse = msg.payload
+            if response.request_id != request_id:
+                self.llm_logger.info(f"ignore old control response from worker:{output_queue.name} {response}")
+                continue
+            if response.error_code != 200:
+                self.llm_logger.info(f"Call Worker Failed: {output_queue.name} {response.error_message}")
+                raise Exception(f"Call Worker error: {response.error_message}")
+            self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
+            responses.append(response.result)
+        return responses
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(

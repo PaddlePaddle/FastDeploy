@@ -258,10 +258,12 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs = []
             for i in range(len(self.running)):
                 req = self.running.pop()
+                 # txt2image: req.use_extend_tables is True, req can not be preempted. txt2image is not used in RL.
+                if req.use_extend_tables:
+                    self.running.insert(0, req)
+                    continue
                 req.status = RequestStatus.PREEMPTED
                 req.num_computed_tokens = 0
-                #self.tasks_list[req.idx] = None
-                #self.stop_flags[req.idx] = True
                 self._free_blocks(req)
                 req.cached_block_num = 0
                 self.to_be_rescheduled_request_id_set.add(req.request_id)
@@ -271,7 +273,8 @@ class ResourceManagerV1(ResourceManager):
     def wait_worker_inflight_requests_finish(self, timeout=60):
         count = 0
         while count < timeout * 1000:
-            running_reqs_count = len(self.to_be_rescheduled_request_id_set)
+            # wait ongoing running and rescheduled requests finished in worker
+            running_reqs_count = len(self.to_be_rescheduled_request_id_set) + len(self.running)
             if running_reqs_count == 0:
                 break
 

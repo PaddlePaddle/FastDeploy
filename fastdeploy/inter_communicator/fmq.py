@@ -214,7 +214,7 @@ class Queue(BaseComponent):
         else:
             self.socket.bind(full_ep)
 
-        fmq_logger.info(f"Queue {name} initialized on {full_ep}")
+        fmq_logger.info(f"Queue {name}({role}) initialized on {full_ep}")
 
     async def put(self, data: Any, shm_threshold: int = 1024 * 1024):
         """

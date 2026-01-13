@@ -18,7 +18,9 @@ import argparse
 import json
 import os
 import time
+import traceback
 from typing import Tuple
+import asyncio
 
 import numpy as np
 import paddle
@@ -56,12 +58,14 @@ from fastdeploy.inter_communicator import (
     ModelWeightsStatus,
     RearrangeExpertStatus,
 )
+from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
+from fastdeploy.engine.request import ControlRequest, ControlResponse
 
 logger = get_logger("worker_process", "worker_process.log")
 
@@ -162,6 +166,11 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+    def init_control(self):
+        queue_name = f"ctrl_w2e_rank{self.local_rank}"
+        logger.info(f"Init Control Output Queue: {queue_name}(producer)")
+        self._ctrl_output = FMQ().queue(queue_name, "producer")
 
     def init_health_status(self) -> None:
         """
@@ -488,6 +497,11 @@ class PaddleDisWorkerProc:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
 
+                # try run control method
+                if len(req_dicts) == 1 and isinstance(req_dicts[0], ControlRequest):
+                    self.run_control_method(req_dicts[0])
+                    continue
+
                 req_ids = [req.request_id for req in req_dicts]
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
@@ -618,6 +632,30 @@ class PaddleDisWorkerProc:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
 
+    def run_control_method(self, control_request: ControlRequest) -> None:
+        request_id = control_request.request_id
+        method = control_request.method
+        kwargs = control_request.args
+
+        handler = getattr(self.worker, method, None)
+        if handler is None or not callable(handler):
+            error_result = ControlResponse(request_id, 400, f"unknown control method {method}")
+            self._send_control_response(error_result)
+            return
+
+        try:
+            result = handler(**kwargs)
+            succ_result = ControlResponse(request_id, 200, "Success", result)
+            self._send_control_response(succ_result)
+        except Exception as e:
+            error_msg = f"Failed run control method {method}: {str(e)}"
+            logger.info(f"{error_msg}\n{traceback.format_exc()}")
+            error_result = ControlResponse(request_id, 500, error_msg)
+            self._send_control_response(error_result)
+
+    def _send_control_response(self, control_response: ControlResponse):
+        logger.info(f"Rank-{self.local_rank} put control output {control_response} to engine")
+        asyncio.run(self._ctrl_output.put(control_response, shm_threshold=100*1024*1024))
 
 def parse_args():
     """
@@ -1058,6 +1096,7 @@ def run_worker_proc() -> None:
         worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+        worker_proc.init_control()
 
     # Initialize device and create model runner
     worker_proc.init_device()
