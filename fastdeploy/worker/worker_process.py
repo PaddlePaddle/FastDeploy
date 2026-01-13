@@ -235,7 +235,7 @@ class PaddleDisWorkerProc:
             name="kv_cache_status",
             array=kv_cache_status_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
