@@ -152,9 +152,6 @@ class AppendAttentionBackend(AttentionBackend):
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
-        # split kv still has bug in speculative decoding
-        if self.speculative_method is not None:
-            self.max_partition_size = self.max_seq_len
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 

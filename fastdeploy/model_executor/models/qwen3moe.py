@@ -282,6 +282,9 @@ class Qwen3MoeModel(nn.Layer):
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
         return out
 
 
@@ -355,6 +358,8 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             ("up_gate_proj", "up_proj", "up"),
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
+            ("qk_norm.q_norm", "q_norm", None),
+            ("qk_norm.k_norm", "k_norm", None),
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())

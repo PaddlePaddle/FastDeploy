@@ -20,6 +20,7 @@
 #include "msg_utils.h"
 #include "paddle/extension.h"
 
+// #define GET_OUTPUT_DEBUG
 void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag) {
@@ -114,16 +115,26 @@ void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag) {
   GetOutput(x, rank_id, wait_flag, 1);
 }
 
+void GetOutputDynamic(const paddle::Tensor& x,
+                      int64_t rank_id,
+                      bool wait_flag,
+                      int msg_queue_id) {
+  if (rank_id > 0) {
+    return;
+  }
+  GetOutput(x, rank_id, wait_flag, msg_queue_id);
+}
+
 void GetOutputEPStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag) {
   GetOutput(x, rank_id, wait_flag, 1);
 }
 
-void GetOutputDynamic(const paddle::Tensor& x,
-                      int64_t rank_id,
-                      bool wait_flag,
-                      int msg_queue_id) {
+void GetOutputEPDynamic(const paddle::Tensor& x,
+                        int64_t rank_id,
+                        bool wait_flag,
+                        int msg_queue_id) {
   GetOutput(x, rank_id, wait_flag, msg_queue_id);
 }
 
@@ -153,4 +164,4 @@ PD_BUILD_OP(get_output_ep_dynamic)
     .Attrs({"rank_id: int64_t", "wait_flag: bool", "msg_queue_id: int"})
     .Outputs({"x_out"})
     .SetInplaceMap({{"x", "x_out"}})
-    .SetKernelFn(PD_KERNEL(GetOutputDynamic));
+    .SetKernelFn(PD_KERNEL(GetOutputEPDynamic));

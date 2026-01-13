@@ -20,6 +20,10 @@
 #include "msg_utils.h"
 #include "paddle/extension.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 // #define SAVE_WITH_OUTPUT_DEBUG
 void SaveOutMmsg(const paddle::Tensor &x,
                  const paddle::Tensor &not_need_stop,
@@ -27,7 +31,7 @@ void SaveOutMmsg(const paddle::Tensor &x,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
-  if (!save_each_rank && rank_id > 0) {
+  if (rank_id > 0) {
     return;
   }
   auto x_cpu = x.copy_to(paddle::CPUPlace(), false);
