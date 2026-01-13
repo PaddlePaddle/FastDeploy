@@ -18,7 +18,6 @@ from typing import Optional
 
 import paddle
 
-import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
