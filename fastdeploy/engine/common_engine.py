@@ -1063,7 +1063,13 @@ class EngineService:
                         )
                     else:
                         self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
-                    break
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        self.recv_request_server = ZmqTcpServer(
+                            port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL
+                        )
+                    else:
+                        self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
+                    continue
 
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
