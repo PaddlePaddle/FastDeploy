@@ -18,7 +18,8 @@
 template <typename T, typename OutT, bool IsFP8 = false>
 void CascadeAppendAttentionC8Kernel(
     const AppendAttnMetaData& meta_data,
-    const paddle::Tensor& qkv,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
+    const paddle::Tensor&
+        qkv,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     const paddle::Tensor&
         cache_k,  // [max_block_num, num_heads, block_size, head_dim]
     const paddle::Tensor&
@@ -35,9 +36,8 @@ void CascadeAppendAttentionC8Kernel(
     const paddle::optional<paddle::Tensor>&
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
-        smooth_weight,  // [num_kv_heads, head_dim]
-    const paddle::optional<paddle::Tensor>&
-        sinks,  // [num_heads]
+        smooth_weight,                              // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>& sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -65,7 +65,6 @@ void CascadeAppendAttentionC8Kernel(
     const int sliding_window) {
   const auto token_num = meta_data.token_nums;
   const auto block_size = meta_data.block_size;
-  const auto bsz = meta_data.batch_size;
   const auto num_heads = meta_data.q_num_heads;
   const auto group_size = meta_data.q_num_heads / meta_data.kv_num_heads;
   const auto head_dim = meta_data.head_dims;
@@ -87,54 +86,57 @@ void CascadeAppendAttentionC8Kernel(
                       block_size,
                       BLOCK_SIZE,
                       {DISPATCH_BLOCKSHAPE_Q(
-                          block_shape_q, BLOCK_SHAPE_Q, NUM_WARP_Q, {
-                            DISPATCH_DyCfp8(is_dynamic_cfp8, IsDynamicC8, {
-                              MultiQueryAppendC8Attention<T,
-                                                          GROUP_SIZE,
-                                                          HEAD_DIM,
-                                                          BLOCK_SIZE,
-                                                          CAUSAL,
-                                                          BLOCK_SHAPE_Q,
-                                                          NUM_WARP_Q,
-                                                          OutT,
-                                                          ENABLE_PREFILL,
-                                                          IsFP8,
-                                                          IsDynamicC8>(
-                                  meta_data,
-                                  qkv,
-                                  cache_k,
-                                  cache_v,
-                                  attn_mask,
-                                  cache_k_scale.get(),
-                                  cache_v_scale.get(),
-                                  shift_bias,
-                                  smooth_weight,
-                                  sinks,
+                          block_shape_q,
+                          BLOCK_SHAPE_Q,
+                          NUM_WARP_Q,
+                          {DISPATCH_DyCfp8(is_dynamic_cfp8, IsDynamicC8, {
+                            MultiQueryAppendC8Attention<T,
+                                                        GROUP_SIZE,
+                                                        HEAD_DIM,
+                                                        BLOCK_SIZE,
+                                                        CAUSAL,
+                                                        BLOCK_SHAPE_Q,
+                                                        NUM_WARP_Q,
+                                                        OutT,
+                                                        ENABLE_PREFILL,
+                                                        IsFP8,
+                                                        IsDynamicC8>(
+                                meta_data,
+                                qkv,
+                                cache_k,
+                                cache_v,
+                                attn_mask,
+                                cache_k_scale.get(),
+                                cache_v_scale.get(),
+                                shift_bias,
+                                smooth_weight,
+                                sinks,
                                 seq_lens_q,
-                                  seq_lens_kv,
-                                  seq_lens_encoder,
-                                  batch_id_per_token,
-                                  cu_seqlens_q,
-                                  block_table,
-                                  batch_ids,
-                                  tile_ids_per_batch,
-                                  num_blocks,
-                                  max_seq_len,
-                                  max_dec_len,
-                                  quant_max_bound,
-                                  quant_min_bound,
-                                  in_scale,
-                                  max_partition_size,
-                                  encoder_max_partition_size,
-                                  speculate_max_draft_token_num,
-                                  is_decoder,
-                                  stream,
-                                  out,
+                                seq_lens_kv,
+                                seq_lens_encoder,
+                                batch_id_per_token,
+                                cu_seqlens_q,
+                                block_table,
+                                batch_ids,
+                                tile_ids_per_batch,
+                                num_blocks,
+                                max_seq_len,
+                                max_dec_len,
+                                quant_max_bound,
+                                quant_min_bound,
+                                in_scale,
+                                max_partition_size,
+                                encoder_max_partition_size,
+                                speculate_max_draft_token_num,
+                                is_decoder,
+                                stream,
+                                out,
                                 sliding_window);
-      })})})})})})})
+                          })})})})})})})
 }
 
-template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, false>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, false>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -173,7 +175,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, f
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, true>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, true>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -212,7 +215,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float16, t
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, false>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, false>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -251,7 +255,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, true>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::float16, paddle::float8_e4m3fn, true>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -368,7 +373,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::float16, int8_t, true>(
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, false>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, false>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -407,7 +413,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16,
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, true>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16, true>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -446,7 +453,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::bfloat16,
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, false>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, false>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
@@ -485,7 +493,8 @@ template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4
     paddle::Tensor* out,
     const int sliding_window);
 
-template void CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, true>(
+template void
+CascadeAppendAttentionC8Kernel<paddle::bfloat16, paddle::float8_e4m3fn, true>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,
     const paddle::Tensor& cache_k,
