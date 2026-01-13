@@ -264,7 +264,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
 
     def apply(self, layer, x):
         x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(x, using_pow2_scale=False)
-        x_scale_tensor = x_scale_tensor.T[: x.shape[0]]
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         linear_out = deep_gemm_fp8_fp8_bf16_nt(
             x, x_scale_tensor, layer.weight, layer.weight_scale_inv, linear_out, layer.output_size
