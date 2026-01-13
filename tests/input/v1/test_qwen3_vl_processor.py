@@ -21,8 +21,8 @@ import numpy as np
 from PIL import Image
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.qwen3_vl_processor import Qwen3VLProcessor
-from fastdeploy.input.qwen3_vl_processor.process import sample_frames
+from fastdeploy.input.v1.qwen3_vl_processor import Qwen3VLProcessor
+from fastdeploy.input.v1.qwen3_vl_processor.process import sample_frames
 
 
 def mock_pil_image(height, width):

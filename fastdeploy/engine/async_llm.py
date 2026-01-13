@@ -396,11 +396,11 @@ class AsyncLLM(EngineServiceClient):
 
         if sampling_params is not None:
             prompt.update(asdict(sampling_params))
+        prompt["metrics"] = {}
 
         try:
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
-            prompt["metrics"] = {}
 
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 request = await self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
@@ -436,7 +436,7 @@ class AsyncLLM(EngineServiceClient):
 
                 request["metrics"]["preprocess_end_time"] = time.time()
                 preprocess_cost_time = (
-                    request["metrics"]["preprocess_end_time"] - ["metrics"]["preprocess_start_timerequest"]
+                    request["metrics"]["preprocess_end_time"] - request["metrics"]["preprocess_start_time"]
                 )
                 llm_logger.info(
                     f"Cache request with request_id ({request.get('request_id')}), "
