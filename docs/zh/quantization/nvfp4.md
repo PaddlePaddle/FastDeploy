@@ -15,7 +15,7 @@ NVFP4 是 NVIDIA 引入的创新 4 位浮点格式，详细介绍请参考[Intro
 - **Fastdeploy 版本**：2.5.0 或更高版本
 
 #### Fastdeploy 安装
-FastDeploy 需以 NVIDIA GPU 模式安装，具体安装方式请参考官方文档：[Fastdeploy NVIDIA GPU 环境安装指南](../../get_started/installation/nvidia_gpu.md)。
+FastDeploy 需以 NVIDIA GPU 模式安装，具体安装方式请参考官方文档：[Fastdeploy NVIDIA GPU 环境安装指南](https://paddlepaddle.github.io/FastDeploy/zh/get_started/installation/nvidia_gpu/)。
 
 ### 运行推理服务
 ```bash

@@ -15,7 +15,7 @@ Based on [FlashInfer](https://github.com/flashinfer-ai/flashinfer), Fastdeploy s
 
 #### FastDeploy Installation
 Please ensure that FastDeploy is installed with NVIDIA GPU support.
-Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU Environment Installation Guide](../../get_started/installation/nvidia_gpu.md).
+Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU Environment Installation Guide](https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/).
 
 ### Running Inference Service
 ```bash
