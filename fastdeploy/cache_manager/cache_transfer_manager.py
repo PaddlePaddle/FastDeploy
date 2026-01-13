@@ -42,12 +42,7 @@ from fastdeploy.cache_manager.ops import (
 )
 from fastdeploy.cache_manager.transfer_factory import MooncakeStore
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.inter_communicator import (
-    EngineCacheQueue,
-    IPCSignal,
-    KVCacheStatus,
-    ModelWeightsStatus,
-)
+from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
@@ -236,13 +231,6 @@ class CacheTransferManager:
         self.write_policy = args.write_policy
 
         # Initialize update/clear signals for RL
-        self.model_weights_status_signal = IPCSignal(
-            name="model_weights_status",
-            array=np.zeros([1], dtype=np.int32),
-            dtype=np.int32,
-            suffix=args.engine_worker_queue_port,
-            create=False,
-        )
         self.kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
             array=np.zeros([1], dtype=np.int32),
@@ -1016,11 +1004,6 @@ class CacheTransferManager:
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
                     logger.info(f"All ranks finish clearing caches {self.cache_ready_signal.value}")
 
-                    logger.info("Waiting for model_weights_status to be cleared..")
-                    while self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
-                        time.sleep(0.1)
-                    logger.info("model_weights_status is cleared, stop waiting!")
-
                 except Exception as e:
                     logger.error(f"Failed to clear caches: {e}")
 
@@ -1045,11 +1028,6 @@ class CacheTransferManager:
                     # set kv_cache_status_signal
                     logger.info(f"All ranks finish restoring caches {self.cache_ready_signal.value}")
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-
-                    logger.info("Waiting for model_weights_status to be normal..")
-                    while self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
-                        time.sleep(0.1)
-                    logger.info("model_weights_status is normal, stop waiting!")
 
                 except Exception as e:
                     logger.error(f"Failed to restore caches: {e}")
