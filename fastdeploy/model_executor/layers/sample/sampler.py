@@ -624,11 +624,7 @@ class SpeculativeSampler(nn.Layer):
         top_p_logprob = None
         top_p_token_mask = None
 
-        if (
-            top_p_normalized_logprobs is not None
-            and share_inputs is not None
-            and sampling_metadata.top_p_normalized_logprobs_flag
-        ):
+        if top_p_normalized_logprobs is not None and share_inputs is not None:
             real_token_top_p = (
                 sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(batch_token_num).unsqueeze(1)
             )
@@ -883,11 +879,7 @@ class MTPSampler(nn.Layer):
         top_p_logprob = None
         top_p_token_mask = None
 
-        if (
-            top_p_normalized_logprobs is not None
-            and share_inputs is not None
-            and sampling_metadata.top_p_normalized_logprobs_flag
-        ):
+        if top_p_normalized_logprobs is not None and share_inputs is not None:
             real_token_top_p = (
                 sampling_metadata.top_p[:real_bsz]
                 .squeeze(1)
