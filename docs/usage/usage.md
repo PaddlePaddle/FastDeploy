@@ -6,11 +6,11 @@ Fastdeploy collects anonymous usage data by default to help the engineering team
 
 # Data Collected
 
-The data inventory collected by the latest version of Fastdeploy can be found here：[usage_lib.py](../../../fastdeploy/usage/usage_lib.py)
-You can preview the collected data by running the following command：
+The data inventory collected by the latest version of Fastdeploy can be found here：[usage_lib.py](../../../fastdeploy/usage/usage_lib.py)  
+You can preview the collected data by running the following command：  
 `tail ~/.config/fastdeploy/usage_stats.json`
 
 # Opting Out
 
-You can opt out of usage collection by setting the `DO_NOT_TRACK` environment variable：
+You can opt out of usage collection by setting the `DO_NOT_TRACK` environment variable：  
 `export DO_NOT_TRACK=1`
