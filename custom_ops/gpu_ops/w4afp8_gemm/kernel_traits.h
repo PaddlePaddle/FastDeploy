@@ -46,7 +46,9 @@ struct SharedStorage {
 };
 
 template <int kBlockM_,
-          int kBlockN_,
+          int kBlockN1_,
+          int kBlockN2_,
+          int kBlockN3_,
           int kBlockK_,
           int kNWarps_,
           int kStages_,
@@ -73,7 +75,9 @@ struct Kernel_traits {
   static_assert(kNWarps_ == 12 || kNWarps_ == 16);
 
   static constexpr int kBlockM = kBlockM_;
-  static constexpr int kBlockN = kBlockN_;
+  static constexpr int kBlockN1 = kBlockN1_;
+  static constexpr int kBlockN2 = kBlockN2_;
+  static constexpr int kBlockN3 = kBlockN3_;
   static constexpr int kBlockK = kBlockK_;
   static constexpr int kTiles = kTiles_;
   static constexpr int TokenPackSize = TokenPackSize_;
@@ -81,8 +85,9 @@ struct Kernel_traits {
   static constexpr int K = K_;
   static constexpr int WeightScaleGroup = WeightScaleGroup_;
 
-  using TileShape_MNK = Shape<Int<kBlockM>, Int<kBlockN>, Int<kBlockK>>;
-
+  using TileShape_MNK1 = Shape<Int<kBlockM>, Int<kBlockN1>, Int<kBlockK>>;
+  using TileShape_MNK2 = Shape<Int<kBlockM>, Int<kBlockN2>, Int<kBlockK>>;
+  using TileShape_MNK3 = Shape<Int<kBlockM>, Int<kBlockN3>, Int<kBlockK>>;
   static constexpr int kClusterM = kClusterM_;
   using ClusterShape_MNK = Shape<Int<kClusterM>, _1, _1>;
 
@@ -91,9 +96,17 @@ struct Kernel_traits {
 
   using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;
 
-  using TiledMma = decltype(cute::make_tiled_mma(
+  using TiledMma1 = decltype(cute::make_tiled_mma(
       cute::GMMA::
-          rs_op_selector<Element, Element, ElementAccum, TileShape_MNK>(),
+          rs_op_selector<Element, Element, ElementAccum, TileShape_MNK1>(),
+      AtomLayoutMNK{}));
+  using TiledMma2 = decltype(cute::make_tiled_mma(
+      cute::GMMA::
+          rs_op_selector<Element, Element, ElementAccum, TileShape_MNK2>(),
+      AtomLayoutMNK{}));
+  using TiledMma3 = decltype(cute::make_tiled_mma(
+      cute::GMMA::
+          rs_op_selector<Element, Element, ElementAccum, TileShape_MNK3>(),
       AtomLayoutMNK{}));
 
   using SmemLayoutAtomA =
@@ -107,27 +120,53 @@ struct Kernel_traits {
       SmemLayoutAtomA{},
       make_shape(Int<kBlockM>{}, Int<kBlockK / 2>{}, Int<kStages>{})));
 
-  using SmemLayoutAtomB =
+  using SmemLayoutAtomB1 =
       decltype(cutlass::gemm::collective::detail::rs_smem_selector<
                GMMA::Major::K,
                Element,
-               decltype(cute::get<1>(TileShape_MNK{})),
-               decltype(cute::get<2>(TileShape_MNK{}))>());
+               decltype(cute::get<1>(TileShape_MNK1{})),
+               decltype(cute::get<2>(TileShape_MNK1{}))>());
 
-  using SmemLayoutB =
-      decltype(tile_to_shape(SmemLayoutAtomB{},
-                             make_shape(shape<1>(TileShape_MNK{}),
-                                        shape<2>(TileShape_MNK{}),
+  using SmemLayoutB1 =
+      decltype(tile_to_shape(SmemLayoutAtomB1{},
+                             make_shape(shape<1>(TileShape_MNK1{}),
+                                        shape<2>(TileShape_MNK1{}),
+                                        Int<kStages>{})));
+
+  using SmemLayoutAtomB2 =
+      decltype(cutlass::gemm::collective::detail::rs_smem_selector<
+               GMMA::Major::K,
+               Element,
+               decltype(cute::get<1>(TileShape_MNK2{})),
+               decltype(cute::get<2>(TileShape_MNK2{}))>());
+
+  using SmemLayoutB2 =
+      decltype(tile_to_shape(SmemLayoutAtomB2{},
+                             make_shape(shape<1>(TileShape_MNK2{}),
+                                        shape<2>(TileShape_MNK2{}),
+                                        Int<kStages>{})));
+
+  using SmemLayoutAtomB3 =
+      decltype(cutlass::gemm::collective::detail::rs_smem_selector<
+               GMMA::Major::K,
+               Element,
+               decltype(cute::get<1>(TileShape_MNK3{})),
+               decltype(cute::get<2>(TileShape_MNK3{}))>());
+
+  using SmemLayoutB3 =
+      decltype(tile_to_shape(SmemLayoutAtomB3{},
+                             make_shape(shape<1>(TileShape_MNK3{}),
+                                        shape<2>(TileShape_MNK3{}),
                                         Int<kStages>{})));
   using SmemLayoutAtomC =
       decltype(cutlass::gemm::collective::detail::rs_smem_selector<
                GMMA::Major::K,
                ElementOutput,
-               decltype(cute::get<0>(TileShape_MNK{})),
-               decltype(cute::get<1>(TileShape_MNK{}))>());
+               decltype(cute::get<0>(TileShape_MNK1{})),
+               decltype(cute::get<1>(TileShape_MNK1{}))>());
 
-  using SmemLayoutC =
-      decltype(tile_to_shape(SmemLayoutAtomC{}, select<0, 1>(TileShape_MNK{})));
+  using SmemLayoutC = decltype(tile_to_shape(SmemLayoutAtomC{},
+                                             select<0, 1>(TileShape_MNK1{})));
 
   using SmemCopyAtomAB = Copy_Atom<cute::SM75_U32x4_LDSM_N, Element>;
   using SmemCopyAtomC = Copy_Atom<cute::SM90_U32x4_STSM_N, ElementOutput>;
@@ -138,7 +177,7 @@ struct Kernel_traits {
                                       Element,
                                       ElementOutput,
                                       SmemLayoutA,
-                                      SmemLayoutB,
+                                      SmemLayoutB1,
                                       SmemLayoutC,
                                       SmemLayoutScale>;
 
@@ -146,7 +185,7 @@ struct Kernel_traits {
   using PipelineState = typename cutlass::PipelineState<kStages>;
 
   static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<OutputType>);
-  static constexpr int kNumThreadsPerRow = kBlockN / kNumVecElem;
+  static constexpr int kNumThreadsPerRow = kBlockN1 / kNumVecElem;
   // static_assert(NumMmaThreads % kNumThreadsPerRow == 0);
   static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow;
   using TiledCopyCAtom =
