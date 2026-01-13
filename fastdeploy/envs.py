@@ -154,7 +154,19 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_OUTPUT_TOKEN_HANG_TIMEOUT": lambda: int(os.getenv("FD_OUTPUT_TOKEN_HANG_TIMEOUT", "60")),
     # Timout for D response in PD disaggregation
-    "FD_GET_RESPONSE_FROM_D_TIMEOUT": lambda: int(os.getenv("FD_GET_RESPONSE_FROM_D_TIMEOUT", "5")),
+    "FD_GET_MESSAGE_FROM_D_TIMEOUT": lambda: int(os.getenv("FD_GET_MESSAGE_FROM_D_TIMEOUT", "5")),
+    "FD_GET_BLOCK_FROM_D_TIMEOUT": lambda: int(os.getenv("FD_GET_BLOCK_FROM_D_TIMEOUT", "30")),
+    "FD_REQUEST_BLOCK_TO_D_INTERVAL": lambda: int(os.getenv("FD_REQUEST_BLOCK_TO_D_INTERVAL", "2")),
+    # Reserve output blocks for decoding requests when schedule new prefill requests
+    "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
+    ),
+    "FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: float(
+        os.getenv("FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0.025")
+    ),
+    "FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0")
+    ),
 }
 
 

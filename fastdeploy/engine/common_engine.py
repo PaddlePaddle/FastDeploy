@@ -678,6 +678,13 @@ class EngineService:
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
 
+        def _recycle_resources_from_P(tasks, need_delete_tasks):
+            for tmp_task in need_delete_tasks:
+                tasks.remove(tmp_task)
+                # release resource in P
+                self.resource_manager.pre_recycle_resource(tmp_task.request_id)
+            return tasks
+
         def _fetch_request():
             try:
                 nonlocal is_fetching
@@ -723,51 +730,72 @@ class EngineService:
                             # start async preprocess
                             self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
-                    if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
-                        for task in tasks:
-                            # assure can allocate block ids in P
-                            while not self.resource_manager.preallocate_resource_in_p(task):
-                                time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
-                            while True:
-                                self.split_connector.send_splitwise_tasks([task], task.idx)
-                                status, msg = self.split_connector.check_decode_allocated(task)
-                                if not status:
-                                    self.llm_logger.error(f"{task.request_id} ask D resource failed, try again.")
-                                    time.sleep(0.05)
-                                else:
-                                    break
-                    else:
-                        for task in tasks:
-                            # assure can allocate block ids in P
-                            while not self.resource_manager.preallocate_resource_in_p(task):
-                                self.llm_logger.info("wait for preallocate_resource_in_p")
-                                time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
-                            self.split_connector.send_splitwise_tasks([task], task.idx)
-
-                        for task in tasks:
-                            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                                # assure fetch block ids from D
-                                status, msg = self.split_connector.check_decode_allocated(task)
-                                if not status:
-                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                                    self.scheduler.put_results(
-                                        [
-                                            RequestOutput(
-                                                request_id=task.request_id,
-                                                finished=True,
-                                                error_code=500,
-                                                error_msg=msg,
-                                            )
-                                        ]
+                    for task in tasks:
+                        if self.resource_manager.has_existed_request(task.request_id):
+                            self.llm_logger.error(
+                                f"request_id: {task.request_id} has been added to scheduler, recieved requests with same request_id."
+                            )
+                            need_delete_tasks.append(task)
+                            continue
+                        # assure can allocate block ids in P
+                        while not self.resource_manager.preallocate_resource_in_p(task):
+                            time.sleep(0.005)
+                        self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                        is_successful = self.split_connector.send_splitwise_tasks([task], task.idx)
+                        if not is_successful:  # Send request for block ids to D failed
+                            self.llm_logger.error(f"{task.request_id} send request for block ids to D failed.")
+                            self.scheduler.put_results(
+                                [
+                                    RequestOutput(
+                                        request_id=task.request_id,
+                                        finished=True,
+                                        error_code=500,
+                                        error_msg="send request for block ids to D failed",
                                     )
-                                    need_delete_tasks.append(task)
-                                    continue
-                    for tmp_task in need_delete_tasks:
-                        tasks.remove(tmp_task)
-                        # release resource in P
-                        self.resource_manager.pre_recycle_resource(tmp_task.request_id)
+                                ]
+                            )
+                            need_delete_tasks.append(task)
+                    tasks = _recycle_resources_from_P(tasks, need_delete_tasks)
+                    # wait until resource is available from D
+                    start_wait_time = time.time()
+                    not_got_blocks_from_d_list = [task for task in tasks]
+                    failed_get_block_id_task_set = set()
+                    repeated_task_set = set()
+                    while not_got_blocks_from_d_list:
+                        for task in tasks:
+                            if task not in not_got_blocks_from_d_list:  # has got block ids continue
+                                continue
+                            status, msg = self.split_connector.check_decode_allocated(task)
+                            if not status:
+                                self.llm_logger.error(f"{task.request_id} ask D resource failed, due to {msg}")
+                                if msg == "Add task repeated" or msg == "timeout":
+                                    if msg == "Add task repeated":
+                                        repeated_task_set.add(task)
+                                    not_got_blocks_from_d_list.remove(task)
+                                    failed_get_block_id_task_set.add(task)
+                            else:
+                                self.llm_logger.info(f"{task.request_id} get blocks from D successful")
+                                not_got_blocks_from_d_list.remove(task)
+                        if not not_got_blocks_from_d_list:
+                            break
+                        if time.time() - start_wait_time > envs.FD_GET_BLOCK_FROM_D_TIMEOUT:
+                            break
+                        else:
+                            time.sleep(envs.FD_REQUEST_BLOCK_TO_D_INTERVAL)
+                    failed_get_block_id_task_set.update(not_got_blocks_from_d_list)
+                    for failed_task in failed_get_block_id_task_set:
+                        if failed_task not in repeated_task_set:
+                            self.scheduler.put_results(
+                                [
+                                    RequestOutput(
+                                        request_id=failed_task.request_id,
+                                        finished=True,
+                                        error_code=500,
+                                        error_msg="ask D resource failed",
+                                    )
+                                ]
+                            )
+                    tasks = _recycle_resources_from_P(tasks, failed_get_block_id_task_set)
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
@@ -777,7 +805,9 @@ class EngineService:
                         finished_ids, delete_tasks_list = [], []
                         while need_check_req_ids:
                             finished_ids.extend(self.engine_worker_queue.get_finished_add_cache_task_req())
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {finished_ids}")
+                            self.llm_logger.info(
+                                f"need_check_req_ids {need_check_req_ids} get_finished_add_cache_task_req: {finished_ids}"
+                            )
                             if finished_ids:
                                 for task in tasks:
                                     result = self.resource_manager.waiting_async_process(task)
@@ -792,6 +822,7 @@ class EngineService:
                                                 )
                                             ]
                                         )
+                                        need_check_req_ids.remove(task.request_id)
                                         delete_tasks_list.append(task)
                                     elif result is False:
                                         if task.request_id in finished_ids:
@@ -1120,6 +1151,15 @@ class EngineService:
                 is_success = False
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if self.resource_manager.has_existed_request(task.request_id):
+                        self.llm_logger.error(
+                            f"request_id: {task.request_id} has been added to scheduler, can not add it again."
+                        )
+                        task.error_msg = "Add task repeated"
+                        task.error_code = 501
+                        self.split_connector.send_cache_info_to_prefill([task])
+                        processed_indices.append(idx)
+                        continue
                     if self.resource_manager.preallocate_resource_in_d(task):
                         self.llm_logger.info(f"Resource available, processing task {task.request_id}")
                         self.split_connector.send_cache_info_to_prefill([task])
