@@ -191,7 +191,7 @@ class PaddleFormersModelBase(nn.Layer):
 
         self.paddleformers_config = AutoConfig.from_pretrained(self.model_config.model)
 
-        # paddleformers fused optimize option
+        # PaddleFormers fused optimize option
         self.paddleformers_config.fuse_rms_norm = True
         model_type = getattr(self.paddleformers_config, "model_type", "").lower()
         supported_fused_qkv_models = ["qwen3", "qwen2"]
@@ -208,7 +208,7 @@ class PaddleFormersModelBase(nn.Layer):
             else:
                 logger.debug(f"QKV fusion not enabled for model_type={model_type}")
 
-        # paddleformers fused optimize option
+        # PaddleFormers fused optimize option
         self._use_fused_ffn = model_type in supported_fused_qkv_models
         if self._use_fused_ffn:
             self.paddleformers_config.fuse_attention_ffn = True
@@ -570,8 +570,6 @@ class PaddleFormersModelBase(nn.Layer):
 
         inputs_embeds = self.embed_input_ids(ids_remove_padding).unsqueeze(0)
 
-        if hasattr(self, "embed_scale") and self.embed_scale is not None:
-            inputs_embeds *= self.embed_scale
         if getattr(self.text_config, "uses_mrope", False):
             position_ids = position_ids.unsqueeze(1)
         else:
@@ -600,8 +598,6 @@ class PaddleFormersModelBase(nn.Layer):
         Using FD native pattern: iterate weights and use param.weight_loader()
         for each FD layer (handles shape conversion automatically).
         """
-        import re
-
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
             process_weights_after_loading,
