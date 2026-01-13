@@ -29,6 +29,7 @@ else:
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
 from .utils import get_tensor
 
@@ -254,6 +255,91 @@ class RMSNorm(nn.Layer):
             out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out, residual_out
+
+
+class QKRMSNorm(nn.Layer):
+    """
+    QK Normalization layer.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        head_dim: int,
+        q_size: int,
+        kv_size: int,
+        eps: float = 1e-5,
+        prefix: str = "",
+        begin_norm_axis: int = 1,
+        dtype: str = None,
+    ) -> None:
+        super().__init__()
+        self.fd_config = fd_config
+        self.prefix: str = prefix
+        self.head_dim: int = head_dim
+        self.q_weight_key: Optional[str] = f"{prefix}.q_norm.weight"
+        self.k_weight_key: Optional[str] = f"{prefix}.k_norm.weight"
+        self.eps: float = eps
+        self._norm_weight_dtype = dtype
+        if self._norm_weight_dtype is None:
+            self._norm_weight_dtype = self._helper.get_default_dtype()
+        else:
+            assert dtype in [
+                "float32",
+                "bfloat16",
+                "float16",
+            ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
+
+        self.q_size = q_size
+        self.kv_size = kv_size
+
+        self.q_norm = RMSNorm(
+            fd_config,
+            hidden_size=self.head_dim,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.q_norm",
+            begin_norm_axis=begin_norm_axis,
+        )
+        self.k_norm = RMSNorm(
+            fd_config,
+            hidden_size=self.head_dim,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.k_norm",
+            begin_norm_axis=begin_norm_axis,
+        )
+        self.qk_norm_fused = _TRITON_AVAILABLE
+
+    def load_state_dict(self, state_dict):
+        self.q_norm.load_state_dict(state_dict)
+        self.k_norm.load_state_dict(state_dict)
+
+    def forward(
+        self,
+        qkv_out,
+    ) -> paddle.Tensor:
+        if self.qk_norm_fused:
+            qkv_out = qk_rmsnorm_fused(
+                qkv_out,
+                self.q_norm.weight,
+                self.k_norm.weight,
+                self.eps,
+                self.q_size,
+                self.kv_size,
+                self.head_dim,
+            )
+        else:
+            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
+
+            q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
+            q_by_head = self.q_norm(q_by_head)[0]
+            q = q_by_head.reshape(q.shape)
+
+            k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
+            k_by_head = self.k_norm(k_by_head)[0]
+            k = k_by_head.reshape(k.shape)
+
+            qkv_out = paddle.concat([q, k, v], axis=-1)
+        return qkv_out
 
 
 class LayerNorm(nn.Layer):

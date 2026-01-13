@@ -1947,7 +1947,7 @@ class GPUModelRunner(ModelRunnerBase):
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
-            enable_entropy=self.enable_entropy,
+            enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -2375,7 +2375,7 @@ class GPUModelRunner(ModelRunnerBase):
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
-                enable_entropy=self.enable_entropy,
+                enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
             return None
@@ -2505,7 +2505,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
-                enable_entropy=self.enable_entropy,
+                enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
