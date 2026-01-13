@@ -8,26 +8,17 @@ NVFP4 是 NVIDIA 引入的创新 4 位浮点格式，详细介绍请参考[Intro
 - 注：目前该功能仅支持Ernie / Qwen系列的FP4量化模型。
 
 ## 如何使用
-### 环境安装
+### 环境准备
+#### 支持环境
 - **支持硬件**：GPU sm >= 100
 - **PaddlePaddle 版本**：3.3.0 或更高版本
-- **Fastdeploy 版本**：2.4.0 或更高版本
+- **Fastdeploy 版本**：2.5.0 或更高版本
 
-#### 1. Fastdeploy 安装
-首先请根据[Fastdeploy NVIDIA GPU 环境安装指南](../../get_started/installation/nvidia_gpu.md)，安装Fastdeploy基础环境。
-
-#### 2. Flashinfer 安装
-```bash
-git clone -b support-paddlepaddle-with-compatible-api-and-tvmffi https://github.com/PFCCLab/flashinfer/ --recursive
-
-cd flashinfer
-python -m pip install -v .
-```
+#### Fastdeploy 安装
+FastDeploy 需以 NVIDIA GPU 模式安装，具体安装方式请参考官方文档：[Fastdeploy NVIDIA GPU 环境安装指南](../../get_started/installation/nvidia_gpu.md)。
 
 ### 运行推理服务
-- 注意：需要指定环境变量`export PADDLE_COMPATIBLE_API=true`并正确安装对应Flashinfer
 ```bash
-export PADDLE_COMPATIBLE_API=true
 python -m fastdeploy.entrypoints.openai.api_server \
     --model nv-community/Qwen3-30B-A3B-FP4 \
     --port 8180 \

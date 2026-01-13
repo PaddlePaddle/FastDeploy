@@ -8,23 +8,16 @@ Based on [FlashInfer](https://github.com/flashinfer-ai/flashinfer), Fastdeploy s
 
 ## How to Use
 ### Environment Setup
+#### Supported Environment
 - **Supported Hardware**: GPU sm >= 100
 - **PaddlePaddle Version**: 3.3.0 or higher
-- **Fastdeploy Version**: 2.4.0 or higher
+- **Fastdeploy Version**: 2.5.0 or higher
 
-#### 1. Fastdeploy Installation
-First, install the Fastdeploy base environment according to the [Fastdeploy NVIDIA GPU Environment Installation Guide](../../get_started/installation/nvidia_gpu.md).
-
-#### 2. Flashinfer Installation
-```bash
-git clone -b support-paddlepaddle-with-compatible-api-and-tvmffi https://github.com/PFCCLab/flashinfer/ --recursive
-
-cd flashinfer
-python -m pip install -v .
-```
+#### FastDeploy Installation
+Please ensure that FastDeploy is installed with NVIDIA GPU support.
+Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU Environment Installation Guide](../../get_started/installation/nvidia_gpu.md).
 
 ### Running Inference Service
-- Note: Need to set environment variable `export PADDLE_COMPATIBLE_API=true` and install the corresponding Flashinfer correctly
 ```bash
 export PADDLE_COMPATIBLE_API=true
 python -m fastdeploy.entrypoints.openai.api_server \

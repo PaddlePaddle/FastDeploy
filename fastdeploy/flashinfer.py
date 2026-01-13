@@ -17,10 +17,7 @@
 import functools
 import importlib
 import importlib.util
-import os
 import shutil
-
-from paddleformers.utils.log import logger
 
 
 @functools.cache
@@ -28,10 +25,6 @@ def has_flashinfer() -> bool:
     """Return `True` if FlashInfer is available."""
     # Use find_spec to check if the module exists without importing it
     # This avoids potential CUDA initialization side effects
-    if os.environ.get("PADDLE_COMPATIBLE_API", "0").lower() not in ["1", "on", "true"]:
-        # currently must support by Paddle compatible API
-        logger.warning("FlashInfer is not supported by Paddle compatible API.")
-        return False
     if importlib.util.find_spec("flashinfer") is None:
         return False
     # Also check if nvcc is available since it's required to JIT compile flashinfer

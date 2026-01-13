@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
-    # 加一个scope
     paddle.compat.enable_torch_proxy(scope={"flashinfer"})
     from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
