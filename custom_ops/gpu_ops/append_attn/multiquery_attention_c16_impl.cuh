@@ -475,7 +475,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t num_chunks = gridDim.y;
   const uint32_t chunk_idx = blockIdx.y;
 
-  const uint32_t batch_id = batch_ids[btid];
+  const int32_t batch_id = batch_ids[btid];
+  if (batch_id == -1) return;
+
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
