@@ -62,14 +62,11 @@ def creat_empty_forward_meta(forward_meta: ForwardMeta):
 
     return res
 
+
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
     res = [forward_meta] * split_num
     total_token_num = forward_meta.ids_remove_padding.shape[0]
-
-    if total_token_num > 0:
-        pass
-        # assert total_token_num >= split_num
 
     if total_token_num < split_num:
         res = [creat_empty_forward_meta(forward_meta), forward_meta]
@@ -77,7 +74,6 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
         res[1].tbo_microbatch_id = 1
         return res
 
-    print("total_token_num", total_token_num)
     chunk_token_num = (total_token_num + split_num - 1) // split_num
 
     for i in range(0, split_num):
