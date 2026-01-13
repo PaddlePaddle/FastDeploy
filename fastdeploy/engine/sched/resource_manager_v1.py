@@ -1089,6 +1089,14 @@ class ResourceManagerV1(ResourceManager):
             self.preallocated_requests_timestamp[request.request_id] = time.time()
         return True
 
+    def has_existed_request(self, request_id):
+        """
+        Whether a request with the given request_id has been added to the scheduler.
+        """
+        if request_id in self.requests:
+            return True
+        return False
+
     def has_resource_for_prefilled_req(self, request_id: str):
         """
         Check whether there are enough slot and gpu resource for the prefilled request,

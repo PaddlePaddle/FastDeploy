@@ -129,6 +129,9 @@ class SplitwiseConnector:
             sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 60)
             sock.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 10)
 
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                sock.setsockopt(zmq.IMMEDIATE, 1)
+
             sock.connect(f"tcp://{addr}")
 
             self.push_sockets[addr] = sock
@@ -142,7 +145,7 @@ class SplitwiseConnector:
     def _send_message(self, addr, msg_type: str, payload):
         if not addr:
             return
-
+        is_successful = True
         try:
             self.logger.info(f"Sent {msg_type} to {addr}")
             message = self._serialize_message(msg_type, payload)
@@ -150,21 +153,27 @@ class SplitwiseConnector:
             try:
 
                 sock = self._get_push_socket(addr)
-                sock.send_multipart([b"", message])
-
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    sock.send_multipart([b"", message], flags=zmq.NOBLOCK)
+                else:
+                    sock.send_multipart([b"", message])
                 self.logger.info(f"Sent {msg_type} to {addr}")
 
             except ConnectionError:
                 self.logger.warning(f"Connection to {addr} not established")
+                is_successful = False
             except zmq.Again:
                 self.logger.warning(f"Send queue full for {addr}")
+                is_successful = False
             except Exception as e:
                 self.logger.error(f"Send to {addr} failed: {e}, {str(traceback.format_exc())}")
                 main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
+                is_successful = False
 
         except Exception as e:
             self.logger.error(f"Message preparation failed: {e}")
+        return is_successful
 
     def _close_connection(self, addr):
         """
@@ -184,6 +193,7 @@ class SplitwiseConnector:
         """
         addr = None
         decode_diagg = None
+        splitwise_task_send_status = {}
         for task in tasks:
             if task.disaggregate_info is None:
                 continue
@@ -206,9 +216,11 @@ class SplitwiseConnector:
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
                 task.disaggregate_info["role"] = "decode"
                 self.logger.debug(f"send task to coupled instance, {addr}, {task}")
-                self._send_message(addr, "prefill", [task])
+                is_successful = self._send_message(addr, "prefill", [task])
+                splitwise_task_send_status[task.request_id] = is_successful
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
+        return splitwise_task_send_status
 
     def send_splitwise_tasks_innode(self, tasks, port):
         """
@@ -239,6 +251,7 @@ class SplitwiseConnector:
         """
         send first token to specific port
         """
+        is_successful = True
         if not isinstance(tasks_list, list):
             tasks_list = [tasks_list]
         self.logger.info(f"send first token to decode, {[x.request_id for x in tasks_list]}")
@@ -250,7 +263,8 @@ class SplitwiseConnector:
         else:
             node = f"{prefill_msg['cache_info']['rdma']['ip']}:{prefill_msg['cache_info']['rdma']['port']}"
             self.logger.info(f"send first token to port {node} decode")
-            self._send_message(node, "decode", tasks_list)
+            is_successful = self._send_message(node, "decode", tasks_list)
+        return is_successful
 
     def create_connection(self, port):
         """
@@ -280,7 +294,7 @@ class SplitwiseConnector:
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
-            if time.time() - start_time > 30:
+            if time.time() - start_time > envs.FD_GET_RESPONSE_FROM_D_TIMEOUT:
                 del self.current_request_ids[task.request_id]
                 return False, "timeout"
         msg = self.current_request_ids[task.request_id]

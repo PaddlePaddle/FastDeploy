@@ -153,6 +153,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Timeout for token processor health check
     "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_OUTPUT_TOKEN_HANG_TIMEOUT": lambda: int(os.getenv("FD_OUTPUT_TOKEN_HANG_TIMEOUT", "60")),
+    # Timout for D response in PD disaggregation
+    "FD_GET_RESPONSE_FROM_D_TIMEOUT": lambda: int(os.getenv("FD_GET_RESPONSE_FROM_D_TIMEOUT", "5")),
 }
 
 
