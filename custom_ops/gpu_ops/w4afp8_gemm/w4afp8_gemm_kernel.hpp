@@ -302,6 +302,82 @@ auto get_scale_layout(const int Rows, const int Cols) {
                                  static_cast<int64_t>(Rows * Cols)));
 }
 
+// Shared cache for max_tokens_per_expert (used by both prewarm and run_gemm)
+template <int Experts>
+struct MaxTokensCache {
+  static thread_local int64_t *pinned_max_tokens;
+  static thread_local int cached_max_tokens;
+  static thread_local bool pinned_allocated;
+  static thread_local bool async_copy_pending;
+};
+
+template <int Experts>
+thread_local int64_t *MaxTokensCache<Experts>::pinned_max_tokens = nullptr;
+
+template <int Experts>
+thread_local int MaxTokensCache<Experts>::cached_max_tokens = -1;
+
+template <int Experts>
+thread_local bool MaxTokensCache<Experts>::pinned_allocated = false;
+
+template <int Experts>
+thread_local bool MaxTokensCache<Experts>::async_copy_pending = false;
+
+// Helper function to pre-warm cache for max_tokens_per_expert (call before
+// cuda_graph capture) NOTE: This function uses async copy with pinned memory to
+// avoid blocking CUDA graph capture. The caller should ensure enough time has
+// passed for the async copy to complete before relying on the cached value, or
+// call this function well before graph capture.
+template <int Experts>
+void prewarm_max_tokens_cache(const int64_t *max_tokens_per_expert,
+                              cudaStream_t stream) {
+  if (max_tokens_per_expert == nullptr) return;
+
+  using Cache = MaxTokensCache<Experts>;
+
+  if (!Cache::pinned_allocated) {
+    // Use cudaHostAlloc for pinned memory that works with async operations
+    cudaHostAlloc(&Cache::pinned_max_tokens,
+                  Experts * sizeof(int64_t),
+                  cudaHostAllocDefault);
+    Cache::pinned_allocated = true;
+  }
+
+  // Use async copy to pinned memory - this avoids blocking during CUDA graph
+  // capture The pinned memory ensures the async copy can complete while graph
+  // capture is in progress
+  cudaMemcpyAsync(Cache::pinned_max_tokens,
+                  max_tokens_per_expert,
+                  Experts * sizeof(int64_t),
+                  cudaMemcpyDeviceToHost,
+                  stream);
+  Cache::async_copy_pending = true;
+}
+
+// Helper function to finalize the cached max_tokens value after async copy
+// completes This should be called after the stream has been synchronized
+// (outside of graph capture)
+template <int Experts>
+void finalize_max_tokens_cache() {
+  using Cache = MaxTokensCache<Experts>;
+
+  if (!Cache::async_copy_pending || !Cache::pinned_allocated) return;
+
+  // Calculate and cache max from the pinned memory (async copy should have
+  // completed)
+  int64_t max_expert_tokens = 0;
+  for (int expert_idx = 0; expert_idx < Experts; ++expert_idx) {
+    if (Cache::pinned_max_tokens[expert_idx] > max_expert_tokens) {
+      max_expert_tokens = Cache::pinned_max_tokens[expert_idx];
+    }
+  }
+
+  if (max_expert_tokens > 0) {
+    Cache::cached_max_tokens = static_cast<int>(max_expert_tokens);
+  }
+  Cache::async_copy_pending = false;
+}
+
 template <typename InputType,
           typename OutputType,
           typename Kernel_traits,
@@ -326,8 +402,54 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  const int N_nums =
-      (max_tokens + Kernel_traits::kBlockN1 - 1) / Kernel_traits::kBlockN1;
+
+  int effective_max_tokens = max_tokens;
+
+  if (max_tokens_per_expert != nullptr && TokenPackSize == 0) {
+    // Use deferred read mechanism: read the result of the previous async copy
+    static thread_local int64_t *pinned_tokens_array = nullptr;
+    static thread_local bool pinned_allocated = false;
+    static thread_local int cached_effective =
+        -1;  // Cache the last valid value
+
+    if (!pinned_allocated) {
+      cudaHostAlloc(&pinned_tokens_array,
+                    Experts * sizeof(int64_t),
+                    cudaHostAllocDefault);
+      // Initialize to 0
+      memset(pinned_tokens_array, 0, Experts * sizeof(int64_t));
+      pinned_allocated = true;
+    }
+
+    // First read the result from the previous async copy
+    int64_t max_expert_tokens = 0;
+    for (int i = 0; i < Experts; ++i) {
+      int64_t current_tokens = pinned_tokens_array[i];
+      if (current_tokens > max_expert_tokens) {
+        max_expert_tokens = current_tokens;
+      }
+    }
+
+    // Use the read value or cached value
+    if (max_expert_tokens > 0 && max_expert_tokens <= max_tokens) {
+      effective_max_tokens = static_cast<int>(max_expert_tokens);
+      cached_effective = effective_max_tokens;
+    } else if (cached_effective > 0 && cached_effective <= max_tokens) {
+      effective_max_tokens = cached_effective;
+    }
+    // Otherwise use max_tokens
+
+    // Initiate this async copy for the next call
+    cudaMemcpyAsync(pinned_tokens_array,
+                    max_tokens_per_expert,
+                    Experts * sizeof(int64_t),
+                    cudaMemcpyDeviceToHost,
+                    stream);
+  }
+
+  const int N_nums = (effective_max_tokens + Kernel_traits::kBlockN1 - 1) /
+                     Kernel_traits::kBlockN1;
+
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
   static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
@@ -361,7 +483,7 @@ void run_gemm(const InputType *A,
 
   dim3 grid_dims;
   grid_dims.x = M_nums;
-  grid_dims.y = N_nums;
+  grid_dims.y = N_nums;  // Use optimized N_nums
   grid_dims.z = Experts;
   static constexpr int ctaSize = Kernel_traits::kNWarps * 32;
   dim3 block_dims(ctaSize);

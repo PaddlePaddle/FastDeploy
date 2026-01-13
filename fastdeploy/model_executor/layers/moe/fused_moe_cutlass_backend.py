@@ -374,6 +374,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     topk_idx,
                     expert_idx_per_token,
                     dequant_scale,
+                    max_tokens_per_expert,
                 ) = moe_expert_dispatch(
                     x,
                     gate_out,
