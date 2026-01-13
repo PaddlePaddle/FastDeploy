@@ -541,7 +541,7 @@ class DataProcessor(BaseDataProcessor):
             List[int]: token ids list
         """
 
-        add_special_tokens = kwargs.get("add_special_tokens")
+        add_special_tokens = kwargs.get("add_special_tokens", False)
         if envs.FD_USE_HF_TOKENIZER:
             tokens = self.tokenizer(
                 text,

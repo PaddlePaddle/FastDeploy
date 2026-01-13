@@ -730,7 +730,7 @@ class OpenAIServingCompletion:
                     else None
                 ),
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_calls", None),
+                tool_calls=output.get("tool_call", None),
                 logprobs=aggregated_logprobs,
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
