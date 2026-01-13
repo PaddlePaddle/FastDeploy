@@ -13,6 +13,9 @@
 # limitations under the License.
 
 import os
+
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "20")
+
 import subprocess
 import sys
 

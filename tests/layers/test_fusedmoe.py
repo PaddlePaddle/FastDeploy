@@ -16,12 +16,6 @@
 
 import json
 import os
-
-import paddle
-
-if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
-    # (ZKK): CI machine.
-    os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 import shutil
 import unittest
 
