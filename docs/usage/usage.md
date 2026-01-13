@@ -6,7 +6,7 @@ Fastdeploy collects anonymous usage data by default to help the engineering team
 
 # Data Collected
 
-The data inventory collected by the latest version of Fastdeploy can be found here：- [usage_lib.py](../../../fastdeploy/usage/usage_lib.py)
+The data inventory collected by the latest version of Fastdeploy can be found here：[usage_lib.py](../../../fastdeploy/usage/usage_lib.py)
 You can preview the collected data by running the following command：
 `tail ~/.config/fastdeploy/usage_stats.json`
 
