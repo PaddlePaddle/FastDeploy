@@ -91,10 +91,10 @@ void SaveOutMmsg(const paddle::Tensor &x,
   int bsz = x.shape()[0];
   msg_sed.mtext[1] = bsz;
   for (int i = 2; i < bsz + 2; i++) {
+    msg_sed.mtext[i] = (int)x_data[i - 2];
     if (preempted_idx_data[i - 2] == 1) {
       msg_sed.mtext[i] = -9;
     }
-    msg_sed.mtext[i] = (int)x_data[i - 2];
   }
 #ifdef SAVE_WITH_OUTPUT_DEBUG
   std::cout << "save_output msg data: ";

@@ -596,6 +596,7 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def step_cuda(
