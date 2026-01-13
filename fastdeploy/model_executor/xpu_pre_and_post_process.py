@@ -374,7 +374,7 @@ def xpu_post_process_normal(
                     sampled_token_ids,
                     model_output.not_need_stop,
                     model_output.mp_rank,
-                    False,  # use_ep
+                    save_each_rank,
                 )
             else:
                 if save_output_topk is None:

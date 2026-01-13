@@ -41,7 +41,7 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.normalization import QKRMSNorm, RMSNorm
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
@@ -205,18 +205,13 @@ class Glm4MoeAttention(nn.Layer):
             rms_norm_eps=fd_config.model_config.rms_norm_eps,
         )
         if self.use_qk_norm:
-            self.q_norm = RMSNorm(
+            self.qk_norm = QKRMSNorm(
                 fd_config,
-                hidden_size=self.head_dim,
+                head_dim=self.head_dim,
+                q_size=self.q_size,
+                kv_size=self.kv_size,
                 eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.q_norm",
-                begin_norm_axis=2,
-            )
-            self.k_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.k_norm",
+                prefix=prefix,
                 begin_norm_axis=2,
             )
 
@@ -227,13 +222,8 @@ class Glm4MoeAttention(nn.Layer):
     ):
         """ """
         qkv_out = self.qkv_proj(hidden_states)
-
         if self.use_qk_norm:
-            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
-            qkv_out = paddle.concat([q, k, v], axis=-1)
-
+            qkv_out = self.qk_norm(qkv_out)
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
@@ -370,6 +360,9 @@ class Glm4MoeModel(nn.Layer):
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
         return out
 
 
@@ -432,6 +425,11 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
         ]
+
+        if self.fd_config.model_config.use_qk_norm:
+            stacked_params_mapping.append(("qk_norm.q_norm", "q_norm", None))
+            stacked_params_mapping.append(("qk_norm.k_norm", "k_norm", None))
+
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
             num_experts=self.fd_config.model_config.n_routed_experts,
