@@ -100,6 +100,7 @@ __global__ void config_decode_attn(const int *__restrict__ seq_lens_this_time,
   const int tid = threadIdx.x, wid = threadIdx.y;
   const uint32_t warp_size = blockDim.x;
   __shared__ int num_block_all_shared[block_size];
+  __shared__ int chunk_size_res[1];
 
   const int lane_id = tid + wid * warp_size;
   int cur_chunk_size = min_chunk_size * (lane_id + 1);
@@ -151,11 +152,14 @@ __global__ void config_decode_attn(const int *__restrict__ seq_lens_this_time,
     }
     num_blocks[0] = num_block_all_best;
     chunk_size[0] = chunk_size_best;
+    chunk_size_res[0] = chunk_size_best;
   }
 
   __syncthreads();
   if (wid == 0) {
-    chunk_size_best = __shfl_sync(0xffffffff, chunk_size_best, 0);
+    chunk_size_best =
+        chunk_size_res[0];  // H20下__shfl_sync广播没有work,使用shared
+                            // memory广播
 
     // one block one warp
     int prev_offset = 0;
