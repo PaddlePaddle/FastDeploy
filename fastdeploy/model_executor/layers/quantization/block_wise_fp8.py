@@ -226,7 +226,10 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
-        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(x, using_pow2_scale=False)
+        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+            x, using_pow2_scale=False, output_scale_transpose=True
+        )
+        x_scale_tensor = x_scale_tensor.T
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         from fastdeploy.model_executor.ops.gpu import deep_gemm
 
