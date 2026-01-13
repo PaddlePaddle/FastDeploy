@@ -77,7 +77,7 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
         res[1].tbo_microbatch_id = 1
         return res
 
-    print("total_token_num: ", total_token_num)
+    print("total_token_num", total_token_num)
     chunk_token_num = (total_token_num + split_num - 1) // split_num
 
     for i in range(0, split_num):
