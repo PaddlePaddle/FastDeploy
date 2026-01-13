@@ -19,7 +19,6 @@ Follow the official guide to set up the base environment: [Fastdeploy NVIDIA GPU
 
 ### Running Inference Service
 ```bash
-export PADDLE_COMPATIBLE_API=true
 python -m fastdeploy.entrypoints.openai.api_server \
     --model nv-community/Qwen3-30B-A3B-FP4 \
     --port 8180 \
