@@ -741,8 +741,8 @@ class EngineService:
                         while not self.resource_manager.preallocate_resource_in_p(task):
                             time.sleep(0.005)
                         self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
-                        is_successful = self.split_connector.send_splitwise_tasks([task], task.idx)
-                        if not is_successful:  # Send request for block ids to D failed
+                        splitwise_task_send_status = self.split_connector.send_splitwise_tasks([task], task.idx)
+                        if not splitwise_task_send_status[task.request_id]:  # Send request for block ids to D failed
                             self.llm_logger.error(f"{task.request_id} send request for block ids to D failed.")
                             self.scheduler.put_results(
                                 [
