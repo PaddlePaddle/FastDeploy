@@ -155,7 +155,9 @@ jobs:
             elif [[ "${PADDLEVERSION}" != "" ]];then
               python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
             else
-              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+              python -m pip install \
+              https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-GpuAll-LinuxCentos-Gcc11-Cuda126-Cudnn95-Trt105-Py310-Compile/9c368cf35974029d2aff4089c570e01839cd36b5/paddlepaddle_gpu-3.4.0.dev20260113-cp310-cp310-linux_x86_64.whl \
+              --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
