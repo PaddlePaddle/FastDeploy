@@ -90,7 +90,7 @@ def test_main(
         seq_len_this_time,
         output_padding_offset,
         output_cum_offsets,
-        max_seq_len,
+        # max_seq_len,
     )
     speculate_get_token_penalty_multi_scores(
         pre_ids_ref,
@@ -126,7 +126,7 @@ def test_main(
 #                                                   84, 100352, 12288, 1, 1, 54, 32768);
 
 
-def miain():
+def main():
     seed = np.random.randint(1, 1e9)
     print(f"random seed is {seed}")
     np.random.seed(seed)
@@ -203,4 +203,4 @@ def miain():
 
 if __name__ == "__main__":
     for i in range(10):
-        miain()
+        main()

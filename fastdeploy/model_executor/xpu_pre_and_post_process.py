@@ -45,6 +45,7 @@ if current_platform.is_xpu():
         speculate_get_seq_lens_output,
         speculate_save_output,
         speculate_set_value_by_flags_and_idx,
+        speculate_set_stop_value_multi_seqs,
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
@@ -172,6 +173,10 @@ def xpu_pre_process(
         caches=share_inputs["caches"],
     )
 
+    print("ch -- debug, seq_lens_encoder:", seq_lens_encoder)
+    print("ch -- debug, seq_lens_decoder:", seq_lens_decoder)
+    print("ch -- debug, xpu_forward_meta.block_tables:", xpu_forward_meta.block_tables)
+    xpu_forward_meta.block_tables
     (
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
@@ -217,6 +222,7 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max bs
     )
+    print("ch -- debug, xpu_forward_meta.len_info_cpu:", xpu_forward_meta.len_info_cpu)
 
     adjusted_input = adjusted_input.squeeze(1)
 
@@ -396,6 +402,18 @@ def xpu_post_process_specualate(
     model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
 ):
     """"""
+    # speculate_set_stop_value_multi_seqs(
+    #     model_output.accept_tokens,
+    #     model_output.accept_num,
+    #     model_output.pre_ids,
+    #     model_output.step_idx,
+    #     model_output.stop_flags,
+    #     model_output.seq_lens_this_time,
+    #     model_output.stop_token_ids,
+    #     model_output.stop_seqs_len,
+    #     model_output.eos_token_id,
+    # )
+
     speculate_update_v3(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
