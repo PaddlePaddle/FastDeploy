@@ -589,9 +589,10 @@ class ResourceManagerV1(ResourceManager):
     def cache_output_tokens(self, request):
         if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
             with self.lock:
-                self.cache_manager.update_cache_blocks(
-                    request, self.config.cache_config.block_size, request.num_total_tokens - 1
-                )
+                if request.num_computed_tokens >= request.need_prefill_tokens:  # request is decoding
+                    self.cache_manager.update_cache_blocks(
+                        request, self.config.cache_config.block_size, request.num_total_tokens - 1
+                    )
 
     def schedule(self):
         """
