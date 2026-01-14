@@ -373,6 +373,7 @@ def xpu_post_process_normal(
                 save_output(
                     sampled_token_ids,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                     save_each_rank,
                 )
@@ -388,8 +389,10 @@ def xpu_post_process_normal(
                     sampler_output.logprobs_tensors.logprobs,
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                 )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def xpu_post_process_specualate(

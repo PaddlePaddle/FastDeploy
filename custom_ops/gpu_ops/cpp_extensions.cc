@@ -835,6 +835,7 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& not_need_stop,
                                       const paddle::Tensor& seq_lens_decoder,
                                       const paddle::Tensor& prompt_lens,
+                                      const paddle::Tensor& preempted_idx,
                                       int64_t rank_id,
                                       bool save_each_rank,
                                       bool skip_prefill);
@@ -1019,6 +1020,7 @@ std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor& probs,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
