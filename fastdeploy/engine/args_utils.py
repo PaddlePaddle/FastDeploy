@@ -1208,17 +1208,21 @@ class EngineArgs:
         """
         Create and return a Config object based on the current settings.
         """
+        speculative_cfg = self.create_speculative_config()
         all_dict = asdict(self)
+        if speculative_cfg.method is not None:
+            all_dict["num_max_dispatch_tokens_per_rank"] = all_dict["max_num_seqs"]
+        else:
+            all_dict["num_max_dispatch_tokens_per_rank"] = all_dict["max_num_seqs"] * (
+                speculative_cfg.num_speculative_tokens + 1
+            )
         model_cfg = ModelConfig(all_dict)
-
         # XPU currently disable prefix cache for VL model
         if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
             self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
-
-        speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
             if current_platform.is_cuda() and self.splitwise_role == "mixed":
                 # default enable chunked prefill
