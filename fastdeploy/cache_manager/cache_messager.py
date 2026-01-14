@@ -33,7 +33,7 @@ from fastdeploy.cache_manager.ops import (
     set_device,
 )
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import MAX_BSZ, SpeculativeConfig
 from fastdeploy.inter_communicator import (
     EngineWorkerQueue,
     IPCSignal,
@@ -844,7 +844,7 @@ class CacheMessagerV1:
 
     def consume_signals(self):
         paddle.device.set_device("cpu")
-        kv_signal_data = paddle.full(shape=[512 * 3 + 2], fill_value=-1, dtype="int32")
+        kv_signal_data = paddle.full(shape=[MAX_BSZ * 3 + 2], fill_value=-1, dtype="int32")
         while True:
             try:
                 get_output_kv_signal(kv_signal_data, self.rank_id, 0)  # wait_flag

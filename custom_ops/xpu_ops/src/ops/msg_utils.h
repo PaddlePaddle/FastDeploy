@@ -26,7 +26,7 @@
 #include <unistd.h>
 #include "paddle/extension.h"
 
-#define MAX_BSZ 512
+#define MAX_BSZ 2048
 
 struct msgdata {
   long mtype;              // NOLINT

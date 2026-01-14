@@ -19,7 +19,7 @@
 #include <sys/types.h>
 #include "paddle/extension.h"
 
-#define MAX_BSZ 256
+#define MAX_BSZ 2048
 #define MAX_DRAFT_TOKENS 6
 
 struct msgdata {
