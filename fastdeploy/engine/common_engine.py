@@ -1063,7 +1063,13 @@ class EngineService:
                         )
                     else:
                         self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
-                    break
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        self.recv_request_server = ZmqTcpServer(
+                            port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL
+                        )
+                    else:
+                        self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
+                    continue
 
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
@@ -1701,6 +1707,7 @@ class EngineService:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
