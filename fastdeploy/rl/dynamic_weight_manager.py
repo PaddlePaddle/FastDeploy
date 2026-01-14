@@ -26,14 +26,40 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import ModelWeightsStatus
 
+def sync_weights_by_rdma(step, rank):
+    etcd_server = "127.0.0.1:2379"
+
+    from checkpoint_transfer.core import RDMAWeightsDownloader
+    import io
+    config = { "etcd_server": etcd_server }
+    downloader = RDMAWeightsDownloader(config)
+    downloader.initialize()
+    logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
+    data = downloader.get_weights(step, rank)
+    if data is None:
+        logger.error("Failed to get weights!")
+    logger.info(f"Successfully retrieved data. Type: {type(data)}")
+    if isinstance(data, np.ndarray):
+        data_bytes = data.tobytes()
+    elif isinstance(data, (bytes, bytearray)):
+        data_bytes = data
+    else:
+        data_bytes = bytes(data)
+    logger.info(f"Data size: {len(data_bytes)} bytes")
+
+    buffer = io.BytesIO(data_bytes)
+    new_state_dict = paddle.load(buffer)
+    return new_state_dict
+
 
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
 
-    def __init__(self, fd_config: FDConfig, models):
+    def __init__(self, fd_config: FDConfig, models, local_rank: int):
         """Initialize with config and model instances."""
         self.fd_config = fd_config
         self.load_config = fd_config.load_config
+        self.local_rank = local_rank
         self.parallel_config = fd_config.parallel_config
         self.state_dict: Dict[str, paddle.Tensor] = {}
         self.rank = fd_config.parallel_config.tensor_parallel_rank
@@ -46,7 +72,11 @@ class DynamicWeightManager:
         else:
             self.model_list = models
         self._capture_model_state()
-        self.update_parameters()
+        if self.load_config.load_strategy == "rsync":
+            step = 100 # todo read from {model}/version.txt
+            self.update_weights_by_rdma(step, self.local_rank)
+        else:
+            self.update_parameters()
         self.finalize_update()
 
         logger.info(
@@ -61,6 +91,40 @@ class DynamicWeightManager:
             for name, param in model.state_dict().items():
                 logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
                 self.state_dict[name] = param
+
+    def update_weights_by_rdma(self, step, rank):
+        old_state_dict = self.state_dict
+        def valid_parameters(old_state_dict, new_state_dict):
+            is_valid = True
+            for key in old_state_dict:
+                if key not in new_state_dict:
+                    is_valid = False
+                    logger.error(f"Invalid parameter: {key} not in new_state_dict")
+                elif old_state_dict[key].shape != new_state_dict[key].shape:
+                    is_valid = False
+                    logger.error(f"Invalid parameter: {key} shape mismatch, "
+                                 f"new shape:{new_state_dict[key].shape}, "
+                                 f"old shape:{old_state_dict[key].shape}")
+                elif old_state_dict[key].dtype != new_state_dict[key].dtype:
+                    is_valid = False
+                    logger.error(f"Invalid parameter: {key} dtype mismatch")
+            return is_valid
+
+        start_time = time.perf_counter()
+
+        new_state_dict = sync_weights_by_rdma(step, rank)
+        #old_state_dict = self.model_list[9].state_dict()
+        if not valid_parameters(old_state_dict, new_state_dict):
+            logger.error("Invalid new_state_dict, update parameters failed")
+            return
+        
+        assign_start = time.perf_counter()
+        for name, param in old_state_dict.items():
+            param.set_value(new_state_dict[name])
+        logger.info(f"params set value cost {time.perf_counter()-assign_start:.2f} seconds")
+
+        logger.info(f"update weights inplace cost {time.perf_counter()-start_time:.2f} seconds")
+        
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""

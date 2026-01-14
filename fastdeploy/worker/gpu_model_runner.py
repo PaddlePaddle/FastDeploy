@@ -1503,8 +1503,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 1.1 Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
-
-            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
+            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
 
         # 2. Load lora model
 
@@ -2812,6 +2811,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def update_weights(self):
         logger.info("GPU Model Runner update weights inplace")
+        self.dynamic_weight_manager.update_weights_by_rdma(100, self.local_rank)
 
     def padding_cudagraph_inputs(self) -> None:
         """

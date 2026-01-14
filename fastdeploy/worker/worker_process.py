@@ -814,7 +814,7 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=["ipc", "ipc_snapshot", "meta", "normal"],
+        choices=["ipc", "ipc_snapshot", "meta", "normal", "rsync"],
         default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
