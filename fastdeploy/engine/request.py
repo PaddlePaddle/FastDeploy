@@ -124,7 +124,7 @@ class Request:
         suffix: Optional[dict] = None,
         top_logprobs: Optional[int] = None,
         # from PoolingRequest
-        add_special_tokens: Optional[bool] = None,
+        add_special_tokens: Optional[bool] = False,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -271,7 +271,7 @@ class Request:
                 else None
             ),
             mm_hashes=getattr(req, "mm_hashes", None),
-            add_special_tokens=getattr(req, "add_special_tokens", None),
+            add_special_tokens=getattr(req, "add_special_tokens", False),
         )
 
         if hasattr(req, "messages"):

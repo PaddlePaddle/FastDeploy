@@ -102,7 +102,7 @@ class TestQwen3VLProcessor(unittest.TestCase):
         self.patcher_parse_video.start()
 
         self.patcher_read_frames = patch(
-            "fastdeploy.input.qwen3_vl_processor.process.DataProcessor._load_and_process_video",
+            "fastdeploy.input.v1.qwen3_vl_processor.process.DataProcessor._load_and_process_video",
             return_value=mock_read_frames(480, 640, 5, 2),
         )
         self.patcher_read_frames.start()
