@@ -1335,6 +1335,7 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
+        self.num_cpu_blocks = None
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1380,10 +1381,12 @@ class CacheConfig:
                 * byte_size
             )
 
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+        if self.num_cpu_blocks is None:
+            if self.swap_space is None:
+                self.num_cpu_blocks = 0
+            else:
+                self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+
         self._verify_args()
 
     def metrics_info(self):
