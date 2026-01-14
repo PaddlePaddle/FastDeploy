@@ -42,7 +42,8 @@ class TestErnie28BVL(unittest.TestCase):
             load_choices="default_v1",
         )
 
-        cls.sampling_params = SamplingParams(top_p=0.95, max_tokens=32768, temperature=0.1)
+        # cls.sampling_params = SamplingParams(top_p=0.95, max_tokens=32768, temperature=0.1)
+        cls.sampling_params = SamplingParams(top_p=0.95, max_tokens=32768, temperature=0)
 
     @classmethod
     def set_config(cls):
