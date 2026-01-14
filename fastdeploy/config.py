@@ -680,6 +680,8 @@ class SpeculativeConfig:
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
 
+        self.enf_gen_phase_tag: bool = False
+
         self.num_extra_cache_layer = 0
 
         for key, value in args.items():
