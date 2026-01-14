@@ -496,11 +496,13 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
 void SaveOutMmsgDynamic(const paddle::Tensor& x,
                         const paddle::Tensor& not_need_stop,
+                        const paddle::Tensor& preempted_idx,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank);
@@ -971,6 +973,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgStatic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("save_each_rank"),
         "Save output function");
@@ -979,6 +982,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgDynamic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("msg_queue_id"),
         py::arg("save_each_rank"),
