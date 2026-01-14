@@ -85,11 +85,6 @@ class Glm4MTPPretrainedModel(PretrainedModel):
             base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
             base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
 
-            # MLP Layer
-            # base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)
-            # base_actions["layers.0.mlp.up_proj.weight"] = partial(fn, is_column=True)
-            # base_actions["layers.0.mlp.down_proj.weight"] = partial(fn, is_column=False)
-
             # Moe Layer
             for expert_idx in range(config.n_routed_experts):
                 base_actions[f"layers.0.mlp.experts.{expert_idx}.up_proj.weight"] = partial(fn, is_column=True)
@@ -132,7 +127,7 @@ class SharedHead(nn.Module):
         )
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        # NOTE(wangyanpeng04): This does NOT go through head layer, only through norm layer
+        # NOTE(wangyanpeng04): This only passes through the normalization layer and skips the head layer
         return self.norm(hidden_states)
 
 
@@ -320,6 +315,8 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
             f"layers.{self.mtp_start_layer_idx}.embed_tokens": "embed_tokens.embeddings",
         }
 
+        # NOTE (wangyanpeng) Here we need to map the layer_id of MTP weights to start from 0,
+        # otherwise there will be out-of-bounds when accessing kv_cache in Attention
         for key, value in template.items():
             for mtp_layer_id in range(self.mtp_start_layer_idx, self.mtp_start_layer_idx + self.num_mtp_layers):
                 remap[f"layers.{mtp_layer_id}.{key}"] = f"layers.{mtp_layer_id - self.mtp_start_layer_idx}.{value}"
