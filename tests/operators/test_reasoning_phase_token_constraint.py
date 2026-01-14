@@ -27,7 +27,6 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         # seq / step
         # ------------------------
-        # 当前 step（token index in pre_ids）
         self.step_idx = paddle.to_tensor([4, 4], dtype="int64")
 
         self.seq_lens_this_time = paddle.to_tensor([2, 2], dtype="int32")
@@ -217,7 +216,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         )
 
     def test_status_2_to_3_only(self):
-        # 强制初始 status = 2
+        # Force initial status = 2
         self.reasoning_status = paddle.to_tensor([2, 2], dtype="int32")
 
         logits_before = self.logits.numpy().copy()
@@ -252,7 +251,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         )
 
     def test_status_1_to_2(self):
-        # batch 0 enforce，batch 1 不 enforce
+        # batch 0 enforce，batch 1 not enforce
         self.reasoning_status = paddle.to_tensor([1, 2], dtype="int32")
 
         logits_before = self.logits.numpy().copy()
@@ -273,7 +272,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         )
 
         logits_after = self.logits.numpy()
-        # 找 batch 0 的 token_idx
+        # Find batch 0's token_idx
         token_idx_batch0 = 0  # speculate_get_output_padding_offset 下，第一个 token 一定是 batch 0
 
         # batch 0 first token should be enforced
