@@ -589,11 +589,16 @@ class TestFusedMoE(unittest.TestCase):
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
         os.environ["FD_USE_DEEP_GEMM"] = "0"
-        ep_size = paddle.distributed.get_world_size()
-        ep_rank = paddle.distributed.get_rank()
-
-        tp_rank = 0
-        tp_size = 1
+        if int(os.getenv("USE_FUSEDMOE_TP", "0")) == 1:
+            ep_size = 1
+            ep_rank = 0
+            tp_rank = paddle.distributed.get_rank()
+            tp_size = paddle.distributed.get_world_size()
+        else:
+            ep_size = paddle.distributed.get_world_size()
+            ep_rank = paddle.distributed.get_rank()
+            tp_rank = 0
+            tp_size = 1
 
         nnodes = (ep_size + 7) // 8
 
