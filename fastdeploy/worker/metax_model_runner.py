@@ -550,7 +550,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
-        self.share_inputs["preempted_idx"] = []
+            self.share_inputs["preempted_idx"] = []
 
         req_len = len(req_dicts)
         has_prefill_task = False
