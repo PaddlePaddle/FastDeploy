@@ -44,7 +44,6 @@ void SpeculateTokenPenaltyMultiScores(
   if (pre_ids.is_cpu()) {
     ctx = new api::Context(api::kCPU);
   }
-  std::cout << "max_seq_len:"  << max_seq_len << std::endl;
   int64_t bs = seq_lens_this_time.shape()[0];
   int64_t token_num = logits.shape()[0];
   PADDLE_ENFORCE_LE(bs,

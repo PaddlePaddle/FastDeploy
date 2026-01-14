@@ -1382,10 +1382,6 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # if not is_dummy_run:
         #     self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
-        logger.info(f"ch -- self.fd_config.scheduler_config.splitwise_role: {self.fd_config.scheduler_config.splitwise_role}")
-        logger.info(f"ch -- debug envs.ENABLE_V1_KVCACHE_SCHEDULER: {envs.ENABLE_V1_KVCACHE_SCHEDULER}")
-        logger.info(f"ch -- encoder len: {self.share_inputs['seq_lens_encoder']}")
-        logger.info(f"ch -- decoder len: {self.share_inputs['seq_lens_decoder']}")
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
             
             self.share_inputs["kv_signal_sender"] = sender
@@ -1484,42 +1480,35 @@ class XPUModelRunner(ModelRunnerBase):
             # 7. Updata 'infer_seed' and step_paddle()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-            step_xpu(
-                self.share_inputs,
-                self.cache_config.block_size,
-                self.cache_config.enc_dec_block_num,
-                self.fd_config.speculative_config,
-                self.fd_config.cache_config.enable_prefix_caching,
-            )
-            # if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            #     step_xpu(
-            #         self.share_inputs,
-            #         self.cache_config.block_size,
-            #         self.cache_config.enc_dec_block_num,
-            #         self.fd_config.speculative_config,
-            #         self.fd_config.cache_config.enable_prefix_caching,
-            #     )
-            # elif
-            # if self.speculative_decoding:
-            #     speculate_schedule_cache(
-            #         self.share_inputs["draft_tokens"],
-            #         self.share_inputs["block_tables"],
-            #         self.share_inputs["stop_flags"],
-            #         self.share_inputs["prompt_lens"],
-            #         self.share_inputs["seq_lens_this_time"],
-            #         self.share_inputs["seq_lens_encoder"],
-            #         self.share_inputs["seq_lens_decoder"],
-            #         self.share_inputs["step_seq_lens_decoder"],
-            #         self.share_inputs["step_draft_tokens"],
-            #         self.share_inputs["step_seq_lens_this_time"],
-            #         self.share_inputs["accept_num"],
-            #         self.share_inputs["accept_tokens"],
-            #         self.share_inputs["is_block_step"],
-            #         self.share_inputs["not_need_stop"],
-            #         self.share_inputs["stop_nums"],
-            #         self.cache_config.block_size,
-            #         self.speculative_config.num_speculative_tokens,
-            #     )
+
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                step_xpu(
+                    self.share_inputs,
+                    self.cache_config.block_size,
+                    self.cache_config.enc_dec_block_num,
+                    self.fd_config.speculative_config,
+                    self.fd_config.cache_config.enable_prefix_caching,
+                )
+            elif self.speculative_decoding:
+                speculate_schedule_cache(
+                    self.share_inputs["draft_tokens"],
+                    self.share_inputs["block_tables"],
+                    self.share_inputs["stop_flags"],
+                    self.share_inputs["prompt_lens"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["step_seq_lens_decoder"],
+                    self.share_inputs["step_draft_tokens"],
+                    self.share_inputs["step_seq_lens_this_time"],
+                    self.share_inputs["accept_num"],
+                    self.share_inputs["accept_tokens"],
+                    self.share_inputs["is_block_step"],
+                    self.share_inputs["not_need_stop"],
+                    self.share_inputs["stop_nums"],
+                    self.cache_config.block_size,
+                    self.speculative_config.num_speculative_tokens,
+                )
 
         return None
 

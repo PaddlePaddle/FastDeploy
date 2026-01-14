@@ -150,15 +150,13 @@ __global__ void speculate_update_v3(
         seq_lens_encoder_sm[bid] = 0;
       }
 
-      draft_tokens[bid * max_draft_tokens] =
-          accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
-      // if (stop_flag_now_int) {
-      //   seq_lens_decoder_sm[bid] = 0;
-      // } else {
-      //   // 这里试下编译器的新特性
-      //   draft_tokens[bid * max_draft_tokens] =
-      //       accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
-      // }
+      if (stop_flag_now_int) {
+        seq_lens_decoder_sm[bid] = 0;
+      } else {
+        // 这里试下编译器的新特性
+        draft_tokens[bid * max_draft_tokens] =
+            accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
+      }
     } else if (bid >= real_bsz && bid < max_bsz) {
       stop_flag_now_int = 1;
     }

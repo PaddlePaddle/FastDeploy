@@ -72,7 +72,7 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
   bool value_false = false;
 
   int bid_start_core, bid_end_core;
-  partition(tid, nthreads, real_bsz, 1, &bid_start_core, &bid_end_core);
+  partition(tid, nthreads, max_bsz, 1, &bid_start_core, &bid_end_core);
   // printf("tid: %d, bid_start_core: %d, bid_end_core: %d\n", tid, bid_start_core, bid_end_core);
 
   int64_t draft_tokens_lm[draft_tokens_len];
@@ -157,14 +157,19 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
     }
     stop_flag_now_int_sm[cid] += stop_flag_now_int;
   }
+  mfence_sm();
+  sync_all();
   // reduce stop_sum_now
-  int64_t stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
-  int stop_nums_lm;
-  GM2LM(stop_nums, &stop_nums_lm, sizeof(int));
-  if (stop_sum < stop_nums[0]) {
-    LM2GM(&value_true, not_need_stop, sizeof(bool));
-  } else {
-    LM2GM(&value_false, not_need_stop, sizeof(bool));
+  if(cid == 0){
+    int stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
+    sync_all();
+    int stop_nums_lm;
+    GM2LM(stop_nums, &stop_nums_lm, sizeof(int));
+    if (stop_sum < stop_nums_lm) {
+      LM2GM(&value_true, not_need_stop, sizeof(bool));
+    } else {
+      LM2GM(&value_false, not_need_stop, sizeof(bool));
+    }
   }
 }
 

@@ -173,10 +173,6 @@ def xpu_pre_process(
         caches=share_inputs["caches"],
     )
 
-    print("ch -- debug, seq_lens_encoder:", seq_lens_encoder)
-    print("ch -- debug, seq_lens_decoder:", seq_lens_decoder)
-    print("ch -- debug, xpu_forward_meta.block_tables:", xpu_forward_meta.block_tables)
-    xpu_forward_meta.block_tables
     (
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
@@ -222,7 +218,6 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max bs
     )
-    print("ch -- debug, xpu_forward_meta.len_info_cpu:", xpu_forward_meta.len_info_cpu)
 
     adjusted_input = adjusted_input.squeeze(1)
 
