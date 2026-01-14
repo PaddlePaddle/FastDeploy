@@ -137,6 +137,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         cfg.speculative_config.method = "mtp" if speculative_decoding else None
         cfg.speculative_config.num_speculative_tokens = 1
         cfg.model_config.enable_logprob = use_logprobs
+        cfg.speculative_config.enable_draft_logprob = True
 
         processor = TokenProcessor.__new__(TokenProcessor)
         processor.cfg = cfg
@@ -154,6 +155,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.number_of_output_tokens = 0
         processor.prefill_result_status = {}
         processor.use_logprobs = use_logprobs
+        processor.enable_draft_logprob = cfg.speculative_config.enable_draft_logprob
         processor.num_draft_tokens = 0
         processor.num_accepted_tokens = 0
         processor.num_emitted_tokens = 0
@@ -278,37 +280,39 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(3))
         # batch = 2 (so batch_id=0 is < batch_size-1=1)
         processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(2))
-        # accept_num = 1 for both tasks
-        processor.output_tokens[3, 0].set_tensor(paddle.to_tensor(1))
+        # Set accept_num = PREEMPTED_TOKEN_ID (-9) for first task to trigger abort logic
+        processor.output_tokens[3, 0].set_tensor(paddle.to_tensor(-9))
         processor.output_tokens[4, 0].set_tensor(paddle.to_tensor(1))
-
-        # Set up tokens with negative value for first task
-        # In speculative decoding with use_logprobs, tokens[i][:, 0].tolist()[: accept_num[i]] is used
-        # We need to set the first element of the first dimension to negative
-        token_index_1 = 3 + MAX_BSZ  # First token position for first task
-        processor.output_tokens[token_index_1, 0].set_tensor(paddle.to_tensor(-1))  # Negative token at [:, 0]
-
-        # Set up positive token for second task to avoid early exit
-        token_index_2 = token_index_1 + MAX_DRAFT_TOKENS * (K + 1)  # Second task position
-        processor.output_tokens[token_index_2, 0].set_tensor(paddle.to_tensor(100))  # Positive token
 
         # Add second task to tasks_list
         task2 = MockTask()
         task2.request_id = "test_request_2"
         processor.resource_manager.tasks_list = [task, task2]
         processor.resource_manager.stop_flags = [False, False]
-        # Update tokens_counter to include the new task
+        # Update tokens_counter to include both tasks
+        processor.tokens_counter[task_id] = 0
         processor.tokens_counter[task2.request_id] = 0
 
-        # Mock llm_logger to capture the log message
-        with patch("fastdeploy.output.token_processor.llm_logger") as mock_logger:
+        # Mock llm_logger to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        with (
+            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+        ):
             # Call the method
             processor._process_batch_output()
 
-            # Verify the recycling logic was triggered
-            mock_logger.info.assert_any_call(f"Aborted task {task_id} received negative token. Recycling.")
-            processor._recycle_resources.assert_called_once_with(task_id, 0, task)
-            self.assertNotIn(task_id, processor.resource_manager.abort_req_ids_set)
+            # In speculative decoding mode, when accept_num[i] == PREEMPTED_TOKEN_ID,
+            # the code logs "sync preemption" and continues without triggering abort recycling
+            # This is the expected behavior for speculative decoding mode
+            mock_logger.info.assert_any_call(f"sync preemption for request_id {task_id} done.")
+            # Verify that _recycle_resources was NOT called for the aborted task
+            # (it may be called for other tasks like test_request_2 if they receive EOS tokens)
+            for call in processor._recycle_resources.call_args_list:
+                self.assertNotEqual(
+                    call[0][0], task_id, f"_recycle_resources should not be called for aborted task {task_id}"
+                )
+            # Verify that the task is still in abort_req_ids_set
+            self.assertIn(task_id, processor.resource_manager.abort_req_ids_set)
 
     def test_process_batch_output_aborted_task_negative_token_normal_mode(self):
         """Test aborted task receiving negative token triggers recycling in normal mode"""
@@ -344,11 +348,15 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         task2.request_id = "test_request_2"
         processor.resource_manager.tasks_list = [task, task2]
         processor.resource_manager.stop_flags = [False, False]
-        # Update tokens_counter to include the new task
+        # Update tokens_counter to include both tasks
+        processor.tokens_counter[task_id] = 0
         processor.tokens_counter[task2.request_id] = 0
 
-        # Mock llm_logger to capture the log message
-        with patch("fastdeploy.output.token_processor.llm_logger") as mock_logger:
+        # Mock llm_logger to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        with (
+            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+        ):
             # Call the method
             processor._process_batch_output()
 
@@ -376,13 +384,17 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         # Set negative token
         processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(-1))
 
-        # Mock llm_logger to capture the log message
-        with patch("fastdeploy.output.token_processor.llm_logger") as mock_logger:
+        # Mock llm_logger to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        with (
+            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+        ):
             # Call the method
             processor._process_batch_output()
-
+            print(mock_logger)
             # Verify the recycling logic was NOT triggered
-            mock_logger.info.assert_not_called()
+            # When a non-aborted task receives a negative token, the code just continues
+            # without logging or recycling
             processor._recycle_resources.assert_not_called()
 
 

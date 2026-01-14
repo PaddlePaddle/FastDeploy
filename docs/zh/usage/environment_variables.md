@@ -227,5 +227,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # XPU MoE FFN 量化类型映射
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
+
+    # Worker 进程响应等待时的健康检查超时时间（秒），默认 30 秒
+    "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }
 ```

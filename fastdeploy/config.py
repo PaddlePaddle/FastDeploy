@@ -61,6 +61,8 @@ _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "pooling": ["embed"],
 }
 
+PREEMPTED_TOKEN_ID = -9
+
 # Some model suffixes are based on auto classes from Transformers:
 # https://huggingface.co/docs/transformers/en/model_doc/auto
 # NOTE: Items higher on this list priority over lower ones
@@ -740,6 +742,8 @@ class SpeculativeConfig:
 
         self.num_extra_cache_layer = 0
 
+        self.enable_draft_logprob: bool = False
+
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1333,6 +1337,7 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
+        self.num_cpu_blocks = None
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1378,10 +1383,12 @@ class CacheConfig:
                 * byte_size
             )
 
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+        if self.num_cpu_blocks is None:
+            if self.swap_space is None:
+                self.num_cpu_blocks = 0
+            else:
+                self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+
         self._verify_args()
 
     def metrics_info(self):
@@ -1825,7 +1832,6 @@ class FDConfig:
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
-            self._disable_sequence_parallel_moe_if_needed("PD's decode node")
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError

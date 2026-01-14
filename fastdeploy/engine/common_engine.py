@@ -58,7 +58,7 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
+from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -157,6 +157,7 @@ class EngineService:
 
     def start(self, async_llm_pid=None):
         self.running = True
+        console_logger.debug("Start engineService...")
 
         if self.use_async_llm:
             self.start_worker_service(async_llm_pid)
@@ -809,7 +810,7 @@ class EngineService:
                         # start async preprocess
                         self.resource_manager.apply_async_preprocess(task)
                     need_delete_tasks = []
-                    if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
+                    if envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
@@ -1064,7 +1065,13 @@ class EngineService:
                         )
                     else:
                         self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
-                    break
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        self.recv_request_server = ZmqTcpServer(
+                            port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL
+                        )
+                    else:
+                        self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
+                    continue
 
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
@@ -1073,14 +1080,19 @@ class EngineService:
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
                         self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
-                        # abort_res = RequestOutput(
-                        #     request_id=req_id,
-                        #     finished=True,
-                        #     error_code=499,
-                        #     error_msg=f"Your request with request_id:{req_id} is aborted.",
-                        # )
-                        # self.scheduler.put_results([abort_res])
                         self.resource_manager.abort_req_ids_set.add(req_id)
+                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            if req_id in self.resource_manager.requests:
+                                req = self.resource_manager.requests[req_id]
+                                task = self.resource_manager._prepare_preempt_task(req)
+                                self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
+                                self.llm_logger.info(f"put abort task in engine worker queue, req_id: {req_id}")
+                            else:
+                                self.scheduler._recycle(req_id)
+                                self.llm_logger.info(
+                                    f"req_id:{req_id} has not been allocated any resources, recycled it in scheduler"
+                                )
+                                self.resource_manager.abort_req_ids_set.remove(req_id)
                         continue
                     err_msg = None
                     try:
@@ -1367,6 +1379,7 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -1394,17 +1407,24 @@ class EngineService:
             return False
 
     def _register_to_router(self):
-        """If use router, register this server to router"""
-        timeout = 5
-        sleep_seconds = 10
+        """
+        Periodically send server information to the router for registeration, and it is used
+        as a heartbeat signal.
+        """
 
         def _register():
+            timeout = 5
+            sleep_seconds = 5
+            is_registered = False
+
             while True:
                 try:
                     api_server_host = self.cfg.router_config.api_server_host
                     api_server_port = self.cfg.router_config.api_server_port
                     api_server_url = f"http://{api_server_host}:{api_server_port}"
                     if not check_service_health(api_server_url):
+                        time.sleep(sleep_seconds)
+                        self.llm_logger.info("Wait for API service health and then register to router")
                         time.sleep(sleep_seconds)
                         continue
 
@@ -1416,20 +1436,22 @@ class EngineService:
                     )
 
                     if resp.ok:
-                        self.llm_logger.info("Successfully registered to the router!")
-                        break
+                        if not is_registered:
+                            is_registered = True
+                            self.llm_logger.info("Register to router successfully")
                     else:
                         self.llm_logger.error(
-                            f"Router registration failed: {resp.status_code}, "
+                            f"Send server info to router failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
                         time.sleep(sleep_seconds)
-                except requests.exceptions.RequestException as e:
-                    self.llm_logger.error(f"Register to router request error: {e}")
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
+                    time.sleep(sleep_seconds)
 
-        if self.cfg.router_config.router is not None:
+        if self.cfg.router_config.router is None:
+            self.llm_logger.info("Router is not enabled, skip registering to router")
+        else:
             register_thread = threading.Thread(target=_register, daemon=True)
             register_thread.start()
 
@@ -1705,6 +1727,7 @@ class EngineService:
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"

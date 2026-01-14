@@ -216,9 +216,18 @@ class TestEngineClientAbort(unittest.TestCase):
         # Run the abort method
         self.loop.run_until_complete(self.engine_client.abort(request_id, n=n))
 
-        # Verify info log was called with correct message
+        # Verify info log was called twice
+        self.assertEqual(mock_logger.info.call_count, 2)
+
+        # Verify the first log message (abort start)
+        first_call = mock_logger.info.call_args_list[0]
+        self.assertEqual(first_call[0][0], "abort request_id:test_request")
+
+        # Verify the second log message (abort completion with request IDs)
+        second_call = mock_logger.info.call_args_list[1]
         expected_log_message = "Aborted request(s) %s."
-        mock_logger.info.assert_called_once_with(expected_log_message, "test_request_0,test_request_1")
+        self.assertEqual(second_call[0][0], expected_log_message)
+        self.assertEqual(second_call[0][1], "test_request_0,test_request_1")
 
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True)
     @patch("fastdeploy.entrypoints.engine_client.api_server_logger")
