@@ -31,7 +31,8 @@ __global__ void compute_max_tokens_from_prefix_sum_kernel(
   int tid = threadIdx.x;
   int64_t local_max = 0;
 
-  // 每个线程处理一个或多个 expert（支持 num_experts > blockDim.x）
+  // Each thread processes one or more experts (support for num_experts >
+  // blockDim.x)
   for (int i = tid; i < num_experts; i += blockDim.x) {
     int64_t tokens =
         (i == 0) ? prefix_sum[0] : (prefix_sum[i] - prefix_sum[i - 1]);
@@ -41,7 +42,7 @@ __global__ void compute_max_tokens_from_prefix_sum_kernel(
   sdata[tid] = local_max;
   __syncthreads();
 
-  // Tree reduction 求最大值
+  // Tree reduction to find maximum value
   for (int s = blockDim.x / 2; s > 0; s >>= 1) {
     if (tid < s) {
       sdata[tid] = max(sdata[tid], sdata[tid + s]);
@@ -54,7 +55,7 @@ __global__ void compute_max_tokens_from_prefix_sum_kernel(
   }
 }
 
-// 辅助函数：启动 kernel 计算 max_tokens_per_expert
+// Helper function: Launch kernel to calculate max_tokens_per_expert
 inline void compute_max_tokens_from_prefix_sum(const int64_t *prefix_sum,
                                                int64_t *max_tokens_output,
                                                int num_experts,
@@ -64,7 +65,8 @@ inline void compute_max_tokens_from_prefix_sum(const int64_t *prefix_sum,
     return;
   }
 
-  // 选择合适的 block size（power of 2，且足够覆盖 num_experts）
+  // Select appropriate block size (power of 2, and large enough to cover
+  // num_experts)
   int block_size = 32;
   while (block_size < num_experts && block_size < 1024) {
     block_size *= 2;
