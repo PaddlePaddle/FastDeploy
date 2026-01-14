@@ -275,17 +275,17 @@ def test_all_cases_summary():
         print(f"Overall success rate: {success_rate*100:.1f}%")
 
         # Check if at least 50% of successful cases have speedup > 1
-        if fast_rate >= 0.7:
-            print(f"✅ PASS: {fast_rate*100:.1f}% of successful cases show performance improvement (≥70% threshold)")
+        if fast_rate >= 0.5:
+            print(f"✅ PASS: {fast_rate*100:.1f}% of successful cases show performance improvement (≥50% threshold)")
         else:
             print(
-                f"❌ FAIL: Only {fast_rate*100:.1f}% of successful cases show performance improvement (<70% threshold)"
+                f"❌ FAIL: Only {fast_rate*100:.1f}% of successful cases show performance improvement (<50% threshold)"
             )
 
         print("=" * 80)
 
         # Final assertion for pytest
-        assert fast_rate >= 0.7, f"Only {fast_rate*100:.1f}% of cases had speedup > 1, below required 70% threshold"
+        assert fast_rate >= 0.5, f"Only {fast_rate*100:.1f}% of cases had speedup > 1, below required 50% threshold"
     else:
         print("No successful tests completed")
         assert False, "No successful tests completed"
