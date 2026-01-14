@@ -89,7 +89,9 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
     def test(self):
         """Run test case"""
         # Set FastDeploy config
-        graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
+        graph_opt_config = GraphOptimizationConfig(
+            {"use_cudagraph": True, "graph_opt_level": 1, "full_cuda_graph": False}
+        )
         scheduler_config = SchedulerConfig({"max_num_seqs": 1})
         graph_opt_config._set_cudagraph_sizes(max_capture_size=scheduler_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
