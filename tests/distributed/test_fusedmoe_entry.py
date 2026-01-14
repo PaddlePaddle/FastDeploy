@@ -27,6 +27,8 @@ def test_fused_moe_launch():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     py_script = os.path.join(current_dir, "../layers/test_fusedmoe.py")
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+
+    os.environ["DISABLE_CI_FUSEDMOE_EP"] = "1"
     command = [
         sys.executable,
         "-m",

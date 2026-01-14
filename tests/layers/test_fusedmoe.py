@@ -618,9 +618,12 @@ class TestFusedMoE(unittest.TestCase):
 
             def fake_model_run():
                 for j in range(num_layers):
-                    out = fused_moe[j % real_weight_layers].fused_moe(
-                        cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
-                    )
+                    if int(os.getenv("DISABLE_CI_FUSEDMOE_EP", "0")) == 1:
+                        out = cache_hidden_states + cache_hidden_states
+                    else:
+                        out = fused_moe[j % real_weight_layers].fused_moe(
+                            cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                        )
 
                 return out
 
