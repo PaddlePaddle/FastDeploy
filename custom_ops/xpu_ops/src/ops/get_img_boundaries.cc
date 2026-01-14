@@ -16,14 +16,14 @@
 
 std::vector<paddle::Tensor> GetImgBoundaries(
     const paddle::Tensor& task_input_ids,
-    const paddle::Tensor& grid_thw,
+    const paddle::Tensor& mm_num_token,
     const int64_t image_patch_id) {
   // All tensor in cpu
   auto input_ids_ptr = task_input_ids.data<int64_t>();
   int64_t seq_lens_origin = task_input_ids.numel();
-  auto grid_thw_ptr = grid_thw.data<int64_t>();
+  auto mm_num_token_ptr = mm_num_token.data<int64_t>();
+  int64_t max_image_idx = mm_num_token.numel();
 
-  int token_times = 4;
   int token_idx = 0;
   int image_idx = 0;
   std::vector<int> img_boundaries, img_nums;
@@ -36,11 +36,20 @@ std::vector<paddle::Tensor> GetImgBoundaries(
       } while (token_idx < seq_lens_origin &&
                input_ids_ptr[token_idx] != image_patch_id);
     } else {
-      int cur_image_token_len =
-          (grid_thw_ptr[image_idx * 3 + 1] * grid_thw_ptr[image_idx * 3 + 2]) /
-          token_times;
+      if (image_idx >= max_image_idx) {
+        token_idx = seq_lens_origin;
+        img_boundaries.emplace_back(token_idx);
+        img_nums.emplace_back(image_idx);
+        break;
+      }
+      // token_idx += mm_num_token_ptr[image_idx];
+      int64_t cur_image_token_len = mm_num_token_ptr[image_idx];
       image_idx++;
-      token_idx += cur_image_token_len;
+      if (token_idx + cur_image_token_len > seq_lens_origin) {
+        token_idx = seq_lens_origin;
+      } else {
+        token_idx += cur_image_token_len;
+      }
     }
     img_boundaries.emplace_back(token_idx);
     img_nums.emplace_back(image_idx);
@@ -59,7 +68,7 @@ std::vector<paddle::Tensor> GetImgBoundaries(
 }
 
 PD_BUILD_OP(get_img_boundaries)
-    .Inputs({"task_input_ids", "grid_thw"})
+    .Inputs({"task_input_ids", "mm_num_token"})
     .Attrs({"image_patch_id: int64_t"})
     .Outputs({"img_boundaries"})
     .SetKernelFn(PD_KERNEL(GetImgBoundaries));

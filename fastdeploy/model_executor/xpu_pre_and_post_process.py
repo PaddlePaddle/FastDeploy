@@ -14,18 +14,22 @@
 # limitations under the License.
 """
 
-from typing import Dict, Optional
+import queue
+from typing import Dict, List, Optional
 
+import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.config import SpeculativeConfig
 from fastdeploy.model_executor.forward_meta import XPUForwardMeta
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
+from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
-from fastdeploy.worker.output import ModelOutputData
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData
 
 if current_platform.is_xpu():
-    from fastdeploy.model_executor.ops.xpu import (
+    from fastdeploy.model_executor.ops.xpu import (  # step_system_cache,; step_reschedule,
         adjust_batch,
         gather_next_token,
         get_infer_param,
@@ -42,11 +46,51 @@ if current_platform.is_xpu():
         speculate_save_output,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
+        speculate_step_reschedule,
+        speculate_step_system_cache,
         speculate_update_v3,
         step_paddle,
         update_inputs,
         update_inputs_v1,
     )
+DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+
+def _build_stream_transfer_data(
+    output_tokens: paddle.Tensor,
+    pooler_outputs: List = None,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list: Optional[LogprobsTensors] = None,
+):
+    """Split output_tokens and output"""
+    stream_transfer_datas = []
+    if output_tokens is not None:
+        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
+
+        for bid, output_token_per_sample in enumerate(output_tokens_lists):
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
+            )
+            if logprobs:
+                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
+            if prompt_logprobs_list:
+                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
+            stream_transfer_datas.append(stream_transfer_data)
+    elif pooler_outputs is not None:
+        for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output is None:
+                continue
+            if pooler_output.dtype == paddle.bfloat16:
+                pooler_output = pooler_output.astype("float32")
+
+            pooler_output = pooler_output.numpy()
+
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
+            )
+            stream_transfer_datas.append(stream_transfer_data)
+    return stream_transfer_datas
 
 
 def xpu_pre_process(
@@ -192,7 +236,6 @@ def xpu_process_output(
     """ """
 
     output_padding_offset = share_inputs.get("output_padding_offset", None)
-
     hiddden_states = gather_next_token(
         forward_output,
         cum_offsets,
@@ -217,6 +260,8 @@ def xpu_post_process_normal(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
     skip_save_output: bool = False,
+    save_each_rank: bool = False,
+    async_output_queue: queue.Queue = None,
     think_end_id: int = None,
     line_break_id: int = None,
 ) -> None:
@@ -314,27 +359,37 @@ def xpu_post_process_normal(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
-            save_output(
-                sampled_token_ids,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-                False,  # use_ep
-            )
-        else:
-            if save_output_topk is None:
-                raise ImportError(
-                    "save_output_topk operator is not available. "
-                    "Please rebuild the XPU operators with the new get_output_msg_with_topk.cc and save_output_msg_with_topk.cc files."
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(
+                    sampled_token_ids,
+                    logprobs=sampler_output.logprobs_tensors,
+                    prompt_logprobs_list=model_output.prompt_logprobs_list,
                 )
-            save_output_topk(
-                sampled_token_ids,
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-            )
+                if async_output_queue is not None:
+                    async_output_queue.put(output)
+        else:
+            if sampler_output.logprobs_tensors is None:
+                save_output(
+                    sampled_token_ids,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                    False,  # use_ep
+                )
+            else:
+                if save_output_topk is None:
+                    raise ImportError(
+                        "save_output_topk operator is not available. "
+                        "Please rebuild the XPU operators with the new get_output_msg_with_topk.cc and save_output_msg_with_topk.cc files."
+                    )
+                save_output_topk(
+                    sampled_token_ids,
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                )
 
 
 def xpu_post_process_specualate(
@@ -382,42 +437,101 @@ def step_xpu(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int,
     enc_dec_block_num: int,
-    speculative_decoding: bool,
-    max_draft_token_num: int,
+    speculative_config: SpeculativeConfig,
+    enable_prefix_caching: bool = False,
 ) -> None:
-    """
-    TODO(chenhuan09): support PD
-    """
-    if speculative_decoding:
-        speculate_step_paddle(
-            share_inputs["stop_flags"],
-            share_inputs["seq_lens_this_time"],
-            share_inputs["step_seq_lens_encoder"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
-            share_inputs["block_tables"],
-            share_inputs["encoder_block_lens"],
-            share_inputs["is_block_step"],
-            share_inputs["step_block_list"],
-            share_inputs["step_lens"],
-            share_inputs["recover_block_list"],
-            share_inputs["recover_lens"],
-            share_inputs["need_block_list"],
-            share_inputs["need_block_len"],
-            share_inputs["used_list_len"],
-            share_inputs["free_list"],
-            share_inputs["free_list_len"],
-            share_inputs["input_ids"],
-            share_inputs["pre_ids"],
-            share_inputs["step_idx"],
-            share_inputs["next_tokens"],
-            share_inputs["first_token_ids"],
-            share_inputs["accept_num"],
-            block_size,
-            enc_dec_block_num,
-            max_draft_token_num,
-        )
+    if speculative_config.method is not None:
+        if DISABLE_RECOVER:
+            speculate_step_reschedule(
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["step_seq_lens_encoder"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["seq_lens_decoder"],
+                share_inputs["block_tables"],
+                share_inputs["encoder_block_lens"],
+                share_inputs["is_block_step"],
+                share_inputs["step_block_list"],
+                share_inputs["step_lens"],
+                share_inputs["recover_block_list"],
+                share_inputs["recover_lens"],
+                share_inputs["need_block_list"],
+                share_inputs["need_block_len"],
+                share_inputs["used_list_len"],
+                share_inputs["free_list"],
+                share_inputs["free_list_len"],
+                share_inputs["input_ids"],
+                share_inputs["pre_ids"],
+                share_inputs["step_idx"],
+                share_inputs["next_tokens"],
+                share_inputs["first_token_ids"],
+                share_inputs["accept_num"],
+                block_size,
+                enc_dec_block_num,
+                speculative_config.num_speculative_tokens,
+            )
+        else:
+            if enable_prefix_caching:
+                speculate_step_system_cache(
+                    share_inputs["stop_flags"],
+                    share_inputs["seq_lens_this_time"],
+                    share_inputs["step_seq_lens_encoder"],
+                    share_inputs["step_seq_lens_decoder"],
+                    share_inputs["seq_lens_encoder"],
+                    share_inputs["seq_lens_decoder"],
+                    share_inputs["block_tables"],
+                    share_inputs["encoder_block_lens"],
+                    share_inputs["is_block_step"],
+                    share_inputs["step_block_list"],
+                    share_inputs["step_lens"],
+                    share_inputs["recover_block_list"],
+                    share_inputs["recover_lens"],
+                    share_inputs["need_block_list"],
+                    share_inputs["need_block_len"],
+                    share_inputs["used_list_len"],
+                    share_inputs["free_list"],
+                    share_inputs["free_list_len"],
+                    share_inputs["input_ids"],
+                    share_inputs["pre_ids"],
+                    share_inputs["step_idx"],
+                    share_inputs["next_tokens"],
+                    share_inputs["first_token_ids"],
+                    share_inputs["accept_num"],
+                    block_size,
+                    enc_dec_block_num,
+                    speculative_config.num_speculative_tokens,
+                )
+            else:
+                speculate_step_paddle(
+                    share_inputs["stop_flags"],
+                    share_inputs["seq_lens_this_time"],
+                    share_inputs["step_seq_lens_encoder"],
+                    share_inputs["seq_lens_encoder"],
+                    share_inputs["seq_lens_decoder"],
+                    share_inputs["block_tables"],
+                    share_inputs["encoder_block_lens"],
+                    share_inputs["is_block_step"],
+                    share_inputs["step_block_list"],
+                    share_inputs["step_lens"],
+                    share_inputs["recover_block_list"],
+                    share_inputs["recover_lens"],
+                    share_inputs["need_block_list"],
+                    share_inputs["need_block_len"],
+                    share_inputs["used_list_len"],
+                    share_inputs["free_list"],
+                    share_inputs["free_list_len"],
+                    share_inputs["input_ids"],
+                    share_inputs["pre_ids"],
+                    share_inputs["step_idx"],
+                    share_inputs["next_tokens"],
+                    share_inputs["first_token_ids"],
+                    share_inputs["accept_num"],
+                    block_size,
+                    enc_dec_block_num,
+                    speculative_config.num_speculative_tokens,
+                )
     else:
+        # TODO(chenhuan09): add step system cache/reschedule support
         step_paddle(
             share_inputs["stop_flags"],
             share_inputs["seq_lens_this_time"],

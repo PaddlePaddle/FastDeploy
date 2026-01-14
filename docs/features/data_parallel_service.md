@@ -1,78 +1,27 @@
 [简体中文](../zh/features/data_parallel_service.md)
 
-# Data Parallelism
-Under the MOE model, enabling Expert Parallelism (EP) combined with Data Parallelism (DP), where EP distributes expert workloads and DP enables parallel request processing.
+# Data Parallelism (DP)
 
-## Data Distribution Strategy
-FastDeploy uses the splitwise scheduler to monitor the load status of each DP node and distribute incoming data accordingly.
+Data Parallelism (DP) is a distributed inference approach in which incoming requests are distributed across multiple **identical model replicas**, with each replica independently handling inference for its assigned requests.
 
-The splitwise scheduler relies on Redis to store DP load status and distribute received data.
+In practice, especially when deploying **Mixture-of-Experts (MoE)** models, **Data Parallelism (DP)** is often combined with **Expert Parallelism (EP)**.
+Each DP service independently performs the Attention computation, while all DP services collaboratively participate in the MoE computation, thereby improving overall inference performance.
 
-### Expert Parallelism + Hybrid Deployment
-FastDeploy provides the splitwise scheduler that monitors DP load status and schedules incoming data.
-The scheduling flow is shown below - users randomly request IP and port, obtain load status via Redis, and data is distributed to less-loaded DPs for inference.
-![Scheduling Architecture](./images/scheduler_img.png)
+FastDeploy supports DP-based inference and provides the `multi_api_server` interface to launch multiple inference services simultaneously.
 
-#### Offline Inference
-```python
-prompts = [
-    "Hello, my name is",
-    "你好，请问今天是星期",
-    "请写6个以数字开头的成语",
-    "写一个300字的小说大纲，内容是李白穿越到现代，最后成为公司文职人员的故事",
-    "我要采访一位科幻作家，创建一个包含5个问题的列表"
-]
+![Architecture](./images/no_scheduler_img.png)
 
-sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=128)
+---
 
-llm = LLM(
-    model="ERNIE-4_5-300B-A47B-FP8-Paddle",
-    tensor_parallel_size=1,
-    data_parallel_size=8,
-    max_model_len=8192,
-    num_gpu_blocks_override=1024,
-    engine_worker_queue_port="6077,6078,6079,6080,6081,6082,6083,6084",
-    enable_expert_parallel=True,
-    scheduler_name="splitwise",
-    scheduler_host="127.0.0.1",
-    scheduler_topic="test",
-    scheduler_port=6379
-)
-outputs = llm.generate(prompts, sampling_params)
+## Launching FastDeploy Services
 
-for output in outputs:
-    prompt = output.prompt
-    generated_text = output.outputs.text
-    print("generated_text: ", generated_text)
-    print("\n")
-```
-
-#### Online Inference
-```shell
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ERNIE-4_5-300B-A47B-FP8-Paddle \
-       --port 8184 --metrics-port 8185 \
-       --engine-worker-queue-port "6077,6078,6079,6080,6081,6082,6083,6084"  \
-       --data-parallel-size 8 --tensor-parallel-size 1\
-       --enable-expert-parallel \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-topic "test" \
-       --scheduler-ttl 9000
-```
-
-### User-Managed Scheduling
-FastDeploy provides multi_api_server, allowing users to launch multiple API servers and manually select DPs for requests. In this case, users can add their own load balancing models for scheduling. (Currently only supports online inference)
-
-#### Online Inference
-![Scheduling Architecture](./images/no_scheduler_img.png)
+Taking the **ERNIE-4.5-300B** model as an example, the following command launches a service with **DP=8, TP=1, EP=8**:
 
 ```shell
 export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
-  --ports "1811,1822,1833,1844,1855,1866,1877,1888" \
   --num-servers 8 \
+  --ports "1811,1822,1833,1844,1855,1866,1877,1888" \
   --metrics-ports "3101,3201,3301,3401,3501,3601,3701,3801" \
   --args --model ERNIE-4_5-300B-A47B-FP8-Paddle \
   --engine-worker-queue-port "25611,25621,25631,25641,25651,25661,25671,25681" \
@@ -85,68 +34,67 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 ```
 
 ### Parameter Description
-- num-servers: Number of API servers to launch
-- ports: Ports for API servers
-- args: Arguments for API servers
 
-### Data Parallelism + Disaggregated Deployment
-Refer to [Disaggregated Deployment](disaggregated.md#multi-machine-disaggregated-deployment)
+* `num-servers`: Number of DP service instances to launch.
+* `ports`: API server ports for the DP service instances. The number of ports must match `num-servers`.
+* `metrics-ports`: Metrics server ports for the DP service instances. The number must match `num-servers`. If not specified, available ports will be allocated automatically.
+* `args`: Arguments passed to each DP service instance. Refer to the [parameter documentation](../parameters.md) for details.
 
-#### Online Inference
-For multi-machine deployment, ensure network cards support RDMA and all cluster nodes are interconnected.
+---
 
-**Note**:
-- `KVCACHE_RDMA_NICS` specifies RDMA network cards for the current machine, multiple cards should be separated by commas.
-- The repository provides an automatic RDMA network card detection script `bash scripts/get_rdma_nics.sh <device>`, where <device> can be `cpu` or `gpu`.
+## Request Scheduling
 
-**Prefill Instance**
-```bash
-export FD_LOG_DIR="log_prefill"
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-echo "set RDMA NICS"
-export $(bash scripts/get_rdma_nics.sh gpu)
-echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ERNIE-4_5-300B-A47B-FP8-Paddle \
-       --port 8180 --metrics-port 8181 \
-       --engine-worker-queue-port "25611,25621,25631,25641,25651,25661,25671,25681" \
-       --cache-queue-port 8183 \
-       --tensor-parallel-size 1 \
-       --data-parallel-size 4 \
-       --enable-expert-parallel \
-       --cache-transfer-protocol "rdma,ipc" \
-       --rdma-comm-ports "7671,7672,7673,7674,7675,7676,7677,7678" \
-       --pd-comm-port "2334" \
-       --splitwise-role "prefill" \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-topic "test" \
-       --scheduler-ttl 9000
+After launching multiple DP services using the data parallel strategy, incoming user requests must be distributed across the services by a scheduler to achieve load balancing.
+
+### Web Server–Based Scheduling
+
+Once the IP addresses and ports of the DP service instances are known, common web servers (such as **Nginx**) can be used to implement request scheduling. Details are omitted here.
+
+### FastDeploy Router
+
+FastDeploy provides a Python-based [Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/router) to handle request reception and scheduling.
+A high-performance Router implementation is currently under development.
+
+The usage and request scheduling workflow is as follows:
+
+* Start the Router
+* Start FastDeploy service instances (either single-DP or multi-DP), which register themselves with the Router
+* User requests are sent to the Router
+* The Router selects an appropriate service instance based on the global load status
+* The Router forwards the request to the selected instance for inference
+* The Router receives the generated result from the instance and returns it to the user
+
+---
+
+## Quick Start Example
+
+### Launching the Router
+
+Start the Router service. Logs are written to `log_router/router.log`.
+
+```shell
+export FD_LOG_DIR="log_router"
+python -m fastdeploy.router.launch \
+    --host 0.0.0.0 \
+    --port 30000
 ```
 
-**Decode Instance**
-```bash
-export FD_LOG_DIR="log_decode"
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-echo "set RDMA NICS"
-export $(bash scripts/get_rdma_nics.sh gpu)
-echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ERNIE-4_5-300B-A47B-FP8-Paddle \
-       --port 8184 --metrics-port 8185 \
-       --engine-worker-queue-port "25611,25621,25631,25641,25651,25661,25671,25681" \
-       --cache-queue-port 8187 \
-       --tensor-parallel-size 1 \
-       --data-parallel-size 4 \
-       --enable-expert-parallel \
-       --scheduler-name "splitwise" \
-       --cache-transfer-protocol "rdma,ipc" \
-       --rdma-comm-ports "7671,7672,7673,7674,7675,7676,7677,7678" \
-       --pd-comm-port "2334" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-ttl 9000
-       --scheduler-topic "test" \
-       --splitwise-role "decode"
+### Launching DP Services with Router
+
+Again using the **ERNIE-4.5-300B** model as an example, the following command launches **DP=8, TP=1, EP=8** services and registers them with the Router via the `--router` argument:
+
+```shell
+export FD_ENABLE_MULTI_API_SERVER=1
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+  --num-servers 8 \
+  --ports "1811,1822,1833,1844,1855,1866,1877,1888" \
+  --metrics-ports "3101,3201,3301,3401,3501,3601,3701,3801" \
+  --args --model ERNIE-4_5-300B-A47B-FP8-Paddle \
+  --tensor-parallel-size 1 \
+  --data-parallel-size 8 \
+  --max-model-len 12288 \
+  --max-num-seqs 64 \
+  --num-gpu-blocks-override 256 \
+  --enable-expert-parallel \
+  --router "0.0.0.0:30000"
 ```

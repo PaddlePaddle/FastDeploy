@@ -129,7 +129,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
-        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
@@ -282,7 +282,8 @@ class PaddleDisWorkerProc:
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
-        return model_weights_signal_tensor.item()
+        value = model_weights_signal_tensor.numpy()[0]
+        return int(value)
 
     def _tp_barrier_wait(self):
         if current_platform.is_xpu():
@@ -421,6 +422,7 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.ranks > 1:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
             req_dicts = None
@@ -441,7 +443,8 @@ class PaddleDisWorkerProc:
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
-                paddle.distributed.barrier()
+                if self.ranks > 1:
+                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
@@ -456,14 +459,18 @@ class PaddleDisWorkerProc:
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.local_engine_worker_queue_port,
+                        self.parallel_config.shutdown_comm_group_if_worker_idle,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
-                    while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
-                        time.sleep(0.01)
-                    continue
+
+                    # 只有不关闭通信组时，清理权重后需要额外等待（否则信号量会同步混乱）
+                    if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                        while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
+                            time.sleep(0.01)
+                        continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
@@ -809,8 +816,8 @@ def parse_args():
     parser.add_argument(
         "--load_choices",
         type=str,
-        default="default",
-        help="The format of the model weights to load. default/new_loader.",
+        default="default_v1",
+        help="The format of the model weights to load. default/default_v1.",
     )
 
     parser.add_argument(
@@ -881,6 +888,18 @@ def parse_args():
         help="Configation of Rollout Routing Replay.",
     )
 
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
+    )
+
+    parser.add_argument(
+        "--enable_entropy",
+        action="store_true",
+        help="Enable output of token-level entropy.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -940,7 +959,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
-    model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
+    model_config.pretrained_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
     model_config.pretrained_config.is_mtp = False
     model_config.pretrained_config.head_dim = model_config.head_dim
 
@@ -979,6 +998,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         or current_platform.is_xpu()
         or current_platform.is_maca()
         or current_platform.is_iluvatar()
+        or current_platform.is_intel_hpu()
     ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -1012,6 +1032,11 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
+        # TODO XPU support PaddleOCR prefix caching
+        if current_platform.is_xpu():
+            fd_config.cache_config.enable_prefix_caching = False
+            fd_config.cache_config.max_encoder_cache = 0
+
     return fd_config
 
 

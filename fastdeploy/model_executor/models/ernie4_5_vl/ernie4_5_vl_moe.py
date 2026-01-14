@@ -556,6 +556,9 @@ class Ernie4_5_VLModel(nn.Layer):
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
 
@@ -735,7 +738,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
                 r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.linear.weight.set_value(
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
@@ -978,7 +981,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
@@ -986,7 +989,7 @@ class Ernie4_5_VLPretrainedModel(PretrainedModel):
         )
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.vision_config.get("num_heads"),
             num_key_value_heads=config.vision_config.get("num_heads"),

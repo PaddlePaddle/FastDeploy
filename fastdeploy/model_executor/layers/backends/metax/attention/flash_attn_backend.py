@@ -31,7 +31,9 @@ from fastdeploy.model_executor.layers.backends.metax.attention.flash_attention_i
     flash_attn_kvcache_func,
     flash_attn_unpadded_func,
 )
-from fastdeploy.model_executor.ops.gpu import apply_rope_qkv, cache_kv_with_rope
+from fastdeploy.model_executor.ops.gpu import cache_kv_with_rope
+from fastdeploy.model_executor.ops.gpu import merge_qkv as merge_qkv_cu
+from fastdeploy.model_executor.ops.gpu import split_qkv as split_qkv_cu
 
 
 @dataclass
@@ -51,10 +53,10 @@ class FlashAttentionMetadata(AttentionMetadata):
     decoder_batch_ids: paddle.Tensor = None
     decoder_tile_ids_per_batch: paddle.Tensor = None
     decoder_num_blocks: paddle.Tensor = None
-    rotary_cos_prefill: paddle.Tensor = None
-    rotary_sin_prefill: paddle.Tensor = None
-    rotary_cos_decode: paddle.Tensor = None
-    rotary_sin_decode: paddle.Tensor = None
+    cu_seqlens_q_decode: paddle.Tensor = None
+    batch_ids_per_token_decode: paddle.Tensor = None
+    seq_lens_decode: paddle.Tensor = None
+    block_table_decode: paddle.Tensor = None
 
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
@@ -64,8 +66,6 @@ class FlashAttentionMetadata(AttentionMetadata):
     encoder_block_shape_q: int = -1
     decoder_block_shape_q: int = -1
     _fuse_kernel_compute_dtype: str = "bf16"
-    seq_lens_dec: paddle.Tensor = None
-    block_table_dec: paddle.Tensor = None
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
@@ -128,20 +128,22 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.enable_mm = fd_config.model_config.enable_mm
+        self.model_type = fd_config.model_config.model_type
+        self.is_neox_style = False
+        if "paddleocr" in fd_config.model_config.model_type:
+            self.is_neox_style = True
+
         max_num_seqs = fd_config.scheduler_config.max_num_seqs
-        self.attention_metadata.rotary_cos_decode = paddle.empty(
-            shape=[max_num_seqs, 1, 1, self.head_dim],
-            dtype=self.dtype,
-        )
-        self.attention_metadata.rotary_sin_decode = paddle.empty(
-            shape=[max_num_seqs, 1, 1, self.head_dim],
-            dtype=self.dtype,
-        )
-        self.attention_metadata.seq_lens_dec = paddle.empty(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype="int32"
-        )
-        self.attention_metadata.block_table_dec = paddle.empty(
-            shape=[fd_config.scheduler_config.max_num_seqs, self.head_dim], dtype="int32"
+        self.attention_metadata.decoder_batch_ids = paddle.empty(shape=[max_num_seqs], dtype="int32")
+        self.attention_metadata.cu_seqlens_q_decode = paddle.empty(shape=[max_num_seqs + 1], dtype="int32")
+        self.attention_metadata.batch_ids_per_token_decode = paddle.empty(shape=[max_num_seqs], dtype="int32")
+        self.attention_metadata.seq_lens_decode = paddle.empty(shape=[max_num_seqs, 1], dtype="int32")
+        self.attention_metadata.block_table_decode = paddle.empty(
+            shape=[
+                max_num_seqs,
+                self.max_seq_len // self.block_size + fd_config.cache_config.enc_dec_block_num,
+            ],
+            dtype="int32",
         )
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -152,177 +154,91 @@ class FlashAttentionBackend(AttentionBackend):
 
         prefill_non_zeros_ids = forward_meta.seq_lens_this_time > 1
         decode_non_zeros_ids = forward_meta.seq_lens_this_time == 1
-        self.prefill_info_dict["batch_ids"] = paddle.where(prefill_non_zeros_ids)[0]
-        self.decode_info_dict["batch_ids"] = paddle.where(decode_non_zeros_ids)[0]
+        self.prefill_info_dict["batch_ids"] = paddle.where(prefill_non_zeros_ids)[0].astype("int32")
+        self.decode_info_dict["batch_ids"] = paddle.where(decode_non_zeros_ids)[0].astype("int32")
 
         self.prefill_len = len(self.prefill_info_dict["batch_ids"])
         self.decode_len = len(self.decode_info_dict["batch_ids"])
+        self.has_prefill = self.prefill_len > 0
+        self.has_decode = self.decode_len > 0
 
-        # only prefill
-        if self.decode_len == 0:
-            cu_seq_ids = list(range(self.prefill_len + 1))
-            self.prefill_info_dict["cu_seqlens_q"] = forward_meta.cu_seqlens_q[cu_seq_ids].astype("int32")
-        # only decode
-        elif self.prefill_len == 0:
-            pass
-        # both prefill and decode
-        else:
-            prefill_num_tokens = paddle.sum(forward_meta.seq_lens_this_time[prefill_non_zeros_ids])
-            decode_num_tokens = paddle.sum(forward_meta.seq_lens_this_time[decode_non_zeros_ids])
+        if self.has_prefill:
+            batch_ids_prefill = self.prefill_info_dict["batch_ids"]
 
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.zeros(
-                [self.prefill_len + 1], dtype=forward_meta.cu_seqlens_q.dtype
+            seq_lens_this_time_prefill = forward_meta.seq_lens_this_time[batch_ids_prefill, 0]
+            self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
+                [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_prefill, axis=0).astype("int32")],
+                axis=0,
             )
-            self.prefill_info_dict["cu_seqlens_q"][1:] = forward_meta.seq_lens_encoder[
-                self.prefill_info_dict["batch_ids"], 0
-            ]
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.cumsum(self.prefill_info_dict["cu_seqlens_q"]).astype(
-                "int32"
+            self.prefill_info_dict["seq_lens_prefill"] = paddle.zeros(self.prefill_len, dtype="int32")
+
+            local_ids = paddle.arange(self.prefill_len, dtype="int32")
+            self.prefill_info_dict["batch_ids_per_token"] = paddle.repeat_interleave(
+                local_ids, repeats=seq_lens_this_time_prefill, axis=0
             )
 
-            self.prefill_qkv = paddle.zeros([prefill_num_tokens, self.total_hidden_dim], dtype=self.dtype)
-            self.decode_qkv = paddle.zeros([decode_num_tokens, self.total_hidden_dim], dtype=self.dtype)
-            self.merged_output = paddle.zeros(
-                [prefill_num_tokens + decode_num_tokens, self.num_heads, self.head_dim], dtype=self.dtype
+        if self.has_decode:
+            batch_ids_decode = self.decode_info_dict["batch_ids"]
+
+            seq_lens_this_time_decode = forward_meta.seq_lens_this_time[batch_ids_decode, 0]
+            cu_seqlens_q_decode = paddle.concat(
+                [paddle.zeros([1], dtype="int32"), paddle.cumsum(seq_lens_this_time_decode, axis=0).astype("int32")],
+                axis=0,
             )
 
-            prefill_start, decode_start, start = 0, 0, 0
-            non_zeros_ids = forward_meta.seq_lens_this_time != 0
-            non_zeros_seq_lens = forward_meta.seq_lens_this_time[non_zeros_ids]
-            end = non_zeros_seq_lens[0]
-            if end > 1:
-                last_stage = "prefill"
-                prefill_end = end
-                decode_end = 0
-            else:
-                last_stage = "decode"
-                prefill_end = 0
-                decode_end = end
+            local_ids = paddle.arange(self.decode_len, dtype="int32")
+            batch_ids_per_token_decode = paddle.repeat_interleave(local_ids, repeats=seq_lens_this_time_decode, axis=0)
 
-            self.prefill_info_dict["id_group"] = []
-            self.prefill_info_dict["reverse_id_group"] = []
-            self.decode_info_dict["id_group"] = []
-            self.decode_info_dict["reverse_id_group"] = []
-            self.record_stages = []
-            for seq_len in non_zeros_seq_lens[1:]:
-                if seq_len > 1:
-                    if last_stage == "decode":
-                        self.record_stages.append((last_stage, len(self.decode_info_dict["id_group"])))
-                        self.decode_info_dict["id_group"].append((decode_start, decode_end))
-                        self.decode_info_dict["reverse_id_group"].append((start, end))
-                        decode_start = decode_end
-                        start = end
-                        last_stage = "prefill"
-                    prefill_end += seq_len
-                    end += seq_len
+            self.attention_metadata.decoder_batch_ids[: self.decode_len].copy_(batch_ids_decode)  # global batch id
+            self.attention_metadata.cu_seqlens_q_decode[: self.decode_len + 1].copy_(cu_seqlens_q_decode)
+            self.attention_metadata.batch_ids_per_token_decode[: self.decode_len].copy_(batch_ids_per_token_decode)
+            self.attention_metadata.seq_lens_decode[: self.decode_len].copy_(
+                forward_meta.seq_lens_decoder[batch_ids_decode, 0]
+            )
+            self.attention_metadata.block_table_decode[: self.decode_len].copy_(
+                forward_meta.block_tables[batch_ids_decode, :]
+            )
+
+        if self.has_prefill and self.has_decode:
+            non_zeros_mask = forward_meta.seq_lens_this_time != 0
+            seq_lens_non_zeros = forward_meta.seq_lens_this_time[non_zeros_mask].astype("int32")
+
+            global_sequence_offsets = paddle.zeros(seq_lens_non_zeros.shape[0] + 1, dtype="int32")
+            global_sequence_offsets[1:] = paddle.cumsum(seq_lens_non_zeros)
+
+            is_prefill_array = seq_lens_non_zeros > 1
+
+            group_boundary = paddle.where(is_prefill_array[1:] != is_prefill_array[:-1])[0].astype("int32") + 1
+            group_starts = paddle.concat((paddle.zeros([1], dtype="int32"), group_boundary))
+            group_ends = paddle.concat(
+                (group_boundary, paddle.full([1], fill_value=seq_lens_non_zeros.shape[0], dtype="int32"))
+            )
+
+            compact_meta = []
+            prefill_ptr = 0
+            decode_ptr = 0
+
+            for start, end in zip(group_starts, group_ends):
+                is_prefill = is_prefill_array[start]
+                g_start = global_sequence_offsets[start]
+                g_end = global_sequence_offsets[end]
+                num_tokens = g_end - g_start
+
+                if is_prefill:
+                    # [0, prefill_start, prefill_end, global_start, global_end]
+                    compact_meta.append([0, prefill_ptr, prefill_ptr + num_tokens, g_start, g_end])
+                    prefill_ptr += num_tokens
                 else:
-                    if last_stage == "prefill":
-                        self.record_stages.append((last_stage, len(self.prefill_info_dict["id_group"])))
-                        self.prefill_info_dict["id_group"].append((prefill_start, prefill_end))
-                        self.prefill_info_dict["reverse_id_group"].append((start, end))
-                        prefill_start = prefill_end
-                        start = end
-                        last_stage = "decode"
-                    decode_end += seq_len
-                    end += seq_len
+                    # [1, decode_start, decode_end, global_start, global_end]
+                    compact_meta.append([1, decode_ptr, decode_ptr + num_tokens, g_start, g_end])
+                    decode_ptr += num_tokens
 
-            if prefill_start < prefill_end:
-                self.record_stages.append(("prefill", len(self.prefill_info_dict["id_group"])))
-                self.prefill_info_dict["id_group"].append((prefill_start, prefill_end))
-                self.prefill_info_dict["reverse_id_group"].append((start, end))
-            if decode_start < decode_end:
-                self.record_stages.append(("decode", len(self.decode_info_dict["id_group"])))
-                self.decode_info_dict["id_group"].append((decode_start, decode_end))
-                self.decode_info_dict["reverse_id_group"].append((start, end))
-
-        self.batch_ids_prefill = paddle.to_tensor(self.prefill_info_dict["batch_ids"])
-        self.batch_ids_decode = paddle.to_tensor(self.decode_info_dict["batch_ids"])
-        self.attention_metadata.seq_lens_dec.copy_(forward_meta.seq_lens_decoder[self.batch_ids_decode, 0])
-        self.attention_metadata.block_table_dec.copy_(forward_meta.block_tables[self.batch_ids_decode, :])
-
-        # update prefilling rope
-        self.update_rotary_embs_prefill(forward_meta)
-        # update decoding rope
-        self.update_rotary_embs_decoder(forward_meta)
-
-    def update_rotary_embs_prefill(self, forward_meta: ForwardMeta):
-        if self.batch_ids_prefill.shape[0] == 0 or forward_meta.rotary_embs is None:
-            return
-
-        batch_ids = self.batch_ids_prefill
-        seq_lens_this_time = forward_meta.seq_lens_this_time[batch_ids]
-        cached_kv_lens = forward_meta.seq_lens_decoder[batch_ids, 0]
-
-        self.block_table_prefill = forward_meta.block_tables[batch_ids, :]
-        # mapping token idx to batch idx
-        self.batch_ids_q = paddle.repeat_interleave(
-            paddle.arange(0, batch_ids.shape[0], dtype="int32"), repeats=seq_lens_this_time, axis=0
-        )
-
-        all_indices = []
-        for i in range(len(batch_ids)):
-            start_pos = cached_kv_lens[i]
-            seq_len_i = seq_lens_this_time[i]
-            if seq_len_i > 0:
-                indices_i = paddle.arange(start_pos, start_pos + seq_len_i, dtype="int64")
-                all_indices.append(indices_i)
-        if not all_indices:
-            return
-
-        all_indices = paddle.concat(all_indices)  # [token_num]
-        if self.enable_mm:
-            gather_nd_indices = paddle.stack(
-                [  # [token_num, 2]
-                    paddle.repeat_interleave(batch_ids, repeats=seq_lens_this_time, axis=0),
-                    all_indices,
-                ],
-                axis=1,
+            self.hybrid_stage_meta = paddle.to_tensor(compact_meta, dtype="int32")
+            self.prefill_qkv = paddle.zeros([prefill_ptr, self.total_hidden_dim], dtype=self.dtype)
+            self.decode_qkv = paddle.zeros([decode_ptr, self.total_hidden_dim], dtype=self.dtype)
+            self.merged_output = paddle.zeros(
+                [prefill_ptr + decode_ptr, self.num_heads, self.head_dim], dtype=self.dtype
             )
-            gathered_embs = paddle.gather_nd(
-                forward_meta.rotary_embs.squeeze([2]).transpose(
-                    [0, 2, 1, 3, 4]
-                ),  # [B, 2, 1, S, 1, D // 2] -> [B, S, 2, 1, D // 2]
-                gather_nd_indices,
-            )  # [token_num, 2, 1, D // 2]
-            rot_cos = gathered_embs[:, 0, :, :]  # [token_num, 1, D // 2]
-            rot_sin = gathered_embs[:, 1, :, :]
-        else:
-            gathered_embs = paddle.gather(
-                forward_meta.rotary_embs.squeeze([1]), all_indices, axis=1  # [2, 1, S, 1, D // 2] -> [2, S, 1, D // 2]
-            )  # [2, token_num, 1, D // 2]
-            rot_cos = gathered_embs[0, :, :, :]  # [token_num, 1, D // 2]
-            rot_sin = gathered_embs[1, :, :, :]
-
-        self.attention_metadata.rotary_cos_prefill = paddle.repeat_interleave(
-            rot_cos, repeats=2, axis=-1
-        )  # [token_num, 1, D]
-        self.attention_metadata.rotary_sin_prefill = paddle.repeat_interleave(rot_sin, repeats=2, axis=-1)
-
-    def update_rotary_embs_decoder(self, forward_meta: ForwardMeta):
-        if self.batch_ids_decode.shape[0] == 0:
-            return
-
-        bs = self.batch_ids_decode.shape[0]
-        if self.enable_mm:
-            index = paddle.concat(
-                [self.batch_ids_decode.view([-1, 1]), self.attention_metadata.seq_lens_dec.to("int64").view([-1, 1])],
-                axis=1,
-            )
-            rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
-            rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
-        else:
-            rot_cos = paddle.gather(
-                forward_meta.rotary_embs[0, 0, :, 0, :], self.attention_metadata.seq_lens_dec
-            ).view([bs, 1, 1, -1])
-            rot_sin = paddle.gather(
-                forward_meta.rotary_embs[1, 0, :, 0, :], self.attention_metadata.seq_lens_dec
-            ).view([bs, 1, 1, -1])
-        self.attention_metadata.rotary_cos_decode[:bs].copy_(
-            paddle.repeat_interleave(rot_cos, repeats=2, axis=-1).astype(self.dtype)
-        )
-        self.attention_metadata.rotary_sin_decode[:bs].copy_(
-            paddle.repeat_interleave(rot_sin, repeats=2, axis=-1).astype(self.dtype)
-        )
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -348,118 +264,57 @@ class FlashAttentionBackend(AttentionBackend):
 
         return key_cache_shape, value_cache_shape
 
-    def apply_rope_native(self, qk, cos, sin):
-        rotate_half = paddle.reshape(
-            paddle.stack([-qk[..., 1::2], qk[..., 0::2]], axis=-1),
-            paddle.shape(qk),
-        )
-        out = paddle.add(paddle.multiply(qk, cos), paddle.multiply(rotate_half, sin))
-        return paddle.cast(out, qk.dtype)
-
     def split_pd_qkv(self, qkv):
-
-        for ids, reverse_ids in zip(self.prefill_info_dict["id_group"], self.prefill_info_dict["reverse_id_group"]):
-            self.prefill_qkv[ids[0] : ids[1], :] = qkv[reverse_ids[0] : reverse_ids[1], :]
-
-        for ids, reverse_ids in zip(self.decode_info_dict["id_group"], self.decode_info_dict["reverse_id_group"]):
-            self.decode_qkv[ids[0] : ids[1], :] = qkv[reverse_ids[0] : reverse_ids[1], :]
-
-        return self.prefill_qkv, self.decode_qkv
+        split_qkv_cu(qkv, self.hybrid_stage_meta, self.prefill_qkv, self.decode_qkv)
 
     def merge_pd_output(self, prefill_out, decode_out):
-        for stage, idx in self.record_stages:
-            if stage == "prefill":
-                ids = self.prefill_info_dict["id_group"][idx]
-                reverse_ids = self.prefill_info_dict["reverse_id_group"][idx]
-                self.merged_output[reverse_ids[0] : reverse_ids[1], :, :] = prefill_out[ids[0] : ids[1], :, :]
-            else:
-                ids = self.decode_info_dict["id_group"][idx]
-                reverse_ids = self.decode_info_dict["reverse_id_group"][idx]
-                self.merged_output[reverse_ids[0] : reverse_ids[1], :, :] = decode_out[ids[0] : ids[1], :, :]
-        return self.merged_output
+        merge_qkv_cu(prefill_out, decode_out, self.hybrid_stage_meta, self.merged_output)
 
-    def update_kv_cache(
-        self, k, v, k_cache_id, v_cache_id, layer_id, forward_meta: ForwardMeta, specific_batch_ids=None
-    ):
-        tensor_start = 0
-        for batch_idx in range(forward_meta.block_tables.shape[0]):
-            if specific_batch_ids is not None and batch_idx not in specific_batch_ids:
-                continue
-            seq_len = forward_meta.seq_lens_this_time[batch_idx]
-            if seq_len == 0:
-                continue
-            tensor_end = tensor_start + seq_len
-            slice_trans_k = k[tensor_start:tensor_end, :, :]
-            slice_trans_v = v[tensor_start:tensor_end, :, :]
-
-            cur_block_tables = forward_meta.block_tables[batch_idx]
-            cur_used_block_tables = cur_block_tables[cur_block_tables != -1]
-
-            # encoder prefil
-            if seq_len > 1:
-                cache_start = 0
-                cur_used_num_blocks = cur_used_block_tables.shape[0]
-
-                for i, block_id in enumerate(cur_used_block_tables):
-
-                    # last block: seq_len - cache_start <= block_size
-                    if i == cur_used_num_blocks - 1:
-                        cache_end = seq_len - cache_start
-                        assert cache_end <= self.block_size
-
-                        forward_meta.caches[k_cache_id][block_id, 0:cache_end, :, :] = slice_trans_k[
-                            cache_start:seq_len, :, :
-                        ]
-                        forward_meta.caches[v_cache_id][block_id, 0:cache_end, :, :] = slice_trans_v[
-                            cache_start:seq_len, :, :
-                        ]
-                        if layer_id == self.num_layers - 1:
-                            self.record_block_table_metadata[batch_idx] = {
-                                "block_id": block_id.item(),
-                                "cache_end": cache_end,
-                            }
-                    # non last block: seq_lens_this_time > block_size
-                    else:
-                        if bool(self.num_layers_draft_model) and (
-                            seq_len < self.block_size and i < cur_used_num_blocks - 1
-                        ):
-                            cache_end = seq_len - cache_start
-                            assert cache_end <= self.block_size
-
-                            forward_meta.caches[k_cache_id][block_id, 0:cache_end, :, :] = slice_trans_k[
-                                cache_start:seq_len, :, :
-                            ]
-                            forward_meta.caches[v_cache_id][block_id, 0:cache_end, :, :] = slice_trans_v[
-                                cache_start:seq_len, :, :
-                            ]
-                            if layer_id == self.num_layers - 1:
-                                self.record_block_table_metadata[batch_idx] = {
-                                    "block_id": block_id.item(),
-                                    "cache_end": cache_end,
-                                }
-                            break
-
-                        assert seq_len > self.block_size
-                        cache_end = cache_start + self.block_size
-                        forward_meta.caches[k_cache_id][block_id] = slice_trans_k[cache_start:cache_end, :, :]
-                        forward_meta.caches[v_cache_id][block_id] = slice_trans_v[cache_start:cache_end, :, :]
-                        cache_start += self.block_size
-            tensor_start = tensor_end
-
-    def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        q, k, v = cache_kv_with_rope(
-            prefill_qkv,
-            forward_meta.caches[k_cache_id],
-            forward_meta.caches[v_cache_id],
-            self.block_table_prefill,
-            self.attention_metadata.rotary_cos_prefill,
-            self.attention_metadata.rotary_sin_prefill,
+    def apply_rope_prefill(self, qkv, rotary_embs, caches_k, caches_v, block_tables):
+        return cache_kv_with_rope(
+            qkv,
+            rotary_embs,
+            self.prefill_info_dict["batch_ids_per_token"],
+            self.prefill_info_dict["batch_ids"],
             self.prefill_info_dict["cu_seqlens_q"],
-            self.batch_ids_q,
+            self.prefill_info_dict["seq_lens_prefill"],
+            caches_k,
+            caches_v,
+            block_tables,
             self.num_heads,
             self.kv_num_heads,
             self.head_dim,
             self.block_size,
+            out_dims=3,
+            neox_style=self.is_neox_style,  # is neox style
+        )
+
+    def apply_rope_decode(self, qkv, rotary_embs):
+        return cache_kv_with_rope(
+            qkv,
+            rotary_embs,
+            self.attention_metadata.batch_ids_per_token_decode,
+            self.attention_metadata.decoder_batch_ids,
+            self.attention_metadata.cu_seqlens_q_decode,
+            self.attention_metadata.seq_lens_decode,
+            None,
+            None,
+            None,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            -1,
+            out_dims=4,
+            neox_style=self.is_neox_style,  # is neox style
+        )
+
+    def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
+        q, k, v = self.apply_rope_prefill(
+            prefill_qkv,
+            forward_meta.rotary_embs,
+            forward_meta.caches[k_cache_id],
+            forward_meta.caches[v_cache_id],
+            forward_meta.block_tables,
         )
 
         prefill_out = flash_attn_unpadded_func(
@@ -477,21 +332,14 @@ class FlashAttentionBackend(AttentionBackend):
         return prefill_out
 
     def forward_decode(self, decode_qkv, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        q, k, v = apply_rope_qkv(
-            decode_qkv,
-            self.attention_metadata.rotary_cos_decode,
-            self.attention_metadata.rotary_sin_decode,
-            self.num_heads,
-            self.kv_num_heads,
-            self.head_dim,
-        )
+        q, k, v = self.apply_rope_decode(decode_qkv, forward_meta.rotary_embs)
 
         decode_out = flash_attn_kvcache_func(
             q,
             forward_meta.caches[k_cache_id],
             forward_meta.caches[v_cache_id],
-            self.attention_metadata.seq_lens_dec,
-            self.attention_metadata.block_table_dec,
+            self.attention_metadata.seq_lens_decode,
+            self.attention_metadata.block_table_decode,
             k,
             v,
             rotary_cos=None,
@@ -509,17 +357,18 @@ class FlashAttentionBackend(AttentionBackend):
         k_cache_id = layer_id * 2
         v_cache_id = k_cache_id + 1
 
-        if self.decode_len == 0:
+        if self.has_prefill and not self.has_decode:
             out = self.forward_prefill(qkv, layer_id, k_cache_id, v_cache_id, forward_meta)
 
-        elif self.prefill_len == 0:
+        elif self.has_decode and not self.has_prefill:
             out = self.forward_decode(qkv, k_cache_id, v_cache_id, forward_meta)
 
         else:
-            prefill_qkv, decode_qkv = self.split_pd_qkv(qkv)
-            prefill_output = self.forward_prefill(prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta)
-            decode_output = self.forward_decode(decode_qkv, k_cache_id, v_cache_id, forward_meta)
-            out = self.merge_pd_output(prefill_output, decode_output)
+            self.split_pd_qkv(qkv)
+            prefill_output = self.forward_prefill(self.prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta)
+            decode_output = self.forward_decode(self.decode_qkv, k_cache_id, v_cache_id, forward_meta)
+            self.merge_pd_output(prefill_output, decode_output)
+            out = self.merged_output
 
         if qkv.dim() == 2:
             out = out.view([-1, self.num_heads * self.head_dim])

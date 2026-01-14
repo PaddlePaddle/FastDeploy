@@ -370,6 +370,9 @@ class Glm4MoeModel(nn.Layer):
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
         return out
 
 
@@ -549,7 +552,7 @@ class Glm4MoePretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,

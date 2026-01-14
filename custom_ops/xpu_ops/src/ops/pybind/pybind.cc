@@ -248,7 +248,8 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
@@ -294,6 +295,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -358,6 +361,10 @@ std::vector<paddle::Tensor> GetInferParam(
     int block_size);
 
 void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag);
+
+void GetOutputEPStatic(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag);
 
 void GetOutputDynamic(const paddle::Tensor& x,
                       int64_t rank_id,
@@ -671,6 +678,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("batch_drop"),
         py::arg("pre_ids"),
+        py::arg("mask_rollback"),
+        py::arg("recompute_token_num"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("base_model_seq_lens_this_time"),
@@ -834,7 +843,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "get_output function");
 
   m.def("get_output_ep",
-        &GetOutputStatic,
+        &GetOutputEPStatic,
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -1013,6 +1022,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",
         &SpeculateVerify,
+        py::arg("sampled_token_ids"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("step_idx"),

@@ -18,7 +18,7 @@ import os
 import shutil
 import uuid
 
-from fastdeploy.utils import console_logger
+from fastdeploy.utils import llm_logger
 
 
 def setup_multiprocess_prometheus():
@@ -33,12 +33,12 @@ def setup_multiprocess_prometheus():
         if os.path.exists(prom_dir):
             shutil.rmtree(prom_dir, ignore_errors=True)
         os.makedirs(prom_dir, exist_ok=True)
-        console_logger.info(f"PROMETHEUS_MULTIPROC_DIR is set to be {prom_dir}")
+        llm_logger.info(f"PROMETHEUS_MULTIPROC_DIR is set to be {prom_dir}")
         os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
         return prom_dir
     else:
         prom_dir = os.environ["PROMETHEUS_MULTIPROC_DIR"]
-        console_logger.warning(
+        llm_logger.warning(
             f"Found PROMETHEUS_MULTIPROC_DIR:{prom_dir} was set by user. "
             "you will find inaccurate metrics. Unset the variable "
             "will properly handle cleanup."
