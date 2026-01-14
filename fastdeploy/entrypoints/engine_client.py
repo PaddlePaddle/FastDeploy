@@ -34,6 +34,7 @@ from fastdeploy.eplb.utils import RedundantExpertWorkload
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     IPCSignal,
+    KVCacheStatus,
     ModelWeightsStatus,
     PrefixTreeStatus,
     RearrangeExpertStatus,
@@ -79,6 +80,9 @@ class EngineClient:
         )
         self.max_model_len = self.fd_config.model_config.max_model_len
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
+        self.enable_cache_transfer = (
+            self.fd_config.cache_config.swap_space or self.fd_config.cache_config.kvcache_storage_backend
+        )
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
@@ -528,17 +532,22 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
-            if self.fd_config.cache_config.swap_space:
-                return False, "hierarchical cache updating is not supported"
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
-                    api_server_logger.info(f"Start to update prefix tree {self.prefix_tree_status_signal.value[0]}")
-                    while self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
-                        api_server_logger.info(f"..updating prefix tree {self.prefix_tree_status_signal.value[0]}")
+                    api_server_logger.info(
+                        f">>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                    )
+                    while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
+                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
                         time.sleep(1)
+                        timeout -= 1
+                    if timeout < 0:
+                        return False, "Update prefix tree timeout"
+                    api_server_logger.info(
+                        f"<<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                    )
 
             # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
@@ -549,13 +558,30 @@ class EngineClient:
                 return False, "worker is clearing model weight, cannot update now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
-            api_server_logger.info(f"Start to update model weight {self.model_weights_status_signal.value[0]}")
-            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.NORMAL:
-                api_server_logger.info(f"..updating model weights {self.model_weights_status_signal.value[0]}")
+            api_server_logger.info(
+                f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                if not self.enable_cache_transfer
+                else f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+            )
+            while timeout >= 0:
+                api_server_logger.info(
+                    f"... weight status: {self.model_weights_status_signal.value[0]}"
+                    if not self.enable_cache_transfer
+                    else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                )
+                weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
+                cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
+                if weight_updated and (not self.enable_cache_transfer or cache_updated):
+                    break
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
                 return False, "Update model weight timeout"
+            api_server_logger.info(
+                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                if not self.enable_cache_transfer
+                else f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+            )
             return True, ""
 
     def clear_load_weight(self, timeout=300):
@@ -566,17 +592,22 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
-            if self.fd_config.cache_config.swap_space:
-                return False, "hierarchical cache clearing is not supported"
-
             if self.enable_prefix_caching:
                 # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
-                    api_server_logger.info(f"Start to clear prefix tree {self.prefix_tree_status_signal.value[0]}")
-                    while self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
-                        api_server_logger.info(f"..clearing prefix tree {self.prefix_tree_status_signal.value[0]}")
+                    api_server_logger.info(
+                        f">>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                    )
+                    while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
+                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
                         time.sleep(1)
+                        timeout -= 1
+                    if timeout < 0:
+                        return False, "Clear prefix tree timeout"
+                    api_server_logger.info(
+                        f"<<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                    )
 
             # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
@@ -587,13 +618,30 @@ class EngineClient:
                 return False, "worker is updating model weight, cannot clear now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
-            api_server_logger.info(f"Start to clear model weight {self.model_weights_status_signal.value[0]}")
-            while timeout >= 0 and self.model_weights_status_signal.value[0] != ModelWeightsStatus.CLEARED:
-                api_server_logger.info(f"..clearing model weights {self.model_weights_status_signal.value[0]}")
+            api_server_logger.info(
+                f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                if not self.enable_cache_transfer
+                else f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+            )
+            while timeout >= 0:
+                api_server_logger.info(
+                    f"... weight status: {self.model_weights_status_signal.value[0]}"
+                    if not self.enable_cache_transfer
+                    else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                )
+                weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
+                cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
+                if weight_cleared and (not self.enable_cache_transfer or cache_cleared):
+                    break
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
                 return False, "Clear model weight timeout"
+            api_server_logger.info(
+                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                if not self.enable_cache_transfer
+                else f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+            )
             return True, ""
 
     def check_model_weight_status(self):

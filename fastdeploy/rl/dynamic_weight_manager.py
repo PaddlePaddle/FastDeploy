@@ -24,7 +24,7 @@ import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.inter_communicator import ModelWeightsStatus
+from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
 
 
 class DynamicWeightManager:
@@ -258,18 +258,25 @@ class DynamicWeightManager:
             value[self.rank] = status
 
     @staticmethod
-    def check_model_weights_status(model_weights_status, model_runner, pid, block):
+    def check_model_weights_status(model_weights_status, kv_cache_status, model_runner, pid, block):
         """
-        check model weights status
+        A function to handle the state of model weights, check the model weights state,
+        and perform corresponding operations as needed.
+
+        - model_weights_status (`IPCSignal`): The signal indicating the status of model weights.
+        - kv_cache_status (`IPCSignal`): The signal indicating the status of key-value cache.
+        - model_runner (`ModelRunnerBase`): The model runner instance.
+        - block (`bool`): Block mode keeps the worker process blocked in the status-check loop,
+            avoiding communication operations in the worker event loop.
         """
-        # logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
         while model_weights_status.value[0] != ModelWeightsStatus.NORMAL and (
             block or model_weights_status.value[0] != ModelWeightsStatus.CLEARED
         ):
-            # 如果为 block 模式，那么循环不会退出，直到权重更新、通信组重建
-            # 如果为非 block 模式，那么循环在权重更新或清理后均会退出
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+                if kv_cache_status:
+                    kv_cache_status.value[0] = KVCacheStatus.UPDATING
                 model_runner.clear_requests()
                 model_runner.update_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
@@ -277,9 +284,12 @@ class DynamicWeightManager:
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+                if kv_cache_status:
+                    kv_cache_status.value[0] = KVCacheStatus.CLEARING
                 model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
                     time.sleep(0.01)
                 logger.info("finished clearing checkpoint")
-            time.sleep(0.01)
+            else:
+                time.sleep(0.01)
