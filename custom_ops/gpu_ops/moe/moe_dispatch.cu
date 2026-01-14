@@ -24,6 +24,7 @@
 
 #include "helper.h"
 
+// This kernel is specifically designed for w4afp8 optimizations
 __global__ void compute_max_tokens_from_prefix_sum_kernel(
     const int64_t *prefix_sum, int64_t *max_tokens_output, int num_experts) {
   extern __shared__ int64_t sdata[];
@@ -88,6 +89,7 @@ void MoeDispatchKernel(
     const paddle::optional<paddle::Tensor> &w4a8_in_scale,
     const int moe_topk,
     const bool group_moe,
+    const std::string &moe_quant_type,
     const bool topk_only_mode,
     const int num_rows,
     const int hidden_size,
@@ -273,10 +275,14 @@ void MoeDispatchKernel(
                                    tokens_expert_prefix_sum->data<int64_t>(),
                                    stream);
 
-  compute_max_tokens_from_prefix_sum(tokens_expert_prefix_sum->data<int64_t>(),
-                                     max_tokens_per_expert->data<int64_t>(),
-                                     expert_num,
-                                     stream);
+  // Only compute max_tokens_per_expert for w4afp8 quantization type
+  if (moe_quant_type == "w4afp8") {
+    compute_max_tokens_from_prefix_sum(
+        tokens_expert_prefix_sum->data<int64_t>(),
+        max_tokens_per_expert->data<int64_t>(),
+        expert_num,
+        stream);
+  }
 }
 
 std::vector<paddle::Tensor> MoeExpertDispatch(
@@ -365,6 +371,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                     w4a8_in_scale,
                                                     moe_topk,
                                                     group_moe,
+                                                    moe_quant_type,
                                                     topk_only_mode,
                                                     num_rows,
                                                     hidden_size,
@@ -385,6 +392,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                    w4a8_in_scale,
                                                    moe_topk,
                                                    group_moe,
+                                                   moe_quant_type,
                                                    topk_only_mode,
                                                    num_rows,
                                                    hidden_size,
