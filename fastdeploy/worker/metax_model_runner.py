@@ -550,6 +550,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
+        self.share_inputs["preempted_idx"] = []
 
         req_len = len(req_dicts)
         has_prefill_task = False
@@ -575,6 +576,7 @@ class MetaxModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 # guided decoding
                 if (
                     request.guided_json is not None
@@ -597,6 +599,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+
                 if self.enable_mm:
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
@@ -669,9 +672,11 @@ class MetaxModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -1308,6 +1313,7 @@ class MetaxModelRunner(ModelRunnerBase):
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
