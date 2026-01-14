@@ -73,7 +73,6 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
 
   int bid_start_core, bid_end_core;
   partition(tid, nthreads, max_bsz, 1, &bid_start_core, &bid_end_core);
-  // printf("tid: %d, bid_start_core: %d, bid_end_core: %d\n", tid, bid_start_core, bid_end_core);
 
   int64_t draft_tokens_lm[draft_tokens_len];
   int64_t step_draft_tokens_lm[draft_tokens_len];
@@ -89,21 +88,22 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
   stop_flag_now_int_sm[cid] = 0;
   for (int bid = bid_start_core; bid < bid_end_core; bid++) {
     int stop_flag_now_int = 0;
-    GM2LM(draft_tokens + bid * draft_tokens_len,
+    GM2LM_ASYNC(draft_tokens + bid * draft_tokens_len,
                 draft_tokens_lm,
                 draft_tokens_len * sizeof(int64_t));
-    GM2LM(step_draft_tokens + bid * draft_tokens_len,
+    GM2LM_ASYNC(step_draft_tokens + bid * draft_tokens_len,
                 step_draft_tokens_lm,
                 draft_tokens_len * sizeof(int64_t));
-    GM2LM(
-        block_tables + bid * block_num_per_seq, block_table_lm, block_num_per_seq * sizeof(int));
-    GM2LM(accept_tokens + bid * accept_tokens_len,
+    GM2LM_ASYNC(block_tables + bid * block_num_per_seq,
+                block_table_lm,
+                block_num_per_seq * sizeof(int));
+    GM2LM_ASYNC(accept_tokens + bid * accept_tokens_len,
                 accept_tokens_lm,
                 accept_tokens_len * sizeof(int64_t));
-    GM2LM(seq_lens_decoder + bid, &seq_lens_decoder_lm, sizeof(int));
-    GM2LM(prompt_lens + bid, &prompt_len_lm, sizeof(int64_t));
-    GM2LM(seq_lens_this_time + bid, &seq_lens_this_time_lm, sizeof(int));
-    GM2LM(stop_flags + bid, &stop_flag_lm, sizeof(int));
+    GM2LM_ASYNC(seq_lens_decoder + bid, &seq_lens_decoder_lm, sizeof(int));
+    GM2LM_ASYNC(prompt_lens + bid, &prompt_len_lm, sizeof(int64_t));
+    GM2LM_ASYNC(seq_lens_this_time + bid, &seq_lens_this_time_lm, sizeof(int));
+    GM2LM_ASYNC(stop_flags + bid, &stop_flag_lm, sizeof(int));
     mfence();
 
     if (!stop_flag_lm) {
@@ -111,26 +111,26 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
         const int max_possible_block_idx =
             (seq_lens_decoder_lm + max_next_step_tokens) / block_size;
         if (prefill_one_step_stop) {
-          LM2GM(&value_true, stop_flags + bid, sizeof(bool));
-          LM2GM(&value_zero, seq_lens_this_time + bid, sizeof(int));
-          LM2GM(&value_zero, seq_lens_decoder + bid, sizeof(int));
-          LM2GM(&value_zero, seq_lens_encoder + bid, sizeof(int));
-          LM2GM(&value_zero, accept_num + bid, sizeof(int));
+          LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
+          LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_encoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
           mfence();
           stop_flag_now_int = 1;
         } else if (max_possible_block_idx < block_num_per_seq &&
                    block_table_lm[max_possible_block_idx] == -1) {
-          LM2GM(&value_true, is_block_step + bid, sizeof(bool));
-          LM2GM(&seq_lens_this_time_lm,
+          LM2GM_ASYNC(&value_true, is_block_step + bid, sizeof(bool));
+          LM2GM_ASYNC(&seq_lens_this_time_lm,
                       step_seq_lens_this_time + bid,
                       sizeof(int));
-          LM2GM(&value_zero, seq_lens_this_time + bid, sizeof(int));
-          LM2GM(&value_true, stop_flags + bid, sizeof(bool));
+          LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+          LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
           stop_flag_now_int = 1;
-          LM2GM(
+          LM2GM_ASYNC(
               &seq_lens_decoder_lm, step_seq_lens_decoder + bid, sizeof(int));
-          LM2GM(&value_zero, seq_lens_decoder + bid, sizeof(int));
-          LM2GM(&value_zero, accept_num + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
           mfence();
           for (int i = 0; i < accept_tokens_len; i++) {
             accept_tokens_lm[i] = -1;
@@ -138,17 +138,20 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
           for (int i = 0; i < draft_tokens_len; i++) {
             step_draft_tokens_lm[i] = draft_tokens_lm[i];
           }
-          LM2GM(accept_tokens_lm, accept_tokens + bid * accept_tokens_len, accept_tokens_len * sizeof(int64_t));
-          LM2GM(step_draft_tokens_lm, step_draft_tokens + bid * draft_tokens_len,
-                draft_tokens_len * sizeof(int64_t));
+          LM2GM_ASYNC(accept_tokens_lm,
+                      accept_tokens + bid * accept_tokens_len,
+                      accept_tokens_len * sizeof(int64_t));
+          LM2GM_ASYNC(step_draft_tokens_lm,
+                      step_draft_tokens + bid * draft_tokens_len,
+                      draft_tokens_len * sizeof(int64_t));
         }
       } else {
         // prefill
-        LM2GM(&value_true, stop_flags + bid, sizeof(bool));
-        LM2GM(&value_zero, seq_lens_this_time + bid, sizeof(int));
-        LM2GM(&value_zero, seq_lens_decoder + bid, sizeof(int));
-        LM2GM(&value_zero, seq_lens_encoder + bid, sizeof(int));
-        LM2GM(&value_zero, accept_num + bid, sizeof(int));
+        LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
+        LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, seq_lens_encoder + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
         mfence();
         stop_flag_now_int = 1;
       }
@@ -160,16 +163,18 @@ __global__ void speculate_schedule_cache(const int64_t *draft_tokens,
   mfence_sm();
   sync_all();
   // reduce stop_sum_now
-  if(cid == 0){
+  if (cid == 0) {
     int stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
-    sync_all();
     int stop_nums_lm;
-    GM2LM(stop_nums, &stop_nums_lm, sizeof(int));
+    GM2LM_ASYNC(stop_nums, &stop_nums_lm, sizeof(int));
+    mfence();
+    sync_all();
     if (stop_sum < stop_nums_lm) {
-      LM2GM(&value_true, not_need_stop, sizeof(bool));
+      LM2GM_ASYNC(&value_true, not_need_stop, sizeof(bool));
     } else {
-      LM2GM(&value_false, not_need_stop, sizeof(bool));
+      LM2GM_ASYNC(&value_false, not_need_stop, sizeof(bool));
     }
+    mfence();
   }
 }
 

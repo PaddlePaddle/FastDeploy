@@ -513,7 +513,6 @@ class XPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
-            logger.info(f"ch -- debug equest.task_type.value: {request.task_type.value}, {RequestType.PREFILL.value}, {RequestType.DECODE.value}")
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
@@ -1383,7 +1382,7 @@ class XPUModelRunner(ModelRunnerBase):
         # if not is_dummy_run:
         #     self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
-            
+
             self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)

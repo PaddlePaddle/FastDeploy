@@ -243,7 +243,8 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         # inplace modify, not return data
         inputs_clone = [x.clone() if isinstance(x, paddle.Tensor) else x for x in inputs]
         speculate_get_token_penalty_multi_scores_ref(*inputs_clone)
-        speculate_get_token_penalty_multi_scores(pre_ids,
+        speculate_get_token_penalty_multi_scores(
+            pre_ids,
             logits,
             penalty_scores,
             frequency_scores,
@@ -257,7 +258,7 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
             output_padding_offset,
             output_cum_offsets,
             max_seq_len,
-            )
+        )
 
         np.testing.assert_allclose(inputs[1].numpy(), inputs_clone[1].numpy(), atol=1e-5, rtol=1e-5)
 

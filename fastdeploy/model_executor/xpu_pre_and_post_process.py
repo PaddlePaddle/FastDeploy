@@ -45,7 +45,6 @@ if current_platform.is_xpu():
         speculate_get_seq_lens_output,
         speculate_save_output,
         speculate_set_value_by_flags_and_idx,
-        speculate_set_stop_value_multi_seqs,
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
