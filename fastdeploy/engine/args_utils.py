@@ -248,7 +248,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = False
+    enable_output_caching: bool = True
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -606,7 +606,12 @@ class EngineArgs:
                     console_logger.info(f"Using `{name}`: {ports}")
 
             if not self.skip_port_check:
-                for port in ports:
+                cur_dp_ports = ports[
+                    num_cur_dp_ports
+                    * self.local_data_parallel_id : num_cur_dp_ports
+                    * (self.local_data_parallel_id + 1)
+                ]
+                for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             console_logger.debug(f"post init {name}: {ports}")
@@ -1374,7 +1379,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if current_platform.is_cuda() and self.splitwise_role == "mixed":
+            if (current_platform.is_cuda() or current_platform.is_maca()) and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1384,7 +1389,10 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if current_platform.is_maca():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

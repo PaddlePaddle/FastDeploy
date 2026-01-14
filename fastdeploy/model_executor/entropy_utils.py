@@ -19,6 +19,19 @@ import paddle
 from fastdeploy.utils import data_processor_logger
 
 
+def get_entropy(logits):
+    # Check for -inf values in logits
+    if paddle.any(paddle.isinf(logits) & (logits < 0)):
+        data_processor_logger.debug("Detected -inf values in logits, clipping to minimum value")
+        logits = paddle.clip(logits, min=1e-9)
+
+    a0 = logits - paddle.max(logits, axis=-1, keepdim=True)
+    ea0 = paddle.exp(a0)
+    z0 = paddle.sum(ea0, axis=-1, keepdim=True)
+    p0 = ea0 / z0
+    return paddle.sum(p0 * (paddle.log(z0) - a0), axis=-1)
+
+
 def calculate_logits_entropy(logits, share_inputs, temperature):
     real_bsz = share_inputs["seq_lens_this_time"].shape[0]
     real_seq_lens = paddle.where(
@@ -26,13 +39,6 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
         paddle.ones([1], dtype="int32"),
         share_inputs["seq_lens_this_time"].squeeze(1),
     )
-
-    def get_entropy(logits):
-        a0 = logits - paddle.max(logits, axis=-1, keepdim=True)
-        ea0 = paddle.exp(a0)
-        z0 = paddle.sum(ea0, axis=-1, keepdim=True)
-        p0 = ea0 / z0
-        return paddle.sum(p0 * (paddle.log(z0) - a0), axis=-1)
 
     batch_indices = paddle.arange(real_bsz, dtype="int32")
     batch_id_per_token = paddle.repeat_interleave(batch_indices, real_seq_lens)
@@ -76,13 +82,6 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
     accepted_logits = paddle.empty([total_accepted_num, logits.shape[1]], dtype=logits.dtype)
     for i in range(total_accepted_num):
         accepted_logits[i] = logits[accepted_idx[i]]
-
-    def get_entropy(logits):
-        a0 = logits - paddle.max(logits, axis=-1, keepdim=True)
-        ea0 = paddle.exp(a0)
-        z0 = paddle.sum(ea0, axis=-1, keepdim=True)
-        p0 = ea0 / z0
-        return paddle.sum(p0 * (paddle.log(z0) - a0), axis=-1)
 
     batch_indices = paddle.arange(share_inputs["accept_num"].shape[0], dtype="int32")
     batch_id_per_token = paddle.repeat_interleave(batch_indices, share_inputs["accept_num"])

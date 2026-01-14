@@ -403,8 +403,9 @@ def v1_loader_support(fd_config):
         or current_platform.is_xpu()
         or current_platform.is_iluvatar()
         or current_platform.is_maca()
+        or current_platform.is_intel_hpu()
     ):
-        _err_msg("v1loader currently only support backends gpu, xpu, iluvatar and maca")
+        _err_msg("v1loader currently only support backends gpu, xpu, intel_hpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
