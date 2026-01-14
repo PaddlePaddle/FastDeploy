@@ -361,14 +361,9 @@ void GetBlockShapeAndSplitKVBlock(
 
     } else {
       CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
-                                 0,
+                                 0xFF,
                                  decoder_batch_ele_num * sizeof(int32_t),
                                  stream));
-      CUDA_CHECK(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
-                                 0,
-                                 decoder_batch_ele_num * sizeof(int32_t),
-                                 stream));
-
       split_q_block<<<1, 32, 0, stream>>>(
           seq_lens_this_time.data<int>(),
           seq_lens_encoder.data<int>(),
