@@ -90,7 +90,7 @@ def test_main(
         seq_len_this_time,
         output_padding_offset,
         output_cum_offsets,
-        # max_seq_len,
+        max_seq_len,
     )
     speculate_get_token_penalty_multi_scores(
         pre_ids_ref,

@@ -1379,8 +1379,7 @@ class XPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
         """
         # 0. set debug level
-        # if not is_dummy_run:
-        #     self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
+        # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
 
             self.share_inputs["kv_signal_sender"] = sender
