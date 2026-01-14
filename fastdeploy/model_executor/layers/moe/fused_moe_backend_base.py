@@ -84,7 +84,7 @@ class MoEMethodBase(QuantMethodBase):
             "num_max_dispatch_tokens_per_rank": layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
             "ep_size": layer.ep_size,
             "ep_rank": layer.ep_rank,
-            "redundant_experts_num": layer.fd_config.model_config.redundant_experts_num,
+            "redundant_experts_num": layer.fd_config.eplb_config.redundant_experts_num,
             "ep_group": layer.fd_config.parallel_config.ep_group,
         }
 

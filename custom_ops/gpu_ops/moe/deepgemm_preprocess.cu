@@ -51,7 +51,7 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
   auto stream = topk_ids.stream();
   using scalar_t = int64_t;
 
-  CUDA_CHECK(cudaGetLastError());
+  // CUDA_CHECK(cudaGetLastError());
   cuda_kernel<<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
       topk_ids.data<scalar_t>(),
       token_nums_per_expert.data<int32_t>(),
@@ -59,7 +59,7 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
       topk_ids_numel,
       num_experts);
 
-  CUDA_CHECK(cudaGetLastError());
+  // CUDA_CHECK(cudaGetLastError());
   return {token_nums_per_expert};
 }
 

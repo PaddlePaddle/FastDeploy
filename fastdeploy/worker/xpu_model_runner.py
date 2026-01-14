@@ -173,6 +173,10 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
+        # Postprocess Env params
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
+
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
         # Initialize ZMQ client for async output
@@ -505,10 +509,12 @@ class XPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -569,9 +575,11 @@ class XPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
@@ -1016,6 +1024,7 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1436,7 +1445,7 @@ class XPUModelRunner(ModelRunnerBase):
                 # 投机解码
                 full_hidden_states=model_output if self.speculative_decoding else None,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1459,6 +1468,7 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=is_dummy_run,
+                    save_each_rank=self.parallel_config.data_parallel_size > 0,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
