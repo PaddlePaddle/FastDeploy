@@ -2325,8 +2325,6 @@ class GPUModelRunner(ModelRunnerBase):
         # Then there is data on other runner, the current runner is required to execute part of the model.
         # But not need to run the below code.
         if not self.not_need_stop():
-            if self.speculative_decoding and self.speculative_method == "mtp":
-                self.proposer.model.empty_input_forward(self.forward_meta)
             return None
 
         if self.use_cudagraph:
