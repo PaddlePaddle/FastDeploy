@@ -339,7 +339,7 @@ def test_mtp_accept_ratio(api_url):
     print("\nresult:\n", result)
 
     base_path = os.getenv("MODEL_PATH")
-    baseline_path = os.path.join(base_path, "21b_mtp_accept_ratio_baseline.txt")
+    baseline_path = os.path.join(base_path, "21b_mtp_accept_ratio_baseline_dev.txt")
     with open(baseline_path, "r", encoding="utf-8") as f:
         baseline = f.read()
     baseline_ratio = {
