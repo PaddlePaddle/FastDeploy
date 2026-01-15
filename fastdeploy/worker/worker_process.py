@@ -643,24 +643,23 @@ class PaddleDisWorkerProc:
 
         handler = getattr(self.worker, method, None)
         if handler is None or not callable(handler):
-            error_result = ControlResponse(request_id, 400, f"unknown control method {method}")
-            self._send_control_response(error_result)
+            error_msg = f"Rank-{self.local_rank}: Unknown control method {method}"
+            error_result = ControlResponse(request_id, 400, error_msg)
+            asyncio.run(self._ctrl_output.put(error_result))
             return
 
         try:
             result = handler(**kwargs)
             succ_result = ControlResponse(request_id, 200, "Success", result)
-            self._send_control_response(succ_result)
-            logger.info(f"Success run control request: {control_request}, response: {succ_result}")
+            logger.info(
+                f"Rank-{self.local_rank} Success run control request: {control_request}, response: {succ_result}"
+            )
+            asyncio.run(self._ctrl_output.put(succ_result, shm_threshold=100 * 1024 * 1024))
         except Exception as e:
-            error_msg = f"Failed run control method {method}: {str(e)}"
+            error_msg = f"Rank-{self.local_rank} Failed run control method {method}: {str(e)}"
             logger.info(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
-            self._send_control_response(error_result)
-
-    def _send_control_response(self, control_response: ControlResponse):
-        logger.info(f"Rank-{self.local_rank} put control output {control_response} to engine")
-        asyncio.run(self._ctrl_output.put(control_response, shm_threshold=100 * 1024 * 1024))
+            asyncio.run(self._ctrl_output.put(error_result))
 
 
 def parse_args():

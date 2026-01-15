@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -204,14 +205,12 @@ class Request:
             # if mm_positions is not of type ImagePosition, convert to ImagePosition
             try:
                 for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
-                    if not isinstance(mm_pos, ImagePosition):
-                        if not isinstance(mm_pos, dict):
-                            raise ValueError(f"Invalid mm_positions format at index {i}")
-                        d["multimodal_inputs"]["mm_positions"][i] = ImagePosition(**mm_pos)
-            except (ValueError, TypeError, KeyError) as e:
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
                 data_processor_logger.error(
-                    f"Convert mm_positions to ImagePosition failed - {type(e).__name__}: {e}\n"
-                    f"Input data: {d['multimodal_inputs']['mm_positions']}"
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
                 raise
         return cls(
@@ -965,8 +964,8 @@ class PoolingRequestOutput(Generic[_O]):
     prompt_token_ids: list[int]
     finished: bool
     metrics: Optional[RequestMetrics] = (None,)
-    error_code: Optional[int] = 200
-    error_msg: Optional[str] = None
+    error_code: Optional[int] = (200,)
+    error_msg: Optional[str] = (None,)
 
     def __repr__(self):
         return (
