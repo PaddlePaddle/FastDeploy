@@ -565,9 +565,9 @@ class XPUModelRunner(ModelRunnerBase):
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 if (
-                        self.fd_config.scheduler_config.splitwise_role == "decode"
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
-                    self.share_inputs["seq_lens_encoder"][idx: idx + 1] = 0
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
