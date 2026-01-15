@@ -598,6 +598,14 @@ class ResourceManagerV1(ResourceManager):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
         """
+
+        def get_enough_request(request, scheduled_reqs):
+            return (
+                ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
+                and self._is_mm_request(request)
+                and self.exist_mm_prefill(scheduled_reqs)
+            ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs))
+
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
@@ -718,11 +726,7 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if (
-                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                        and self._is_mm_request(request)
-                        and self.exist_mm_prefill(scheduled_reqs)
-                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
+                    if get_enough_request(request, scheduled_reqs):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
@@ -755,11 +759,7 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (
-                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                        and self._is_mm_request(request)
-                        and self.exist_mm_prefill(scheduled_reqs)
-                    ):
+                    if get_enough_request(request, scheduled_reqs):
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
