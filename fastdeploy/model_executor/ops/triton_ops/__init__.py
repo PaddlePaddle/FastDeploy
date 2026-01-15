@@ -15,10 +15,12 @@
 """
 
 try:
+    from .qk_rmsnorm_fused_kernel import qk_rmsnorm_fused
     from .repetition_early_stop_kernel import repetition_early_stopper_kernel
-    from .wint2_fused_moe import fused_moe_wint2_triton
     from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
 
-    __all__ = ["fused_moe_wint2_triton", "moe_wint2_ffn_kernel", "repetition_early_stopper_kernel"]
+    _TRITON_AVAILABLE = True
+
+    __all__ = ["moe_wint2_ffn_kernel", "repetition_early_stopper_kernel", "qk_rmsnorm_fused"]
 except:
-    pass
+    _TRITON_AVAILABLE = False

@@ -546,7 +546,9 @@ class OpenAIServingCompletion:
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
-                        prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
+                        prompt_logprobs=(
+                            clamp_prompt_logprobs(prompt_logprobs_res) if not request.return_token_ids else None
+                        ),
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )

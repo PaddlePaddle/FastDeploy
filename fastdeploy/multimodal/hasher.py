@@ -19,8 +19,6 @@ import pickle
 
 import numpy as np
 
-from fastdeploy.utils import data_processor_logger
-
 
 class MultimodalHasher:
 
@@ -28,8 +26,4 @@ class MultimodalHasher:
     def hash_features(cls, obj: object) -> str:
         if isinstance(obj, np.ndarray):
             return hashlib.sha256((obj.tobytes())).hexdigest()
-
-        data_processor_logger.warning(
-            f"Unsupported type for hashing features: {type(obj)}" + ", use pickle for serialization"
-        )
         return hashlib.sha256((pickle.dumps(obj))).hexdigest()

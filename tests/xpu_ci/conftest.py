@@ -77,8 +77,11 @@ def stop_processes():
         "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'multiprocessing' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'fastdeploy' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: master' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: worker' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
+        f"lsof -t -i :{port_num + 47873} | xargs echo",
     ]
 
     # Kill additional ports

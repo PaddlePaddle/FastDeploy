@@ -74,14 +74,18 @@ python -m pip uninstall fastdeploy-xpu -y
 
 # 安装PaddlePaddle
 echo "安装PaddlePaddle..."
-python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# 20260109 由于主框架xhpc版本更新导致报错，暂时锁死paddle版本到20260107
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.4.0.dev20260107-cp310-cp310-linux_x86_64.whl
 
 # ============ 编译项目 ============
 
 echo "============================编译项目============================"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
+# export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
+wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20260109/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
+export XVLLM_PATH=${PWD}/xvllm
 bash build.sh || exit 1
 
 # ============ 安装测试依赖 ============
