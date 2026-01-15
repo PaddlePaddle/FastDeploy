@@ -174,6 +174,8 @@ def parse_prometheus_to_dict(metrics_text: str):
             # 解析 labels
             labels = {}
             for kv in labels_str.split(","):
+                if "=" not in kv:
+                    continue
                 k, v = kv.split("=")
                 labels[k] = v.strip('"')
 
