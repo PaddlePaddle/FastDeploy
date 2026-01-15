@@ -1226,7 +1226,7 @@ class EngineService:
                 break
         if count >= timeout * 1000:
             error_msg = f"wait engine_worker_queue tasks empty timeout after {timeout} seconds, worker may Hanged"
-            self.llm_logger.info(error_msg)
+            self.llm_logger.error(error_msg)
             raise Exception(error_msg)
         running_reqs = self.resource_manager.preempted_all()
         if len(running_reqs) > 0:
