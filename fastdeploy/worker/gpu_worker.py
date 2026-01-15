@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 
 import paddle
 import pynvml
@@ -184,8 +184,9 @@ class GpuWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
-    def update_weights(self):
-        self.model_runner.update_weights()
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        """update weights in place"""
+        return self.model_runner.update_weights(version, rsync_config)
 
     def execute_model(
         self,

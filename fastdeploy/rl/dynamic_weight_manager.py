@@ -15,6 +15,7 @@
 """
 
 import os
+import io
 import time
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
@@ -26,18 +27,15 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import ModelWeightsStatus
 
-def sync_weights_by_rdma(step, rank):
-    etcd_server = "127.0.0.1:2379"
-
+def sync_weights_by_rdma(config, step, rank):
     from checkpoint_transfer.core import RDMAWeightsDownloader
-    import io
-    config = { "etcd_server": etcd_server }
     downloader = RDMAWeightsDownloader(config)
     downloader.initialize()
     logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
     data = downloader.get_weights(step, rank)
     if data is None:
         logger.error("Failed to get weights!")
+        raise Exception("Failed to rsync weights through checkpoint_transfer")
     logger.info(f"Successfully retrieved data. Type: {type(data)}")
     if isinstance(data, np.ndarray):
         data_bytes = data.tobytes()
@@ -73,8 +71,7 @@ class DynamicWeightManager:
             self.model_list = models
         self._capture_model_state()
         if self.load_config.load_strategy == "rsync":
-            step = 100 # todo read from {model}/version.txt
-            self.update_weights_by_rdma(step, self.local_rank)
+            self.update_weights_by_rdma()
         else:
             self.update_parameters()
         self.finalize_update()
@@ -92,8 +89,7 @@ class DynamicWeightManager:
                 logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, step, rank):
-        old_state_dict = self.state_dict
+    def update_weights_by_rdma(self, version: str = None, rsync_config: dict[str, Any] = None):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in old_state_dict:
@@ -110,20 +106,41 @@ class DynamicWeightManager:
                     logger.error(f"Invalid parameter: {key} dtype mismatch")
             return is_valid
 
-        start_time = time.perf_counter()
+        if rsync_config is None:
+            rsync_config = self.fd_config.load_config.rsync_config
+        if rsync_config is None or len(rsync_config) == "":
+            raise Exception(f"rsync config not set, please set it in 1) launch arguments '--rsync-config' "
+                            f"or 2) interface arguments 'rsync_config'")
 
-        new_state_dict = sync_weights_by_rdma(step, rank)
-        #old_state_dict = self.model_list[9].state_dict()
+        if version is None or version == "":
+            version = self.read_model_version_from_file()
+        if version is None or version == "":
+            raise Exception(f"rsync model version not set, please set it in 1) {{model_version}}/version.txt "
+                            f"or 2) interface arguments 'version'")
+
+        llm_logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
+        rank = self.local_rank
+
+        sync_start = time.perf_counter()
+        new_state_dict = sync_weights_by_rdma(rsync_config, version, rank)
+        sync_cost = time.perf_counter() - sync_start
+        logger.info(f"weights sync cost {sync_cost:.2f} seconds")
+
+        old_state_dict = self.state_dict
         if not valid_parameters(old_state_dict, new_state_dict):
             logger.error("Invalid new_state_dict, update parameters failed")
             return
         
-        assign_start = time.perf_counter()
+        update_start = time.perf_counter()
         for name, param in old_state_dict.items():
             param.set_value(new_state_dict[name])
-        logger.info(f"params set value cost {time.perf_counter()-assign_start:.2f} seconds")
+        update_cost = time.perf_counter() - update_start
+        logger.info(f"params set value cost {update_cost:.2f} seconds")
 
-        logger.info(f"update weights inplace cost {time.perf_counter()-start_time:.2f} seconds")
+        total_cost = time.perf_counter() - sync_start
+        logger.info(f"END update_weights_by_rdma, cost {total_cost:.2f} seconds",
+                    f" version:{version}, rsync_config: {rsync_config}")
+        return {"sync_cost": sync_cost, "update_cost": update_cost, "total_cost": total_cost, "version": version, "rank": rank}
         
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
@@ -320,6 +337,12 @@ class DynamicWeightManager:
         value = np.ndarray(array.shape, dtype=array.dtype, buffer=shm.buf)
         if self.rank == 0:
             value[self.rank] = status
+
+    def read_model_version_from_file(self):
+        model_dir = self.fd_config.model_config.model
+        with open(os.path.join(model_dir, "version.txt")) as f:
+            version = f.read().strip()
+        return version
 
     @staticmethod
     def check_model_weights_status(model_weights_status, model_runner, pid, block):

@@ -392,7 +392,21 @@ async def is_paused(request: Request) -> Response:
 @app.post("/v1/update_weights")
 async def update_weights(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
-    control_request = ControlRequest(request_id, "update_weights")
+    # 从请求体中获取参数
+    request_data = await request.json()
+    
+    # 提取version和rsync_config参数
+    version = request_data.get("version")
+    rsync_config = request_data.get("rsync_config")
+    
+    # 构建控制请求，传递参数
+    args = {}
+    if version is not None:
+        args["version"] = version
+    if rsync_config is not None:
+        args["rsync_config"] = rsync_config
+        
+    control_request = ControlRequest(request_id, "update_weights", args)
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 

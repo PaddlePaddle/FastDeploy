@@ -492,15 +492,18 @@ class PaddleDisWorkerProc:
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
 
-                req_dicts = []
+                req_dicts, control_reqs = [], []
                 for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
-                    req_dicts.extend(req_dict)
+                    if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                        control_reqs.append(req_dict[0])
+                    else:
+                        num_running_requests = int(bsz)
+                        req_dicts.extend(req_dict)
 
-                # try run control method
-                if len(req_dicts) == 1 and isinstance(req_dicts[0], ControlRequest):
-                    self.run_control_method(req_dicts[0])
-                    continue
+                if len(control_reqs) > 0:
+                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                    for control_req in control_reqs:
+                        self.run_control_method(control_req)
 
                 req_ids = [req.request_id for req in req_dicts]
                 logger.info(
@@ -633,6 +636,7 @@ class PaddleDisWorkerProc:
         self.loaded_model_signal.value[0] = 1
 
     def run_control_method(self, control_request: ControlRequest) -> None:
+        logger.info(f"Start run control request: {control_request}")
         request_id = control_request.request_id
         method = control_request.method
         kwargs = control_request.args
@@ -647,6 +651,7 @@ class PaddleDisWorkerProc:
             result = handler(**kwargs)
             succ_result = ControlResponse(request_id, 200, "Success", result)
             self._send_control_response(succ_result)
+            logger.info(f"Success run control request: {control_request}, response: {succ_result}")
         except Exception as e:
             error_msg = f"Failed run control method {method}: {str(e)}"
             logger.info(f"{error_msg}\n{traceback.format_exc()}")
@@ -819,6 +824,12 @@ def parse_args():
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
+    )
+    parser.add_argument(
+        "--rsync_config",
+        type=json.loads,
+        default=None,
+        help="Rsync weights config",
     )
     parser.add_argument(
         "--enable_logprob",
@@ -1029,6 +1040,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+    logger.info(f"- Rsync config: {load_config.rsync_config}, {type(load_config.rsync_config)}")
 
     if not (
         current_platform.is_cuda()

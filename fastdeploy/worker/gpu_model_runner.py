@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import List, Optional, cast
+from typing import Any, List, Optional, cast, Dict
 
 import numpy as np
 import paddle
@@ -2809,9 +2809,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def update_weights(self):
-        logger.info("GPU Model Runner update weights inplace")
-        self.dynamic_weight_manager.update_weights_by_rdma(100, self.local_rank)
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
 
     def padding_cudagraph_inputs(self) -> None:
         """
