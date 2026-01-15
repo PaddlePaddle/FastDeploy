@@ -221,6 +221,7 @@ class ModelConfig:
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
+        self.mm_max_tokens_per_item = None
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
