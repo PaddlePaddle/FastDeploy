@@ -215,8 +215,10 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         weight_scale_tensor.data<float>(),
         reinterpret_cast<NvType*>(fc1_out),
         used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
-        used_in_ep_low_latency ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert : max_tokens_per_expert)
-                               : permute_input.dims()[0],
+        used_in_ep_low_latency
+            ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert
+                                           : max_tokens_per_expert)
+            : permute_input.dims()[0],
         num_experts,
         inter_size,
         hidden_size,
@@ -427,8 +429,10 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         weight_scale_tensor.data<float>(),
         reinterpret_cast<NvType*>(ffn_out_data),
         used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
-        used_in_ep_low_latency ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert : max_tokens_per_expert)
-                               : act_out_tensor.dims()[0],
+        used_in_ep_low_latency
+            ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert
+                                           : max_tokens_per_expert)
+            : act_out_tensor.dims()[0],
         num_experts,
         hidden_size,
         inter_size / 2,
