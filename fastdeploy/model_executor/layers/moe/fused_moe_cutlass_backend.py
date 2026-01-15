@@ -400,6 +400,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             layer, permute_input, token_nums_per_expert, expert_idx_per_token, False, -1, dequant_scale
         )
 
+        # reduce 中会做 topk 个 weight 的 norm 和 routed_scaling_factor
         fused_moe_out = moe_expert_reduce(
             ffn_out,
             topk_weights,

@@ -107,6 +107,34 @@ class TestCalculateLogitsEntropy(unittest.TestCase):
 
         self.assertAlmostEqual(share_inputs["entropy_list"][2][0], 0.0003187173861078918, places=6)
 
+    def test_negative_inf_clip(self):
+        share_inputs = {
+            "seq_lens_this_time": paddle.to_tensor([[1], [0], [15]], dtype="int32"),
+            "seq_lens_encoder": paddle.to_tensor([[0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [0], [15]], dtype="int32"),
+            "entropy_list": [[], [], []],
+            "stop_flags": paddle.to_tensor([[False], [True], [False]], dtype="bool"),
+            "req_ids": ["req_1", "req_2", "req_3"],
+        }
+
+        logits = paddle.to_tensor(
+            [
+                [10.0, 1.0, -float("inf")],
+                [1.0, 1.0, -float("inf")],
+            ],
+            dtype="float32",
+        )
+        temperature = paddle.ones([3], dtype="float32")
+
+        calculate_logits_entropy(logits, share_inputs, temperature)
+
+        self.assertEqual(len(share_inputs["entropy_list"][0]), 1)
+        self.assertEqual(len(share_inputs["entropy_list"][1]), 0)
+        self.assertEqual(len(share_inputs["entropy_list"][2]), 1)
+
+        self.assertAlmostEqual(share_inputs["entropy_list"][0][0], 0.0017332095885649323, places=6)
+        self.assertAlmostEqual(share_inputs["entropy_list"][2][0], 1.017357349395752, places=6)
+
 
 class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
 
@@ -206,6 +234,34 @@ class TestSpeculateCalculateLogitsEntropy(unittest.TestCase):
         self.assertEqual(len(share_inputs["entropy_list"][3]), 0)
 
         self.assertAlmostEqual(share_inputs["entropy_list"][1][0], 0.0024676250759512186, places=6)
+
+    def test_negative_inf_clip(self):
+        share_inputs = {
+            "seq_lens_this_time": paddle.to_tensor([[1], [0], [15]], dtype="int32"),
+            "seq_lens_encoder": paddle.to_tensor([[0], [0], [15]], dtype="int32"),
+            "seq_lens_decoder": paddle.to_tensor([[30], [0], [15]], dtype="int32"),
+            "entropy_list": [[], [], []],
+            "stop_flags": paddle.to_tensor([[False], [True], [False]], dtype="bool"),
+            "req_ids": ["req_1", "req_2", "req_3"],
+        }
+
+        logits = paddle.to_tensor(
+            [
+                [10.0, 1.0, -float("inf")],
+                [1.0, 1.0, -float("inf")],
+            ],
+            dtype="float32",
+        )
+        temperature = paddle.ones([3], dtype="float32")
+
+        calculate_logits_entropy(logits, share_inputs, temperature)
+
+        self.assertEqual(len(share_inputs["entropy_list"][0]), 1)
+        self.assertEqual(len(share_inputs["entropy_list"][1]), 0)
+        self.assertEqual(len(share_inputs["entropy_list"][2]), 1)
+
+        self.assertAlmostEqual(share_inputs["entropy_list"][0][0], 0.0017332095885649323, places=6)
+        self.assertAlmostEqual(share_inputs["entropy_list"][2][0], 1.017357349395752, places=6)
 
 
 if __name__ == "__main__":

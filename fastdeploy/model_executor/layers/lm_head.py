@@ -102,7 +102,6 @@ class ParallelLMHead(nn.Layer):
                     },
                 )
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
-
                 if self.tp_size > 1:
                     if with_bias:
                         set_weight_attrs(self.linear.bias, {"output_dim": True})

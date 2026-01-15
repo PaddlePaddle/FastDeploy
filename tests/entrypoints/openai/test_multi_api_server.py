@@ -122,7 +122,8 @@ class TestMultiApiServer(unittest.TestCase):
         # Mock port availability check - first port available, second not
         mock_is_port_available.side_effect = [True, False]
 
-        self.assertFalse(check_param(self.test_ports.split(","), self.test_server_count))
+        with self.assertRaises(RuntimeError):
+            check_param(self.test_ports.split(","), self.test_server_count)
 
     @patch("fastdeploy.entrypoints.openai.multi_api_server.is_port_available")
     @patch("fastdeploy.entrypoints.openai.multi_api_server.start_servers")

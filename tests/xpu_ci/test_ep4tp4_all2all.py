@@ -78,8 +78,6 @@ def test_ep4tp4_all2all(xpu_env):
             str(port_num + 10),
             "--metrics-port",
             str(port_num + 2),
-            "--cache-queue-port",
-            str(port_num + 47873),
             "--gpu-memory-utilization",
             "0.9",
         ]

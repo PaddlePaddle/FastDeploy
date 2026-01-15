@@ -155,6 +155,11 @@ class SpeculateMetrics:
     average_accept_length: float
 
     """
+    The number of accepted tokens of each head in the current request
+    """
+    accepted_tokens_per_head: list[int]
+
+    """
     Average acceptance rate of each head in the current request
     """
     accept_ratio_per_head: list[float]

@@ -21,7 +21,9 @@ import inspect
 import json
 import os
 import pickle
+import re
 import time
+from contextlib import ExitStack
 from functools import wraps
 from pathlib import Path
 
@@ -37,6 +39,10 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.linear import KVBatchLinear
 from fastdeploy.model_executor.utils import multi_switch_config_context
+
+
+def natural_key(s: str):
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
 
 def pdparams_weight_iterator(paddle_file_list: list[str]):
@@ -71,9 +77,12 @@ def load_weights_from_cache(model, weights_iterator):
 
 
 def get_weight_iterator(model_path: str):
-    key_name_list, files_list, use_safetensors = get_all_weights_file(model_path)
+    files_list, ordered_weight_map, use_safetensors, is_key_ordered = get_all_weights_file(model_path)
     if use_safetensors:
-        weights_iterator = safetensors_weights_iterator(key_name_list, files_list)
+        if is_key_ordered:
+            weights_iterator = safetensors_weights_iterator(files_list)
+        else:
+            weights_iterator = safetensors_weights_iterator_ordered(ordered_weight_map)
     else:
         weights_iterator = pdparams_weight_iterator(files_list)
 
@@ -252,8 +261,13 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         "mtp_block" if getattr(fd_config.speculative_config, "model_type", "main") == "mtp" else "layers"
     )
 
+    moe_num_experts = fd_config.model_config.moe_num_experts
+    if isinstance(moe_num_experts, list):
+        moe_num_experts = moe_num_experts[0]
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
         for j in get_expert_ranges(fd_config):
+            # Map redundant expert IDs back to actual expert IDs for weight loading
+            j = j % moe_num_experts
             up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
             down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
 
@@ -264,6 +278,8 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             down_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight_scale"
 
             down_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.activation_scale"
+            # single up_gate_proj.activation_scale for all mlp.experts
+            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
@@ -271,6 +287,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             num_local_ffn_keys.append(up_gate_proj_scale_key)
             num_local_ffn_keys.append(down_proj_scale_key)
             num_local_ffn_keys.append(down_proj_in_scale_key)
+            num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
         # for EP w4a8, we need all expert's activation_scale for up_gate_proj
         num_experts = fd_config.model_config.moe_num_experts
@@ -324,20 +341,6 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
     return state_dict
 
 
-class SafetensorFileCache:
-    def __init__(self):
-        self._files = {}
-
-    def get(self, filename):
-        if filename not in self._files:
-            self._files[filename] = safe_open(filename, framework="paddle", device="cpu")
-        return self._files[filename]
-
-    def close(self):
-        for f in self._files.values():
-            f.__exit__(None, None, None)
-        self._files.clear()
-
 def kv_cache_scale_iterator(kv_cache_scale_json_path):
     """
     kv_cache_scale_iterator
@@ -348,20 +351,39 @@ def kv_cache_scale_iterator(kv_cache_scale_json_path):
             scale_tensor = paddle.to_tensor(value, dtype=paddle.get_default_dtype()) * 448.0
             yield key, scale_tensor
 
-def safetensors_weights_iterator(key_name_list: list[str], safe_tensor_list: list[str]):
+
+def safetensors_weights_iterator(safe_tensor_list: list[str]):
     """
     safetensors_weights_iterator
     """
-
-    safe_tensor_cache = SafetensorFileCache()
-    for i, key_name in tqdm(
-        enumerate(key_name_list),
-        total=len(key_name_list),
-        desc="Loading weights",
+    for st_file in tqdm(
+        safe_tensor_list,
+        desc="Loading safetensors checkpoint shards",
     ):
-        f = safe_tensor_cache.get(safe_tensor_list[i])
-        param = f.get_tensor(key_name)
-        yield key_name, param
+        with safe_open(st_file, framework="paddle", device="cpu") as f:
+            for name in f.keys():
+                param = f.get_tensor(name)
+                yield name, param
+
+
+def safetensors_weights_iterator_ordered(ordered_weight_map: dict[str, str]):
+    """
+    safetensors_weights_iterator_ordered
+    """
+    with ExitStack() as stack:
+        current_file = None
+        current_handle = None
+
+        for key, st_file in tqdm(
+            ordered_weight_map.items(),
+            desc="Loading safetensors weights",
+        ):
+            if st_file != current_file:
+                stack.close()
+                current_handle = stack.enter_context(safe_open(st_file, framework="paddle", device="cpu"))
+                current_file = st_file
+
+            yield key, current_handle.get_tensor(key)
 
 
 def fast_weights_iterator(safe_tensor_list: list[str]):
@@ -384,48 +406,46 @@ def load_pre_sharded_checkpoint(model_path: str, local_rank: int):
     """
 
     state_dict = {}
-    _, safetensor_files, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
+    safetensor_files, _, _, _ = get_all_weights_file(os.path.join(model_path, f"rank{local_rank}"))
     weights_iterator = safetensors_weights_iterator(safetensor_files)
     for name, weight in weights_iterator:
         state_dict[name] = weight.clone()
     return state_dict
 
 
-def natural_key(s: str):
-    import re
-
-    return [int(text) if text.isdigit() else text for text in re.split(r"(\d+)", s)]
-
-
 def get_all_weights_file(model_path: str):
     """
     get_all_safetensors
     """
-    from collections import OrderedDict
-
     model_path = Path(model_path)
     use_safetensors = True
     files_list = [str(file) for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
     if len(files_list) > 0:
-        key_name_list = []
+        ordered_weight_map = {}
         use_safetensors = False
+        # dont care about the order of the files
+        return files_list, {}, use_safetensors, False
     else:
         safe_model_path = model_path / "model.safetensors"
         if safe_model_path.exists():
             with safe_open(safe_model_path, framework="np", device="cpu") as f:
-                key_name_list = f.keys()
-
-            files_list = [str(safe_model_path)] * len(key_name_list)
-            return key_name_list, files_list, use_safetensors
+                key_name_list = sorted(f.keys(), key=natural_key)
+            ordered_weight_map = {key: "model.safetensors" for key in key_name_list}
+            is_key_ordered = True
+            files_list = [str(safe_model_path)]
+            return files_list, ordered_weight_map, use_safetensors, is_key_ordered
         else:
             index_file = model_path / "model.safetensors.index.json"
             with index_file.open("r") as f:
                 weight_map = json.load(f)["weight_map"]
-                sorted_weight_map = OrderedDict(sorted(weight_map.items(), key=lambda kv: natural_key(kv[0])))
-            files_list = [str(model_path / file_name) for (_, file_name) in sorted_weight_map.items()]
-            key_name_list = list(sorted_weight_map.keys())
-
-    return key_name_list, files_list, use_safetensors
+            keys = list(weight_map.keys())
+            is_key_ordered = keys == sorted(keys, key=natural_key)
+            ordered_weight_map = {
+                key: str(model_path / weight_map[key]) for key in sorted(weight_map.keys(), key=natural_key)
+            }
+            weight_files_in_index = {str(model_path / weight_map[name]) for name in weight_map}
+            files_list = sorted(weight_files_in_index)
+            return files_list, ordered_weight_map, use_safetensors, is_key_ordered
 
 
 def deal_state_dict(state_dict):

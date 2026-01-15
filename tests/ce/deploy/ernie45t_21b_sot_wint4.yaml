@@ -6,3 +6,4 @@ graph_optimization_config:
   graph_opt_level: 1
   sot_warmup_sizes: [2,16,32,64]
   use_cudagraph: True
+  full_cuda_graph: False
