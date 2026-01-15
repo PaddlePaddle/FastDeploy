@@ -24,6 +24,7 @@ from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
     UnquantizedFusedMoEMethod,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 
 class HpuMoEMethod(UnquantizedFusedMoEMethod):
@@ -53,6 +54,24 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         )
         self.down_proj_expert_act_scale_key = down_proj_expert_weight_key.replace("weight", "activation_scale")
 
+    def init_ep(self, layer: nn.Layer) -> None:
+        """
+        Initialize EP (Expert Parallel) related modules.
+        """
+        return
+
+    def apply_tp(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        """
+        Apply the TP prefill method.
+        """
+        raise NotImplementedError
+
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
@@ -77,7 +96,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         """
         raise NotImplementedError
 
-    def apply_tp(
+    def apply(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
@@ -190,6 +209,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
         up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0)
         down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0)
+        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0)
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
@@ -197,10 +217,10 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
             "up_gate_proj_weight_scale": up_gate_proj_weight_scale,
             "down_proj_weight_scale": down_proj_weight_scale,
             "up_gate_proj_in_scale": up_gate_proj_in_scale,
+            "down_proj_in_scale": down_proj_in_scale,
         }
         for name, tensor in name_tensor_map.items():
             getattr(layer, name).set_value(tensor)
-        setattr(layer, "down_proj_in_scale", down_proj_in_scale)
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
@@ -247,6 +267,15 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        setattr(
+            layer,
+            "down_proj_in_scale",
+            layer.create_parameter(
+                shape=[layer.num_local_experts, 1],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
 
         # weight_scales
         setattr(
@@ -267,6 +296,19 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        extra_weight_attrs = {
+            **(extra_weight_attrs or {}),
+            "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1},
+        }
+        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+        extra_scale_attrs = {
+            **(extra_weight_attrs or {}),
+            "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "up": 0, "down": None},
+        }
+        set_weight_attrs(layer.down_proj_in_scale, extra_scale_attrs)
+        set_weight_attrs(layer.up_gate_proj_weight_scale, extra_scale_attrs)
+        set_weight_attrs(layer.down_proj_weight_scale, extra_scale_attrs)
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -296,6 +338,27 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
             setattr(layer, weights_name, weights_list)
             setattr(layer, scales_name, scales_list)
 
+    def process_weights_after_loading(self, layer):
+        return
+
+    def init_ep(self, layer: nn.Layer) -> None:
+        """
+        Initialize EP (Expert Parallel) related modules.
+        """
+        return
+
+    def apply_tp(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+    ) -> paddle.Tensor:
+        """
+        Apply the TP decoder method.
+        """
+        raise NotImplementedError
+
     def apply_ep_prefill(
         self,
         layer: nn.Layer,
@@ -320,7 +383,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         """
         raise NotImplementedError
 
-    def apply_tp(
+    def apply(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,

@@ -207,6 +207,8 @@ class Qwen3VLForConditionalGeneration(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
             ("visual", "model.visual", None),
+            ("qk_norm.q_norm", "q_norm", None),
+            ("qk_norm.k_norm", "k_norm", None),
         ]
 
         params_dict = dict(self.named_parameters())
