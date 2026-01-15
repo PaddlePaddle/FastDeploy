@@ -25,10 +25,10 @@ def test_unstream_with_logprobs():
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] == "牛顿的"
     assert resp_json["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] ==  -0.03113006055355072
+    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.03113006055355072
     assert resp_json["choices"][0]["logprobs"]["content"][0]["top_logprobs"][0] == {
         "token": "牛顿",
-        "logprob":  -0.03113006055355072,
+        "logprob": -0.03113006055355072,
         "bytes": [231, 137, 155, 233, 161, 191],
         "top_logprobs": None,
     }
