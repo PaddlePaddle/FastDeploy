@@ -250,9 +250,10 @@ int speculate_schedule_cache(Context *ctx,
   WRAPPER_ASSERT_GT(ctx, max_next_step_tokens, 0);
   WRAPPER_ASSERT_GE(ctx, max_bsz, real_bsz);
   WRAPPER_CHECK_PTR(ctx, int64_t, draft_tokens_len * real_bsz, draft_tokens);
-  WRAPPER_CHECK_PTR(ctx, int64_t, draft_tokens_len * real_bsz, step_draft_tokens);
+  WRAPPER_CHECK_PTR(
+      ctx, int64_t, draft_tokens_len * real_bsz, step_draft_tokens);
   WRAPPER_CHECK_PTR(ctx, int64_t, accept_tokens_len * real_bsz, accept_tokens);
-  WRAPPER_CHECK_PTR(ctx, int, block_num_per_seq * real_bsz, block_tables);
+  WRAPPER_CHECK_PTR(ctx, int, block_num_per_seq *real_bsz, block_tables);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, prompt_lens);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, stop_flags);
