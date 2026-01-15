@@ -628,7 +628,6 @@ def reset_scheduler():
         return Response("Engine not loaded", status_code=500)
 
     llm_engine.engine.clear_data()
-    llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
@@ -648,7 +647,6 @@ def control_scheduler(request: ControlSchedulerRequest):
 
     if request.reset:
         llm_engine.engine.clear_data()
-        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
         if hasattr(llm_engine.engine.scheduler, "update_config") and callable(

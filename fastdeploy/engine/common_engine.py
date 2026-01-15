@@ -664,7 +664,6 @@ class EngineService:
                 else:
                     continue
 
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
                 main_process_metrics.num_requests_running.inc(len(tasks))
             except Exception as e:
                 err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
@@ -998,7 +997,6 @@ class EngineService:
                             added_requests.pop(request_id)
 
                     if failed is None:
-                        main_process_metrics.num_requests_waiting.inc(1)
                         continue
 
                     self._send_error_response(request_id, failed)
@@ -1256,12 +1254,13 @@ class EngineService:
 
     def clear_data(self):
         try:
-            llm_logger.info("Clear Data: Start")
+            self.llm_logger.info("[Engine] start clearing data")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
-            llm_logger.info("Clear Data: Successfully")
+            self.scheduler.reset()
+            self.llm_logger.info("[Engine] finish clearing data")
             return True
         except Exception as e:
             llm_logger.error(f"Clear data error: {e}")

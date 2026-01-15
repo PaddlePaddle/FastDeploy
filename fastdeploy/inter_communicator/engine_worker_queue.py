@@ -767,11 +767,12 @@ class EngineWorkerQueue:
         return item
 
     def clear_data(self):
+        llm_logger.info("[EngineWorkerQueue] start clearing data")
         self.lock.acquire()
         self.tasks[:] = list()
         self.client_read_flag[:] = [1] * self.num_client
         self.lock.release()
-        llm_logger.info("clear data for engine worker queue")
+        llm_logger.info("[EngineWorkerQueue] finish clearing data")
 
     def cleanup(self):
         """

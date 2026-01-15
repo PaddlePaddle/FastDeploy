@@ -19,6 +19,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import envs, scheduler_logger
 
@@ -116,6 +117,7 @@ class LocalScheduler:
             self.ids = list()
             self.requests = dict()
             self.responses = dict()
+        main_process_metrics.num_requests_enqueued.set(0)
         scheduler_logger.info("Scheduler has been reset")
 
     def _recycle(self, request_id: Optional[str] = None):
@@ -191,6 +193,8 @@ class LocalScheduler:
 
         if len(duplicated_ids) > 0:
             scheduler_logger.warning(f"Scheduler has received some duplicated requests: {duplicated_ids}")
+
+        main_process_metrics.num_requests_enqueued.inc(len(valid_ids))
 
         results = [(request_id, None) for request_id in valid_ids]
         results += [(request_id, "duplicated request_id") for request_id in duplicated_ids]
@@ -297,6 +301,8 @@ class LocalScheduler:
 
         if len(requests) > 0:
             scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+
+        main_process_metrics.num_requests_enqueued.dec(len(requests))
 
         return requests
 

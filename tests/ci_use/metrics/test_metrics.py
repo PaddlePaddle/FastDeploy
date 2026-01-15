@@ -16,6 +16,7 @@ sys.path.insert(0, tests_dir)
 from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
+    FD_CONTROLLER_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
     clean_ports,
@@ -33,7 +34,6 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
@@ -184,54 +184,66 @@ def get_metrics_dict(metrics_url):
 
     # Parse Prometheus metrics data
     metrics_data = resp.text
-    print(metrics_data)
     metrics_dict = parse_prometheus_to_dict(metrics_data)
-    # print("\nParsed dict:")
-    # print(metrics_dict)
-    print("num_requests_running:", metrics_dict["fastdeploy:num_requests_running"])
-    print("num_requests_waiting", metrics_dict["fastdeploy:num_requests_waiting"])
 
     return metrics_dict
+
+
+def test_metrics_with_too_many_requests():
+    metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
+    base_metrics = get_metrics_dict(metrics_url)
+    async_concurrency(n=10)
+    time.sleep(0.3)
+
+    metrics = get_metrics_dict(metrics_url)
+    running = metrics["fastdeploy:num_requests_running"]
+    waiting = metrics["fastdeploy:num_requests_waiting"]
+    preempted = metrics["fastdeploy:num_requests_preempted"]
+    enqueued = metrics["fastdeploy:num_requests_enqueued"]
+    total = metrics["fastdeploy:requests_number_total"] - base_metrics["fastdeploy:requests_number_total"]
+    assert total == 10, f"server should have received all 10 requests, got {total}"
+    assert running == 1, "only one request should be running, for max_num_seqs = 1"
+    assert enqueued + waiting == 9, "the other requests should all be waiting"
+    assert preempted == 0, "no preemption should be triggered"
 
 
 def test_metrics_with_clear_and_reset():
     """
     Test the metrics monitoring endpoint.
     """
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
     metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
+    base_metrics = get_metrics_dict(metrics_url)
 
+    # 1. send requests
     async_concurrency(n=10)
 
     time.sleep(0.3)
 
-    # ===== clear_load_weight =====
+    # 2. clear_load_weight
     clear_url = f"http://0.0.0.0:{FD_API_PORT}/clear_load_weight"
     print("Calling clear_load_weight...")
     r = requests.get(clear_url, timeout=30)
     assert r.status_code == 200, f"clear_load_weight failed: {r.status_code}"
 
-    metrics = get_metrics_dict(metrics_url)
-    running = metrics["fastdeploy:num_requests_running"]
-    waiting = metrics["fastdeploy:num_requests_waiting"]
-
-    print("ASSERT clear_load_weight后非0 running:", running, "waiting:", waiting)
-    assert running != 0 or waiting != 0, "Expected running/waiting to be non-zero"
-
-    # ===== reset_scheduler =====
+    # 3. reset_scheduler
     reset_url = f"http://0.0.0.0:{FD_CONTROLLER_PORT}/controller/reset_scheduler"
     print("Calling reset_scheduler...")
     r = requests.post(reset_url, json={"reset": True}, timeout=30)
     assert r.status_code == 200, f"reset_scheduler failed: {r.status_code}"
 
+    # 4. check metrics after reset_scheduler
     metrics = get_metrics_dict(metrics_url)
     running = metrics["fastdeploy:num_requests_running"]
     waiting = metrics["fastdeploy:num_requests_waiting"]
+    preempted = metrics["fastdeploy:num_requests_preempted"]
+    enqueued = metrics["fastdeploy:num_requests_enqueued"]
+    total = metrics["fastdeploy:requests_number_total"] - base_metrics["fastdeploy:requests_number_total"]
 
-    print("ASSERT reset_scheduler后为0 running:", running, "waiting:", waiting)
-    # Temporarily disable this assertion. The running/waiting states are not strictly
-    # guaranteed to reach zero in the current workflow, so we skip this check for now.
-    # assert running == 0 and waiting == 0, "Expected running/waiting to be zero"
+    assert total == 10, f"server should have received all 10 requests, got {total}"
+    assert running == 0, f"after reset_scheduler, num_requests_running should be 0, got {running}"
+    assert waiting == 0, f"after reset_scheduler, num_requests_waiting should be 0, got {waiting}"
+    assert preempted == 0, f"after reset_scheduler, num_requests_preempted should be 0, got {preempted}"
+    assert enqueued == 0, f"after reset_scheduler, num_requests_enqueued should be 0, got {enqueued}"
 
 
 if __name__ == "__main__":

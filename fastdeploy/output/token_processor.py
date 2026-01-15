@@ -487,17 +487,8 @@ class TokenProcessor:
                 if task_id in self.resource_manager.req_dict:
                     del self.resource_manager.req_dict[task_id]
 
-        # Update block metrics
-        num_blocks_used_by_tasks = sum(
-            [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
-        )
-        main_process_metrics.available_gpu_block_num.set(
-            self.resource_manager.total_block_number() - num_blocks_used_by_tasks
-        )
-        main_process_metrics.batch_size.set(
-            self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
-        )
-        main_process_metrics.available_batch_size.set(self.resource_manager.available_batch())
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.resource_manager.update_metrics()
 
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
@@ -927,6 +918,7 @@ class TokenProcessor:
             self.accept_token_num_per_head[i] += 1
 
     def clear_data(self):
+        llm_logger.info("[TokenProcessor] start clearing data")
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
         for i in range(self.resource_manager.max_num_seqs):
@@ -944,12 +936,13 @@ class TokenProcessor:
                 finished=True,
                 metrics=RequestMetrics(
                     arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
+                    request_start_time=task.metrics.arrival_time,
                 ),
             )
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
             self._recycle_resources(task.request_id, i, task, result, is_prefill)
-            llm_logger.warning(f"clear data for task {task.request_id}")
+            llm_logger.warning(f"[TokenProcessor] abort request {task.request_id}")
+        llm_logger.info("[TokenProcessor] finish clearing data")
 
 
 class WarmUpTokenProcessor(TokenProcessor):

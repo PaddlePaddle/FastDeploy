@@ -25,7 +25,6 @@ import zmq
 from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.inter_communicator import EngineWorkerQueue
-from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
 
@@ -154,7 +153,6 @@ class SplitwiseConnector:
                 self.logger.warning(f"_send_message: Send queue full for {addr}")
             except Exception as e:
                 self.logger.error(f"_send_message: Send to {addr} failed: {e}, {str(traceback.format_exc())}")
-                main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
         except Exception as e:
             self.logger.error(f"_send_message: Message preparation failed: {e}")

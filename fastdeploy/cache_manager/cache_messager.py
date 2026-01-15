@@ -39,6 +39,7 @@ from fastdeploy.inter_communicator import (
     IPCSignal,
     shared_memory_exists,
 )
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import envs, get_logger
 
 # logger = get_logger("cache_messager", "cache_messager.log")
@@ -347,6 +348,7 @@ class CacheMessager:
                                     f"write cache failed, layer_idx: {layer_idx}, "
                                     f"req_id: {item['request_id']}, dest_ip: {target_ip}"
                                 )
+                                main_process_metrics.send_cache_failed_num.inc()
                                 break
 
                             tok = time.time()
