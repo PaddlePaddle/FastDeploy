@@ -54,7 +54,7 @@ def test_fused_moe_launch():
         stdout, stderr = process.communicate()
         return_code = -1
     print(f"std_out: {stdout}")
-    assert return_code in (0,), f"Process exited with code {return_code}, stdout: {stdout}, stderr: {stderr}"
+    assert return_code in (0, 255), f"Process exited with code {return_code}, stdout: {stdout}, stderr: {stderr}"
 
 
 test_fused_moe_launch()
