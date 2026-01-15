@@ -258,7 +258,7 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs = []
             for i in range(len(self.running)):
                 req = self.running.pop()
-                 # txt2image: req.use_extend_tables is True, req can not be preempted. txt2image is not used in RL.
+                # txt2image: req.use_extend_tables is True, req can not be preempted. txt2image is not used in RL.
                 if req.use_extend_tables:
                     self.running.insert(0, req)
                     continue
@@ -281,8 +281,10 @@ class ResourceManagerV1(ResourceManager):
             count += 1
             time.sleep(0.001)
         if count >= timeout * 1000:
-            llm_logger.info(f"wait_inflight_requests_finish timeout after {timeout} seconds, "
-                            f"still {len(self.to_be_rescheduled_request_id_set)} requests running")
+            llm_logger.info(
+                f"wait_inflight_requests_finish timeout after {timeout} seconds, "
+                f"still {len(self.to_be_rescheduled_request_id_set)} requests running"
+            )
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
@@ -1269,12 +1271,14 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
 
     def log_status(self):
-        llm_logger.info(f"ResourceManagerV1( "
-                        f"waiting={len(self.waiting)}, "
-                        f"running={len(self.running)}, "
-                        f"preempted={len(self.to_be_rescheduled_request_id_set)}, "
-                        f"tasks_list={self.tasks_list}, "
-                        f"stop_flags={self.stop_flags}, "
-                        f"req_dict={self.req_dict}, "
-                        f"requests={self.requests}, "
-                        f")")
+        llm_logger.info(
+            f"ResourceManagerV1( "
+            f"waiting={len(self.waiting)}, "
+            f"running={len(self.running)}, "
+            f"preempted={len(self.to_be_rescheduled_request_id_set)}, "
+            f"tasks_list={self.tasks_list}, "
+            f"stop_flags={self.stop_flags}, "
+            f"req_dict={self.req_dict}, "
+            f"requests={self.requests}, "
+            f")"
+        )

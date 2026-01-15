@@ -20,9 +20,9 @@ import signal
 import threading
 import time
 import traceback
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-import uuid
 
 import uvicorn
 import zmq
@@ -38,8 +38,8 @@ from fastdeploy import envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.engine.request import ControlRequest
 from fastdeploy.engine.expert_service import ExpertService
+from fastdeploy.engine.request import ControlRequest
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.middleware import AuthenticationMiddleware
@@ -367,6 +367,7 @@ def ping(raw_request: Request) -> Response:
     """Ping check. Endpoint required for SageMaker"""
     return health(raw_request)
 
+
 @app.post("/v1/pause")
 async def pause(request: Request) -> Response:
     # todo: support wait_for_inflight_requests(default False), clear_cache(default True) arguments
@@ -375,12 +376,14 @@ async def pause(request: Request) -> Response:
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 
+
 @app.post("/v1/resume")
 async def resume(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
     control_request = ControlRequest(request_id, "resume")
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
+
 
 @app.get("/v1/is_paused")
 async def is_paused(request: Request) -> Response:
@@ -389,26 +392,28 @@ async def is_paused(request: Request) -> Response:
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 
+
 @app.post("/v1/update_weights")
 async def update_weights(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
     # 从请求体中获取参数
     request_data = await request.json()
-    
+
     # 提取version和rsync_config参数
     version = request_data.get("version")
     rsync_config = request_data.get("rsync_config")
-    
+
     # 构建控制请求，传递参数
     args = {}
     if version is not None:
         args["version"] = version
     if rsync_config is not None:
         args["rsync_config"] = rsync_config
-        
+
     control_request = ControlRequest(request_id, "update_weights", args)
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
+
 
 def wrap_streaming_generator(original_generator: AsyncGenerator):
     """

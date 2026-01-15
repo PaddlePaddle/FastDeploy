@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import inspect
 import os
 import time
@@ -21,7 +22,6 @@ import traceback
 import uuid
 from copy import copy
 from http import HTTPStatus
-import asyncio
 
 import numpy as np
 from filelock import FileLock
@@ -29,6 +29,7 @@ from filelock import FileLock
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
+from fastdeploy.engine.request import ControlRequest, ControlResponse
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -52,7 +53,6 @@ from fastdeploy.utils import (
     api_server_logger,
     to_tensor,
 )
-from fastdeploy.engine.request import ControlRequest, ControlResponse
 
 
 class EngineClient:
@@ -531,7 +531,6 @@ class EngineClient:
             api_server_logger.error(f"Error Run Control Method: {error_response}")
             return error_response
 
-        
     def is_workers_alive(self):
         """
         Check the health of the model server by checking whether all workers are alive.

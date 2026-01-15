@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 
 import paddle
 import pynvml

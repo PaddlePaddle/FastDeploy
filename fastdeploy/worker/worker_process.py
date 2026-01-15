@@ -15,12 +15,12 @@
 """
 
 import argparse
+import asyncio
 import json
 import os
 import time
 import traceback
 from typing import Tuple
-import asyncio
 
 import numpy as np
 import paddle
@@ -44,6 +44,7 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.engine.request import ControlRequest, ControlResponse
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -65,7 +66,6 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
-from fastdeploy.engine.request import ControlRequest, ControlResponse
 
 logger = get_logger("worker_process", "worker_process.log")
 
@@ -660,7 +660,8 @@ class PaddleDisWorkerProc:
 
     def _send_control_response(self, control_response: ControlResponse):
         logger.info(f"Rank-{self.local_rank} put control output {control_response} to engine")
-        asyncio.run(self._ctrl_output.put(control_response, shm_threshold=100*1024*1024))
+        asyncio.run(self._ctrl_output.put(control_response, shm_threshold=100 * 1024 * 1024))
+
 
 def parse_args():
     """

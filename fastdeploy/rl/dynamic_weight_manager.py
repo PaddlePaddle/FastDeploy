@@ -14,8 +14,8 @@
 # limitations under the License.
 """
 
-import os
 import io
+import os
 import time
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
@@ -27,8 +27,10 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import ModelWeightsStatus
 
+
 def sync_weights_by_rdma(config, step, rank):
     from checkpoint_transfer.core import RDMAWeightsDownloader
+
     downloader = RDMAWeightsDownloader(config)
     downloader.initialize()
     logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
@@ -98,9 +100,11 @@ class DynamicWeightManager:
                     logger.error(f"Invalid parameter: {key} not in new_state_dict")
                 elif old_state_dict[key].shape != new_state_dict[key].shape:
                     is_valid = False
-                    logger.error(f"Invalid parameter: {key} shape mismatch, "
-                                 f"new shape:{new_state_dict[key].shape}, "
-                                 f"old shape:{old_state_dict[key].shape}")
+                    logger.error(
+                        f"Invalid parameter: {key} shape mismatch, "
+                        f"new shape:{new_state_dict[key].shape}, "
+                        f"old shape:{old_state_dict[key].shape}"
+                    )
                 elif old_state_dict[key].dtype != new_state_dict[key].dtype:
                     is_valid = False
                     logger.error(f"Invalid parameter: {key} dtype mismatch")
@@ -109,16 +113,20 @@ class DynamicWeightManager:
         if rsync_config is None:
             rsync_config = self.fd_config.load_config.rsync_config
         if rsync_config is None or len(rsync_config) == "":
-            raise Exception(f"rsync config not set, please set it in 1) launch arguments '--rsync-config' "
-                            f"or 2) interface arguments 'rsync_config'")
+            raise Exception(
+                "rsync config not set, please set it in 1) launch arguments '--rsync-config' "
+                "or 2) interface arguments 'rsync_config'"
+            )
 
         if version is None or version == "":
             version = self.read_model_version_from_file()
         if version is None or version == "":
-            raise Exception(f"rsync model version not set, please set it in 1) {{model_version}}/version.txt "
-                            f"or 2) interface arguments 'version'")
+            raise Exception(
+                "rsync model version not set, please set it in 1) {model_version}/version.txt "
+                "or 2) interface arguments 'version'"
+            )
 
-        llm_logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
+        logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
         rank = self.local_rank
 
         sync_start = time.perf_counter()
@@ -130,7 +138,7 @@ class DynamicWeightManager:
         if not valid_parameters(old_state_dict, new_state_dict):
             logger.error("Invalid new_state_dict, update parameters failed")
             return
-        
+
         update_start = time.perf_counter()
         for name, param in old_state_dict.items():
             param.set_value(new_state_dict[name])
@@ -138,10 +146,17 @@ class DynamicWeightManager:
         logger.info(f"params set value cost {update_cost:.2f} seconds")
 
         total_cost = time.perf_counter() - sync_start
-        logger.info(f"END update_weights_by_rdma, cost {total_cost:.2f} seconds",
-                    f" version:{version}, rsync_config: {rsync_config}")
-        return {"sync_cost": sync_cost, "update_cost": update_cost, "total_cost": total_cost, "version": version, "rank": rank}
-        
+        logger.info(
+            f"END update_weights_by_rdma, cost {total_cost:.2f} seconds",
+            f" version:{version}, rsync_config: {rsync_config}",
+        )
+        return {
+            "sync_cost": sync_cost,
+            "update_cost": update_cost,
+            "total_cost": total_cost,
+            "version": version,
+            "rank": rank,
+        }
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""

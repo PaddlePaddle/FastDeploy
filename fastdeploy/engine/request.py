@@ -17,13 +17,12 @@
 from __future__ import annotations
 
 import time
-import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
-from fastapi.responses import JSONResponse
 
 import numpy as np
+from fastapi.responses import JSONResponse
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
@@ -380,9 +379,10 @@ class Request:
         except Exception as e:
             return f"<Request repr failed: {e}>"
 
+
 class ControlRequest:
     """A generic control request that supports method and args for control operations.
-    
+
     This request type is used for system-level control operations rather than
     typical inference requests. It enables dynamic control of engine behavior,
     resource management, and system configuration via a flexible method-args interface.
@@ -407,19 +407,11 @@ class ControlRequest:
     @classmethod
     def from_dict(cls, d: dict):
         """Create ControlRequest instance from dictionary."""
-        return cls(
-            request_id=d["request_id"],
-            method=d["method"],
-            args=d.get("args", {})
-        )
+        return cls(request_id=d["request_id"], method=d["method"], args=d.get("args", {}))
 
     def to_dict(self) -> dict:
         """Convert ControlRequest into a serializable dict."""
-        return {
-            "request_id": self.request_id,
-            "method": self.method,
-            "args": self.args
-        }
+        return {"request_id": self.request_id, "method": self.method, "args": self.args}
 
     def __repr__(self) -> str:
         """Provide a clean representation of the control request."""
@@ -449,42 +441,45 @@ class ControlRequest:
     def is_control_request(d: dict) -> bool:
         """
         Check if a dictionary represents a valid ControlRequest.
-        
+
         Args:
             d: Dictionary to check
-            
+
         Returns:
             bool: True if the dictionary contains the required fields for a ControlRequest
         """
-        
+
         # Check if all required fields are present and have correct types
         if not isinstance(d, dict):
             return False
-        
+
         # Check field types
         if "request_id" not in d or not isinstance(d.get("request_id"), str):
             return False
-            
+
         if "method" not in d or not isinstance(d.get("method"), str):
             return False
-            
+
         # Args is optional, but if present should be a dict
         if "args" in d and not isinstance(d["args"], dict):
             return False
-            
+
         return True
+
 
 class ControlResponse:
     """
     Response for control opeartions
     """
+
     def __init__(
-        self, 
-        request_id: str, 
-        error_code: int = 200, 
+        self,
+        request_id: str,
+        error_code: int = 200,
         error_message: Optional[str] = None,
         result: Optional[dict] = None,
-        finished: bool = True) -> None:
+        finished: bool = True,
+    ) -> None:
         self.request_id = request_id
         self.finished = finished
         self.error_message = error_message
@@ -498,7 +493,7 @@ class ControlResponse:
             "finished": self.finished,
             "error_code": self.error_code,
             "error_message": self.error_message,
-            "result": self.result
+            "result": self.result,
         }
 
     @classmethod
@@ -509,7 +504,7 @@ class ControlResponse:
             finished=d.get("finished", True),
             error_code=d.get("error_code", 200),
             error_message=d.get("error_message"),
-            result=d.get("result")
+            result=d.get("result"),
         )
 
     def to_api_json_response(self) -> JSONResponse:
@@ -519,7 +514,7 @@ class ControlResponse:
             "request_id": self.request_id,
             "status": status,
             "error_message": self.error_message,
-            "result": self.result
+            "result": self.result,
         }
         return JSONResponse(status_code=self.error_code, content=content)
 
