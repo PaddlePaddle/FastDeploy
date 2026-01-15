@@ -2639,18 +2639,10 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
-        if self.scheduler_config.splitwise_role == "decode":
-            num_tokens = self.scheduler_config.max_num_seqs
-        else:
-            num_tokens = self.scheduler_config.max_num_batched_tokens
-            if self.model_config.mm_max_tokens_per_item is not None:
-                # The maximum length of a single inference in a multimodal model is influenced by the logic of chunking
-                max_mm_tokens = max(
-                    self.model_config.mm_max_tokens_per_item.get("image", 0),
-                    self.model_config.mm_max_tokens_per_item.get("video", 0),
-                    self.model_config.mm_max_tokens_per_item.get("audio", 0),
-                )
-                num_tokens = min(num_tokens + max_mm_tokens, self.model_config.max_model_len)
+        num_tokens = self.fd_config.get_max_chunk_tokens()
+        logger.info(
+            f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
+        )
         self._dummy_run(
             num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,

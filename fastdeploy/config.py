@@ -2078,6 +2078,29 @@ class FDConfig:
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
 
+    @property
+    def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
+        """
+        get max chunk tokens
+
+        The maximum tokens size of a single inference in a multimodal model is influenced by the logic of chunking
+        """
+        if mm_max_tokens_per_item is None:
+            mm_max_tokens_per_item = self.model_config.mm_max_tokens_per_item
+
+        if self.scheduler_config.splitwise_role == "decode":
+            num_tokens = self.scheduler_config.max_num_seqs
+        else:
+            num_tokens = self.scheduler_config.max_num_batched_tokens
+            if mm_max_tokens_per_item is not None:
+                max_mm_tokens = max(
+                    mm_max_tokens_per_item.get("image", 0),
+                    mm_max_tokens_per_item.get("video", 0),
+                    mm_max_tokens_per_item.get("audio", 0),
+                )
+                num_tokens = min(num_tokens + max_mm_tokens, self.model_config.max_model_len)
+        return num_tokens
+
     def _check_master(self):
         return self.is_master
 
