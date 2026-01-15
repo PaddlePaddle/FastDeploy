@@ -85,6 +85,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         used_in_ep_low_latency: bool = False,
         estimate_total_token_nums: int = -1,
         dequant_scale: paddle.Tensor = None,
+        max_tokens_per_expert: int = -1,
     ):
         """
         Paddle Cutlass compute Fused MoE.
@@ -120,6 +121,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 used_in_ep_low_latency,
                 estimate_total_token_nums,
                 getattr(layer.moe_quant_config, "hadamard_block_size", 128),
+                max_tokens_per_expert,
                 layer.activation,
             )
 
@@ -260,6 +262,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             True,
             estimate_total_token_nums,
             dequant_scale,
+            layer.fd_config.model_config.num_max_dispatch_tokens_per_rank * layer.fd_config.parallel_config.data_parallel_size
         )
 
         # 4. EP combine
