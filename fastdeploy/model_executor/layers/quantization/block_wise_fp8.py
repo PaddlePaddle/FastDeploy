@@ -90,7 +90,7 @@ class BlockWiseFP8Config(QuantConfigBase):
             return BlockWiseFP8LinearMethod(self)
 
 
-def deep_gemm_fp8_fp8_bf16_nt_infer_meta(
+def deep_gemm_fp8_gemm_nt_infer_meta(
     x_meta: "paddle.static.MetaTensor",
     x_scale_tensor_meta: "paddle.static.MetaTensor",
     layer_weight_meta: "paddle.static.MetaTensor",
@@ -102,28 +102,27 @@ def deep_gemm_fp8_fp8_bf16_nt_infer_meta(
 
 
 @register_custom_python_op(
-    name="deep_gemm_fp8_fp8_bf16_nt",
-    infer_meta=deep_gemm_fp8_fp8_bf16_nt_infer_meta,
+    name="deep_gemm_fp8_gemm_nt",
+    infer_meta=deep_gemm_fp8_gemm_nt_infer_meta,
     input_names=["x", "x_scale_tensor", "layer_weight", "layer_weight_scale_inv", "linear_out_empty"],
     output_names=["linear_out"],
     inplace_map={},
 )
-def deep_gemm_fp8_fp8_bf16_nt(
+def deep_gemm_fp8_gemm_nt(
     x: paddle.Tensor,
     x_scale_tensor: paddle.Tensor,
     layer_weight: paddle.Tensor,
     layer_weight_scale_inv: paddle.Tensor,
     linear_out: paddle.Tensor,
+    disable_ue8m0_cast: bool,
     layer_output_size: int,
 ):
-    from fastdeploy.model_executor.ops.gpu import deep_gemm
-
-    deep_gemm.gemm_fp8_fp8_bf16_nt(
+    deep_gemm.fp8_gemm_nt(
         (x, x_scale_tensor),
         (layer_weight, layer_weight_scale_inv),
         linear_out,
+        disable_ue8m0_cast=disable_ue8m0_cast,
     )
-
     return linear_out
 
 
@@ -288,11 +287,14 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         )
         x_scale_tensor = x_scale_tensor[: x.shape[0], ...]
 
-        deep_gemm.fp8_gemm_nt(
-            (x, x_scale_tensor),
-            (layer.weight, layer.weight_scale_inv),
+        deep_gemm_fp8_gemm_nt(
+            x,
+            x_scale_tensor,
+            layer.weight,
+            layer.weight_scale_inv,
             linear_out,
             disable_ue8m0_cast=(not self.quant_config.deepgemm_scale_ue8m0),
+            layer_output_size=layer.output_size,
         )
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
