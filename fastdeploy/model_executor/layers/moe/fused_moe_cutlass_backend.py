@@ -86,6 +86,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         used_in_ep_low_latency: bool = False,
         estimate_total_token_nums: int = -1,
         dequant_scale: paddle.Tensor = None,
+        max_tokens_per_expert: paddle.Tensor = None,
     ):
         """
         Paddle Cutlass compute Fused MoE.
@@ -106,7 +107,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 used_in_ep_low_latency,
             )
         else:
-
             ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
@@ -118,6 +118,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
                 (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
                 expert_idx_per_token,
+                max_tokens_per_expert,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
                 estimate_total_token_nums,
@@ -331,6 +332,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     topk_idx,
                     expert_idx_per_token,
                     dequant_scale,
+                    max_tokens_per_expert,
                 ) = moe_expert_dispatch(
                     x,
                     gate_out,
@@ -372,6 +374,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     topk_idx,
                     expert_idx_per_token,
                     dequant_scale,
+                    max_tokens_per_expert,
                 ) = moe_expert_dispatch(
                     x,
                     gate_out,
@@ -397,7 +400,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             expert_idx_per_token = expert_idx_per_token.cast("int64")
 
         ffn_out = self.compute_ffn(
-            layer, permute_input, token_nums_per_expert, expert_idx_per_token, False, -1, dequant_scale
+            layer,
+            permute_input,
+            token_nums_per_expert,
+            expert_idx_per_token,
+            False,
+            -1,
+            dequant_scale,
+            max_tokens_per_expert,
         )
 
         # reduce 中会做 topk 个 weight 的 norm 和 routed_scaling_factor
