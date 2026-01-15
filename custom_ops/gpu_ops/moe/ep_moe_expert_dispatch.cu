@@ -38,8 +38,18 @@
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
+    case 5: {                                                                  \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 5;                               \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
     case 6: {                                                                  \
       constexpr size_t NUM_EXPERTS_PER_RANK = 6;                               \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
+    case 7: {                                                                  \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 7;                               \
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
@@ -53,8 +63,18 @@
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
+    case 10: {                                                                 \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 10;                              \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
     case 16: {                                                                 \
       constexpr size_t NUM_EXPERTS_PER_RANK = 16;                              \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
+    case 17: {                                                                 \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 17;                              \
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
@@ -792,7 +812,7 @@ PD_BUILD_STATIC_OP(ep_moe_expert_dispatch)
     .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertDispatchInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertDispatchInferDtype));
 
-template <typename T, int NUM_EXPERTS_PER_RANK = 8>
+template <typename T>
 __global__ void permute_x_fp8_kernel(
     const T* src_x,
     const float* scale,
@@ -800,6 +820,7 @@ __global__ void permute_x_fp8_kernel(
     const float* topk_weights,
     const int* token_nums_per_expert,
     const int* token_nums_per_expert_padded,
+    const int num_experts_per_rank,
     const int moe_topk,
     const int num_rows,
     const int token_nums_this_rank,
@@ -819,11 +840,13 @@ __global__ void permute_x_fp8_kernel(
   constexpr int vec_size = sizeof(int4) / sizeof(T);
   constexpr int scale_vec_size = sizeof(int4) / sizeof(float);
   __shared__ int write_idx;  // cumsum start idx
-  __shared__ int token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK];
+
+  // num_experts_per_rank size array.
+  extern __shared__ int token_nums_per_expert_cum[];
   if (tid == 0) {
     int sum_now = 0;
     int sum_now_padded = 0;
-    for (int i = 0; i < NUM_EXPERTS_PER_RANK; i++) {
+    for (int i = 0; i < num_experts_per_rank; i++) {
       sum_now += token_nums_per_expert[i];
       sum_now_padded += token_nums_per_expert_padded[i];
       token_nums_per_expert_cum[i] = sum_now_padded;
@@ -838,14 +861,14 @@ __global__ void permute_x_fp8_kernel(
   const int hidden_size_scale = hidden_size / 128;
   const int hidden_size_scale_int4 = hidden_size_scale / scale_vec_size;
   const int token_nums_feed_to_ffn =
-      token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK - 1];
+      token_nums_per_expert_cum[num_experts_per_rank - 1];
   // prmt
   for (int64_t s_token_idx = src_token_idx;
        s_token_idx < token_nums_feed_to_ffn;
        s_token_idx += gridDim.x) {
     // the m_indices[s_token_idx] must be a value `i` in [0,
-    // NUM_EXPERTS_PER_RANK) here we parallel wo find the `i` we want.
-    for (int i = threadIdx.x; i < NUM_EXPERTS_PER_RANK; i += blockDim.x) {
+    // num_experts_per_rank) here we parallel wo find the `i` we want.
+    for (int i = threadIdx.x; i < num_experts_per_rank; i += blockDim.x) {
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
       if (s_token_idx >= start_idx && s_token_idx < end_idx) {
@@ -878,7 +901,7 @@ __global__ void permute_x_fp8_kernel(
         dst_weights[dst_token_idx] =
             topk_weights[s_token_idx * moe_topk + expert_idx];
         // m_indices[dst_token_idx] = expert_now; // not need?
-        dst_indices[s_token_idx * NUM_EXPERTS_PER_RANK + expert_now] =
+        dst_indices[s_token_idx * num_experts_per_rank + expert_now] =
             expert_now;
         // cp x
         for (int64_t v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
@@ -927,17 +950,15 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
   auto place = input.place();
   // const int gridx = min(132 * 8, num_rows);
   const int gridx = 132 * 8;
-  DISPATCH_NUM_EXPERTS_PER_RANK(
-      num_experts_per_rank,
-      NUM_EXPERTS_PER_RANK,
-      permute_x_fp8_kernel<phi::dtype::float8_e4m3fn, NUM_EXPERTS_PER_RANK>
-      <<<gridx, 512, 0, stream>>>(
+  permute_x_fp8_kernel<phi::dtype::float8_e4m3fn>
+      <<<gridx, 512, num_experts_per_rank * sizeof(int32_t), stream>>>(
           input.data<phi::dtype::float8_e4m3fn>(),
           scale.data<float>(),
           topk_ids.data<int64_t>(),
           topk_weights.data<float>(),
           token_nums_per_expert.data<int>(),
           token_nums_per_expert_padded.data<int>(),
+          num_experts_per_rank,
           moe_topk,
           num_rows,
           token_nums_this_rank,
@@ -951,7 +972,7 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
           cumsum_idx_gpu->data<int>(),
           token_nums_per_expert_cumsum->data<int64_t>(),
           token_nums_per_expert_padded_cumsum->data<int64_t>(),
-          m_indices->data<int>());)
+          m_indices->data<int>());
 }
 
 std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
@@ -1048,6 +1069,64 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
           m_indices};
 }
 
+std::vector<std::vector<int64_t>> EPMoeExpertDispatchFP8InferShape(
+    const std::vector<int64_t>& input_shape,
+    const std::vector<int64_t>& scale_shape,
+    const std::vector<int64_t>& topk_ids_shape,
+    const std::vector<int64_t>& topk_weights_shape,
+    const std::vector<int64_t>& num_experts_per_rank_tensor_shape,
+    const std::vector<int64_t>& num_experts_per_rank_padded_tensor_shape,
+    const bool use_in_ep,
+    const int token_nums_this_rank_padded) {
+  int token_rows = 0;
+  const int moe_topk = topk_ids_shape[1];
+
+  if (input_shape.size() == 3) {
+    token_rows = input_shape[0] * input_shape[1];
+  } else {
+    token_rows = input_shape[0];
+  }
+
+  const int hidden_size = input_shape.back();
+  const int num_experts_per_rank = num_experts_per_rank_tensor_shape[0];
+
+  int32_t token_nums_feed_to_ffn =
+      use_in_ep ? token_nums_this_rank_padded
+                : token_rows * moe_topk + num_experts_per_rank * (128 - 1);
+
+  return {
+      {token_nums_feed_to_ffn, hidden_size},
+      {token_nums_feed_to_ffn, hidden_size / 128},
+      {num_experts_per_rank, token_rows},
+      {num_experts_per_rank},
+      {num_experts_per_rank},
+      {token_nums_feed_to_ffn},
+      {token_rows, num_experts_per_rank},
+      {num_experts_per_rank},
+      {token_nums_feed_to_ffn},
+  };
+}
+
+std::vector<paddle::DataType> EPMoeExpertDispatchFP8InferDtype(
+    const paddle::DataType& input_dtype,
+    const paddle::DataType& scale_dtype,
+    const paddle::DataType& topk_ids_dtype,
+    const paddle::DataType& topk_weights_dtype,
+    const paddle::DataType& num_experts_per_rank_tensor_dtype,
+    const paddle::DataType& num_experts_per_rank_padded_tensor_dtype,
+    const bool use_in_ep,
+    const int token_nums_this_rank_padded) {
+  return {input_dtype,
+          paddle::DataType::FLOAT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT64,
+          paddle::DataType::INT64,
+          paddle::DataType::FLOAT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT32,
+          paddle::DataType::INT32};
+}
+
 PD_BUILD_STATIC_OP(ep_moe_expert_dispatch_fp8)
     .Inputs({"input",
              "scale",
@@ -1065,4 +1144,44 @@ PD_BUILD_STATIC_OP(ep_moe_expert_dispatch_fp8)
               "cumsum_idx_gpu",
               "m_indices"})
     .Attrs({"use_in_ep:bool", "token_nums_this_rank_padded:int"})
-    .SetKernelFn(PD_KERNEL(EPMoeExpertDispatchFP8));
+    .SetKernelFn(PD_KERNEL(EPMoeExpertDispatchFP8))
+    .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertDispatchFP8InferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertDispatchFP8InferDtype));
+
+std::vector<paddle::DataType> EPMoeExpertCombineInferDtype(
+    const paddle::DataType& ffn_out_dtype,
+    const paddle::DataType& expert_scales_float_dtype,
+    const paddle::DataType& permute_indices_per_token_dtype,
+    const paddle::DataType& top_k_indices_dtype,
+    const paddle::optional<paddle::DataType>& down_proj_bias_dtype,
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
+  return {ffn_out_dtype};
+}
+
+std::vector<std::vector<int64_t>> EPMoeExpertCombineInferShape(
+    const std::vector<int64_t>& ffn_out_shape,
+    const std::vector<int64_t>& expert_scales_float_shape,  // dst_weights
+    const std::vector<int64_t>&
+        permute_indices_per_token_shape,  // permute_indices_per_token
+    const std::vector<int64_t>& top_k_indices_shape,  // dst_indices
+    const paddle::optional<std::vector<int64_t>>& down_proj_bias_shape,
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
+  const int num_rows = top_k_indices_shape[0];
+  const int hidden_size = ffn_out_shape[1];
+
+  return {{num_rows, hidden_size}};
+}
+
+PD_BUILD_STATIC_OP(ep_moe_expert_combine)
+    .Inputs({"ffn_out",
+             "expert_scales_float",
+             "permute_indices_per_token",
+             "top_k_indices",
+             paddle::Optional("down_proj_bias")})
+    .Outputs({"output"})
+    .Attrs({"norm_topk_prob:bool", "routed_scaling_factor:float"})
+    .SetKernelFn(PD_KERNEL(EPMoeExpertCombine))
+    .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertCombineInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertCombineInferDtype));

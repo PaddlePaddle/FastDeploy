@@ -34,6 +34,7 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::optional<paddle::Tensor>& down_proj_scale,
                   const paddle::optional<paddle::Tensor>& down_proj_in_scale,
                   const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+                  const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
                   const std::string& quant_method,
                   paddle::Tensor ffn_out,
                   bool used_in_ep_low_latency,
@@ -90,6 +91,12 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
   typedef PDTraits<paddle::DataType::FLOAT8_E4M3FN> traits_fp8;
   typedef typename traits_fp8::DataType DataType_fp8;
   typedef typename traits_fp8::data_t data_t_fp8;
+
+  const int64_t* max_tokens_ptr = nullptr;
+  if (max_tokens_per_expert && quant_method == "w4afp8" &&
+      !used_in_ep_low_latency) {
+    max_tokens_ptr = max_tokens_per_expert.get().data<int64_t>();
+  }
 
   int num_experts_ = num_experts;
   int num_max_tokens_per_expert = 256;
@@ -220,7 +227,8 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         inter_size,
         hidden_size,
         weight_scale_group_size,
-        stream);
+        stream,
+        max_tokens_ptr);
   } else {
     typename cutlass::WintQuantTraits<
         DataType_,
@@ -432,7 +440,8 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         hidden_size,
         inter_size / 2,
         weight_scale_group_size,
-        stream);
+        stream,
+        max_tokens_ptr);
   } else {
     typename cutlass::WintQuantTraits<
         DataType_,
@@ -464,6 +473,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -489,6 +499,7 @@ paddle::Tensor MoeExpertFFNFunc(
                                                down_proj_scale,
                                                down_proj_in_scale,
                                                expert_idx_per_token,
+                                               max_tokens_per_expert,
                                                quant_method,
                                                ffn_out,
                                                used_in_ep_low_latency,
@@ -507,6 +518,7 @@ paddle::Tensor MoeExpertFFNFunc(
                                               down_proj_scale,
                                               down_proj_in_scale,
                                               expert_idx_per_token,
+                                              max_tokens_per_expert,
                                               quant_method,
                                               ffn_out,
                                               used_in_ep_low_latency,
@@ -531,6 +543,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -546,6 +559,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
                            down_proj_scale,
                            down_proj_in_scale,
                            expert_idx_per_token,
+                           max_tokens_per_expert,
                            quant_method,
                            used_in_ep_low_latency,
                            estimate_total_token_nums,
@@ -564,6 +578,7 @@ std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(
     const paddle::optional<std::vector<int64_t>>& down_proj_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_in_scale_shape,
     const paddle::optional<std::vector<int64_t>>& expert_idx_per_token_shape,
+    const paddle::optional<std::vector<int64_t>>& max_tokens_per_expert_shape,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -582,6 +597,8 @@ std::vector<paddle::DataType> MoeExpertFFNInferDtype(
     const paddle::optional<paddle::DataType>& up_gate_proj_scale_dtype,
     const paddle::optional<paddle::DataType>& down_proj_scale_dtype,
     const paddle::optional<paddle::DataType>& down_proj_in_scale_dtype,
+    const paddle::optional<paddle::DataType>& expert_idx_per_token_dtype,
+    const paddle::optional<paddle::DataType>& max_tokens_per_expert_dtype,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -660,7 +677,8 @@ PD_BUILD_STATIC_OP(moe_expert_ffn)
              paddle::Optional("up_gate_proj_scale"),
              paddle::Optional("down_proj_scale"),
              paddle::Optional("down_proj_in_scale"),
-             paddle::Optional("expert_idx_per_token")})
+             paddle::Optional("expert_idx_per_token"),
+             paddle::Optional("max_tokens_per_expert")})
     .Outputs({"output_tensor"})
     .Attrs({"quant_method:std::string",
             "used_in_ep_low_latency:bool",

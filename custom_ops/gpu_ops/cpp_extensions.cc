@@ -49,6 +49,21 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+void FlashAttentionMask(const paddle::Tensor& q_input,
+                        const paddle::Tensor& k_input,
+                        const paddle::Tensor& v_input,
+                        const paddle::Tensor& cu_seq_q,
+                        const paddle::Tensor& cu_seq_k,
+                        const paddle::Tensor& seq_len_encoder,
+                        const paddle::Tensor& attn_out,
+                        const paddle::optional<paddle::Tensor>& mask,
+                        const int head_num,
+                        const int kv_head_num,
+                        const int head_dim,
+                        const int max_seq_len,
+                        const int q_token_num,
+                        const int k_token_num);
+
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -315,6 +330,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -499,8 +515,8 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     paddle::Tensor& image_index,
     const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
-                                            int64_t num_experts);
+std::vector<paddle::Tensor> count_tokens_per_expert_func(
+    const paddle::Tensor& topk_ids, int64_t num_experts);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -786,6 +802,7 @@ void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& actual_candidate_len,
                      const paddle::Tensor& actual_draft_token_nums,
                      const paddle::Tensor& topp,
+                     const paddle::Tensor& reasoning_status,
                      int max_seq_len,
                      int verify_window,
                      bool enable_topp,
@@ -819,6 +836,7 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& not_need_stop,
                                       const paddle::Tensor& seq_lens_decoder,
                                       const paddle::Tensor& prompt_lens,
+                                      const paddle::Tensor& preempted_idx,
                                       int64_t rank_id,
                                       bool save_each_rank,
                                       bool skip_prefill);
@@ -887,6 +905,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -1001,6 +1021,7 @@ std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor& probs,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
@@ -1087,6 +1108,19 @@ std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
 
 std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
+void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
+                                   const paddle::Tensor& pre_ids,
+                                   const paddle::Tensor& stop_flags,
+                                   const paddle::Tensor& seq_lens_this_time,
+                                   const paddle::Tensor& seq_lens_encoder,
+                                   const paddle::Tensor& step_idx,
+                                   const paddle::Tensor& allowed_tokens,
+                                   const paddle::Tensor& reasoning_status,
+                                   const paddle::Tensor& output_padding_offset,
+                                   const paddle::Tensor& output_cum_offsets,
+                                   int64_t think_end_id,
+                                   int64_t line_break_id);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1129,6 +1163,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    */
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -1158,6 +1193,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("append_attention_with_output",
         &AppendAttentionWithOutput,
         "append attention with output function");
+
+#ifdef ENABLE_FLASH_MASK_ATTENTION
+  m.def("flash_mask_attention", &FlashAttentionMask, "flash_mask_attention");
+#endif
+
   /**
    * gqa_rope_write_cache.cu
    * gqa_rope_write_cache
@@ -1227,18 +1267,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("norm_topk_prob"),
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
-
-  m.def("per_token_quant",
-        &PerTokenQuant,
-        py::arg("input"),
-        py::arg("block_size"),
-        "per token per block quant");
-
-  m.def("per_token_quant_padding",
-        &PerTokenQuantPadding,
-        py::arg("input"),
-        py::arg("block_size"),
-        "per token per block quant and padding transpose scale");
 
   m.def("masked_per_token_quant",
         &MaskedPerTokenQuant,
@@ -1686,4 +1714,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "fused_neox_rope_embedding function");
 
   m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
+
+  m.def("reasoning_phase_token_constraint",
+        &ReasoningPhaseTokenConstraint,
+        "reasoning_phase_token_constraint function");
 }

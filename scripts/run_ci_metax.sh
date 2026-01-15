@@ -5,6 +5,7 @@ tests_path="$DIR/../tests/"
 export PYTEST_INI="$DIR/../tests/cov_pytest.ini"
 run_path=$( realpath "$DIR/../")
 
+
 export COVERAGE_FILE=${COVERAGE_FILE:-$DIR/../coveragedata/.coverage}
 export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 
@@ -73,7 +74,6 @@ is_excluded() {
     done
     return 1
 }
-
 # FIND_PATTERN="test_*.py"
 # declare -a ALL_PATHS=()
 
@@ -86,6 +86,7 @@ declare -a FILTERED_PATHS=()
 
 METAX_CI_CASELIST=(
     "tests/metax_ci/test_fused_moe.py"
+    "tests/metax_ci/test_cache_kv_with_rope.py"
     "tests/operators/test_limit_thinking_content_length.py"
     "tests/operators/test_update_inputs_v1.py"
     "tests/operators/test_set_value_by_flags_and_idx.py"
@@ -232,6 +233,8 @@ while IFS=, read -r file exit_code cost_time; do
         FAIL_COUNT=$((FAIL_COUNT + 1))
         FAIL_FILES+=$(basename "$file")
         echo "$file" >> ${FAIL_FILE_LIST}
+        echo -e "\n\n+++++++++++++++++++++++++ [ $(basename "$file") ] Fail Info +++++++++++++++++++++++++\n\n"
+        cat ${LOG_SUBDIR}/$(basename "$file").log
     fi
 done < "$LOG_RESULT_TMP"
 

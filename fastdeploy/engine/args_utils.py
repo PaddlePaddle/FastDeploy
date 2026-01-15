@@ -230,6 +230,14 @@ class EngineArgs:
     """
     Port for cache queue.
     """
+    kvcache_storage_backend: str = None
+    """
+    The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
+    """
+    write_policy: str = "write_through"
+    """
+    The policy of write cache to storage.
+    """
 
     # System configuration parameters
     use_warmup: int = 0
@@ -509,6 +517,11 @@ class EngineArgs:
     Whether to skip port availability check. Default is False (not skip).
     """
 
+    enable_entropy: bool = False
+    """
+    Flag to enable entropy output. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -518,7 +531,12 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
+        if (
+            not current_platform.is_cuda()
+            and not current_platform.is_xpu()
+            and not current_platform.is_intel_hpu()
+            and not current_platform.is_maca()
+        ):
             self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -551,6 +569,15 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
+            self.enable_prefix_caching = False
+
+        if self.kvcache_storage_backend is not None:
+            if not self.enable_prefix_caching:
+                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         self.post_init_all_ports()
 
@@ -577,7 +604,12 @@ class EngineArgs:
                     console_logger.info(f"Using `{name}`: {ports}")
 
             if not self.skip_port_check:
-                for port in ports:
+                cur_dp_ports = ports[
+                    num_cur_dp_ports
+                    * self.local_data_parallel_id : num_cur_dp_ports
+                    * (self.local_data_parallel_id + 1)
+                ]
+                for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             console_logger.debug(f"post init {name}: {ports}")
@@ -854,6 +886,12 @@ class EngineArgs:
             default=EngineArgs.logits_processors,
             help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
+        model_group.add_argument(
+            "--enable-entropy",
+            action="store_true",
+            default=EngineArgs.enable_entropy,
+            help="Enable output of token-level entropy.",
+        )
 
         # Parallel processing parameters group
         parallel_group = parser.add_argument_group("Parallel Configuration")
@@ -1005,6 +1043,22 @@ class EngineArgs:
             type=int,
             default=EngineArgs.static_decode_blocks,
             help="Static decoding blocks num.",
+        )
+
+        cache_group.add_argument(
+            "--kvcache-storage-backend",
+            type=nullable_str,
+            choices=["mooncake"],
+            default=EngineArgs.kvcache_storage_backend,
+            help="The storage backend for kvcache storage. Leave empty to disable.",
+        )
+
+        cache_group.add_argument(
+            "--write-policy",
+            type=str,
+            choices=["write_through"],
+            default=EngineArgs.write_policy,
+            help="KVCache write policy",
         )
 
         # Cluster system parameters group
@@ -1323,7 +1377,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if current_platform.is_cuda() and self.splitwise_role == "mixed":
+            if (current_platform.is_cuda() or current_platform.is_maca()) and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1333,7 +1387,10 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if current_platform.is_maca():
+                    self.max_num_batched_tokens = self.max_model_len
+                else:
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

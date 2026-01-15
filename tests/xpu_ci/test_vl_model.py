@@ -47,8 +47,6 @@ def test_vl_model(xpu_env):
         str(port_num + 1),
         "--metrics-port",
         str(port_num + 2),
-        "--cache-queue-port",
-        str(port_num + 47873),
         "--tensor-parallel-size",
         "4",
         "--max-model-len",
@@ -94,7 +92,6 @@ def test_vl_model(xpu_env):
             ],
             temperature=1,
             top_p=0,
-            max_tokens=70,
             stream=False,
         )
 

@@ -1,0 +1,182 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+static inline __device__ int v_reduce(int32x16_t &v0, int32x16_t &v1) {
+  int res;
+  v1 = vvadd_int32x16(v0, v1);
+  auto v = vsrlp_int32x16(256, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(128, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(64, v1);
+  v1 = vvadd_int32x16(v, v1);
+  v = vsrlp_int32x16(32, v1);
+  v1 = vvadd_int32x16(v, v1);
+  res = vextract_int32x16(v1, 1);
+  return res;
+}
+
+static inline __device__ int ClusterReduce(
+    const _shared_ptr_ int *stop_flag_now_int_sm, int len) {
+  int sum = 0;
+  if (core_id() == 0) {
+    int32x16_t vec_x_0;
+    int32x16_t vec_x_1;
+    int32x16_t vec_y_0 = vzero<int>();
+    int32x16_t vec_y_1 = vzero<int>();
+    for (int i = 0; i < len; i += 32) {
+      vload2_sm(stop_flag_now_int_sm + i, vec_x_0, vec_x_1);
+      vec_y_0 = vvadd_int32x16(vec_y_0, vec_x_0);
+      vec_y_1 = vvadd_int32x16(vec_y_1, vec_x_1);
+    }
+    sum = v_reduce(vec_y_0, vec_y_1);
+  }
+  return sum;
+}
+
+__global__ void speculate_schedule_cache(const int64_t *draft_tokens,
+                                         int *block_tables,
+                                         bool *stop_flags,
+                                         const int64_t *prompt_lens,
+                                         int *seq_lens_this_time,
+                                         int *seq_lens_encoder,
+                                         int *seq_lens_decoder,
+                                         int *step_seq_lens_decoder,
+                                         int64_t *step_draft_tokens,
+                                         int *step_seq_lens_this_time,
+                                         int *accept_num,
+                                         int64_t *accept_tokens,
+                                         bool *is_block_step,
+                                         bool *not_need_stop,
+                                         const int64_t *stop_nums,
+                                         const int real_bsz,
+                                         const int max_bsz,
+                                         const int max_next_step_tokens,
+                                         const int draft_tokens_len,
+                                         const int accept_tokens_len,
+                                         const int block_size,
+                                         const int block_num_per_seq,
+                                         const bool prefill_one_step_stop) {
+  const int cid = core_id();
+  const int tid = core_id() * cluster_num() + cluster_id();
+  const int nthreads = core_num() * cluster_num();
+
+  __shared__ int stop_flag_now_int_sm[64];
+  int value_zero = 0;
+  bool value_true = true;
+  bool value_false = false;
+
+  int bid_start_core, bid_end_core;
+  partition(tid, nthreads, max_bsz, 1, &bid_start_core, &bid_end_core);
+
+  int64_t draft_tokens_lm[draft_tokens_len];
+  int64_t step_draft_tokens_lm[draft_tokens_len];
+  int block_table_lm[block_num_per_seq];
+  int64_t accept_tokens_lm[accept_tokens_len];
+
+  int *seq_lens_encoder_lm;
+  int seq_lens_decoder_lm;
+  int64_t prompt_len_lm;
+  int seq_lens_this_time_lm;
+  bool stop_flag_lm;
+
+  stop_flag_now_int_sm[cid] = 0;
+  for (int bid = bid_start_core; bid < bid_end_core; bid++) {
+    int stop_flag_now_int = 0;
+    GM2LM_ASYNC(draft_tokens + bid * draft_tokens_len,
+                draft_tokens_lm,
+                draft_tokens_len * sizeof(int64_t));
+    GM2LM_ASYNC(step_draft_tokens + bid * draft_tokens_len,
+                step_draft_tokens_lm,
+                draft_tokens_len * sizeof(int64_t));
+    GM2LM_ASYNC(block_tables + bid * block_num_per_seq,
+                block_table_lm,
+                block_num_per_seq * sizeof(int));
+    GM2LM_ASYNC(accept_tokens + bid * accept_tokens_len,
+                accept_tokens_lm,
+                accept_tokens_len * sizeof(int64_t));
+    GM2LM_ASYNC(seq_lens_decoder + bid, &seq_lens_decoder_lm, sizeof(int));
+    GM2LM_ASYNC(prompt_lens + bid, &prompt_len_lm, sizeof(int64_t));
+    GM2LM_ASYNC(seq_lens_this_time + bid, &seq_lens_this_time_lm, sizeof(int));
+    GM2LM_ASYNC(stop_flags + bid, &stop_flag_lm, sizeof(int));
+    mfence();
+
+    if (!stop_flag_lm) {
+      if (seq_lens_decoder_lm >= prompt_len_lm) {
+        const int max_possible_block_idx =
+            (seq_lens_decoder_lm + max_next_step_tokens) / block_size;
+        if (prefill_one_step_stop) {
+          LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
+          LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_encoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
+          mfence();
+          stop_flag_now_int = 1;
+        } else if (max_possible_block_idx < block_num_per_seq &&
+                   block_table_lm[max_possible_block_idx] == -1) {
+          LM2GM_ASYNC(&value_true, is_block_step + bid, sizeof(bool));
+          LM2GM_ASYNC(&seq_lens_this_time_lm,
+                      step_seq_lens_this_time + bid,
+                      sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+          LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
+          stop_flag_now_int = 1;
+          LM2GM_ASYNC(
+              &seq_lens_decoder_lm, step_seq_lens_decoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+          LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
+          mfence();
+          for (int i = 0; i < accept_tokens_len; i++) {
+            accept_tokens_lm[i] = -1;
+          }
+          for (int i = 0; i < draft_tokens_len; i++) {
+            step_draft_tokens_lm[i] = draft_tokens_lm[i];
+          }
+          LM2GM_ASYNC(accept_tokens_lm,
+                      accept_tokens + bid * accept_tokens_len,
+                      accept_tokens_len * sizeof(int64_t));
+          LM2GM_ASYNC(step_draft_tokens_lm,
+                      step_draft_tokens + bid * draft_tokens_len,
+                      draft_tokens_len * sizeof(int64_t));
+        }
+      } else {
+        // prefill
+        LM2GM_ASYNC(&value_true, stop_flags + bid, sizeof(bool));
+        LM2GM_ASYNC(&value_zero, seq_lens_this_time + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, seq_lens_decoder + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, seq_lens_encoder + bid, sizeof(int));
+        LM2GM_ASYNC(&value_zero, accept_num + bid, sizeof(int));
+        mfence();
+        stop_flag_now_int = 1;
+      }
+    } else {
+      stop_flag_now_int = 1;
+    }
+    stop_flag_now_int_sm[cid] += stop_flag_now_int;
+  }
+  mfence_sm();
+  sync_all();
+  // reduce stop_sum_now
+  if (cid == 0) {
+    int stop_sum = ClusterReduce(stop_flag_now_int_sm, 64);
+    int stop_nums_lm;
+    GM2LM_ASYNC(stop_nums, &stop_nums_lm, sizeof(int));
+    mfence();
+    sync_all();
+    if (stop_sum < stop_nums_lm) {
+      LM2GM_ASYNC(&value_true, not_need_stop, sizeof(bool));
+    } else {
+      LM2GM_ASYNC(&value_false, not_need_stop, sizeof(bool));
+    }
+    mfence();
+  }
+}
+
+}  // namespace plugin
+}  // namespace xpu3

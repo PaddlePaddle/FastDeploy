@@ -500,6 +500,7 @@ class LLMEngine:
         start gpu worker service
 
         """
+        console_logger.debug("Start worker process...")
         log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
@@ -573,9 +574,14 @@ class LLMEngine:
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
             f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
+            f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+
+        # TODO (iluvatar): remove aftet paddle fix launch error
+        if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
+            arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
@@ -591,6 +597,7 @@ class LLMEngine:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
+            "enable_entropy": self.cfg.model_config.enable_entropy,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

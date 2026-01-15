@@ -14,7 +14,8 @@
 import os
 import re
 
-file_dir = "./gpu_ops/w4afp8_gemm/"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_dir = os.path.join(script_dir, "..", "gpu_ops", "w4afp8_gemm") + os.sep
 
 gemm_template_head = """
 #pragma once
@@ -40,7 +41,8 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     const float * input_dequant_scale,
     const int64_t *tokens,
     const int64_t max_tokens,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int64_t *max_tokens_per_expert = nullptr);
 """
 
 gemm_template_cu_head = """
@@ -58,7 +60,8 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
         const float * input_dequant_scale,
         const int64_t *tokens,
         const int64_t max_tokens,
-        cudaStream_t stream) {{
+        cudaStream_t stream,
+        const int64_t *max_tokens_per_expert) {{
 
     constexpr static int M = {M};
     constexpr static int K = {K};
@@ -75,17 +78,51 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     constexpr int kTiles = K / kBlockK;
 
     using Kernel_traits = Kernel_traits<
-        kBlockM, kBlockN, kBlockK, kNWarps, kStages, kTiles,
+        kBlockM, kBlockN, 128, 64, kBlockK, kNWarps, kStages, kTiles,
         M, K, TokenPackSize, kGroupSize, kCluster, cutlass::float_e4m3_t,
         {cutlass_type}>;
     run_gemm<cutlass::float_e4m3_t, {cutlass_type},
         Kernel_traits, M, K, EXPERTS, TokenPackSize, kGroupSize>
-        (weight, input, out, weight_scale, input_dequant_scale, tokens, max_tokens, stream);
+        (weight, input, out, weight_scale, input_dequant_scale, tokens, max_tokens, stream,max_tokens_per_expert);
 }}
 """
 
 # [M, K, Number of experts, token Padding Size, weight K group size]
-gemm_case = [[256, 256, 2, 0, 128], [512, 256, 2, 0, 128]]
+gemm_case = [
+    [256, 256, 2, 0, 128],
+    [512, 256, 2, 0, 128],
+    [256, 5120, 128, 0, 128],
+    [3072, 2560, 64, 0, 128],
+    [2560, 1536, 64, 0, 128],
+    [1536, 2560, 64, 0, 128],
+    [2560, 768, 64, 0, 128],
+    [768, 2048, 128, 0, 128],
+    [2048, 384, 128, 0, 128],
+    [7168, 7168, 6, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 3584, 6, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 7168, 6, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 3584, 6, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 7168, 6, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 3584, 6, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 7168, 6, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 3584, 6, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 7168, 6, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 3584, 6, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 7168, 7, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 3584, 7, 8192, 128],  # num_max_dispatch_tokens_per_rank=128
+    [7168, 7168, 7, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 3584, 7, 10240, 128],  # num_max_dispatch_tokens_per_rank=160
+    [7168, 7168, 7, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 3584, 7, 12288, 128],  # num_max_dispatch_tokens_per_rank=192
+    [7168, 7168, 7, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 3584, 7, 16384, 128],  # num_max_dispatch_tokens_per_rank=256
+    [7168, 7168, 7, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [7168, 3584, 7, 20480, 128],  # num_max_dispatch_tokens_per_rank=320
+    [3072, 1536, 128, 0, 128],
+    [1536, 1536, 128, 0, 128],
+    [1536, 768, 128, 0, 128],
+    [768, 1536, 128, 0, 128],
+]
 
 dtype = ["BF16"]
 

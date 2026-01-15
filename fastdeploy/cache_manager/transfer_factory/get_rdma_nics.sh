@@ -4,9 +4,9 @@ NICNAME_TYPE=xgbe  # 默认检测类型
 type=$1
 
 if [ "$ENABLE_EP_DP" == "1" ]; then
-    gpu_root_port_filename="${Cur_Dir}/gpu_rootport_${DP_RANK}.txt"
+    gpu_root_port_filename="${Cur_Dir}/gpu_rootport_${DP_RANK}_$$.txt"
 else
-    gpu_root_port_filename="${Cur_Dir}/gpu_rootport.txt"
+    gpu_root_port_filename="${Cur_Dir}/gpu_rootport_$$.txt"
 fi
 
 function __NEW_GPU_ROOTPORT_FILE__() {

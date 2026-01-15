@@ -149,7 +149,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         super(Qwen2_5_VLForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
-        self.visual = self._init_vision_model(fd_config.model_config)
+        self.visual = self._init_vision_model(fd_config)
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
@@ -388,7 +388,7 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,
@@ -397,7 +397,7 @@ class Qwen2_5_VLPretrainedModel(PretrainedModel):
 
         vision_fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.vision_config.get("num_heads"),
             num_key_value_heads=config.vision_config.get("num_heads"),
