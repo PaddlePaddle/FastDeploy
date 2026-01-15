@@ -138,7 +138,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     if not download_and_build_xdeepep():
         pytest.fail("xDeepEP下载或编译失败")
 
-
     # 清理并创建日志目录
     for log_dir in ["log_router", "log_prefill", "log_decode"]:
         if os.path.exists(log_dir):

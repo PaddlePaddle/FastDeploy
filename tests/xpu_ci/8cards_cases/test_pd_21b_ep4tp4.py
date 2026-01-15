@@ -135,7 +135,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 
     # 清理资源
     cleanup_resources()
-    
+
     if not download_and_build_xdeepep():
         pytest.fail("xDeepEP下载或编译失败")
 
