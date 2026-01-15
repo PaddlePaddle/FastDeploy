@@ -33,6 +33,7 @@ from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
+    AnyResponseFormat,
     DeltaMessage,
     StructuralTagResponseFormat,
     ToolCall,
@@ -119,7 +120,7 @@ class Request:
         chat_template_kwargs: Optional[dict] = None,
         prompt_tokens: Optional[str] = None,
         add_generation_prompt: Optional[bool] = None,
-        response_format: Optional[dict] = None,
+        response_format: Optional[AnyResponseFormat] = None,
         mm_hashes: Optional[list] = None,
         suffix: Optional[dict] = None,
         top_logprobs: Optional[int] = None,
