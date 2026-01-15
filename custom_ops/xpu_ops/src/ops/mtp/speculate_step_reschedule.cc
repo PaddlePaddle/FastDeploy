@@ -15,7 +15,6 @@
 #include <paddle/phi/backends/xpu/xpu_context.h>
 #include "paddle/phi/core/enforce.h"
 #include "speculate_msg.h"  // NOLINT
-#include "speculate_msg.h"
 #include "xpu/plugin.h"
 
 #ifndef PD_BUILD_STATIC_OP
