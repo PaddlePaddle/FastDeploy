@@ -205,6 +205,13 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                                             : weight_scale_tensor.dims()[3];
     const float* input_dequant_scale =
         up_proj_in_scale ? up_proj_in_scale.get().data<float>() : nullptr;
+    // For token_padding_size == 0 case, compute the maximum number of tokens
+    // per expert to optimize grid.y
+    const int max_tokens_per_expert_for_opt =
+        used_in_ep_low_latency
+            ? -1  // No need for this optimization in padding mode
+            : static_cast<int>((permute_input.dims()[0] + num_experts - 1) /
+                               num_experts);
     DisPatchW4AFp8GemmWrapper(
         reinterpret_cast<const DataType_fp8*>(permute_input.data<data_t_fp8>()),
         reinterpret_cast<const DataType_fp8*>(
@@ -220,7 +227,8 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         inter_size,
         hidden_size,
         weight_scale_group_size,
-        stream);
+        stream,
+        max_tokens_per_expert_for_opt);
   } else {
     typename cutlass::WintQuantTraits<
         DataType_,
@@ -418,6 +426,13 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                                             ? inter_size / 2
                                             : weight_scale_tensor.dims()[3];
 
+    // For token_padding_size == 0 case, compute the maximum number of tokens
+    // per expert to optimize grid.y
+    const int max_tokens_per_expert_for_opt_down =
+        used_in_ep_low_latency
+            ? -1  // No need for this optimization in padding mode
+            : static_cast<int>((act_out_tensor.dims()[0] + num_experts - 1) /
+                               num_experts);
     DisPatchW4AFp8GemmWrapper(
         reinterpret_cast<const DataType_fp8*>(fp8_act_out->ptr()),
         reinterpret_cast<const DataType_fp8*>(down_proj_weight.data<int8_t>()),
@@ -432,7 +447,8 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         hidden_size,
         inter_size / 2,
         weight_scale_group_size,
-        stream);
+        stream,
+        max_tokens_per_expert_for_opt_down);
   } else {
     typename cutlass::WintQuantTraits<
         DataType_,

@@ -317,7 +317,8 @@ void run_gemm(const InputType *A,
               const float *input_dequant_scale,
               const int64_t *tokens,
               const int max_tokens,
-              cudaStream_t stream) {
+              cudaStream_t stream,
+              const int max_tokens_per_expert = -1) {
   using ElementOutput = typename Kernel_traits::ElementOutput;
   using Element = typename Kernel_traits::Element;
   using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
@@ -325,8 +326,21 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  const int N_nums =
-      (max_tokens + Kernel_traits::kBlockN1 - 1) / Kernel_traits::kBlockN1;
+  // Optimization: For token_padding_size == 0 cases, use max_tokens_per_expert
+  // to calculate grid.y to avoid launching many idle blocks (previously
+  // max_tokens caused grid.y too large)
+  int effective_tokens;
+  if constexpr (TokenPackSize == 0) {
+    // If valid max_tokens_per_expert is provided, use it; otherwise fallback to
+    // estimation
+    effective_tokens = (max_tokens_per_expert > 0)
+                           ? max_tokens_per_expert
+                           : (max_tokens + Experts - 1) / Experts;
+  } else {
+    effective_tokens = max_tokens;
+  }
+  const int N_nums = (effective_tokens + Kernel_traits::kBlockN1 - 1) /
+                     Kernel_traits::kBlockN1;
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
   static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
