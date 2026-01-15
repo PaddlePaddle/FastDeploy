@@ -1567,6 +1567,9 @@ class RoutingReplayConfig:
         # RDMA routing store
         self.rdma_store_server: str = ""
 
+        # Only save last turn
+        self.only_last_turn: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1735,6 +1738,10 @@ class FDConfig:
         """
         calculate some parameters
         """
+        #  Unified field model config
+        if self.model_config.architectures[0] == "Glm4MoeForCausalLM":
+            # The first moe layer id of GLM4.5 model
+            self.model_config.moe_layer_start_index = self.model_config.first_k_dense_replace
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
