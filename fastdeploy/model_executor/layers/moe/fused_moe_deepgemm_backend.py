@@ -17,15 +17,11 @@
 from typing import Callable
 
 import paddle
-
-paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-
-import deep_gemm
 from paddle import nn
-from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.utils import register_custom_python_op
@@ -33,6 +29,19 @@ from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
+
+paddle_compat_scope = {"deep_gemm"}
+try:
+    if envs.FD_USE_PFCC_DEEP_EP:
+        paddle_compat_scope.add("deep_ep")
+        paddle.compat.enable_torch_proxy(scope=paddle_compat_scope)  # Enable torch proxy before importing deep_ep
+        import deep_ep
+    else:
+        paddle.compat.enable_torch_proxy(scope=paddle_compat_scope)
+        from paddle.distributed.communication import deep_ep
+except:
+    logger.warning("import deep_ep Failed!")
+import deep_gemm
 
 
 def m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom_python_op_infermeta(
@@ -363,8 +372,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
 
-        # tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
-        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
