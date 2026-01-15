@@ -363,6 +363,24 @@ from fastdeploy.model_executor.models.qwen2 import Qwen2Attention, Qwen2MLP
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
 
 
+def process_scales_alignment_after_loading(layer, alignment=0x80) -> None:
+    aligned_attrs = ["down_proj_in_scale"]
+    for attr in aligned_attrs:
+        if hasattr(layer, attr):
+            value = getattr(layer, attr)
+            if value.dim() != 2 or value.shape[1] != 1:
+                raise ValueError(f"{attr} must be [num_experts, 1], but got {value.shape}")
+
+            dtype_size = value.element_size()
+            elements_per_slot = alignment // dtype_size
+            # special 3D shape [..., 1, align_with_padding] as a mark for HPU alignment
+            padded_tensor = paddle.zeros(shape=[value.shape[0], 1, elements_per_slot], dtype=value.dtype)
+            padded_tensor[:, 0, 0] = value[:, 0]
+
+            delattr(layer, attr)
+            setattr(layer, attr, padded_tensor)
+
+
 def convert_model(model, measurement_mode=False, init_done=False):
     """ """
     if measurement_mode:
@@ -391,6 +409,7 @@ def convert_model(model, measurement_mode=False, init_done=False):
                 module.forward = types.MethodType(fused_attention_forward, module)
             if isinstance(module, FusedMoE):
                 module.measurement_mode = measurement_mode
+                process_scales_alignment_after_loading(module)
 
     return model
 
@@ -1544,6 +1563,9 @@ class HPUModelRunner(ModelRunnerBase):
             We plan to replace it with 'ModelForwardBatch'.
             intermediate_tensors:
         """
+        if (self.parallel_config.use_ep) and (not self.not_need_stop()):
+            time.sleep(0.001)
+            return None
         # # 1. Prepare inputs of model and decoder.
         start_time = time.time()
         self._prepare_inputs()

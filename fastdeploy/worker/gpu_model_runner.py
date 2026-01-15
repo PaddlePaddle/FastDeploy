@@ -652,6 +652,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 self.share_inputs["req_ids"][idx] = str(request.request_id)
                 # guided decoding
                 if (
@@ -744,9 +745,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -1391,6 +1394,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -2764,6 +2768,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.put_table_to_store()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""

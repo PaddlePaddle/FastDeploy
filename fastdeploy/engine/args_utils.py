@@ -248,7 +248,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = False
+    enable_output_caching: bool = True
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -569,9 +569,7 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
-            # TODO XPU support PaddleOCR prefix caching
-            if current_platform.is_xpu():
-                self.enable_prefix_caching = False
+            self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
             if not self.enable_prefix_caching:
