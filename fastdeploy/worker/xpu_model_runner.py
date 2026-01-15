@@ -52,6 +52,7 @@ from fastdeploy.model_executor.ops.xpu import (
     recover_decode_task,
     set_data_ipc,
     share_external_data,
+    speculate_schedule_cache,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
     step_xpu,
@@ -172,6 +173,10 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
+
+        # Postprocess Env params
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
+        logger.info(f"queue id is {str(self.parallel_config.local_engine_worker_queue_port)}")
 
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
@@ -505,10 +510,12 @@ class XPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -569,9 +576,11 @@ class XPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 0
@@ -1016,6 +1025,7 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1048,7 +1058,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
 
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
-            self.forward_meta.kv_signal_sender = self.kv_signal_sender
+            self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
@@ -1376,7 +1386,8 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
-            self.kv_signal_sender = sender
+
+            self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
@@ -1415,9 +1426,6 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                 )
 
-            # 5. Speculative decode
-
-            # 6. Post Process
             prompt_logprobs_list = None
             if not self.speculative_decoding:
                 prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
@@ -1439,7 +1447,7 @@ class XPUModelRunner(ModelRunnerBase):
                 # 投机解码
                 full_hidden_states=model_output if self.speculative_decoding else None,
                 msg_queue_id=self.parallel_config.msg_queue_id,
-                mp_rank=self.local_rank,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
                 use_ep=self.parallel_config.use_ep,
                 draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
                 actual_draft_token_num=(
@@ -1462,25 +1470,49 @@ class XPUModelRunner(ModelRunnerBase):
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
                     skip_save_output=is_dummy_run,
+                    save_each_rank=self.parallel_config.data_parallel_size > 0,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
                     line_break_id=self.model_config.line_break_id,
                 )
 
-            # draft model propose
+            # 6. Draft model propose
             if self.speculative_method == "mtp":
                 self.proposer.run(full_hidden_states=model_output)
 
             # 7. Updata 'infer_seed' and step_paddle()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-            step_xpu(
-                self.share_inputs,
-                self.cache_config.block_size,
-                self.cache_config.enc_dec_block_num,
-                self.speculative_decoding,
-                self.speculative_config.num_speculative_tokens,
-            )
+
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                step_xpu(
+                    self.share_inputs,
+                    self.cache_config.block_size,
+                    self.cache_config.enc_dec_block_num,
+                    self.fd_config.speculative_config,
+                    self.fd_config.cache_config.enable_prefix_caching,
+                )
+            elif self.speculative_decoding:
+                speculate_schedule_cache(
+                    self.share_inputs["draft_tokens"],
+                    self.share_inputs["block_tables"],
+                    self.share_inputs["stop_flags"],
+                    self.share_inputs["prompt_lens"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["step_seq_lens_decoder"],
+                    self.share_inputs["step_draft_tokens"],
+                    self.share_inputs["step_seq_lens_this_time"],
+                    self.share_inputs["accept_num"],
+                    self.share_inputs["accept_tokens"],
+                    self.share_inputs["is_block_step"],
+                    self.share_inputs["not_need_stop"],
+                    self.share_inputs["stop_nums"],
+                    self.cache_config.block_size,
+                    self.speculative_config.num_speculative_tokens,
+                )
+
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
@@ -1499,10 +1531,9 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache(profile=True)
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
+        self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
@@ -1518,10 +1549,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        self.initialize_kv_cache()
-
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
 
         # Reset free list
         free_list = list(

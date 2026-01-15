@@ -51,8 +51,8 @@ class XPUPlatform(Platform):
         get_attention_backend_cls
         """
         # TODO: 等支持配置 attention engine 之后再改回去
-        return "fastdeploy.model_executor.layers.attention.XPUAttentionBackend"
+        return "fastdeploy.model_executor.layers.backends.xpu.XPUAttentionBackend"
         if selected_backend == _Backend.NATIVE_ATTN:
-            return "fastdeploy.model_executor.layers.attention.XPUAttentionBackend"
+            return "fastdeploy.model_executor.layers.backends.xpu.XPUAttentionBackend"
         else:
             logger.warning("Other backends are not supported for now for XPU.")

@@ -152,9 +152,6 @@ class AppendAttentionBackend(AttentionBackend):
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
-        # split kv still has bug in speculative decoding
-        if self.speculative_method is not None:
-            self.max_partition_size = self.max_seq_len
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q
 
@@ -167,6 +164,20 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        if self.use_output:
+            flag = "FLAGS_cuda_graph_blacklist"
+            paddle.set_flags(
+                {
+                    flag: ",".join(
+                        list(
+                            set(
+                                paddle.get_flags(flag)[flag].split(",")
+                                + ["custom_op.static_op_append_attention_with_output_"]
+                            )
+                        )
+                    )
+                }
+            )
         self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):

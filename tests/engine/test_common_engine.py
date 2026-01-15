@@ -436,22 +436,38 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         class DummyRecv:
             def __init__(self, msg):
                 self.msg = msg
+                self.call_count = 0
 
             def receive_json_once(self, block):
-                return self.msg, None
+                self.call_count += 1
+                if self.call_count == 1:
+                    return self.msg, None
+                else:
+                    eng.running = False
+                    return None, None
 
             def close(self):
                 pass
 
         # Case 1: context terminated -> info branch
         eng.recv_request_server = DummyRecv("Context was terminated")
-        with patch.object(eng, "llm_logger") as _:
-            eng._insert_zmq_task_to_scheduler()
+        with patch.object(eng, "llm_logger") as mock_logger:
+            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
+                eng._insert_zmq_task_to_scheduler()
+            # verify info logger
+            mock_logger.info.assert_called()
+
+        # reset status
+        eng.running = True
 
         # Case 2: other error -> error branch
         eng.recv_request_server = DummyRecv("Other Error")
-        with patch.object(eng, "llm_logger") as _:
-            eng._insert_zmq_task_to_scheduler()
+        with patch.object(eng, "llm_logger") as mock_logger:
+            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
+                eng._insert_zmq_task_to_scheduler()
+            # verify error logger
+            mock_logger.error.assert_called()
+
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
