@@ -1044,6 +1044,12 @@ def parse_args():
         type=str,
         help="KVCache storage backend.",
     )
+    parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
+    )
 
     parser.add_argument(
         "--enable_overlap_schedule",
