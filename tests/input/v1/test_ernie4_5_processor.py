@@ -83,6 +83,16 @@ class ErnieX1ReasoningParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
+    def extract_reasoning_content(self, full_text, response_dict, model_status):
+        """Extract reasoning content for non-streaming responses."""
+
+        class ReasoningContent:
+            def __init__(self):
+                self.reasoning_content = "mock_reasoning"
+                self.content = "mock_content"
+
+        return ReasoningContent()
+
     def extract_reasoning_content_streaming(
         self,
         previous_texts,
@@ -348,6 +358,72 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertTrue(hasattr(result.outputs, "tool_calls"))
         self.assertEqual(result.outputs.tool_calls[0]["name"], "fake_tool")
+
+    def test_process_request(self):
+        """Test process_request method with various input types."""
+        proc = self._make_processor()
+
+        # Test with prompt string
+        request = Request.from_dict(
+            {
+                "request_id": "test_1",
+                "prompt": "hello",
+                "temperature": 0.5,
+                "top_p": 0.5,
+            }
+        )
+        result = proc.process_request(request, max_model_len=10)
+        self.assertEqual(result.prompt_token_ids, [9])
+
+        # Test with prompt token ids
+        request = Request.from_dict(
+            {
+                "request_id": "test_2",
+                "prompt_token_ids": [1, 2, 3],
+                "temperature": 0.5,
+                "top_p": 0.5,
+            }
+        )
+        result = proc.process_request(request, max_model_len=5)
+        self.assertEqual(result.prompt_token_ids, [1, 2, 3])
+
+        # Test with messages - mock the messages2ids method to avoid dict attribute error
+        proc.messages2ids = MagicMock(return_value=[9])
+        request = Request.from_dict(
+            {
+                "request_id": "test_3",
+                "messages": [{"role": "user", "content": "hello"}],
+                "temperature": 0.5,
+                "top_p": 0.5,
+            }
+        )
+        result = proc.process_request(request, max_model_len=10)
+        self.assertEqual(result.prompt_token_ids, [9])
+        proc.messages2ids.assert_called_once()
+
+    def test_process_response(self):
+        """Test process_response method with various scenarios."""
+        # Test without reasoning parser to avoid model_status_dict dependency
+        proc = self._make_processor(reasoning=False)
+
+        # Test basic response
+        response = RequestOutput.from_dict(
+            {"request_id": "test_4", "outputs": {"token_ids": [10, 11, proc.tokenizer.eos_token_id], "index": 0}}
+        )
+        result = proc.process_response(response)
+        self.assertEqual(result.outputs.text, "10 11")
+
+        # Test another response to ensure consistency
+        response = RequestOutput.from_dict(
+            {"request_id": "test_5", "outputs": {"token_ids": [20, 21, proc.tokenizer.eos_token_id], "index": 0}}
+        )
+        result = proc.process_response(response)
+        self.assertEqual(result.outputs.text, "20 21")
+
+        # Test response without eos_token at the end
+        response = RequestOutput.from_dict({"request_id": "test_6", "outputs": {"token_ids": [30, 31], "index": 0}})
+        result = proc.process_response(response)
+        self.assertEqual(result.outputs.text, "30 31")
 
 
 if __name__ == "__main__":

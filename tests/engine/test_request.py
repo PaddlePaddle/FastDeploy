@@ -21,10 +21,12 @@ from unittest.mock import Mock
 import numpy as np
 
 from fastdeploy.engine.request import (
+    CompletionOutput,
     ImagePosition,
     PoolingParams,
     Request,
     RequestMetrics,
+    RequestOutput,
     RequestStatus,
     RequestType,
     SamplingParams,
@@ -562,6 +564,132 @@ class TestRequestEdgeCases(unittest.TestCase):
         # Should not raise an exception but log error
         request = Request.from_dict(test_dict)
         self.assertEqual(request.request_id, "error_test")
+
+
+class TestRequestOutputDictAccess(unittest.TestCase):
+    """Test cases for RequestOutput dictionary-style access methods"""
+
+    def setUp(self):
+        self.metrics = RequestMetrics()
+        self.metrics.arrival_time = 1000.0
+        self.metrics.model_forward_time = 1.5
+
+        self.outputs = CompletionOutput(
+            index=0, send_idx=0, token_ids=[1, 2, 3], text="test output", reasoning_content="test reasoning"
+        )
+
+        self.request_output = RequestOutput(
+            request_id="test_dict_access",
+            prompt="test prompt",
+            prompt_token_ids=[1, 2, 3],
+            outputs=self.outputs,
+            metrics=self.metrics,
+        )
+
+    def test_get_method(self):
+        """Test get() method"""
+        # Test getting request_output attribute
+        self.assertEqual(self.request_output.get("request_id"), "test_dict_access")
+
+        # Test getting outputs attribute
+        self.assertEqual(self.request_output.get("text"), "test output")
+
+        # Test getting metrics attribute
+        self.assertEqual(self.request_output.get("arrival_time"), 1000.0)
+
+        # Test getting non-existent attribute with default
+        self.assertIsNone(self.request_output.get("non_existent"))
+        self.assertEqual(self.request_output.get("non_existent", "default"), "default")
+
+    def test_set_method(self):
+        """Test set() method"""
+        # Test setting request_output attribute
+        self.request_output.set("prompt", "new prompt")
+        self.assertEqual(self.request_output.prompt, "new prompt")
+
+        # Test setting outputs attribute
+        self.request_output.set("text", "new text")
+        self.assertEqual(self.outputs.text, "new text")
+
+        # Test setting metrics attribute
+        self.request_output.set("model_forward_time", 2.0)
+        self.assertEqual(self.metrics.model_forward_time, 2.0)
+
+    def test_getitem_method(self):
+        """Test __getitem__ method"""
+        # Test getting request_output attribute
+        self.assertEqual(self.request_output["request_id"], "test_dict_access")
+
+        # Test getting outputs attribute
+        self.assertEqual(self.request_output["text"], "test output")
+
+        # Test getting metrics attribute
+        self.assertEqual(self.request_output["arrival_time"], 1000.0)
+
+        # Test KeyError for non-existent attribute
+        with self.assertRaises(KeyError):
+            _ = self.request_output["non_existent"]
+
+    def test_setitem_method(self):
+        """Test __setitem__ method"""
+        # Test setting request_output attribute
+        self.request_output["prompt"] = "new prompt"
+        self.assertEqual(self.request_output.prompt, "new prompt")
+
+        # Test setting outputs attribute
+        self.request_output["text"] = "new text"
+        self.assertEqual(self.outputs.text, "new text")
+
+        # Test setting metrics attribute
+        self.request_output["model_forward_time"] = 2.0
+        self.assertEqual(self.metrics.model_forward_time, 2.0)
+
+    def test_delitem_method(self):
+        """Test __delitem__ method"""
+        # Test deleting request_output attribute (using existing attribute)
+        original_prompt = self.request_output.prompt
+        del self.request_output["prompt"]
+        self.assertFalse(hasattr(self.request_output, "prompt"))
+        # Restore for other tests
+        self.request_output.prompt = original_prompt
+
+        # Test deleting outputs attribute (using existing attribute)
+        original_text = self.outputs.text
+        del self.request_output["text"]
+        self.assertFalse(hasattr(self.outputs, "text"))
+        # Restore for other tests
+        self.outputs.text = original_text
+
+        # Test deleting metrics attribute (using existing attribute)
+        original_arrival_time = self.metrics.arrival_time
+        del self.request_output["arrival_time"]
+        self.assertFalse(hasattr(self.metrics, "arrival_time"))
+        # Restore for other tests
+        self.metrics.arrival_time = original_arrival_time
+
+        # Test KeyError for non-existent attribute
+        try:
+            del self.request_output["non_existent"]
+            self.fail("Expected KeyError but none was raised")
+        except KeyError:
+            pass  # Expected behavior
+
+    def test_contains_method(self):
+        """Test __contains__ method"""
+        # Test request_output attributes
+        self.assertTrue("request_id" in self.request_output)
+        self.assertTrue("prompt" in self.request_output)
+
+        # Test outputs attributes
+        self.assertTrue("text" in self.request_output)
+        self.assertTrue("reasoning_content" in self.request_output)
+
+        # Test metrics attributes
+        self.assertTrue("arrival_time" in self.request_output)
+        self.assertTrue("model_forward_time" in self.request_output)
+
+        # Test non-existent attribute
+        self.assertFalse("non_existent" in self.request_output)
 
 
 if __name__ == "__main__":
