@@ -77,8 +77,11 @@ def stop_processes():
         "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'multiprocessing' | grep -v grep | awk '{print $2}' | xargs echo",
         "ps -efww | grep -E 'fastdeploy' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: master' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'gunicorn: worker' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
+        f"lsof -t -i :{port_num + 47873} | xargs echo",
     ]
 
     # Kill additional ports
@@ -460,3 +463,28 @@ def restore_pd_ep_env(original_values):
     """
     restore_env(original_values)
     restore_pd_env(original_values)
+
+
+def setup_logprobs_env():
+    """
+    设置logprobs相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    env_vars = {
+        "FD_USE_GET_SAVE_OUTPUT_V1": "1",
+    }
+    os.system("sysctl -w kernel.msgmax=131072")
+    os.system("sysctl -w kernel.msgmnb=33554432")
+
+    # 保存原始值
+    original_values = {}
+    for key in env_vars:
+        original_values[key] = os.environ.get(key)
+
+    # 设置新值
+    for key, value in env_vars.items():
+        os.environ[key] = value
+        print(f"设置环境变量: {key}={value}")
+    return original_values

@@ -23,6 +23,7 @@ from fastdeploy.model_executor.layers.quantization.tensor_wise_fp8 import (
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.intel_hpu import fused_quant
+from fastdeploy.model_executor.utils import set_weight_attrs
 
 
 class HpuTensorWiseFP8LinearMethod(TensorWiseFP8LinearMethod):
@@ -92,6 +93,14 @@ class HpuTensorWiseFP8LinearMethod(TensorWiseFP8LinearMethod):
             is_bias=False,
         )
 
+        self.model_format = extra_weight_attrs.get("model_format")
+        if self.model_format == "torch" and "output_dim" in extra_weight_attrs:
+            extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
+        set_weight_attrs(
+            layer.weight,
+            extra_weight_attrs,
+        )
+
     def process_loaded_weights(self, layer: nn.Layer, weight: paddle.Tensor) -> None:
         """
         loaded_weights using HPU specific quantization
@@ -99,3 +108,20 @@ class HpuTensorWiseFP8LinearMethod(TensorWiseFP8LinearMethod):
         quanted_weight_tensor, weight_scale_tensor = fused_quant(weight)
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor)
+
+    def process_weights_after_loading(self, layer: nn.Layer):
+        """
+        use for loader v1
+        """
+        # these activation_scale will fall in, but only quant for self_attn
+        # mlp.shared_experts.up_gate_proj / down_proj
+        # self_attn.qkv_proj / o_proj
+        if layer.act_scale._is_initialized():
+            if "self_attn" in layer.act_scale_key:
+                act_scale_inv = layer.act_scale / self.max_bound
+                act_scale = self.max_bound / layer.act_scale
+            else:
+                act_scale_inv = layer.act_scale
+                act_scale = 1.0 / layer.act_scale
+        layer.act_scale.set_value(act_scale.astype(paddle.get_default_dtype()))
+        layer.act_scale_inv.set_value(act_scale_inv.astype(paddle.get_default_dtype()))

@@ -330,6 +330,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
@@ -834,6 +835,7 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& not_need_stop,
                                       const paddle::Tensor& seq_lens_decoder,
                                       const paddle::Tensor& prompt_lens,
+                                      const paddle::Tensor& preempted_idx,
                                       int64_t rank_id,
                                       bool save_each_rank,
                                       bool skip_prefill);
@@ -1018,6 +1020,7 @@ std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor& probs,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
@@ -1146,6 +1149,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    */
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
