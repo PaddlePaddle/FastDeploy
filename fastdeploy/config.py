@@ -1268,7 +1268,7 @@ class EPLBConfig:
         """
         Print all configuration information.
         """
-        i.info("EPLB Configuration Information :")
+        logger.info("EPLB Configuration Information :")
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
