@@ -1046,6 +1046,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
         os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
+    elif envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "decode":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "0"
 
     fd_config = FDConfig(
         model_config=model_config,
