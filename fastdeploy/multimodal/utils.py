@@ -54,11 +54,13 @@ def set_processor_kwargs(func):
     def wrapper(self, *args, **kwargs):
         original_kwargs = {}
         for k, v in kwargs.items():
-            if hasattr(self, k):
-                original_kwargs[k] = getattr(self, k)
-                setattr(self, k, v)
-            elif hasattr(self, k.replace("video_", "")):
+            if hasattr(self, k.replace("video_", "")):
                 k = k.replace("video_", "")
+            if hasattr(self, k):
+                if k.endswith("min_pixels"):
+                    assert getattr(self, k) <= v, f"{k} should be larger than its initial value"
+                if k.endswith("max_pixels"):
+                    assert getattr(self, k) >= v, f"{k} should be smaller than its initial value"
                 original_kwargs[k] = getattr(self, k)
                 setattr(self, k, v)
 
