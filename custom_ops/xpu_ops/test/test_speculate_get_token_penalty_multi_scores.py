@@ -126,7 +126,7 @@ def test_main(
 #                                                   84, 100352, 12288, 1, 1, 54, 32768);
 
 
-def miain():
+def main():
     seed = np.random.randint(1, 1e9)
     print(f"random seed is {seed}")
     np.random.seed(seed)
@@ -203,4 +203,4 @@ def miain():
 
 if __name__ == "__main__":
     for i in range(10):
-        miain()
+        main()
