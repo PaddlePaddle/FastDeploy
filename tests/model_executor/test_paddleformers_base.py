@@ -37,7 +37,10 @@ from fastdeploy.config import (
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.attention.attention import Attention
-from fastdeploy.model_executor.layers.linear import ColumnParallelLinear, RowParallelLinear
+from fastdeploy.model_executor.layers.linear import (
+    ColumnParallelLinear,
+    RowParallelLinear,
+)
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.paddleformers.base import (
     PaddleFormersRMSNormWrapper,
@@ -47,17 +50,17 @@ from fastdeploy.model_executor.models.paddleformers.base import (
 from fastdeploy.scheduler import SchedulerConfig
 
 
-
 @pytest.fixture
 def mock_layer_init_patch():
     """Patch nn.Layer.__init__ globally for tests using it."""
+
     def mock_init(self, *args, **kwargs):
         self._sub_layers = {}
         self._parameters = {}
         self._buffers = {}
         self._loaddict_holder = {}
-    
-    with patch.object(nn.Layer, '__init__', mock_init):
+
+    with patch.object(nn.Layer, "__init__", mock_init):
         yield
 
 
@@ -84,18 +87,22 @@ def mock_fd_config():
     with open(config_path, "w") as f:
         json.dump(config_dict, f)
 
-    model_config = ModelConfig({
-        "model": tmp_dir,
-        "model_impl": "paddleformers",
-        "max_model_len": 2048,
-    })
+    model_config = ModelConfig(
+        {
+            "model": tmp_dir,
+            "model_impl": "paddleformers",
+            "max_model_len": 2048,
+        }
+    )
 
-    parallel_config = ParallelConfig({
-        "tensor_parallel_size": 1,
-        "data_parallel_size": 1,
-        "expert_parallel_size": 1,  # Add expert_parallel_size
-        "tensor_parallel_rank": 0,  # Add tensor_parallel_rank
-    })
+    parallel_config = ParallelConfig(
+        {
+            "tensor_parallel_size": 1,
+            "data_parallel_size": 1,
+            "expert_parallel_size": 1,  # Add expert_parallel_size
+            "tensor_parallel_rank": 0,  # Add tensor_parallel_rank
+        }
+    )
     parallel_config.tp_group = None
 
     scheduler_config = SchedulerConfig({})
@@ -148,18 +155,22 @@ def mock_fd_config_tp2():
     with open(config_path, "w") as f:
         json.dump(config_dict, f)
 
-    model_config = ModelConfig({
-        "model": tmp_dir,
-        "model_impl": "paddleformers",
-        "max_model_len": 2048,
-    })
+    model_config = ModelConfig(
+        {
+            "model": tmp_dir,
+            "model_impl": "paddleformers",
+            "max_model_len": 2048,
+        }
+    )
 
-    parallel_config = ParallelConfig({
-        "tensor_parallel_size": 2,  # TP=2
-        "data_parallel_size": 1,
-        "expert_parallel_size": 1,
-        "tensor_parallel_rank": 0,
-    })
+    parallel_config = ParallelConfig(
+        {
+            "tensor_parallel_size": 2,  # TP=2
+            "data_parallel_size": 1,
+            "expert_parallel_size": 1,
+            "tensor_parallel_rank": 0,
+        }
+    )
     parallel_config.tp_group = None
 
     scheduler_config = SchedulerConfig({})
@@ -211,18 +222,22 @@ def mock_fd_config_qwen3():
     with open(config_path, "w") as f:
         json.dump(config_dict, f)
 
-    model_config = ModelConfig({
-        "model": tmp_dir,
-        "model_impl": "paddleformers",
-        "max_model_len": 2048,
-    })
+    model_config = ModelConfig(
+        {
+            "model": tmp_dir,
+            "model_impl": "paddleformers",
+            "max_model_len": 2048,
+        }
+    )
 
-    parallel_config = ParallelConfig({
-        "tensor_parallel_size": 1,  # TP=1 to enable fused QKV
-        "data_parallel_size": 1,
-        "expert_parallel_size": 1,
-        "tensor_parallel_rank": 0,
-    })
+    parallel_config = ParallelConfig(
+        {
+            "tensor_parallel_size": 1,  # TP=1 to enable fused QKV
+            "data_parallel_size": 1,
+            "expert_parallel_size": 1,
+            "tensor_parallel_rank": 0,
+        }
+    )
     parallel_config.tp_group = None
 
     scheduler_config = SchedulerConfig({})
@@ -313,7 +328,9 @@ class TestAttentionForward:
 
     def test_missing_required_attributes(self):
         """Test that missing required attributes raise ValueError."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         module = SimpleNamespace()
         query = paddle.randn([1, 32, 10, 128])
@@ -323,45 +340,35 @@ class TestAttentionForward:
 
         # Missing config
         with pytest.raises(ValueError, match="does not have 'config' attribute"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         # Missing attention_instances
         module.config = SimpleNamespace()
         with pytest.raises(ValueError, match="attention_instances not found"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         # Missing forward_meta
         module.config.attention_instances = {}
         with pytest.raises(ValueError, match="forward_meta not found"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         # Missing layer_idx
         module.config.forward_meta = SimpleNamespace()
         with pytest.raises(ValueError, match="layer_idx not found"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
     def test_valid_forward_call(self):
         """Test valid forward call with all required attributes."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*32]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 32]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         query = paddle.randn([1, 32, 10, 128])
@@ -369,25 +376,21 @@ class TestAttentionForward:
         value = paddle.randn([1, 32, 10, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         assert mock_attention.forward.called
 
     def test_invalid_batch_size(self):
         """Test that batch size != 1 raises ValueError."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         query = paddle.randn([2, 32, 10, 128])  # Batch size 2
@@ -396,24 +399,20 @@ class TestAttentionForward:
         attention_mask = paddle.ones([2, 10])
 
         with pytest.raises(ValueError, match="batch size.*not supported"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
     def test_scaling_parameter(self):
         """Test that scaling parameter sets attention scale."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*32]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 32]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         query = paddle.randn([1, 32, 10, 128])
@@ -421,9 +420,7 @@ class TestAttentionForward:
         value = paddle.randn([1, 32, 10, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask, scaling=0.5
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask, scaling=0.5)
 
         assert mock_attention.scale == 0.5
 
@@ -433,7 +430,9 @@ class TestConfigSync:
 
     def test_sync_tie_word_embeddings(self, mock_fd_config):
         """Test syncing tie_word_embeddings from text_config."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -445,8 +444,7 @@ class TestConfigSync:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -459,7 +457,9 @@ class TestConfigSync:
 
     def test_sync_multiple_fields(self, mock_fd_config):
         """Test syncing multiple fields from text_config."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -472,8 +472,7 @@ class TestConfigSync:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -488,7 +487,9 @@ class TestConfigSync:
 
     def test_skips_none_values(self, mock_fd_config):
         """Test that None values are not synced."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -502,8 +503,7 @@ class TestConfigSync:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -522,7 +522,9 @@ class TestAttentionInstances:
 
     def test_creates_instances_for_all_layers(self, mock_fd_config):
         """Test that attention instances are created for all layers."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -531,9 +533,11 @@ class TestAttentionInstances:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel', return_value=mock_model), \
-             patch('paddleformers.transformers.AutoConfig'), \
-             patch.object(Attention, '__init__', return_value=None):
+        with (
+            patch("paddleformers.transformers.AutoModel", return_value=mock_model),
+            patch("paddleformers.transformers.AutoConfig"),
+            patch.object(Attention, "__init__", return_value=None),
+        ):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -552,7 +556,9 @@ class TestAttentionInstances:
 
     def test_sliding_window_sets_layer_types(self, mock_fd_config):
         """Test that sliding_window creates layer_types config."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -561,9 +567,11 @@ class TestAttentionInstances:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel', return_value=mock_model), \
-             patch('paddleformers.transformers.AutoConfig'), \
-             patch.object(Attention, '__init__', return_value=None):
+        with (
+            patch("paddleformers.transformers.AutoModel", return_value=mock_model),
+            patch("paddleformers.transformers.AutoConfig"),
+            patch.object(Attention, "__init__", return_value=None),
+        ):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -579,7 +587,7 @@ class TestAttentionInstances:
 
             instances = model.create_attention_instances()
 
-            assert hasattr(model.model_config, 'layer_types')
+            assert hasattr(model.model_config, "layer_types")
             assert len(model.model_config.layer_types) == 4
             assert model.model_config.sliding_window == 4096
 
@@ -589,7 +597,9 @@ class TestEmbedInputIds:
 
     def test_basic_embedding(self, mock_fd_config):
         """Test basic embedding lookup."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -602,8 +612,10 @@ class TestEmbedInputIds:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel', return_value=mock_model), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with (
+            patch("paddleformers.transformers.AutoModel", return_value=mock_model),
+            patch("paddleformers.transformers.AutoConfig"),
+        ):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -622,7 +634,9 @@ class TestEmbedInputIds:
 
     def test_embedding_with_scale(self, mock_fd_config):
         """Test embedding with embed_scale."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -635,8 +649,10 @@ class TestEmbedInputIds:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel', return_value=mock_model), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with (
+            patch("paddleformers.transformers.AutoModel", return_value=mock_model),
+            patch("paddleformers.transformers.AutoConfig"),
+        ):
 
             model = object.__new__(TestModel)
             model.fd_config = fd_config
@@ -659,8 +675,10 @@ class TestRecursiveReplace:
 
     def test_replaces_linear_layers(self, mock_fd_config):
         """Test that nn.Linear layers are replaced with FD parallel layers."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
         from fastdeploy.model_executor.layers.linear import ReplicatedLinear
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -685,16 +703,15 @@ class TestRecursiveReplace:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             # Manually add required attributes since we bypassed __init__
             # MUST be set before assigning any sublayers
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -722,7 +739,9 @@ class TestRecursiveReplace:
 
     def test_replaces_rmsnorm_layers(self, mock_fd_config):
         """Test that RMSNorm layers are wrapped."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -731,9 +750,7 @@ class TestRecursiveReplace:
             def __init__(self):
                 super().__init__()  # Must call super first
                 self.weight = paddle.create_parameter(
-                    shape=[4096],
-                    dtype='float32',
-                    default_initializer=paddle.nn.initializer.Constant(value=1.0)
+                    shape=[4096], dtype="float32", default_initializer=paddle.nn.initializer.Constant(value=1.0)
                 )
                 self.epsilon = 1e-6
 
@@ -749,16 +766,15 @@ class TestRecursiveReplace:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             # Manually add required attributes since we bypassed __init__
             # MUST be set before assigning any sublayers
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -776,7 +792,9 @@ class TestRecursiveReplace:
 
     def test_nested_module_replacement(self, mock_fd_config):
         """Test that nested modules are also processed."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -803,16 +821,15 @@ class TestRecursiveReplace:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
             # Manually add required attributes since we bypassed __init__
             # MUST be set before assigning any sublayers
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -829,6 +846,7 @@ class TestRecursiveReplace:
             assert isinstance(model.model.layers[0].attention.k_proj, ColumnParallelLinear)
             # mlp_down doesn't match any TP pattern, becomes ReplicatedLinear
             from fastdeploy.model_executor.layers.linear import ReplicatedLinear
+
             assert isinstance(model.model.layers[0].mlp_down, ReplicatedLinear)
 
 
@@ -837,18 +855,16 @@ class TestAttentionForwardEdgeCases:
 
     def test_3d_tensor_input(self):
         """Test flatten_to_sd with 3D tensor input (line 117)."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*32]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 32]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         # Use 3D tensors [S, H, D] instead of 4D
@@ -857,26 +873,22 @@ class TestAttentionForwardEdgeCases:
         value = paddle.randn([10, 32, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         assert mock_attention.forward.called
 
     def test_seq_first_4d_tensor(self):
         """Test flatten_to_sd with [1, S, H, D] shape (lines 130-132)."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*32]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 32]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         # Use [1, S, H, D] instead of [1, H, S, D]
@@ -885,25 +897,21 @@ class TestAttentionForwardEdgeCases:
         value = paddle.randn([1, 10, 32, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         assert mock_attention.forward.called
 
     def test_invalid_tensor_dims_raises_error(self):
         """Test that invalid tensor dims raise ValueError (line 119)."""
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         # Use 2D tensors (invalid - neither 3 nor 4 dims)
@@ -913,28 +921,24 @@ class TestAttentionForwardEdgeCases:
         attention_mask = paddle.ones([1, 10])
 
         with pytest.raises(ValueError, match="unexpected dims"):
-            fastdeploy_append_attention_forward(
-                module, query, key, value, attention_mask
-            )
+            fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
     def test_key_value_seq_first_format(self):
         """Test flatten_to_sd with key/value in [1, S, H, D] format (lines 130-132).
-        
+
         seq_len is computed from query.shape[-2]. If key/value have dim1 == seq_len,
         they hit the elif branch (lines 130-132).
         """
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*32]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 32]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         # query: [1, 32, 10, 128] → seq_len = 10 (from shape[-2])
@@ -946,30 +950,26 @@ class TestAttentionForwardEdgeCases:
         value = paddle.randn([1, 10, 32, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         assert mock_attention.forward.called
 
     def test_key_value_fallback_format(self):
         """Test flatten_to_sd fallback when neither dim matches seq_len (lines 133-135).
-        
+
         seq_len is computed from query.shape[-2]. If key/value have neither dim1 nor dim2
         equal to seq_len, they hit the else fallback (lines 133-135).
         """
-        from fastdeploy.model_executor.models.paddleformers.base import fastdeploy_append_attention_forward
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            fastdeploy_append_attention_forward,
+        )
 
         mock_attention = MagicMock()
-        mock_attention.forward = Mock(return_value=paddle.randn([10, 128*5]))
+        mock_attention.forward = Mock(return_value=paddle.randn([10, 128 * 5]))
         forward_meta = SimpleNamespace(rotary_embs=None)
 
         module = SimpleNamespace(
-            config=SimpleNamespace(
-                attention_instances={0: mock_attention},
-                forward_meta=forward_meta
-            ),
-            layer_idx=0
+            config=SimpleNamespace(attention_instances={0: mock_attention}, forward_meta=forward_meta), layer_idx=0
         )
 
         # query: [1, 32, 10, 128] → seq_len = 10 (from shape[-2])
@@ -980,9 +980,7 @@ class TestAttentionForwardEdgeCases:
         value = paddle.randn([1, 5, 8, 128])
         attention_mask = paddle.ones([1, 10])
 
-        output, _ = fastdeploy_append_attention_forward(
-            module, query, key, value, attention_mask
-        )
+        output, _ = fastdeploy_append_attention_forward(module, query, key, value, attention_mask)
 
         assert mock_attention.forward.called
 
@@ -992,7 +990,9 @@ class TestRecursiveReplaceAdvanced:
 
     def test_fused_qkv_replacement(self, mock_fd_config):
         """Test that qkv_proj with fused QKV uses ColumnParallelLinear (lines 330-337)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1000,21 +1000,20 @@ class TestRecursiveReplaceAdvanced:
         class MockModel(nn.Layer):
             def __init__(self):
                 super().__init__()
-                self.qkv_proj = nn.Linear(4096, 4096*3)
+                self.qkv_proj = nn.Linear(4096, 4096 * 3)
 
         mock_model_obj = MockModel()
 
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1032,8 +1031,10 @@ class TestRecursiveReplaceAdvanced:
 
     def test_fused_ffn_replacement(self, mock_fd_config):
         """Test that up_gate_proj with fused FFN uses MergedColumnParallelLinear (lines 340-347)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
         from fastdeploy.model_executor.layers.linear import MergedColumnParallelLinear
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1041,7 +1042,7 @@ class TestRecursiveReplaceAdvanced:
         class MockModel(nn.Layer):
             def __init__(self):
                 super().__init__()
-                self.up_gate_proj = nn.Linear(4096, 11008*2)
+                self.up_gate_proj = nn.Linear(4096, 11008 * 2)
 
         mock_model_obj = MockModel()
 
@@ -1052,14 +1053,13 @@ class TestRecursiveReplaceAdvanced:
                     r"\.up_gate_proj$": "colwise",
                 }
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1077,7 +1077,9 @@ class TestRecursiveReplaceAdvanced:
 
     def test_rmsnorm_without_weight(self, mock_fd_config):
         """Test RMSNorm replacement when module has no weight attribute (line 378)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1100,14 +1102,13 @@ class TestRecursiveReplaceAdvanced:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1125,7 +1126,9 @@ class TestRecursiveReplaceAdvanced:
 
     def test_linear_without_weight(self, mock_fd_config):
         """Test Linear replacement when module uses in_features/out_features (lines 321-322)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1150,15 +1153,17 @@ class TestRecursiveReplaceAdvanced:
             pass
 
         # Need to register MockLinearNoWeight as an nn.Linear subclass for the isinstance check
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'), \
-             patch.object(nn.Linear, '__subclasscheck__', return_value=True):
+        with (
+            patch("paddleformers.transformers.AutoModel"),
+            patch("paddleformers.transformers.AutoConfig"),
+            patch.object(nn.Linear, "__subclasscheck__", return_value=True),
+        ):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1180,8 +1185,11 @@ class TestGetTPPlan:
 
     def test_get_tp_plan_with_paddleformers_mappings(self, mock_fd_config):
         """Test _get_tp_plan when model has _get_tensor_parallel_mappings (lines 410-471)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
         from functools import partial
+
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1216,14 +1224,13 @@ class TestGetTPPlan:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1244,8 +1251,11 @@ class TestGetTPPlan:
 
     def test_get_tp_plan_with_fused_qkv(self, mock_fd_config):
         """Test _get_tp_plan adjusts for fused QKV (lines 444-453)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
         from functools import partial
+
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1273,14 +1283,13 @@ class TestGetTPPlan:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1301,8 +1310,11 @@ class TestGetTPPlan:
 
     def test_get_tp_plan_with_fused_ffn(self, mock_fd_config):
         """Test _get_tp_plan adjusts for fused FFN (lines 458-460)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
         from functools import partial
+
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1331,14 +1343,13 @@ class TestGetTPPlan:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1360,7 +1371,9 @@ class TestGetTPPlan:
 
     def test_get_tp_plan_fallback_on_exception(self, mock_fd_config):
         """Test _get_tp_plan falls back to default on exception (line 472-473)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1379,14 +1392,13 @@ class TestGetTPPlan:
         class TestModel(PaddleFormersModelBase):
             pass
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1409,7 +1421,9 @@ class TestFusionSettings:
 
     def test_tp_greater_than_1_disables_fused_qkv(self, mock_fd_config_tp2):
         """Test that TP>1 disables fused QKV (lines 201-202)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, tmp_dir = mock_fd_config_tp2
 
@@ -1441,12 +1455,14 @@ class TestFusionSettings:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch('paddleformers.transformers.AutoConfig.from_pretrained', return_value=mock_pf_config), \
-             patch('paddleformers.transformers.AutoModel.from_config', return_value=mock_pf_model), \
-             patch.object(TestModel, 'recursive_replace'), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}), \
-             patch('fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding'):
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch("paddleformers.transformers.AutoConfig.from_pretrained", return_value=mock_pf_config),
+            patch("paddleformers.transformers.AutoModel.from_config", return_value=mock_pf_model),
+            patch.object(TestModel, "recursive_replace"),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+            patch("fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding"),
+        ):
 
             model = TestModel(fd_config)
 
@@ -1455,7 +1471,9 @@ class TestFusionSettings:
 
     def test_qwen3_tp1_enables_fused_qkv_and_ffn(self, mock_fd_config_qwen3):
         """Test that Qwen3 with TP=1 enables fused QKV and FFN (lines 206-207, 214-216)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, tmp_dir = mock_fd_config_qwen3
 
@@ -1489,12 +1507,14 @@ class TestFusionSettings:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch('paddleformers.transformers.AutoConfig.from_pretrained', return_value=mock_pf_config), \
-             patch('paddleformers.transformers.AutoModel.from_config', return_value=mock_pf_model), \
-             patch.object(TestModel, 'recursive_replace'), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}), \
-             patch('fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding'):
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch("paddleformers.transformers.AutoConfig.from_pretrained", return_value=mock_pf_config),
+            patch("paddleformers.transformers.AutoModel.from_config", return_value=mock_pf_model),
+            patch.object(TestModel, "recursive_replace"),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+            patch("fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding"),
+        ):
 
             model = TestModel(fd_config)
 
@@ -1508,7 +1528,9 @@ class TestFusionSettings:
 
     def test_non_qwen_model_disables_fusion(self, mock_fd_config):
         """Test that non-Qwen model types disable fusion."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, tmp_dir = mock_fd_config
 
@@ -1539,12 +1561,14 @@ class TestFusionSettings:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch('paddleformers.transformers.AutoConfig.from_pretrained', return_value=mock_pf_config), \
-             patch('paddleformers.transformers.AutoModel.from_config', return_value=mock_pf_model), \
-             patch.object(TestModel, 'recursive_replace'), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}), \
-             patch('fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding'):
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch("paddleformers.transformers.AutoConfig.from_pretrained", return_value=mock_pf_config),
+            patch("paddleformers.transformers.AutoModel.from_config", return_value=mock_pf_model),
+            patch.object(TestModel, "recursive_replace"),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+            patch("fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding"),
+        ):
 
             model = TestModel(fd_config)
 
@@ -1558,7 +1582,9 @@ class TestForward:
 
     def test_forward_without_batch_id_per_token(self, mock_fd_config):
         """Test forward() when batch_id_per_token is None (lines 567-569)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1586,14 +1612,13 @@ class TestForward:
             attention_instances=None,
         )
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1618,7 +1643,9 @@ class TestForward:
 
     def test_forward_with_cu_seqlens_none(self, mock_fd_config):
         """Test forward() when cu_seqlens is None but batch_id_per_token exists (line 564)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1646,14 +1673,13 @@ class TestForward:
             attention_instances=None,
         )
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1678,7 +1704,9 @@ class TestForward:
 
     def test_forward_with_mrope(self, mock_fd_config):
         """Test forward() with uses_mrope=True (line 574)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
 
@@ -1706,14 +1734,13 @@ class TestForward:
             attention_instances=None,
         )
 
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'):
+        with patch("paddleformers.transformers.AutoModel"), patch("paddleformers.transformers.AutoConfig"):
 
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(
@@ -1745,22 +1772,24 @@ class TestLoadWeights:
     def setup_mocks(self):
         """Setup common mocks for all tests in this class."""
         self.mock_model_output = (paddle.randn([1, 10, 4096]),)
-        
+
         # Mock PF model
         self.mock_pf_model = MagicMock()
         self.mock_pf_model.return_value = self.mock_model_output
         self.mock_pf_model.eval = Mock()
         self.mock_pf_model.named_parameters = Mock(return_value=[])
         self.mock_pf_model.named_sublayers = Mock(return_value=[])
-        
+
         # Mock AutoModel.from_config to return our mock model
-        self.auto_model_patcher = patch('paddleformers.transformers.AutoModel.from_config', return_value=self.mock_pf_model)
+        self.auto_model_patcher = patch(
+            "paddleformers.transformers.AutoModel.from_config", return_value=self.mock_pf_model
+        )
         self.mock_auto_model = self.auto_model_patcher.start()
-        
+
         # Mock AutoConfig
-        self.auto_config_patcher = patch('paddleformers.transformers.AutoConfig')
+        self.auto_config_patcher = patch("paddleformers.transformers.AutoConfig")
         self.mock_auto_config = self.auto_config_patcher.start()
-        
+
         # Configure from_pretrained return value properly
         mock_config_instance = MagicMock()
         mock_config_instance.hidden_size = 4096
@@ -1768,16 +1797,16 @@ class TestLoadWeights:
         mock_config_instance.num_key_value_heads = 32
         mock_config_instance.head_dim = 128
         self.mock_auto_config.from_pretrained.return_value = mock_config_instance
-        
+
         # Also set on return_value if instantiated directly (just in case)
         self.mock_auto_config.return_value = mock_config_instance
-        
+
         # Mock VocabParallelEmbedding
-        self.vocab_embed_patcher = patch('fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding')
+        self.vocab_embed_patcher = patch("fastdeploy.model_executor.models.paddleformers.base.VocabParallelEmbedding")
         self.mock_vocab_embed = self.vocab_embed_patcher.start()
 
         # Mock process_weights_after_loading (correct path)
-        self.process_weights_patcher = patch('fastdeploy.model_executor.utils.process_weights_after_loading')
+        self.process_weights_patcher = patch("fastdeploy.model_executor.utils.process_weights_after_loading")
         self.mock_process_weights = self.process_weights_patcher.start()
 
     def teardown_method(self):
@@ -1788,7 +1817,9 @@ class TestLoadWeights:
 
     def test_load_fused_qkv_weights(self, mock_fd_config):
         """Test loading and fusing Q/K/V weights (lines 635-741)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
         # Ensure config supports QKV fusion shapes (TP=1, equal heads)
@@ -1807,15 +1838,17 @@ class TestLoadWeights:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}):
-             
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+        ):
+
             # Setup Model
             model = TestModel(fd_config)
-            model.fd_config = fd_config 
+            model.fd_config = fd_config
             model._use_fused_qkv = True
             model._use_fused_ffn = False
-            
+
             # Setup weights fusion buffer for QKV
             model.qkv_stacked_mapping = {}
             model.qkv_weight_buffer = {}
@@ -1823,14 +1856,12 @@ class TestLoadWeights:
             # Create mock parameters in the model
             # We expect 'model.layers.0.self_attn.qkv_proj.weight' to exist
             qkv_param = MagicMock(spec=paddle.Tensor)
-            qkv_param.shape = [4096, 12288] # [In, Out] for FD fused
+            qkv_param.shape = [4096, 12288]  # [In, Out] for FD fused
             qkv_param.weight_loader = Mock()
-            
+
             # Param dict needs to look like what named_parameters returns
-            params_dict = {
-                "model.layers.0.self_attn.qkv_proj.weight": qkv_param
-            }
-            
+            params_dict = {"model.layers.0.self_attn.qkv_proj.weight": qkv_param}
+
             # Mock named_parameters and named_sublayers
             model.named_parameters = Mock(return_value=params_dict.items())
             model.named_sublayers = Mock(return_value={}.items())
@@ -1859,10 +1890,12 @@ class TestLoadWeights:
 
     def test_load_fused_ffn_weights(self, mock_fd_config):
         """Test loading and fusing FFN weights (lines 619-624 + stacked mapping logic)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
-        
+
         class TestModel(PaddleFormersModelBase):
             pass
 
@@ -1872,8 +1905,10 @@ class TestLoadWeights:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}):
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+        ):
 
             model = TestModel(fd_config)
             model._use_fused_qkv = False
@@ -1893,31 +1928,33 @@ class TestLoadWeights:
             model.named_sublayers = Mock(return_value={}.items())
 
             # Simulate loading separate gate and up weights from checkpoint
-            loaded_gate = paddle.randn([4096, 11008]) # Example shapes
+            loaded_gate = paddle.randn([4096, 11008])  # Example shapes
             loaded_up = paddle.randn([4096, 11008])
-            
+
             weights = [
                 ("model.layers.0.mlp.gate_proj.weight", loaded_gate),
-                ("model.layers.0.mlp.up_proj.weight", loaded_up)
+                ("model.layers.0.mlp.up_proj.weight", loaded_up),
             ]
 
             model.load_weights(weights)
 
             # Expect weight_loader to be called for both input weights, fusing them into the param
-            # Wait, default `weight_loader` might not fuse? 
-            # Actually `weight_loader` just loads. 
+            # Wait, default `weight_loader` might not fuse?
+            # Actually `weight_loader` just loads.
             # But the mapping logic in base.py redirects `gate_proj` -> `up_gate_proj` and `up_proj` -> `up_gate_proj`.
             # And calls `up_gate_param.weight_loader`.
             # So `up_gate_param.weight_loader` should be called twice.
-            
+
             assert up_gate_param.weight_loader.call_count == 2
 
     def test_tie_word_embeddings(self, mock_fd_config):
         """Test tie_word_embeddings logic (lines 794-800)."""
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
 
         fd_config, _ = mock_fd_config
-        
+
         class TestModel(PaddleFormersModelBase):
             pass
 
@@ -1927,8 +1964,10 @@ class TestLoadWeights:
             self._buffers = {}
             self._loaddict_holder = {}
 
-        with patch.object(nn.Layer, '__init__', mock_layer_init), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}):
+        with (
+            patch.object(nn.Layer, "__init__", mock_layer_init),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+        ):
 
             model = TestModel(fd_config)
             model.tie_word_embeddings = True
@@ -1946,7 +1985,7 @@ class TestLoadWeights:
             # Call load_weights with empty weights
             model.named_parameters = Mock(return_value=[])
             model.named_sublayers = Mock(return_value=[])
-            
+
             model.load_weights([])
 
             # Verify set_value called on lm_head
@@ -1955,12 +1994,14 @@ class TestLoadWeights:
 
 class TestLinearNoWeight:
     """Test Linear layer replacement when weight is None (lines 321-322)."""
-    
+
     def test_linear_no_weight_attrs(self, mock_fd_config):
-        from fastdeploy.model_executor.models.paddleformers.base import PaddleFormersModelBase
-        
+        from fastdeploy.model_executor.models.paddleformers.base import (
+            PaddleFormersModelBase,
+        )
+
         fd_config, _ = mock_fd_config
-        
+
         class MockLinear(nn.Linear):
             def __init__(self):
                 # Init with dummy args
@@ -1970,37 +2011,40 @@ class TestLinearNoWeight:
                 self.bias = None
                 self.in_features = 4096
                 self.out_features = 4096
-                
+
         class MockModel(nn.Layer):
             def __init__(self):
                 super().__init__()
-                self.q_proj = MockLinear() # Targets colwise
-                
+                self.q_proj = MockLinear()  # Targets colwise
+
         mock_model_obj = MockModel()
-        
+
         class TestModel(PaddleFormersModelBase):
             pass
-            
-        with patch('paddleformers.transformers.AutoModel'), \
-             patch('paddleformers.transformers.AutoConfig'), \
-             patch.object(TestModel, 'create_attention_instances', return_value={}):
-             
+
+        with (
+            patch("paddleformers.transformers.AutoModel"),
+            patch("paddleformers.transformers.AutoConfig"),
+            patch.object(TestModel, "create_attention_instances", return_value={}),
+        ):
+
             model = object.__new__(TestModel)
-            model.__dict__['_sub_layers'] = {}
-            model.__dict__['_parameters'] = {}
-            model.__dict__['_buffers'] = {}
-            model.__dict__['_loaddict_holder'] = {}
+            model.__dict__["_sub_layers"] = {}
+            model.__dict__["_parameters"] = {}
+            model.__dict__["_buffers"] = {}
+            model.__dict__["_loaddict_holder"] = {}
             model.fd_config = fd_config
             model.model_config = fd_config.model_config
             model.text_config = SimpleNamespace(hidden_size=4096)
             model.model = mock_model_obj
             model._use_fused_qkv = False
             model._use_fused_ffn = False
-            
+
             model.recursive_replace()
-            
+
             # q_proj should be replaced
             from fastdeploy.model_executor.layers.linear import ColumnParallelLinear
+
             assert isinstance(model.model.q_proj, ColumnParallelLinear)
 
 
