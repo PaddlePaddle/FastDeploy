@@ -886,9 +886,16 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     """
     # RL rollout
     paddle.set_default_dtype(args.dtype)
-    model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
     speculative_config = SpeculativeConfig(args.speculative_config)
+    all_dict = vars(args)
+    if speculative_config.method is not None:
+        all_dict["num_max_dispatch_tokens_per_rank"] = args.max_num_seqs
+    else:
+        all_dict["num_max_dispatch_tokens_per_rank"] = args.max_num_seqs * (
+            speculative_config.num_speculative_tokens + 1
+        )
+    model_config = ModelConfig(all_dict)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     scheduler_config = SchedulerConfig(vars(args))
