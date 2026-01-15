@@ -874,6 +874,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
