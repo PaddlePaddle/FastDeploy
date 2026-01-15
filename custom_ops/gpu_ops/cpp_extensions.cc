@@ -802,6 +802,7 @@ void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& actual_candidate_len,
                      const paddle::Tensor& actual_draft_token_nums,
                      const paddle::Tensor& topp,
+                     const paddle::Tensor& reasoning_status,
                      int max_seq_len,
                      int verify_window,
                      bool enable_topp,
@@ -1106,6 +1107,19 @@ std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
     const int head_dim);
 
 std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
+
+void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
+                                   const paddle::Tensor& pre_ids,
+                                   const paddle::Tensor& stop_flags,
+                                   const paddle::Tensor& seq_lens_this_time,
+                                   const paddle::Tensor& seq_lens_encoder,
+                                   const paddle::Tensor& step_idx,
+                                   const paddle::Tensor& allowed_tokens,
+                                   const paddle::Tensor& reasoning_status,
+                                   const paddle::Tensor& output_padding_offset,
+                                   const paddle::Tensor& output_cum_offsets,
+                                   int64_t think_end_id,
+                                   int64_t line_break_id);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1712,4 +1726,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "fused_neox_rope_embedding function");
 
   m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
+
+  m.def("reasoning_phase_token_constraint",
+        &ReasoningPhaseTokenConstraint,
+        "reasoning_phase_token_constraint function");
 }
