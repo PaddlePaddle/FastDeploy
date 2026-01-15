@@ -659,6 +659,12 @@ class FusedMoE(nn.Layer):
                     tp_group=self.fd_config.parallel_config.tp_group,
                 )
 
+        if current_platform.is_intel_hpu():
+            out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
+            if self.reduce_results and (self.ep_size > 1 or self.tp_size > 1):
+                tensor_model_parallel_all_reduce_custom(out)
+            return out
+
         token_num = x.shape[0]
         if (
             self.ep_size > 1
@@ -678,10 +684,7 @@ class FusedMoE(nn.Layer):
             out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
 
         if self.reduce_results and self.tp_size > 1:
-            if current_platform.is_intel_hpu():
-                tensor_model_parallel_all_reduce_custom(out)
-            else:
-                out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(
