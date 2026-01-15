@@ -147,7 +147,7 @@ class DynamicWeightManager:
 
         total_cost = time.perf_counter() - sync_start
         logger.info(
-            f"END update_weights_by_rdma, cost {total_cost:.2f} seconds",
+            f"END update_weights_by_rdma, cost {total_cost:.2f} seconds"
             f" version:{version}, rsync_config: {rsync_config}",
         )
         return {
