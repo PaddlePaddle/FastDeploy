@@ -481,14 +481,6 @@ class TokenProcessor:
                         llm_logger.info(f"finished_task_id: {finished_task_id}")
                         self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
                 if task_id in self.prefill_result_status:
-                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        self.resource_manager.finish_requests_async(task_id)
-                    else:
-                        self.resource_manager.stop_flags[index] = True
-                        self.resource_manager.tasks_list[index] = None
-                        self.resource_manager._recycle_block_tables(task)
-                        if task_id in self.resource_manager.req_dict:
-                            del self.resource_manager.req_dict[task_id]
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
@@ -497,6 +489,14 @@ class TokenProcessor:
                     )
                     result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        self.resource_manager.finish_requests_async(task_id)
+                    else:
+                        self.resource_manager.stop_flags[index] = True
+                        self.resource_manager.tasks_list[index] = None
+                        self.resource_manager._recycle_block_tables(task)
+                        if task_id in self.resource_manager.req_dict:
+                            del self.resource_manager.req_dict[task_id]
                     break
                 else:
                     # TODO: Refine checking sending cache and do not keep waiting
