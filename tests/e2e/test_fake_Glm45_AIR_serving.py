@@ -20,8 +20,10 @@ import subprocess
 import sys
 import time
 
+import openai
 import pytest
 import requests
+from utils.rollout_routing_replay_test_utils import check_routing_replay_chat_completion
 from utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
@@ -72,7 +74,7 @@ def setup_and_run_server():
         "--max-model-len",
         "32768",
         "--max-num-seqs",
-        "32",
+        "1",
         "--graph-optimization-config",
         '{"use_cudagraph":true}',
         "--load-choices",
@@ -80,6 +82,8 @@ def setup_and_run_server():
         "--lm_head-fp32",
         "--quantization",
         "wfp8afp8",
+        "--routing-replay-config",
+        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air"}',
     ]
     env = os.environ.copy()
     # Start subprocess in new process group
@@ -176,4 +180,25 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     assert (
         resp_json["choices"][0]["message"]["content"]
         == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
+    ), f"The response content is not as expected {resp_json['choices'][0]['message']['content']}."
+
+
+# ==========================
+# Test for Rollout Routing Replay
+# ==========================
+@pytest.fixture
+def openai_client():
+    ip = "0.0.0.0"
+    service_http_port = str(FD_API_PORT)
+    client = openai.Client(
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
+    )
+    return client
+
+
+def test_r3_accuracy(openai_client):
+    moe_layer_num = 1  # GLM45 AIR moe layer num: 45, Fake GLM AIR moe layer num: 1
+    check_routing_replay_chat_completion(
+        openai_client=openai_client, moe_layer_num=moe_layer_num, model_name="glm45air"
     )

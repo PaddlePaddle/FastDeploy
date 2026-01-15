@@ -641,14 +641,16 @@ class FusedMoE(nn.Layer):
         """
         topk_ids_hookfunc = None
         if self.enable_routing_replay:
-            if forward_meta is not None:  # forward_meta is None when execute empty_input_forward
+            # When execute empty_input_forward forward_meta is None. When execute mtp layer routing_replay_table is None.
+            if forward_meta is not None and forward_meta.routing_replay_table is not None:
+                moe_layer_idx = self.layer_idx - self.fd_config.model_config.moe_layer_start_index
                 topk_ids_hookfunc = partial(
                     save_routing_to_buffer,
                     routing_replay_table=forward_meta.routing_replay_table,
                     batch_id_per_token=forward_meta.batch_id_per_token,
                     seq_lens_decoder=forward_meta.seq_lens_decoder,
                     cu_seqlens_q=forward_meta.cu_seqlens_q,
-                    layer_idx=self.layer_idx,
+                    layer_idx=moe_layer_idx,
                     tp_size=self.fd_config.parallel_config.tensor_parallel_size,
                     ep_size=self.fd_config.parallel_config.expert_parallel_size,
                     tp_group=self.fd_config.parallel_config.tp_group,
