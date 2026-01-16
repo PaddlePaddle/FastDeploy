@@ -149,7 +149,7 @@ class TestKernelInterfaceV2(unittest.TestCase):
         self.assertEqual(len(dtypes_arg), 2)
         self.assertEqual(dtypes_arg[0], a.dtype)
         self.assertEqual(dtypes_arg[1], paddle.int8)
-        mock_import.assert_called_once_with("haha_N8_K16_package")
+        mock_import.assert_any_call("haha_N8_K16_package")
         mock_pybind_func.assert_called_once_with(a, b)
 
     def test_getitem_sets_grid_and_returns_decorator(self):

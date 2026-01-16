@@ -328,6 +328,7 @@ class TestServe(IsolatedAsyncioTestCase):
         mock_args.save_detailed = False
         mock_args.append_result = False
         mock_args.hyperparameter_path = "test_params.yaml"
+        mock_args.seed = None
         mock_parse_args.return_value = mock_args
 
         # Mock YAML loading
