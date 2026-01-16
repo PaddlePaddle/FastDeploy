@@ -131,6 +131,11 @@ class HPUKVCacheMethodBase(QuantMethodBase):
         layer.s_scale.set_value(s_scale)
         layer.s_out_scale.set_value(s_out_scale)
 
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight).cast("float32")
+        loaded_weight = self.cache_quant_config.max_bound / loaded_weight
+        param.copy_(loaded_weight, False)
+
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         create_weights
@@ -158,12 +163,14 @@ class HPUKVCacheMethodBase(QuantMethodBase):
             layer.cache_k_scale,
             {
                 **extra_weight_attrs,
+                "weight_loader": self.weight_loader,
             },
         )
         set_weight_attrs(
             layer.cache_v_scale,
             {
                 **extra_weight_attrs,
+                "weight_loader": self.weight_loader,
             },
         )
         layer.cache_k_out_scale = layer.create_parameter(
@@ -181,6 +188,13 @@ class HPUKVCacheMethodBase(QuantMethodBase):
             shape=scale_shape,
             dtype="float32",
             default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_weight_attrs(
+            layer.q_scale,
+            {
+                **extra_weight_attrs,
+                "weight_loader": self.weight_loader,
+            },
         )
         layer.q_out_scale = layer.create_parameter(
             shape=scale_shape,
@@ -201,6 +215,13 @@ class HPUKVCacheMethodBase(QuantMethodBase):
             shape=scale_shape,
             dtype="float32",
             default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        set_weight_attrs(
+            layer.s_scale,
+            {
+                **extra_weight_attrs,
+                "weight_loader": self.weight_loader,
+            },
         )
         layer.s_out_scale = layer.create_parameter(
             shape=scale_shape,
@@ -226,9 +247,16 @@ class HPUKVCacheMethodBase(QuantMethodBase):
         """
         # cache_k_out_scale is the reciprocal of cache_k_scale
         if layer.cache_k_scale._is_initialized():
-            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)  # cache_k_out_scale
+            layer.cache_k_out_scale.set_value(1.0 / layer.cache_k_scale)
         if layer.cache_v_scale._is_initialized():
-            layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
+            layer.cache_v_out_scale.set_value(1.0 / layer.cache_v_scale)
+        if layer.q_scale._is_initialized():
+            scaling_factor = layer.head_dim**-0.5
+            layer.q_scaling_scale.set_value(layer.q_scale / scaling_factor)
+            layer.q_scaling_out_scale.set_value(scaling_factor / layer.q_scale)
+            layer.q_out_scale.set_value(1.0 / layer.q_scale)
+        if layer.s_scale._is_initialized():
+            layer.s_out_scale.set_value(1.0 / layer.s_scale)
 
     def apply(self, layer):
         """

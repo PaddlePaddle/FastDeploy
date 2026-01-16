@@ -1046,6 +1046,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
         os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
+    elif envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "decode":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "0"
 
     fd_config = FDConfig(
         model_config=model_config,
@@ -1073,10 +1075,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
-        # TODO XPU support PaddleOCR prefix caching
-        if current_platform.is_xpu():
-            fd_config.cache_config.enable_prefix_caching = False
-            fd_config.cache_config.max_encoder_cache = 0
+        fd_config.cache_config.enable_prefix_caching = False
+        fd_config.cache_config.max_encoder_cache = 0
 
     return fd_config
 

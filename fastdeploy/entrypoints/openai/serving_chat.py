@@ -183,6 +183,13 @@ class OpenAIServingChat:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
                     api_server_logger.error(error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
+            )
         except Exception as e:
             error_msg = (
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
@@ -511,6 +518,10 @@ class OpenAIServingChat:
                 )
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
         except Exception as e:
             error_data = self._create_streaming_error_response(
                 f"request[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"

@@ -739,6 +739,9 @@ class SpeculativeConfig:
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
+        # Enable token constraint enforcement in generation phase
+        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
+        self.enf_gen_phase_tag: bool = False
 
         self.num_extra_cache_layer = 0
 
@@ -1567,6 +1570,9 @@ class RoutingReplayConfig:
         # RDMA routing store
         self.rdma_store_server: str = ""
 
+        # Only save last turn
+        self.only_last_turn: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1735,6 +1741,10 @@ class FDConfig:
         """
         calculate some parameters
         """
+        #  Unified field model config
+        if self.model_config.architectures[0] == "Glm4MoeForCausalLM":
+            # The first moe layer id of GLM4.5 model
+            self.model_config.moe_layer_start_index = self.model_config.first_k_dense_replace
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
