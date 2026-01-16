@@ -81,7 +81,6 @@ def stop_processes():
         "ps -efww | grep -E 'gunicorn: worker' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
-        f"lsof -t -i :{port_num + 47873} | xargs echo",
     ]
 
     # Kill additional ports
