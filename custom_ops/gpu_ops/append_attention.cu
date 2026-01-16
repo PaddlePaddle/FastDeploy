@@ -394,9 +394,7 @@ void AppendAttentionKernel(
               rms_norm_eps);
         }
       }
-    }else{
-      printf("append attention: no rope_norm cache \n");
-  }
+    }
 
     if (out_linear_in_scale > 0.0) {
       switch (fmha_out.dtype()) {

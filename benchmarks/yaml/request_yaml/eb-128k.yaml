@@ -1,0 +1,9 @@
+max_tokens: 128
+top_p: 0
+temperature: 1
+repetition_penalty: 1.0
+frequency_penalty: 0
+presence_penalty: 0
+metadata:
+  enable_thinking: true
+  min_tokens: 120

@@ -268,39 +268,63 @@ void FastTopKTransformRaggedInterface(
     const paddle::Tensor& topk_indices_offset,
     paddle::Tensor& row_starts_opt);
 
-// std::vector<paddle::Tensor> IndexerGQARopeWriteCacheKernel(
-//     const paddle::Tensor &qkv,
-//     const paddle::Tensor &key_cache,
-//     const paddle::Tensor &value_cache,
-//     const paddle::Tensor &cu_seqlens_q,
-//     const paddle::Tensor &cu_seqlens_k,
-//     const paddle::Tensor &rotary_embs,
-//     const paddle::Tensor &seq_lens_this_time,
-//     const paddle::Tensor &seq_lens_encoder,
-//     const paddle::Tensor &seq_lens_decoder,
-//     const paddle::Tensor &batch_id_per_token,
-//     const paddle::Tensor &block_tables,
-//     const paddle::Tensor &kv_batch_ids,
-//     const paddle::Tensor &kv_tile_ids,
-//     const paddle::Tensor &kv_num_blocks,
-//     const paddle::Tensor &cache_batch_ids,
-//     const paddle::Tensor &cache_tile_ids,
-//     const paddle::Tensor &cache_num_blocks,
-//     const paddle::optional<paddle::Tensor> &q_norm_weight,
-//     const paddle::optional<paddle::Tensor> &k_norm_weight,
-//     const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
-//     const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
-//     const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
-//     const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
-//     const paddle::optional<paddle::Tensor> &cache_k_zp,
-//     const paddle::optional<paddle::Tensor> &cache_v_zp,
-//     const paddle::optional<paddle::Tensor> &kv_signal_data,
-//     const int kv_token_num,
-//     const int max_seq_len,
-//     const float rms_norm_eps,
-//     const std::string &cache_quant_type,
-//     const bool rope_3d);
 
+void FastTopKTransformDecodeRaggedInterface(
+    const paddle::Tensor& score,
+    const paddle::Tensor& lengths,
+    paddle::Tensor& topk_indices_ragged,
+    const paddle::Tensor& topk_indices_offset,
+    paddle::Tensor& row_starts_opt,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& seq_lens_decoder);
+
+
+
+void FastTopKTransformInterface(
+    const paddle::Tensor& score,
+    const paddle::Tensor& lengths,
+    paddle::Tensor& dst_page_table,
+    const paddle::Tensor& src_page_table,
+    const paddle::Tensor& cu_seqlens_q,
+    paddle::optional<paddle::Tensor>& row_starts_opt);
+
+std::vector<paddle::Tensor> IndexerEncoderRopeNormWriteCache(
+    const paddle::Tensor &qkv,
+    const paddle::Tensor &key_cache,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &cu_seqlens_k,
+    const paddle::Tensor &rotary_embs,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &block_tables,
+    const paddle::Tensor &kv_batch_ids,
+    const paddle::Tensor &kv_tile_ids,
+    const paddle::Tensor &kv_num_blocks,
+    const paddle::Tensor &cache_batch_ids,
+    const paddle::Tensor &cache_tile_ids,
+    const paddle::Tensor &cache_num_blocks,
+    const paddle::optional<paddle::Tensor> &q_norm_weight,
+    const paddle::optional<paddle::Tensor> &k_norm_weight,
+    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor> &cache_k_zp,
+    const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const int kv_token_num,
+    const int max_seq_len,
+    const float rms_norm_eps,
+    const std::string &cache_quant_type,
+    const bool rope_3d);
+
+
+void radix_topk_ragged_transform(
+    paddle::Tensor& input, 
+    paddle::Tensor& output_indices,
+    const paddle::Tensor& offsets,
+    paddle::Tensor& lengths, 
+    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
+    int64_t top_k);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_decoder,
@@ -1303,13 +1327,35 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("fast_topk_transform_ragged_interface", &FastTopKTransformRaggedInterface,
         "fast_topk_transform_ragged_interface function");
 
+  /**
+   * indexer_encoder_top_k.cu
+   * fast_topk_transform_ragged_interface
+   */
+  m.def("fast_topk_transform_decode_ragged_interface", &FastTopKTransformDecodeRaggedInterface,
+        "fast_topk_transform_decode_ragged_interface function");
 
-//   /**
-//    * indexer_encoder_top_k.cu
-//    * fast_topk_transform_ragged_interface
-//    */
-//   m.def("indexer_gqa_rope_write_cache", &IndexerGQARopeWriteCacheKernel,
-//         "fast_topk_transform_ragged_interface function");
+        
+  /**
+   * indexer_encoder_top_k.cu
+   * fast_topk_transform_ragged_interface
+   */
+  m.def("fast_topk_transform_interface", &FastTopKTransformInterface,
+        "fast_topk_transform_interface function");
+
+
+  /**
+   * indexer_encoder_top_k.cu
+   * fast_topk_transform_ragged_interface
+   */
+  m.def("indexer_encoder_rope_norm_write_cache", &IndexerEncoderRopeNormWriteCache,
+        "indexer_encoder_rope_norm_write_cache function");
+
+  /**
+   * indexer_encoder_top_k.cu
+   * fast_topk_transform_ragged_interface
+   */
+  m.def("flashinfer_radix_topk_ragged_transform", &radix_topk_ragged_transform,
+        "radix_topk_ragged_transform function");
 
 
   /**

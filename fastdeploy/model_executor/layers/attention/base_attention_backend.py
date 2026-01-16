@@ -52,6 +52,7 @@ class AttentionBackend(ABC):
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
+        token_sparse_index: paddle.Tensor,
     ) -> paddle.Tensor:
         """
         Run a forward.
@@ -74,6 +75,7 @@ class AttentionBackend(ABC):
                 k_pe,
                 layer,
                 forward_meta,
+                token_sparse_index,
             )
         elif forward_meta.forward_mode.is_decode():
             return self.forward_decode(
@@ -117,6 +119,7 @@ class AttentionBackend(ABC):
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
+        token_sparse_index: paddle.Tensor,
     ) -> paddle.Tensor:
         """Run a forward for mix."""
         raise NotImplementedError

@@ -120,13 +120,13 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "max_position_embeddings": 131072,
-            "max_model_len": 131072,
+            "max_position_embeddings": 131072+1024,
+            "max_model_len": 131072+1024,
             "head_dim": 128,
-            "hidden_size": 4096,
-            "num_attention_heads": 32,
+            "hidden_size": 7168,
+            "num_attention_heads": 56,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 57,
+            "num_hidden_layers": 2,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -137,7 +137,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
     def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1):
         """Creates a complete FDConfig from a model path."""
-        model_args = {"model": model_path, "dtype": "bfloat16"}
+        model_args = {"model": model_path, "dtype": "b16"}
         model_config = ModelConfig(model_args)
         model_config.tensor_parallel_size = tensor_parallel_size
         parallel_config = ParallelConfig({"tensor_parallel_size": tensor_parallel_size, "data_parallel_size": 1})
@@ -158,6 +158,7 @@ class TestAttentionPerformance(unittest.TestCase):
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
                 kv_cache_quant_type="float8_e4m3fn",
+                # kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -355,14 +356,14 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        for decode_batch_size in [32, 16, 8, 4, 2]:
+        for decode_batch_size in [1]:
             decode_hidden_states = paddle.randn(
                 [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
             )
 
             forward_meta = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=36 * 1024,
+                seq_len=128 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,

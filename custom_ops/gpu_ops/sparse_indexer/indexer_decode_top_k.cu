@@ -6,7 +6,7 @@
 #include "paddle/extension.h"
 #include "paddle/phi/api/ext/op_meta_info.h"
 #include "paddle/utils/optional.h"
-
+#include <cuda_bf16.h>
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
@@ -21,7 +21,7 @@ constexpr int kThreadsPerBlock = 1024;
 constexpr size_t kSmem = 32 * 1024 * sizeof(uint32_t);  // 128KB
 
 struct FastTopKParams {
-  const float* __restrict__ input;         // [B, input_stride]
+  const __nv_bfloat16* __restrict__ input;         // [B, input_stride]
   const int32_t* __restrict__ row_starts;  // [B]
   int32_t* __restrict__ indices;           // [B, TopK]
   int32_t* __restrict__ lengths;           // [B]
@@ -31,7 +31,7 @@ struct FastTopKParams {
 
 
 // when length <= TopK, we can directly write the indices
-__device__ void naive_topk_cuda(const float* __restrict__ score, int32_t* __restrict__ indice, int32_t length) {
+__device__ void naive_topk_cuda(const __nv_bfloat16* __restrict__ score, int32_t* __restrict__ indice, int32_t length) {
   const auto tid = threadIdx.x;
   for (int i = tid; i < TopK; i += kThreadsPerBlock) {
     indice[i] = (i < length) ? i : -1;
@@ -40,7 +40,7 @@ __device__ void naive_topk_cuda(const float* __restrict__ score, int32_t* __rest
 
 // keep the first `length` entries, set others to -1
 __device__ void naive_topk_transform(
-    const float* __restrict__ score,
+    const __nv_bfloat16* __restrict__ score,
     int32_t length,
     int32_t* __restrict__ dst_page_table,
     const int32_t* __restrict__ src_page_table) {
@@ -53,26 +53,43 @@ __device__ void naive_topk_transform(
 
 // keep the first `length` entries, set others to -1
 __device__ void naive_topk_transform_ragged(
-    const float* __restrict__ score, int32_t length, int32_t* __restrict__ topk_indices_ragged, int32_t offset) {
+    const __nv_bfloat16* __restrict__ score, int32_t length, int32_t* __restrict__ topk_indices_ragged, int32_t offset) {
   const auto tid = threadIdx.x;
   for (auto i = tid; i < TopK; i += kThreadsPerBlock) {
     topk_indices_ragged[i] = (i < length) ? static_cast<int32_t>(i) + offset : -1;
   }
 }
 
-__device__ __forceinline__ auto convert_to_uint8(float x) -> uint8_t {
-  __half h = __float2half_rn(x);
-  uint16_t bits = __half_as_ushort(h);
+// __device__ __forceinline__ auto convert_to_uint8(float x) -> uint8_t {
+//   __half h = __float2half_rn(x);
+//   uint16_t bits = __half_as_ushort(h);
+//   uint16_t key = (bits & 0x8000) ? static_cast<uint16_t>(~bits) : static_cast<uint16_t>(bits | 0x8000);
+//   return static_cast<uint8_t>(key >> 8);
+// }
+
+// __device__ __forceinline__ auto convert_to_uint32(float x) -> uint32_t {
+//   uint32_t bits = __float_as_uint(x);
+//   return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
+// }
+
+
+__device__ __forceinline__ auto convert_to_uint8(__nv_bfloat16 x) -> uint8_t {
+  // uint16_t bits = *reinterpret_cast<const uint16_t*>(&x);
+  uint16_t bits = __bfloat16_as_ushort(x);
   uint16_t key = (bits & 0x8000) ? static_cast<uint16_t>(~bits) : static_cast<uint16_t>(bits | 0x8000);
   return static_cast<uint8_t>(key >> 8);
 }
 
-__device__ __forceinline__ auto convert_to_uint32(float x) -> uint32_t {
-  uint32_t bits = __float_as_uint(x);
+
+__device__ __forceinline__ auto convert_to_uint32(__nv_bfloat16 x) -> uint32_t {
+  // uint16_t bf16_bits = *reinterpret_cast<const uint16_t*>(&x);
+  uint16_t bf16_bits = __bfloat16_as_ushort(x);
+  uint32_t bits = static_cast<uint32_t>(bf16_bits) << 16;
   return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
 }
 
-__device__ void fast_topk_cuda_tl(const float* __restrict__ input, int* __restrict__ index, int row_start, int length) {
+
+__device__ void fast_topk_cuda_tl(const __nv_bfloat16* __restrict__ input, int* __restrict__ index, int row_start, int length) {
   // An optimized topk kernel copied from tilelang kernel
   // We assume length > TopK here, or it will crash
   int topk = TopK;
@@ -269,6 +286,7 @@ __global__ __launch_bounds__(kThreadsPerBlock)  // decode
   const auto src_page_entry = src_page_table + bid * src_stride;
   const auto dst_page_entry = dst_page_table + bid * TopK;
   const auto score = input + bid * input_stride;
+  // length = seq_lens_decoder[batch_id_per_token[bid/4]]+1
   if (length <= TopK) {
     return naive_topk_transform(score, length, dst_page_entry, src_page_entry);
   } else {
@@ -348,30 +366,40 @@ __global__ __launch_bounds__(kThreadsPerBlock)  // prefill, ragged kv
     void topk_transform_prefill_ragged_kernel(
         const FastTopKParams params,
         int32_t* __restrict__ topk_indices_ragged,
-        const int32_t* __restrict__ topk_indices_offset) {
+        const int32_t* __restrict__ topk_indices_offset,
+        const int32_t* __restrict__ batch_id_per_token,
+        const int32_t* __restrict__ seq_lens_decoder) {
+
   const auto& [input, row_starts, _, lengths, input_stride] = params;
   const auto bid = static_cast<uint64_t>(blockIdx.x);
   const auto tid = threadIdx.x;
-  const auto row_start = row_starts == nullptr ? 0 : row_starts[bid];
-  const auto length = lengths[bid];
+  const auto row_start = 0;//row_starts == nullptr ? 0 : row_starts[bid];
+  auto length = 0;//lengths[bid];
   const auto dst_indices_entry = topk_indices_ragged + bid * TopK;
   const auto score = input + bid * input_stride;
-  const auto offset = topk_indices_offset[bid];
+  const auto offset = 0;//topk_indices_offset[bid];
+  
+  const auto  batch_id = batch_id_per_token[bid/4];
+  if (batch_id == -1){
+    return;
+  }
+
+  length = seq_lens_decoder[batch_id];
 
   if (length <= TopK) {
-    return naive_topk_transform_ragged(score, length, dst_indices_entry, offset);
+    return naive_topk_transform_ragged(score, length+1, dst_indices_entry, offset);
   } else {
     __shared__ int s_indices[TopK];
-    fast_topk_cuda_tl(score, s_indices, row_start, length);
+    fast_topk_cuda_tl(score, s_indices, row_start, length+1);
     // copy src[s_indices] to dst, we manually unroll here
     static_assert(TopK % kThreadsPerBlock == 0);
     static_assert(TopK / kThreadsPerBlock == 2);
     const auto idx_0 = tid;
     const auto pos_0 = s_indices[idx_0];
-    dst_indices_entry[idx_0] = pos_0 + offset;
+    dst_indices_entry[idx_0] = pos_0;// + offset;
     const auto idx_1 = tid + kThreadsPerBlock;
     const auto pos_1 = s_indices[idx_1];
-    dst_indices_entry[idx_1] = pos_1 + offset;
+    dst_indices_entry[idx_1] = pos_1;// + offset;
   }
 }
 
@@ -397,7 +425,7 @@ auto get_params(
   int32_t* lengths_data_ptr = const_cast<int32_t*>(lengths.data<int32_t>());
 
   return FastTopKParams{
-      .input = score.data<float>(),
+      .input = reinterpret_cast<const __nv_bfloat16*>(score.data<paddle::bfloat16>()),
       .row_starts = row_starts_data_ptr,
       .indices = indices_data_ptr,
       .lengths = lengths_data_ptr,
@@ -421,85 +449,87 @@ void setup_kernel_smem_once() {
 // #define CHECK_CUDA(x) PD_CHECK(x.is_cuda(), #x " must be a CUDA tensor")
 
 
-void FastTopKTransformInterface(
-    const paddle::Tensor& score,
-    const paddle::Tensor& lengths,
-    paddle::Tensor& dst_page_table,
-    const paddle::Tensor& src_page_table,
-    const paddle::Tensor& cu_seqlens_q,
-    paddle::optional<paddle::Tensor>& row_starts_opt) {
-  // CHECK_CUDA(score);
-  // CHECK_CUDA(lengths);
-  // CHECK_CUDA(dst_page_table);
-  // CHECK_CUDA(src_page_table);
-  // CHECK_CUDA(cu_seqlens_q);
-  // if (row_starts_opt.has_value()) {
-  //   CHECK_CUDA(row_starts_opt.value());
-  // }
-  // int32_t* row_starts_data_ptr = nullptr;
-  // if (row_starts_opt) {
-  //   const auto& row_starts = *row_starts_opt;
-  //   row_starts_data_ptr = const_cast<int32_t*>(row_starts.data<int32_t>());
-  // }
+// void FastTopKTransformInterface(
+//     const paddle::Tensor& score,
+//     const paddle::Tensor& lengths,
+//     paddle::Tensor& dst_page_table,
+//     const paddle::Tensor& src_page_table,
+//     const paddle::Tensor& cu_seqlens_q,
+//     paddle::optional<paddle::Tensor>& row_starts_opt) {
+//   // CHECK_CUDA(score);
+//   // CHECK_CUDA(lengths);
+//   // CHECK_CUDA(dst_page_table);
+//   // CHECK_CUDA(src_page_table);
+//   // CHECK_CUDA(cu_seqlens_q);
+//   // if (row_starts_opt.has_value()) {
+//   //   CHECK_CUDA(row_starts_opt.value());
+//   // }
+//   // int32_t* row_starts_data_ptr = nullptr;
+//   // if (row_starts_opt) {
+//   //   const auto& row_starts = *row_starts_opt;
+//   //   row_starts_data_ptr = const_cast<int32_t*>(row_starts.data<int32_t>());
+//   // }
 
-  // int32_t* row_starts_data_ptr = nullptr;
-  // if (row_starts_opt) {
-  //   const auto& row_starts = row_starts_opt;
-  //   row_starts_data_ptr = const_cast<int32_t*>(row_starts.data<int32_t>());
-  // }
+//   // int32_t* row_starts_data_ptr = nullptr;
+//   // if (row_starts_opt) {
+//   //   const auto& row_starts = row_starts_opt;
+//   //   row_starts_data_ptr = const_cast<int32_t*>(row_starts.data<int32_t>());
+//   // }
 
-  const auto params = get_params(score, lengths, row_starts_opt ? row_starts_opt : nullptr);
-  const auto B = score.dims()[0];
-  // TORCH_CHECK(dst_page_table.dim() == 2 && dst_page_table.is_contiguous());
-  // TORCH_CHECK(src_page_table.dim() == 2 && src_page_table.stride(1) == 1);
-  // TORCH_CHECK(cu_seqlens_q.dim() == 1 && cu_seqlens_q.is_contiguous());
-  const auto prefill_bs = cu_seqlens_q.dims()[0] - 1;
-  // TORCH_CHECK(dst_page_table.dims()[0] == B);
-  // TORCH_CHECK(dst_page_table.dims()[1] == TopK);
-  // TORCH_CHECK(src_page_table.dims()[0] == prefill_bs);
-  // TORCH_CHECK(prefill_bs <= B);  // prefill_bs should be smaller than expanded bs
+//   const auto params = get_params(score, lengths, row_starts_opt ? row_starts_opt : nullptr);
+//   const auto B = score.dims()[0];
+//   // TORCH_CHECK(dst_page_table.dim() == 2 && dst_page_table.is_contiguous());
+//   // TORCH_CHECK(src_page_table.dim() == 2 && src_page_table.stride(1) == 1);
+//   // TORCH_CHECK(cu_seqlens_q.dim() == 1 && cu_seqlens_q.is_contiguous());
+//   const auto prefill_bs = cu_seqlens_q.dims()[0] - 1;
+//   // TORCH_CHECK(dst_page_table.dims()[0] == B);
+//   // TORCH_CHECK(dst_page_table.dims()[1] == TopK);
+//   // TORCH_CHECK(src_page_table.dims()[0] == prefill_bs);
+//   // TORCH_CHECK(prefill_bs <= B);  // prefill_bs should be smaller than expanded bs
 
-  // launch kernel
-  const auto stream = score.stream();
-  const auto grid = dim3{static_cast<uint32_t>(B)};
-  const auto block = dim3{kThreadsPerBlock};
-  const auto src_stride = src_page_table.strides()[0];
+//   // launch kernel
+//   const auto stream = score.stream();
+//   const auto grid = dim3{static_cast<uint32_t>(B)};
+//   const auto block = dim3{kThreadsPerBlock};
+//   const auto src_stride = src_page_table.strides()[0];
 
-  // dispatch to decode or prefill
-  // extend and draft extend: row_starts_opt is not null, invokes the prefill kernel
-  // decode: row_starts_opt is null, invokes the decode kernel
-  // target verify: row_starts_opt is null, invokes the prefill kernel
+//   // dispatch to decode or prefill
+//   // extend and draft extend: row_starts_opt is not null, invokes the prefill kernel
+//   // decode: row_starts_opt is null, invokes the decode kernel
+//   // target verify: row_starts_opt is null, invokes the prefill kernel
 
-  const auto is_decode = !row_starts_opt && prefill_bs == B;
-  if (is_decode) {
-    setup_kernel_smem_once<topk_transform_decode_kernel, kSmem>();
-    topk_transform_decode_kernel<<<grid, block, kSmem, stream>>>(
-        params, dst_page_table.data<int32_t>(), src_page_table.data<int32_t>(), src_stride);
-  } else {
-    setup_kernel_smem_once<topk_transform_prefill_kernel, kSmem>();
-    topk_transform_prefill_kernel<<<grid, block, kSmem, stream>>>(
-        params,
-        dst_page_table.data<int32_t>(),
-        src_page_table.data<int32_t>(),
-        src_stride,
-        cu_seqlens_q.data<int32_t>(),
-        prefill_bs);
-  }
+//   const auto is_decode = !row_starts_opt && prefill_bs == B;
+//   if (is_decode) {
+//     setup_kernel_smem_once<topk_transform_decode_kernel, kSmem>();
+//     topk_transform_decode_kernel<<<grid, block, kSmem, stream>>>(
+//         params, dst_page_table.data<int32_t>(), src_page_table.data<int32_t>(), src_stride);
+//   } else {
+//     setup_kernel_smem_once<topk_transform_prefill_kernel, kSmem>();
+//     topk_transform_prefill_kernel<<<grid, block, kSmem, stream>>>(
+//         params,
+//         dst_page_table.data<int32_t>(),
+//         src_page_table.data<int32_t>(),
+//         src_stride,
+//         cu_seqlens_q.data<int32_t>(),
+//         prefill_bs);
+//   }
 
-  const auto result = cudaGetLastError();
-  PD_CHECK(result == cudaSuccess, "topk kernel failed:", ::cudaGetErrorString(result));
-}
-
-
+//   const auto result = cudaGetLastError();
+//   PD_CHECK(result == cudaSuccess, "topk kernel failed:", ::cudaGetErrorString(result));
+// }
 
 
 
-void FastTopKTransformRaggedInterface(
+
+
+void FastTopKTransformDecodeRaggedInterface(
     const paddle::Tensor& score,
     const paddle::Tensor& lengths,
     paddle::Tensor& topk_indices_ragged,
     const paddle::Tensor& topk_indices_offset,
-    paddle::Tensor& row_starts_opt) {
+    paddle::Tensor& row_starts_opt,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& seq_lens_decoder) {
 
   const auto params = get_params(score, lengths, row_starts_opt);
   const auto B = score.dims()[0];
@@ -511,28 +541,30 @@ auto stream = score.stream();
 
   setup_kernel_smem_once<topk_transform_prefill_ragged_kernel, kSmem>();
   topk_transform_prefill_ragged_kernel<<<grid, block, kSmem, stream>>>(
-      params, topk_indices_ragged.data<int32_t>(), topk_indices_offset.data<int32_t>());
+      params, topk_indices_ragged.data<int32_t>(), topk_indices_offset.data<int32_t>(),batch_id_per_token.data<int32_t>(),seq_lens_decoder.data<int32_t>());
 
   const auto result = cudaGetLastError();
   PD_CHECK(result == cudaSuccess, "topk kernel failed:", ::cudaGetErrorString(result));
 }
 
 
-PD_BUILD_STATIC_OP(fast_topk_transform_ragged_interface)
-    .Inputs({"score", 
-             "lengths",
-             "topk_indices_ragged",
-             "topk_indices_offset",
-             "row_starts_opt"})
-    .SetKernelFn(PD_KERNEL(FastTopKTransformRaggedInterface));
+// PD_BUILD_STATIC_OP(fast_topk_transform_decode_ragged_interface)
+//     .Inputs({"score", 
+//              "lengths",
+//              "topk_indices_ragged",
+//              "topk_indices_offset",
+//              "row_starts_opt",
+//              "batch_id_per_token",
+//              "seq_lens_decoder"})
+//     .SetKernelFn(PD_KERNEL(FastTopKTransformDecodeRaggedInterface));
 
-PD_BUILD_STATIC_OP(fast_topk_transform_interface)
-    .Inputs({"score", 
-             "lengths",
-             "dst_page_table",
-             "src_page_table",
-             "cu_seqlens_q",
-             paddle::Optional("row_starts_opt")})
-    .SetKernelFn(PD_KERNEL(FastTopKTransformInterface));
+// PD_BUILD_STATIC_OP(fast_topk_transform_interface)
+//     .Inputs({"score", 
+//              "lengths",
+//              "dst_page_table",
+//              "src_page_table",
+//              "cu_seqlens_q",
+//              paddle::Optional("row_starts_opt")})
+//     .SetKernelFn(PD_KERNEL(FastTopKTransformInterface));
 
 

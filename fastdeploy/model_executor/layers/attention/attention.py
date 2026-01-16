@@ -246,6 +246,7 @@ class Attention(nn.Layer):
         compressed_kv: paddle.Tensor = None,
         k_pe: paddle.Tensor = None,
         forward_meta: ForwardMeta = None,
+        token_sparse_index: paddle.Tensor = None,
     ) -> paddle.Tensor:
         """
         The forward function of attention layer.
@@ -266,4 +267,5 @@ class Attention(nn.Layer):
             k_pe,
             self,
             forward_meta,
+            token_sparse_index,
         )

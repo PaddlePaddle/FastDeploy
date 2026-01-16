@@ -141,30 +141,30 @@ void IndexerDecoderRopeNormWriteCache(
     return;
 }
 
-PD_BUILD_STATIC_OP(indexer_decoder_rope_norm_write_cache)
-    .Inputs({"qkv",
-             "key_cache",
-             "seq_lens_encoder",
-             "seq_lens_decoder",
-             "seq_lens_this_time",
-             "batch_id_per_token",
-             "cu_seqlens_q",
-             "block_tables",
-             paddle::Optional("rotary_embs"),
-             paddle::Optional("qkv_bias"),
-             paddle::Optional("qkv_out_scales"),
-             paddle::Optional("cache_k_quant_scales"),
-             paddle::Optional("cache_k_dequant_scales"),
-             paddle::Optional("cache_k_zp"),
-             paddle::Optional("kv_signal_data"),
-             paddle::Optional("q_norm_weight"),
-             paddle::Optional("k_norm_weight")})
-    .Attrs({"rms_norm_eps: float",
-            "compute_type: std::string",
-            "cache_quant_type: std::string",
-            "use_neox_rotary_style: bool",
-            "rope_3d: bool",
-            "max_input_length: int",
-            "speculate_decoder: bool",})
-    .SetKernelFn(PD_KERNEL(IndexerDecoderRopeNormWriteCache));
+// PD_BUILD_STATIC_OP(indexer_decoder_rope_norm_write_cache)
+//     .Inputs({"qkv",
+//              "key_cache",
+//              "seq_lens_encoder",
+//              "seq_lens_decoder",
+//              "seq_lens_this_time",
+//              "batch_id_per_token",
+//              "cu_seqlens_q",
+//              "block_tables",
+//              paddle::Optional("rotary_embs"),
+//              paddle::Optional("qkv_bias"),
+//              paddle::Optional("qkv_out_scales"),
+//              paddle::Optional("cache_k_quant_scales"),
+//              paddle::Optional("cache_k_dequant_scales"),
+//              paddle::Optional("cache_k_zp"),
+//              paddle::Optional("kv_signal_data"),
+//              paddle::Optional("q_norm_weight"),
+//              paddle::Optional("k_norm_weight")})
+//     .Attrs({"rms_norm_eps: float",
+//             "compute_type: std::string",
+//             "cache_quant_type: std::string",
+//             "use_neox_rotary_style: bool",
+//             "rope_3d: bool",
+//             "max_input_length: int",
+//             "speculate_decoder: bool",})
+//     .SetKernelFn(PD_KERNEL(IndexerDecoderRopeNormWriteCache));
 
