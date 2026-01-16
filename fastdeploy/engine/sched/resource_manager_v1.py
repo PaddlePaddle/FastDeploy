@@ -459,6 +459,18 @@ class ResourceManagerV1(ResourceManager):
                 start_patch_idx = inputs["patch_idx"][-1]
             else:
                 start_patch_idx = inputs["patch_idx"][pre_end_idx]
+                if (
+                    pre_end_idx > 0
+                    and request.prompt_token_ids[pre_end_idx]
+                    in [
+                        inputs["image_patch_id"],
+                        inputs["video_patch_id"],
+                        inputs["audio_patch_id"],
+                    ]
+                    and request.prompt_token_ids[pre_end_idx] != request.prompt_token_ids[pre_end_idx - 1]
+                ):
+                    # It just hit the starting position of the image / video / audio
+                    start_patch_idx -= 1
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
