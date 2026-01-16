@@ -268,6 +268,15 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         result = self.manager.revert_chunked_mm_input(mm_inputs, 256)
         self.assertEqual(result, 256)
 
+    def test_revert_chunked_mm_input_match_image_offset(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=64, length=21),
+            ]
+        }
+        result = self.manager.revert_chunked_mm_input(mm_inputs, 64)
+        self.assertEqual(result, 64)
+
 
 if __name__ == "__main__":
     unittest.main()
