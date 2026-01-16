@@ -204,7 +204,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev-0113")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev-0115")
     else:
         base_file = "ernie-4_5-vl-base-tp2-dev-0113"
     with open(base_file, "r") as f:

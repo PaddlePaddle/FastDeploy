@@ -44,6 +44,7 @@ if current_platform.is_xpu():
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
+        speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_reschedule,
@@ -399,6 +400,20 @@ def xpu_post_process_specualate(
     model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
 ):
     """"""
+
+    # TODO(chenhuan09): support model_output.next_tokens,
+    speculate_set_stop_value_multi_seqs(
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.pre_ids,
+        model_output.step_idx,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.stop_token_ids,
+        model_output.stop_seqs_len,
+        model_output.eos_token_id,
+    )
+
     speculate_update_v3(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,

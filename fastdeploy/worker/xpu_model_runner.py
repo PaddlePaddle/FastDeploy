@@ -52,6 +52,7 @@ from fastdeploy.model_executor.ops.xpu import (
     recover_decode_task,
     set_data_ipc,
     share_external_data,
+    speculate_schedule_cache,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
     step_xpu,
@@ -564,6 +565,10 @@ class XPUModelRunner(ModelRunnerBase):
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
+                if (
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
+                ):  # In PD, we continue to decode after P generate first token
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -1385,6 +1390,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
+
             self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
@@ -1481,13 +1487,36 @@ class XPUModelRunner(ModelRunnerBase):
             # 7. Updata 'infer_seed' and step_paddle()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-            step_xpu(
-                self.share_inputs,
-                self.cache_config.block_size,
-                self.cache_config.enc_dec_block_num,
-                self.fd_config.speculative_config,
-                self.fd_config.cache_config.enable_prefix_caching,
-            )
+
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                step_xpu(
+                    self.share_inputs,
+                    self.cache_config.block_size,
+                    self.cache_config.enc_dec_block_num,
+                    self.fd_config.speculative_config,
+                    self.fd_config.cache_config.enable_prefix_caching,
+                )
+            elif self.speculative_decoding:
+                speculate_schedule_cache(
+                    self.share_inputs["draft_tokens"],
+                    self.share_inputs["block_tables"],
+                    self.share_inputs["stop_flags"],
+                    self.share_inputs["prompt_lens"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["step_seq_lens_decoder"],
+                    self.share_inputs["step_draft_tokens"],
+                    self.share_inputs["step_seq_lens_this_time"],
+                    self.share_inputs["accept_num"],
+                    self.share_inputs["accept_tokens"],
+                    self.share_inputs["is_block_step"],
+                    self.share_inputs["not_need_stop"],
+                    self.share_inputs["stop_nums"],
+                    self.cache_config.block_size,
+                    self.speculative_config.num_speculative_tokens,
+                )
+
         return None
 
     def _execute_empty_input(self, forward_meta) -> None:
