@@ -105,10 +105,6 @@ def try_match_architecture_defaults(
     return None
 
 
-def can_use_cuda_graph():
-    return (paddle.is_compiled_with_cuda() or paddle.is_compiled_with_xpu()) and not paddle.is_compiled_with_rocm()
-
-
 class MoEPhase:
     """
     The generation phase of the moe.
@@ -1832,7 +1828,9 @@ class FDConfig:
 
         if not current_platform.is_cuda() and not current_platform.is_maca() and not current_platform.is_xpu():
             self.graph_opt_config.use_cudagraph = False
-            logger.info("CUDAGraph currently only support on GPU!")
+            logger.info(
+                "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"
+            )
 
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
