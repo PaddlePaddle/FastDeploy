@@ -1012,15 +1012,14 @@ class RequestOutput:
             setattr(self, key, value)
 
     def __delitem__(self, key):
-        try:
-            if hasattr(self, key):
-                delattr(self, key)
-            elif hasattr(self.outputs, key):
-                delattr(self.outputs, key)
-            elif hasattr(self.metrics, key):
-                delattr(self.metrics, key)
-        except AttributeError:
-            raise KeyError(key) from None
+        if hasattr(self, key):
+            delattr(self, key)
+        elif hasattr(self.outputs, key):
+            delattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            delattr(self.metrics, key)
+        else:
+            raise KeyError(key)
 
     def __contains__(self, key: str) -> bool:
         if hasattr(self, key):
