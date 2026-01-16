@@ -133,6 +133,8 @@ class TokenProcessor:
         self.timestamp_for_alive_after_handle_batch = None
         self.health_lock = threading.Lock()
         self.engine_output_token_hang = False
+        if self.cfg.scheduler_config.name == "splitwise":
+            threading.Thread(target=self.collect_inference_metrics).start()
 
     def healthy(self):
         """
@@ -781,6 +783,9 @@ class TokenProcessor:
                     llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
                     llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
                     llm_engine_recv_token_timestamp=time.time(),
+                    inference_start_times=task.inference_start_times,
+                    inference_end_times=task.inference_end_times,
+                    scheduler_finish_times=task.scheduler_finish_times,
                 )
                 self._record_first_token_metrics(task, current_time)
 
@@ -880,6 +885,15 @@ class TokenProcessor:
             batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
+
+    def collect_inference_metrics(self):
+        while True:
+            datas = self.engine_worker_queue.get_metrics()
+            for data in datas:
+                req_id, inference_start_time, inference_end_time = data
+                task = self.resource_manager.requests[req_id]
+                task.inference_end_times.append(inference_end_time)
+                task.inference_start_times.append(inference_start_time)
 
     def _record_metrics(self, task, current_time, token_ids):
         """Record all metrics for a task"""

@@ -17,7 +17,9 @@
 import argparse
 import json
 import os
+import threading
 import time
+from queue import Queue
 from typing import Tuple
 
 import numpy as np
@@ -156,11 +158,14 @@ class PaddleDisWorkerProc:
         self.cache_config = fd_config.cache_config
         self.scheduler_config = fd_config.scheduler_config
         self.eplb_config = fd_config.eplb_config
+        self.metrics_queue = Queue()
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        if self.scheduler_config.splitwise_role == "prefill":
+            threading.Thread(target=self.collect_inference_metrics).start()
 
     def init_health_status(self) -> None:
         """
@@ -290,6 +295,11 @@ class PaddleDisWorkerProc:
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
 
+    def collect_inference_metrics(self):
+        while True:
+            data = self.metrics_queue.get()
+            self.engine_worker_queue.put_metrics(data)
+
     def _init_eplb_signal(self):
         if not self.eplb_config.enable_eplb:
             return
@@ -415,6 +425,7 @@ class PaddleDisWorkerProc:
 
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            inference_metrics_list = []
             # run eplb
             self._run_eplb(tp_rank)
             if tp_rank == 0:
@@ -510,7 +521,13 @@ class PaddleDisWorkerProc:
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, cur_max_bsz_index)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
-            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            end_execute_time = time.time() - start_execute_time
+            if self.scheduler_config.splitwise_role == "prefill":
+                for req_dict in req_dicts:
+                    inference_metrics_list.append((req_dict.request_id, start_execute_time, end_execute_time))
+                if inference_metrics_list:
+                    self.metrics_queue.put(inference_metrics_list)
+            logger.debug(f"execute model cost: {end_execute_time - start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many

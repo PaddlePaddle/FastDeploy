@@ -106,6 +106,9 @@ class Request:
         num_computed_tokens: int = 0,
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
+        scheduler_finish_times: Optional[list] = [],
+        inference_start_times: Optional[list] = [],
+        inference_end_times: Optional[list] = [],
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -183,6 +186,9 @@ class Request:
         self.error_message = None
         self.error_code = None
         self.last_recv_token_time = None
+        self.scheduler_finish_times = scheduler_finish_times
+        self.inference_start_times = inference_start_times
+        self.inference_end_times = inference_end_times
 
     def __getstate__(self):
         """
@@ -475,6 +481,9 @@ class RequestMetrics:
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_token_timestamp: Optional[float] = None
+    inference_start_times: Optional[list[float]] = None
+    inference_end_times: Optional[list[float]] = None
+    scheduler_finish_times: Optional[float] = None
 
     def to_dict(self):
         """
@@ -492,6 +501,9 @@ class RequestMetrics:
             "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
             "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
             "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
+            "inference_start_times": self.inference_start_times,
+            "inference_end_times": self.inference_end_times,
+            "scheduler_finish_times": self.scheduler_finish_times,
         }
 
     @classmethod
