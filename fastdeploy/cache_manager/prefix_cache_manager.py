@@ -444,33 +444,35 @@ class PrefixCacheManager:
         else:
             return True
 
-    def allocate_gpu_blocks(self, num_blocks):
+    def allocate_gpu_blocks(self, num_blocks, req_id=None):
         """
         allocate gpu blocks.
         """
         assert num_blocks <= len(
             self.gpu_free_block_list
         ), f"gpu free block num: {len(self.gpu_free_block_list)} < needed number {num_blocks}"
+        logger.debug(f"{req_id} start allocate...")
         allocated_block_ids = [heapq.heappop(self.gpu_free_block_list) for i in range(num_blocks)]
         logger.info(
-            f"allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated_block_ids
 
-    def recycle_gpu_blocks(self, gpu_block_ids):
+    def recycle_gpu_blocks(self, gpu_block_ids, req_id=None):
         """
         recycle gpu blocks.
         """
         logger.info(
-            f"recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         if isinstance(gpu_block_ids, list):
             for gpu_block_id in gpu_block_ids:
                 heapq.heappush(self.gpu_free_block_list, gpu_block_id)
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
+        logger.debug(f"req_id:{req_id} recycle blocks end")
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
@@ -978,7 +980,7 @@ class PrefixCacheManager:
                 logger.info(f"release_block_ids: req_id {req_id} leaf_node {leaf_node}")
 
                 if leaf_node == self.radix_tree_root:
-                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id])
+                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id], req_id)
                     del self.unfilled_req_block_map[req_id]
                     return
 
