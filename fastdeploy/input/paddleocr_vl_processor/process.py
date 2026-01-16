@@ -16,6 +16,7 @@
 """
 
 import pickle
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -620,3 +621,14 @@ class DataProcessor(MMBaseDataProcessor):
             f"req_id:{request.get('request_id', ''), } prompt: {raw_prompt} tokens: {tokens}, token_ids: {token_ids}"
         )
         return token_ids
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Get maximum number of tokens per multimodal item.
+        """
+        max_image_tokens = self.get_max_image_tokens(seq_len)
+        max_video_tokens = self.get_max_video_tokens(seq_len)
+        return {"image": max_image_tokens, "video": max_video_tokens}

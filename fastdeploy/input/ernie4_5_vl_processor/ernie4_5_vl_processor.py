@@ -324,4 +324,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self,
         seq_len: int,
     ) -> Mapping[str, int]:
+        """
+        Get maximum number of tokens per multimodal item.
+        Args:
+            seq_len: Maximum model length
+            Returns:
+                A mapping from modalities to their respective maximum token counts.
+        """
         return self.ernie4_5_processor.get_mm_max_tokens_per_item(seq_len)
