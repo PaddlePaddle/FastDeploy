@@ -1470,6 +1470,10 @@ class RouterConfig:
 
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
+        if args["metrics_port"] is not None:
+            self.metrics_port = args["metrics_port"]
+        else:
+            self.metrics_port = self.api_server_port
 
 
 class CommitConfig:
@@ -1613,7 +1617,6 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
-        metrics_port: int = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1631,7 +1634,6 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
-        self.metrics_port = metrics_port
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -2037,6 +2039,7 @@ class FDConfig:
 
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
+        metrics_port = self.router_config.metrics_port if self.router_config else None
         transfer_protocol = (
             self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
         )
@@ -2044,7 +2047,7 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
-            "metrics_port": self.metrics_port,
+            "metrics_port": metrics_port,
             "connector_port": self.cache_config.local_pd_comm_port,
             "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
