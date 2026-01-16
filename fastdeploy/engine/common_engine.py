@@ -936,11 +936,7 @@ class EngineService:
                         get_request_pool.submit(_fetch_request)
 
                 else:
-                    if (
-                        len(self.resource_manager.waiting) == 0
-                        and (not is_fetching)
-                        and self.exist_prefill_task_signal.value[0] == 0
-                    ):
+                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
                             is_fetching = True
