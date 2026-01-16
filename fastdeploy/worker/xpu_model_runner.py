@@ -1640,7 +1640,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
-        logger.info(f"self.scheduler_config.max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens}")
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
