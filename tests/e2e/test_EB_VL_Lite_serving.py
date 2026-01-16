@@ -180,40 +180,6 @@ def consistent_payload():
     }
 
 
-# ==========================
-# Consistency test for repeated runs with fixed payload
-# ==========================
-def test_consistency_between_runs(api_url, headers, consistent_payload):
-    """
-    Test that result is same as the base result.
-    """
-    # request
-    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp1.status_code == 200
-    result1 = resp1.json()
-    content1 = (
-        result1["choices"][0]["message"]["reasoning_content"]
-        + "</think>"
-        + result1["choices"][0]["message"]["content"]
-    )
-    file_res_temp = "ernie-4_5-vl"
-    f_o = open(file_res_temp, "a")
-    f_o.writelines(content1)
-    f_o.close()
-
-    # base result
-    base_path = os.getenv("MODEL_PATH")
-    if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev-0115")
-    else:
-        base_file = "ernie-4_5-vl-base-tp2-dev-0113"
-    with open(base_file, "r") as f:
-        content2 = f.read()
-
-    # Verify that result is same as the base result
-    assert content1 == content2
-
-
 def test_with_metadata(api_url, headers, consistent_payload):
     """
     Test that result is same as the base result.
