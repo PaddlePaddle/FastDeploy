@@ -487,7 +487,7 @@ class PaddleDisWorkerProc:
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
-
+                self.exist_prefill_task_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
@@ -520,7 +520,8 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, cur_max_bsz_index)
-            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            # self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            self.exist_prefill_task_signal.value[0] = 0
             end_execute_time = time.time() - start_execute_time
             if self.scheduler_config.splitwise_role == "prefill":
                 for req_dict in req_dicts:

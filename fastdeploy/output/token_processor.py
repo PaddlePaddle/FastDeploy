@@ -904,6 +904,8 @@ class TokenProcessor:
 
         # Record generation metrics
         main_process_metrics.generation_tokens_total.inc(len(token_ids))
+        if self.cfg.scheduler_config.splitwise_role == "prefill":
+            main_process_metrics.prefilled_tokens_total.inc(task.need_prefill_tokens)
 
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""

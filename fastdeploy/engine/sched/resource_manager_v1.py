@@ -786,6 +786,10 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+                main_process_metrics.scheduler_batched_token.set(
+                    self.config.scheduler_config.max_num_batched_tokens - token_budget
+                )
+                main_process_metrics.scheduler_batched_reqs.set(len(scheduled_reqs))
 
             self.update_metrics()
 
