@@ -157,34 +157,6 @@ class ForwardMeta:
         if self.caches:
             del self.caches
 
-    def print_meta_info(self, logger):
-        """打印类中所有变量的信息，对于paddle.Tensor类型会额外打印shape和平均值"""
-        logger.info("\n=== ForwardMeta Info ===")
-        for field_name, field_value in self.__dict__.items():
-            if field_value is None:
-                logger.info(f"{field_name}: None")
-            elif isinstance(field_value, paddle.Tensor):
-                try:
-                    avg = float(field_value.mean().numpy())
-                    logger.info(f"{field_name}: shape={field_value.shape}, avg={avg:.4f}")
-                except Exception as e:
-                    logger.info(f"{field_name}: shape={field_value.shape} [error calculating average: {str(e)}]")
-            elif (
-                isinstance(field_value, (list, tuple))
-                and len(field_value) > 0
-                and isinstance(field_value[0], paddle.Tensor)
-            ):
-                logger.info(f"{field_name}: list of {len(field_value)} tensors")
-                for i, tensor in enumerate(field_value):
-                    try:
-                        avg = float(tensor.mean().numpy())
-                        logger.info(f"  [{i}]: shape={tensor.shape}, avg={avg:.4f}")
-                    except Exception as e:
-                        logger.info(f"  [{i}]: shape={tensor.shape} [error calculating average: {str(e)}]")
-            else:
-                logger.info(f"{field_name}: {field_value}")
-        logger.info("=======================\n")
-
     def __str__(self) -> str:
         """
         Returns a concise string representation of the ForwardMeta object in a compact format.

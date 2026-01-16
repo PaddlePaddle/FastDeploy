@@ -1769,7 +1769,7 @@ class FDConfig:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
+        self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
         if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
@@ -2078,7 +2078,6 @@ class FDConfig:
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
 
-    @property
     def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
         """
         get max chunk tokens
