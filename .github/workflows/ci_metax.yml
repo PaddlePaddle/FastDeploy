@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Trigger Jenkins job
-        uses: MetaX-MACA/simple-jenkins-githubaction@v1.0
+        uses: MetaX-MACA/simple-jenkins-githubaction@v1.1
         with:
           job_name: paddle_fastdeploy_metax_smoketest
           username: fastdeploy_builder
