@@ -8,7 +8,7 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn==0.29.0
+uvicorn>=0.38.0
 fastapi
 # if paddleformers version > 0.3.2, metax triton will be replaced by the newest triton.
 paddleformers==0.3.2
