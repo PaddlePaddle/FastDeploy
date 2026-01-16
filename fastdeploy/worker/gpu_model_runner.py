@@ -1577,7 +1577,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
             if self.speculative_decoding:
-                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                self.proposer.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
