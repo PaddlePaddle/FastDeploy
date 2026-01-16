@@ -1492,7 +1492,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=self.max_logprobs,
+            max_num_logprobs=20 if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
