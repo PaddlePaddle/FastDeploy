@@ -38,7 +38,7 @@ import zmq
 from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, RequestOutput, RequestType
+from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.eplb.utils import init_eplb_signals
@@ -721,6 +721,7 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -787,6 +788,7 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -1074,6 +1076,24 @@ class EngineService:
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
+                    status_value = data.get("status", None)
+                    if status_value is not None and status_value == RequestStatus.ABORT.value:
+                        req_id = data["request_id"]
+                        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
+                        self.resource_manager.abort_req_ids_set.add(req_id)
+                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            if req_id in self.resource_manager.requests:
+                                req = self.resource_manager.requests[req_id]
+                                task = self.resource_manager._prepare_preempt_task(req)
+                                self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
+                                self.llm_logger.info(f"put abort task in engine worker queue, req_id: {req_id}")
+                            else:
+                                self.scheduler._recycle(req_id)
+                                self.llm_logger.info(
+                                    f"req_id:{req_id} has not been allocated any resources, recycled it in scheduler"
+                                )
+                                self.resource_manager.abort_req_ids_set.remove(req_id)
+                        continue
                     err_msg = None
                     try:
                         request = Request.from_dict(data)

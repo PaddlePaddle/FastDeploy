@@ -158,6 +158,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
+        os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
+    ),
     # Whether to collect user information
     "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
     # Usage stats server url
