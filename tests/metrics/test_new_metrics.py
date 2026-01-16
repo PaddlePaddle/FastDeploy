@@ -95,10 +95,11 @@ class TestCoverageFix(unittest.TestCase):
         self.processor.tokens_counter[task_id] = 5
 
         # 调用目标方法
-        self.processor._recycle_resources(task_id=task_id, index=index, task=mock_task, result=None, is_prefill=False)
-
-        # 核心断言：验证 available_batch_size 指标是否被正确设置
-        mock_main_process_metrics.available_batch_size.set.assert_called_once_with(8)
+        with patch("fastdeploy.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            self.processor._recycle_resources(
+                task_id=task_id, index=index, task=mock_task, result=None, is_prefill=False
+            )
+            self.mock_resource_manager.update_metrics.assert_called_once()
 
         print("Test for TokenProcessor passed.")
 
