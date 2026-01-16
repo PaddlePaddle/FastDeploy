@@ -453,7 +453,7 @@ class TestConfigSync:
 
             model._sync_config_from_text_config()
 
-            assert model.model_config.tie_word_embeddings == True
+            assert model.model_config.tie_word_embeddings is True
 
     def test_sync_multiple_fields(self, mock_fd_config):
         """Test syncing multiple fields from text_config."""
@@ -585,7 +585,7 @@ class TestAttentionInstances:
             )
             model.model = mock_model
 
-            instances = model.create_attention_instances()
+            _ = model.create_attention_instances()
 
             assert hasattr(model.model_config, "layer_types")
             assert len(model.model_config.layer_types) == 4

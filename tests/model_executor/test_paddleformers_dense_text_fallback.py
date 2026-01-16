@@ -422,7 +422,7 @@ class TestForwardMethod:
 
         # Verify forward executed and set rope_already_applied
         assert hidden_states is not None
-        assert forward_meta.rope_already_applied == True
+        assert forward_meta.rope_already_applied is True
 
     def test_forward_position_ids_construction(self):
         """Test position IDs construction logic."""
