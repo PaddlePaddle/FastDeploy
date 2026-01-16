@@ -210,6 +210,7 @@ def pre_process(
         cu_seqlens_k:
     """
     token_num_cpu = seq_lens_this_time.numpy().sum().item()
+    token_num_cpu += 1
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
