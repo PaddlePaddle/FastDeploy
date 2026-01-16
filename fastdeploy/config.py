@@ -1613,6 +1613,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        metrics_port: int = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1630,6 +1631,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.metrics_port = metrics_port
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -2042,6 +2044,7 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
+            "metrics_port": self.metrics_port,
             "connector_port": self.cache_config.local_pd_comm_port,
             "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,

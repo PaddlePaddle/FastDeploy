@@ -82,6 +82,10 @@ class EngineArgs:
     """
     Port for api server.
     """
+    metrics_port: Optional[str] = None
+    """
+    Port for metrics server.
+    """
     served_model_name: Optional[str] = None
     """
     The name of the model being served.
@@ -1415,6 +1419,8 @@ class EngineArgs:
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
         structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
 
+        metrics_port = all_dict['metrics_port']
+
         return FDConfig(
             model_config=model_cfg,
             scheduler_config=scheduler_cfg,
@@ -1438,4 +1444,5 @@ class EngineArgs:
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
+            metrics_port=metrics_port,
         )
