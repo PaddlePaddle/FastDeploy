@@ -38,7 +38,7 @@ on:
         value: ${{ jobs.xpu-build-test.outputs.wheel_path }}
 jobs:
   xpu-build-test:
-    runs-on: [self-hosted, XPU-P800-8Card]
+    runs-on: [self-hosted, XPU-P800]
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:
