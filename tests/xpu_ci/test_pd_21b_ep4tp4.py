@@ -27,6 +27,7 @@ import os
 import shutil
 import subprocess
 import time
+import json
 
 import openai
 import pytest
@@ -165,6 +166,13 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     prefill_env["FD_LOG_DIR"] = "log_prefill"
     prefill_env["XPU_VISIBLE_DEVICES"] = "0,1,2,3"
 
+    speculative_dict = {
+        "method": "mtp",
+        "num_speculative_tokens": 1,
+        "model": f"{model_path}/ERNIE-4.5-21B-A3B-Paddle/mtp"
+    }
+    speculative_json = json.dumps(speculative_dict)
+
     prefill_cmd = [
         "python",
         "-m",
@@ -194,6 +202,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
+        "--speculative-config",
+        speculative_json
     ]
 
     with open("log_prefill/nohup", "w") as log_file:
@@ -237,6 +247,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
+        "--speculative-config",
+        speculative_json
     ]
 
     with open("log_decode/nohup", "w") as log_file:
@@ -288,19 +300,20 @@ def test_pd_separation():
         ip = "0.0.0.0"
         client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
-        # 非流式对话
-        response = client.chat.completions.create(
-            model="default",
-            messages=[
-                {"role": "user", "content": "你好，你是谁？"},
-            ],
-            temperature=1,
-            top_p=0,
-            max_tokens=64,
-            stream=False,
-        )
+        for i in range(10):
+            # 非流式对话
+            response = client.chat.completions.create(
+                model="default",
+                messages=[
+                    {"role": "user", "content": "你好，你是谁？"},
+                ],
+                temperature=1,
+                top_p=0,
+                max_tokens=64,
+                stream=False,
+            )
 
-        print(f"\n模型回复: {response.choices[0].message.content}")
+            print(f"\n模型回复: {response.choices[0].message.content}")
 
         # 验证响应
         assert any(
