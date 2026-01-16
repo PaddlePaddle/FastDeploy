@@ -29,6 +29,7 @@ def test_fused_moe_launch():
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
     os.environ["DISABLE_CI_FUSEDMOE_EP"] = "1"
+    FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
     command = [
         sys.executable,
         "-m",
@@ -36,7 +37,7 @@ def test_fused_moe_launch():
         "--gpus",
         "0,1",
         "--master",
-        "127.0.0.1:6175",
+        f"127.0.0.1:{FD_API_PORT}",
         "--nnodes",
         "1",
         "--rank",

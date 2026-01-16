@@ -1268,18 +1268,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 
-  m.def("per_token_quant",
-        &PerTokenQuant,
-        py::arg("input"),
-        py::arg("block_size"),
-        "per token per block quant");
-
-  m.def("per_token_quant_padding",
-        &PerTokenQuantPadding,
-        py::arg("input"),
-        py::arg("block_size"),
-        "per token per block quant and padding transpose scale");
-
   m.def("masked_per_token_quant",
         &MaskedPerTokenQuant,
         py::arg("input"),
