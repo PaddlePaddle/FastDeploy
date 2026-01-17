@@ -67,7 +67,6 @@ class GptOssAttention(nn.Layer):
             input_size=self.num_attention_heads * self.head_dim,
             output_size=self.hidden_size,
             with_bias=True,
-            add_bias=True,
         )
 
         self.attn = Attention(
@@ -208,14 +207,18 @@ class GptOssModel(nn.Layer):
         )
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = self.norm(hidden_states, residual)[0]
-        return hidden_states
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
+        return out
 
 
 @ModelRegistry.register_model_class(

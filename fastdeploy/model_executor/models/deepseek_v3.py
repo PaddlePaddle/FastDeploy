@@ -223,32 +223,30 @@ class DeepseekV3MLAAttention(nn.Layer):
         self.rope_theta = fd_config.model_config.rope_theta
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
-        if self.q_lora_rank is not None:
-            # NOTE: (changwenbin) qkv_a_proj horizontal fusion
-            self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.qkv_a_proj_with_mqa",
-                input_size=self.hidden_size,
-                output_sizes=[self.q_lora_rank, self.kv_lora_rank + self.qk_rope_head_dim],
-                with_bias=False,
-            )
+        assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
+        # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+        self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.qkv_a_proj_with_mqa",
+            input_size=self.hidden_size,
+            output_sizes=[self.q_lora_rank, self.kv_lora_rank + self.qk_rope_head_dim],
+            with_bias=False,
+        )
 
-            self.q_a_layernorm = RMSNorm(
-                fd_config,
-                hidden_size=self.q_lora_rank,
-                eps=self.rms_norm_eps,
-                prefix=f"{prefix}.q_a_layernorm",
-            )
+        self.q_a_layernorm = RMSNorm(
+            fd_config,
+            hidden_size=self.q_lora_rank,
+            eps=self.rms_norm_eps,
+            prefix=f"{prefix}.q_a_layernorm",
+        )
 
-            self.q_b_proj = ColumnParallelLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.q_b_proj",
-                input_size=self.q_lora_rank,
-                output_size=self.num_attention_heads * self.qk_head_dim,
-                with_bias=False,
-            )
-        else:
-            assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
+        self.q_b_proj = ColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.q_b_proj",
+            input_size=self.q_lora_rank,
+            output_size=self.num_attention_heads * self.qk_head_dim,
+            with_bias=False,
+        )
 
         self.kv_a_layernorm = RMSNorm(
             fd_config,
@@ -411,14 +409,14 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
+            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
 
             fmha_out_decode = (
                 self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
                 .transpose([1, 0, 2])
-                .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+                .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
             if fmha_out is None:
@@ -581,7 +579,7 @@ class DeepSeekV3Model(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):
@@ -593,6 +591,9 @@ class DeepSeekV3Model(nn.Layer):
                 mask_encoder_batch,
             )
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out
 
@@ -803,7 +804,7 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
         )

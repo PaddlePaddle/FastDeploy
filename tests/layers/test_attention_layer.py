@@ -49,6 +49,7 @@ from fastdeploy.model_executor.layers.quantization.mix_quant import MixQuantConf
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
+from fastdeploy.worker.worker_process import init_distributed_environment
 
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     # (ZKK): CI machine.
@@ -65,20 +66,20 @@ class TestAttentionPerformance(unittest.TestCase):
         print("Setting up test environment...")
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
+        init_distributed_environment()
 
         self.model_dir = self.create_model_config_json()
-        self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=1)
-        self.fd_config.parallel_config.tp_group = [0]
+        tp_size = paddle.distributed.get_world_size()
+
+        self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=tp_size)
+        self.fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
 
         # Initialize Attention Layer
-        os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
         attn_cls = get_attention_backend()
         self.attn_backend = attn_cls(
             self.fd_config,
-            kv_num_heads=self.fd_config.model_config.num_key_value_heads
-            // self.fd_config.parallel_config.tensor_parallel_size,
-            num_heads=self.fd_config.model_config.num_attention_heads
-            // self.fd_config.parallel_config.tensor_parallel_size,
+            kv_num_heads=self.fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=self.fd_config.model_config.num_attention_heads // tp_size,
             head_dim=self.fd_config.model_config.head_dim,
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
@@ -120,8 +121,8 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "max_position_embeddings": 131072+1024,
-            "max_model_len": 131072+1024,
+            "max_position_embeddings": 201 * 1024,
+            "max_model_len": 201 * 1024,
             "head_dim": 128,
             "hidden_size": 7168,
             "num_attention_heads": 56,
@@ -175,10 +176,9 @@ class TestAttentionPerformance(unittest.TestCase):
         tp_size = fd_config.parallel_config.tensor_parallel_size
         tensor_dtype = getattr(paddle, fd_config.model_config.dtype)
 
-        q_dims = fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim
-        kv_dims = fd_config.model_config.num_key_value_heads * fd_config.model_config.head_dim
-        total_output_dim = q_dims + 2 * kv_dims
-        qkv_proj_output_dim_tp = total_output_dim // tp_size
+        q_dims = fd_config.model_config.num_attention_heads // tp_size * fd_config.model_config.head_dim
+        kv_dims = fd_config.model_config.num_key_value_heads // tp_size * fd_config.model_config.head_dim
+        qkv_proj_output_dim_tp = q_dims + 2 * kv_dims
         qkv_weight_shape = [hidden_size, qkv_proj_output_dim_tp]
 
         o_proj_input_dim = fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim
@@ -188,8 +188,7 @@ class TestAttentionPerformance(unittest.TestCase):
         qkv_weight = paddle.randn(qkv_weight_shape, dtype=tensor_dtype)
         o_proj_weight = paddle.randn(o_proj_weight_shape, dtype=tensor_dtype)
 
-        kv_num_heads_tp = fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size
-        activation_scale_shape = [kv_num_heads_tp]
+        activation_scale_shape = [fd_config.model_config.num_key_value_heads]
         activation_scale_tensor = paddle.full(shape=activation_scale_shape, fill_value=1.0, dtype=tensor_dtype)
 
         state_dict = {
@@ -223,14 +222,15 @@ class TestAttentionPerformance(unittest.TestCase):
         else:
             raise ValueError(f"Unsupported ForwardMode: {mode}")
 
+        tp_size = fd_config.parallel_config.tensor_parallel_size
         attn_backend_buffers = allocate_launch_related_buffer(
             max_batch_size=batch_size,
             max_model_len=fd_config.model_config.max_model_len,
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
             decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
-            num_heads=fd_config.model_config.num_attention_heads,
-            kv_num_heads=fd_config.model_config.num_key_value_heads,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
             block_size=fd_config.cache_config.block_size,
         )
 
@@ -240,7 +240,7 @@ class TestAttentionPerformance(unittest.TestCase):
         allocated_blocks_per_seq = seq_len // block_size + 1
         allocated_num_blocks = allocated_blocks_per_seq * batch_size
         head_dim = fd_config.model_config.head_dim
-        kv_num_heads_tp = fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size
+        kv_num_heads_tp = fd_config.model_config.num_key_value_heads // tp_size
         num_layers = fd_config.model_config.num_hidden_layers
         cache_type = fd_config.model_config.dtype
         if cache_quant_type_str != "none":
@@ -262,7 +262,7 @@ class TestAttentionPerformance(unittest.TestCase):
             for j in range(allocated_blocks_per_seq):
                 block_tables[i, j] = i * allocated_blocks_per_seq + j
 
-        tmp_position_ids = paddle.arange(fd_config.model_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(max_model_len).reshape((1, -1))
         rope_emb = get_rope(
             rotary_dim=fd_config.model_config.head_dim,
             position_ids=tmp_position_ids,
@@ -271,10 +271,10 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
-        input_ids = paddle.zeros([batch_size, seq_len if mode == ForwardMode.EXTEND else 1], dtype="int64")
-        token_num = paddle.sum(seq_lens_this_time)
+        input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
+        token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, token_num, seq_lens_this_time
+            input_ids, seq_lens_this_time, token_num
         )
 
         forward_meta = ForwardMeta(
@@ -295,34 +295,30 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_mask_offsets=None,
             **attn_backend_buffers,
         )
-        return forward_meta
+
+        hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
+        return forward_meta, hidden_states
 
     def test_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
-        act_tensor_dtype = paddle.bfloat16
 
-        # prefill_batch_size = 1
-        # prefill_seq_len = 4096
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
 
-        # prefill_hidden_states = paddle.randn(
-        #     [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
-        #     dtype=act_tensor_dtype,
-        # )
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=self.fd_config,
+            attn_backend=self.attn_backend,
+            cache_quant_type_str=self.cache_quant_type_str,
+        )
 
-        # forward_meta = self.create_forward_meta(
-        #     batch_size=prefill_batch_size,
-        #     seq_len=prefill_seq_len,
-        #     mode=ForwardMode.EXTEND,
-        #     fd_config=self.fd_config,
-        #     attn_backend=self.attn_backend,
-        #     cache_quant_type_str=self.cache_quant_type_str,
-        # )
+        self.attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(forward_meta, prefill_hidden_states)
 
-        # self.attn_backend.init_attention_metadata(forward_meta)
-        # self.attn_forward(forward_meta, prefill_hidden_states)
-
-        # paddle.device.synchronize()
+        paddle.device.synchronize()
 
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
@@ -332,21 +328,21 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # for i in range(test_steps):
-        #     start_events[i].record()
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
 
-        #     self.attn_forward(forward_meta, prefill_hidden_states)
+            self.attn_forward(forward_meta, prefill_hidden_states)
 
-        #     end_events[i].record()
-        # paddle.device.synchronize()
+            end_events[i].record()
+        paddle.device.synchronize()
 
-        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        # print(times[-5:])
-        # return
-
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
         # p.stop()
+
+        # return
 
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
@@ -356,14 +352,10 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        for decode_batch_size in [1]:
-            decode_hidden_states = paddle.randn(
-                [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
-            )
-
-            forward_meta = self.create_forward_meta(
+        for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
+            forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=128 * 1024,
+                seq_len=10 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
@@ -375,12 +367,12 @@ class TestAttentionPerformance(unittest.TestCase):
             paddle.device.synchronize()
 
             # 必须要先预热一次！因为预处理被放到了第一层再做了！
-            self.attn_forward(forward_meta, decode_hidden_states)
+            self.attn_forward(forward_meta, hidden_states)
 
             attn_cuda_graphs = graphs.CUDAGraph()
             attn_cuda_graphs.capture_begin()
 
-            self.attn_forward(forward_meta, decode_hidden_states)
+            self.attn_forward(forward_meta, hidden_states)
 
             attn_cuda_graphs.capture_end()
 

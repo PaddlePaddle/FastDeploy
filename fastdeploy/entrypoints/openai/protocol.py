@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.worker.output import PromptLogprobs
+from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
 class InvalidParameterException(Exception):
@@ -76,6 +76,16 @@ class CompletionTokenUsageInfo(BaseModel):
     reasoning_tokens: Optional[int] = None
     image_tokens: Optional[int] = None
 
+    def add(self, other: CompletionTokenUsageInfo):
+        if self.reasoning_tokens is not None and other.reasoning_tokens is not None:
+            self.reasoning_tokens += other.reasoning_tokens
+        elif other.reasoning_tokens is not None:
+            self.reasoning_tokens = other.reasoning_tokens
+        if self.image_tokens is not None and other.image_tokens is not None:
+            self.image_tokens += other.image_tokens
+        elif other.image_tokens is not None:
+            self.image_tokens = other.image_tokens
+
 
 class PromptTokenUsageInfo(BaseModel):
     """
@@ -85,6 +95,22 @@ class PromptTokenUsageInfo(BaseModel):
     cached_tokens: Optional[int] = None
     image_tokens: Optional[int] = None
     video_tokens: Optional[int] = None
+
+    def add(self, other: PromptTokenUsageInfo):
+        if self.cached_tokens and other.cached_tokens:
+            self.cached_tokens += other.cached_tokens
+        elif other.cached_tokens:
+            self.cached_tokens = other.cached_tokens
+
+        if self.image_tokens and other.image_tokens:
+            self.image_tokens += other.image_tokens
+        elif other.image_tokens:
+            self.image_tokens = other.image_tokens
+
+        if self.video_tokens and other.video_tokens:
+            self.video_tokens += other.video_tokens
+        elif other.video_tokens:
+            self.video_tokens = other.video_tokens
 
 
 class UsageInfo(BaseModel):
@@ -97,6 +123,19 @@ class UsageInfo(BaseModel):
     completion_tokens: Optional[int] = 0
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
     completion_tokens_details: Optional[CompletionTokenUsageInfo] = None
+
+    def add(self, other: UsageInfo):
+        self.prompt_tokens += other.prompt_tokens
+        self.completion_tokens += other.completion_tokens
+        self.total_tokens = self.prompt_tokens + self.completion_tokens
+        if other.prompt_tokens_details and self.prompt_tokens_details:
+            self.prompt_tokens_details.add(other.prompt_tokens_details)
+        elif other.prompt_tokens_details:
+            self.prompt_tokens_details = other.prompt_tokens_details
+        if other.completion_tokens_details and self.completion_tokens_details:
+            self.completion_tokens_details.add(other.completion_tokens_details)
+        elif other.completion_tokens_details:
+            self.completion_tokens_details = other.completion_tokens_details
 
 
 class ModelPermission(BaseModel):
@@ -230,6 +269,7 @@ class ChatCompletionResponseChoice(BaseModel):
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -293,8 +333,9 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
     arrival_time: Optional[float] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class ChatCompletionStreamResponse(BaseModel):
@@ -308,6 +349,7 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class CompletionResponseChoice(BaseModel):
@@ -327,8 +369,9 @@ class CompletionResponseChoice(BaseModel):
     draft_logprobs: Optional[CompletionLogprobs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionResponse(BaseModel):
@@ -372,8 +415,9 @@ class CompletionResponseStreamChoice(BaseModel):
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    speculate_metrics: Optional[SpeculateMetrics] = None
 
 
 class CompletionStreamResponse(BaseModel):
@@ -387,6 +431,7 @@ class CompletionStreamResponse(BaseModel):
     model: str
     choices: List[CompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class StreamOptions(BaseModel):
@@ -455,6 +500,7 @@ class CompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
     prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -498,6 +544,9 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -616,6 +665,7 @@ class ChatCompletionRequest(BaseModel):
     top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
+    include_logprobs_decode_token: Optional[bool] = True
 
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -671,6 +721,9 @@ class ChatCompletionRequest(BaseModel):
     mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
+    trace_context: Optional[str] = None
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None):
         """

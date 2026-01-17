@@ -27,6 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -75,9 +76,12 @@ class GpuWorker(WorkerBase):
             ):
                 from fastdeploy.distributed.communication import use_custom_allreduce
 
-                use_custom_allreduce()
+                use_custom_allreduce(self.fd_config.parallel_config.tp_group)
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
@@ -209,6 +213,8 @@ class GpuWorker(WorkerBase):
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1:
+            self.model_runner.vision_encoder_compile()
         # Trigger cuda graph capture
         self.model_runner.capture_model()
 

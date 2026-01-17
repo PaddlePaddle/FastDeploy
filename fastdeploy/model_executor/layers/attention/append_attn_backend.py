@@ -43,6 +43,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.platforms import current_platform
 
 
 @dataclass
@@ -87,7 +88,10 @@ def allocate_launch_related_buffer(
     res = {}
     res["decoder_batch_ids"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
     res["decoder_tile_ids_per_batch"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
-    res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+    if current_platform.is_maca():
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+    else:
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
     # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
     # adapted to cudagraph.
     res["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
@@ -160,6 +164,20 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        if self.use_output:
+            flag = "FLAGS_cuda_graph_blacklist"
+            paddle.set_flags(
+                {
+                    flag: ",".join(
+                        list(
+                            set(
+                                paddle.get_flags(flag)[flag].split(",")
+                                + ["custom_op.static_op_append_attention_with_output_"]
+                            )
+                        )
+                    )
+                }
+            )
         self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -206,20 +224,9 @@ class AppendAttentionBackend(AttentionBackend):
         Calculate kv cache shape
         """
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
-        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            key_cache_shape = [
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            ]
-            value_cache_shape = [
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            ]
+            key_cache_shape[-1] = self.head_dim // 2
+        value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
     def forward_mixed(
@@ -237,8 +244,17 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
-
         sliding_window = layer.sliding_window
+
+        if self.rope_3d:
+            assert len(forward_meta.rotary_embs.shape) == 6
+        else:
+            assert len(forward_meta.rotary_embs.shape) == 5
+            if layer.use_neox_rotary_style:
+                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
+                # 128 is qwen3
+                # 32 is glm
+                assert forward_meta.rotary_embs.shape[4] in [128, 32]
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(

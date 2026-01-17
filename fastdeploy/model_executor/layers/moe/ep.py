@@ -20,8 +20,14 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
+
 try:
-    from paddle.distributed.communication import deep_ep
+    if envs.FD_USE_PFCC_DEEP_EP:
+        paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
+        import deep_ep
+    else:
+        from paddle.distributed.communication import deep_ep
 except:
     logger.warning("import deep_ep Failed!")
 
@@ -280,23 +286,40 @@ class DeepEPEngine:
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        (
-            packed_recv_x,
-            recv_expert_count,
-            handle,
-            _,
-            dispatch_hook,
-        ) = self.deepep_engine.low_latency_dispatch(
-            hidden_states,
-            topk_idx,
-            expertwise_scale,
-            self.buffer.num_max_dispatch_tokens_per_rank,
-            self.num_experts,
-            use_fp8=use_fp8,
-            async_finish=False,
-            return_recv_hook=True,
-            num_per_channel=quant_group_size,
-        )
+        if envs.FD_USE_PFCC_DEEP_EP:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+            )
+        else:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                expertwise_scale,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+                num_per_channel=quant_group_size,
+            )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
@@ -307,6 +330,7 @@ class DeepEPEngine:
         topk_weights: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
+        quant_group_size: int = 128,
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
@@ -327,6 +351,7 @@ class DeepEPEngine:
             use_fp8=use_fp8,
             async_finish=False,
             return_recv_hook=True,
+            num_per_channel=quant_group_size,
         )
 
         return packed_recv_x, packed_recv_count, handle, dispatch_hook
@@ -363,6 +388,7 @@ class DeepEPEngine:
         topk_idx: paddle.Tensor,
         topk_weights: paddle.Tensor,
         dispatch_use_fp8: bool,
+        quant_group_size: int,
         handle,
     ):
         if self.deepep_engine is None:
@@ -376,6 +402,7 @@ class DeepEPEngine:
             async_finish=False,
             dispatch_use_fp8=dispatch_use_fp8,
             return_recv_hook=True,
+            num_per_channel=quant_group_size,
         )
         return combined_hidden_states, combine_hook
 
@@ -445,7 +472,7 @@ class EPRunner:
                     expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
-                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
@@ -457,7 +484,7 @@ class EPRunner:
                     moe_topk=self.top_k,
                     apply_norm_weight=True,
                     enable_softmax_top_k_fused=False,
-                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
                 )
         else:
             if layer.topk_method == "noaux_tc":
@@ -536,6 +563,8 @@ class EPPrefillRunner(EPRunner):
         )
 
     def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
+        if EPPrefillRunner.allocate_on_comm_stream == allocate_on_comm_stream:
+            return
         logger.info(
             f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream"
         )
@@ -661,21 +690,29 @@ class EPDecoderRunner(EPRunner):
             # just supports dispatch_use_fp8 = True now!
             assert use_fp8 is True
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = (
-                self.ep_engine.low_latency_dispatch_two_stage(x, topk_idx, topk_weights, expertwise_scale, use_fp8)
+                self.ep_engine.low_latency_dispatch_two_stage(
+                    x, topk_idx, topk_weights, expertwise_scale, use_fp8, quant_group_size
+                )
             )
         if dispatch_hook is not None:
             dispatch_hook()
 
         return recv_hidden_states, recv_expert_count, handle
 
-    def combine(self, ffn_out, topk_idx, topk_weights, handle):
+    def combine(self, ffn_out, topk_idx, topk_weights, handle, **kwargs):
+        quant_group_size = kwargs.get("quant_group_size", 128)
         if not self.use_internode_ll_two_stage:
             combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
                 ffn_out, topk_idx, topk_weights, handle
             )
         else:
             combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine_two_stage(
-                ffn_out, topk_idx, topk_weights, True, handle  # just supports dispatch_use_fp8 = True now!
+                ffn_out,
+                topk_idx,
+                topk_weights,
+                True,
+                quant_group_size,
+                handle,  # just supports dispatch_use_fp8 = True now!
             )
         if combine_hook is not None:
             combine_hook()

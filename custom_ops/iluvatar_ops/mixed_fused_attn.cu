@@ -16,32 +16,37 @@
 #include "iluvatar_context.h"
 
 template <paddle::DataType T>
-void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
-                               paddle::Tensor& k_cache,
-                               paddle::Tensor& v_cache,
-                               const paddle::Tensor& prefill_block_table,
-                               const paddle::Tensor& decode_block_table,
-                               const paddle::Tensor& cu_seqlens_qkv,
-                               const paddle::Tensor& seq_lens,
-                               const paddle::optional<paddle::Tensor>& rope_sin,
-                               const paddle::optional<paddle::Tensor>& rope_cos,
-                               int prefill_num_tokens,
-                               int num_heads,
-                               int head_dim,
-                               int num_kv_heads,
-                               int block_size,
-                               int max_seq_len,
-                               float scale,
-                               bool causal,
-                               bool q_rope,
-                               bool k_rope,
-                               bool v_rope,
-                               int window_left,
-                               int window_right,
-                               float softcap,
-                               bool enable_cuda_graph,
-                               bool use_sqrt_alibi,
-                               paddle::Tensor& out) {
+void MixedFusedPagedAttnKernel(
+    const paddle::Tensor& qkv,
+    paddle::Tensor& k_cache,
+    paddle::Tensor& v_cache,
+    const paddle::Tensor& prefill_block_table,
+    const paddle::Tensor& decode_block_table,
+    const paddle::Tensor& cu_seqlens_qkv,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& prefill_rope_sin,
+    const paddle::Tensor& prefill_rope_cos,
+    const paddle::optional<paddle::Tensor>& decode_rope_sin,
+    const paddle::optional<paddle::Tensor>& decode_rope_cos,
+    int prefill_num_tokens,
+    int num_heads,
+    int head_dim,
+    int num_kv_heads,
+    int block_size,
+    int max_seq_len,
+    float scale,
+    bool causal,
+    bool q_rope,
+    bool k_rope,
+    bool v_rope,
+    int window_left,
+    int window_right,
+    float softcap,
+    bool enable_cuda_graph,
+    bool use_sqrt_alibi,
+    int rope_batch_stride,
+    bool is_interleaved_rope_mode,
+    paddle::Tensor& out) {
   typedef PDTraits<T> traits_;
   typedef typename traits_::data_t data_t;
 
@@ -72,8 +77,39 @@ void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
   int kv_block_stride = k_cache.strides()[0];
   int kv_head_stride = k_cache.strides()[1];
   int block_table_stride = prefill_block_table.strides()[0];
-  const float* rope_sin_ptr = rope_sin ? rope_sin.get().data<float>() : nullptr;
-  const float* rope_cos_ptr = rope_cos ? rope_cos.get().data<float>() : nullptr;
+  const float* prefill_rope_sin_ptr = prefill_rope_sin.data<float>();
+  const float* prefill_rope_cos_ptr = prefill_rope_cos.data<float>();
+  const auto& prefill_rope_dims = prefill_rope_sin.dims();
+  std::vector<int> prefill_rope_shape_vec, prefill_rope_stride_vec;
+  int prefill_rope_ndim;
+  if (prefill_rope_dims.size() == 4) {
+    // [prefill_batch_size, max_seq_len, 1, head_dim]
+    PADDLE_ENFORCE_EQ(
+        prefill_rope_dims[0],
+        prefill_batch_size,
+        common::errors::InvalidArgument(
+            "prefill_rope_dims[0] must be equal to prefill_batch_size"));
+    prefill_rope_shape_vec =
+        std::vector<int>({prefill_batch_size, max_seq_len, head_dim});
+    prefill_rope_stride_vec =
+        std::vector<int>({max_seq_len * head_dim, head_dim, 1});
+    prefill_rope_ndim = 3;
+  } else if (prefill_rope_dims.size() == 3) {
+    // [max_seq_len, 1, head_dim]
+    prefill_rope_shape_vec = std::vector<int>({max_seq_len, head_dim});
+    prefill_rope_stride_vec = std::vector<int>({head_dim, 1});
+    prefill_rope_ndim = 2;
+  } else {
+    PD_THROW("Unsupported prefill_rope_ndim = %d for Paged attn",
+             prefill_rope_ndim);
+  }
+
+  const float* decode_rope_sin_ptr =
+      decode_rope_sin ? decode_rope_sin.get().data<float>() : nullptr;
+  const float* decode_rope_cos_ptr =
+      decode_rope_cos ? decode_rope_cos.get().data<float>() : nullptr;
+  cuinferAttentionRopeMode_t rope_mode =
+      is_interleaved_rope_mode ? CUINFER_ATTEN_NORMAL : CUINFER_ATTEN_OCRV1;
 
   cuinferTensorDescriptor_t qkv_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&qkv_desc));
@@ -139,21 +175,19 @@ void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
 
   cuinferTensorDescriptor_t cos_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&cos_desc));
-  CUINFER_CHECK(cuinferSetTensorNdDescriptor(
-      cos_desc,
-      CUINFER_DATA_FLOAT,
-      2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+  CUINFER_CHECK(cuinferSetTensorNdDescriptor(cos_desc,
+                                             CUINFER_DATA_FLOAT,
+                                             prefill_rope_ndim,
+                                             prefill_rope_shape_vec.data(),
+                                             prefill_rope_stride_vec.data()));
 
   cuinferTensorDescriptor_t sin_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&sin_desc));
-  CUINFER_CHECK(cuinferSetTensorNdDescriptor(
-      sin_desc,
-      CUINFER_DATA_FLOAT,
-      2,
-      std::vector<int>({max_seq_len, head_dim}).data(),
-      std::vector<int>({head_dim, 1}).data()));
+  CUINFER_CHECK(cuinferSetTensorNdDescriptor(sin_desc,
+                                             CUINFER_DATA_FLOAT,
+                                             prefill_rope_ndim,
+                                             prefill_rope_shape_vec.data(),
+                                             prefill_rope_stride_vec.data()));
 
   cuinferHandle_t cuinfer_handle =
       iluvatar::getContextInstance()->getIxInferHandle();
@@ -195,9 +229,9 @@ void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
                                        prefill_workspace_ptr,
                                        prefill_workspace_size,
                                        cos_desc,
-                                       rope_cos_ptr,
+                                       prefill_rope_cos_ptr,
                                        sin_desc,
-                                       rope_sin_ptr,
+                                       prefill_rope_sin_ptr,
                                        prefill_batch_size,
                                        num_heads,
                                        num_kv_heads,
@@ -206,7 +240,8 @@ void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
                                        scale,
                                        q_rope,
                                        k_rope,
-                                       v_rope));
+                                       v_rope,
+                                       rope_mode));
 
   size_t decode_workspace_size = 0;
   CUINFER_CHECK(cuInferPageAttentionGetWorkspaceV7(decode_num_tokens,
@@ -241,8 +276,18 @@ void MixedFusedPagedAttnKernel(const paddle::Tensor& qkv,
                                          decode_qkv_ptr,
                                          decode_workspace_ptr,
                                          true,
-                                         rope_sin_ptr,
-                                         rope_cos_ptr};
+                                         decode_rope_sin_ptr,
+                                         decode_rope_cos_ptr,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         1,
+                                         0,
+                                         0,
+                                         nullptr,
+                                         static_cast<size_t>(rope_batch_stride),
+                                         rope_mode};
 
   CUINFER_CHECK(cuInferPageAttentionV7(cuinfer_handle,
                                        decode_out_ptr,
@@ -285,8 +330,10 @@ std::vector<paddle::Tensor> MixedFusedPagedAttn(
     const paddle::Tensor& decode_block_table,
     const paddle::Tensor& cu_seqlens_qkv,
     const paddle::Tensor& seq_lens,
-    const paddle::optional<paddle::Tensor>& rope_sin,
-    const paddle::optional<paddle::Tensor>& rope_cos,
+    const paddle::Tensor& prefill_rope_sin,
+    const paddle::Tensor& prefill_rope_cos,
+    const paddle::optional<paddle::Tensor>& decode_rope_sin,
+    const paddle::optional<paddle::Tensor>& decode_rope_cos,
     int prefill_num_tokens,
     int num_heads,
     int head_dim,
@@ -302,67 +349,79 @@ std::vector<paddle::Tensor> MixedFusedPagedAttn(
     int window_right,
     float softcap,
     bool enable_cuda_graph,
-    bool use_sqrt_alibi) {
+    bool use_sqrt_alibi,
+    int rope_batch_stride,
+    bool is_interleaved_rope_mode) {
   const auto dtype = qkv.dtype();
   auto out =
       paddle::empty({qkv.shape()[0], num_heads * head_dim}, dtype, qkv.place());
 
   switch (dtype) {
     case paddle::DataType::BFLOAT16:
-      MixedFusedPagedAttnKernel<paddle::DataType::BFLOAT16>(qkv,
-                                                            k_cache,
-                                                            v_cache,
-                                                            prefill_block_table,
-                                                            decode_block_table,
-                                                            cu_seqlens_qkv,
-                                                            seq_lens,
-                                                            rope_sin,
-                                                            rope_cos,
-                                                            prefill_num_tokens,
-                                                            num_heads,
-                                                            head_dim,
-                                                            num_kv_heads,
-                                                            block_size,
-                                                            max_seq_len,
-                                                            scale,
-                                                            causal,
-                                                            q_rope,
-                                                            k_rope,
-                                                            v_rope,
-                                                            window_left,
-                                                            window_right,
-                                                            softcap,
-                                                            enable_cuda_graph,
-                                                            use_sqrt_alibi,
-                                                            out);
+      MixedFusedPagedAttnKernel<paddle::DataType::BFLOAT16>(
+          qkv,
+          k_cache,
+          v_cache,
+          prefill_block_table,
+          decode_block_table,
+          cu_seqlens_qkv,
+          seq_lens,
+          prefill_rope_sin,
+          prefill_rope_cos,
+          decode_rope_sin,
+          decode_rope_cos,
+          prefill_num_tokens,
+          num_heads,
+          head_dim,
+          num_kv_heads,
+          block_size,
+          max_seq_len,
+          scale,
+          causal,
+          q_rope,
+          k_rope,
+          v_rope,
+          window_left,
+          window_right,
+          softcap,
+          enable_cuda_graph,
+          use_sqrt_alibi,
+          rope_batch_stride,
+          is_interleaved_rope_mode,
+          out);
       break;
     case paddle::DataType::FLOAT16:
-      MixedFusedPagedAttnKernel<paddle::DataType::FLOAT16>(qkv,
-                                                           k_cache,
-                                                           v_cache,
-                                                           prefill_block_table,
-                                                           decode_block_table,
-                                                           cu_seqlens_qkv,
-                                                           seq_lens,
-                                                           rope_sin,
-                                                           rope_cos,
-                                                           prefill_num_tokens,
-                                                           num_heads,
-                                                           head_dim,
-                                                           num_kv_heads,
-                                                           block_size,
-                                                           max_seq_len,
-                                                           scale,
-                                                           causal,
-                                                           q_rope,
-                                                           k_rope,
-                                                           v_rope,
-                                                           window_left,
-                                                           window_right,
-                                                           softcap,
-                                                           enable_cuda_graph,
-                                                           use_sqrt_alibi,
-                                                           out);
+      MixedFusedPagedAttnKernel<paddle::DataType::FLOAT16>(
+          qkv,
+          k_cache,
+          v_cache,
+          prefill_block_table,
+          decode_block_table,
+          cu_seqlens_qkv,
+          seq_lens,
+          prefill_rope_sin,
+          prefill_rope_cos,
+          decode_rope_sin,
+          decode_rope_cos,
+          prefill_num_tokens,
+          num_heads,
+          head_dim,
+          num_kv_heads,
+          block_size,
+          max_seq_len,
+          scale,
+          causal,
+          q_rope,
+          k_rope,
+          v_rope,
+          window_left,
+          window_right,
+          softcap,
+          enable_cuda_graph,
+          use_sqrt_alibi,
+          rope_batch_stride,
+          is_interleaved_rope_mode,
+          out);
       break;
     default:
       PD_THROW("Unsupported data type for mixed paged attn");
@@ -388,8 +447,10 @@ PD_BUILD_STATIC_OP(mixed_fused_paged_attn)
              "decode_block_table",
              "cu_seqlens_qkv",
              "seq_lens",
-             paddle::Optional("rope_sin"),
-             paddle::Optional("rope_cos")})
+             "prefill_rope_sin",
+             "prefill_rope_cos",
+             paddle::Optional("decode_rope_sin"),
+             paddle::Optional("decode_rope_cos")})
     .Outputs({"out"})
     .Attrs({"prefill_num_tokens:int",
             "num_heads: int",
@@ -406,7 +467,9 @@ PD_BUILD_STATIC_OP(mixed_fused_paged_attn)
             "window_right:int",
             "softcap:float",
             "enable_cuda_graph:bool",
-            "use_sqrt_alibi:bool"})
+            "use_sqrt_alibi:bool",
+            "rope_batch_stride:int",
+            "is_interleaved_rope_mode:bool"})
     .SetKernelFn(PD_KERNEL(MixedFusedPagedAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(MixedFusedPagedAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MixedFusedPagedAttnInferDtype));

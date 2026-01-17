@@ -42,7 +42,7 @@ except:
 import numpy as np
 
 
-def get_moe_method():
+def get_moe_method(layer=None):
     """
     return moe method based on device platform
     """
@@ -54,7 +54,7 @@ def get_moe_method():
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
-        return XPUMoEMethod(None)
+        return XPUMoEMethod(None, layer)
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
@@ -64,7 +64,6 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import HpuMoEMethod
 
         return HpuMoEMethod(None)
-        # return HpuTensorWiseFP8MoEMethod(None)
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
@@ -213,8 +212,10 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
-        self.is_quantized = fd_config.model_config.is_quantized and not (
-            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        self.is_moe_quantized = getattr(self.fd_config.model_config, "is_moe_quantized", False)
+        self.is_quantized = self.is_moe_quantized or (
+            fd_config.model_config.is_quantized
+            and not (fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None)
         )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
@@ -224,7 +225,7 @@ class FusedMoE(nn.Layer):
             self.moe_quant_type = moe_quant_config.name()
         else:
             # unquantized quant_method
-            self.quant_method = get_moe_method()
+            self.quant_method = get_moe_method(self)
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         self.is_rearrange = False
@@ -274,10 +275,13 @@ class FusedMoE(nn.Layer):
         if not param._is_initialized():
             param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+
+        if self.ep_size > 1 or weight_need_transpose:
+            loaded_weight = get_tensor(loaded_weight)
+
         if shard_id is None:
             # 1.gate up fused in disk
             if weight_need_transpose:
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
@@ -293,7 +297,6 @@ class FusedMoE(nn.Layer):
                 self.weight_loader(param, loaded_weight_shard, expert_id, shard_id, "fused")
         else:
             if weight_need_transpose and source != "fused":
-                loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # 2.gate up splited in disk
             assert shard_id in ["gate", "down", "up"]
@@ -464,13 +467,18 @@ class FusedMoE(nn.Layer):
         """
         logical_expert_ids = [
             i
+            % (
+                self.fd_config.model_config.moe_num_experts[0]
+                if isinstance(self.fd_config.model_config.moe_num_experts, list)
+                else self.fd_config.model_config.moe_num_experts
+            )
             for i in range(
                 self.expert_id_offset,
                 self.expert_id_offset + self.num_local_experts,
             )
         ]
         ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
-        if self.redundant_table_manger is not None and is_rearrange is True:
+        if self.redundant_table_manger is not None:
             (
                 ep_rank_to_expert_id_list,
                 expert_id_to_ep_rank_array,
@@ -484,10 +492,7 @@ class FusedMoE(nn.Layer):
         down_proj_weights = []
         if isinstance(state_dict, list):
             state_dict = dict(state_dict)
-        is_ffn_merged = (
-            up_gate_proj_expert_weight_key.format(logical_expert_ids[0] if is_rearrange else self.expert_id_offset)
-            in state_dict
-        )
+        is_ffn_merged = up_gate_proj_expert_weight_key.format(logical_expert_ids[0]) in state_dict
         if is_ffn_merged:
             for expert_idx in logical_expert_ids:
                 down_proj_expert_weight_key_name = down_proj_expert_weight_key.format(expert_idx)
@@ -495,7 +500,7 @@ class FusedMoE(nn.Layer):
                 up_gate_proj_weights.append(
                     get_tensor(
                         (
-                            state_dict.pop(up_gate_proj_expert_weight_key_name)
+                            state_dict[up_gate_proj_expert_weight_key_name]
                             if up_gate_proj_expert_weight_key_name in state_dict
                             else up_gate_proj_expert_weight_key_name
                         ),
@@ -505,7 +510,7 @@ class FusedMoE(nn.Layer):
                 down_proj_weights.append(
                     get_tensor(
                         (
-                            state_dict.pop(down_proj_expert_weight_key_name)
+                            state_dict[down_proj_expert_weight_key_name]
                             if down_proj_expert_weight_key_name in state_dict
                             else down_proj_expert_weight_key_name
                         ),
@@ -639,18 +644,26 @@ class FusedMoE(nn.Layer):
         """
         topk_ids_hookfunc = None
         if self.enable_routing_replay:
-            if forward_meta is not None:  # forward_meta is None when execute empty_input_forward
+            # When execute empty_input_forward forward_meta is None. When execute mtp layer routing_replay_table is None.
+            if forward_meta is not None and forward_meta.routing_replay_table is not None:
+                moe_layer_idx = self.layer_idx - self.fd_config.model_config.moe_layer_start_index
                 topk_ids_hookfunc = partial(
                     save_routing_to_buffer,
                     routing_replay_table=forward_meta.routing_replay_table,
                     batch_id_per_token=forward_meta.batch_id_per_token,
                     seq_lens_decoder=forward_meta.seq_lens_decoder,
                     cu_seqlens_q=forward_meta.cu_seqlens_q,
-                    layer_idx=self.layer_idx,
+                    layer_idx=moe_layer_idx,
                     tp_size=self.fd_config.parallel_config.tensor_parallel_size,
                     ep_size=self.fd_config.parallel_config.expert_parallel_size,
                     tp_group=self.fd_config.parallel_config.tp_group,
                 )
+
+        if current_platform.is_intel_hpu():
+            out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
+            if self.reduce_results and (self.ep_size > 1 or self.tp_size > 1):
+                tensor_model_parallel_all_reduce_custom(out)
+            return out
 
         token_num = x.shape[0]
         if (
@@ -671,10 +684,7 @@ class FusedMoE(nn.Layer):
             out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
 
         if self.reduce_results and self.tp_size > 1:
-            if current_platform.is_intel_hpu():
-                tensor_model_parallel_all_reduce_custom(out)
-            else:
-                out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(

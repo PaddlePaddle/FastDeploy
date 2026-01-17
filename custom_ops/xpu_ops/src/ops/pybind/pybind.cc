@@ -85,8 +85,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string& pos_emb_type = "NORMAL",
-    bool rope_3d = false);
+    const bool use_neox_rotary_style,
+    const bool rope_3d = false);
 
 std::vector<paddle::Tensor> MoeLayer(
     const paddle::Tensor& x,
@@ -142,6 +142,8 @@ std::vector<paddle::Tensor> WeightOnlyLinear(
     const std::string& weight_dtype,
     const int arch,
     const int group_size);
+
+std::vector<paddle::Tensor> Quant2dPerToken(const paddle::Tensor& x);
 
 std::vector<paddle::Tensor> MoeEPCombine(const paddle::Tensor& ffn_out,
                                          const paddle::Tensor& moe_index,
@@ -246,7 +248,8 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
@@ -292,6 +295,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -361,6 +366,15 @@ void GetOutputDynamic(const paddle::Tensor& x,
                       int64_t rank_id,
                       bool wait_flag,
                       int msg_queue_id);
+
+void GetOutputEPStatic(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag);
+
+void GetOutputEPDynamic(const paddle::Tensor& x,
+                        int64_t rank_id,
+                        bool wait_flag,
+                        int msg_queue_id);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& cum_offsets,
@@ -470,13 +484,25 @@ void SpeculateStepPaddle(
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
+void SpeculateGetLogits(const paddle::Tensor& draft_logits,
+                        const paddle::Tensor& next_token_num,
+                        const paddle::Tensor& batch_token_num,
+                        const paddle::Tensor& cu_next_token_offset,
+                        const paddle::Tensor& cu_batch_token_offset,
+                        const paddle::Tensor& logits,
+                        const paddle::Tensor& first_token_logits,
+                        const paddle::Tensor& seq_lens_this_time,
+                        const paddle::Tensor& seq_lens_encoder);
+
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
 void SaveOutMmsgDynamic(const paddle::Tensor& x,
                         const paddle::Tensor& not_need_stop,
+                        const paddle::Tensor& preempted_idx,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank);
@@ -616,7 +642,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("smooth"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
-        py::arg("pos_emb_type") = "NORMAL",
+        py::arg("use_neox_rotary_style"),
         py::arg("rope_3d") = false,
         "block attention in XPU");
 
@@ -659,6 +685,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("batch_drop"),
         py::arg("pre_ids"),
+        py::arg("mask_rollback"),
+        py::arg("recompute_token_num"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("base_model_seq_lens_this_time"),
@@ -821,13 +849,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output function");
 
-  m.def("get_output_ep",
-        &GetOutputStatic,
-        py::arg("x"),
-        py::arg("rank_id"),
-        py::arg("wait_flag"),
-        "get_output_ep function");
-
   m.def("get_output_dynamic",
         &GetOutputDynamic,
         py::arg("x"),
@@ -836,8 +857,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("msg_queue_id"),
         "get_output_dynamic function");
 
+  m.def("get_output_ep",
+        &GetOutputEPStatic,
+        py::arg("x"),
+        py::arg("rank_id"),
+        py::arg("wait_flag"),
+        "get_output_ep function");
+
   m.def("get_output_ep_dynamic",
-        &GetOutputDynamic,
+        &GetOutputEPDynamic,
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -846,6 +874,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -945,6 +974,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgStatic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("save_each_rank"),
         "Save output function");
@@ -953,6 +983,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgDynamic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("msg_queue_id"),
         py::arg("save_each_rank"),
@@ -1001,6 +1032,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",
         &SpeculateVerify,
+        py::arg("sampled_token_ids"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("step_idx"),
@@ -1174,6 +1206,19 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_draft_tokens"),
         "Step paddle function");
 
+  m.def("speculate_get_logits",
+        &SpeculateGetLogits,
+        py::arg("draft_logits"),
+        py::arg("next_token_num"),
+        py::arg("batch_token_num"),
+        py::arg("cu_next_token_offset"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("logits"),
+        py::arg("first_token_logits"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        "speculate get logits function");
+
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,
         py::arg("input"),
@@ -1251,6 +1296,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("weight_dtype"),
         py::arg("arch"),
         py::arg("group_size") = -1);
+
+  m.def(
+      "quant2d_per_token", &Quant2dPerToken, py::arg("x"), "quant x per token");
 
   m.def("xpu_moe_layer",
         &MoeLayer,

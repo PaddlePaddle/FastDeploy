@@ -169,9 +169,17 @@ __global__ void multi_query_append_attention_c4_kernel(
   T *o_base_ptr_T = nullptr;
   OutT *o_base_ptr_int8 = nullptr;
   if constexpr (partition_kv) {
-    o_base_ptr_T = tmp_workspace + q_start_seq_id * num_chunks * q_n_stride +
-                   chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-                   tid % 8 * num_elems_per_128b<T>();
+    if (ENABLE_PREFILL) {
+      o_base_ptr_T = tmp_workspace + q_start_seq_id * num_chunks * q_n_stride +
+                     chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+                     tid % 8 * num_elems_per_128b<T>();
+    } else {
+      o_base_ptr_T =
+          tmp_workspace +
+          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+          chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+          tid % 8 * num_elems_per_128b<T>();
+    }
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
@@ -477,8 +485,18 @@ __global__ void multi_query_append_attention_c4_kernel(
         const uint32_t qo_head_idx = q_head_idx + qo_idx_now % GROUP_SIZE;
         const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
         if (qo_idx - q_start_seq_id < q_len) {
-          uint32_t offset =
-              (qo_idx * num_chunks + chunk_idx) * q_num_heads + qo_head_idx;
+          uint32_t offset;
+          if (ENABLE_PREFILL) {
+            offset =
+                (qo_idx * num_chunks + chunk_idx) * q_num_heads + qo_head_idx;
+          } else {
+            offset = ((batch_id * speculate_max_draft_token_num +
+                       qo_idx_now / GROUP_SIZE) *
+                          num_chunks +
+                      chunk_idx) *
+                         q_num_heads +
+                     qo_head_idx;
+          }
           tmp_m[offset] = m_frag[fx][j];
           tmp_d[offset] = d_frag[fx][j];
         }
@@ -519,6 +537,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
     const T *__restrict__ sinks,               // [q_num_heads]
     const int *__restrict__ seq_lens,
     const int *__restrict__ seq_lens_kv,
+    const int *__restrict__ seq_lens_encoder,
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
@@ -559,7 +578,9 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
   const uint32_t num_chunks = gridDim.y;
   const uint32_t chunk_idx = blockIdx.y;
 
-  const uint32_t batch_id = batch_ids[btid];
+  const int32_t batch_id = batch_ids[btid];
+  if (batch_id == -1) return;
+
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
@@ -586,6 +607,10 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
       return;
     }
     kv_len += q_len;
+  }
+  const int seq_len_enc = seq_lens_encoder[batch_id];
+  if (seq_len_enc > 0) {
+    return;
   }
   const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
   if (chunk_idx >= num_chunks_this_seq) {
@@ -651,9 +676,11 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
                      chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
                      tid % 8 * num_elems_per_128b<T>();
     } else {
-      o_base_ptr_T = tmp_workspace + q_start_seq_id * num_chunks * q_n_stride +
-                     chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-                     tid % 8 * num_elems_per_128b<T>();
+      o_base_ptr_T =
+          tmp_workspace +
+          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+          chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+          tid % 8 * num_elems_per_128b<T>();
     }
   }
   const int *mask_offset_this_seq =
@@ -969,8 +996,12 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
               offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
                        qo_head_idx;
             } else {
-              offset =
-                  (qo_idx * num_chunks + chunk_idx) * q_num_heads + qo_head_idx;
+              offset = ((batch_id * speculate_max_draft_token_num +
+                         qo_idx_now / GROUP_SIZE) *
+                            num_chunks +
+                        chunk_idx) *
+                           q_num_heads +
+                       qo_head_idx;
             }
             tmp_m[offset] = m_frag[fx][j];
             tmp_d[offset] = d_frag[fx][j];
@@ -1161,15 +1192,30 @@ void MultiQueryAppendC4Attention(
           sliding_window);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
-      tmp_workspace = allocator->Allocate(
-          phi::SizeOf(qkv.dtype()) *
-          static_cast<size_t>(token_num * num_chunks * num_heads * HEAD_DIM));
-      tmp_m = allocator->Allocate(
-          phi::SizeOf(paddle::DataType::FLOAT32) *
-          static_cast<size_t>(token_num * num_chunks * num_heads));
-      tmp_d = allocator->Allocate(
-          phi::SizeOf(paddle::DataType::FLOAT32) *
-          static_cast<size_t>(token_num * num_chunks * num_heads));
+      if (ENABLE_PREFILL) {
+        tmp_workspace = allocator->Allocate(
+            phi::SizeOf(qkv.dtype()) *
+            static_cast<size_t>(token_num * num_chunks * num_heads * HEAD_DIM));
+        tmp_m = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(token_num * num_chunks * num_heads));
+        tmp_d = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(token_num * num_chunks * num_heads));
+      } else {
+        tmp_workspace = allocator->Allocate(
+            phi::SizeOf(qkv.dtype()) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads * HEAD_DIM));
+        tmp_m = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
+        tmp_d = allocator->Allocate(
+            phi::SizeOf(paddle::DataType::FLOAT32) *
+            static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                num_chunks * num_heads));
+      }
       launchWithPdlWhenEnabled(
           split_kv_kernel,
           grids,
@@ -1220,6 +1266,7 @@ void MultiQueryAppendC4Attention(
           sliding_window);
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
+
       constexpr int blockx = HEAD_DIM / vec_size;
       constexpr int blocky = (128 + blockx - 1) / blockx;
       dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
@@ -1230,7 +1277,8 @@ void MultiQueryAppendC4Attention(
                                        blocky,
                                        HEAD_DIM,
                                        OUT_NV_TYPE,
-                                       ENABLE_PREFILL>,
+                                       ENABLE_PREFILL,
+                                       false>,
           grids_merge,
           blocks_merge,
           0,
@@ -1366,6 +1414,7 @@ void MultiQueryAppendC4Attention(
                 : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
+          seq_lens_encoder.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
@@ -1402,15 +1451,31 @@ void MultiQueryAppendC4Attention(
             phi::SizeOf(paddle::DataType::FLOAT32) *
             static_cast<size_t>(bsz * num_chunks * num_heads));
       } else {
-        tmp_workspace = allocator->Allocate(
-            phi::SizeOf(qkv.dtype()) *
-            static_cast<size_t>(token_num * num_chunks * num_heads * HEAD_DIM));
-        tmp_m = allocator->Allocate(
-            phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(token_num * num_chunks * num_heads));
-        tmp_d = allocator->Allocate(
-            phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(token_num * num_chunks * num_heads));
+        if (ENABLE_PREFILL) {
+          tmp_workspace =
+              allocator->Allocate(phi::SizeOf(qkv.dtype()) *
+                                  static_cast<size_t>(token_num * num_chunks *
+                                                      num_heads * HEAD_DIM));
+          tmp_m = allocator->Allocate(
+              phi::SizeOf(paddle::DataType::FLOAT32) *
+              static_cast<size_t>(token_num * num_chunks * num_heads));
+          tmp_d = allocator->Allocate(
+              phi::SizeOf(paddle::DataType::FLOAT32) *
+              static_cast<size_t>(token_num * num_chunks * num_heads));
+        } else {
+          tmp_workspace = allocator->Allocate(
+              phi::SizeOf(qkv.dtype()) *
+              static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                  num_chunks * num_heads * HEAD_DIM));
+          tmp_m = allocator->Allocate(
+              phi::SizeOf(paddle::DataType::FLOAT32) *
+              static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                  num_chunks * num_heads));
+          tmp_d = allocator->Allocate(
+              phi::SizeOf(paddle::DataType::FLOAT32) *
+              static_cast<size_t>(speculate_max_draft_token_num * bsz *
+                                  num_chunks * num_heads));
+        }
       }
       launchWithPdlWhenEnabled(
           split_kv_kernel,
@@ -1440,6 +1505,7 @@ void MultiQueryAppendC4Attention(
                 : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
+          seq_lens_encoder.data<int>(),
           batch_ids.data<int>(),
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
@@ -1517,7 +1583,8 @@ void MultiQueryAppendC4Attention(
                                          blocky,
                                          HEAD_DIM,
                                          OUT_NV_TYPE,
-                                         ENABLE_PREFILL>,
+                                         ENABLE_PREFILL,
+                                         true>,
             grids_merge,
             blocks_merge,
             0,

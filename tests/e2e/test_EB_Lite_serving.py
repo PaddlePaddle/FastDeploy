@@ -78,8 +78,6 @@ def setup_and_run_server():
         "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
-        "--routing-replay-config",
-        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./routing_replay_output"}',
     ]
 
     # Start subprocess in new process group
@@ -481,7 +479,6 @@ def test_completions_streaming_with_n(openai_client):
     assert sum(count) == 2
 
 
-@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_non_streaming_with_stop_str(openai_client):
     """
     Test non-streaming chat functionality with the local service
@@ -490,8 +487,9 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
-        max_tokens=5,
-        extra_body={"include_stop_str_in_output": True},
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"min_tokens": 5, "include_stop_str_in_output": True},
         stream=False,
     )
     # Assertions to check the response structure
@@ -516,7 +514,7 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=10,
         stream=False,
     )
     assert not response.choices[0].text.endswith("</s>")
@@ -525,7 +523,7 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=10,
         extra_body={"include_stop_str_in_output": True},
         stream=False,
     )

@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import inspect
 import itertools
 import time
 import traceback
@@ -24,6 +25,8 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.envs as envs
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
@@ -73,6 +76,7 @@ class OpenAIServingCompletion:
         else:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
+        self._is_process_response_dict_async = None
         api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
@@ -82,6 +86,7 @@ class OpenAIServingCompletion:
         """
         Create a completion for the given prompt.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -106,6 +111,8 @@ class OpenAIServingCompletion:
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
         api_server_logger.info(f"Initialize request {request_id}: {request}")
+        tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+        del request.trace_context
         request_prompt_ids = None
         request_prompts = None
 
@@ -223,7 +230,13 @@ class OpenAIServingCompletion:
                     )
                     api_server_logger.error(error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
-
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", num_choices)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
+            )
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
@@ -261,6 +274,7 @@ class OpenAIServingCompletion:
             aggregated_token_ids = [[] for _ in range(num_choices)]
             aggregated_prompt_logprobs_tensors = [None] * num_choices
             completion_batched_token_ids = [[] for _ in range(num_choices)]
+            aggregated_speculate_metrics = [None] * num_choices
             current_waiting_time = 0
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -277,7 +291,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -309,18 +325,34 @@ class OpenAIServingCompletion:
                         aggregated_prompt_logprobs_tensors[rid] = output_prompt_logprobs_tensors
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
-
-                    self.engine_client.data_processor.process_response_dict(
-                        data, stream=False, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
+                    await self._call_process_response_dict(data, request, stream=False)
                     output_tokens[rid] += len(data["outputs"]["token_ids"])
                     completion_batched_token_ids[rid].extend(data["outputs"]["token_ids"])
+
+                    output_speculate_metrics = data["metrics"].get("speculate_metrics", None)
+                    if output_speculate_metrics is not None:
+                        aggregated_speculate_metrics[rid] = output_speculate_metrics
+
                     if data.get("finished", False):
+                        trace_carrier = data.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = data["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in data:
+                                del data["trace_carrier"]
                         data["output_token_ids"] = output_tokens[rid]
                         data["outputs"]["top_logprobs"] = aggregated_top_logprobs[rid]
                         data["outputs"]["draft_top_logprobs"] = aggregated_draft_top_logprobs[rid]
                         data["outputs"]["token_ids"] = aggregated_token_ids[rid]
                         data["prompt_logprobs_tensors"] = aggregated_prompt_logprobs_tensors[rid]
+                        data["speculate_metrics"] = aggregated_speculate_metrics[rid]
                         valid_results[rid] = data
                         num_choices -= 1
                         break
@@ -340,6 +372,7 @@ class OpenAIServingCompletion:
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
         finally:
+            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
             if dealer is not None:
@@ -430,7 +463,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health()
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -452,7 +487,7 @@ class OpenAIServingCompletion:
                                 else self.engine_client.ori_vocab_size
                             )
                             prompt_logprobs_res = self._build_prompt_logprobs(
-                                prompt_logprobs_tensors, num_prompt_logprobs
+                                prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                             )
                         if request.return_token_ids:
                             chunk = CompletionStreamResponse(
@@ -480,14 +515,12 @@ class OpenAIServingCompletion:
                             )
                         first_iteration[idx] = False
 
-                    self.engine_client.data_processor.process_response_dict(
-                        res, stream=True, include_stop_str_in_output=request.include_stop_str_in_output
-                    )
-                    if res["metrics"].get("first_token_time") is not None:
+                    await self._call_process_response_dict(res, request, stream=True)
+                    if inference_start_time[idx] == 0:
                         arrival_time = res["metrics"]["first_token_time"]
                         inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
+                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
 
                     await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
@@ -512,6 +545,7 @@ class OpenAIServingCompletion:
                         output_tokens[idx] += output.get("num_image_tokens")
                         num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
+                    output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -522,8 +556,11 @@ class OpenAIServingCompletion:
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
-                        prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
+                        prompt_logprobs=(
+                            clamp_prompt_logprobs(prompt_logprobs_res) if not request.return_token_ids else None
+                        ),
                         draft_logprobs=draft_logprobs_res,
+                        speculate_metrics=output_speculate_metrics,
                     )
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
@@ -544,6 +581,7 @@ class OpenAIServingCompletion:
                             output,
                             tool_called[idx],
                         )
+                        inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
@@ -561,11 +599,25 @@ class OpenAIServingCompletion:
                             created=created_time,
                             model=model_name,
                             choices=choices,
+                            metrics=res["metrics"] if request.collect_metrics else None,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
 
                     if res["finished"]:
+                        trace_carrier = res.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = res["metrics"]["engine_recv_latest_token_time"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in res:
+                                del res["trace_carrier"]
                         num_choices -= 1
                         if getattr(request, "stream_options", None) and request.stream_options.include_usage:
                             usage_chunk = CompletionStreamResponse(
@@ -587,14 +639,21 @@ class OpenAIServingCompletion:
                                         image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
+                                metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
 
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", num_choices)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
+
+            tracing.trace_req_finish(request_id)
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
             if dealer is not None:
@@ -648,7 +707,9 @@ class OpenAIServingCompletion:
                 num_prompt_logprobs = (
                     request.prompt_logprobs if request.prompt_logprobs != -1 else self.engine_client.ori_vocab_size
                 )
-                prompt_logprobs_res = self._build_prompt_logprobs(prompt_logprobs_tensors, num_prompt_logprobs)
+                prompt_logprobs_res = self._build_prompt_logprobs(
+                    prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
+                )
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
@@ -681,6 +742,7 @@ class OpenAIServingCompletion:
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
                 finish_reason=finish_reason,
+                speculate_metrics=final_res["metrics"].get("speculate_metrics", None),
             )
             choices.append(choice_data)
 
@@ -713,6 +775,20 @@ class OpenAIServingCompletion:
             choices=choices,
             usage=usage,
         )
+
+    async def _call_process_response_dict(self, res, request, stream):
+        if self._is_process_response_dict_async is None:
+            self._is_process_response_dict_async = inspect.iscoroutinefunction(
+                self.engine_client.data_processor.process_response_dict
+            )
+        if self._is_process_response_dict_async:
+            await self.engine_client.data_processor.process_response_dict(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
+        else:
+            self.engine_client.data_processor.process_response_dict(
+                res, stream=stream, include_stop_str_in_output=request.include_stop_str_in_output
+            )
 
     def _create_completion_logprobs(
         self,
@@ -814,6 +890,7 @@ class OpenAIServingCompletion:
         self,
         prompt_logprobs_tensors: LogprobsTensors,
         num_prompt_logprobs: int,
+        include_logprobs_decode_token: bool,
     ):
         """Update with prompt logprobs from worker.
         Args:
@@ -825,10 +902,13 @@ class OpenAIServingCompletion:
 
         # Detokenize non-incrementally.
         # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
-        decoded_tokens = [
-            self.engine_client.data_processor.process_logprob_response(token_id)
-            for token_id in token_ids.flatten().tolist()
-        ]
+        if include_logprobs_decode_token:
+            decoded_tokens = [
+                self.engine_client.data_processor.process_logprob_response(token_id)
+                for token_id in token_ids.flatten().tolist()
+            ]
+        else:
+            decoded_tokens = None
 
         # Recover shapes.
         num_prompt_tokens, num_logprobs = logprobs.shape

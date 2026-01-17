@@ -19,16 +19,8 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "paddle/extension.h"
+#include "speculate_msg.h"
 #include "xpu/plugin.h"
-
-#define MAX_BSZ 256
-#define MAX_DRAFT_TOKENS 6
-
-struct msgdata {
-  long mtype;  // NOLINT
-  int mtext[MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ +
-            2];  // stop_flag, bsz, tokens
-};
 
 void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 const paddle::Tensor& accept_num,
@@ -59,7 +51,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
 #endif
     msg_queue_id = inference_msg_queue_id_from_env;
   }
-  static struct msgdata msg_sed;
+  static struct speculate_msgdata msg_sed;
   static key_t key = ftok("./", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 

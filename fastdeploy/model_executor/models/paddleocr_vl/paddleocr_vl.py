@@ -40,6 +40,7 @@ from fastdeploy.model_executor.utils import (
     default_weight_loader,
     process_weights_after_loading,
 )
+from fastdeploy.platforms import current_platform
 
 from .projector import Projector
 from .siglip import SiglipVisionModel
@@ -90,8 +91,10 @@ class PaddleOCRVLModel(nn.Layer):
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
-    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
-        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+    def get_input_embeddings(
+        self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta = None
+    ) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
     def forward(
         self,
@@ -99,11 +102,18 @@ class PaddleOCRVLModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         hidden_states = input_embeddings
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual)[0]
+
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
 
         return out
 
@@ -222,8 +232,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor] = None,
+        forward_meta=None,
     ) -> paddle.Tensor:
-        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        input_embeddings = self.model.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, forward_meta=forward_meta
+        )
         image_mask = ids_remove_padding == self.model.config.image_token_id
         image_token_num = image_mask.sum()
 
@@ -238,7 +251,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding, image_features=image_features, forward_meta=forward_meta
         )
 
         if forward_meta.step_use_cudagraph:

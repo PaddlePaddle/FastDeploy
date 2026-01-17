@@ -242,7 +242,7 @@ def test_non_streaming_chat(openai_client):
             {"role": "user", "content": "List 3 countries and their capitals."},
         ],
         temperature=1,
-        max_tokens=1024,
+        max_tokens=64,
         stream=False,
     )
 
@@ -269,7 +269,7 @@ def test_streaming_chat(openai_client, capsys):
             {"role": "user", "content": "OK, tell more."},
         ],
         temperature=1,
-        max_tokens=1024,
+        max_tokens=64,
         stream=True,
     )
 
@@ -293,7 +293,7 @@ def test_non_streaming(openai_client):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=64,
         stream=False,
     )
 
@@ -310,7 +310,7 @@ def test_streaming(openai_client, capsys):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=64,
         stream=True,
     )
 
@@ -334,8 +334,9 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
-        max_tokens=5,
-        extra_body={"include_stop_str_in_output": True},
+        top_p=0.0,
+        max_tokens=10,
+        extra_body={"min_tokens": 5, "include_stop_str_in_output": True},
         stream=False,
     )
     # Assertions to check the response structure
@@ -360,7 +361,7 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=10,
         stream=False,
     )
     assert not response.choices[0].text.endswith("</s>")
@@ -369,7 +370,7 @@ def test_non_streaming_with_stop_str(openai_client):
         model="default",
         prompt="Hello, how are you?",
         temperature=1,
-        max_tokens=1024,
+        max_tokens=10,
         extra_body={"include_stop_str_in_output": True},
         stream=False,
     )
@@ -1436,6 +1437,7 @@ def test_structured_outputs_grammar(openai_client):
 
     grammar_param = {
         "temperature": 1,
+        "top_p": 0.0,
         "max_tokens": 1024,
         "messages": [
             {

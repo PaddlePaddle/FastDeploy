@@ -26,6 +26,7 @@ from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
 from fastdeploy.model_executor.ops.gpu import (
     all_reduce,
     clear_ipc_handles,
+    decode_alltoall_transpose,
     dispose,
     get_graph_buffer_ipc_meta,
     init_custom_all_reduce,
@@ -164,6 +165,23 @@ class CustomAllreduce:
             all_reduce(inp, out, self._ptr, self.buffer_ptrs[self.rank], self.max_size)
         return out
 
+    def decode_alltoall_transpose(
+        self,
+        inp: paddle.Tensor,
+        out: paddle.Tensor = None,
+        registered: bool = False,
+    ):
+        """
+        alltoall and transpose in decode.
+        """
+        if out is None:
+            out = paddle.empty_like(inp)
+        if registered:
+            decode_alltoall_transpose(inp, out, self._ptr, 0, 0)
+        else:
+            decode_alltoall_transpose(inp, out, self._ptr, self.buffer_ptrs[self.rank], self.max_size)
+        return out
+
     def start_capture(self):
         """
         set CUDA graph flag: True.
@@ -207,6 +225,10 @@ class CustomAllreduce:
 
     def custom_all_reduce(self, input: paddle.Tensor) -> Optional[paddle.Tensor]:
         """The main allreduce API that provides support for cuda graph."""
+
+        if input.shape[0] == 0:
+            return input
+
         if self.capturing:
             lib = cuda_wrapper.CudaRTLibrary()
             stream = paddle.device.current_stream()

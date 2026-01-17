@@ -14,12 +14,13 @@
 # limitations under the License.
 """
 
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.engine.request import CompletionOutput, RequestOutput
+from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.output import LogprobsLists
 
@@ -49,14 +50,17 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         self.task_mock.messages = None
         self.task_mock.disaggregate_info = None
         self.task_mock.eos_token_ids = [2]
-        self.task_mock.inference_start_time = 100.0  # Set a float value for time calculation
-        self.task_mock.arrival_time = 90.0
-        self.task_mock.preprocess_end_time = 95.0
-        self.task_mock.preprocess_start_time = 90.0
-        self.task_mock.schedule_start_time = 95.0
-        self.task_mock.llm_engine_recv_req_timestamp = 95.0
         self.task_mock.ic_req_data = {}
         self.task_mock.prompt_token_ids_len = 0
+
+        now = time.time()
+        self.task_mock.metrics = RequestMetrics(
+            arrival_time=now,
+            preprocess_start_time=now - 0.2,
+            preprocess_end_time=now - 0.1,
+            scheduler_recv_req_time=now + 0.1,
+            inference_start_time=now + 0.2,
+        )
 
         self.processor.resource_manager.tasks_list = [self.task_mock]
 
@@ -148,6 +152,60 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         result = self.processor._process_batch_output_use_zmq([stream_data])
 
         self.assertEqual(len(result), 0)
+
+    def test_process_batch_output_use_zmq_aborted_task_negative_token(self):
+        """Test aborted task receiving negative token triggers recycling logic"""
+        # Set up task as aborted
+        task_id = "test_aborted_request"
+        self.task_mock.request_id = task_id
+        self.processor.resource_manager.abort_req_ids_set = {task_id}
+
+        # Create stream data with negative token
+        stream_data = MagicMock()
+        stream_data.tokens = np.array([1, 2, -1])  # Last token is negative
+        stream_data.batch_id = 0
+
+        # Mock _recycle_resources to track if it's called
+        self.processor._recycle_resources = MagicMock()
+
+        # Mock the llm_logger module and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        with (
+            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
+        ):
+            # Call the method
+            result = self.processor._process_batch_output_use_zmq([stream_data])
+
+            # Verify the recycling logic was triggered
+            mock_logger.info.assert_any_call(f"Aborted task {task_id} received negative token. Recycling.")
+            self.processor._recycle_resources.assert_called_once_with(task_id, 0, self.task_mock)
+            self.assertNotIn(task_id, self.processor.resource_manager.abort_req_ids_set)
+            self.assertEqual(len(result), 1)  # Should return abort result
+            self.assertEqual(result[0].finished, True)
+            self.assertEqual(result[0].error_code, 499)
+            self.assertIn("aborted", result[0].error_msg.lower())
+
+    def test_process_batch_output_use_zmq_non_aborted_task_negative_token(self):
+        """Test non-aborted task receiving negative token does not trigger recycling"""
+        # Set up task as not aborted
+        task_id = "test_normal_request"
+        self.task_mock.request_id = task_id
+        self.processor.resource_manager.abort_req_ids_set = set()  # Empty set
+
+        # Create stream data with negative token
+        stream_data = MagicMock()
+        stream_data.tokens = np.array([1, 2, -1])  # Last token is negative
+        stream_data.batch_id = 0
+
+        # Mock _recycle_resources to track if it's called
+        self.processor._recycle_resources = MagicMock()
+
+        # Call the method
+        self.processor._process_batch_output_use_zmq([stream_data])
+
+        # Verify recycling logic was NOT triggered
+        self.processor._recycle_resources.assert_not_called()
+        self.processor.llm_logger.info.assert_not_called()
 
 
 if __name__ == "__main__":

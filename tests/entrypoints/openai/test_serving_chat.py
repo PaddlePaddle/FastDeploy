@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -41,35 +42,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             chat_template=None,
         )
 
-    def test_enable_thinking(self):
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, None)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"enable_thinking": True})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"enable_thinking": False})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "close"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "false"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, False)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "open"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
-        request = ChatCompletionRequest(messages=[], chat_template_kwargs={"options": {"thinking_mode": "123"}})
-        enable_thinking = self.chat_completion_handler._get_thinking_status(request)
-        self.assertEqual(enable_thinking, True)
-
     def test_build_prompt_logprobs_basic(self):
         """Test basic functionality of _build_prompt_logprobs"""
         # Create mock data
@@ -89,7 +61,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["token1", "token2", "token3", "token4", "token5", "token6"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             # Verify result structure (first element is None, then actual results)
             self.assertEqual(len(result), num_prompt_tokens + 1)
@@ -127,7 +99,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["hello", "world"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, -1)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, -1, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -154,7 +126,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.return_value = "single_token"
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -183,7 +155,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ) as mock_decode:
             mock_decode.side_effect = ["t1", "t2", "t3", "t4", "t5", "t6"]
 
-            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+            result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
             self.assertEqual(len(result), num_prompt_tokens + 1)
             self.assertIsNone(result[0])
@@ -217,7 +189,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         prompt_logprobs_tensors = LogprobsTensors(token_ids, logprobs, ranks)
 
-        result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
+        result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs, True)
 
         self.assertEqual(len(result), num_prompt_tokens + 1)
         self.assertIsNone(result[0])
@@ -1107,6 +1079,127 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(choice.prompt_logprobs)
             # logprobs should be None when not requested
             self.assertIsNone(choice.logprobs)
+
+    async def test_create_chat_completion_cancelled_error(self):
+        """Test asyncio.CancelledError handling in create_chat_completion method"""
+        # Create mock request
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+
+        # Mock the semaphore
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+
+        # Mock the model weight status check
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+
+        # Mock format_and_add_data to raise CancelledError
+        self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(
+            side_effect=asyncio.CancelledError("Test cancellation during data formatting")
+        )
+
+        # Mock the abort method that should be called when CancelledError occurs
+        self.chat_completion_handler.engine_client.abort = AsyncMock()
+
+        # Execute and verify that CancelledError is handled properly
+        # The CancelledError should be caught and handled, not re-raised
+        try:
+            await self.chat_completion_handler.create_chat_completion(request)
+        except asyncio.CancelledError:
+            # This should not happen as CancelledError should be caught and handled
+            self.fail("CancelledError should be caught and handled, not re-raised")
+
+        # Verify abort was called despite the cancellation
+        self.chat_completion_handler.engine_client.abort.assert_called_once()
+
+    async def test_chat_completion_stream_generator_cancelled_error(self):
+        """Test asyncio.CancelledError handling in chat_completion_stream_generator method"""
+        # Create mock request
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=True)
+
+        request_id = "test_cancel_request"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        # Mock the connection manager
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+
+        # Mock get_connection to return normally
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+
+        # Mock the semaphore
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+
+        # Mock the model weight status check
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+
+        # Mock the response processor to raise CancelledError during processing
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+
+        async def mock_async_generator_with_cancel():
+            # Simulate some normal response first
+            yield {
+                "request_id": f"{request_id}_0",
+                "error_code": 200,
+                "metrics": {
+                    "first_token_time": 1234567890,
+                    "inference_start_time": 1234567880,
+                    "arrival_time": 1234567890,
+                    "request_start_time": 1234567870,
+                },
+                "prompt_logprobs": None,
+                "outputs": {
+                    "token_ids": [5],
+                    "text": "Hi",
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "multipart": [{"type": "text", "text": "Hi"}],
+                },
+                "finished": False,
+                "num_cached_tokens": 0,
+                "num_input_image_tokens": 0,
+                "num_input_video_tokens": 0,
+            }
+            # Then raise CancelledError
+            raise asyncio.CancelledError("Test cancellation during streaming")
+
+        mock_response_processor.process_response_chat.return_value = mock_async_generator_with_cancel()
+
+        # Mock the cleanup method
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        # Mock the abort method that should be called when CancelledError occurs
+        self.chat_completion_handler.engine_client.abort = AsyncMock()
+
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor", return_value=mock_response_processor
+        ):
+            # Execute the generator and verify CancelledError handling
+            # The CancelledError should be caught and handled, not re-raised
+            chunks = []
+            try:
+                async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+                ):
+                    chunks.append(chunk)
+            except asyncio.CancelledError:
+                # This should not happen as CancelledError should be caught and handled
+                self.fail("CancelledError should be caught and handled, not re-raised")
+
+            # Should have received at least one chunk before cancellation
+            self.assertGreaterEqual(len(chunks), 1)
+            self.assertIsNotNone(chunks[0])
+
+            # Verify cleanup and abort were called despite the cancellation
+            self.chat_completion_handler.engine_client.connection_manager.cleanup_request.assert_called_once()
+            self.chat_completion_handler.engine_client.abort.assert_called_once()
 
 
 if __name__ == "__main__":

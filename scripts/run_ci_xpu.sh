@@ -632,6 +632,7 @@ export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
 export MOE_FFN_USE_DENSE_INPUT=1
+export FD_XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_int8:8->53"
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
@@ -643,7 +644,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --data-parallel-size 1 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
-    --quantization "wint4" \
+    --quantization "wint8" \
     --engine-worker-queue-port $((port_num + 10)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
@@ -692,6 +693,7 @@ unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 unset MOE_FFN_USE_DENSE_INPUT
+unset XPU_MOE_FFN_QUANT_TYPE_MAP
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then

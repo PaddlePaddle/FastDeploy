@@ -110,7 +110,11 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
+        if moe_quant_type == "w4a8" or (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and not fd_config.quant_config.moe_dynamic_quant
+        ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -120,6 +124,19 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
                 "up_gate_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.activation_scale",
                 "down_proj_expert_in_scale_key": f"{prefix}.experts.{{}}.down_proj.activation_scale",
+            }
+        elif (
+            moe_quant_type == "w4afp8"
+            and fd_config.model_config.is_quantized
+            and fd_config.quant_config.moe_dynamic_quant
+        ):
+            weight_key_map = {
+                "gate_weight_key": f"{prefix}.gate.weight",
+                "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
+                "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.quant_weight",
+                "down_proj_expert_weight_key": f"{prefix}.experts.{{}}.down_proj.quant_weight",
+                "up_gate_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.up_gate_proj.weight_scale",
+                "down_proj_expert_weight_scale_key": f"{prefix}.experts.{{}}.down_proj.weight_scale",
             }
         elif moe_quant_type == "w4w2":
             weight_key_map = {
@@ -223,6 +240,7 @@ class Ernie4_5_MoE(nn.Layer):
             gate=self.gate,
             forward_meta=forward_meta,
         )
+
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -382,7 +400,7 @@ class Ernie4_5_Model(nn.Layer):
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                redundant_experts_num=fd_config.eplb_config.redundant_experts_num,
                 ep_size=fd_config.parallel_config.expert_parallel_size,
             )
 
@@ -448,7 +466,7 @@ class Ernie4_5_Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             hidden_states = forward_meta.attn_backend.transpose(hidden_states)
@@ -458,6 +476,9 @@ class Ernie4_5_Model(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
@@ -544,6 +565,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
             ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
             ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
+            ("act_scale", "in_scale", None, None),
+            ("attn.q_scale", "q_matmul.in_scale", None, None),
+            ("attn.s_scale", "s_matmul.in_scale", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
+            ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
         ]
 
         expert_params_mapping = []
@@ -569,7 +596,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
         ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
         checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
-            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+            fd_config=self.fd_config,
+            ckpt_weight_suffix="quant_weight",
+            ckpt_scale_suffix="weight_scale",
+            ckpt_act_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
 
@@ -609,8 +639,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
-
-        if self.tie_word_embeddings:
+        if getattr(self, "tie_word_embeddings", False):
             self.lm_head.linear.weight.set_value(
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
@@ -763,6 +792,11 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
             tsm.PairFused,
         ),
         WeightMeta(
+            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.up_gate_proj.weight_scale",
+            True,
+            tsm.PairFused,
+        ),
+        WeightMeta(
             f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.EXPERT_ID}}}.down_proj.quant_weight",
             False,
         ),
@@ -791,7 +825,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,

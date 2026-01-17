@@ -17,7 +17,7 @@
 **注意**： 如下镜像仅支持SM 80/90架构GPU（A800/H800等），如果你是在L20/L40/4090等SM 86/89架构的GPU上部署，请在创建容器后，卸载```fastdeploy-gpu```再重新安装如下文档指定支持86/89架构的`fastdeploy-gpu`包。
 
 ``` shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.3.0
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.3.3
 ```
 
 ## 2. 预编译Pip安装
@@ -38,7 +38,7 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 
 ```
 # 安装稳定版本fastdeploy
-python -m pip install fastdeploy-gpu==2.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.3.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -48,7 +48,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 
 ```
 # 安装稳定版本fastdeploy
-python -m pip install fastdeploy-gpu==2.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.3.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -90,7 +90,7 @@ bash build.sh 1 python false [80,90]
 
 ## 5. 算子预编译 Wheel 包
 
-FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码编译的情况下快速构建。该方式当前仅支持 **SM90 架构（H20/H100等）** 和 **CUDA 12.6** 环境。
+FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码编译的情况下快速构建。该方式当前仅支持 **SM80/90 架构（A100/H100等）** 和 **CUDA 12.6** 环境。
 
 >默认情况下，`build.sh` 会从源码编译；若希望使用预编译包，可使用`FD_USE_PRECOMPILED` 参数；
 >若预编译包下载失败或与环境不匹配，系统会自动回退至 `4. wheel 包源码编译` 模式。
@@ -110,7 +110,7 @@ cd FastDeploy
 # 第1个参数: 是否打包成 wheel (1 表示打包)
 # 第2个参数: Python 解释器路径
 # 第3个参数: 是否编译 CPU 推理算子 (false 表示仅 GPU)
-# 第4个参数: GPU 架构 (当前仅支持 [90])
+# 第4个参数: GPU 架构 (当前仅支持 80/90)
 # 第5个参数: 是否使用预编译算子 (1 表示启用预编译)
 # 第6个参数(可选): 指定预编译算子的 commitID（默认使用当前的 commitID）
 
@@ -127,7 +127,7 @@ bash build.sh 1 python false [90] 1 8a9e7b53af4a98583cab65e4b44e3265a93e56d2
 
 > **说明：**
 > - 该模式会优先下载预编译的 GPU 算子 whl 包，减少编译时间；
-> - 目前仅支持 **GPU + SM90 + CUDA 12.6**；
+> - 目前仅支持 **GPU， SM80/90 架构， CUDA 12.6**；
 > - 若希望自定义架构或修改算子逻辑，请使用 **源码编译方式（第4节）**。
 > - 您可以在 FastDeploy CI 构建状态页面查看对应 commit 的预编译 whl 是否已构建成功。
 
