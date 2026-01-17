@@ -318,13 +318,15 @@ std::vector<paddle::Tensor> IndexerEncoderRopeNormWriteCache(
     const bool rope_3d);
 
 
-void radix_topk_ragged_transform(
-    paddle::Tensor& input, 
+void RadixTopkRaggedTransform(
+    paddle::Tensor& input,
     paddle::Tensor& output_indices,
     const paddle::Tensor& offsets,
-    paddle::Tensor& lengths, 
+    paddle::Tensor& lengths,
+    paddle::Tensor& seq_len,
+    paddle::Tensor& batch_id_per_token,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int64_t top_k);
+    int top_k);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_decoder,
@@ -1350,11 +1352,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("indexer_encoder_rope_norm_write_cache", &IndexerEncoderRopeNormWriteCache,
         "indexer_encoder_rope_norm_write_cache function");
 
+//   /**
+//    * indexer_encoder_top_k.cu
+//    * fast_topk_transform_ragged_interface
+//    */
+//   m.def("flashinfer_radix_topk_ragged_transform", &radix_topk_ragged_transform,
+//         "radix_topk_ragged_transform function");
+
   /**
-   * indexer_encoder_top_k.cu
+   * topk.cu
    * fast_topk_transform_ragged_interface
    */
-  m.def("flashinfer_radix_topk_ragged_transform", &radix_topk_ragged_transform,
+  m.def("radix_topk_ragged_transform", &RadixTopkRaggedTransform,
         "radix_topk_ragged_transform function");
 
 

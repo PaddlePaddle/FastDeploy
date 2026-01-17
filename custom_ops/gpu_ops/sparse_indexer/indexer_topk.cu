@@ -12,8 +12,10 @@
 #include "paddle/utils/optional.h"
 
 
-using namespace flashinfer;
-
+// using namespace flashinfer;
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 template<paddle::DataType T>
 cudaError_t DispatchTopK(
@@ -22,9 +24,11 @@ cudaError_t DispatchTopK(
     const paddle::Tensor& offsets,
     paddle::Tensor& lengths,
     uint32_t num_rows,
+    paddle::Tensor& seq_len,
+    paddle::Tensor& batch_id_per_token,
     uint32_t top_k,
     uint32_t max_len,
-    sampling::RadixRowState* row_states_ptr,
+    flashinfer::sampling::RadixRowState* row_states_ptr,
     cudaStream_t stream) {
 
    typedef PDTraits<T> traits_;
@@ -32,12 +36,14 @@ cudaError_t DispatchTopK(
    typedef typename traits_::data_t data_t;
 
    cudaError_t status;
-   status = sampling::TopKRaggedTransformDispatch<DataType_,int32_t>(
+   status = flashinfer::sampling::TopKRaggedTransformDispatch<DataType_,int32_t>(
          reinterpret_cast<DataType_*>(input.data<data_t>()),
          static_cast<int32_t*>(output_indices.data<int32_t>()),
          static_cast<const int32_t*>(offsets.data<int32_t>()),
          static_cast<int32_t*>(lengths.data<int32_t>()),
          num_rows, 
+         static_cast<int32_t*>(seq_len.data<int32_t>()),
+         static_cast<int32_t*>(batch_id_per_token.data<int32_t>()),
          static_cast<uint32_t>(top_k), 
          max_len, 
          row_states_ptr, 
@@ -45,13 +51,15 @@ cudaError_t DispatchTopK(
    return status;
 }
 
-void radix_topk_ragged_transform(
+void RadixTopkRaggedTransform(
     paddle::Tensor& input,
     paddle::Tensor& output_indices,
     const paddle::Tensor& offsets,
     paddle::Tensor& lengths,
+    paddle::Tensor& seq_len,
+    paddle::Tensor& batch_id_per_token,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int64_t top_k) {
+    int top_k) {
 
 //   CHECK_INPUT(input);
 //   CHECK_INPUT(output_indices);
@@ -74,19 +82,31 @@ void radix_topk_ragged_transform(
 //     row_states_ptr =
 //         static_cast<sampling::RadixRowState*>(maybe_row_states_buffer.value().data_ptr());
 //   }
-   sampling::RadixRowState* row_states_ptr = nullptr;
+   flashinfer::sampling::RadixRowState* row_states_ptr = nullptr;
    if(maybe_row_states_buffer){
       auto& tensor_ptr = maybe_row_states_buffer.get();
-      row_states_ptr = reinterpret_cast<sampling::RadixRowState*>(tensor_ptr.data<uint8_t>());
+      row_states_ptr = reinterpret_cast<flashinfer::sampling::RadixRowState*>(tensor_ptr.data<uint8_t>());
    }
 
    if (input_dtype == paddle::DataType::BFLOAT16) {
       status = DispatchTopK<paddle::DataType::BFLOAT16>(
          input, output_indices, offsets, lengths,
-         num_rows, top_k, max_len, row_states_ptr, stream);
+         num_rows,seq_len, batch_id_per_token, top_k, max_len, row_states_ptr, stream);
    } else if (input_dtype == paddle::DataType::FLOAT32) {
       status = DispatchTopK<paddle::DataType::FLOAT32>(
          input, output_indices, offsets, lengths,
-         num_rows, top_k, max_len, row_states_ptr, stream);
+         num_rows, seq_len, batch_id_per_token, top_k, max_len, row_states_ptr, stream);
    }
 }
+
+
+PD_BUILD_STATIC_OP(radix_topk_ragged_transform)
+    .Inputs({"input", 
+             "output_indices",
+             "offsets",
+             "lengths",
+             "seq_len",
+             "batch_id_per_token",
+             paddle::Optional("maybe_row_states_buffer")})
+    .Attrs({"top_k : int"})
+    .SetKernelFn(PD_KERNEL(RadixTopkRaggedTransform));
