@@ -1590,7 +1590,11 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Use static graph splitting to isolate incompatible operators from the CUDA Graph. This splits the graph into subgraphs, allowing Prefill, Decode, and Mixed Batches to run compatible parts via CUDA Graph.
-        if self.graph_opt_config.graph_opt_level > 0 and not self.graph_opt_config.full_cuda_graph:
+        if (
+            hasattr(self, "graph_opt_config")
+            and self.graph_opt_config.graph_opt_level > 0
+            and not self.graph_opt_config.full_cuda_graph
+        ):
             self.forward_meta.step_use_cudagraph = True
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
