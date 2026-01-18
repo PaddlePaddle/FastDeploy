@@ -2037,6 +2037,7 @@ __global__ void merge_multi_chunks_kernel(
   const int vid = threadIdx.x, hid = threadIdx.y;
   const int qid = blockIdx.x;
   const uint32_t bid = batch_id_per_token[qid];
+  if (bid == -1) return;
   if (seq_lens_q[bid] <= 0 || seq_lens_kv[bid] <= 0) {
     return;
   }
