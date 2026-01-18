@@ -172,7 +172,10 @@ class AppendAttentionBackend(AttentionBackend):
                         list(
                             set(
                                 paddle.get_flags(flag)[flag].split(",")
-                                + ["custom_op.static_op_append_attention_with_output_"]
+                                + [
+                                    "custom_op.static_op_append_attention_with_output_",
+                                    "custom_op.static_op_get_block_shape_and_split_kv_block",
+                                ]
                             )
                         )
                     )
@@ -324,13 +327,13 @@ class AppendAttentionBackend(AttentionBackend):
             # 3. generate output tensor of different dtypes
             if out_scale > 0.0:
                 if abs(quant_max_bound - 127) < 0.000001:
-                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="int8")
+                    res = paddle.zeros([token_nums, q_num_heads * head_dims], dtype="int8")
                 elif abs(quant_max_bound - 448) < 0.000001:
-                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="float8_e4m3fn")
+                    res = paddle.zeros([token_nums, q_num_heads * head_dims], dtype="float8_e4m3fn")
                 else:
                     raise NotImplementedError("Only supported attr of quant_max_bound in ['127', '448'].")
             else:
-                res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type)
+                res = paddle.zeros([token_nums, q_num_heads * head_dims], dtype=D_type)
 
             res = append_attention_with_output(
                 qkv,
