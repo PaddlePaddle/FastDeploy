@@ -187,6 +187,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -209,7 +210,7 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
+    
     # token_num_cpu += 1
     # for i in range(seq_lens_this_time.shape[0]):
     #     tmp = seq_lens_this_time[i, 0].item()

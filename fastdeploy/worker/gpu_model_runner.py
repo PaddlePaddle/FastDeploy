@@ -1437,6 +1437,8 @@ class GPUModelRunner(ModelRunnerBase):
                 )
             elif self.enable_logprob:
                 self.max_logprobs = None if not self.speculative_decoding else 0
+        
+        token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
 
         # Remove padding
         (
@@ -1447,6 +1449,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
+            token_num_cpu,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
