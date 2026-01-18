@@ -84,7 +84,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   const int max_seq_len = input_ids_shape[1];
   const int token_num_data = cpu_token_num;
   auto x_remove_padding = paddle::full(
-      {token_num_data}, 0, paddle::DataType::INT64, input_ids.place());
+      {token_num_data}, 2, paddle::DataType::INT64, input_ids.place());
   auto batch_id_per_token = paddle::full(
       {token_num_data}, -1, paddle::DataType::INT32, input_ids.place());
 
