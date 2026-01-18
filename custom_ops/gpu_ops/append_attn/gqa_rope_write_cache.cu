@@ -66,6 +66,8 @@ __global__ void GQAVariableLengthRotarySplitKernel(
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
 
+    if (ori_bi == -1) continue;
+
     int cache_kv_len = seq_lens_decoder[ori_bi];
     // 这里其实是不需要处理的，但是由于FA3的bug，所以必须！
     if (seq_lens_encoder[ori_bi] == 0) cache_kv_len = 0;
@@ -275,6 +277,8 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel(
     const int token_idx =
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
+
+    if (ori_bi == -1) continue;
 
     int cache_kv_len = seq_lens_decoder[ori_bi];
     // 这里其实是不需要处理的，但是由于FA3的bug，所以必须！
