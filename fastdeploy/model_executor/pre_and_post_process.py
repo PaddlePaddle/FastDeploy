@@ -210,7 +210,7 @@ def pre_process(
         cu_seqlens_k:
     """
     token_num_cpu = seq_lens_this_time.numpy().sum().item()
-    token_num_cpu += 1
+    # token_num_cpu += 1
     # for i in range(seq_lens_this_time.shape[0]):
     #     tmp = seq_lens_this_time[i, 0].item()
     #     if tmp == 0:
