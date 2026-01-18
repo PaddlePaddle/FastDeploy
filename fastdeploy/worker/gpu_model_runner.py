@@ -1439,7 +1439,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.max_logprobs = None if not self.speculative_decoding else 0
 
         self.token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
-        self.token_num_cpu += 0
+        self.token_num_cpu += 1
 
         # Remove padding
         (
@@ -2333,6 +2333,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta.ids_remove_padding,
                 self.forward_meta,
             )
+
+        model_output = model_output[:, self.token_num_cpu]
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
