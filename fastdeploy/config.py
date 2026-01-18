@@ -1649,6 +1649,10 @@ class FDConfig:
         else:
             max_capture_shape = min(512, max_capture_shape)
 
+        if self.graph_opt_config.graph_opt_level > 0:
+            # TODO(DrRyanHuang): Tune this value or expose it as a CLI argument.
+            max_capture_shape = 512
+
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
                 self.speculative_config.num_speculative_tokens + 1
