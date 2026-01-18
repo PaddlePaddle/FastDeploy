@@ -30,7 +30,6 @@ from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
-from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("gpu_worker", "gpu_worker.log")
@@ -192,10 +191,17 @@ class GpuWorker(WorkerBase):
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_request: int = None,
-    ) -> Optional[ModelRunnerOutput]:
+    ):
         """ """
-        output = self.model_runner.execute_model(model_forward_batch, num_running_request)
-        return output
+        model_output_data, sampler_output = self.model_runner.execute_model(model_forward_batch, num_running_request)
+        return model_output_data, sampler_output
+
+    def save_output(
+        self,
+        model_output_data,
+        sampler_output,
+    ) -> None:
+        self.model_runner.save_output(model_output_data, sampler_output)
 
     def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop

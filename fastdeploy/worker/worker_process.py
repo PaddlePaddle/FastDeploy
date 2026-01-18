@@ -163,6 +163,8 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.last_model_output_data = None
+        self.last_sampler_output = None
 
     def init_health_status(self) -> None:
         """
@@ -297,10 +299,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
-            self.task_queue.worker_process_tp_barrier.wait()
-        else:
-            paddle.distributed.barrier(self.parallel_config.tp_group)
+        self.task_queue.worker_process_tp_barrier.wait()
 
     def _init_eplb_signal(self):
         if not self.eplb_config.enable_eplb:
@@ -528,9 +527,14 @@ class PaddleDisWorkerProc:
                     f"num_scheduled_requests: {num_scheduled_requests}, "
                     f"scheduled_request_ids: {scheduled_request_ids}"
                 )
+                if self.last_model_output_data is not None and self.last_sampler_output is not None:
+                    self.worker.save_output(self.last_model_output_data, self.last_sampler_output)
 
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+            else:
+                if self.last_model_output_data is not None and self.last_sampler_output is not None:
+                    self.worker.save_output(self.last_model_output_data, self.last_sampler_output)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 self._tp_barrier_wait() if tp_size > 1 else None
@@ -541,7 +545,9 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            self.last_model_output_data, self.last_sampler_output = self.worker.execute_model(
+                req_dicts, max_occupied_batch_index
+            )
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
