@@ -529,10 +529,12 @@ class PaddleDisWorkerProc:
                         max_occupied_batch_index = int(bsz)
                         req_dicts.extend(req_dict)
 
+                # todo: run control request async
                 if len(control_reqs) > 0:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
                     for control_req in control_reqs:
                         self.run_control_method(control_req)
+                        self._tp_barrier_wait() if tp_size > 1 else None
 
                 # Count prefill requests in current batch
                 num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)

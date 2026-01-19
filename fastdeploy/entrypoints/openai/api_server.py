@@ -404,36 +404,26 @@ async def update_weights(request: Request) -> Response:
     request_data = await request.json() if await request.body() else {}
 
     args = {}
-    
+
     # Validate and extract version parameter
     if "version" in request_data and request_data["version"] is not None:
         if not isinstance(request_data["version"], str):
             return JSONResponse(
-                status_code=400, 
-                content={
-                    "error": "Invalid parameter type",
-                    "message": "version must be a string"
-                }
+                status_code=400, content={"error": "Invalid parameter type", "message": "version must be a string"}
             )
         args["version"] = request_data["version"]
-    
+
     # Validate and extract rsync_config parameter
     if "rsync_config" in request_data and request_data["rsync_config"] is not None:
         if not isinstance(request_data["rsync_config"], dict):
             return JSONResponse(
-                status_code=400, 
-                content={
-                    "error": "Invalid parameter type",
-                    "message": "rsync_config must be a dictionary"
-                }
+                status_code=400,
+                content={"error": "Invalid parameter type", "message": "rsync_config must be a dictionary"},
             )
         if "etcd_server" not in request_data["rsync_config"]:
             return JSONResponse(
-                status_code=400, 
-                content={
-                    "error": "Invalid parameter type",
-                    "message": "rsync_config must contain etcd_server"
-                }
+                status_code=400,
+                content={"error": "Invalid parameter type", "message": "rsync_config must contain etcd_server"},
             )
         args["rsync_config"] = request_data["rsync_config"]
 
