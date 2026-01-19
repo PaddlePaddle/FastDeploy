@@ -465,6 +465,8 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
+            stop_flags=share_inputs["stop_flags"],
+            eos_token_ids=share_inputs["eos_token_id"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )

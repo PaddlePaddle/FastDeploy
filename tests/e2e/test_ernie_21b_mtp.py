@@ -339,16 +339,16 @@ def test_mtp_accept_ratio(api_url):
     print("\nresult:\n", result)
 
     base_path = os.getenv("MODEL_PATH")
-    baseline_path = os.path.join(base_path, "21b_mtp_accept_ratio_baseline.txt")
+    baseline_path = os.path.join(base_path, "21b_mtp_accept_ratio_baseline_dev.txt")
     with open(baseline_path, "r", encoding="utf-8") as f:
         baseline = f.read()
     baseline_ratio = {
-        "accepted_tokens": 131,
+        "accepted_tokens": 139,
         "rejected_tokens": 23,
-        "accept_ratio": 0.4122137404580153,
-        "average_accept_length": 1.7012987012987013,
-        "accepted_tokens_per_head": [77, 54],
-        "accept_ratio_per_head": [0.7012987012987013],
+        "accept_ratio": 0.41726618705035967,
+        "average_accept_length": 1.7160493827160495,
+        "accepted_tokens_per_head": [81, 58],
+        "accept_ratio_per_head": [0.7160493827160493],
     }
 
     response = send_request(url=api_url, payload=payload)
