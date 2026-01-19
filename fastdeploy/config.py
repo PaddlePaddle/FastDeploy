@@ -739,6 +739,9 @@ class SpeculativeConfig:
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
+        # Enable token constraint enforcement in generation phase
+        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
+        self.enf_gen_phase_tag: bool = False
 
         self.num_extra_cache_layer = 0
 

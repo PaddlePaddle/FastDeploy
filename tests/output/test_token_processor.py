@@ -74,6 +74,7 @@ class _DummyResourceManager:
         self.req_dict = {}
         self.requests = {}
         self.to_be_rescheduled_request_id_set = set()
+        self.abort_req_ids_set = set()
         self.recycled = []
         self.cached_tasks = []
         self.cleared = False
