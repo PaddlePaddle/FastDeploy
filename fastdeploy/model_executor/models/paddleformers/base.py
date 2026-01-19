@@ -144,14 +144,14 @@ def fastdeploy_append_attention_forward(
     return output, None
 
 
-ALL_ATTENTION_FUNCTIONS._global_mapping["fastdeploy"] = fastdeploy_append_attention_forward
+ALL_ATTENTION_FUNCTIONS._global_mapping["fastdeploy_append"] = fastdeploy_append_attention_forward
 
 
 @support_graph_optimization
 class PaddleFormersModelBase(nn.Layer):
     """
-    A mixin class to provide PaddleFormers backend logic.
-    This class is not a nn.Layer itself but provides methods to
+    A mixin-style base class to provide PaddleFormers backend logic on top of nn.Layer.
+    This class subclasses nn.Layer and provides common methods to
     initialize and manage a PaddleFormers model.
     """
 
@@ -224,7 +224,7 @@ class PaddleFormersModelBase(nn.Layer):
         self.parallel_config = self.fd_config.parallel_config
         self.tp_group = self.parallel_config.tp_group
         self.tp_rank = self.parallel_config.tensor_parallel_rank
-        self.paddleformers_config._attn_implementation = "fastdeploy"
+        self.paddleformers_config._attn_implementation = "fastdeploy_append"
 
         self.model: PretrainedModel = AutoModel.from_config(
             self.paddleformers_config,
@@ -241,7 +241,12 @@ class PaddleFormersModelBase(nn.Layer):
         input_embeddings = self.model.get_input_embeddings()
         self.embed_scale = getattr(input_embeddings, "embed_scale", None)
         embedding_dim = getattr_iter(self.text_config, ("embedding_size", "hidden_size"))
-        assert embedding_dim is not None
+        if embedding_dim is None:
+            raise ValueError(
+                "Failed to determine embedding dimension from text_config: "
+                "neither 'embedding_size' nor 'hidden_size' is set. "
+                f"text_config type={type(self.text_config).__name__}."
+            )
         self.model.set_input_embeddings(
             VocabParallelEmbedding(
                 fd_config=self.fd_config,
@@ -476,6 +481,7 @@ class PaddleFormersModelBase(nn.Layer):
         return {
             # Column Parallel (output dimension split)
             r"\.qkv_proj$": "colwise",  # Fused QKV projection
+            r"\.up_gate_proj$": "colwise",  # Fused FFN projection
             r"\.q_proj$": "colwise",
             r"\.k_proj$": "colwise",
             r"\.v_proj$": "colwise",
