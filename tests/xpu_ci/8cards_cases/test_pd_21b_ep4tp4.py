@@ -32,6 +32,7 @@ import openai
 import pytest
 from conftest import (
     cleanup_resources,
+    download_and_build_xdeepep,
     get_model_path,
     get_port_num,
     restore_pd_ep_env,
@@ -57,7 +58,7 @@ def wait_for_pd_health_check(port_p, port_d, timeout=600, interval=10):
     endpoint_d = f"http://0.0.0.0:{port_d}/health"
     start_time = time.time()
 
-    print(f"开始PD分离+EP4TP1服务健康检查,最长等待时间:{timeout}秒")
+    print(f"开始PD分离+EP4TP4服务健康检查,最长等待时间:{timeout}秒")
 
     while True:
         elapsed = int(time.time() - start_time)
@@ -135,6 +136,9 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     # 清理资源
     cleanup_resources()
 
+    if not download_and_build_xdeepep():
+        pytest.fail("xDeepEP下载或编译失败")
+
     # 清理并创建日志目录
     for log_dir in ["log_router", "log_prefill", "log_decode"]:
         if os.path.exists(log_dir):
@@ -170,16 +174,16 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "-m",
         "fastdeploy.entrypoints.openai.multi_api_server",
         "--port",
-        f"{port_num + 11},{port_num + 12},{port_num + 13},{port_num + 14}",
+        str(port_num + 11),
         "--num-servers",
-        "4",
+        "1",
         "--args",
         "--model",
         f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--tensor-parallel-size",
-        "1",
-        "--data-parallel-size",
         "4",
+        "--data-parallel-size",
+        "1",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -213,16 +217,16 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "-m",
         "fastdeploy.entrypoints.openai.multi_api_server",
         "--port",
-        f"{port_num + 21},{port_num + 22},{port_num + 23},{port_num + 24}",
+        str(port_num + 21),
         "--num-servers",
-        "4",
+        "1",
         "--args",
         "--model",
         f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--tensor-parallel-size",
-        "1",
-        "--data-parallel-size",
         "4",
+        "--data-parallel-size",
+        "1",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -264,7 +268,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 def test_pd_separation():
     """PD分离部署模式测试"""
 
-    print("\n============================开始PD分离+EP4TP1测试!============================")
+    print("\n============================开始PD分离+EP4TP4测试!============================")
 
     # 设置PD分离环境变量
     original_env = setup_pd_ep_env()
