@@ -34,12 +34,6 @@ from fastdeploy.model_executor.layers.attention.ops import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
-# try:
-#     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-# except:
-#     flash_attention_v3_varlen = None
-
-
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
@@ -58,7 +52,7 @@ import os
 
 from fastdeploy.model_executor.layers.attention.utils import split_decodes_and_prefills
 
-paddle.compat.enable_torch_proxy()
+paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 from flashinfer.decode import trtllm_batch_decode_with_kv_cache
 from flashinfer.prefill import trtllm_batch_context_with_kv_cache
 
