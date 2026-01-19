@@ -1439,7 +1439,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.max_logprobs = None if not self.speculative_decoding else 0
 
         self.token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
-        self.token_num_cpu += 0
+        self.token_num_cpu += 1
 
         # Remove padding
         (
