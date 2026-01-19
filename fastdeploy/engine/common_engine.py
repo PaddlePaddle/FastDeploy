@@ -1181,15 +1181,19 @@ class EngineService:
 
     def run_control_method(self, control_req: ControlRequest):
         """
-        Execute control methods for engine management using dynamic method invocation.
+        Execute control method, process control request and return response.
+
+        This method is responsible for handling control requests, calling the corresponding
+        handler function based on the method name in the request. If the method doesn't exist
+        or is not callable, it returns an error response; otherwise executes the method and
+        returns a success response.
 
         Args:
-            control_req: ControlRequest instance containing method name and arguments
+            control_req (ControlRequest): Control request object containing request ID,
+                method name and parameters.
 
-        Usage:
-            - Control request with method "get_metrics" will call self._control_get_metrics(args)
-            - Method names are automatically mapped to handler methods with prefix "_control_"
-            - If no handler exists, returns error with available methods
+        Returns:
+            None: No return value, sends ControlResponse through send_response_server.
         """
         method = control_req.get_method()
         request_id = control_req.request_id
@@ -1216,17 +1220,19 @@ class EngineService:
             error_result = ControlResponse(request_id, 500, error_msg)
             self.send_response_server.send_response(request_id, [error_result])
 
-    def _control_pause(self, control_request: ControlRequest) -> dict | None:
-        """暂停请求生成
-
+    def _control_pause(self, control_request: ControlRequest):
+        """Pauses the LLM engine and aborts all running/inflight requests.
         Args:
-            args: 控制参数字典，暂停相关的配置参数
+            control_request: The control request containing pause command
+
+        Raises:
+            Exception: If pause is not supported in current configuration
+            Exception: If engine worker queue cleanup times out
 
         Returns:
-            tuple: (error_code, error_msg) 元组
-                - error_code: 错误代码，0表示成功，非0表示失败
-                - error_msg: 错误信息，成功时为空字符串
+            None
         """
+
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             raise Exception("pause only supported in ENABLE_V1_KVCACHE_SCHEDULER")
         if self.cfg.scheduler_config.name != "local":
@@ -1271,45 +1277,49 @@ class EngineService:
         self.resource_manager.cache_manager.reset()
         return None
 
-    def _control_resume(self, control_request: ControlRequest) -> dict | None:
-        """恢复暂停的请求生成
+    def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
+        """Control function for resuming request generation.
+
+        This method resumes the paused request generation process by setting the pause flag
+        and notifying all waiting threads. It logs the start and end of the resume operation.
 
         Args:
-            args: 控制参数字典，恢复生成相关的配置参数
-
-        Returns:
-            dict | None: 返回结果字典或None，包含恢复操作的状态信息
+            control_request: Control request object containing resume operation information
         """
         self.llm_logger.info("START Resume Request Generation")
         with self._pause_cond:
             if not self.is_paused:
                 self.llm_logger.info("Resume Request Generation: not paused.")
+                return None
             self.is_paused = False
             self._pause_cond.notify_all()
         self.llm_logger.info("END Resume Request Generation")
         return None
 
     def _control_is_paused(self, control_request: ControlRequest) -> bool:
-        """检查是否暂停了请求生成
+        """
+        Check if the LLM engine is in paused state.
 
         Args:
-            args: 控制参数字典，检查是否暂停相关的配置参数
+            control_request: Control request object.
 
         Returns:
-            bool: 是否暂停了请求生成
+            dict: Dictionary containing pause status information, {'is_paused': bool}
         """
         self.llm_logger.info(f"LLM Engine request generation is paused: {self.is_paused}")
         with self._pause_cond:
             return {"is_paused": self.is_paused}
 
-    def _control_update_weights(self, control_request: ControlRequest) -> dict | None:
-        """更新模型权重
-
+    def _control_update_weights(self, control_request: ControlRequest) -> Optional[dict]:
+        """Update model weights
         Args:
-            args: 控制参数字典，更新权重相关的配置参数
+            control_request: Control request object containing parameters for weight updates
 
         Returns:
-            dict | None: 返回结果字典或None，包含更新权重的操作结果信息
+            Optional[dict]: Returns the result dictionary if update succeeds, None otherwise
+
+        Raises:
+            Exception: Raised when the engine is not in paused state
         """
         self.llm_logger.info("Update Model Weights")
         with self._pause_cond:
@@ -1337,7 +1347,7 @@ class EngineService:
                 raise Exception(f"Call Worker error: {response.error_message}")
             self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
             responses.append(response.result)
-        return responses
+        return {"worker_responses": responses}
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(
