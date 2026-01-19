@@ -77,8 +77,6 @@ def test_ep4tp4_online(xpu_env):
             str(port_num + 10),
             "--metrics-port",
             str(port_num + 2),
-            "--cache-queue-port",
-            str(port_num + 47873),
             "--disable-sequence-parallel-moe",
             "--gpu-memory-utilization",
             "0.9",

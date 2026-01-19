@@ -139,10 +139,12 @@ class MTPProposer(Proposer):
         self.forward_meta: ForwardMeta = None
         self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
+        # TODO (wangyanpeng): The number of MTP layers should be read from model config
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
-        self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
-        self.model_config.prefix_layer_name = "mtp_block"
+        if "Ernie" in self.model_config.architectures[0]:
+            self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+            self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
@@ -871,7 +873,9 @@ class MTPProposer(Proposer):
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 if self.enable_logprob and self.enable_draft_logprob and substep == 0:
-                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
+                    first_token_logits = self.model.compute_logits(
+                        self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
+                    )
 
                     speculate_get_logits(
                         self.model_inputs["draft_logits"],

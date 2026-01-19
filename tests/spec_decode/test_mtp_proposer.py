@@ -34,6 +34,7 @@ class TestMTPProposer(unittest.TestCase):
         self.fd_config.model_config.rope_theta = 10000.0
         self.fd_config.model_config.enable_logprob = False
         self.fd_config.model_config.max_model_len = 2048
+        self.fd_config.model_config.partial_rotary_factor = 1.0
         self.fd_config.speculative_config = SpeculativeConfig({})
         self.fd_config.speculative_config.method = "mtp"
         self.fd_config.speculative_config.num_speculative_tokens = 1

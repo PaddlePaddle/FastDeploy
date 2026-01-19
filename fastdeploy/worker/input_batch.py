@@ -301,6 +301,13 @@ class InputBatch:
         # For logits processors
         self.logits_processors = build_logits_processors(self.fd_config)
         self.logits_processors_args = [{} for _ in range(max_num_seqs)]
+        self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
+        # It is a hard code to cover up model's performance
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
         logger.info(f"Enabled logits processors: {self.logits_processors}")
 
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
@@ -370,6 +377,9 @@ class InputBatch:
         # # Swap stop sequences
         swap_data(self.stop_seqs_len, i1, i2)
         swap_data(self.stop_seqs, i1, i2)
+
+        swap_data(self.preempted_idx, i1, i2)
+        swap_data(self.reasoning_status, i1, i2)
 
         # Swap speculative decoding buffers if enabled
         if self.speculative_decoding:
@@ -486,13 +496,13 @@ class ProposerInputBatch(InputBatch):
         )
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-        from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 
         self.rope_emb = get_rope(
             rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
+            partial_rotary_factor=self.model_config.partial_rotary_factor,
         )
 
         # self.caches = self.cache_kvs

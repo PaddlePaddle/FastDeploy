@@ -175,6 +175,7 @@ class ResourceManagerV1(ResourceManager):
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
+        self.abort_req_ids_set = set()
 
         # need block nums
         need_block_num_data = np.zeros([max_num_seqs], dtype=np.int32)
@@ -243,6 +244,7 @@ class ResourceManagerV1(ResourceManager):
                 request = self.requests[request_id]
                 if process_func is not None:
                     process_func(request)
+                llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
                 self.waiting.appendleft(request)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
@@ -400,9 +402,14 @@ class ResourceManagerV1(ResourceManager):
                     position.offset // self.config.cache_config.block_size
                 ) * self.config.cache_config.block_size
                 position_idx -= 1
-            elif matched_token_num < position.offset:
+            elif matched_token_num <= position.offset:
                 position_idx -= 1
             elif matched_token_num >= position.offset + position.length:
+                break
+            else:
+                llm_logger.error(
+                    f"revert_chunked_mm_input error, matched_token_num:{matched_token_num} position:{position}, {mm_inputs['mm_positions']}"
+                )
                 break
         return matched_token_num
 
@@ -452,6 +459,18 @@ class ResourceManagerV1(ResourceManager):
                 start_patch_idx = inputs["patch_idx"][-1]
             else:
                 start_patch_idx = inputs["patch_idx"][pre_end_idx]
+                if (
+                    pre_end_idx > 0
+                    and request.prompt_token_ids[pre_end_idx]
+                    in [
+                        inputs["image_patch_id"],
+                        inputs["video_patch_id"],
+                        inputs["audio_patch_id"],
+                    ]
+                    and request.prompt_token_ids[pre_end_idx] != request.prompt_token_ids[pre_end_idx - 1]
+                ):
+                    # It just hit the starting position of the image / video / audio
+                    start_patch_idx -= 1
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
@@ -589,14 +608,23 @@ class ResourceManagerV1(ResourceManager):
     def cache_output_tokens(self, request):
         if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
             with self.lock:
-                self.cache_manager.update_cache_blocks(
-                    request, self.config.cache_config.block_size, request.num_total_tokens - 1
-                )
+                if request.num_computed_tokens >= request.need_prefill_tokens:  # request is decoding
+                    self.cache_manager.update_cache_blocks(
+                        request, self.config.cache_config.block_size, request.num_total_tokens - 1
+                    )
 
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
         """
+
+        def get_enough_request(request, scheduled_reqs):
+            return (
+                ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
+                and self._is_mm_request(request)
+                and self.exist_mm_prefill(scheduled_reqs)
+            )
+
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
@@ -631,7 +659,9 @@ class ResourceManagerV1(ResourceManager):
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
                             request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                                self.cache_manager.allocate_gpu_blocks(
+                                    self.config.cache_config.enc_dec_block_num, request.request_id
+                                )
                             )
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
@@ -644,7 +674,9 @@ class ResourceManagerV1(ResourceManager):
                                 break
                             # Allocation for next decoding blocks
                             request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                                self.cache_manager.allocate_gpu_blocks(
+                                    self.config.cache_config.enc_dec_block_num, request.request_id
+                                )
                             )
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
@@ -659,7 +691,9 @@ class ResourceManagerV1(ResourceManager):
                         def _allocate_decode_and_extend():
                             allocate_block_num = self.need_block_num_map[request.request_id].consume()
                             # Prepare decoding task
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(allocate_block_num))
+                            request.block_tables.extend(
+                                self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
+                            )
                             scheduled_reqs.append(self._prepare_decode_task(request))
 
                             # Prepare extend task
@@ -673,7 +707,7 @@ class ResourceManagerV1(ResourceManager):
 
                             request.extend_block_tables = request.block_tables[:reuse_block_num]  # copy prompt cache
                             request.extend_block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(allocate_block_num)
+                                self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
                             )
                             scheduled_reqs.append(
                                 ScheduledExtendBlocksTask(
@@ -717,25 +751,25 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if (
-                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                        and self._is_mm_request(request)
-                        and self.exist_mm_prefill(scheduled_reqs)
-                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
+                    if get_enough_request(request, scheduled_reqs):
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                        request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                        request.block_tables.extend(
+                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
+                        )
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate, trigger preemption
                         can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
-                        request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
+                        request.block_tables.extend(
+                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
+                        )
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
@@ -754,11 +788,7 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (
-                        ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                        and self._is_mm_request(request)
-                        and self.exist_mm_prefill(scheduled_reqs)
-                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
+                    if get_enough_request(request, scheduled_reqs):
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
@@ -805,7 +835,9 @@ class ResourceManagerV1(ResourceManager):
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
-                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
+                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
+                                    num_new_block, request.request_id
+                                )
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
@@ -823,6 +855,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.tasks_list[allocated_position] = request
                                 self.stop_flags[allocated_position] = False
                                 self.req_dict[request.request_id] = allocated_position
+                                llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -855,7 +888,9 @@ class ResourceManagerV1(ResourceManager):
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                             if not request.get("skip_allocate", False):
-                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
+                                extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
+                                    num_new_block, request.request_id
+                                )
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
@@ -872,7 +907,7 @@ class ResourceManagerV1(ResourceManager):
                                 self._free_blocks(request)
                             break
                     else:
-                        llm_logger.error("Unknown request status type")
+                        llm_logger.info(f"Unknown request status type:{request.status}, req_id:{request.request_id}")
 
                 for req in skip_requests:
                     # move waiting request to end of the deque
@@ -1040,7 +1075,7 @@ class ResourceManagerV1(ResourceManager):
                     f"request {request.request_id} num_cached_tokens: {request.num_cached_tokens}, revert_tokens_num: {revert_tokens_num}"
                 )
 
-                revert_block_idx = revert_tokens_num // self.config.cache_config.block_size
+                revert_block_idx = len(common_block_ids) - revert_tokens_num // self.config.cache_config.block_size - 1
                 for block_idx in range(len(common_block_ids) - 1, revert_block_idx, -1):
                     if common_block_ids[block_idx] in metrics["match_gpu_block_ids"]:
                         metrics["gpu_match_token_num"] -= self.config.cache_config.block_size
@@ -1068,6 +1103,7 @@ class ResourceManagerV1(ResourceManager):
     def add_request(self, request: Request) -> None:
         with self.lock:
             self.apply_async_preprocess(request)
+            llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
@@ -1119,7 +1155,9 @@ class ResourceManagerV1(ResourceManager):
 
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
-                    extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks)
+                    extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
+                        need_extra_prefill_blocks, request.request_id
+                    )
                     request.block_tables.extend(extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
@@ -1134,7 +1172,9 @@ class ResourceManagerV1(ResourceManager):
 
             else:
                 if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                    request.block_tables.extend(
+                        self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks, request.request_id)
+                    )
                     request.num_computed_tokens = 0
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
@@ -1168,7 +1208,9 @@ class ResourceManagerV1(ResourceManager):
             if not self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
                 return False
 
-            request.block_tables = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks)
+            request.block_tables = self.cache_manager.allocate_gpu_blocks(
+                need_prealloc_prefill_blocks, request.request_id
+            )
             request.num_computed_tokens = request.need_prefill_tokens
             request.disaggregate_info["block_tables"] = request.block_tables
             allocated_position = self.get_available_position()
@@ -1220,16 +1262,18 @@ class ResourceManagerV1(ResourceManager):
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
             self.cache_manager.release_block_ids(request)
-            self.cache_manager.recycle_gpu_blocks(request.block_tables[request.num_cached_blocks :])
+            self.cache_manager.recycle_gpu_blocks(
+                request.block_tables[request.num_cached_blocks :], request.request_id
+            )
         else:
-            self.cache_manager.recycle_gpu_blocks(request.block_tables)
+            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:
             reuse_block_num = self.reuse_block_num_map[request.request_id]
 
             self.using_extend_tables_req_id.remove(request.request_id)
-            self.cache_manager.recycle_gpu_blocks(request.extend_block_tables[reuse_block_num:])
+            self.cache_manager.recycle_gpu_blocks(request.extend_block_tables[reuse_block_num:], request.request_id)
             llm_logger.info(
                 f"req {request.request_id} recycle extend blocks {request.extend_block_tables[reuse_block_num:]}"
             )
@@ -1279,9 +1323,9 @@ class ResourceManagerV1(ResourceManager):
                 for req in need_postprocess_reqs:
                     try:
                         self._free_blocks(req)
+                        llm_logger.debug(f"req_id:{req.request_id} free pos:{req.idx}")
                     except Exception as e:
                         llm_logger.warning(f"release block failed {req.request_id}: {e}")
-
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
