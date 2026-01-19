@@ -82,6 +82,10 @@ class EngineArgs:
     """
     Port for api server.
     """
+    metrics_port: Optional[str] = None
+    """
+    Port for metrics server.
+    """
     served_model_name: Optional[str] = None
     """
     The name of the model being served.
