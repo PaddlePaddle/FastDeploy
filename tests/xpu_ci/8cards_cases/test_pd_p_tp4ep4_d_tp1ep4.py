@@ -23,6 +23,7 @@ PD分离测试 - Prefill/Decode分离部署模式
 - P: TP4EP4 D:TP1EP4
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -162,6 +163,10 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     print(f"Router启动命令: {' '.join(router_cmd)}")
     time.sleep(1)
 
+    target_model = f"{model_path}/ERNIE-4.5-300B-A47B-Paddle"
+    speculative_dict = {"method": "mtp", "num_speculative_tokens": 1, "model": f"{target_model}/mtp"}
+    speculative_json = json.dumps(speculative_dict)
+
     # 2. 启动Prefill节点
     print("启动Prefill节点...")
     prefill_env = os.environ.copy()
@@ -178,7 +183,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "1",
         "--args",
         "--model",
-        f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        f"{target_model}",
         "--tensor-parallel-size",
         "4",
         "--data-parallel-size",
@@ -196,6 +201,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--enable-expert-parallel",
         "--router",
         f"0.0.0.0:{port_num}",
+        "--speculative-config",
+        speculative_json,
     ]
 
     with open("log_prefill/nohup", "w") as log_file:
@@ -220,7 +227,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "4",
         "--args",
         "--model",
-        f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        f"{target_model}",
         "--tensor-parallel-size",
         "1",
         "--data-parallel-size",
@@ -238,6 +245,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--enable-expert-parallel",
         "--router",
         f"0.0.0.0:{port_num}",
+        "--speculative-config",
+        speculative_json,
     ]
 
     with open("log_decode/nohup", "w") as log_file:
@@ -265,7 +274,7 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 def test_pd_separation():
     """PD分离部署模式测试"""
 
-    print("\n============================开始PD分离+P_EP4TP4 D_EP4TP1测试!============================")
+    print("\n============================开始PD分离+MTP+P_EP4TP4 D_EP4TP1测试!============================")
 
     # 设置PD分离环境变量
     original_env = setup_pd_ep_env()
