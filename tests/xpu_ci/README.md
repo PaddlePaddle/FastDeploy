@@ -47,7 +47,8 @@ cd /path/to/FastDeploy
 # 设置环境变量
 export XPU_ID=0
 export MODEL_PATH=/path/to/models
-
+# 注意 需要设置PYTHONPATH环境变量,否则CI脚本导入模块会失败
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
 # 运行单个测试
 python -m pytest -v -s tests/xpu_ci/4cards_cases/test_ep4tp1_online.py
 
@@ -57,6 +58,12 @@ python -m pytest -v -s tests/xpu_ci/4cards_cases/test_ep4tp1_online.py
 
 ```bash
 # 运行多个测试
+# 设置环境变量
+export XPU_ID=0
+export MODEL_PATH=/path/to/models
+# 注意 需要设置PYTHONPATH环境变量,否则CI脚本导入模块会失败
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
+
 python -m pytest -v -s \
     tests/xpu_ci/4cards_cases/test_v1_mode.py \
     tests/xpu_ci/4cards_cases/test_w4a8.py
@@ -69,7 +76,7 @@ python -m pytest -v -s -k "v1_mode or w4a8" tests/xpu_ci/
 
 ### 步骤1: 创建新的测试文件
 
-在 `tests/xpu_ci/` 对应卡数目录下创建新的测试文件,文件名必须以 `test_` 开头,例如 `test_new_feature.py`
+在 `tests/xpu_ci/` 对应卡数（目前有8卡或者4卡）目录下创建新的测试文件,文件名必须以 `test_` 开头,例如 `test_new_feature.py`
 
 ### 步骤2: 编写测试代码
 
