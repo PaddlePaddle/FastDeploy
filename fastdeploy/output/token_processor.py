@@ -918,15 +918,24 @@ class TokenProcessor:
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
+        # 记录解码时间（从首令牌生成到请求结束）
         if hasattr(task, "first_token_time"):
             decode_time = current_time - task.first_token_time
             main_process_metrics.request_decode_time.observe(decode_time)
+
+        # 记录推理结束和后处理开始事件
         trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
+
+        # 更新运行时请求计数和成功请求统计
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
+
+        # 记录推理延迟和总推理时间
         main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
         main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
+
+        # 记录该请求生成的总令牌数
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 
     def _record_speculative_decoding_mertics(self, accept_num):
