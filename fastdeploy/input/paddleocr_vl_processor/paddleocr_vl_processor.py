@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-from collections.abc import Mapping
-
 import numpy as np
 
 from fastdeploy.engine.request import Request
@@ -318,16 +316,3 @@ class PaddleOCRVLProcessor(TextProcessor):
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
         outputs["mm_num_token_func"] = self.processor.mm_num_tokens
         return outputs
-
-    def get_mm_max_tokens_per_item(
-        self,
-        seq_len: int,
-    ) -> Mapping[str, int]:
-        """
-        Get maximum number of tokens per multimodal item.
-        Args:
-            seq_len: Maximum model length
-            Returns:
-                A mapping from modalities to their respective maximum token counts.
-        """
-        return self.processor.get_mm_max_tokens_per_item(seq_len)
