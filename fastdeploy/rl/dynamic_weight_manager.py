@@ -136,8 +136,9 @@ class DynamicWeightManager:
 
         old_state_dict = self.state_dict
         if not valid_parameters(old_state_dict, new_state_dict):
-            logger.error("Invalid new_state_dict, update parameters failed")
-            return
+            error_msg = "Invalid new_state_dict, update parameters failed"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         update_start = time.perf_counter()
         for name, param in old_state_dict.items():
