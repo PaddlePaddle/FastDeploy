@@ -839,7 +839,7 @@ class EngineService:
                     if (
                         len(self.resource_manager.waiting) == 0
                         and (not is_fetching)
-                        and self.exist_prefill_task_signal.value[self.cfg.parallel_config.local_data_parallel_id] == 0
+                        and self.exist_prefill_task_signal.value[0] == 0
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
@@ -850,10 +850,7 @@ class EngineService:
                                 break
                             else:
                                 raise
-                if not (
-                    self.engine_worker_queue.num_tasks() == 0
-                    and self.engine_forward_signal.value[self.cfg.parallel_config.local_data_parallel_id] == 0
-                ):
+                if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
                     time.sleep(0.001)
                     continue
 
