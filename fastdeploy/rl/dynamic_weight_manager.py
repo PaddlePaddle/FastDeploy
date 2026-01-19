@@ -355,9 +355,14 @@ class DynamicWeightManager:
 
     def read_model_version_from_file(self):
         model_dir = self.fd_config.model_config.model
-        with open(os.path.join(model_dir, "version.txt")) as f:
-            version = f.read().strip()
-        return version
+        version_file = os.path.join(model_dir, "version.txt")
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                version = f.read().strip()
+            return version
+        except (FileNotFoundError, OSError, IOError) as e:
+            logger.error(f"Failed to read model version file '{version_file}': {e}")
+            return None
 
     @staticmethod
     def check_model_weights_status(model_weights_status, kv_cache_status, model_runner, pid, block):
