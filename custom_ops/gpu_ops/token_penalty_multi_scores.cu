@@ -121,7 +121,8 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
   float alpha = static_cast<float>(penalty_scores[bi]);
   float beta = static_cast<float>(frequency_score[bi]);
   float gamma = static_cast<float>(presence_score[bi]);
-  if (alpha == 1.f && beta == 0.f && gamma == 0.f) {
+  float temperature = temperatures[bi];
+  if (alpha == 1.f && beta == 0.f && gamma == 0.f && temperature == 1.f) {
     return;
   }
   for (int i = tid; i < vocab_size; i += blockDim.x) {
@@ -133,7 +134,7 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
     if (times != 0) {
       logit_now = logit_now - times * beta - gamma;
     }
-    logits_now[i] = static_cast<T>(logit_now / temperatures[bi]);
+    logits_now[i] = static_cast<T>(logit_now / temperature);
   }
 }
 
