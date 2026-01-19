@@ -1592,6 +1592,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Use static graph splitting to isolate incompatible operators from the CUDA Graph. This splits the graph into subgraphs, allowing Prefill, Decode, and Mixed Batches to run compatible parts via CUDA Graph.
         if (
             hasattr(self, "graph_opt_config")
+            and self.use_cudagraph
             and self.graph_opt_config.graph_opt_level > 0
             and not self.graph_opt_config.full_cuda_graph
         ):
