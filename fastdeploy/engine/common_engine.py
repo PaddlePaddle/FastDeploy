@@ -1329,26 +1329,53 @@ class EngineService:
                 raise Exception(error_msg)
         return self._call_worker(control_request, 60)
 
-    def _call_worker(self, control_request: ControlRequest, timeout: int):
-        request_id = control_request.request_id
-        self.engine_worker_queue.put_tasks(([control_request], 1))
+    async def _wait_all_control_responses(self, request_id: str, timeout: int):
+        """Wait for control responses from all workers with a global timeout.
+
+        This method concurrently waits for responses from all control workers
+        and enforces an overall timeout to avoid leaking pending tasks.
+        """
+        timeout_ms = timeout * 1000
+        # Create one get() coroutine per worker output queue
+        tasks = [output_queue.get(timeout=timeout_ms) for output_queue in self._ctrl_worker_output_queues]
+
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            # Keep the error message consistent with previous behavior
+            raise Exception("Worker Update Weights Timeouted after 600s")
 
         responses = []
-        for output_queue in self._ctrl_worker_output_queues:
-            msg = asyncio.run(output_queue.get(timeout=timeout * 1000))  # todo: fix timeout when tp > 1
+        for output_queue, msg in zip(self._ctrl_worker_output_queues, results):
+            if isinstance(msg, Exception):
+                self.llm_logger.error(f"Call Worker Failed: {output_queue.name} {repr(msg)}")
+                raise Exception(f"Call Worker error: {repr(msg)}")
             if msg is None:
+                # Preserve original semantics when no message is received
                 raise Exception("Worker Update Weights Timeouted after 600s")
             response: ControlResponse = msg.payload
             if response.request_id != request_id:
-                self.llm_logger.info(f"ignore old control response from worker:{output_queue.name} {response}")
+                self.llm_logger.info(
+                    f"ignore old control response from worker:{output_queue.name} {response}"
+                )
                 continue
             if response.error_code != 200:
-                self.llm_logger.info(f"Call Worker Failed: {output_queue.name} {response.error_message}")
+                self.llm_logger.info(
+                    f"Call Worker Failed: {output_queue.name} {response.error_message}"
+                )
                 raise Exception(f"Call Worker error: {response.error_message}")
             self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
             responses.append(response.result)
-        return {"worker_responses": responses}
+        return responses
 
+    def _call_worker(self, control_request: ControlRequest, timeout: int):
+        request_id = control_request.request_id
+        self.engine_worker_queue.put_tasks(([control_request], 1))
+        # Use a single asyncio.run() to concurrently wait for all worker responses.
+        return asyncio.run(self._wait_all_control_responses(request_id, timeout))
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(
             f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}, error_code: {error_code}"
