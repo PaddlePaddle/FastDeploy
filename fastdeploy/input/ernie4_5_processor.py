@@ -365,7 +365,11 @@ class Ernie4_5Processor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["text"] = delta_text
         response_dict["outputs"]["completion_tokens"] = delta_text
+        response_dict["outputs"]["skipped"] = False
+        response_dict["outputs"]["tool_calls"] = None
+        response_dict["outputs"]["reasoning_content"] = ""
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
@@ -376,18 +380,15 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
                 self.model_status_dict[req_id],
             )
-            response_dict["outputs"]["delta_message"] = reasoning_delta_message
-            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
-            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
-            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
-            response_dict["outputs"]["reasoning_content"] = reasoning_content
-            response_dict["outputs"]["text"] = (
-                reasoning_delta_message.content or ""
-                if reasoning_delta_message and hasattr(reasoning_delta_message, "content")
-                else ""
-            )
-        else:
-            response_dict["outputs"]["text"] = delta_text
+            if reasoning_delta_message:
+                reasoning_content = reasoning_delta_message.reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+                response_dict["outputs"]["reasoning_content"] = reasoning_content
+                response_dict["outputs"]["text"] = reasoning_delta_message.content or ""
+            else:
+                if not is_end:
+                    response_dict["outputs"]["skipped"] = True
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -401,8 +402,12 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
                 response_dict,
             )
-            if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
-                response_dict["outputs"]["delta_message"] = tool_call_delta_message
+            if tool_call_delta_message:
+                response_dict["outputs"]["text"] = tool_call_delta_message.content
+                response_dict["outputs"]["tool_call"] = tool_call_delta_message.tool_calls
+            else:
+                if not is_end:
+                    response_dict["outputs"]["skipped"] = True
 
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")

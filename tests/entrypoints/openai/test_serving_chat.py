@@ -1161,6 +1161,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "top_logprobs": None,
                     "draft_top_logprobs": None,
                     "multipart": [{"type": "text", "text": "Hi"}],
+                    "enable_parser": False,
                 },
                 "finished": False,
                 "num_cached_tokens": 0,

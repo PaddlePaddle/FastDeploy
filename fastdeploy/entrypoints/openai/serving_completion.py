@@ -551,9 +551,9 @@ class OpenAIServingCompletion:
                         text=output["text"],
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                        tool_calls=None,
+                        tool_calls=output["tool_calls"],
                         completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
-                        reasoning_content="",
+                        reasoning_content=output["reasoning_content"],
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
                         prompt_logprobs=(
@@ -562,15 +562,12 @@ class OpenAIServingCompletion:
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.text = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"]:
+                        continue
 
                     choices.append(delta_message)
 
