@@ -161,6 +161,10 @@ class EngineWorkerQueue:
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
+            self.metrics_queues = [Queue() for _ in range(self.local_data_parallel_size)]
+
+            QueueManager.register("get_metrics_queue", callable=lambda idx: self.metrics_queues[idx])
+
             # Register shared objects with proxy types
             QueueManager.register(
                 "get_tasks",
@@ -343,6 +347,7 @@ class EngineWorkerQueue:
             QueueManager.register("get_cache_infos")
             QueueManager.register("get_client_read_info_flag")
             QueueManager.register("get_lock_info")
+            QueueManager.register("get_metrics_queue")
             QueueManager.register("get_disaggregate_requests")
             QueueManager.register("get_finish_request_barrier")
             QueueManager.register("get_finish_add_cache_task_barrier")
@@ -381,6 +386,7 @@ class EngineWorkerQueue:
             self.lock_info: AcquirerProxy = self.manager.get_lock_info(self.local_data_parallel_id)
 
             # p/d 分离获取
+            self.metrics_queue = self.manager.get_metrics_queue(self.local_data_parallel_id)
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
@@ -736,6 +742,14 @@ class EngineWorkerQueue:
         self.can_put_next_add_task_finished_flag.set(1)
         self.finish_add_cache_task_lock.release()
         return response
+
+    def put_metrics(self, item):
+        # item: [(req_id, get_task_time_stamp, inference_time), ... ]
+        self.metrics_queue.put(item)
+
+    def get_metrics(self):
+        item = self.metrics_queue.get()
+        return item
 
     def disaggregate_queue_empty(self):
         """

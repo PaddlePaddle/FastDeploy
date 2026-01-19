@@ -822,9 +822,6 @@ class EngineService:
 
         while self.running:
             try:
-                if self.engine_worker_queue.num_tasks() > 0:
-                    time.sleep(0.001)
-                    continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         get_request_pool.submit(_fetch_request)
@@ -844,6 +841,10 @@ class EngineService:
                                 break
                             else:
                                 raise
+                if not (self.engine_worker_queue.num_tasks() == 0 and self.exist_prefill_task_signal.value[0] == 0):
+                    time.sleep(0.001)
+                    continue
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 

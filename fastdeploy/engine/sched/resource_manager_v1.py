@@ -680,6 +680,7 @@ class ResourceManagerV1(ResourceManager):
                         self.cache_manager.update_cache_blocks(
                             request, self.config.cache_config.block_size, request.num_computed_tokens
                         )
+                    request.scheduler_finish_times.append(time.time())
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
@@ -797,6 +798,10 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+                main_process_metrics.scheduler_batched_token.set(
+                    self.config.scheduler_config.max_num_batched_tokens - token_budget
+                )
+                main_process_metrics.scheduler_batched_reqs.set(len(scheduled_reqs))
 
             self.update_metrics()
 

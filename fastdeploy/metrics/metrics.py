@@ -140,6 +140,7 @@ class MetricsManager:
     request_queue_time: "Histogram"
     gpu_cache_usage_perc: "Gauge"
     generation_tokens_total: "Counter"
+    prefilled_tokens_total: "Counter"
     request_prefill_time: "Histogram"
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
@@ -172,8 +173,28 @@ class MetricsManager:
     hit_token_rate: "Gauge"
     cpu_hit_token_rate: "Gauge"
     gpu_hit_token_rate: "Gauge"
+
+    scheduler_batched_token: "Gauge"
+    scheduler_batched_reqs: "Gauge"
+    # scheduler_batched_token_histogram: "Histogram"
+    # scheduler_batched_reqs_histogram: "Histogram"
+    num_requests_waiting_in_queue: "Gauge"
+    # num_requests_waiting_in_queue_histogram: "Histogram"
+
     # 定义所有指标配置
     METRICS = {
+        "scheduler_batched_token": {
+            "type": Gauge,
+            "name": "fastdeploy:scheduler_batched_token",
+            "description": "Number of tokens batched",
+            "kwargs": {},
+        },
+        "scheduler_batched_reqs": {
+            "type": Gauge,
+            "name": "fastdeploy:scheduler_batched_reqs",
+            "description": "Number of requests batched",
+            "kwargs": {},
+        },
         "num_requests_running": {
             "type": Gauge,
             "name": "fastdeploy:num_requests_running",
@@ -250,6 +271,12 @@ class MetricsManager:
             "type": Counter,
             "name": "fastdeploy:generation_tokens_total",
             "description": "Total number of generation tokens processed",
+            "kwargs": {},
+        },
+        "prefilled_tokens_total": {
+            "type": Counter,
+            "name": "fastdeploy:prefilled_tokens_total",
+            "description": "Total number of prefilled tokens processed",
             "kwargs": {},
         },
         "request_prefill_time": {
