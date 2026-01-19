@@ -16,6 +16,7 @@
 
 import inspect
 import os
+import re
 import time
 import traceback
 import uuid
@@ -28,6 +29,7 @@ from filelock import FileLock
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
+from fastdeploy.engine.request import RequestStatus
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -844,3 +846,27 @@ class EngineClient:
             content = {"code": 0, "msg": "ok", "data": update_weight_from_disk_list}
             status_code = HTTPStatus.OK
         return content, status_code
+
+    async def abort(self, request_id, n=1) -> None:
+        if envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE:
+            api_server_logger.info(f"abort request_id:{request_id}")
+            if n <= 0:
+                api_server_logger.warning("Abort function called with non-positive n: %d. No requests aborted.", n)
+                return
+            match = re.search(r"_\d+$", request_id)
+            if match:
+                prefix = request_id[: match.start()]
+            else:
+                api_server_logger.warning(
+                    "request_id format error: %s does not end with _<number>. Using it as prefix.", request_id
+                )
+                prefix = request_id
+            request_ids = [f"{prefix}_{i}" for i in range(n)]
+            for req_id in request_ids:
+                data = {
+                    "request_id": req_id,
+                    "status": RequestStatus.ABORT.value,
+                }
+                self._send_task(data)
+
+            api_server_logger.info("Aborted request(s) %s.", ",".join(request_ids))

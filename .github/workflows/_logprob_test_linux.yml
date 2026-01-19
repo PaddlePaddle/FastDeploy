@@ -185,7 +185,7 @@ jobs:
             -d "{\"messages\": [{\"role\": \"user\", \"content\": \"1+1=?\"}], \"logprobs\": true}"
           set +e
           rm -rf ./baseline_output
-          cp -r baseline/ERNIE-4.5-0.3B-Paddle ./baseline_output
+          cp -r baseline_dev/ERNIE-4.5-0.3B-Paddle ./baseline_output
           LOGPROB_EXIT_CODE=0
           python3.10 lanucher.py --request_template TOKEN_LOGPROB --url http://localhost:${FD_API_PORT}/v1/chat/completions  --case ./cases/demo.yaml  --concurrency 1 --name demo --exe logprob || LOGPROB_EXIT_CODE=$?
           echo "LOGPROB_EXIT_CODE=${LOGPROB_EXIT_CODE}" > /workspace/exit_code.env

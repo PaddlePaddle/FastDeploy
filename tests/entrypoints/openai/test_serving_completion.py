@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import unittest
 from typing import List
 from unittest.mock import AsyncMock, Mock, patch
@@ -520,7 +521,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             results.append(result)
 
         # Verify results
-        self.assertTrue(len(results) > 0)
+        self.assertGreater(len(results), 0)
         # Check that the first response contains prompt_logprobs
         self.assertIn("prompt_logprobs", results[0])
 
@@ -1215,6 +1216,118 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Check that the response contains null logprobs fields
         self.assertIsNone(result.choices[0].prompt_logprobs)
         self.assertIsNone(result.choices[0].logprobs)
+
+    async def test_create_completion_cancelled_error(self):
+        """Test create_completion with asyncio.CancelledError"""
+        # Mock the engine client and its dependencies
+        mock_engine_client = Mock()
+        mock_engine_client.is_master = True
+        mock_engine_client.semaphore = Mock()
+        mock_engine_client.semaphore.acquire = AsyncMock()
+        mock_engine_client.semaphore.release = Mock()
+        mock_engine_client.format_and_add_data = AsyncMock()
+        mock_engine_client.format_and_add_data.return_value = [1, 2, 3]
+        mock_engine_client.abort = AsyncMock()
+
+        # Create serving completion instance
+        serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
+
+        # Create mock request
+        mock_request = Mock()
+        mock_request.prompt = "Hello, world!"
+        mock_request.prompt_token_ids = None
+        mock_request.stream = False
+        mock_request.n = 1
+        mock_request.request_id = None
+        mock_request.user = None
+
+        # Mock to_dict_for_infer method to return a proper dict
+        def mock_to_dict_for_infer(request_id_idx, prompt):
+            return {"prompt": prompt, "request_id": request_id_idx, "prompt_tokens": 10, "max_tokens": 100}
+
+        mock_request.to_dict_for_infer = mock_to_dict_for_infer
+
+        # Mock format_and_add_data to raise CancelledError
+        mock_engine_client.format_and_add_data.side_effect = asyncio.CancelledError("Test cancellation")
+
+        # Call method and expect CancelledError to be handled
+        result = await serving_completion.create_completion(mock_request)
+
+        # Verify that error was handled properly
+        self.assertIsNotNone(result)
+        self.assertTrue(hasattr(result, "error"))
+        self.assertEqual(result.error.code, "client_aborted")
+        self.assertIn("client disconnected", result.error.message)
+
+        # Verify that abort was called
+        mock_engine_client.abort.assert_called_once()
+
+    async def test_completion_stream_generator_cancelled_error(self):
+        """Test completion_stream_generator with asyncio.CancelledError"""
+        # Mock the engine client and its dependencies
+        mock_engine_client = Mock()
+        mock_engine_client.semaphore = Mock()
+        mock_engine_client.semaphore.acquire = AsyncMock()
+        mock_engine_client.semaphore.release = Mock()
+        mock_engine_client.connection_manager = AsyncMock()
+        mock_engine_client.data_processor = Mock()
+        mock_engine_client.ori_vocab_size = 1000
+        mock_engine_client.check_model_weight_status.return_value = False
+        mock_engine_client.check_health.return_value = (True, "Healthy")
+        mock_engine_client.abort = AsyncMock()
+
+        # Mock the data_processor methods
+        mock_engine_client.data_processor.process_response_dict = Mock()
+
+        # Mock connection manager get_connection method
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+        mock_response_queue = AsyncMock()
+
+        # Make response_queue.get raise CancelledError
+        mock_response_queue.get.side_effect = asyncio.CancelledError("Test cancellation")
+        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+
+        # Create serving completion instance
+        serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
+
+        # Create mock request
+        mock_request = Mock()
+        mock_request.prompt_logprobs = None
+        mock_request.logprobs = None
+        mock_request.include_draft_logprobs = False
+        mock_request.return_token_ids = True
+        mock_request.include_stop_str_in_output = False
+        mock_request.max_streaming_response_tokens = 1
+        mock_request.max_tokens = None
+        mock_request.stream_options = Mock()
+        mock_request.stream_options.include_usage = False
+        mock_request.n = 1
+        mock_request.echo = False
+
+        # Call the method and collect results
+        result_generator = serving_completion.completion_stream_generator(
+            request=mock_request,
+            num_choices=1,
+            request_id="test_request",
+            created_time=1234567890,
+            model_name="test_model",
+            prompt_batched_token_ids=[[1, 2, 3]],
+            prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
+        )
+
+        # Collect results - should handle CancelledError gracefully
+        results = []
+        async for result in result_generator:
+            results.append(result)
+
+        # Verify that abort was called
+        mock_engine_client.abort.assert_called_once_with("test_request_0", 1)
+
+        # Verify that generator ends gracefully (should have [DONE] message)
+        self.assertTrue(len(results) > 0)
+        self.assertTrue(any("[DONE]" in result for result in results))
 
 
 if __name__ == "__main__":

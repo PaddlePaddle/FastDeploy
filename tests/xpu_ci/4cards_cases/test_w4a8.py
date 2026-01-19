@@ -13,13 +13,12 @@
 # limitations under the License.
 
 """
-VL模型测试 - ERNIE-4.5-VL-28B 视觉语言模型
+W4A8模式测试 - ERNIE-4.5-300B W4A8C8量化模型
 
 测试配置:
-- 模型: ERNIE-4.5-VL-28B-A3B-Thinking
-- 量化: wint8
+- 模型: ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle
+- 量化: W4A8
 - Tensor Parallel: 4
-- 特性: reasoning-parser, tool-call-parser, enable-chunked-prefill
 """
 
 
@@ -28,10 +27,10 @@ import pytest
 from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
 
 
-def test_vl_model(xpu_env):
-    """VL视觉语言模型测试"""
+def test_w4a8(xpu_env):
+    """W4A8量化模式测试"""
 
-    print("\n============================开始vl模型测试!============================")
+    print("\n============================开始W4A8测试!============================")
 
     # 获取配置
     port_num = get_port_num()
@@ -40,60 +39,43 @@ def test_vl_model(xpu_env):
     # 构建服务器启动参数
     server_args = [
         "--model",
-        f"{model_path}/ERNIE-4.5-VL-28B-A3B-Thinking",
+        f"{model_path}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle",
         "--port",
         str(port_num),
         "--engine-worker-queue-port",
         str(port_num + 1),
         "--metrics-port",
         str(port_num + 2),
-        "--cache-queue-port",
-        str(port_num + 47873),
         "--tensor-parallel-size",
         "4",
+        "--num-gpu-blocks-override",
+        "16384",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
-        "32",
+        "64",
         "--quantization",
-        "wint8",
-        "--reasoning-parser",
-        "ernie-45-vl-thinking",
-        "--tool-call-parser",
-        "ernie-45-vl-thinking",
-        "--mm-processor-kwargs",
-        '{"image_max_pixels": 12845056 }',
-        "--enable-chunked-prefill",
+        "W4A8",
     ]
 
     # 启动服务器
     if not start_server(server_args):
-        pytest.fail("VL模型服务启动失败")
+        pytest.fail("W4A8模式服务启动失败")
 
     # 执行测试
     try:
         ip = "0.0.0.0"
         client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
-        # 非流式对话(带图像)
+        # 非流式对话
         response = client.chat.completions.create(
             model="default",
             messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
-                            },
-                        },
-                        {"type": "text", "text": "图片中的文物来自哪个时代?"},
-                    ],
-                },
+                {"role": "user", "content": "你好,你是谁?"},
             ],
             temperature=1,
             top_p=0,
+            max_tokens=64,
             stream=False,
         )
 
@@ -101,15 +83,16 @@ def test_vl_model(xpu_env):
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content for keyword in ["北魏", "北齐", "释迦牟尼", "北朝"]
+            keyword in response.choices[0].message.content
+            for keyword in ["人工智能", "文心一言", "小度", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
-        print("\nVL模型测试通过!")
+        print("\nW4A8测试通过!")
 
     except Exception as e:
-        print(f"\nVL模型测试失败: {str(e)}")
+        print(f"\nW4A8测试失败: {str(e)}")
         print_logs_on_failure()
-        pytest.fail(f"VL模型测试失败: {str(e)}")
+        pytest.fail(f"W4A8测试失败: {str(e)}")
 
 
 if __name__ == "__main__":

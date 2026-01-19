@@ -61,6 +61,8 @@ _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "pooling": ["embed"],
 }
 
+PREEMPTED_TOKEN_ID = -9
+
 # Some model suffixes are based on auto classes from Transformers:
 # https://huggingface.co/docs/transformers/en/model_doc/auto
 # NOTE: Items higher on this list priority over lower ones
@@ -737,6 +739,9 @@ class SpeculativeConfig:
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
+        # Enable token constraint enforcement in generation phase
+        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
+        self.enf_gen_phase_tag: bool = False
 
         self.num_extra_cache_layer = 0
 
@@ -1468,6 +1473,10 @@ class RouterConfig:
 
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
+        if args["metrics_port"] is not None:
+            self.metrics_port = args["metrics_port"]
+        else:
+            self.metrics_port = self.api_server_port
 
 
 class CommitConfig:
@@ -1564,6 +1573,9 @@ class RoutingReplayConfig:
 
         # RDMA routing store
         self.rdma_store_server: str = ""
+
+        # Only save last turn
+        self.only_last_turn: bool = False
 
         if args is not None:
             for key, value in args.items():
@@ -1686,8 +1698,6 @@ class FDConfig:
         # TODO
         if not envs.FD_ENABLE_MAX_PREFILL:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-            if current_platform.is_xpu():
-                self.max_prefill_batch = 1
             if (
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None
@@ -1733,6 +1743,10 @@ class FDConfig:
         """
         calculate some parameters
         """
+        #  Unified field model config
+        if self.model_config.architectures[0] == "Glm4MoeForCausalLM":
+            # The first moe layer id of GLM4.5 model
+            self.model_config.moe_layer_start_index = self.model_config.first_k_dense_replace
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -2033,6 +2047,7 @@ class FDConfig:
 
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
+        metrics_port = self.router_config.metrics_port if self.router_config else None
         transfer_protocol = (
             self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
         )
@@ -2040,6 +2055,7 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
+            "metrics_port": metrics_port,
             "connector_port": self.cache_config.local_pd_comm_port,
             "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
