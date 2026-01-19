@@ -792,7 +792,5 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
 
     if sampler_output.logits is not None:
         logits = sampler_output.logits
-        real_logits = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logits, sampled_token_ids.shape
-        )
+        real_logits = paddle.gather(logits, index_to_batch_id_tensor, axis=0)
         sampler_output.logits = real_logits

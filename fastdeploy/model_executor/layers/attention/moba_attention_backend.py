@@ -157,6 +157,7 @@ class PlasAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ) -> paddle.Tensor:
         """
         Mixed模式的前向传播

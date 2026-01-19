@@ -164,6 +164,7 @@ class XPUAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ) -> paddle.Tensor:
         """
         forward_mixed

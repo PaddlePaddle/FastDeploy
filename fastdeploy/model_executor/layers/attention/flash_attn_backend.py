@@ -244,6 +244,7 @@ class FlashAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ):
         metadata = forward_meta.attention_metadata
 

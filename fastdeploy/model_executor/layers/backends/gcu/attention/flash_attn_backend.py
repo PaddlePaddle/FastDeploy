@@ -232,6 +232,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ) -> paddle.Tensor:
         """Run a forward for mixed."""
         token_num = qkv.shape[0]

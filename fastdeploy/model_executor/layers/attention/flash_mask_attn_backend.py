@@ -181,6 +181,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ):
         if int(os.getenv("USE_TBO", "0")) == 1:
             if hasattr(forward_meta, "tbo_microbatch_id"):

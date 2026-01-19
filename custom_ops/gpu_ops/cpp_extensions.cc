@@ -209,6 +209,37 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const std::string& cache_quant_type,
     const bool rope_3d);
 
+std::vector<paddle::Tensor> DecoderWriteCacheWithRoPE(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& set_max_lengths,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_input_length,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const bool speculate_decoder);
+
 std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -1187,6 +1218,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("gqa_rope_write_cache",
         &GQARopeWriteCacheKernel,
         "gqa rope write cache function");
+  /**
+   * decoder_write_cache_with_rope.cu
+   * decoder_write_cache_with_rope
+   */
+  m.def("decoder_write_cache_with_rope",
+        &DecoderWriteCacheWithRoPE,
+        "decoder write cache with RoPE function");
   /**
    * pre_cache_len_concat.cu
    * pre_cache_len_concat

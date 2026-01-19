@@ -262,13 +262,15 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
-        return forward_meta.attn_backend.forward(
-            q,
-            k,
-            v,
-            qkv,
-            compressed_kv,
-            k_pe,
-            self,
-            forward_meta,
-        )
+        use_output = getattr(forward_meta.attn_backend, "use_output", False)
+        if use_output:
+            if q is not None:
+                q_shape = [q.shape[0], self.num_heads, self.head_dim]
+                output_type = q.dtype
+            else:
+                q_shape = [qkv.shape[0], self.num_heads, self.head_dim]
+                output_type = qkv.dtype
+            output = paddle.empty(shape=q_shape, dtype=output_type)
+        else:
+            output = None
+        return forward_meta.attn_backend.forward(q, k, v, qkv, compressed_kv, k_pe, self, forward_meta, output=output)

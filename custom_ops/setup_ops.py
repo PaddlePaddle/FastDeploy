@@ -491,6 +491,7 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 90 and nvcc_version >= 12.0:
         # Hopper optimized mla
+        sources += ["gpu_ops/decoder_write_cache_with_rope.cu"]
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
         cc_compile_args += ["-DENABLE_FLASH_MASK_ATTENTION"]

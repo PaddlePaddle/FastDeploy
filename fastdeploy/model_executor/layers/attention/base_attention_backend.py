@@ -52,6 +52,7 @@ class AttentionBackend(ABC):
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
+        output: paddle.Tensor | None = None,
     ) -> paddle.Tensor:
         """
         Run a forward.
@@ -74,6 +75,7 @@ class AttentionBackend(ABC):
                 k_pe,
                 layer,
                 forward_meta,
+                output=output,
             )
         elif forward_meta.forward_mode.is_decode():
             return self.forward_decode(

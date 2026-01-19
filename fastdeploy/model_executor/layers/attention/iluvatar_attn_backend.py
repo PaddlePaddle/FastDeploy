@@ -237,6 +237,7 @@ class IluvatarAttnBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        **kwargs,
     ):
         """
         forward_mixed

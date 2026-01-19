@@ -423,7 +423,6 @@ def post_process_normal(
     #    In the future, we will abandon this approach.
     if not skip_save_output:
         recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
-    if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
                 recover_model_output_map = recover_batch_index_for_output(
