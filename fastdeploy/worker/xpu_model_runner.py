@@ -1105,8 +1105,9 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
-            self.fd_config.scheduler_config.splitwise_role == "mixed"
+            self.fd_config.scheduler_config.splitwise_role == "mixed" and self.fd_config.enable_low_latency_in_mixed
         ):  # Centralized scenario: the phase is initialized as "prefill" by default. During inference runtime, different types of batches can achieve phase switching at this point.
+
             if_only_decode = self.only_decode()
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 

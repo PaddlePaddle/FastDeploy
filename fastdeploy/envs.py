@@ -190,6 +190,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # Whether to enable low latency in mixed scenario
+    "FD_ENABLE_LOW_LANTENCY_IN_MIXED": lambda: bool(int(os.getenv("FD_ENABLE_LOW_LANTENCY_IN_MIXED", "0"))),
 }
 
 
