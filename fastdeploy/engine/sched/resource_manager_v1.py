@@ -623,7 +623,7 @@ class ResourceManagerV1(ResourceManager):
                 ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
                 and self._is_mm_request(request)
                 and self.exist_mm_prefill(scheduled_reqs)
-            ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs))
+            )
 
         with self.lock:
             scheduled_reqs: list[Request] = []
