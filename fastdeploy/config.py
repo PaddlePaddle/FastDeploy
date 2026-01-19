@@ -56,6 +56,9 @@ ConvertType = Literal["none", "embed"]
 
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
+# Model implementation backend options
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
     "pooling": ["embed"],
@@ -220,6 +223,7 @@ class ModelConfig:
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
+        self.model_impl: ModelImpl = "auto"
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -296,6 +300,9 @@ class ModelConfig:
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass
+            elif self.model_impl in ("auto", "paddleformers"):
+                # Skip check for auto/paddleformers - may fallback to paddleformers which supports any model
+                pass
             else:
                 generate_converts = _RUNNER_CONVERTS["generate"]
                 if self.convert_type not in generate_converts:
@@ -314,6 +321,7 @@ class ModelConfig:
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
         self._model_info = model_info
         self._architecture = arch
+        self.architectures = [arch]
 
         self.pooler_config = self._init_pooler_config()
         self.override_name_from_config()
