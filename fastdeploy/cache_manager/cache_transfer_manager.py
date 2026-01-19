@@ -552,9 +552,7 @@ class CacheTransferManager:
                 )
                 read_cost_time = time.time() - start_time
                 valid_gpu_block_ids = gpu_block_ids[:read_block_num]
-                logger.debug(
-                    f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
-                )
+                logger.debug(f"_run_read_storage, read_cost_time: {read_cost_time:.6f}s")
 
             return valid_gpu_block_ids
 
