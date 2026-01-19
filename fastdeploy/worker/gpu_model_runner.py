@@ -1425,11 +1425,15 @@ class GPUModelRunner(ModelRunnerBase):
                 if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
-                self.max_logprobs = max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
+                self.max_logprobs = (
+                    max(
+                        [
+                            self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                            for req in logprobs_reqs
+                        ]
+                    )
+                    if not self.speculative_decoding
+                    else 20
                 )
                 self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
                 self.top_p_normalized_logprobs = any(
@@ -1492,7 +1496,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=20 if self.enable_logprob else None,
+            max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
