@@ -120,6 +120,8 @@ class SiluAndMul(nn.Layer):
         Returns:
             Tensor: Output tensor.
         """
+        if self.bias is None and self.quant_scale == -1:
+            return paddle.nn.functional.swiglu(x)
         return fused_bias_act(
             x,
             bias=self.bias,

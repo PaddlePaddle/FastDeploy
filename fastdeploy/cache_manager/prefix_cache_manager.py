@@ -446,33 +446,35 @@ class PrefixCacheManager:
         else:
             return True
 
-    def allocate_gpu_blocks(self, num_blocks):
+    def allocate_gpu_blocks(self, num_blocks, req_id=None):
         """
         allocate gpu blocks.
         """
         assert num_blocks <= len(
             self.gpu_free_block_list
         ), f"gpu free block num: {len(self.gpu_free_block_list)} < needed number {num_blocks}"
+        logger.debug(f"{req_id} start allocate...")
         allocated_block_ids = [heapq.heappop(self.gpu_free_block_list) for i in range(num_blocks)]
         logger.info(
-            f"allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated_block_ids
 
-    def recycle_gpu_blocks(self, gpu_block_ids):
+    def recycle_gpu_blocks(self, gpu_block_ids, req_id=None):
         """
         recycle gpu blocks.
         """
         logger.info(
-            f"recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         if isinstance(gpu_block_ids, list):
             for gpu_block_id in gpu_block_ids:
                 heapq.heappush(self.gpu_free_block_list, gpu_block_id)
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
+        logger.debug(f"req_id:{req_id} recycle blocks end")
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
@@ -702,6 +704,9 @@ class PrefixCacheManager:
                     "gpu_match_token_num": 0,
                     "cpu_match_token_num": 0,
                     "storage_match_token_num": 0,
+                    "match_gpu_block_ids": [],
+                    "gpu_recv_block_ids": [],
+                    "match_storage_block_ids": [],
                     "cpu_cache_prepare_time": 0,
                     "storage_cache_prepare_time": 0,
                 }
@@ -822,6 +827,9 @@ class PrefixCacheManager:
                 metrics["gpu_match_token_num"] = gpu_match_token_num
                 metrics["cpu_match_token_num"] = cpu_match_token_num
                 metrics["storage_match_token_num"] = storage_match_token_num
+                metrics["match_gpu_block_ids"] = match_gpu_block_ids
+                metrics["gpu_recv_block_ids"] = gpu_recv_block_ids
+                metrics["match_storage_block_ids"] = match_storage_block_ids
                 self.metrics._update_history_hit_metrics()
                 if self.metrics.req_count % 10000 == 0:
                     self.metrics.reset_metrics()
@@ -980,7 +988,7 @@ class PrefixCacheManager:
                 logger.info(f"release_block_ids: req_id {req_id} leaf_node {leaf_node}")
 
                 if leaf_node == self.radix_tree_root:
-                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id])
+                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id], req_id)
                     del self.unfilled_req_block_map[req_id]
                     return
 
@@ -1424,66 +1432,6 @@ class PrefixCacheManager:
                 hash_keys.append(mm_inputs["mm_hashes"][img_idx])
         return len(mm_inputs["mm_positions"]) - 1, hash_keys
 
-    def _revert_match_blocks(
-        self,
-        request,
-        matched_token_num: int,
-        block_size: int,
-        chunk_idx: int,
-        match_node_ids: list,
-        matche_nodes: list,
-        match_gpu_block_ids: list,
-        match_cpu_block_ids: list,
-        gpu_match_token_num: int,
-        cpu_match_token_num: int,
-        swap_node_ids: list,
-    ):
-        # position = request.multimodal_inputs["mm_positions"][chunk_idx]
-        # revert_tokens = matched_token_num - position.offset
-        # TODO(chengyanfu): fix when is_chunked_mm_input=True, revert all matched tokens
-        revert_tokens = matched_token_num
-        match_block_ids = [node.block_id for node in matche_nodes]
-        logger.warning(
-            f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_block_ids}"
-        )
-        while revert_tokens >= block_size:
-            if len(matche_nodes) == 0:
-                logger.error(f"req_id {request.request_id} revert nodes error, tokens: {revert_tokens}")
-                break
-            revert_tokens -= block_size
-            revert_block = matche_nodes.pop()
-            revert_block_id = revert_block.block_id
-            if revert_block_id in match_gpu_block_ids:
-                match_gpu_block_ids.remove(revert_block_id)
-                match_node_ids.remove(revert_block.node_id)
-                gpu_match_token_num -= block_size
-            elif revert_block_id in match_cpu_block_ids:
-                match_cpu_block_ids.remove(revert_block_id)
-                match_node_ids.remove(revert_block.node_id)
-                cpu_match_token_num -= block_size
-            else:
-                logger.error(
-                    f"req_id {request.request_id} revert nodes error, nodes: {revert_block_id}, "
-                    f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
-                )
-                break
-            if revert_block_id in swap_node_ids:
-                swap_node_ids.remove(revert_block_id)
-
-        if revert_tokens > 0:
-            last_block_id = matche_nodes[-1].block_id
-            if last_block_id in match_gpu_block_ids:
-                gpu_match_token_num -= revert_tokens
-            elif last_block_id in match_cpu_block_ids:
-                cpu_match_token_num -= revert_tokens
-            else:
-                logger.error(
-                    f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
-                    f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
-                )
-        current_node = self.radix_tree_root if len(matche_nodes) == 0 else matche_nodes[-1]
-        return gpu_match_token_num, cpu_match_token_num, current_node
-
     def mm_match_block(self, request, block_size):
         """
         Match and retrieve cached blocks for multimodal requests using a radix tree structure.
@@ -1575,28 +1523,6 @@ class PrefixCacheManager:
             heapq.heapify(self.gpu_lru_leaf_heap)
         if has_modified_cpu_lru_leaf_heap:
             heapq.heapify(self.cpu_lru_leaf_heap)
-
-        if self.cache_config.disable_chunked_mm_input:
-            matched_token_num = gpu_match_token_num + cpu_match_token_num
-            is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
-            if is_chunked:
-                (
-                    gpu_match_token_num,
-                    cpu_match_token_num,
-                    current_match_node,
-                ) = self._revert_match_blocks(
-                    request=request,
-                    matched_token_num=matched_token_num,
-                    block_size=block_size,
-                    chunk_idx=chunk_idx,
-                    match_node_ids=match_node_ids,
-                    matche_nodes=matche_nodes,
-                    match_gpu_block_ids=match_gpu_block_ids,
-                    match_cpu_block_ids=match_cpu_block_ids,
-                    gpu_match_token_num=gpu_match_token_num,
-                    cpu_match_token_num=cpu_match_token_num,
-                    swap_node_ids=swap_node_ids,
-                )
 
         logger.info(f"match_block: req_id {request.request_id} matched nodes: {match_node_ids}")
         return (

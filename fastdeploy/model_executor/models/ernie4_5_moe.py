@@ -400,7 +400,7 @@ class Ernie4_5_Model(nn.Layer):
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
-                redundant_experts_num=fd_config.model_config.redundant_experts_num,
+                redundant_experts_num=fd_config.eplb_config.redundant_experts_num,
                 ep_size=fd_config.parallel_config.expert_parallel_size,
             )
 
@@ -476,6 +476,9 @@ class Ernie4_5_Model(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
@@ -562,6 +565,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
             ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
             ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
+            ("act_scale", "in_scale", None, None),
+            ("attn.q_scale", "q_matmul.in_scale", None, None),
+            ("attn.s_scale", "s_matmul.in_scale", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
+            ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
         ]
 
         expert_params_mapping = []
@@ -587,7 +596,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
         ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
         checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
-            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+            fd_config=self.fd_config,
+            ckpt_weight_suffix="quant_weight",
+            ckpt_scale_suffix="weight_scale",
+            ckpt_act_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
 

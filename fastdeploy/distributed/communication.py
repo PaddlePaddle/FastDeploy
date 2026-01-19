@@ -35,13 +35,16 @@ def capture_custom_allreduce():
         yield
 
 
-def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
-    hcg = fleet.get_hybrid_communicate_group()
-    model_parallel_group = hcg.get_model_parallel_group()
+def use_custom_allreduce(
+    tp_group: paddle.distributed.communication.group.Group = None, custom_all_reduce_max_bytes: int = 8192 * 1024
+):
+    if tp_group is None:
+        hcg = fleet.get_hybrid_communicate_group()
+        tp_group = hcg.get_model_parallel_group()
     global _TP_AR
     from fastdeploy.distributed.custom_all_reduce import CustomAllreduce
 
-    _TP_AR = CustomAllreduce(model_parallel_group, custom_all_reduce_max_bytes)
+    _TP_AR = CustomAllreduce(tp_group, custom_all_reduce_max_bytes)
 
 
 def custom_ar_clear_ipc_handles():
@@ -84,6 +87,18 @@ try:
                 dist.all_reduce(input_, group=mp_group)
         else:
             dist.all_reduce(input_)
+        return input_
+
+    @paddle.jit.marker.unified
+    def decode_alltoall_transpose(
+        input_: paddle.Tensor,
+        out: paddle.Tensor = None,
+    ) -> paddle.Tensor:
+        """alltoall and transpose in decode."""
+        if input_.shape[0] == 0:
+            return input_
+        global _TP_AR
+        input_ = _TP_AR.decode_alltoall_transpose(input_, out)
         return input_
 
 except:

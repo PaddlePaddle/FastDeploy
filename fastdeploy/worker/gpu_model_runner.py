@@ -652,6 +652,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 self.share_inputs["req_ids"][idx] = str(request.request_id)
                 # guided decoding
                 if (
@@ -744,9 +745,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -1271,6 +1274,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
+        # It is a hard code to cover up model's performance
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["reasoning_allowed_tokens"] = paddle.to_tensor([100973, 100975], dtype="int64")
+
         # Initialize rotary position embedding
         if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
@@ -1391,6 +1400,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -1482,7 +1492,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=self.max_logprobs,
+            max_num_logprobs=20 if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
@@ -1567,7 +1577,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
             if self.speculative_decoding:
-                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                self.proposer.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1875,7 +1885,7 @@ class GPUModelRunner(ModelRunnerBase):
                     group=self.parallel_config.tp_group,
                 )
         else:
-            self.sampler(
+            sampler_output = self.sampler(
                 logits,
                 self.sampling_metadata,
                 self.model_config.max_model_len,
@@ -1883,7 +1893,6 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_all_drafts,
                 reject_all_drafts,
             )
-            sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"],
@@ -1948,7 +1957,7 @@ class GPUModelRunner(ModelRunnerBase):
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
-            enable_entropy=self.enable_entropy,
+            enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
@@ -2376,7 +2385,7 @@ class GPUModelRunner(ModelRunnerBase):
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
-                enable_entropy=self.enable_entropy,
+                enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
             return None
@@ -2506,7 +2515,7 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
-                enable_entropy=self.enable_entropy,
+                enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
@@ -2757,6 +2766,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.put_table_to_store()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
