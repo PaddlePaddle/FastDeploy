@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
@@ -28,7 +29,6 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
 from .utils import get_tensor
@@ -307,7 +307,7 @@ class QKRMSNorm(nn.Layer):
             prefix=f"{prefix}.k_norm",
             begin_norm_axis=begin_norm_axis,
         )
-        self.qk_norm_fused = _TRITON_AVAILABLE
+        self.qk_norm_fused = current_platform.is_cuda() and _TRITON_AVAILABLE
 
     def load_state_dict(self, state_dict):
         self.q_norm.load_state_dict(state_dict)
@@ -316,8 +316,9 @@ class QKRMSNorm(nn.Layer):
     def forward(
         self,
         qkv_out,
+        forward_meta,
     ) -> paddle.Tensor:
-        if self.qk_norm_fused:
+        if self.qk_norm_fused and forward_meta.step_use_cudagraph:
             qkv_out = qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,

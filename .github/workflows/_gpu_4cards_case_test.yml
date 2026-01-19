@@ -1,0 +1,213 @@
+name: 4-GPU E2E Tests
+description: "Run FastDeploy e2e tests on 4 GPUs"
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      FASTDEPLOY_WHEEL_URL:
+        description: "URL of the FastDeploy Wheel."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+      MODEL_CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      github-token:
+        required: true
+
+jobs:
+  run_4_cards_tests:
+    runs-on: [self-hosted, GPU-h20-4Cards]
+    timeout-minutes: 30
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+          set -x
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          docker pull ${docker_image}
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            CLEAN_RETRIES=3
+            CLEAN_COUNT=0
+
+            while [ $CLEAN_COUNT -lt $CLEAN_RETRIES ]; do
+              echo "Attempt $((CLEAN_COUNT+1)) to remove ${REPO_NAME}* ..."
+              rm -rf "${REPO_NAME}"* || true
+              sleep 2
+
+              # Check if anything matching ${REPO_NAME}* still exists
+              if ! ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "All ${REPO_NAME}* removed successfully"
+                break
+              fi
+
+              CLEAN_COUNT=$((CLEAN_COUNT + 1))
+            done
+
+            if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+              echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
+              ls -ld "${REPO_NAME}"*
+              exit 1
+            fi
+          '
+
+          wget -q --no-proxy ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
+
+      - name: Run Four Cards Tests
+        shell: bash
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+          CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "Running on PR"
+          else
+            echo "Not a PR"
+          fi
+          runner_name="${{ runner.name }}"
+          CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
+          DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
+          DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
+
+          FLASK_PORT=$((8068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((8088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
+          FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
+          FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
+          echo "Test ENV Parameter:"
+          echo "========================================================="
+          echo "FLASK_PORT=${FLASK_PORT}"
+          echo "FD_API_PORT=${FD_API_PORT}"
+          echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
+          echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
+          echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
+          echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
+          echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
+          echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
+          echo "DEVICES=${DEVICES}"
+          echo "========================================================="
+
+          CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+          echo "CACHE_DIR is set to ${CACHE_DIR}"
+          if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
+            touch "${CACHE_DIR}/gitconfig"
+          fi
+
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT $FD_CACHE_QUEUE_PORT)
+          LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
+          echo "==== LOG_FILE is ${LOG_FILE} ===="
+
+          echo "==== PORT CLEAN BEFORE TASK RUN ====" | tee -a $LOG_FILE
+
+          for port in "${PORTS[@]}"; do
+              PIDS=$(lsof -t -i :$port || true)
+              if [ -n "$PIDS" ]; then
+                  echo "Port $port is occupied by PID(s): $PIDS" | tee -a $LOG_FILE
+                  echo "$PIDS" | xargs -r kill -9
+                  echo "Port $port cleared" | tee -a $LOG_FILE
+              else
+                  echo "Port $port is free" | tee -a $LOG_FILE
+              fi
+          done
+
+          echo "==== PORT CLEAN COMPLETE ====" | tee -a $LOG_FILE
+
+          echo "========================================================="
+          echo "Ensuring no stale container named ${runner_name} ..."
+          if [ "$(docker ps -a -q -f name=${runner_name})" ]; then
+            echo "Removing stale container: ${runner_name}"
+            docker rm -f ${runner_name} || true
+          fi
+
+          docker run --rm --ipc=host --net=host \
+          --name ${runner_name} \
+          -v $(pwd):/workspace -w /workspace \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -v "${CACHE_DIR}/.cache:/root/.cache" \
+          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+          -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
+          -e "MODEL_PATH=/ModelData" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "FLASK_PORT=${FLASK_PORT}" \
+          -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
+          -e TZ="Asia/Shanghai" \
+          -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+          python -m pip install -r scripts/unittest_requirement.txt
+          python -m pip install ${fd_wheel_url}
+          rm -rf fastdeploy
+          python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
+          export PYTHONPATH=/workspace/FastDeploy/
+
+          export CUDA_VISIBLE_DEVICES=0,1,2,3
+          echo "============================================================"
+          echo "Running pytest for 4-GPU end-to-end cases"
+
+          python -m pytest -sv --tb=short tests/e2e/4cards_cases/
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+              if [ -f "./log/log_0/workerlog.0" ]; then
+                  echo "---------------- log/workerlog.0 -------------------"
+                  cat "./log/log_0/workerlog.0"
+                  echo "----------------------------------------------------"
+              fi
+
+              if [ -f "./server.log" ]; then
+                  echo "---------------- server.log ----------------"
+                  cat "./server.log"
+                  echo "--------------------------------------------"
+              fi
+              exit 1
+          fi
+          '
