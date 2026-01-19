@@ -526,7 +526,6 @@ class EngineClient:
         dealer.write([b"", request_id.encode("utf-8")])
         try:
             response = await asyncio.wait_for(response_queue.get(), timeout=600)
-            print(response)
             response = ControlResponse.from_dict(response[0])
             api_server_logger.info(f"End Run Control Method: {response}")
             return response

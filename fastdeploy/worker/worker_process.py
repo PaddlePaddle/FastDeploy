@@ -693,7 +693,7 @@ class PaddleDisWorkerProc:
             asyncio.run(self._ctrl_output.put(succ_result, shm_threshold=100 * 1024 * 1024))
         except Exception as e:
             error_msg = f"Rank-{self.local_rank} Failed run control method {method}: {str(e)}"
-            logger.info(f"{error_msg}\n{traceback.format_exc()}")
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
             asyncio.run(self._ctrl_output.put(error_result))
 

@@ -91,7 +91,7 @@ class DynamicWeightManager:
                 logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, version: str = None, rsync_config: dict[str, Any] = None):
+    def update_weights_by_rdma(self, version: str = None, rsync_config: Dict[str, Any] = None):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in old_state_dict:
@@ -112,7 +112,7 @@ class DynamicWeightManager:
 
         if rsync_config is None:
             rsync_config = self.fd_config.load_config.rsync_config
-        if rsync_config is None or len(rsync_config) == "":
+        if rsync_config is None or len(rsync_config) == 0:
             raise Exception(
                 "rsync config not set, please set it in 1) launch arguments '--rsync-config' "
                 "or 2) interface arguments 'rsync_config'"

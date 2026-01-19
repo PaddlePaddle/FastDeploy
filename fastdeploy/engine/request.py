@@ -469,7 +469,7 @@ class ControlRequest:
 
 class ControlResponse:
     """
-    Response for control opeartions
+    Response for control operations
     """
 
     def __init__(

@@ -46,7 +46,6 @@ class TestResourceManagerV1(unittest.TestCase):
             local_data_parallel_id=0,
         )
 
-        print("3")
         # Mock cache manager
         self.manager.cache_manager = Mock()
         self.manager.cache_manager.free_blocks = Mock()
@@ -56,11 +55,9 @@ class TestResourceManagerV1(unittest.TestCase):
 
     def test_preempted_all_with_no_running_requests(self):
         """Test preempted_all with no running requests."""
-        print("hello")
         self.assertEqual(len(self.manager.running), 0)
         preempted_reqs = self.manager.preempted_all()
         self.assertEqual(len(preempted_reqs), 0)
-        print("world")
 
     def test_preempted_all_with_normal_requests(self):
         """Test preempted_all with normal running requests."""
