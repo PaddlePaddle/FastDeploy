@@ -209,7 +209,10 @@ class WeightsMapper:
         return self._map_name(weight_name)
 
 
-def remap_weight_keys(weights_iterator, mapper: dict):
+def remap_weight_keys(weights_iterator, mapper: dict, include_keys: Optional[List[str]] = None):
+    if include_keys is not None:
+        weights_iterator = filter(lambda item: any(key in item[0] for key in include_keys), weights_iterator)
+
     return (
         (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
         for key, value in weights_iterator

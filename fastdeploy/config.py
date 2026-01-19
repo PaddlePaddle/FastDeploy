@@ -1694,8 +1694,6 @@ class FDConfig:
         # TODO
         if not envs.FD_ENABLE_MAX_PREFILL:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-            if current_platform.is_xpu():
-                self.max_prefill_batch = 1
             if (
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None

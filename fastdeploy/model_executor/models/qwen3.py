@@ -103,7 +103,7 @@ class Qwen3Attention(nn.Layer):
     ):
         """ """
         qkv_out = self.qkv_proj(hidden_states)
-        qkv_out = self.qk_norm(qkv_out)
+        qkv_out = self.qk_norm(qkv_out, forward_meta)
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,

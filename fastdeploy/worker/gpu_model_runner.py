@@ -1419,11 +1419,15 @@ class GPUModelRunner(ModelRunnerBase):
                 if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
-                self.max_logprobs = max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
+                self.max_logprobs = (
+                    max(
+                        [
+                            self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                            for req in logprobs_reqs
+                        ]
+                    )
+                    if not self.speculative_decoding
+                    else 20
                 )
                 self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
                 self.top_p_normalized_logprobs = any(
@@ -1571,7 +1575,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
             if self.speculative_decoding:
-                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                self.proposer.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
