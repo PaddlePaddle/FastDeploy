@@ -401,13 +401,41 @@ async def is_paused(request: Request) -> Response:
 async def update_weights(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
 
-    # 兼容无参数传入的情况 - 简洁写法
     request_data = await request.json() if await request.body() else {}
 
-    # 提取并过滤有效参数
-    args = {
-        key: value for key, value in request_data.items() if key in ("version", "rsync_config") and value is not None
-    }
+    args = {}
+    
+    # Validate and extract version parameter
+    if "version" in request_data and request_data["version"] is not None:
+        if not isinstance(request_data["version"], str):
+            return JSONResponse(
+                status_code=400, 
+                content={
+                    "error": "Invalid parameter type",
+                    "message": "version must be a string"
+                }
+            )
+        args["version"] = request_data["version"]
+    
+    # Validate and extract rsync_config parameter
+    if "rsync_config" in request_data and request_data["rsync_config"] is not None:
+        if not isinstance(request_data["rsync_config"], dict):
+            return JSONResponse(
+                status_code=400, 
+                content={
+                    "error": "Invalid parameter type",
+                    "message": "rsync_config must be a dictionary"
+                }
+            )
+        if "etcd_server" not in request_data["rsync_config"]:
+            return JSONResponse(
+                status_code=400, 
+                content={
+                    "error": "Invalid parameter type",
+                    "message": "rsync_config must contain etcd_server"
+                }
+            )
+        args["rsync_config"] = request_data["rsync_config"]
 
     control_request = ControlRequest(request_id, "update_weights", args)
     control_response = await app.state.engine_client.run_control_method(control_request)
