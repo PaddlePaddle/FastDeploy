@@ -2029,9 +2029,10 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
+                # fallback paddleformers use cuda graph need kwargs
                 model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.forward_meta,
+                    ids_remove_padding=self.forward_meta.ids_remove_padding,
+                    forward_meta=self.forward_meta,
                 )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
@@ -2330,8 +2331,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
         else:
             model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.forward_meta,
+                ids_remove_padding=self.forward_meta.ids_remove_padding,
+                forward_meta=self.forward_meta,
             )
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
