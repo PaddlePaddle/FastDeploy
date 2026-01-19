@@ -504,7 +504,7 @@ class PaddleDisWorkerProc:
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     self._tp_barrier_wait()
-
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
