@@ -65,13 +65,12 @@ def creat_empty_forward_meta(forward_meta: ForwardMeta):
 
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
-    res = [forward_meta] * split_num
+    res = [creat_empty_forward_meta(forward_meta), forward_meta]
+    res[0].tbo_microbatch_id = 0
+    res[1].tbo_microbatch_id = 1
     total_token_num = forward_meta.ids_remove_padding.shape[0]
 
     if total_token_num < split_num:
-        res = [creat_empty_forward_meta(forward_meta), forward_meta]
-        res[0].tbo_microbatch_id = 0
-        res[1].tbo_microbatch_id = 1
         return res
 
     chunk_token_num = (total_token_num + split_num - 1) // split_num
@@ -88,14 +87,18 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
 
     ids_remove_padding_cpu = forward_meta.ids_remove_padding.numpy().tolist()
     detect_pos = split_sections[0]
-    while ids_remove_padding_cpu[detect_pos] == 1003:
+    while ids_remove_padding_cpu[detect_pos] in [101031, 101032, 101033, 101029]:
         detect_pos += 1
+        if detect_pos >= len(ids_remove_padding_cpu):
+            print("越界")
+            return res
+            break
+    if split_sections[0] != detect_pos:
+        print("改了")
     split_sections[0] = detect_pos
 
     for i in range(0, split_num):
-        start_token_id = 0
-        if i >= 1:
-            start_token_id = split_sections[i - 1]
+        start_token_id = 0 if i == 0 else split_sections[i - 1]
         end_token_id = split_sections[i]
 
         res[i] = ForwardMeta(
