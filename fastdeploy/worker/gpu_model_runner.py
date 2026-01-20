@@ -2030,6 +2030,15 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
+            if hasattr(self.forward_meta, "ids_remove_padding") and self.forward_meta.ids_remove_padding is not None:
+                vocab_size = getattr(self.model_config, "vocab_size", 32000)
+                self.forward_meta.ids_remove_padding = paddle.randint(
+                    low=0,
+                    high=vocab_size,
+                    shape=self.forward_meta.ids_remove_padding.shape,
+                    dtype=self.forward_meta.ids_remove_padding.dtype,
+                )
+            
             # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
