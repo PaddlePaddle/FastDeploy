@@ -43,6 +43,7 @@ class RequestStatus(Enum):
     RUNNING = 1
     PREEMPTED = 2
     FINISHED = 3
+    ABORT = 4
 
 
 class RequestType(Enum):

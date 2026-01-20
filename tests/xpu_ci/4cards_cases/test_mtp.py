@@ -13,59 +13,57 @@
 # limitations under the License.
 
 """
-V1模式测试 - ERNIE-4.5-300B-A47B 模型
+MTP模式测试 - ERNIE-4.5-21B-A3B-Paddle 模型
 
 测试配置:
-- 模型: ERNIE-4.5-300B-A47B-Paddle
+- 模型: ERNIE-4.5-21B-A3B-Paddle
 - 量化: wint4
 - Tensor Parallel: 4
-- 特性: enable-prefix-caching, enable-chunked-prefill
 """
 
+import json
 
 import openai
 import pytest
 from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
 
 
-def test_v1_mode(xpu_env):
-    """V1模式测试"""
+def test_mtp_mode(xpu_env):
+    """mtp模式测试"""
 
-    print("\n============================开始V1模式测试!============================")
+    print("\n============================开始mtp模式测试!============================")
 
     # 获取配置
     port_num = get_port_num()
     model_path = get_model_path()
-
+    spec_config = {"method": "mtp", "num_speculative_tokens": 1, "model": f"{model_path}/ERNIE-4.5-21B-A3B-Paddle/mtp"}
     # 构建服务器启动参数
     server_args = [
         "--model",
-        f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--port",
         str(port_num),
         "--engine-worker-queue-port",
         str(port_num + 1),
         "--metrics-port",
         str(port_num + 2),
-        "--cache-queue-port",
-        str(port_num + 47873),
         "--tensor-parallel-size",
         "4",
         "--num-gpu-blocks-override",
         "16384",
         "--max-model-len",
-        "32768",
+        "8192",
         "--max-num-seqs",
         "128",
         "--quantization",
         "wint4",
-        "--enable-prefix-caching",
-        "--enable-chunked-prefill",
+        "--speculative-config",
+        f"{json.dumps(spec_config)}",
     ]
 
     # 启动服务器
     if not start_server(server_args):
-        pytest.fail("V1模式服务启动失败")
+        pytest.fail("mtp模式服务启动失败")
 
     # 执行测试
     try:
@@ -91,12 +89,12 @@ def test_v1_mode(xpu_env):
             keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
-        print("\nV1模式测试通过!")
+        print("\nmtp模式测试通过!")
 
     except Exception as e:
-        print(f"\nV1模式测试失败: {str(e)}")
+        print(f"\nmtp模式测试失败: {str(e)}")
         print_logs_on_failure()
-        pytest.fail(f"V1模式测试失败: {str(e)}")
+        pytest.fail(f"mtp模式测试失败: {str(e)}")
 
 
 if __name__ == "__main__":

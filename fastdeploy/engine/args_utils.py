@@ -82,6 +82,10 @@ class EngineArgs:
     """
     Port for api server.
     """
+    metrics_port: Optional[str] = None
+    """
+    Port for metrics server.
+    """
     served_model_name: Optional[str] = None
     """
     The name of the model being served.
@@ -127,6 +131,13 @@ class EngineArgs:
     """
     Convert the model using adapters. The most common use case is to
     adapt a text generation model to be used for pooling tasks.
+    """
+    model_impl: str = "auto"
+    """
+    The model implementation backend to use. Options: auto, fastdeploy, paddleformers.
+    'auto': Use native FastDeploy implementation when available, fallback to PaddleFormers.
+    'fastdeploy': Use only native FastDeploy implementations.
+    'paddleformers': Use PaddleFormers backend with FastDeploy optimizations.
     """
     override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
     """
@@ -248,7 +259,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = False
+    enable_output_caching: bool = True
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -569,9 +580,7 @@ class EngineArgs:
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
             envs.FD_ENABLE_MAX_PREFILL = 1
-            # TODO XPU support PaddleOCR prefix caching
-            if current_platform.is_xpu():
-                self.enable_prefix_caching = False
+            self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
             if not self.enable_prefix_caching:
@@ -580,6 +589,12 @@ class EngineArgs:
                 raise NotImplementedError(
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
                 )
+
+        valid_model_impls = ["auto", "fastdeploy", "paddleformers"]
+        if self.model_impl not in valid_model_impls:
+            raise NotImplementedError(
+                f"not support model_impl: '{self.model_impl}'. " f"Must be one of: {', '.join(valid_model_impls)}"
+            )
 
         self.post_init_all_ports()
 
@@ -893,6 +908,18 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_entropy,
             help="Enable output of token-level entropy.",
+        )
+        model_group.add_argument(
+            "--model-impl",
+            type=str,
+            choices=["auto", "fastdeploy", "paddleformers"],
+            default=EngineArgs.model_impl,
+            help=(
+                "Model implementation backend. "
+                "'auto': Use native FastDeploy when available, fallback to PaddleFormers. "
+                "'fastdeploy': Use only native FastDeploy implementations. "
+                "'paddleformers': Use PaddleFormers backend with FastDeploy optimizations."
+            ),
         )
 
         # Parallel processing parameters group

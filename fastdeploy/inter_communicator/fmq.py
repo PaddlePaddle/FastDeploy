@@ -82,7 +82,7 @@ class Config:
     io_threads: int = 1
     copy: bool = False
     endpoints: Dict[str, Endpoint] = field(default_factory=dict)
-    socket_config: SocketOptions = SocketOptions()
+    socket_config: SocketOptions = field(default_factory=SocketOptions)
 
 
 # ==========================

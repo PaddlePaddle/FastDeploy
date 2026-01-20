@@ -220,6 +220,7 @@ class ErrorCode(str, Enum):
     CONNECTION_ERROR = "connection_error"
     MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
     INTERNAL_ERROR = "internal_error"
+    CLIENT_ABORTED = "client_aborted"
 
 
 class ColoredFormatter(logging.Formatter):

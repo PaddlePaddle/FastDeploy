@@ -83,6 +83,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
     const bool use_neox_rotary_style,
@@ -496,11 +498,13 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
 void SaveOutMmsgDynamic(const paddle::Tensor& x,
                         const paddle::Tensor& not_need_stop,
+                        const paddle::Tensor& preempted_idx,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank);
@@ -638,6 +642,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("v_zeros"),
         py::arg("shift"),
         py::arg("smooth"),
+        py::arg("q_norm_weight"),
+        py::arg("k_norm_weight"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
         py::arg("use_neox_rotary_style"),
@@ -872,6 +878,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -971,6 +978,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgStatic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("save_each_rank"),
         "Save output function");
@@ -979,6 +987,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgDynamic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("msg_queue_id"),
         py::arg("save_each_rank"),

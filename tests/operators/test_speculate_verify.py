@@ -66,6 +66,7 @@ def speculate_verify_ref(
     actual_candidate_len,
     actual_draft_token_nums,
     topp,
+    reasoning_status,
     max_seq_len,
     verify_window,
     enable_topp,
@@ -285,6 +286,7 @@ def gen_speculate_verify_inputs(
         if enable_topp
         else np.zeros(real_bsz, dtype=np.float32)
     )
+    reasoning_status = np.zeros((real_bsz), dtype=np.int32)
 
     # Output(inplace)
     accept_tokens = np.zeros((real_bsz, max_draft_tokens), dtype=np.int64)
@@ -311,6 +313,7 @@ def gen_speculate_verify_inputs(
         "actual_candidate_len": actual_candidate_len,
         "actual_draft_token_nums": actual_draft_token_nums,
         "topp": topp,
+        "reasoning_status": reasoning_status,
         "max_seq_len": max_seq_len,
         "verify_window": verify_window,
         "enable_topp": enable_topp,

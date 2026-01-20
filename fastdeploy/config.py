@@ -56,10 +56,15 @@ ConvertType = Literal["none", "embed"]
 
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
+# Model implementation backend options
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
     "pooling": ["embed"],
 }
+
+PREEMPTED_TOKEN_ID = -9
 
 # Some model suffixes are based on auto classes from Transformers:
 # https://huggingface.co/docs/transformers/en/model_doc/auto
@@ -218,6 +223,7 @@ class ModelConfig:
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
+        self.model_impl: ModelImpl = "auto"
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -294,6 +300,9 @@ class ModelConfig:
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass
+            elif self.model_impl in ("auto", "paddleformers"):
+                # Skip check for auto/paddleformers - may fallback to paddleformers which supports any model
+                pass
             else:
                 generate_converts = _RUNNER_CONVERTS["generate"]
                 if self.convert_type not in generate_converts:
@@ -312,6 +321,7 @@ class ModelConfig:
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
         self._model_info = model_info
         self._architecture = arch
+        self.architectures = [arch]
 
         self.pooler_config = self._init_pooler_config()
         self.override_name_from_config()
@@ -744,6 +754,9 @@ class SpeculativeConfig:
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
+        # Enable token constraint enforcement in generation phase
+        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
+        self.enf_gen_phase_tag: bool = False
 
         self.num_extra_cache_layer = 0
 
@@ -926,6 +939,10 @@ class GraphOptimizationConfig:
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
         self.draft_model_use_cudagraph: bool = False
+        """ Maximum CUDA Graph capture size for static graph mode.
+        Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
+        """
+        self.max_capture_shape_dy2st: int = 512
 
         # CINN Config ...
         if args is not None:
@@ -1342,6 +1359,7 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
+        self.num_cpu_blocks = None
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1387,10 +1405,12 @@ class CacheConfig:
                 * byte_size
             )
 
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+        if self.num_cpu_blocks is None:
+            if self.swap_space is None:
+                self.num_cpu_blocks = 0
+            else:
+                self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+
         self._verify_args()
 
     def metrics_info(self):
@@ -1472,6 +1492,10 @@ class RouterConfig:
 
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
+        if args["metrics_port"] is not None:
+            self.metrics_port = args["metrics_port"]
+        else:
+            self.metrics_port = self.api_server_port
 
 
 class CommitConfig:
@@ -1569,6 +1593,9 @@ class RoutingReplayConfig:
         # RDMA routing store
         self.rdma_store_server: str = ""
 
+        # Only save last turn
+        self.only_last_turn: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1645,6 +1672,9 @@ class FDConfig:
         else:
             max_capture_shape = min(512, max_capture_shape)
 
+        if self.graph_opt_config.graph_opt_level > 0:
+            max_capture_shape = graph_opt_config.max_capture_shape_dy2st
+
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
                 self.speculative_config.num_speculative_tokens + 1
@@ -1690,8 +1720,6 @@ class FDConfig:
         # TODO
         if not envs.FD_ENABLE_MAX_PREFILL:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-            if current_platform.is_xpu():
-                self.max_prefill_batch = 1
             if (
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None
@@ -1737,6 +1765,10 @@ class FDConfig:
         """
         calculate some parameters
         """
+        #  Unified field model config
+        if self.model_config.architectures[0] == "Glm4MoeForCausalLM":
+            # The first moe layer id of GLM4.5 model
+            self.model_config.moe_layer_start_index = self.model_config.first_k_dense_replace
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -2037,6 +2069,7 @@ class FDConfig:
 
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
+        metrics_port = self.router_config.metrics_port if self.router_config else None
         transfer_protocol = (
             self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
         )
@@ -2044,6 +2077,7 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
+            "metrics_port": metrics_port,
             "connector_port": self.cache_config.local_pd_comm_port,
             "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,
