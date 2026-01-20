@@ -1114,6 +1114,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
+        # It is a hard code to cover up model's performance
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["reasoning_allowed_tokens"] = paddle.to_tensor([100973, 100975], dtype="int64")
+
         # Initialize rotary position embedding
         if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
@@ -1279,9 +1285,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
-        # Update bad tokens len
-        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
-
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
@@ -1302,7 +1305,8 @@ class GPUModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
+            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_len=self.share_inputs["bad_tokens_len"],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,

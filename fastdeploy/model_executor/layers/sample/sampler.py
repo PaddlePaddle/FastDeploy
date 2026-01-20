@@ -35,6 +35,7 @@ from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
     min_p_sampling,
+    reasoning_phase_token_constraint,
     speculate_get_target_logits,
     speculate_insert_first_token,
     top_k_top_p_sampling,
@@ -478,6 +479,7 @@ class Sampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -578,6 +580,9 @@ class SpeculativeSampler(nn.Layer):
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
         self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
+        self.think_end_id = fd_config.model_config.think_end_id
+        self.line_break_id = fd_config.model_config.line_break_id
+        self.enf_gen_phase_tag = fd_config.speculative_config.enf_gen_phase_tag
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
@@ -708,6 +713,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -716,6 +722,22 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["output_cum_offsets"],
             max_model_len,
         )
+
+        if self.enf_gen_phase_tag:
+            reasoning_phase_token_constraint(
+                logits,
+                sampling_metadata.pre_token_ids,
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["step_idx"],
+                share_inputs["reasoning_allowed_tokens"],
+                share_inputs["reasoning_status"],
+                share_inputs["output_padding_offset"],
+                share_inputs["output_cum_offsets"],
+                self.think_end_id,
+                self.line_break_id,
+            )
 
         probs = F.softmax(logits)
 
@@ -756,6 +778,7 @@ class SpeculativeSampler(nn.Layer):
             actual_candidate_len,
             share_inputs["actual_draft_token_num"],
             sampling_metadata.top_p,
+            share_inputs["reasoning_status"],
             max_model_len,
             self.speculative_verify_window,
             True,  # enable_topp
@@ -800,9 +823,9 @@ class SpeculativeSampler(nn.Layer):
         logprobs_tensors = None
         token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
-            token_ids = paddle.concat(
-                [share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]] for i in range(real_bsz)]
-            )
+            idx = paddle.arange(share_inputs["accept_tokens"].shape[1], dtype="int32")
+            mask = idx < share_inputs["accept_num"].unsqueeze(1)
+            token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
@@ -826,6 +849,7 @@ class MTPSampler(nn.Layer):
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
+        self.enable_draft_logprob = fd_config.speculative_config.enable_draft_logprob
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
@@ -955,7 +979,7 @@ class MTPSampler(nn.Layer):
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        if num_logprobs is not None and share_inputs["substep"] == 0:
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
             real_token_num = share_inputs["batch_token_num"][:real_bsz].sum()
             if self.logprobs_mode == "raw_logprobs":
                 raw_logprobs = self.compute_logprobs(
@@ -972,6 +996,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -992,7 +1017,7 @@ class MTPSampler(nn.Layer):
 
         token_ids = None
         logprobs_tensors = None
-        if num_logprobs is not None and share_inputs["substep"] == 0:
+        if self.enable_draft_logprob and num_logprobs is not None and share_inputs["substep"] == 0:
             token_ids = paddle.empty(real_token_num, dtype="int64")
             speculate_insert_first_token(
                 token_ids,

@@ -48,18 +48,32 @@ def is_last_thread():
     return thread_name == "thread1"
 
 
+def creat_empty_forward_meta(forward_meta: ForwardMeta):
+
+    res = ForwardMeta(
+        ids_remove_padding=forward_meta.ids_remove_padding[0:0],
+        rotary_embs=forward_meta.rotary_embs,
+        attn_backend=forward_meta.attn_backend,
+        caches=forward_meta.caches,
+    )
+
+    res.hidden_states = forward_meta.hidden_states[0:0]
+    res.decode_states = forward_meta.decode_states[0:0]
+
+    return res
+
+
 def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
     res = [forward_meta] * split_num
     total_token_num = forward_meta.ids_remove_padding.shape[0]
 
-    if total_token_num > 0:
-        assert total_token_num >= split_num
-
     if total_token_num < split_num:
+        res = [creat_empty_forward_meta(forward_meta), forward_meta]
+        res[0].tbo_microbatch_id = 0
+        res[1].tbo_microbatch_id = 1
         return res
 
-    print("total_token_num", total_token_num)
     chunk_token_num = (total_token_num + split_num - 1) // split_num
 
     for i in range(0, split_num):

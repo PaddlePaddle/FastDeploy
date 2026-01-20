@@ -76,6 +76,7 @@ class MTPProposer(Proposer):
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
+        self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -387,6 +388,7 @@ class MTPProposer(Proposer):
         self.model_inputs["min_dec_len"] = self.target_model_inputs["min_dec_len"]
 
         self.model_inputs["bad_tokens"] = self.target_model_inputs["bad_tokens"]
+        self.model_inputs["bad_tokens_len"] = self.target_model_inputs["bad_tokens_len"]
 
         # Integrate the updated results in model forward
         self.model_inputs["base_model_draft_tokens"] = self.target_model_inputs["draft_tokens"]
@@ -855,6 +857,7 @@ class MTPProposer(Proposer):
                     repetition_penalties=self.model_inputs["penalty_score"],
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
+                    bad_words_token_len=self.model_inputs["bad_tokens_len"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
                     max_num_logprobs=20 if self.enable_logprob else None,
                     temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
@@ -887,7 +890,7 @@ class MTPProposer(Proposer):
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
-                if self.enable_logprob and substep == 0:
+                if self.enable_logprob and self.enable_draft_logprob and substep == 0:
                     first_token_logits = self.model.compute_logits(
                         self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
                     )

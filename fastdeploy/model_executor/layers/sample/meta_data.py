@@ -40,6 +40,8 @@ class SamplingMetadata:
 
     bad_words_token_ids: paddle.Tensor
 
+    bad_words_token_len: paddle.Tensor
+
     step_idx: paddle.Tensor
 
     top_p: paddle.Tensor
