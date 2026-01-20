@@ -1425,11 +1425,15 @@ class GPUModelRunner(ModelRunnerBase):
                 if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
-                self.max_logprobs = max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
+                self.max_logprobs = (
+                    max(
+                        [
+                            self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                            for req in logprobs_reqs
+                        ]
+                    )
+                    if not self.speculative_decoding
+                    else 20
                 )
                 self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
                 self.top_p_normalized_logprobs = any(
@@ -1588,6 +1592,15 @@ class GPUModelRunner(ModelRunnerBase):
             if self.cudagraph_only_prefill
             else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
+
+        # Use static graph splitting to isolate incompatible operators from the CUDA Graph. This splits the graph into subgraphs, allowing Prefill, Decode, and Mixed Batches to run compatible parts via CUDA Graph.
+        if (
+            hasattr(self, "graph_opt_config")
+            and self.use_cudagraph
+            and self.graph_opt_config.graph_opt_level > 0
+            and not self.graph_opt_config.full_cuda_graph
+        ):
+            self.forward_meta.step_use_cudagraph = True
 
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
@@ -2025,9 +2038,10 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
+                # fallback paddleformers use cuda graph need kwargs
                 model_output = self.model(
-                    self.forward_meta.ids_remove_padding,
-                    self.forward_meta,
+                    ids_remove_padding=self.forward_meta.ids_remove_padding,
+                    forward_meta=self.forward_meta,
                 )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
@@ -2326,8 +2340,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
         else:
             model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.forward_meta,
+                ids_remove_padding=self.forward_meta.ids_remove_padding,
+                forward_meta=self.forward_meta,
             )
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.

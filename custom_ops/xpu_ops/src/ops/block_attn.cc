@@ -87,6 +87,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
     const bool use_neox_rotary_style,
@@ -197,6 +199,16 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           const_cast<float*>(v_scales_inv.get().data<float>()));
     }
   }
+  const float *q_norm_weight_data{nullptr}, *k_norm_weight_data{nullptr};
+  if (q_norm_weight) {
+    q_norm_weight_data = q_norm_weight.get().data<float>();
+  }
+  if (k_norm_weight) {
+    k_norm_weight_data = k_norm_weight.get().data<float>();
+  }
+  PD_CHECK(!(pos_emb_type == "NEOX" && q_norm_weight_data != nullptr),
+           "split_neox_cache_kv_encoder not support q/k norm weight");
+
   int ret = 0;
   if (enc_batch > 0) {
     xftblock::TransformerParam param;
@@ -383,6 +395,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           quant_v_scale,  // intx_v_pc_scale
           quant_k_zp,     // intx_k_pc_zero
           quant_v_zp,     // intx_v_pc_zero
+          q_norm_weight_data,
+          k_norm_weight_data,
           rope_3d);
       PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_encoder failed.");
     }
@@ -632,6 +646,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             quant_v_scale,  // intx_v_pc_scale
             quant_k_zp,     // intx_k_pc_zero
             quant_v_zp,     // intx_v_pc_zero
+            q_norm_weight_data,
+            k_norm_weight_data,
             rope_3d);
         PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_encoder failed.");
       }
@@ -858,7 +874,9 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             reinterpret_cast<D_Scale*>(quant_v_scale),  // v_cache_scale_inv
             reinterpret_cast<D_Scale*>(quant_k_zp),     // k_cache_zp
             reinterpret_cast<D_Scale*>(quant_v_zp),     // v_cache_zp
-            is_cache_int8,                              // bool b_c8_pc
+            q_norm_weight_data,
+            k_norm_weight_data,
+            is_cache_int8,  // bool b_c8_pc
             rope_3d);
         PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_decoder failed.");
       }
@@ -1003,6 +1021,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
     const bool use_neox_rotary_style,
@@ -1032,6 +1052,8 @@ std::vector<paddle::Tensor> BlockAttn(
                                      v_zeros,                       \
                                      shift,                         \
                                      smooth,                        \
+                                     q_norm_weight,                 \
+                                     k_norm_weight,                 \
                                      kv_signal_data_cpu,            \
                                      cachekv_signal_thread_cpu,     \
                                      use_neox_rotary_style,         \
@@ -1098,6 +1120,8 @@ PD_BUILD_STATIC_OP(block_attn)
              paddle::Optional("v_zeros"),
              paddle::Optional("shift"),
              paddle::Optional("smooth"),
+             paddle::Optional("q_norm_weight"),
+             paddle::Optional("k_norm_weight"),
              paddle::Optional("kv_signal_data_cpu"),
              paddle::Optional("cachekv_signal_thread_cpu")})
     .Attrs({"use_neox_rotary_style:bool", "rope_3d:bool"})

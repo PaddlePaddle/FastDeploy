@@ -32,11 +32,11 @@ import openai
 import pytest
 from conftest import (
     cleanup_resources,
+    download_and_build_xdeepep,
     get_model_path,
     get_port_num,
-    get_xpu_id,
-    restore_pd_env,
-    setup_pd_env,
+    restore_pd_ep_env,
+    setup_pd_ep_env,
     stop_processes,
 )
 
@@ -58,7 +58,7 @@ def wait_for_pd_health_check(port_p, port_d, timeout=600, interval=10):
     endpoint_d = f"http://0.0.0.0:{port_d}/health"
     start_time = time.time()
 
-    print(f"开始PD分离服务健康检查,最长等待时间:{timeout}秒")
+    print(f"开始PD分离+EP4TP4服务健康检查,最长等待时间:{timeout}秒")
 
     while True:
         elapsed = int(time.time() - start_time)
@@ -129,13 +129,15 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     Returns:
         bool: 服务是否启动成功
     """
-    xpu_id = get_xpu_id()
 
     # 停止旧进程
     stop_processes()
 
     # 清理资源
     cleanup_resources()
+
+    if not download_and_build_xdeepep():
+        pytest.fail("xDeepEP下载或编译失败")
 
     # 清理并创建日志目录
     for log_dir in ["log_router", "log_prefill", "log_decode"]:
@@ -165,27 +167,23 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     print("启动Prefill节点...")
     prefill_env = os.environ.copy()
     prefill_env["FD_LOG_DIR"] = "log_prefill"
-    if xpu_id == 0:
-        prefill_env["XPU_VISIBLE_DEVICES"] = "0,1"
-    else:
-        prefill_env["XPU_VISIBLE_DEVICES"] = "4,5"
+    prefill_env["XPU_VISIBLE_DEVICES"] = "0,1,2,3"
 
     prefill_cmd = [
         "python",
         "-m",
-        "fastdeploy.entrypoints.openai.api_server",
-        "--model",
-        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
+        "fastdeploy.entrypoints.openai.multi_api_server",
         "--port",
         str(port_num + 11),
-        "--metrics-port",
-        str(port_num + 12),
-        "--engine-worker-queue-port",
-        str(port_num + 13),
-        "--cache-queue-port",
-        str(port_num + 14),
+        "--num-servers",
+        "1",
+        "--args",
+        "--model",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--tensor-parallel-size",
-        "2",
+        "4",
+        "--data-parallel-size",
+        "1",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -196,10 +194,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "prefill",
         "--cache-transfer-protocol",
         "rdma",
-        "--rdma-comm-ports",
-        f"{port_num + 15},{port_num + 16}",
-        "--pd-comm-port",
-        str(port_num + 19),
+        "--enable-expert-parallel",
+        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -214,27 +210,23 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     print("启动Decode节点...")
     decode_env = os.environ.copy()
     decode_env["FD_LOG_DIR"] = "log_decode"
-    if xpu_id == 0:
-        decode_env["XPU_VISIBLE_DEVICES"] = "2,3"
-    else:
-        decode_env["XPU_VISIBLE_DEVICES"] = "6,7"
+    decode_env["XPU_VISIBLE_DEVICES"] = "4,5,6,7"
 
     decode_cmd = [
         "python",
         "-m",
-        "fastdeploy.entrypoints.openai.api_server",
-        "--model",
-        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
+        "fastdeploy.entrypoints.openai.multi_api_server",
         "--port",
         str(port_num + 21),
-        "--metrics-port",
-        str(port_num + 22),
-        "--engine-worker-queue-port",
-        str(port_num + 23),
-        "--cache-queue-port",
-        str(port_num + 24),
+        "--num-servers",
+        "1",
+        "--args",
+        "--model",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--tensor-parallel-size",
-        "2",
+        "4",
+        "--data-parallel-size",
+        "1",
         "--max-model-len",
         "32768",
         "--max-num-seqs",
@@ -245,10 +237,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "decode",
         "--cache-transfer-protocol",
         "rdma",
-        "--rdma-comm-ports",
-        f"{port_num + 25},{port_num + 26}",
-        "--pd-comm-port",
-        str(port_num + 29),
+        "--enable-expert-parallel",
+        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -278,10 +268,10 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 def test_pd_separation():
     """PD分离部署模式测试"""
 
-    print("\n============================开始PD分离测试!============================")
+    print("\n============================开始PD分离+EP4TP4测试!============================")
 
     # 设置PD分离环境变量
-    original_env = setup_pd_env()
+    original_env = setup_pd_ep_env()
 
     # 检查RDMA网卡是否配置成功
     rdma_nics = os.environ.get("KVCACHE_RDMA_NICS", "")
@@ -334,7 +324,7 @@ def test_pd_separation():
         stop_processes()
 
         # 恢复环境变量
-        restore_pd_env(original_env)
+        restore_pd_ep_env(original_env)
 
 
 if __name__ == "__main__":
