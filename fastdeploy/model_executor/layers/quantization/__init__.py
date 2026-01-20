@@ -33,7 +33,7 @@ QUANTIZATION_METHODS: List[str] = [
     "mix_quant",
     "tensor_wise_fp8",
     "kvcache",
-    # "modelopt_fp4",
+    "modelopt_fp4",
 ]
 
 
@@ -154,7 +154,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .block_wise_fp8 import BlockWiseFP8Config
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
-    # from .nvfp4 import ModelOptNvFp4Config
+    from .nvfp4 import ModelOptNvFp4Config
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -176,7 +176,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
-        # "modelopt_fp4": ModelOptNvFp4Config,
+        "modelopt_fp4": ModelOptNvFp4Config,
     }
 
     return method_to_config[quantization]
