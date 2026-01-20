@@ -1677,6 +1677,19 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_config.model_config.enable_mm = False
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = False
+        mock_config.cache_config = Mock()
+        mock_config.cache_config.swap_space = False
+        mock_config.cache_config.kvcache_storage_backend = None
+        mock_config.parallel_config = Mock()
+        mock_config.parallel_config.tensor_parallel_rank = 0
+        mock_config.parallel_config.local_data_parallel_id = 0
+        mock_config.scheduler_config = Mock()
+        mock_config.scheduler_config.splitwise_role = None
+        mock_config.limit_mm_per_prompt = 5
+        mock_config.mm_processor_kwargs = {}
+        mock_config.structured_outputs_config = Mock()
+        mock_config.structured_outputs_config.reasoning_parser = None
+        mock_config.tool_parser = None
 
         with (
             patch("fastdeploy.entrypoints.engine_client.InputPreprocessor") as mock_processor_class,
@@ -1698,18 +1711,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
             mock_config.model_config.max_model_len = 2048
             mock_config.model_config.enable_logprob = True
-            mock_config.cache_config.enable_prefix_caching = False
-            mock_config.cache_config.max_processor_cache = 0
-            mock_config.cache_config.swap_space = False  # Ensure cache_transfer is False
-            mock_config.cache_config.kvcache_storage_backend = None
             mock_config.parallel_config.tensor_parallel_size = 16  # > 8 (max_chips_per_node)
-            mock_config.parallel_config.tensor_parallel_rank = 0
-            mock_config.parallel_config.local_data_parallel_id = 0
-            mock_config.scheduler_config.splitwise_role = None
-            mock_config.limit_mm_per_prompt = 5
-            mock_config.mm_processor_kwargs = {}
-            mock_config.structured_outputs_config.reasoning_parser = None
-            mock_config.tool_parser = None
 
             client = EngineClient(
                 pid=5678,
@@ -1731,6 +1733,19 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_config.eplb_config.redundant_expert_api_user = "test_user"
         mock_config.eplb_config.redundant_expert_api_password = "test_pass"
         mock_config.eplb_config.redundant_expert_ip_shm_size = 1024
+        mock_config.cache_config = Mock()
+        mock_config.cache_config.swap_space = False
+        mock_config.cache_config.kvcache_storage_backend = None
+        mock_config.parallel_config = Mock()
+        mock_config.parallel_config.tensor_parallel_rank = 0
+        mock_config.parallel_config.local_data_parallel_id = 0
+        mock_config.scheduler_config = Mock()
+        mock_config.scheduler_config.splitwise_role = None
+        mock_config.limit_mm_per_prompt = 5
+        mock_config.mm_processor_kwargs = {}
+        mock_config.structured_outputs_config = Mock()
+        mock_config.structured_outputs_config.reasoning_parser = None
+        mock_config.tool_parser = None
 
         with (
             patch("fastdeploy.entrypoints.engine_client.InputPreprocessor") as mock_processor_class,
@@ -1752,18 +1767,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
             mock_config.model_config.max_model_len = 2048
             mock_config.model_config.enable_logprob = True
-            mock_config.cache_config.enable_prefix_caching = False
-            mock_config.cache_config.max_processor_cache = 0
-            mock_config.cache_config.swap_space = False  # Ensure cache_transfer is False
-            mock_config.cache_config.kvcache_storage_backend = None
             mock_config.parallel_config.tensor_parallel_size = 1
-            mock_config.parallel_config.tensor_parallel_rank = 0  # Rank 0 should init EPLB
-            mock_config.parallel_config.local_data_parallel_id = 0
-            mock_config.scheduler_config.splitwise_role = None
-            mock_config.limit_mm_per_prompt = 5
-            mock_config.mm_processor_kwargs = {}
-            mock_config.structured_outputs_config.reasoning_parser = None
-            mock_config.tool_parser = None
 
             client = EngineClient(
                 pid=5678,
