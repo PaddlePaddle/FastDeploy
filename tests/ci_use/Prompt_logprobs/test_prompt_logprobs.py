@@ -368,6 +368,38 @@ def test_unstream_with_prompt_logprobs_chunk():
                 assert top[i]["decoded_token"].encode("utf-8")
 
 
+def test_unstream_with_prompt_logprobs_chunk_chat():
+    """
+    测试chunk切分的能力是否正常
+    """
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "user", "content": "!hello! " * (8 * 1024)},
+        ],
+        "max_tokens": 1,
+        "prompt_logprobs": 1,
+    }
+    # 构建请求并发送
+    response = send_request(URL, data)
+    resp_json = response.json()
+
+    # 校验返回内容与概率信息
+    assert resp_json["choices"][0]["message"]["content"] is not None
+    # assert resp_json["usage"]["prompt_tokens"] == 7
+    assert resp_json["usage"]["completion_tokens"] == 1
+    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
+        if i == 0:
+            assert prompt_logprobs is None
+        else:
+            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
+            assert top[0]["rank"] == 1
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
+            for i in range(len(top)):
+                assert top[i]["logprob"] < 0
+                assert top[i]["decoded_token"].encode("utf-8")
+
+
 def test_unstream_with_prompt_logprobs_none_completions():
     """
     测试completions非流式响应prompt_logprobs字段为0时返回结果是否正确
@@ -417,13 +449,13 @@ def test_stream_with_prompt_logprobs_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        # "return_token_ids":True
+        "return_token_ids": True,
     }
 
     response = send_request(COMPLETIONS_URL, data)
 
     result_chunk = {}
-    first_packet = True
+    # first_packet = True
     for line in response.iter_lines():
         if not line:
             continue
@@ -432,9 +464,9 @@ def test_stream_with_prompt_logprobs_completions():
             break
 
         result_chunk = json.loads(decoded)
-        # completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
-        # if completion_token_ids:
-        if not first_packet:
+        completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
+        if completion_token_ids:
+            # if not first_packet:
             assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
@@ -442,12 +474,12 @@ def test_stream_with_prompt_logprobs_completions():
                     assert prompt_logprobs is None
                 else:
                     top = list(prompt_logprobs.values())
-                    # token_id = int(list(prompt_logprobs.keys())[0])
+                    token_id = int(list(prompt_logprobs.keys())[0])
                     assert top[0]["decoded_token"] is not None
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
-                    # assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
-            first_packet = False
+                    assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
+            # first_packet = False
 
 
 def test_unstream_with_prompt_logprobs_list_completions():

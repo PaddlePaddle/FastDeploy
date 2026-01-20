@@ -158,11 +158,36 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
+        os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
+    ),
+    # Whether to collect user information
+    "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+    # Usage stats server url
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
+    # Usage stats source
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+    # Usage stats config root
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
     "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
     "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
     "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
     "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
+    # Reserve output blocks for decoding requests when schedule new prefill requests
+    "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
+    ),
+    "FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: float(
+        os.getenv("FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0.025")
+    ),
+    "FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0")
+    ),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 }

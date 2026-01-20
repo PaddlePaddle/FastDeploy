@@ -44,6 +44,7 @@ if current_platform.is_xpu():
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
+        speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_reschedule,
@@ -327,7 +328,7 @@ def xpu_post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
@@ -373,8 +374,9 @@ def xpu_post_process_normal(
                 save_output(
                     sampled_token_ids,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
-                    False,  # use_ep
+                    save_each_rank,
                 )
             else:
                 if save_output_topk is None:
@@ -388,14 +390,30 @@ def xpu_post_process_normal(
                     sampler_output.logprobs_tensors.logprobs,
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                 )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def xpu_post_process_specualate(
     model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
 ):
     """"""
+
+    # TODO(chenhuan09): support model_output.next_tokens,
+    speculate_set_stop_value_multi_seqs(
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.pre_ids,
+        model_output.step_idx,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.stop_token_ids,
+        model_output.stop_seqs_len,
+        model_output.eos_token_id,
+    )
+
     speculate_update_v3(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
