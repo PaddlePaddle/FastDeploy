@@ -39,6 +39,7 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                   bool used_in_ep_low_latency,
                   const int estimate_total_token_nums,
                   const int hadamard_block_size,
+                  const int max_tokens_per_expert,
                   const std::string& activation) {
   using namespace phi;
   typedef PDTraits<T> traits_;
@@ -214,8 +215,10 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         weight_scale_tensor.data<float>(),
         reinterpret_cast<NvType*>(fc1_out),
         used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
-        used_in_ep_low_latency ? num_max_tokens_per_expert
-                               : permute_input.dims()[0],
+        used_in_ep_low_latency
+            ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert
+                                           : max_tokens_per_expert)
+            : permute_input.dims()[0],
         num_experts,
         inter_size,
         hidden_size,
@@ -426,8 +429,10 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         weight_scale_tensor.data<float>(),
         reinterpret_cast<NvType*>(ffn_out_data),
         used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
-        used_in_ep_low_latency ? num_max_tokens_per_expert
-                               : act_out_tensor.dims()[0],
+        used_in_ep_low_latency
+            ? (max_tokens_per_expert == -1 ? num_max_tokens_per_expert
+                                           : max_tokens_per_expert)
+            : act_out_tensor.dims()[0],
         num_experts,
         hidden_size,
         inter_size / 2,
@@ -468,6 +473,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation) {
   const auto t_type = (quant_method == "w4a8")
                           ? up_gate_proj_scale.get().dtype()
@@ -494,6 +500,7 @@ paddle::Tensor MoeExpertFFNFunc(
                                                used_in_ep_low_latency,
                                                estimate_total_token_nums,
                                                hadamard_block_size,
+                                               max_tokens_per_expert,
                                                activation);
       break;
     case paddle::DataType::FLOAT16:
@@ -512,6 +519,7 @@ paddle::Tensor MoeExpertFFNFunc(
                                               used_in_ep_low_latency,
                                               estimate_total_token_nums,
                                               hadamard_block_size,
+                                              max_tokens_per_expert,
                                               activation);
       break;
     default:
@@ -535,6 +543,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation) {
   return {MoeExpertFFNFunc(permute_input,
                            tokens_expert_prefix_sum,
@@ -550,6 +559,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
                            used_in_ep_low_latency,
                            estimate_total_token_nums,
                            hadamard_block_size,
+                           max_tokens_per_expert,
                            activation)};
 }
 
@@ -568,6 +578,7 @@ std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation) {
   return {permute_input_shape};
 }
@@ -586,6 +597,7 @@ std::vector<paddle::DataType> MoeExpertFFNInferDtype(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation) {
   if (quant_method == "w4a8" || quant_method == "w4afp8") {
     return {up_gate_proj_scale_dtype.get()};
@@ -666,6 +678,7 @@ PD_BUILD_STATIC_OP(moe_expert_ffn)
             "used_in_ep_low_latency:bool",
             "estimate_total_token_nums:int",
             "hadamard_block_size:int",
+            "max_tokens_per_expert:int",
             "activation:std::string"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFN))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertFFNInferShape))

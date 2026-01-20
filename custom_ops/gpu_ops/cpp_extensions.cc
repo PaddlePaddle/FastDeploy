@@ -409,6 +409,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(
