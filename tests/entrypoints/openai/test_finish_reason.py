@@ -109,11 +109,12 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             "num_cached_tokens": 0,
             "top_logprobs": None,
             "draft_top_logprobs": None,
-            "tool_call": None,
+            "tool_calls": None,
+            "skipped": False,
         }
 
         if tool_call:
-            outputs["tool_call"] = [
+            outputs["tool_calls"] = [
                 {"index": 0, "type": "function", "function": {"name": tool_call["name"], "arguments": json.dumps({})}}
             ]
 

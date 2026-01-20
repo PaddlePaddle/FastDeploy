@@ -243,7 +243,7 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertIn("reasoning_token_num", outputs)
         self.assertGreaterEqual(outputs["reasoning_token_num"], 0)
 
-        self.assertIn("tool_call", outputs)
+        self.assertIn("tool_calls", outputs)
 
         self.assertNotIn("req-1", proc.decode_status)
         self.assertNotIn("req-1", proc.tool_parser_dict)
@@ -349,8 +349,8 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         result = proc.process_response_dict_normal(resp, enable_thinking=False, include_stop_str_in_output=False)
 
-        self.assertIn("tool_call", result["outputs"])
-        self.assertEqual(result["outputs"]["tool_call"][0]["name"], "fake_tool")
+        self.assertIn("tool_calls", result["outputs"])
+        self.assertEqual(result["outputs"]["tool_calls"][0]["name"], "fake_tool")
 
 
 if __name__ == "__main__":
