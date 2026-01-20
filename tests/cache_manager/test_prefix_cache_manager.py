@@ -14,19 +14,30 @@
 
 import sys
 import threading
+import time
 import types
 import unittest
+from collections import defaultdict
+from concurrent.futures import Future
+from dataclasses import asdict
 from functools import partial
+from threading import Event
 from types import SimpleNamespace
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import paddle
 import pytest
 
 # Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
-from fastdeploy.inter_communicator.ipc_signal_const import PrefixTreeStatus
+from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig
+from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.engine.request import ImagePosition
+from fastdeploy.inter_communicator import PrefixTreeStatus
+from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_hash_str
 
 
@@ -61,6 +72,89 @@ class _DummyMainMetrics:
         if name not in self.metrics:
             self.metrics[name] = _DummyMetric()
         return self.metrics[name]
+
+
+# Dummy classes for additional tests
+class DummySpeculativeConfig:
+    method = None
+
+    def to_json_string(self):
+        return "{}"
+
+
+class DummyRequest:
+    def __init__(
+        self,
+        request_id,
+        prompt_token_ids,
+        output_token_ids=None,
+        multimodal_inputs=None,
+        block_tables=None,
+    ):
+        self.request_id = request_id
+        self.prompt_token_ids = prompt_token_ids
+        self.output_token_ids = output_token_ids or []
+        self.multimodal_inputs = multimodal_inputs
+        self.block_tables = block_tables or []
+        self.num_total_tokens = len(self.prompt_token_ids) + len(self.output_token_ids)
+
+
+def make_prefix_cache_manager(
+    max_num_seqs=2,
+    num_gpu_blocks_override=12,
+    num_cpu_blocks=0,
+    block_size=4,
+    enable_mm=False,
+    disable_chunked_mm_input=False,
+    splitwise_role="mixed",
+):
+    max_model_len = max(16, block_size * 4)
+    engine_args = EngineArgs(
+        max_num_seqs=max_num_seqs,
+        num_gpu_blocks_override=num_gpu_blocks_override,
+        block_size=block_size,
+        max_model_len=max_model_len,
+    )
+    args = asdict(engine_args)
+    cache_cfg = CacheConfig(args)
+    cache_cfg.bytes_per_layer_per_block = 1
+    cache_cfg.cache_queue_port = 12345
+    cache_cfg.cache_transfer_protocol = "shm"
+    cache_cfg.rdma_comm_ports = None
+    cache_cfg.num_cpu_blocks = num_cpu_blocks
+    cache_cfg.enable_hierarchical_cache = num_cpu_blocks > 0
+    cache_cfg.enable_prefix_caching = False
+    cache_cfg.disable_chunked_mm_input = disable_chunked_mm_input
+
+    model_cfg = SimpleNamespace(
+        enable_mm=enable_mm,
+        max_model_len=max_model_len,
+        num_hidden_layers=2,
+        num_attention_heads=8,
+        num_key_value_heads=8,
+        head_dim=16,
+    )
+    model_cfg.print = lambda *args, **kwargs: None
+    cache_cfg.model_cfg = model_cfg
+
+    parallel_cfg = ParallelConfig(args)
+    scheduler_cfg = SchedulerConfig(args)
+    graph_opt_cfg = engine_args.create_graph_optimization_config()
+    speculative_cfg = DummySpeculativeConfig()
+    fd_config = FDConfig(
+        model_config=model_cfg,
+        cache_config=cache_cfg,
+        parallel_config=parallel_cfg,
+        graph_opt_config=graph_opt_cfg,
+        speculative_config=speculative_cfg,
+        scheduler_config=scheduler_cfg,
+    )
+    fd_config.postprocess()
+    return PrefixCacheManager(
+        config=fd_config,
+        tensor_parallel_size=parallel_cfg.tensor_parallel_size,
+        splitwise_role=splitwise_role,
+    )
 
 
 # IPC signal stub that mirrors the real object's surface area.
@@ -219,6 +313,765 @@ def _make_block_node(manager, node_id, input_ids, *, block_size=2, parent=None, 
     )
     parent.children[block_hash] = node
     return node
+
+
+# Additional test cases from test1.py
+class TestPrefixCacheManagerBasics(unittest.TestCase):
+    def test_update_config_and_allocate_blocks(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        new_cache_cfg = manager.cache_config
+        new_cache_cfg.total_block_num = 4
+        manager.update_cache_config(new_cache_cfg)
+
+        allocated = manager.allocate_gpu_blocks(2)
+        self.assertEqual(len(allocated), 2)
+        self.assertEqual(len(manager.gpu_free_block_list), 2)
+
+        manager.recycle_gpu_blocks(allocated)
+        self.assertEqual(len(manager.gpu_free_block_list), 4)
+
+        cpu_allocated = manager.allocate_cpu_blocks(1)
+        self.assertEqual(len(cpu_allocated), 1)
+        manager.recycle_cpu_blocks(cpu_allocated)
+        self.assertEqual(len(manager.cpu_free_block_list), 2)
+
+    def test_can_allocate_and_check_validity(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        manager.gpu_free_block_list = [0]
+        manager.cache_config.enable_prefix_caching = False
+        self.assertFalse(manager.can_allocate_gpu_blocks(2))
+        with self.assertRaises(Exception):
+            manager._check_validity("req", match_gpu_blocks_num=0, expected_block_num=3)
+
+    def test_issue_and_sync_swap_task(self):
+        manager = make_prefix_cache_manager()
+
+        class DummyQueue:
+            def __init__(self):
+                self.payload = None
+
+            def put_transfer_task(self, payload):
+                self.payload = payload
+
+        manager.cache_task_queue = DummyQueue()
+        transfer_task_id = "transfer-1"
+        manager.issue_swap_task(
+            transfer_task_id,
+            swap_node_ids=[1],
+            gpu_block_ids=[2],
+            cpu_block_ids=[3],
+            event_type=CacheStatus.SWAP2CPU,
+            is_sync=False,
+        )
+        self.assertIn(transfer_task_id, manager.task_swapping_event)
+        manager.task_swapping_event[transfer_task_id].set()
+        manager.sync_swap_task(transfer_task_id)
+        self.assertNotIn(transfer_task_id, manager.task_swapping_event)
+
+    def test_prepare_cache_and_required_blocks(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        self.assertEqual(manager.get_required_block_num(5, 4), 2)
+        manager.cache_task_queue = mock.Mock()
+        with mock.patch.object(manager, "issue_swap_task") as issue_swap_task:
+            gpu_recv, gpu_extra = manager._prepare_cache(
+                req_id="req",
+                input_ids=[1, 2, 3, 4],
+                block_size=4,
+                expected_block_num=2,
+                match_gpu_block_ids=[],
+                match_cpu_block_ids=[0],
+                match_node_ids=[1],
+            )
+        issue_swap_task.assert_called_once()
+        self.assertEqual(len(gpu_recv), 1)
+        self.assertEqual(len(gpu_extra), 1)
+
+    def test_get_block_hash_extra_keys_and_hash(self):
+        manager = make_prefix_cache_manager(enable_mm=True)
+        paddle_tensor = paddle.to_tensor([1, 2, 3, 4], dtype="int64")
+        input_ids = paddle_tensor.numpy().tolist()
+
+        mm_inputs = {
+            "mm_positions": [ImagePosition(offset=6, length=3)],
+            "mm_hashes": ["img-1"],
+        }
+        request = DummyRequest("req-1", input_ids, multimodal_inputs=mm_inputs)
+
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 0, 4, 0)
+        self.assertEqual(mm_idx, 0)
+        self.assertEqual(hash_keys, [])
+
+        request.multimodal_inputs["mm_positions"][0] = ImagePosition(offset=2, length=3)
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 0, 4, 0)
+        self.assertEqual(hash_keys, ["img-1"])
+
+        hash_a = manager.hash_block_features(input_ids, hash_keys)
+        hash_b = manager.hash_block_features(input_ids, hash_keys)
+        self.assertEqual(hash_a, hash_b)
+
+    def test_get_block_hash_extra_keys_edge_cases(self):
+        manager = make_prefix_cache_manager(enable_mm=True)
+        request = DummyRequest("req", [1, 2, 3, 4], multimodal_inputs=None)
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 0, 4, 0)
+        self.assertEqual(mm_idx, 0)
+        self.assertEqual(hash_keys, [])
+
+        mm_inputs = {
+            "mm_positions": [ImagePosition(offset=0, length=2), ImagePosition(offset=6, length=2)],
+            "mm_hashes": ["h1", "h2"],
+        }
+        request.multimodal_inputs = mm_inputs
+        request.num_total_tokens = 12
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 9, 12, 0)
+        self.assertEqual(mm_idx, 0)
+        self.assertEqual(hash_keys, [])
+
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 4, 6, 0)
+        self.assertEqual(mm_idx, 1)
+        self.assertEqual(hash_keys, [])
+
+        mm_idx, hash_keys = manager.get_block_hash_extra_keys(request, 0, 10, 0)
+        self.assertEqual(mm_idx, 1)
+        self.assertEqual(hash_keys, ["h1", "h2"])
+
+    def test_build_path_for_full_and_empty_left_input(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=8, block_size=4)
+        gpu_block_ids = [0, 1, 2, 3]
+        leaf_node = manager.build_path(
+            req_id="req-empty",
+            current_time=time.time(),
+            input_ids=[1, 2],
+            left_input_ids=[],
+            gpu_block_ids=gpu_block_ids,
+            block_size=4,
+            last_node=manager.radix_tree_root,
+            reverved_dec_block_num=2,
+        )
+        self.assertEqual(leaf_node, manager.radix_tree_root)
+        self.assertEqual(leaf_node.reverved_dec_block_ids, [0, 1])
+
+        gpu_block_ids = [4, 5, 6, 7]
+        leaf_node = manager.build_path(
+            req_id="req-partial",
+            current_time=time.time(),
+            input_ids=[1, 2, 3, 4, 5, 6],
+            left_input_ids=[1, 2, 3, 4, 5, 6],
+            gpu_block_ids=gpu_block_ids,
+            block_size=4,
+            last_node=manager.radix_tree_root,
+            reverved_dec_block_num=1,
+        )
+        self.assertEqual(leaf_node.reverved_dec_block_ids, [5, 6])
+        self.assertIn(leaf_node.node_id, manager.node_map)
+
+        gpu_block_ids = [8, 9]
+        leaf_node = manager.build_path(
+            req_id="req-unfilled",
+            current_time=time.time(),
+            input_ids=[1, 2],
+            left_input_ids=[1, 2],
+            gpu_block_ids=gpu_block_ids,
+            block_size=4,
+            last_node=manager.radix_tree_root,
+            reverved_dec_block_num=0,
+        )
+        self.assertEqual(leaf_node, manager.radix_tree_root)
+        self.assertEqual(manager.unfilled_req_block_map["req-unfilled"], [8])
+
+    def test_match_block_cache_status_transitions(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, block_size=4)
+        input_ids = [1, 2, 3, 4]
+        hash_value = manager.cal_block_hash(input_ids)
+
+        node = BlockNode(1, input_ids, hash_value, 1, 0, 4, hash_value, time.time(), parent=manager.radix_tree_root)
+        manager.node_map[node.node_id] = node
+        manager.radix_tree_root.children[hash_value] = node
+        manager.gpu_lru_leaf_set.add(node)
+        manager.gpu_lru_leaf_heap.append(node)
+
+        match_gpu, match_cpu, swap_ids, _, gpu_tokens, cpu_tokens = manager.match_block("req-gpu", input_ids, 4)
+        self.assertEqual(match_gpu, [0])
+        self.assertEqual(match_cpu, [])
+        self.assertEqual(swap_ids, [])
+        self.assertEqual(gpu_tokens, 4)
+        self.assertEqual(cpu_tokens, 0)
+
+        node.cache_status = CacheStatus.SWAP2CPU
+        match_gpu, match_cpu, swap_ids, _, gpu_tokens, cpu_tokens = manager.match_block("req-swap", input_ids, 4)
+        self.assertEqual(match_gpu, [0])
+        self.assertEqual(match_cpu, [])
+        self.assertEqual(swap_ids, [])
+        self.assertEqual(node.cache_status, CacheStatus.GPU)
+
+        node.cache_status = CacheStatus.CPU
+        manager.cpu_lru_leaf_set.add(node)
+        manager.cpu_lru_leaf_heap.append(node)
+        match_gpu, match_cpu, swap_ids, _, gpu_tokens, cpu_tokens = manager.match_block("req-cpu", input_ids, 4)
+        self.assertEqual(match_gpu, [])
+        self.assertEqual(match_cpu, [0])
+        self.assertEqual(swap_ids, [node.node_id])
+        self.assertEqual(node.cache_status, CacheStatus.SWAP2GPU)
+
+        match_gpu, match_cpu, swap_ids, _, gpu_tokens, cpu_tokens = manager.match_block("req-partial", [1, 2], 4)
+        self.assertEqual(match_gpu, [])
+        self.assertEqual(match_cpu, [])
+        self.assertEqual(swap_ids, [])
+
+    def test_mm_match_block_with_chunk_revert(self):
+        manager = make_prefix_cache_manager(
+            num_gpu_blocks_override=8,
+            block_size=4,
+            enable_mm=True,
+            disable_chunked_mm_input=True,
+        )
+        prompt_ids = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int64)
+        mm_inputs = {
+            "mm_positions": [ImagePosition(offset=6, length=4)],
+            "mm_hashes": ["img-1"],
+        }
+        request = DummyRequest("req-mm", prompt_ids, multimodal_inputs=mm_inputs)
+
+        hash_first = manager.hash_block_features(prompt_ids[:4].tolist(), [])
+        hash_second = manager.hash_block_features(prompt_ids[4:8].tolist(), ["img-1"])
+
+        first_node = BlockNode(
+            1, prompt_ids, hash_first, 1, 0, 4, hash_first, time.time(), parent=manager.radix_tree_root
+        )
+        first_node.cache_status = CacheStatus.SWAP2CPU
+        second_node = BlockNode(2, prompt_ids, hash_second, 2, 1, 4, hash_second, time.time(), parent=first_node)
+        second_node.cache_status = CacheStatus.CPU
+        manager.node_map[first_node.node_id] = first_node
+        manager.node_map[second_node.node_id] = second_node
+        manager.radix_tree_root.children[hash_first] = first_node
+        first_node.children[hash_second] = second_node
+        manager.gpu_lru_leaf_set.add(first_node)
+        manager.gpu_lru_leaf_heap.append(first_node)
+        manager.cpu_lru_leaf_set.add(second_node)
+        manager.cpu_lru_leaf_heap.append(second_node)
+
+        match_gpu, match_cpu, swap_ids, current_node, gpu_tokens, cpu_tokens = manager.mm_match_block(request, 4)
+        self.assertEqual(match_gpu, [0])
+        self.assertEqual(match_cpu, [1])
+        self.assertEqual(swap_ids, [second_node.node_id])
+        self.assertEqual(current_node, second_node)
+        self.assertEqual(gpu_tokens, 4)
+        self.assertEqual(cpu_tokens, 2)
+
+    def test_mm_match_block_partial_input(self):
+        manager = make_prefix_cache_manager(enable_mm=True)
+        request = DummyRequest("req-mm-short", [1, 2], multimodal_inputs=None)
+        match_gpu, match_cpu, swap_ids, current_node, gpu_tokens, cpu_tokens = manager.mm_match_block(request, 4)
+        self.assertEqual(match_gpu, [])
+        self.assertEqual(match_cpu, [])
+        self.assertEqual(swap_ids, [])
+        self.assertEqual(current_node, manager.radix_tree_root)
+        self.assertEqual(gpu_tokens, 0)
+        self.assertEqual(cpu_tokens, 0)
+
+    def test_is_chunked_mm_input_and_revert_blocks(self):
+        manager = make_prefix_cache_manager(enable_mm=True)
+        mm_inputs = {"mm_positions": [ImagePosition(offset=5, length=4)]}
+        is_chunked, idx = manager.is_chunked_mm_input(mm_inputs, 3)
+        self.assertFalse(is_chunked)
+        self.assertEqual(idx, 0)
+
+        mm_inputs = {
+            "mm_positions": [ImagePosition(offset=0, length=12)],
+            "mm_hashes": ["img"],
+        }
+        request = DummyRequest("req-revert", [1] * 8, multimodal_inputs=mm_inputs)
+        match_node_ids = [1, 2]
+        matche_nodes = [
+            BlockNode(1, [], 0, 1, 0, 4, "h1", time.time(), parent=manager.radix_tree_root),
+            BlockNode(2, [], 0, 2, 1, 4, "h2", time.time(), parent=manager.radix_tree_root),
+        ]
+        match_gpu_block_ids = [0, 1]
+        match_cpu_block_ids = []
+        gpu_match_token_num = 8
+        cpu_match_token_num = 0
+        swap_node_ids = [1, 2]
+        gpu_match_token_num, cpu_match_token_num, current_node = manager._revert_match_blocks(
+            request=request,
+            matched_token_num=8,
+            block_size=4,
+            chunk_idx=0,
+            match_node_ids=match_node_ids,
+            matche_nodes=matche_nodes,
+            match_gpu_block_ids=match_gpu_block_ids,
+            match_cpu_block_ids=match_cpu_block_ids,
+            gpu_match_token_num=gpu_match_token_num,
+            cpu_match_token_num=cpu_match_token_num,
+            swap_node_ids=swap_node_ids,
+        )
+        self.assertEqual(match_gpu_block_ids, [])
+        self.assertEqual(match_node_ids, [])
+        self.assertEqual(gpu_match_token_num, 0)
+        self.assertEqual(current_node, manager.radix_tree_root)
+
+    def test_mm_build_path_variants(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=8, block_size=4, enable_mm=True)
+        prompt_ids = paddle.to_tensor([1, 2, 3, 4], dtype="int64").numpy()
+        request_full = DummyRequest("req-mm-full", prompt_ids, block_tables=[0, 1])
+        leaf_node = manager.mm_build_path(
+            request=request_full,
+            num_computed_tokens=4,
+            block_size=4,
+            last_node=manager.radix_tree_root,
+            num_cached_tokens=0,
+        )
+        self.assertNotEqual(leaf_node, manager.radix_tree_root)
+        self.assertIn(leaf_node.node_id, manager.node_map)
+
+        prompt_ids = paddle.to_tensor([5, 6], dtype="int64").numpy()
+        request_unfilled = DummyRequest("req-mm-unfilled", prompt_ids, block_tables=[2])
+        leaf_node = manager.mm_build_path(
+            request=request_unfilled,
+            num_computed_tokens=4,
+            block_size=4,
+            last_node=manager.radix_tree_root,
+            num_cached_tokens=0,
+        )
+        self.assertEqual(leaf_node, manager.radix_tree_root)
+        self.assertEqual(manager.unfilled_req_block_map["req-mm-unfilled"], [2])
+
+    def test_request_block_ids_flow(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=10, block_size=4)
+        task = SimpleNamespace(prompt_token_ids=[1, 2, 3, 4, 5, 6], request_id="req-flow")
+
+        common_blocks, unique_blocks, hit_info = manager.request_block_ids(task, block_size=4, dec_token_num=4)
+        self.assertEqual(common_blocks, [])
+        self.assertGreater(len(unique_blocks), 0)
+        self.assertEqual(hit_info["gpu_cache_blocks"], 0)
+
+    def test_update_cache_blocks_and_request_match(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=8, block_size=4, enable_mm=True)
+        prompt_ids = paddle.to_tensor([1, 2, 3, 4], dtype="int64").numpy()
+        task = DummyRequest("req-update", prompt_ids, block_tables=[0, 1])
+        manager.cache_info[task.request_id] = (manager.radix_tree_root, 0)
+        manager.req_leaf_map[task.request_id] = manager.radix_tree_root
+        manager.leaf_req_map[manager.radix_tree_root].add(task.request_id)
+
+        manager.update_cache_blocks(task, block_size=4, num_computed_tokens=4)
+        self.assertEqual(task.cached_block_num, 1)
+        self.assertIn(task.request_id, manager.req_leaf_map)
+
+        match_task = DummyRequest("req-match", np.array([1, 2, 3, 4], dtype=np.int64))
+        match_task.output_token_ids = []
+        common_blocks, matched_token_num, hit_info = manager.request_match_blocks(match_task, block_size=4)
+        self.assertEqual(common_blocks, [0])
+        self.assertEqual(matched_token_num, 4)
+        self.assertEqual(hit_info["gpu_cache_blocks"], 1)
+
+    def test_release_block_ids_paths(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        node = BlockNode(
+            node_id=1,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=0,
+            token_num=4,
+            hash_value="hash-release",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=1,
+        )
+        node.req_id_set.add("req-release")
+        manager.node_map[node.node_id] = node
+        manager.radix_tree_root.children[node.hash_value] = node
+        manager.req_leaf_map["req-release"] = node
+        manager.leaf_req_map[node].add("req-release")
+        manager.cache_info["req-release"] = (node, 0)
+
+        task = SimpleNamespace(request_id="req-release")
+        manager.release_block_ids(task)
+        self.assertIn(node, manager.gpu_lru_leaf_set)
+
+        root_task = SimpleNamespace(request_id="req-root")
+        manager.req_leaf_map["req-root"] = manager.radix_tree_root
+        manager.unfilled_req_block_map["req-root"] = [1]
+        manager.release_block_ids(root_task)
+        self.assertNotIn("req-root", manager.unfilled_req_block_map)
+
+        async_manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        async_node = BlockNode(
+            node_id=2,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=1,
+            token_num=4,
+            hash_value="hash-async",
+            last_used_time=time.time(),
+            parent=async_manager.radix_tree_root,
+            shared_count=1,
+        )
+        async_node.req_id_set.add("req-async")
+        async_manager.node_map[async_node.node_id] = async_node
+        async_manager.radix_tree_root.children[async_node.hash_value] = async_node
+        async_manager.req_leaf_map["req-async"] = async_node
+        async_manager.leaf_req_map[async_node].add("req-async")
+        async_manager.cache_info["req-async"] = (async_node, 0)
+        future = async_manager.release_block_ids_async(SimpleNamespace(request_id="req-async"))
+        future.result(timeout=2)
+
+    def test_free_block_ids_and_cpu_free(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        node = BlockNode(
+            node_id=2,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=2,
+            token_num=4,
+            hash_value="hash-free",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+        )
+        manager.node_map[node.node_id] = node
+        manager.radix_tree_root.children[node.hash_value] = node
+        manager.gpu_lru_leaf_set.add(node)
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.free_block_ids_async(need_block_num=1)
+        manager.free_block_ids(need_block_num=1)
+        self.assertIsNone(manager.gpu_free_task_future)
+
+        cpu_manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        cpu_node = BlockNode(
+            node_id=3,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=0,
+            token_num=4,
+            hash_value="hash-cpu",
+            last_used_time=time.time(),
+            parent=cpu_manager.radix_tree_root,
+            shared_count=0,
+            cache_status=CacheStatus.CPU,
+        )
+        cpu_manager.node_map[cpu_node.node_id] = cpu_node
+        cpu_manager.radix_tree_root.children[cpu_node.hash_value] = cpu_node
+        cpu_manager.cpu_lru_leaf_set.add(cpu_node)
+        cpu_manager.cpu_lru_leaf_heap.append(cpu_node)
+        freed = cpu_manager.free_cpu_block_ids(1)
+        self.assertEqual(freed, 1)
+
+    def test_evict_cache_async_and_update_matched_info(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        manager.cpu_free_block_list = [0, 1]
+        hash_value_gpu_block_ids_map = {"hash": [2]}
+        hash_value_block_ids_map = {"hash": [2]}
+        hash_value_swap_node_ids_map = {"hash": [10]}
+        hash_value_input_ids_map = {"hash": [1, 2]}
+        hash_value_depth_map = {"hash": 1}
+        node = BlockNode(
+            node_id=7,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=2,
+            token_num=4,
+            hash_value="hash",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+            reverved_dec_block_ids=[3],
+        )
+        need_recycle_gpu_block_ids = []
+        hash_value_gpu_block_ids_map = defaultdict(list)
+        hash_value_swap_node_ids_map = defaultdict(list)
+        manager._handle_free_gpu_node_with_cpu(
+            node,
+            hash_value_input_ids_map,
+            hash_value_depth_map,
+            need_recycle_gpu_block_ids,
+            hash_value_gpu_block_ids_map,
+            hash_value_swap_node_ids_map,
+        )
+        self.assertEqual(node.reverved_dec_block_ids, [])
+        self.assertEqual(need_recycle_gpu_block_ids, [2])
+
+        hash_value_gpu_block_ids_map = {"hash": [2]}
+        hash_value_swap_node_ids_map = {"hash": [10]}
+        with mock.patch.object(manager, "issue_swap_task") as issue_swap_task:
+            manager._evict_cache_async(
+                None,
+                1,
+                hash_value_gpu_block_ids_map,
+                hash_value_block_ids_map,
+                hash_value_swap_node_ids_map,
+                hash_value_input_ids_map,
+                hash_value_depth_map,
+            )
+        issue_swap_task.assert_called_once()
+
+        node = BlockNode(
+            node_id=4,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=1,
+            token_num=4,
+            hash_value="hash-info",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+        )
+        manager._update_matched_node_info("req-info", node, current_time=time.time())
+        self.assertIn("req-info", node.req_id_set)
+
+    def test_handle_swap_result_edge_cases(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+        manager._handle_swap_result(None, 0, 0, CacheStatus.SWAP2CPU)
+        node = BlockNode(
+            node_id=6,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=1,
+            token_num=4,
+            hash_value="hash-unexpected",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+        )
+        manager.node_map[node.node_id] = node
+        manager._handle_swap_result(
+            node.node_id,
+            0,
+            0,
+            SimpleNamespace(value=999),
+        )
+
+    def test_recv_data_transfer_result(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        node = BlockNode(
+            node_id=5,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=1,
+            token_num=4,
+            hash_value="hash-recv",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+            cache_status=CacheStatus.SWAP2GPU,
+        )
+        manager.node_map[node.node_id] = node
+        transfer_id = "transfer-1"
+        manager.task_swapping_event[transfer_id] = Event()
+
+        class DummyQueue:
+            def __init__(self):
+                self.calls = 0
+
+            def get_transfer_done_signal(self):
+                self.calls += 1
+                if self.calls == 1:
+                    return ([node.node_id], [1], [0], CacheStatus.SWAP2GPU, transfer_id)
+                raise RuntimeError("stop")
+
+        manager.cache_task_queue = DummyQueue()
+        with self.assertRaises(RuntimeError):
+            manager.recv_data_transfer_result()
+        self.assertTrue(manager.task_swapping_event[transfer_id].is_set())
+
+    def test_reset_noop_with_empty_state(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        manager.reset()
+        self.assertEqual(manager.node_map, {})
+
+    def test_clear_prefix_cache_branches(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6)
+
+        class DummySignal:
+            def __init__(self, value):
+                self.value = value
+
+        manager.prefix_tree_status_signal = DummySignal([PrefixTreeStatus.CLEARING])
+        with (
+            mock.patch.object(manager, "reset") as reset_mock,
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=RuntimeError("stop")),
+        ):
+            with self.assertRaises(RuntimeError):
+                manager.clear_prefix_cache()
+        reset_mock.assert_called_once()
+        self.assertEqual(manager.prefix_tree_status_signal.value[0], PrefixTreeStatus.CLEARED)
+
+        manager.prefix_tree_status_signal = DummySignal([PrefixTreeStatus.UPDATING])
+        with mock.patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", side_effect=RuntimeError("stop")):
+            with self.assertRaises(RuntimeError):
+                manager.clear_prefix_cache()
+        self.assertEqual(manager.prefix_tree_status_signal.value[0], PrefixTreeStatus.NORMAL)
+
+    def test_free_nodes_directly_and_handle_swap_result(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        node = BlockNode(
+            node_id=1,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=1,
+            token_num=4,
+            hash_value="hash",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+            reverved_dec_block_ids=[2],
+        )
+        manager.node_map[node.node_id] = node
+        manager.radix_tree_root.children[node.hash_value] = node
+        manager.gpu_lru_leaf_set.add(node)
+        manager.gpu_lru_leaf_heap.append(node)
+
+        manager.free_nodes_directly(node)
+        self.assertNotIn(node.node_id, manager.node_map)
+        self.assertNotIn(node.hash_value, manager.radix_tree_root.children)
+        self.assertIn(1, manager.gpu_free_block_list)
+        self.assertIn(2, manager.gpu_free_block_list)
+
+        parent_node = BlockNode(
+            node_id=2,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=3,
+            token_num=4,
+            hash_value="hash-parent",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+        )
+        leaf_node = BlockNode(
+            node_id=3,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=2,
+            block_id=4,
+            token_num=4,
+            hash_value="hash-child",
+            last_used_time=time.time(),
+            parent=parent_node,
+            shared_count=0,
+        )
+        manager.node_map[parent_node.node_id] = parent_node
+        manager.node_map[leaf_node.node_id] = leaf_node
+        manager.radix_tree_root.children[parent_node.hash_value] = parent_node
+        parent_node.children[leaf_node.hash_value] = leaf_node
+        manager.gpu_lru_leaf_set.add(leaf_node)
+        manager.gpu_lru_leaf_heap.append(leaf_node)
+        manager.free_nodes_directly(leaf_node)
+        self.assertNotIn(parent_node.node_id, manager.node_map)
+        self.assertNotIn(parent_node.hash_value, manager.radix_tree_root.children)
+
+        gpu_node = BlockNode(
+            node_id=10,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=3,
+            token_num=4,
+            hash_value="hash-3",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+        )
+        manager.node_map[gpu_node.node_id] = gpu_node
+        manager._handle_swap_result(gpu_node.node_id, 3, 0, CacheStatus.SWAP2CPU)
+        self.assertIn(0, manager.cpu_free_block_list)
+        self.assertEqual(gpu_node.cache_status, CacheStatus.GPU)
+
+        cpu_node = BlockNode(
+            node_id=11,
+            input_ids=[1, 2, 3, 4],
+            input_hash_value=0,
+            depth=1,
+            block_id=4,
+            token_num=4,
+            hash_value="hash-4",
+            last_used_time=time.time(),
+            parent=manager.radix_tree_root,
+            shared_count=0,
+            cache_status=CacheStatus.SWAP2CPU,
+        )
+        manager.node_map[cpu_node.node_id] = cpu_node
+        manager._handle_swap_result(cpu_node.node_id, 4, 1, CacheStatus.SWAP2CPU)
+        self.assertEqual(cpu_node.cache_status, CacheStatus.CPU)
+        self.assertEqual(cpu_node.block_id, 1)
+        self.assertIn(cpu_node, manager.cpu_lru_leaf_set)
+
+        manager._handle_swap_result(cpu_node.node_id, 2, 0, CacheStatus.SWAP2GPU)
+        self.assertEqual(cpu_node.cache_status, CacheStatus.GPU)
+        self.assertIn(0, manager.cpu_free_block_list)
+
+    def test_reset_clears_cache_state(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, num_cpu_blocks=2)
+        node = BlockNode(1, [], 0, 0, 1, 0, None, time.time(), parent=manager.radix_tree_root, shared_count=0)
+        manager.node_map[node.node_id] = node
+        manager.req_leaf_map["req"] = node
+        manager.leaf_req_map[node].add("req")
+        manager.unfilled_req_block_map["req"] = [1]
+        manager.cache_info["req"] = (node, 0)
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+        manager.cpu_lru_leaf_heap.append(node)
+        manager.cpu_lru_leaf_set.add(node)
+
+        future = Future()
+        future.set_result(None)
+        manager.gpu_free_task_future = future
+        event = manager.task_swapping_event["task"] = mock.Mock()
+        event.wait.return_value = None
+
+        manager.reset()
+        self.assertEqual(manager.node_map, {})
+        self.assertEqual(manager.req_leaf_map, {})
+        self.assertEqual(manager.leaf_req_map, {})
+        self.assertEqual(manager.unfilled_req_block_map, {})
+        self.assertEqual(manager.cache_info, {})
+        self.assertEqual(len(manager.gpu_free_block_list), manager.num_gpu_blocks)
+        self.assertEqual(manager.radix_tree_root.node_id, -1)
+
+    def test_launch_cache_manager_with_mocks(self):
+        manager = make_prefix_cache_manager(num_gpu_blocks_override=6, splitwise_role="cache")
+        cache_cfg = manager.cache_config
+
+        class DummySignal:
+            def __init__(self, name=None, array=None, dtype=None, suffix=None, create=None, **kwargs):
+                self.name = name
+                self.value = array
+                if name in {"cache_ready_signal", "swap_space_ready_signal"}:
+                    self.value[:] = 1
+
+        class DummyQueue:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class DummyProcess:
+            def poll(self):
+                return None
+
+        with (
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.IPCSignal", DummySignal),
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue", DummyQueue),
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices", return_value=""),
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen", return_value=DummyProcess()),
+            mock.patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep", return_value=None),
+            mock.patch.object(PrefixCacheManager, "_get_kv_cache_shape", return_value=([1, 2], [3, 4])),
+        ):
+            processes = manager.launch_cache_manager(
+                cache_cfg,
+                tensor_parallel_size=2,
+                device_ids=[0, 1],
+                pod_ip="127.0.0.1",
+                engine_worker_queue_port=1234,
+                pid_suffix="pid",
+                create_cache_tensor=False,
+            )
+        self.assertEqual(len(processes), 4)
 
 
 # Core behavior validation tests. These cases focus on black-box behavior
