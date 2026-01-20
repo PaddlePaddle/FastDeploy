@@ -442,7 +442,7 @@ class DataProcessor(BaseDataProcessor):
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
-                    response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
+                    response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -487,7 +487,7 @@ class DataProcessor(BaseDataProcessor):
                 reasoning_content = reasoning_delta_message.reasoning_content
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
                 response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
-                response_dict["outputs"]["reasoning_content"] = reasoning_content
+                response_dict["outputs"]["reasoning_content"] = reasoning_content or ""
                 response_dict["outputs"]["text"] = reasoning_delta_message.content or ""
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True
@@ -506,7 +506,7 @@ class DataProcessor(BaseDataProcessor):
             )
             if tool_call_delta_message:
                 response_dict["outputs"]["text"] = tool_call_delta_message.content
-                response_dict["outputs"]["tool_call"] = tool_call_delta_message.tool_calls
+                response_dict["outputs"]["tool_calls"] = tool_call_delta_message.tool_calls
             else:
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True

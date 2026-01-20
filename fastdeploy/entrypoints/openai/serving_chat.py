@@ -751,7 +751,7 @@ class OpenAIServingChat:
         message = ChatMessage(
             role="assistant",
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
+            tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
@@ -783,7 +783,7 @@ class OpenAIServingChat:
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if output.get("tool_call"):
+            if output.get("tool_calls"):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"

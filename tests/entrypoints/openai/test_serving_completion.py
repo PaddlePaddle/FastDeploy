@@ -767,6 +767,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "num_cache_tokens": 0,
                     "num_image_tokens": 0,
                     "reasoning_token_num": 0,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "skipped": False,
                 },
                 "finished": True,
             }

@@ -404,7 +404,7 @@ class OpenAIServingCompletion:
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if tool_called or output.get("tool_call"):
+            if tool_called or output.get("tool_calls"):
                 return "tool_calls"
             else:
                 return "stop"
@@ -734,7 +734,7 @@ class OpenAIServingCompletion:
                     else None
                 ),
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_call"),
+                tool_calls=output.get("tool_calls"),
                 logprobs=aggregated_logprobs,
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),

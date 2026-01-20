@@ -150,6 +150,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 "top_logprobs": None,
                 "draft_top_logprobs": None,
                 "reasoning_token_num": 0,
+                "reasoning_content": "",
+                "tool_calls": None,
+                "skipped": False,
             }
 
             if tool_call and isinstance(tool_call, dict) and i == total_token_num - 2:
@@ -167,6 +170,13 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     completion_token_ids=None,
                 )
                 outputs["delta_message"] = delta_msg
+                outputs["tool_calls"] = [
+                    {
+                        "index": 0,
+                        "type": "function",
+                        "function": {"name": tool_call["name"], "arguments": json.dumps({})},
+                    }
+                ]
 
             frame = [
                 {
@@ -494,6 +504,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                         break
 
                 for chunk_str in chunks:
+                    print(f"chunk: {chunk_str}")
                     if chunk_str.startswith("data: ") and "[DONE]" not in chunk_str:
                         try:
                             json_part = chunk_str.strip().lstrip("data: ").rstrip("\n\n")
