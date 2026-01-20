@@ -1672,11 +1672,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_init_worker_node_when_tensor_parallel_size_exceeds_max_chips(self):
         """Test EngineClient initialization as worker node when tensor_parallel_size > max_chips_per_node."""
         # Covers line 94: self.is_master = False
-        mock_model_config = Mock()
-        mock_model_config.enable_mm = False
-
         mock_config = Mock()
-        mock_config.model_config = mock_model_config
+        mock_config.model_config = Mock()
+        mock_config.model_config.enable_mm = False
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = False
 
@@ -1725,11 +1723,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_init_eplb_signals_when_enabled(self):
         """Test EngineClient initialization with EPLB enabled."""
         # Covers line 97: self.init_eplb_signals(ipc_signal_suffix=port)
-        mock_model_config = Mock()
-        mock_model_config.enable_mm = False
-
         mock_config = Mock()
-        mock_config.model_config = mock_model_config
+        mock_config.model_config = Mock()
+        mock_config.model_config.enable_mm = False
         mock_config.eplb_config = Mock()
         mock_config.eplb_config.enable_eplb = True  # EPLB enabled
         mock_config.eplb_config.redundant_expert_api_user = "test_user"
@@ -1905,7 +1901,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             self.engine_client.valid_parameters(data)
 
-        self.assertIn("max_tokens must be defined [1,", str(context.exception))
+        self.assertIn("max_tokens can be defined [1,", str(context.exception))
 
     def test_valid_parameters_reasoning_max_tokens_adjusted(self):
         """Test valid_parameters reasoning_max_tokens adjustment."""
