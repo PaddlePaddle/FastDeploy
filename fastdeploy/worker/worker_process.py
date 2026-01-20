@@ -537,10 +537,11 @@ class PaddleDisWorkerProc:
                     # Process prefill inputs
                     self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
             else:
-                if tp_size > 1:
-                    # Synchronize the signal for other workers
-                    self._tp_barrier_wait()
-                continue
+                if self.scheduler_config.splitwise_role == "prefill":
+                    if tp_size > 1:
+                        # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 self._tp_barrier_wait() if tp_size > 1 else None
