@@ -132,11 +132,11 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
         has_block_size = "weight_block_size" in quantization_config
         if quant_method == "fp8" and has_block_size:
             quant_config_name = "block_wise_fp8"
-        elif quant_method == "modelopt":
-            if quantization_config.get("quant_algo", "") == "NVFP4":
-                quant_config_name = "modelopt_fp4"
-            else:
-                raise ValueError("modelopt only supports NVFP4 quantization.")
+        # elif quant_method == "modelopt":
+        #     if quantization_config.get("quant_algo", "") == "NVFP4":
+        #         quant_config_name = "modelopt_fp4"
+        #     else:
+        #         raise ValueError("modelopt only supports NVFP4 quantization.")
         else:
             raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
     else:
