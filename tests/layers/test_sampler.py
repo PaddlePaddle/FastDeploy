@@ -14,22 +14,29 @@
 # limitations under the License.
 """
 
-import json
-import os
+import sys
+import types
+from concurrent.futures import Future
+from unittest.mock import Mock
 
 import paddle
 import paddle.nn.functional as F
+import pytest
 
 from fastdeploy.config import (
     CacheConfig,
     FDConfig,
     GraphOptimizationConfig,
-    LoadConfig,
-    ModelConfig,
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
-from fastdeploy.model_executor.layers.sample.sampler import Sampler
+from fastdeploy.model_executor.layers.sample.sampler import (
+    GuidedDecoding,
+    Sampler,
+    padding_sampling_params,
+    top_p_normalize_probs_paddle,
+)
+from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 
 
@@ -79,35 +86,12 @@ def _create_default_sampling_metadata(
     return fake_sampling_metadata
 
 
-def build_config_json() -> str:
-    config_dict = {
-        "architectures": ["Qwen3MoeForCausalLM"],
-        "hidden_size": 7168,
-        "moe_intermediate_size": 1,
-        "moe_num_experts": 1,
-        "moe_k": 1,
-        "hidden_act": "silu",
-        "num_attention_heads": 64,
-        "dtype": "bfloat16",
-    }
-
-    tmp_dir = f"./tmpefef{paddle.distributed.get_rank()}"
-    os.makedirs(tmp_dir, exist_ok=True)
-    with open(f"./{tmp_dir}/config.json", "w") as f:
-        json.dump(config_dict, f)
-    model_name_or_path = os.path.join(os.getcwd(), tmp_dir)
-    print("model_name_or_path", model_name_or_path)
-    return model_name_or_path
-
-
-def get_fd_config(batch_size: int):
+def get_fd_config(batch_size: int, logprobs_mode: str = "raw_logprobs"):
+    model_config: Mock = Mock()
+    model_config.logprobs_mode = logprobs_mode
+    model_config.max_model_len = 2048
     fd_config = FDConfig(
-        model_config=ModelConfig(
-            {
-                "model": build_config_json(),
-                "max_model_len": 2048,
-            }
-        ),
+        model_config=model_config,
         parallel_config=ParallelConfig(
             {
                 "tensor_parallel_size": 1,
@@ -120,13 +104,61 @@ def get_fd_config(batch_size: int):
         scheduler_config=SchedulerConfig({"max_num_seqs": batch_size}),
         cache_config=CacheConfig({}),
         graph_opt_config=GraphOptimizationConfig({}),
-        load_config=LoadConfig({}),
         ips="0.0.0.0",
     )
     return fd_config
 
 
-def test_sampler():
+def _patch_sampler_ops(monkeypatch):
+    monkeypatch.setattr(current_platform, "is_cuda", lambda: True)
+    monkeypatch.setattr(current_platform, "is_xpu", lambda: False)
+    monkeypatch.setattr(current_platform, "is_iluvatar", lambda: False)
+    monkeypatch.setattr(current_platform, "is_gcu", lambda: False)
+    monkeypatch.setattr(current_platform, "is_dcu", lambda: False)
+    monkeypatch.setattr(current_platform, "is_maca", lambda: False)
+    monkeypatch.setattr(current_platform, "is_intel_hpu", lambda: False)
+
+    def _noop_apply_penalty(*args, **kwargs):
+        return args[3]
+
+    def _noop_min_p_sampling(probs, min_p_arr, min_p_arr_cpu):
+        return probs
+
+    def _safe_top_k_top_p_sampling(
+        x,
+        top_p,
+        top_k=None,
+        top_k_list=None,
+        threshold=None,
+        topp_seed=None,
+        seed=-1,
+        k=0,
+        mode="truncated",
+        order="top_k_first",
+    ):
+        ids = paddle.argmax(x, axis=-1).unsqueeze(-1)
+        return None, ids
+
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.apply_penalty_multi_scores",
+        _noop_apply_penalty,
+    )
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.ops.apply_penalty_multi_scores",
+        _noop_apply_penalty,
+    )
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.min_p_sampling",
+        _noop_min_p_sampling,
+    )
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",
+        _safe_top_k_top_p_sampling,
+    )
+
+
+def test_sampler(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -194,7 +226,8 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
     return token_logprobs
 
 
-def test_sampler_logprobs():
+def test_sampler_logprobs(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -203,8 +236,7 @@ def test_sampler_logprobs():
     logits = _create_fake_logits(batch_size, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     for logprobs_mode in logprobs_mode_list:
-        fd_config = get_fd_config(batch_size)
-        fd_config.model_config.logprobs_mode = logprobs_mode
+        fd_config = get_fd_config(batch_size, logprobs_mode)
         sampler = Sampler(logprobs_mode=logprobs_mode, fd_config=fd_config)
         assert sampler.logprobs_mode == logprobs_mode
         sampler_output = sampler(logits.clone(), sampling_metadata)
@@ -217,6 +249,130 @@ def test_sampler_logprobs():
         equal = paddle.allclose(baseline_logprobs, logprobs, atol=1e-03, rtol=1e-03).item()
         print(f"logprobs_mode: {logprobs_mode} equal={equal}")
         assert equal
+
+
+class _DummyProcessor:
+    def __init__(self, enable_reasoning=True, reasoning_ended=False, accept_result=True, terminated=False):
+        self.enable_reasoning = enable_reasoning
+        self.reasoning_ended = reasoning_ended
+        self.accept_result = accept_result
+        self.is_terminated = terminated
+        self.accepted_tokens = []
+        self.fill_calls = 0
+
+    def allocate_token_bitmask(self):
+        return paddle.zeros([2], dtype="int32")
+
+    def fill_token_bitmask(self, token_bitmask, idx):
+        self.fill_calls += 1
+
+    def accept_token(self, token):
+        self.accepted_tokens.append(token)
+        return self.accept_result
+
+
+class _DummyReasoningParser:
+    def __init__(self, end_token):
+        self.end_token = end_token
+
+    def is_reasoning_end(self, tokens):
+        return tokens[0] == self.end_token
+
+
+def test_guided_decoding_bitmask_and_accept(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
+    guided_decoding = GuidedDecoding(get_fd_config(batch_size=2))
+    processor = _DummyProcessor(enable_reasoning=True, reasoning_ended=False)
+    future = Future()
+    future.set_result(processor)
+    guided_decoding.add_logits_processor(0, future, prefill_tokens=[])
+
+    fake_backend = types.SimpleNamespace(
+        apply_token_mask=lambda logits, token_bitmask, indices, is_cuda_platform: logits + 1.0
+    )
+    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.guided_decoding.xgrammar_backend", fake_backend)
+
+    logits = paddle.zeros([2, 4], dtype="float32")
+    guided_decoding.update_vocab_mask(prefill_done_idxs=[0])
+    guided_decoding.join_async_fillmask()
+    assert processor.fill_calls == 1
+    masked_logits = guided_decoding.apply_token_mask(logits, prefill_done_idxs=[0])
+    assert paddle.allclose(masked_logits, logits + 1.0)
+
+
+def test_guided_decoding_reasoning_and_reset(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
+    guided_decoding = GuidedDecoding(get_fd_config(batch_size=1))
+    processor = _DummyProcessor(enable_reasoning=False, reasoning_ended=False)
+    guided_decoding.logits_processors[0] = processor
+    guided_decoding._prefill_done_idxs[0] = True
+    guided_decoding.apply_reasoning_parser(_DummyReasoningParser(end_token=7))
+
+    guided_decoding.update_output_tokens(paddle.to_tensor([[7]], dtype="int64"))
+    assert processor.reasoning_ended is True
+
+    guided_decoding.update_output_tokens(paddle.to_tensor([[-1]], dtype="int64"))
+    assert guided_decoding.logits_processors[0] is None
+
+
+def test_top_p_normalize_and_padding():
+    probs = paddle.to_tensor([[0.4, 0.3, 0.2, 0.1]], dtype="float32")
+    top_p = paddle.to_tensor([[0.5]], dtype="float32")
+    normalized = top_p_normalize_probs_paddle(probs, top_p)
+    assert paddle.sum(normalized).item() == pytest.approx(1.0)
+    assert normalized[0, 2].item() == pytest.approx(0.0)
+
+    top_p_padding, top_k_padding = padding_sampling_params(
+        top_p=paddle.to_tensor([[0.5], [0.9]], dtype="float32"),
+        top_k=paddle.to_tensor([[1], [2]], dtype="int32"),
+        seq_lens_this_time=paddle.to_tensor([[2], [1]], dtype="int32"),
+        seq_lens_encoder=paddle.to_tensor([[0], [1]], dtype="int32"),
+    )
+    assert top_p_padding.shape[0] == 3
+    assert top_k_padding[-1].item() == 2
+
+
+def test_sampler_compute_logprobs_with_top_p_normalization(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
+    fd_config = get_fd_config(batch_size=2)
+    sampler = Sampler(fd_config)
+    logits = paddle.to_tensor([[1.0, 0.0, -1.0], [0.5, 0.0, -0.5]], dtype="float32")
+    sampling_metadata = _create_default_sampling_metadata(batch_size=2, min_seq_len=1, max_seq_len=4)
+    sampling_metadata.temperature = paddle.to_tensor([[2.0], [1.0]], dtype="float32")
+    sampling_metadata.temp_scaled_logprobs_flag = True
+    sampling_metadata.temp_scaled_logprobs = paddle.to_tensor([[True], [False]])
+    sampling_metadata.top_p_normalized_logprobs_flag = True
+    sampling_metadata.top_p_normalized_logprobs = paddle.to_tensor([[True], [True]])
+    sampling_metadata.top_p = paddle.to_tensor([[0.5], [1.0]], dtype="float32")
+    sampling_metadata.share_inputs = {
+        "seq_lens_this_time": paddle.to_tensor([[1], [1]], dtype="int32"),
+        "seq_lens_encoder": paddle.to_tensor([[0], [0]], dtype="int32"),
+        "seq_lens_decoder": paddle.to_tensor([[0], [0]], dtype="int32"),
+    }
+
+    logprobs = sampler.compute_logprobs(logits, sampling_metadata)
+    scaled_logits = logits.clone()
+    scaled_logits[0] = scaled_logits[0] / 2.0
+    probs = F.softmax(scaled_logits, axis=-1)
+    expected_top_p = top_p_normalize_probs_paddle(probs[:1], sampling_metadata.top_p[:1])
+    expected_logprobs = paddle.log(expected_top_p)
+    assert paddle.allclose(logprobs[:1], expected_logprobs, atol=1e-6)
+    expected_row1 = F.log_softmax(logits[1:2], axis=-1)
+    assert paddle.allclose(logprobs[1:2], expected_row1, atol=1e-6)
+
+
+def test_sampler_gather_logprobs(monkeypatch):
+    _patch_sampler_ops(monkeypatch)
+    sampler = Sampler(get_fd_config(batch_size=2))
+    logprobs = paddle.to_tensor([[0.0, -1.0, -2.0], [-0.1, -0.2, -0.3]], dtype="float32")
+    token_ids = paddle.to_tensor([0, 2], dtype="int64")
+    topk = sampler.gather_logprobs(logprobs, num_logprobs=2, token_ids=token_ids)
+    assert tuple(topk.logprob_token_ids.shape) == (2, 3)
+    assert topk.logprob_token_ids[:, 0].tolist() == token_ids.tolist()
+
+    none_topk = sampler.gather_logprobs(logprobs, num_logprobs=0, token_ids=token_ids)
+    assert tuple(none_topk.logprob_token_ids.shape) == (2, 1)
+    assert none_topk.logprob_token_ids[:, 0].tolist() == token_ids.tolist()
 
 
 if __name__ == "__main__":
