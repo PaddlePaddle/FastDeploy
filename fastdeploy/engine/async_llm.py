@@ -442,7 +442,7 @@ class AsyncLLM(EngineServiceClient):
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
-            if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
+            if not envs.ENABLE_V1_DATA_PROCESSOR and not self.cfg.model_config.enable_mm:
                 self.request_client.send_pyobj(request)
             else:
                 self.request_client.send_json(request)
