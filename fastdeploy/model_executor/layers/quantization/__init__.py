@@ -154,6 +154,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .block_wise_fp8 import BlockWiseFP8Config
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
+    from .nvfp4 import ModelOptNvFp4Config
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -161,14 +162,6 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .weight_only import WeightOnlyConfig, WINT4Config, WINT8Config
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
-
-    if quantization == "modelopt_fp4":
-        try:
-            from .nvfp4 import ModelOptNvFp4Config
-
-            return ModelOptNvFp4Config
-        except ImportError as e:
-            raise ImportError(f"Failed to import ModelOptNvFp4Config. Details: {e}")
 
     method_to_config: Dict[str, Type[QuantConfigBase]] = {
         "wint2": WINT2Config,
@@ -183,6 +176,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
+        "modelopt_fp4": ModelOptNvFp4Config,
     }
 
     return method_to_config[quantization]

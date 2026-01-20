@@ -33,9 +33,6 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
     paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-    from flashinfer import fp4_quantize
-    from flashinfer import mm_fp4 as fp4_gemm
-    from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
 else:
     logger.warning("FlashInfer is not installed. For nvFp4 inference, please install Flashinfer.")
 
@@ -327,6 +324,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         output_dtype = x.dtype
 
         # Quantize BF16 or FP16 to (FP4 and interleaved block scale)
+        from flashinfer import fp4_quantize
+
         x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
 
         assert x_fp4.dtype == paddle.uint8
@@ -345,6 +344,8 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         if backend == "cutlass":
             x_scale_interleaved = x_scale_interleaved.view(paddle.uint8)
             w_scale_interleaved = w_scale_interleaved.view(paddle.uint8)
+        from flashinfer import mm_fp4 as fp4_gemm
+
         out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
         if layer.with_bias:
             out = paddle.add(out, layer.bias)
@@ -607,6 +608,10 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass
+            from flashinfer.fused_moe import (
+                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+            )
+
             _ = flashinfer_cutlass_fused_moe(
                 input=x,
                 token_selected_experts=topk_ids.to(paddle.int),
