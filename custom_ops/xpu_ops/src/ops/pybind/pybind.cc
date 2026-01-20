@@ -75,7 +75,7 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
-      const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
     const paddle::Tensor& decoder_seq_lod_xpu,
     const paddle::Tensor& encoder_kv_lod_xpu,
     const paddle::Tensor& encoder_batch_map_xpu,

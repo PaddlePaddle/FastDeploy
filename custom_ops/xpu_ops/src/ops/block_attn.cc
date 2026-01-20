@@ -560,14 +560,15 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           dec_batch,
           const_cast<int32_t*>(
               decoder_context_len
-                  .data<int32_t>())};   // use for speculative_attention_decoder seq_len in
-                     // MTP
+                  .data<int32_t>())};  // use for speculative_attention_decoder
+                                       // seq_len in MTP
       api::VectorParam<int32_t> decoder_context_len_cache_vp = {
           const_cast<int32_t*>(decoder_context_len_cache_cpu.data<int32_t>()),
           dec_batch,
           const_cast<int32_t*>(
               decoder_context_len_cache
-                  .data<int32_t>())};  // use for split rope enc as prefix cache len in MTP
+                  .data<int32_t>())};  // use for split rope enc as prefix cache
+                                       // len in MTP
       api::VectorParam<int32_t> decoder_batch_map_vp = {
           const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
           dec_batch,
@@ -1029,7 +1030,7 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
-        const paddle::Tensor& encoder_seq_lod,
+    const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_kv_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -1144,7 +1145,7 @@ PD_BUILD_STATIC_OP(block_attn)
              "decoder_context_len_cache_cpu",
              "decoder_batch_map_cpu",
              "prefix_len_cpu",
-            "encoder_seq_lod",
+             "encoder_seq_lod",
              "decoder_seq_lod",
              "encoder_kv_lod",
              "encoder_batch_map",
