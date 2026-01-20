@@ -1,4 +1,4 @@
-[简体中文](../zh/usage/usage.md)
+[简体中文](../zh/usage/usage_stats_collection.md)
 
 # usage collection
 
