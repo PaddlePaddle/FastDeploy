@@ -16,8 +16,8 @@
 
 # from typing import Optional
 
-# import paddle
-# from paddleformers.utils.log import logger
+import paddle
+from paddleformers.utils.log import logger
 
 # import fastdeploy
 # from fastdeploy import envs
