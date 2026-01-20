@@ -932,6 +932,10 @@ class GraphOptimizationConfig:
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
         self.draft_model_use_cudagraph: bool = False
+        """ Maximum CUDA Graph capture size for static graph mode.
+        Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
+        """
+        self.max_capture_shape_dy2st: int = 512
 
         # CINN Config ...
         if args is not None:
@@ -1660,6 +1664,9 @@ class FDConfig:
             max_capture_shape = 512
         else:
             max_capture_shape = min(512, max_capture_shape)
+
+        if self.graph_opt_config.graph_opt_level > 0:
+            max_capture_shape = graph_opt_config.max_capture_shape_dy2st
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
