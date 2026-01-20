@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import gc
 import json
+import os
 import queue
 import threading
 import time
@@ -163,6 +164,8 @@ class CacheTransferManager:
         self.device = device
         self.ipc_suffix = args.ipc_suffix
         self.cache_dtype = args.cache_dtype
+        self.check_storage_cache = int(os.environ.get("CHECK_STORAGE_CACHE", 0)) == 1
+        logger.info(f"check_storage_cache: {self.check_storage_cache}")
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -366,6 +369,12 @@ class CacheTransferManager:
                             [num_gpu_blocks, self.value_cache_shape[1], self.value_cache_shape[2]],
                             True,
                         )
+                if not key_cache.is_contiguous():
+                    logger.info("make contiguous for key_cache")
+                    key_cache.contiguous()
+                if not val_cache.is_contiguous():
+                    logger.info("make contiguous for val_cache")
+                    val_cache.contiguous()
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
@@ -550,8 +559,12 @@ class CacheTransferManager:
                     logger.info(
                         f"read_storage_task, finish loading {match_block_num} blocks from storage for task {task_id}."
                     )
+                    self._load_check_cache(task_id, k_cache_keys[-1], valid_gpu_block_ids, self.gpu_cache_k_tensors)
+                    self._load_check_cache(task_id, v_cache_keys[-1], valid_gpu_block_ids, self.gpu_cache_v_tensors)
                 except Exception as e:
-                    logger.error(f"[rank {self.rank}/{self.n_ranks}] An error occurred: {task_id} {e}")
+                    logger.error(
+                        f"[rank {self.rank}/{self.n_ranks}] An error occurred: {task_id} {e}, {traceback.format_exc()}"
+                    )
                     valid_gpu_block_ids = []
 
             result = (CacheStatus.STORAGE2GPU, task_id, keys, valid_gpu_block_ids)
@@ -582,6 +595,16 @@ class CacheTransferManager:
                 self.key_cache_shape[3],
             ]
 
+            if self.check_storage_cache:
+                saved_key_tensors = []
+                saved_value_tensors = []
+                for i in range(len(self.gpu_cache_k_tensors)):
+                    key_tensor = self.gpu_cache_k_tensors[i][gpu_block_ids]
+                    value_tensor = self.gpu_cache_v_tensors[i][gpu_block_ids]
+                    saved_key_tensors.append(key_tensor.clone().astype("float32"))
+                    saved_value_tensors.append(value_tensor.clone().astype("float32"))
+                paddle.device.cuda.synchronize()
+
             mode = 0  # gpu ==> cpu
             start_time = time.time()
             swap_cache_layout(
@@ -603,6 +626,63 @@ class CacheTransferManager:
                 mode,
             )
             swap_cost_time = time.time() - start_time
+
+            if self.check_storage_cache:
+                paddle.device.cuda.synchronize()
+                for i in range(len(self.gpu_cache_k_tensors)):
+                    self.gpu_cache_k_tensors[i][gpu_block_ids] = 0
+                    self.gpu_cache_v_tensors[i][gpu_block_ids] = 0
+                paddle.device.cuda.synchronize()
+
+                mode = 1  # cpu ==> gpu
+                swap_cache_layout(
+                    self.gpu_cache_k_tensors,
+                    self.storage_key_write_buffer,
+                    key_cache_size,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.device,
+                    mode,
+                )
+                swap_cache_layout(
+                    self.gpu_cache_v_tensors,
+                    self.storage_value_write_buffer,
+                    key_cache_size,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.device,
+                    mode,
+                )
+                paddle.device.cuda.synchronize()
+                debug_prepare_cost_time = time.time() - start_time
+
+                for i in range(len(self.gpu_cache_k_tensors)):
+                    new_key_tensor = self.gpu_cache_k_tensors[i][gpu_block_ids].clone().astype("float32")
+                    new_value_tensor = self.gpu_cache_v_tensors[i][gpu_block_ids].clone().astype("float32")
+                    paddle.device.cuda.synchronize()
+                    key_is_close = paddle.allclose(
+                        new_key_tensor, saved_key_tensors[i], rtol=1e-5, atol=1e-5, equal_nan=True
+                    )
+                    value_is_close = paddle.allclose(
+                        new_value_tensor, saved_value_tensors[i], rtol=1e-5, atol=1e-5, equal_nan=True
+                    )
+                    if key_is_close and value_is_close:
+                        logger.debug(
+                            f"key and value are all close for layer {i}, debug_prepare_cost_time: {debug_prepare_cost_time:.6f}s"
+                        )
+                    else:
+                        logger.error(
+                            f"key or value is not same for layer {i}, debug_prepare_cost_time: {debug_prepare_cost_time:.6f}s, "
+                            f"key_is_close: {key_is_close}, value_is_close: {value_is_close}"
+                        )
+                        if not key_is_close:
+                            x = paddle.cast(new_key_tensor[:, -1, -1, -1], "float32").numpy().tolist()
+                            x_gt = paddle.cast(saved_key_tensors[i][:, -1, -1, -1], "float32").numpy().tolist()
+                            logger.error(f"new_key_tensor: {x}, saved_key_tensors: {x_gt}")
+                        if not value_is_close:
+                            x = paddle.cast(new_value_tensor[:, -1, -1, -1], "float32").numpy().tolist()
+                            x_gt = paddle.cast(saved_value_tensors[i][:, -1, -1, -1], "float32").numpy().tolist()
+                            logger.error(f"new_value_tensor: {x}, saved_value_tensors: {x_gt}")
 
             block_num = len(gpu_block_ids)
             keys = k_cache_keys + v_cache_keys
@@ -643,6 +723,11 @@ class CacheTransferManager:
 
             k_cache_keys = k_cache_keys[match_block_num:]
             v_cache_keys = v_cache_keys[match_block_num:]
+
+            if len(k_cache_keys) != 0:
+                self._save_cache(task_id, k_cache_keys[-1], gpu_block_ids, self.gpu_cache_k_tensors)
+                self._save_cache(task_id, v_cache_keys[-1], gpu_block_ids, self.gpu_cache_v_tensors)
+
             gpu_block_ids = gpu_block_ids[match_block_num:]
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
 
@@ -669,6 +754,67 @@ class CacheTransferManager:
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in write_back_storage_task: "
                 f"error:{e}, {traceback.format_exc()}"
             )
+
+    def _save_cache(self, task_id, key, block_ids, cache_tensors):
+        """保存Cache的一些数值到本地文件中"""
+        if not self.check_storage_cache:
+            return
+
+        # [block_num, head_num, block_size, head_dim]
+        start_time = time.time()
+        layer_num = len(cache_tensors)
+        for layer_idx in range(0, layer_num, 5):
+            cur_cache = cache_tensors[layer_idx][block_ids, -1, -1, -1]
+            save_path = f"/dev/shm/{key}_layer{layer_idx}_cache"
+            paddle.save(cur_cache, save_path)
+        cost_time = round(time.time() - start_time, 6)
+        logger.debug(
+            f"save cache, task_id: {task_id}, key:{key}, " f"block_num:{len(block_ids)}, cost_time: {cost_time}s"
+        )
+
+    def _load_check_cache(self, task_id, key, block_ids, cache_tensors):
+        """读取本地保存的Cache数值，进行校验检查"""
+        if not self.check_storage_cache:
+            return
+
+        def _list_is_same(x, x_gt):
+            epsilon = 1e-5
+            x = np.array(x)
+            x_gt = np.array(x_gt)
+            diff_indices = np.where(np.abs(x - x_gt) >= epsilon)[0]
+            is_same = len(diff_indices) == 0
+            if not is_same:
+                logger.debug(f"diff indices: {diff_indices},\n x: {x[diff_indices]},\n x_gt: {x_gt[diff_indices]}")
+            return is_same
+
+        block_num = len(block_ids)
+        layer_num = len(cache_tensors)
+        for layer_idx in range(0, layer_num, 5):
+            start_time = time.time()
+            load_path = f"/dev/shm/{key}_layer{layer_idx}_cache"
+            if not os.path.exists(load_path):
+                logger.warning(
+                    f"check cache, task_id: {task_id}, key:{key}, layer_idx: {layer_idx}, "
+                    f"is_same:False, gt cache does not exist."
+                )
+                continue
+
+            cur_cache_gt_raw = paddle.load(load_path)
+            if cur_cache_gt_raw.shape[0] > block_num:
+                cur_cache_gt_raw = cur_cache_gt_raw[-block_num:]
+            cur_cache_gt = paddle.cast(cur_cache_gt_raw, "float32").numpy().tolist()
+
+            cur_cache_raw = cache_tensors[layer_idx][block_ids, -1, -1, -1]
+            cur_cache = paddle.cast(cur_cache_raw, "float32").numpy().tolist()
+
+            is_same = _list_is_same(cur_cache, cur_cache_gt)
+            cost_time = round(time.time() - start_time, 6)
+            logger.debug(
+                f"check cache, task_id: {task_id}, key:{key}, layer_idx: {layer_idx}, "
+                f"is_same:{is_same}, block_num:{block_num}, cost_time: {cost_time}s"
+            )
+            if not is_same:
+                logger.debug(f"cur_cache: {cur_cache}, \n cur_cache_gt: {cur_cache_gt}")
 
     def _do_swap_to_cpu_task(
         self,
