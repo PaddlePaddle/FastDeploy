@@ -292,7 +292,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         x_scale_tensor = x_scale_tensor.T
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         linear_out = deep_gemm_fp8_fp8_bf16_nt(
-            x, x_scale_tensor, layer.weight, layer.weight_scale_inv, linear_out, layer.output_size
+            x_q, x_scale_tensor, layer.weight, layer.weight_scale_inv, linear_out, layer.output_size
         )
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
