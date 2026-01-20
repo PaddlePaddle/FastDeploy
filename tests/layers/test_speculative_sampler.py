@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import sys
+import types
 from unittest.mock import Mock
 
 import paddle
@@ -30,8 +32,8 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import (
     MTPSampler,
     SpeculativeSampler,
-    padding_sampling_params,
 )
+from fastdeploy.platforms import current_platform
 
 
 def _create_fake_logits(batch_size: int, vocab_size: int) -> paddle.Tensor:
@@ -80,13 +82,17 @@ def _create_default_sampling_metadata(
     return fake_sampling_metadata
 
 
-def _create_fd_config(max_model_len):
+def _create_fd_config(max_model_len, max_num_seqs=32):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
-    model_config.architectures = ["test_model"]
     speculative_config = SpeculativeConfig({})
     graph_opt_config = GraphOptimizationConfig({})
-    scheduler_config = SchedulerConfig({})
+    scheduler_config = SchedulerConfig(
+        {
+            "max_num_seqs": max_num_seqs,
+            "max_num_batched_tokens": max_model_len * max_num_seqs,
+        }
+    )
     parallel_config = ParallelConfig({})
     cache_config = CacheConfig({})
     cache_config.cache_transfer_protocol = "rdma,ipc"
@@ -101,6 +107,90 @@ def _create_fd_config(max_model_len):
     )
 
     return fd_config
+
+
+def _patch_platform(monkeypatch):
+    monkeypatch.setattr(current_platform, "is_cuda", lambda: True)
+    monkeypatch.setattr(current_platform, "is_xpu", lambda: False)
+
+
+def _install_fake_ops(monkeypatch, kind):
+    def _speculate_verify(*args, **kwargs):
+        return None
+
+    def _top_p_candidates(probs, top_p, output_padding_offset, max_candidate_len, max_model_len):
+        batch = top_p.shape[0]
+        verify_scores = paddle.zeros([batch, 1], dtype="float32")
+        verify_tokens = paddle.zeros([batch, 1], dtype="int64")
+        actual_candidate_len = paddle.full([batch], 1, dtype="int32")
+        return verify_scores, verify_tokens, actual_candidate_len
+
+    def _speculate_get_target_logits(
+        target_logits,
+        logits,
+        cu_batch_token_offset,
+        ori_cu_batch_token_offset,
+        seq_lens_this_time,
+        seq_lens_encoder,
+        accept_num,
+    ):
+        target_logits.set_value(logits[: target_logits.shape[0], :])
+
+    def _speculate_insert_first_token(
+        token_ids,
+        accept_tokens,
+        next_tokens,
+        cu_next_token_offset,
+        cu_batch_token_offset,
+        seq_lens_this_time,
+        seq_lens_encoder,
+    ):
+        token_ids.set_value(accept_tokens.flatten()[: token_ids.shape[0]])
+
+    fake_ops = types.SimpleNamespace(
+        speculate_verify=_speculate_verify,
+        top_p_candidates=_top_p_candidates,
+        speculate_get_target_logits=_speculate_get_target_logits,
+        speculate_insert_first_token=_speculate_insert_first_token,
+    )
+    monkeypatch.setitem(sys.modules, f"fastdeploy.model_executor.ops.{kind}", fake_ops)
+
+
+def _patch_speculative_penalty(monkeypatch):
+    def _noop_penalty(*args, **kwargs):
+        return args[1]
+
+    def _safe_top_k_top_p_sampling(
+        x,
+        top_p,
+        top_k=None,
+        top_k_list=None,
+        threshold=None,
+        topp_seed=None,
+        seed=-1,
+        k=0,
+        mode="truncated",
+        order="top_k_first",
+    ):
+        ids = paddle.argmax(x, axis=-1).unsqueeze(-1)
+        return None, ids
+
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.apply_speculative_penalty_multi_scores",
+        _noop_penalty,
+    )
+    monkeypatch.setattr(
+        "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",
+        _safe_top_k_top_p_sampling,
+    )
+    original_to_tensor = paddle.to_tensor
+
+    def _safe_to_tensor(data, *args, **kwargs):
+        if isinstance(data, list) and data == [0] and "dtype" not in kwargs:
+            kwargs["dtype"] = "int32"
+        return original_to_tensor(data, *args, **kwargs)
+
+    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.paddle.to_tensor", _safe_to_tensor)
 
 
 def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab_size):
@@ -134,7 +224,7 @@ def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab
     ).squeeze(1)
     share_inputs["next_token_num"] = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
     share_inputs["cu_batch_token_offset"] = paddle.concat(
-        [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"])]
+        [paddle.to_tensor([0], dtype="int32"), paddle.cumsum(share_inputs["accept_num"])]
     ).astype("int32")
     share_inputs["cu_next_token_offset"] = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
     share_inputs["substep"] = 0
@@ -159,7 +249,10 @@ def _create_padding_inputs():
     return top_p, top_k, infer_seed, seq_lens_this_time, seq_lens_encoder
 
 
-def test_speculative_sampler():
+def test_speculative_sampler(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -167,7 +260,7 @@ def test_speculative_sampler():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
@@ -176,7 +269,10 @@ def test_speculative_sampler():
     sampler(logits, sampling_metadata, max_model_len, share_inputs)
 
 
-def test_speculative_sampler_logprobs():
+def test_speculative_sampler_logprobs(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -184,7 +280,7 @@ def test_speculative_sampler_logprobs():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     sampling_metadata.share_inputs = share_inputs
@@ -197,7 +293,10 @@ def test_speculative_sampler_logprobs():
         sampler(logits, sampling_metadata, max_model_len, share_inputs)
 
 
-def test_mtp_sampler():
+def test_mtp_sampler(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -205,7 +304,7 @@ def test_mtp_sampler():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
 
@@ -215,7 +314,10 @@ def test_mtp_sampler():
     sampler(logits, sampling_metadata, max_model_len, share_inputs)
 
 
-def test_mtp_sampler_logprobs():
+def test_mtp_sampler_logprobs(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
     batch_size = 32
     vocab_size = 1024
     min_seq_len = 1
@@ -223,7 +325,7 @@ def test_mtp_sampler_logprobs():
     max_model_len = 1024
     max_draft_token_num = 1
 
-    fd_config = _create_fd_config(max_model_len)
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     sampling_metadata.share_inputs = share_inputs
@@ -278,6 +380,91 @@ def test_padding_sampling_params_seed_offset():
     assert paddle.equal_all(seed_pad.squeeze(), paddle.to_tensor(expected_seed, dtype="int64"))
 
 
+def test_speculative_sampler_forward_logprobs(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
+    batch_size = 2
+    vocab_size = 8
+    max_model_len = 16
+    max_draft_token_num = 1
+
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
+    fd_config.model_config.logprobs_mode = "raw_logprobs"
+    share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
+    sampling_metadata = _create_default_sampling_metadata(batch_size, 1, max_model_len, max_num_logprobs=1)
+    sampling_metadata.share_inputs = share_inputs
+    sampling_metadata.temp_scaled_logprobs = paddle.to_tensor([[True], [True]])
+    sampling_metadata.top_p_normalized_logprobs = paddle.to_tensor([[True], [True]])
+    logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
+
+    sampler = SpeculativeSampler(fd_config)
+    output = sampler(logits, sampling_metadata, max_model_len, share_inputs)
+    assert output.logprobs_tensors is not None
+    assert output.sampled_token_ids.shape[0] == batch_size
+    assert output.token_num_per_batch.tolist() == share_inputs["accept_num"].tolist()
+
+
+def test_speculative_sampler_forward_xpu(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "xpu")
+    _patch_speculative_penalty(monkeypatch)
+    batch_size = 2
+    vocab_size = 8
+    max_model_len = 16
+    max_draft_token_num = 1
+
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
+    share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
+    sampling_metadata = _create_default_sampling_metadata(batch_size, 1, max_model_len)
+    logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
+
+    sampler = SpeculativeSampler(fd_config)
+    output = sampler.forward_xpu(logits, sampling_metadata, max_model_len, share_inputs)
+    assert output.logprobs_tensors is None
+
+
+def test_mtp_sampler_forward_cuda_logprobs(monkeypatch):
+    _patch_platform(monkeypatch)
+    _install_fake_ops(monkeypatch, "gpu")
+    _patch_speculative_penalty(monkeypatch)
+    batch_size = 2
+    vocab_size = 8
+    max_model_len = 16
+    max_draft_token_num = 1
+
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
+    fd_config.model_config.logprobs_mode = "raw_logits"
+    share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
+    sampling_metadata = _create_default_sampling_metadata(batch_size, 1, max_model_len, max_num_logprobs=1)
+    sampling_metadata.share_inputs = share_inputs
+    logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
+
+    sampler = MTPSampler(fd_config)
+    next_tokens, output = sampler.forward_cuda(logits, sampling_metadata, max_model_len, share_inputs)
+    assert next_tokens.shape[0] == logits.shape[0]
+    assert output.logprobs_tensors is not None
+
+
+def test_mtp_sampler_forward_xpu(monkeypatch):
+    _patch_platform(monkeypatch)
+    _patch_speculative_penalty(monkeypatch)
+    batch_size = 2
+    vocab_size = 8
+    max_model_len = 16
+    max_draft_token_num = 1
+
+    fd_config = _create_fd_config(max_model_len, max_num_seqs=batch_size)
+    share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
+    sampling_metadata = _create_default_sampling_metadata(batch_size, 1, max_model_len)
+    logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
+
+    sampler = MTPSampler(fd_config)
+    next_tokens, output = sampler.forward_xpu(logits, sampling_metadata, max_model_len, share_inputs)
+    assert next_tokens.shape[0] == logits.shape[0]
+    assert output.logprobs_tensors is None
+
+
 if __name__ == "__main__":
     test_speculative_sampler()
     test_speculative_sampler_logprobs()
@@ -285,3 +472,7 @@ if __name__ == "__main__":
     test_mtp_sampler_logprobs()
     test_padding_sampling_params_basic()
     test_padding_sampling_params_seed_offset()
+    test_speculative_sampler_forward_logprobs()
+    test_speculative_sampler_forward_xpu()
+    test_mtp_sampler_forward_cuda_logprobs()
+    test_mtp_sampler_forward_xpu()
