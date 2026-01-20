@@ -19,11 +19,14 @@ import importlib.util
 import sys
 import types
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
+
+from fastdeploy.entrypoints.openai.protocol import DeltaMessage
 
 
 class DummyTokenizer:
@@ -269,6 +272,18 @@ class DataProcessorTestCase(unittest.TestCase):
             def extract_reasoning_content(self, full_text, response_dict, model_status):
                 return reasoning_content, f"{full_text}!"
 
+            def extract_reasoning_content_streaming(
+                self,
+                previous_text: str,
+                current_text: str,
+                delta_text: str,
+                previous_token_ids: Sequence[int],
+                current_token_ids: Sequence[int],
+                delta_token_ids: Sequence[int],
+                model_status: str,
+            ):
+                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text)
+
         return DummyReasoning(tokenizer)
 
     @staticmethod
@@ -278,7 +293,21 @@ class DataProcessorTestCase(unittest.TestCase):
                 self.tokenizer = tokenizer
 
             def extract_tool_calls(self, full_text, response_dict):
+                # 模拟工具调用解析，返回固定的工具调用数据用于测试
                 return SimpleNamespace(tools_called=True, tool_calls=["tool"], content=content)
+
+            def extract_tool_calls_streaming(
+                self,
+                previous_text: str,
+                current_text: str,
+                delta_text: str,
+                previous_token_ids: Sequence[int],
+                current_token_ids: Sequence[int],
+                delta_token_ids: Sequence[int],
+                model_status: str,
+            ):
+                # 模拟流式工具调用解析，返回固定的工具调用数据用于测试
+                return DeltaMessage(tool_calls=mock.MagicMock(), content=content)
 
         return DummyToolParser
 
@@ -433,6 +462,23 @@ class DataProcessorTestCase(unittest.TestCase):
         result = processor.process_response_dict_streaming(response, enable_thinking=False)
         self.assertEqual(result["outputs"]["text"], "7")
         self.assertNotIn(req_id, processor.decode_status)
+
+    def test_process_response_streaming_with_reasoning_and_tools(self):
+        processor = self.processor
+        self.processor.model_status_dict["normal"] = "think_start"
+        processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
+        processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-text")
+        response = {
+            "finished": False,
+            "request_id": "normal",
+            "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
+        }
+
+        result = processor.process_response_dict_streaming(response, enable_thinking=True)
+        self.assertEqual(result["outputs"]["completion_tokens"], "7")
+        self.assertEqual(result["outputs"]["text"], "tool-text")
+        self.assertEqual(result["outputs"]["reasoning_content"], "because")
+        self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
 
     def test_process_response_dict_normal_with_reasoning(self):
         processor = self.processor

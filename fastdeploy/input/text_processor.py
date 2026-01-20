@@ -489,6 +489,7 @@ class DataProcessor(BaseDataProcessor):
                 response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
                 response_dict["outputs"]["reasoning_content"] = reasoning_content or ""
                 response_dict["outputs"]["text"] = reasoning_delta_message.content or ""
+            else:
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True
         if self.tool_parser_obj:
