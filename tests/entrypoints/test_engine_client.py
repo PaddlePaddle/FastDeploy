@@ -792,21 +792,21 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_valid_parameters_max_tokens_valid(self):
         """Test valid_parameters accepts valid max_tokens."""
-        data = {"max_tokens": 100}
+        data = {"max_tokens": 100, "request_id": "test"}
 
         # Should not raise exception
         self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_max_tokens_too_small(self):
         """Test valid_parameters rejects max_tokens < 1."""
-        data = {"max_tokens": 0}
+        data = {"max_tokens": 0, "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_max_tokens_too_large(self):
         """Test valid_parameters rejects max_tokens >= max_model_len."""
-        data = {"max_tokens": 2048}  # Equal to max_model_len, should raise exception
+        data = {"max_tokens": 2048, "request_id": "test"}  # Equal to max_model_len, should raise exception
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -823,7 +823,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_valid_parameters_temperature_zero_adjustment(self):
         """Test valid_parameters adjusts zero temperature."""
-        data = {"temperature": 0}
+        data = {"temperature": 0, "request_id": "test"}
 
         self.engine_client.valid_parameters(data)
 
@@ -832,14 +832,14 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_logprobs_disabled_when_enabled(self):
         """Test valid_parameters rejects logprobs when disabled."""
         self.engine_client.enable_logprob = False
-        data = {"logprobs": True}
+        data = {"logprobs": True, "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_logprobs_with_invalid_type(self):
         """Test valid_parameters rejects invalid logprobs type."""
-        data = {"logprobs": "invalid"}
+        data = {"logprobs": "invalid", "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -847,7 +847,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_disabled(self):
         """Test valid_parameters rejects top_logprobs when disabled."""
         self.engine_client.enable_logprob = False
-        data = {"logprobs": True, "top_logprobs": 5}
+        data = {"logprobs": True, "top_logprobs": 5, "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -855,7 +855,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_invalid_type(self):
         """Test valid_parameters rejects invalid top_logprobs type."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": "invalid"}
+        data = {"logprobs": True, "top_logprobs": "invalid", "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -863,7 +863,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_negative(self):
         """Test valid_parameters rejects negative top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": -1}
+        data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -871,7 +871,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_too_large(self):
         """Test valid_parameters rejects top_logprobs > 20."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": 25}
+        data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -879,7 +879,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_valid(self):
         """Test valid_parameters accepts valid top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": 10}
+        data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
 
         # Should not raise exception
         self.engine_client.valid_parameters(data)
@@ -1702,6 +1702,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
             mock_config.model_config.enable_logprob = True
             mock_config.cache_config.enable_prefix_caching = False
             mock_config.cache_config.max_processor_cache = 0
+            mock_config.cache_config.swap_space = False  # Ensure cache_transfer is False
+            mock_config.cache_config.kvcache_storage_backend = None
             mock_config.parallel_config.tensor_parallel_size = 16  # > 8 (max_chips_per_node)
             mock_config.parallel_config.tensor_parallel_rank = 0
             mock_config.parallel_config.local_data_parallel_id = 0
@@ -1756,6 +1758,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
             mock_config.model_config.enable_logprob = True
             mock_config.cache_config.enable_prefix_caching = False
             mock_config.cache_config.max_processor_cache = 0
+            mock_config.cache_config.swap_space = False  # Ensure cache_transfer is False
+            mock_config.cache_config.kvcache_storage_backend = None
             mock_config.parallel_config.tensor_parallel_size = 1
             mock_config.parallel_config.tensor_parallel_rank = 0  # Rank 0 should init EPLB
             mock_config.parallel_config.local_data_parallel_id = 0
@@ -1896,7 +1900,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_max_tokens_out_of_range(self):
         """Test valid_parameters max_tokens validation."""
         # Covers line 393
-        data = {"max_tokens": 0}  # Invalid value
+        data = {"max_tokens": 0, "request_id": "test-id"}  # Invalid value, but add required request_id
 
         with self.assertRaises(ValueError) as context:
             self.engine_client.valid_parameters(data)
