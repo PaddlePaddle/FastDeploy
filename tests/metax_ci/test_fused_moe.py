@@ -178,6 +178,7 @@ class FusedMoe:
             top_k_weights,
             top_k_indices,
             expert_idx_per_token,
+            _,
         ) = moe_expert_dispatch(hidden_states, scores, None, None, self.top_k, False, self.quant_type, True)
 
         expert_idx_per_token = None
