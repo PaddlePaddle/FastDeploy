@@ -34,7 +34,7 @@ nohup python -m fastdeploy.router.launch \
     2>&1 >${FD_LOG_DIR}/nohup &
 
 # start prefill
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=4,5
 export FD_LOG_DIR="log/$LOG_DATE/prefill"
 rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
@@ -49,7 +49,7 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
 wait_for_health ${P_PORT}
 
 # start decode
-export CUDA_VISIBLE_DEVICES=2,3
+export CUDA_VISIBLE_DEVICES=6,7
 export FD_LOG_DIR="log/$LOG_DATE/decode"
 rm -rf ${FD_LOG_DIR} && mkdir -p ${FD_LOG_DIR}
 
@@ -75,3 +75,11 @@ curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
   "max_tokens": 100,
   "stream": false
 }'
+
+echo "正在停止由本脚本启动的服务..."
+# 根据您的具体端口列表终止
+for port in ${ROUTER_PORT} ${P_PORT} ${D_PORT}; do
+    lsof -ti :$port | xargs kill -9 2>/dev/null
+done
+sleep 3
+echo "服务停止完成。"
