@@ -568,11 +568,11 @@ class EngineClient:
 
             # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
-                return True, ""
+                return 200, "model weight is updated"
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight already"
+                return 400, "worker is updating model weight already"
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight, cannot update now"
+                return 403, "worker is clearing model weight, cannot update now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
             api_server_logger.info(
@@ -593,13 +593,13 @@ class EngineClient:
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
-                return False, "Update model weight timeout"
+                return 404, "update model weight timeout"
             api_server_logger.info(
-                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
                 if not self.enable_cache_transfer
                 else f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
             )
-            return True, ""
+            return 200, "update model weight successfully"
 
     def clear_load_weight(self, timeout=300):
         """
@@ -628,11 +628,11 @@ class EngineClient:
 
             # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                return True, ""
+                return 200, "model weight is cleared"
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight already"
+                return 400, "worker is clearing model weight already"
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight, cannot clear now"
+                return 403, "worker is updating model weight, cannot clear now"
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
             api_server_logger.info(
@@ -653,13 +653,13 @@ class EngineClient:
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
-                return False, "Clear model weight timeout"
+                return 404, "clear model weight timeout"
             api_server_logger.info(
-                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]})"
                 if not self.enable_cache_transfer
                 else f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
             )
-            return True, ""
+            return 200, "clear model weight successfully"
 
     def check_model_weight_status(self):
         return self.model_weights_status_signal.value[0] < 0
