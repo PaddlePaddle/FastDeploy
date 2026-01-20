@@ -603,7 +603,7 @@ class GPUModelRunner(ModelRunnerBase):
                     feature_idx += mm_token_lenght
                     thw_idx += 1
                 image_features_list.append(paddle.concat(merge_image_features, axis=0))
-            for _, index in req_idx_img_index_map.items():
+            for idx, index in req_idx_img_index_map.items():
                 if index != -1:
                     self.share_inputs["image_features_list"][idx] = image_features_list[index]
 
@@ -1318,11 +1318,12 @@ class GPUModelRunner(ModelRunnerBase):
             ):
                 logger.info("Multimodal models skip reordering if v1 scheduling is not enabled.")
             else:
+                self.share_inputs.enable_pd_reorder = True
                 self.share_inputs.condense()
                 reorder_split_prefill_and_decode(input_batch=self.share_inputs)
                 if self.speculative_decoding:
                     if self.speculative_method == "mtp":
-                        self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+                        self.proposer.reorder_inputs()
 
     def load_model(self) -> None:
         """load or download model"""

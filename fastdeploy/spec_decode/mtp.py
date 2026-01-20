@@ -1170,11 +1170,11 @@ class MTPProposer(Proposer):
             raise NotImplementedError
         return cache_type
 
-    def reorder_inputs(self, base_model_index_to_batch_id):
+    def reorder_inputs(self):
         """
         Reorder inputs to split prefill and decode.
         """
-        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs, base_model_index_to_batch_id)
+        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs)
 
     def _share_external_data(self, cache, cache_name, cache_shape):
         if current_platform.is_xpu():

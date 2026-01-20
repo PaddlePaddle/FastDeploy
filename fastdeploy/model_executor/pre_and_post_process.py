@@ -423,12 +423,16 @@ def post_process_normal(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
-    if not skip_save_output:
+        recover_batch_index_for_sampler_output(
+            sampler_output, model_output.index_to_batch_id, share_inputs.enable_pd_reorder
+        )
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
                 recover_model_output_map = recover_batch_index_for_output(
-                    model_output, model_output.index_to_batch_id, ["prompt_logprobs_list"]
+                    model_output,
+                    model_output.index_to_batch_id,
+                    share_inputs.enable_pd_reorder,
+                    ["prompt_logprobs_list"],
                 )
                 output = _build_stream_transfer_data(
                     sampler_output.sampled_token_ids,
@@ -517,15 +521,11 @@ def post_process_specualate(
             recover_model_output_map = recover_batch_index_for_output(
                 model_output,
                 model_output.index_to_batch_id,
-                ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
-            )
-            recover_model_output_map = recover_batch_index_for_output(
-                model_output,
-                model_output.index_to_batch_id,
+                share_inputs.enable_pd_reorder,
                 ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
             )
             recover_share_inputs = recover_batch_index_for_output(
-                share_inputs, model_output.index_to_batch_id, ["preempted_idx"]
+                share_inputs, model_output.index_to_batch_id, share_inputs.enable_pd_reorder, ["preempted_idx"]
             )
             speculate_save_output(
                 recover_model_output_map["accept_tokens"],
@@ -539,12 +539,17 @@ def post_process_specualate(
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
             )
         else:
-            recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, share_inputs.enable_pd_reorder
+            )
             recover_model_output_map = recover_batch_index_for_output(
-                model_output, model_output.index_to_batch_id, ["seq_lens_decoder", "prompt_lens"]
+                model_output,
+                model_output.index_to_batch_id,
+                share_inputs.enable_pd_reorder,
+                ["seq_lens_decoder", "prompt_lens"],
             )
             recover_share_inputs = recover_batch_index_for_output(
-                share_inputs, model_output.index_to_batch_id, ["preempted_idx"]
+                share_inputs, model_output.index_to_batch_id, share_inputs.enable_pd_reorder, ["preempted_idx"]
             )
             speculate_save_output_topk(
                 sampler_output.sampled_token_ids,

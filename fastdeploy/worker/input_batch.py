@@ -92,6 +92,7 @@ class InputBatch:
         self.enable_mm = self.model_config.enable_mm
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
+        self.enable_pd_reorder = False
 
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
@@ -461,8 +462,13 @@ class ProposerInputBatch(InputBatch):
         self.model_config: ModelConfig = fd_config.model_config
         self.cache_config: CacheConfig = fd_config.cache_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
+        self.enable_pd_reorder: bool = False
 
     def init_share_inputs(self):
+        # share with targe model
+        self.enable_pd_reorder = self.target_model_input_batch.enable_pd_reorder
+        self.index_to_batch_id = self.target_model_input_batch.index_to_batch_id
+
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
         self.input_ids_cpu = paddle.full(
@@ -662,10 +668,9 @@ class ProposerInputBatch(InputBatch):
             swap_data(self.decode_states, i1, i2)
 
 
-def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, index_to_batch_id):
+def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch):
     swapped = set()
-    input_batch.index_to_batch_id = index_to_batch_id
-    for i, target in index_to_batch_id.items():
+    for i, target in input_batch.index_to_batch_id.items():
         if i in swapped or target in swapped or i == target:
             continue
         input_batch.swap_states(i, target)
@@ -704,7 +709,7 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
-def recover_batch_index_for_output(output_cls, index_to_batch_id, recover_list):
+def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reorder, recover_list):
     """
     Reorder model_output according to index_to_batch_id mapping.
 
@@ -716,7 +721,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, recover_list):
         Updated model_output object with reordered attributes
     """
     res_map = {}
-    is_not_swapped = all(i == v for i, v in index_to_batch_id.items())
+    is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
     sorted_keys = sorted(index_to_batch_id.keys())
     index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
@@ -743,7 +748,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, recover_list):
     return res_map
 
 
-def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
+def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, enable_pd_reorder):
     """
     Reorder sampled_token_ids according to index_to_batch_id mapping.
 
@@ -754,7 +759,7 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
     Returns:
         Updated sampler_output object with reordered sampled_token_ids
     """
-    if all(i == v for i, v in index_to_batch_id.items()):
+    if not enable_pd_reorder or all(i == v for i, v in index_to_batch_id.items()):
         return
 
     sampled_token_ids = sampler_output.sampled_token_ids
