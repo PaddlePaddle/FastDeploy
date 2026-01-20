@@ -263,9 +263,32 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
-        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=True
+        K = x.shape[1]
+        align = 128
+
+        # 目标是 padding 到 128 的倍数
+        K_aligned = ((K + align - 1) // align) * align
+        pad_k = K_aligned - K
+
+        if pad_k > 0:
+            x = paddle.concat(
+                [
+                    x,
+                    paddle.zeros([x.shape[0], pad_k], dtype=x.dtype),
+                ],
+                axis=1,
+            )
+
+        # fp8 quant 要求 dim[1] 是 128 的倍数
+        x_q, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+            x,
+            using_pow2_scale=False,
+            output_scale_transpose=True,
         )
+
+        # 去掉 hidden 维 padding
+        if pad_k > 0:
+            x_q = x_q[:, :K]
         x_scale_tensor = x_scale_tensor.T
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         linear_out = deep_gemm_fp8_fp8_bf16_nt(

@@ -42,6 +42,48 @@ from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.ops import scaled_fp8_quant
 
 
+def fp8_quant_fordebug(
+    x: paddle.Tensor,
+    epsilon: float = 0.0,
+    input_transpose: bool = False,
+    output_scale_transpose: bool = True,
+    return_transpose_only: bool = False,
+    using_pow2_scale: bool = True,
+    using_ue8m0_scale: bool = False,
+    quant_method: str = "1x128",
+    output_type: str = "e4m3",
+    name: str | None = None,
+):
+
+    K = x.shape[1]
+    align = 128
+
+    # 目标是 padding 到 128 的倍数
+    K_aligned = ((K + align - 1) // align) * align
+    pad_k = K_aligned - K
+
+    if pad_k > 0:
+        x = paddle.concat(
+            [
+                x,
+                paddle.zeros([x.shape[0], pad_k], dtype=x.dtype),
+            ],
+            axis=1,
+        )
+
+    # fp8 quant 要求 dim[1] 是 128 的倍数
+    x_q, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+        x,
+        using_pow2_scale=using_pow2_scale,
+        output_scale_transpose=output_scale_transpose,
+    )
+
+    # 去掉 hidden 维 padding
+    if pad_k > 0:
+        x_q = x_q[:, :K]
+    return x_q, x_scale_tensor
+
+
 class TritonWeightOnlyMoEMethod(QuantMethodBase):
     """
     Use Triton Group Gemm to compute Fused MoE.
@@ -1228,9 +1270,7 @@ def python_op_fused_moe_kernel_paddle(
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
-    x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-        x, using_pow2_scale=False, output_scale_transpose=False
-    )
+    x_q, x_scale = fp8_quant_fordebug(x, using_pow2_scale=False, output_scale_transpose=False)
     x_scale = x_scale[: x.shape[0]]
 
     fused_moe_kernel_paddle[grid](
@@ -1282,9 +1322,7 @@ def python_op_fused_moe_kernel_paddle(
 
     grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),)
 
-    x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-        intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
-    )
+    x_q, x_scale = fp8_quant_fordebug(intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False)
     x_scale = x_scale[: x_q.shape[0]]
 
     fused_moe_kernel_paddle[grid](

@@ -46,6 +46,48 @@ def m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom_python_op_infermeta(
     )
 
 
+def fp8_quant_fordebug(
+    x: paddle.Tensor,
+    epsilon: float = 0.0,
+    input_transpose: bool = False,
+    output_scale_transpose: bool = True,
+    return_transpose_only: bool = False,
+    using_pow2_scale: bool = True,
+    using_ue8m0_scale: bool = False,
+    quant_method: str = "1x128",
+    output_type: str = "e4m3",
+    name: str | None = None,
+):
+
+    K = x.shape[1]
+    align = 128
+
+    # 目标是 padding 到 128 的倍数
+    K_aligned = ((K + align - 1) // align) * align
+    pad_k = K_aligned - K
+
+    if pad_k > 0:
+        x = paddle.concat(
+            [
+                x,
+                paddle.zeros([x.shape[0], pad_k], dtype=x.dtype),
+            ],
+            axis=1,
+        )
+
+    # fp8 quant 要求 dim[1] 是 128 的倍数
+    x_q, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+        x,
+        using_pow2_scale=using_pow2_scale,
+        output_scale_transpose=output_scale_transpose,
+    )
+
+    # 去掉 hidden 维 padding
+    if pad_k > 0:
+        x_q = x_q[:, :K]
+    return x_q, x_scale_tensor
+
+
 @register_custom_python_op(
     name="m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom",
     infer_meta=m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom_python_op_infermeta,
@@ -92,9 +134,7 @@ def m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom_python_op(
     ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
     # down_proj
-    ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-        ffn_out, using_pow2_scale=False
-    )
+    ffn_in_x, ffn_in_x_scale_tensor = fp8_quant_fordebug(ffn_out, using_pow2_scale=False)
     ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
     ffn_out = paddle.empty(
@@ -237,9 +277,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         # 2. Dynamic compute blockwise quantization scales
-        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
-        )
+        x, x_scale_tensor = fp8_quant_fordebug(x, using_pow2_scale=False, output_scale_transpose=False)
         x_scale_tensor = x_scale_tensor[: x.shape[0]]
 
         event = deep_ep.Buffer.capture()
@@ -316,9 +354,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
             # down_proj
-            ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-                ffn_out, using_pow2_scale=False
-            )
+            ffn_in_x, ffn_in_x_scale_tensor = fp8_quant_fordebug(ffn_out, using_pow2_scale=False)
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
             del ffn_out
@@ -472,7 +508,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
-        recv_x, recv_x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
+        recv_x, recv_x_scale = fp8_quant_fordebug(
             x,
             using_pow2_scale=False,
             output_scale_transpose=False,
