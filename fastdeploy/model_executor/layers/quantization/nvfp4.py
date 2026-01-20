@@ -80,17 +80,17 @@ class ModelOptNvFp4Config(QuantConfigBase):
         if not quant_method:
             raise ValueError("Missing 'quant_algo' in quantization config")
 
-        Handle kv_cache_quant_algo with proper type validation
+        # Handle kv_cache_quant_algo with proper type validation
         kv_cache_quant_algo_raw = quant_config.get("kv_cache_quant_algo")
         if kv_cache_quant_algo_raw is None:
-            No KV cache quantization by default
+            # No KV cache quantization by default
             kv_cache_quant_algo = None
         elif isinstance(kv_cache_quant_algo_raw, str):
             kv_cache_quant_algo = kv_cache_quant_algo_raw
         else:
             raise ValueError(f"kv_cache_quant_algo must be a string, got " f"{type(kv_cache_quant_algo_raw)}")
 
-        Handle group_size with proper type validation
+        # Handle group_size with proper type validation
         group_size_raw = quant_config.get("group_size")
         if group_size_raw is None:
             group_size = 16  Default value
@@ -102,16 +102,16 @@ class ModelOptNvFp4Config(QuantConfigBase):
             except (ValueError, TypeError):
                 raise ValueError(f"group_size must be an integer, got {type(group_size_raw)}") from None
 
-        "exclude_modules" is the key in the legacy hf_quant_config.json
+        # "exclude_modules" is the key in the legacy hf_quant_config.json
         exclude_modules = quant_config.get("exclude_modules", [])
         if not isinstance(exclude_modules, list):
             raise ValueError(f"exclude_modules must be a list, got {type(exclude_modules)}")
 
         is_checkpoint_nvfp4_serialized = "NVFP4" in quant_method
 
-        For FP4, these fields are required
+        # For FP4, these fields are required
         if is_checkpoint_nvfp4_serialized and "quantization" in config:
-            Check if required fields are present in the quantization config
+            # Check if required fields are present in the quantization config
             quant_config = config["quantization"]
             required_fields = ["group_size", "kv_cache_quant_algo", "exclude_modules"]
             missing_fields = [field for field in required_fields if field not in quant_config]
@@ -323,7 +323,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         output_shape = [x_m, w_n]
         output_dtype = x.dtype
 
-        Quantize BF16 or FP16 to (FP4 and interleaved block scale)
+        # Quantize BF16 or FP16 to (FP4 and interleaved block scale)
         from flashinfer import fp4_quantize
 
         x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
@@ -377,7 +377,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         self.backend = "none"
 
         if envs.FD_FLASHINFER_MOE_BACKEND is None:
-            currently support flashinfer-cutlass,  flashinfer-trtllm will support in the future
+            # currently support flashinfer-cutlass,  flashinfer-trtllm will support in the future
             if has_flashinfer():
                 self.backend = "flashinfer-cutlass"
         elif envs.FD_FLASHINFER_MOE_BACKEND.startswith("flashinfer-"):
@@ -441,7 +441,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-        weight_scale
+        # weight_scale
         setattr(
             layer,
             up_gate_proj_scale_name,
@@ -460,7 +460,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
-        weight_scale_2
+        # weight_scale_2
         layer.up_gate_proj_weight_scale_2 = layer.create_parameter(
             shape=[layer.num_local_experts, 2],
             dtype="float32",
@@ -471,7 +471,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             dtype="float32",
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        input_scale
+        # input_scale
         layer.up_gate_proj_input_scale = layer.create_parameter(
             shape=[layer.num_local_experts, 2],
             dtype="float32",
@@ -511,7 +511,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
     def swizzle_blockscale(self, scale):
         assert scale.dtype == paddle.float8_e4m3fn
-        Pad and blockwise interleave weight_scale
+        # Pad and blockwise interleave weight_scale
         scale_dim = len(scale.shape)
         if len(scale.shape) == 2:
             scale = scale.unsqueeze(0)
@@ -536,8 +536,8 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
     @property
     def load_up_proj_weight_first(self) -> bool:
-        FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-        目前默认给True
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+        # 目前默认给True
         return True
 
     def process_weights_after_loading(self, layer):
@@ -548,7 +548,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale).cast("float32")
         down_proj_input_scale = paddle.max(layer.down_proj_input_scale).cast("float32")
 
-        Create shared parameters
+        # Create shared parameters
         create_parameter_and_copy(
             layer, "g1_alphas", (up_gate_proj_input_scale * up_gate_proj_weight_scale_2).cast("float32")
         )
@@ -607,7 +607,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         output = paddle.empty_like(x)
 
         if self.backend == "flashinfer-cutlass":
-            flashinfer cutlass
+            # flashinfer cutlass
             from flashinfer.fused_moe import (
                 cutlass_fused_moe as flashinfer_cutlass_fused_moe,
             )
@@ -638,5 +638,5 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
             return output
 
-        flashinfer-trtllm
+        # flashinfer-trtllm
         return output
