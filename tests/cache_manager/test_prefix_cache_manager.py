@@ -133,6 +133,7 @@ def make_prefix_cache_manager(
         num_attention_heads=8,
         num_key_value_heads=8,
         head_dim=16,
+        architectures=["test_model"],
     )
     model_cfg.print = lambda *args, **kwargs: None
     cache_cfg.model_cfg = model_cfg
