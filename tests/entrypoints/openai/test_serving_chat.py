@@ -16,14 +16,25 @@
 
 import asyncio
 import json
+import types
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import numpy as np
 import paddle
 
-from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
+if not hasattr(paddle, "compat"):
+    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
+
+from fastdeploy.entrypoints.openai.protocol import (
+    ChatCompletionRequest,
+    DeltaMessage,
+    LogProbEntry,
+    StreamOptions,
+)
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
-from fastdeploy.worker.output import Logprob, LogprobsTensors
+from fastdeploy.utils import ErrorCode, ParameterError
+from fastdeploy.worker.output import Logprob, LogprobsLists, LogprobsTensors
 
 
 class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
@@ -41,6 +52,49 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             max_waiting_time=10,
             chat_template=None,
         )
+
+    def _make_handler(self, *, max_waiting_time=10, models=None, ips=None):
+        return OpenAIServingChat(
+            self.mock_engine,
+            models=models,
+            pid=123,
+            ips=ips,
+            max_waiting_time=max_waiting_time,
+            chat_template=None,
+        )
+
+    @staticmethod
+    def _setup_semaphore(handler):
+        handler.engine_client.semaphore = MagicMock()
+        handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        handler.engine_client.semaphore.release = MagicMock()
+        handler.engine_client.semaphore.status = Mock(return_value="ok")
+        return handler
+
+    @staticmethod
+    def _make_logprobs_lists(token_ids, logprobs, ranks):
+        return LogprobsLists(
+            logprob_token_ids=[token_ids],
+            logprobs=[logprobs],
+            sampled_token_ranks=ranks,
+        )
+
+    def test_init_master_ip_from_list_and_string(self):
+        """Test master_ip selection for list and string ips inputs."""
+        with patch("fastdeploy.entrypoints.openai.serving_chat.get_host_ip", return_value="1.2.3.4"):
+            handler_list = self._make_handler(ips=["1.2.3.4", "2.2.2.2"])
+            self.assertEqual(handler_list.master_ip, "1.2.3.4")
+            self.assertTrue(handler_list.is_master_ip)
+
+            handler_str = self._make_handler(ips="5.5.5.5,6.6.6.6")
+            self.assertEqual(handler_str.master_ip, "5.5.5.5")
+            self.assertFalse(handler_str.is_master_ip)
+
+    def test_check_master_false(self):
+        """Test _check_master when neither master flag nor ip match."""
+        self.chat_completion_handler.engine_client.is_master = False
+        self.chat_completion_handler.is_master_ip = False
+        self.assertFalse(self.chat_completion_handler._check_master())
 
     def test_build_prompt_logprobs_basic(self):
         """Test basic functionality of _build_prompt_logprobs"""
@@ -194,6 +248,17 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), num_prompt_tokens + 1)
         self.assertIsNone(result[0])
 
+    def test_build_prompt_logprobs_no_decode(self):
+        """Test _build_prompt_logprobs without decoding tokens."""
+        token_ids = paddle.to_tensor([[1, 2]], dtype=paddle.int64)
+        logprobs = paddle.to_tensor([[-0.1, -0.2]], dtype=paddle.float32)
+        ranks = paddle.to_tensor([1], dtype=paddle.int64)
+        prompt_logprobs_tensors = LogprobsTensors(token_ids, logprobs, ranks)
+
+        result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, 2, False)
+
+        self.assertIsNone(result[1][1].decoded_token)
+
     def test_make_logprob_dict(self):
         """Test the static method _make_logprob_dict"""
         logprobs = [-0.1, -0.2, -0.3]
@@ -265,6 +330,519 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[2].logprob, -0.2)
         self.assertEqual(result[2].rank, 1)  # topk rank starts from 1
         self.assertEqual(result[2].decoded_token, "token2")
+
+    def test_create_chat_logprobs_invalid_input_returns_none(self):
+        """Test _create_chat_logprobs with invalid inputs"""
+        for bad_input in (None, [[1], [2]], [[], [], []]):
+            with self.subTest(bad_input=bad_input):
+                result = self.chat_completion_handler._create_chat_logprobs(
+                    bad_input,
+                    request_logprobs=True,
+                    request_top_logprobs=2,
+                    request_decode_flag=True,
+                )
+                self.assertIsNone(result)
+
+    def test_build_logprobs_response_without_decode(self):
+        """Test _build_logprobs_response when decode flag is False"""
+        response_logprobs = self._make_logprobs_lists([10, 11], [-0.1, -0.2], [1])
+
+        result = self.chat_completion_handler._build_logprobs_response(
+            request_logprobs=True,
+            response_logprobs=response_logprobs,
+            request_top_logprobs=1,
+            request_decode_flag=False,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result.content), 1)
+        sampled_entry = result.content[0]
+        self.assertEqual(sampled_entry.token, "")
+        self.assertEqual(sampled_entry.bytes, [])
+        self.assertEqual(len(sampled_entry.top_logprobs), 1)
+
+    def test_build_logprobs_response_decode_error_returns_none(self):
+        """Test _build_logprobs_response handles decode errors"""
+        response_logprobs = self._make_logprobs_lists([10, 11], [-0.1, -0.2], [1])
+
+        with patch.object(
+            self.chat_completion_handler.engine_client.data_processor,
+            "process_logprob_response",
+            side_effect=ValueError,
+        ):
+            result = self.chat_completion_handler._build_logprobs_response(
+                request_logprobs=True,
+                response_logprobs=response_logprobs,
+                request_top_logprobs=1,
+                request_decode_flag=True,
+            )
+
+        self.assertIsNone(result)
+
+    def test_build_logprobs_response_invalid_request(self):
+        """Test _build_logprobs_response returns None for invalid request args."""
+        response_logprobs = self._make_logprobs_lists([10, 11], [-0.1, -0.2], [1])
+        result = self.chat_completion_handler._build_logprobs_response(
+            request_logprobs=False,
+            response_logprobs=response_logprobs,
+            request_top_logprobs=1,
+            request_decode_flag=True,
+        )
+        self.assertIsNone(result)
+
+        result = self.chat_completion_handler._build_logprobs_response(
+            request_logprobs=True,
+            response_logprobs=response_logprobs,
+            request_top_logprobs=-1,
+            request_decode_flag=True,
+        )
+        self.assertIsNone(result)
+
+    def test_build_logprobs_response_replacement_bytes(self):
+        """Test _build_logprobs_response replaces invalid bytes tokens."""
+        response_logprobs = self._make_logprobs_lists([10, 11], [-0.1, -0.2], [1])
+        with patch.object(
+            self.chat_completion_handler.engine_client.data_processor,
+            "process_logprob_response",
+            side_effect=["bad\ufffd", "ok"],
+        ):
+            result = self.chat_completion_handler._build_logprobs_response(
+                request_logprobs=True,
+                response_logprobs=response_logprobs,
+                request_top_logprobs=1,
+                request_decode_flag=True,
+            )
+        self.assertIsNotNone(result)
+        self.assertTrue(result.content[0].token.startswith("bytes:"))
+
+    def test_create_chat_logprobs_multiple_steps(self):
+        """Test _create_chat_logprobs merges multiple steps."""
+        output_top_logprobs = [
+            [[1, 2], [3, 4]],
+            [[-0.1, -0.2], [-0.3, -0.4]],
+            [1, 1],
+        ]
+        with patch.object(
+            self.chat_completion_handler.engine_client.data_processor,
+            "process_logprob_response",
+            return_value="tok",
+        ):
+            result = self.chat_completion_handler._create_chat_logprobs(
+                output_top_logprobs,
+                request_logprobs=True,
+                request_top_logprobs=1,
+                request_decode_flag=True,
+            )
+        self.assertEqual(len(result.content), 2)
+
+    def test_create_chat_logprobs_request_false(self):
+        """Test _create_chat_logprobs returns None when logprobs not requested."""
+        output_top_logprobs = [
+            [[1, 2]],
+            [[-0.1, -0.2]],
+            [1],
+        ]
+        result = self.chat_completion_handler._create_chat_logprobs(
+            output_top_logprobs,
+            request_logprobs=False,
+            request_top_logprobs=1,
+            request_decode_flag=True,
+        )
+        self.assertIsNone(result)
+
+    def test_create_streaming_error_response(self):
+        """Test _create_streaming_error_response returns expected payload"""
+        message = "test streaming error"
+        error_json = self.chat_completion_handler._create_streaming_error_response(message)
+        payload = json.loads(error_json)
+        self.assertEqual(payload["error"]["message"], message)
+
+    async def test_create_chat_completion_not_master(self):
+        """Test create_chat_completion returns error on non-master."""
+        self.chat_completion_handler.engine_client.is_master = False
+        self.chat_completion_handler.is_master_ip = False
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+        result = await self.chat_completion_handler.create_chat_completion(request)
+        self.assertIn("Only master node can accept completion request", result.error.message)
+
+    async def test_create_chat_completion_unsupported_model(self):
+        """Test create_chat_completion rejects unsupported models."""
+        mock_models = MagicMock()
+        mock_models.is_supported_model.return_value = (False, "bad-model")
+        mock_models.model_paths = [types.SimpleNamespace(name="good-model")]
+        self.chat_completion_handler.models = mock_models
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False, model="bad")
+        result = await self.chat_completion_handler.create_chat_completion(request)
+        self.assertEqual(result.error.code, ErrorCode.MODEL_NOT_SUPPORT)
+
+    async def test_create_chat_completion_parameter_error(self):
+        """Test create_chat_completion handles ParameterError from formatter."""
+        handler = self._setup_semaphore(self._make_handler(max_waiting_time=-1))
+        handler.engine_client.format_and_add_data = AsyncMock(
+            side_effect=ParameterError(param="max_tokens", message="bad token")
+        )
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+        result = await handler.create_chat_completion(request)
+        self.assertEqual(result.error.param, "max_tokens")
+        handler.engine_client.semaphore.release.assert_called_once()
+
+    async def test_create_chat_completion_request_id_prefix(self):
+        """Test create_chat_completion adds chatcmpl- prefix."""
+        handler = self._setup_semaphore(self._make_handler())
+        handler.engine_client.format_and_add_data = AsyncMock(return_value=[1, 2, 3])
+        handler.chat_completion_full_generator = AsyncMock(return_value="ok")
+
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=False,
+            request_id="custom",
+        )
+        result = await handler.create_chat_completion(request)
+        self.assertEqual(result, "ok")
+        handler.chat_completion_full_generator.assert_called_once()
+        called_request_id = handler.chat_completion_full_generator.call_args.args[1]
+        self.assertTrue(called_request_id.startswith("chatcmpl-"))
+
+    async def test_create_chat_completion_request_id_keeps_prefix(self):
+        """Test create_chat_completion preserves chatcmpl- prefix."""
+        handler = self._setup_semaphore(self._make_handler())
+        handler.engine_client.format_and_add_data = AsyncMock(return_value=[1])
+        handler.chat_completion_full_generator = AsyncMock(return_value="ok")
+
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=False,
+            request_id="chatcmpl-custom",
+        )
+        result = await handler.create_chat_completion(request)
+        self.assertEqual(result, "ok")
+        called_request_id = handler.chat_completion_full_generator.call_args.args[1]
+        self.assertEqual(called_request_id, "chatcmpl-custom")
+
+    async def test_create_chat_completion_user_stream_numpy_prompt(self):
+        """Test create_chat_completion uses user id and numpy prompt ids."""
+        handler = self._setup_semaphore(self._make_handler())
+        handler.engine_client.format_and_add_data = AsyncMock(return_value=np.array([1, 2]))
+        handler.chat_completion_stream_generator = Mock(return_value="streamed")
+
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+            user="user1",
+        )
+        result = await handler.create_chat_completion(request)
+        self.assertEqual(result, "streamed")
+        called_prompt_tokens = handler.chat_completion_stream_generator.call_args.args[3]
+        self.assertEqual(called_prompt_tokens, [1, 2])
+
+    async def test_create_chat_completion_full_generator_error(self):
+        """Test create_chat_completion handles full generator error."""
+        handler = self._setup_semaphore(self._make_handler())
+        handler.engine_client.format_and_add_data = AsyncMock(return_value=[1])
+        handler.chat_completion_full_generator = AsyncMock(side_effect=RuntimeError("boom"))
+
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+        result = await handler.create_chat_completion(request)
+        self.assertIn("full generator error", result.error.message)
+
+    async def test_create_chat_completion_formatter_error(self):
+        """Test create_chat_completion handles formatter exceptions."""
+        handler = self._setup_semaphore(self._make_handler())
+        handler.engine_client.format_and_add_data = AsyncMock(side_effect=RuntimeError("bad format"))
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+        result = await handler.create_chat_completion(request)
+        self.assertIn("generator error", result.error.message)
+
+    async def test_chat_completion_stream_generator_multimodal_usage(self):
+        """Test streaming generator with multimodal content and usage flags."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            prompt_logprobs=1,
+            logprobs=True,
+            top_logprobs=1,
+            include_draft_logprobs=True,
+            stream=True,
+            return_token_ids=True,
+            collect_metrics=True,
+            stream_options=StreamOptions(include_usage=True, continuous_usage_stats=True),
+        )
+
+        request_id = "stream_req"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2]
+        prompt_tokens = "Hello"
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.ori_vocab_size = 100
+
+        response_base = {
+            "request_id": f"{request_id}_0",
+            "error_code": 200,
+            "metrics": {
+                "first_token_time": 1234567890,
+                "inference_start_time": 1234567880,
+                "engine_recv_latest_token_time": 1234567891,
+                "arrival_time": 1234567890,
+                "request_start_time": 1234567870,
+                "speculate_metrics": {"foo": "bar"},
+            },
+            "prompt_logprobs": LogprobsTensors(
+                logprob_token_ids=paddle.to_tensor([[1, 2]], dtype=paddle.int64),
+                logprobs=paddle.to_tensor([[-0.1, -0.2]], dtype=paddle.float32),
+                selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
+            ),
+        }
+
+        response_first = {
+            **response_base,
+            "outputs": {
+                "token_ids": [5],
+                "text": "Hi",
+                "top_logprobs": [[[5, 6]], [[-0.1, -0.2]], [1]],
+                "draft_top_logprobs": [[[5, 6]], [[-0.1, -0.2]], [1]],
+                "multipart": [{"type": "text", "text": "Hi"}],
+                "delta_message": DeltaMessage(
+                    content="Hi",
+                    reasoning_content="because",
+                    tool_calls=[{"index": 0, "id": "call_1", "type": "function", "function": {"name": "tool"}}],
+                ),
+                "num_image_tokens": 1,
+                "reasoning_token_num": 1,
+                "audio_content": "audio",
+                "completion_tokens": "1",
+            },
+            "finished": False,
+            "num_cached_tokens": 1,
+            "num_input_image_tokens": 2,
+            "num_input_video_tokens": 3,
+        }
+
+        response_last = {
+            **response_base,
+            "outputs": {
+                "token_ids": [7],
+                "text": "Bye",
+                "top_logprobs": [[[7, 8]], [[-0.3, -0.4]], [1]],
+                "draft_top_logprobs": [[[7, 8]], [[-0.3, -0.4]], [1]],
+                "multipart": [{"type": "text", "text": "Bye"}],
+                "completion_tokens": "1",
+            },
+            "finished": True,
+            "trace_carrier": "trace",
+            "error_msg": "Recover finished",
+            "num_cached_tokens": 1,
+            "num_input_image_tokens": 2,
+            "num_input_video_tokens": 3,
+        }
+
+        async def mock_async_generator():
+            yield response_first
+            yield response_last
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = True
+        mock_response_processor.process_response_chat.return_value = mock_async_generator()
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor", return_value=mock_response_processor
+        ):
+            with patch.object(
+                self.chat_completion_handler.engine_client.data_processor, "process_logprob_response"
+            ) as mock_decode:
+                mock_decode.return_value = "tok"
+
+                chunks = []
+                async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=5
+                ):
+                    chunks.append(chunk)
+
+        self.assertGreater(len(chunks), 0)
+        self.assertTrue(any("usage" in chunk for chunk in chunks))
+
+    async def test_chat_completion_full_generator_with_draft_and_prompt_logprobs(self):
+        """Test full generator includes draft logprobs and prompt logprobs."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            prompt_logprobs=1,
+            logprobs=True,
+            top_logprobs=1,
+            include_draft_logprobs=True,
+            stream=False,
+            return_token_ids=True,
+        )
+
+        request_id = "full_req"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2]
+        prompt_tokens = "Hello"
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.ori_vocab_size = 100
+
+        response = {
+            "request_id": f"{request_id}_0",
+            "error_code": 200,
+            "metrics": {
+                "first_token_time": 1234567890,
+                "inference_start_time": 1234567880,
+                "engine_recv_latest_token_time": 1234567891,
+                "arrival_time": 1234567890,
+                "request_start_time": 1234567870,
+            },
+            "prompt_logprobs": LogprobsTensors(
+                logprob_token_ids=paddle.to_tensor([[1, 2]], dtype=paddle.int64),
+                logprobs=paddle.to_tensor([[-0.1, -0.2]], dtype=paddle.float32),
+                selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
+            ),
+            "outputs": {
+                "token_ids": [5],
+                "text": "Hi",
+                "top_logprobs": [[[5, 6]], [[-0.1, -0.2]], [1]],
+                "draft_top_logprobs": [[[5, 6]], [[-0.1, -0.2]], [1]],
+                "multipart": [{"type": "text", "text": "Hi"}],
+                "reasoning_token_num": 1,
+                "image_token_num": 2,
+                "completion_tokens": "1",
+            },
+            "finished": True,
+            "trace_carrier": "trace",
+            "num_cached_tokens": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+        }
+
+        async def mock_async_generator():
+            yield response
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+        mock_response_processor.process_response_chat.return_value = mock_async_generator()
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor", return_value=mock_response_processor
+        ):
+            with patch.object(
+                self.chat_completion_handler.engine_client.data_processor, "process_logprob_response"
+            ) as mock_decode:
+                mock_decode.return_value = "tok"
+                result = await self.chat_completion_handler.chat_completion_full_generator(
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=3
+                )
+
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.choices[0].draft_logprobs)
+        self.assertIsNotNone(result.choices[0].prompt_logprobs)
+
+    async def test_create_chat_completion_choice_finish_reasons(self):
+        """Test _create_chat_completion_choice finish_reason variants."""
+        response_processor = MagicMock()
+        response_processor.enable_multimodal_content.return_value = False
+        log_entry = LogProbEntry(token="t", logprob=-0.1, bytes=[])
+        base_output = {
+            "text": "hello",
+            "token_ids": [1],
+            "completion_tokens": "1",
+            "metrics": {"request_start_time": 1.0},
+        }
+        data_tool = {
+            "request_id": "req_0",
+            "outputs": {
+                **base_output,
+                "tool_call": [{"id": "call_1", "type": "function", "function": {"name": "tool", "arguments": "{}"}}],
+            },
+            "metrics": {"request_start_time": 1.0},
+        }
+        request = ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], return_token_ids=True)
+
+        choice_tool = await self.chat_completion_handler._create_chat_completion_choice(
+            data=data_tool,
+            request=request,
+            prompt_token_ids=[1, 2],
+            prompt_tokens="hello",
+            completion_token_ids=[3],
+            previous_num_tokens=1,
+            num_cached_tokens=[0],
+            num_input_image_tokens=[0],
+            num_input_video_tokens=[0],
+            num_image_tokens=[0],
+            logprob_contents=[[log_entry]],
+            draft_logprob_contents=[[log_entry]],
+            response_processor=response_processor,
+            prompt_logprobs_res_list=[[{1: Logprob(logprob=-0.1, rank=1, decoded_token="t")}]],
+            max_tokens=5,
+            speculate_metrics=None,
+        )
+        self.assertEqual(choice_tool.finish_reason, "tool_calls")
+
+        data_length = {
+            "request_id": "req_0",
+            "outputs": base_output,
+            "metrics": {"request_start_time": 1.0},
+        }
+        choice_length = await self.chat_completion_handler._create_chat_completion_choice(
+            data=data_length,
+            request=request,
+            prompt_token_ids=[1],
+            prompt_tokens="hello",
+            completion_token_ids=[3],
+            previous_num_tokens=2,
+            num_cached_tokens=[0],
+            num_input_image_tokens=[0],
+            num_input_video_tokens=[0],
+            num_image_tokens=[0],
+            logprob_contents=[[]],
+            draft_logprob_contents=[[]],
+            response_processor=response_processor,
+            prompt_logprobs_res_list=[[]],
+            max_tokens=2,
+            speculate_metrics=None,
+        )
+        self.assertEqual(choice_length.finish_reason, "length")
+
+        data_recover = {
+            "request_id": "req_0",
+            "outputs": base_output,
+            "metrics": {"request_start_time": 1.0},
+            "error_msg": "Recover finished",
+        }
+        choice_recover = await self.chat_completion_handler._create_chat_completion_choice(
+            data=data_recover,
+            request=request,
+            prompt_token_ids=[1],
+            prompt_tokens="hello",
+            completion_token_ids=[3],
+            previous_num_tokens=1,
+            num_cached_tokens=[0],
+            num_input_image_tokens=[0],
+            num_input_video_tokens=[0],
+            num_image_tokens=[0],
+            logprob_contents=[[]],
+            draft_logprob_contents=[[]],
+            response_processor=response_processor,
+            prompt_logprobs_res_list=[[]],
+            max_tokens=5,
+            speculate_metrics=None,
+        )
+        self.assertEqual(choice_recover.finish_reason, "recover_stop")
 
     async def test_chat_completion_stream_generator_with_prompt_logprobs(self):
         """Test chat_completion_stream_generator with prompt_logprobs enabled"""
