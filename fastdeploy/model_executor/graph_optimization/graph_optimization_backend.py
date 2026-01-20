@@ -125,10 +125,6 @@ class GraphOptBackend:
                 backend,
             ).__get__(self.runnable.__self__)
 
-        self.cudagraph_switch_threshold = (
-            1024 if self.fd_config.graph_opt_config.graph_opt_level > 0 else self.max_captre_size
-        )
-
     def __call__(self, **kwargs):
         if not self.fd_config.graph_opt_config.use_cudagraph:
             return self.runnable(**kwargs)
@@ -143,7 +139,7 @@ class GraphOptBackend:
             # only count the actual load.
             self._debug_count_total_step += 1
 
-        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.cudagraph_switch_threshold):
+        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.max_captre_size):
             return self.dy_runnable(**kwargs)
         else:
             self._debug_count_cudagraph_replay += 1

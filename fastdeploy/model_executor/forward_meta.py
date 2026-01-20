@@ -73,6 +73,10 @@ class ForwardMeta:
     # Use cuda graph in this step or not. Used to avoid run cuda graph when in dummy run or prefill stage.
     step_use_cudagraph: bool = False
 
+    # Flag indicating RoPE was already applied externally (e.g., by PaddleFormers)
+    # When True, FlashAttentionBackend uses identity RoPE (cos=1, sin=0) to avoid double application
+    rope_already_applied: bool = False
+
     # Attention backend object
     attn_backend: AttentionBackend = None
     # Forward mode used during attention
