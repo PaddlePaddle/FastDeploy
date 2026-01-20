@@ -506,8 +506,9 @@ class DataProcessor(BaseDataProcessor):
                 response_dict,
             )
             if tool_call_delta_message:
-                response_dict["outputs"]["text"] = tool_call_delta_message.content
-                response_dict["outputs"]["tool_calls"] = tool_call_delta_message.tool_calls
+                if tool_call_delta_message.tool_calls:
+                    response_dict["outputs"]["text"] = tool_call_delta_message.content
+                    response_dict["outputs"]["tool_calls"] = tool_call_delta_message.tool_calls
             else:
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True
