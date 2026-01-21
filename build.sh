@@ -366,6 +366,8 @@ function build_deep_gemm() {
   # TODO: remove this function and import deep_gemm from paddlefleet
   echo -e "${BLUE}[build]${NONE} building and installing deep_gemm..."
   DEEPGEMM_SRC_DIR="custom_ops/third_party/DeepGEMM"
+  rm -rf $DEEPGEMM_SRC_DIR
+  git submodule update --init --recursive
   cd $DEEPGEMM_SRC_DIR
   git submodule update --init
   bash install.sh

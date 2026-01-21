@@ -141,8 +141,7 @@ class DeepEPBuffer:
                 self.num_nvl_bytes,
                 self.num_rdma_bytes,
                 low_latency_mode=True,
-                # num_qps_per_rank=24,
-                num_qps_per_rank=48,
+                num_qps_per_rank=24,
             )
             self.deepep_buffer.set_num_sms(14)  # TODO: tune in future
         else:
@@ -155,8 +154,7 @@ class DeepEPBuffer:
                     self.num_nvl_bytes,
                     self.num_rdma_bytes,
                     low_latency_mode=True,
-                    # num_qps_per_rank=24,
-                    num_qps_per_rank=48,
+                    num_qps_per_rank=24,
                 )
             else:
                 raise ValueError(f"Unknown generation phase: {self.moe_phase.phase}")
