@@ -225,7 +225,7 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
     """
     from fastdeploy.model_executor.ops.gpu.deep_gemm import ceil_div
-
+    print("shape:",x.shape,"type: ",x.dtype,"strides:",x.strides)
     assert x.dim() == 2
     m, n = x.shape
     x_padded = paddle.zeros(
@@ -246,7 +246,7 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     x_amax = paddle.clip(x_amax, min=1e-4)
     x_scaled = (x_view * (448.0 / x_amax)).astype(paddle.float8_e4m3fn)
     return x_scaled.view_as(x_padded)[:m, :n].contiguous(), (
-        paddle.view(x_amax / 448.0, (x_view.shape[0], x_view.shape[2]))
+        paddle.view(1.0 / (448.0 / x_amax), (x_view.shape[0], x_view.shape[2]))
     )
 
 
