@@ -46,6 +46,18 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  four_cards_test:
+    name: Run Four Cards Tests
+    needs: [clone,build]
+    uses: ./.github/workflows/_gpu_4cards_case_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
   logprob_test:
     name: Run FastDeploy LogProb Tests
     needs: [build]
