@@ -202,6 +202,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # use_in_ep
                 token_all_num,
             )
+            # can not del recv_x in tbo case.
             # del recv_x
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
