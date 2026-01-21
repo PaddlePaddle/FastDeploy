@@ -16,6 +16,14 @@
 
 constexpr float epsilon = 1e-10;
 
+__host__ __device__ __forceinline__ int ceil_div(int x, int y) {
+  return (x + y - 1) / y;
+}
+
+__host__ __device__ __forceinline__ int align(int x, int y) {
+  return ceil_div(x, y) * y;
+}
+
 template <typename T, typename ScaleT, bool UseUE8M0>
 __global__ void masked_quant_per_token_per_block(
     const T *input,
