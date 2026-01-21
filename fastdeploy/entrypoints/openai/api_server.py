@@ -24,7 +24,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import uvicorn
-import zmq
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -266,7 +265,6 @@ async def lifespan(app: FastAPI):
     reward_handler = OpenAIServingReward(
         engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
-    engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
@@ -282,7 +280,18 @@ async def lifespan(app: FastAPI):
         if envs.FD_ENABLE_ASYNC_LLM:
             await llm_engine.shutdown()
         await engine_client.connection_manager.close()
-        engine_client.zmq_client.close()
+        if hasattr(engine_client, "fmq_a2e_producer") and engine_client.fmq_a2e_producer is not None:
+            try:
+                if (
+                    hasattr(engine_client.fmq_a2e_producer, "socket")
+                    and engine_client.fmq_a2e_producer.socket is not None
+                ):
+                    engine_client.fmq_a2e_producer.socket.close()
+                    api_server_logger.info("FMQ producer socket closed successfully.")
+            except Exception as e:
+                api_server_logger.error(f"Error closing fmq_producer: {e}")
+            finally:
+                engine_client.fmq_a2e_producer = None
         from prometheus_client import multiprocess
 
         multiprocess.mark_process_dead(os.getpid())

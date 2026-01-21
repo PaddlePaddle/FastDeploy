@@ -35,7 +35,7 @@ from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import FMQFactory, IPCSignal
 from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, llm_logger
@@ -299,6 +299,7 @@ class AsyncLLM(EngineServiceClient):
         # Create high-performance async connection manager
         self.connection_manager = None
         self.request_client = None
+        self.fmq_a2e_producer = None
 
         # Output processor uses data_processor for post-processing engine outputs
         self.output_processor = AsyncOutputProcessor(self.data_processor)
@@ -306,6 +307,11 @@ class AsyncLLM(EngineServiceClient):
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
         main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
+
+    def _get_producer(self):
+        if self.fmq_a2e_producer is None:
+            self.fmq_a2e_producer = FMQFactory.q_a2e_producer()
+        return self.fmq_a2e_producer
 
     async def init_connections(self):
         """Initialize high-performance ZMQ connections"""
@@ -439,10 +445,11 @@ class AsyncLLM(EngineServiceClient):
                     f"preprocess time cost {preprocess_cost_time}"
                 )
 
-            if not self.cfg.model_config.enable_mm:
-                self.request_client.send_json(request)
-            else:
-                self.request_client.send_pyobj(request)
+            try:
+                producer = self._get_producer()
+                await producer.put(request)
+            except Exception as e:
+                llm_logger.error(f"Failed to send task via FMQ: {e}")
 
         except EngineError:
             raise
@@ -603,6 +610,16 @@ class AsyncLLM(EngineServiceClient):
                 self.request_client.close()
             except Exception as e:
                 llm_logger.warning(f"Error closing request client: {e}")
+        # Close FMQ producer
+        if hasattr(self, "fmq_a2e_producer") and self.fmq_a2e_producer is not None:
+            try:
+                if hasattr(self.fmq_a2e_producer, "socket") and self.fmq_a2e_producer.socket is not None:
+                    self.fmq_a2e_producer.socket.close()
+                    llm_logger.info("FMQ producer socket closed successfully.")
+            except Exception as e:
+                llm_logger.error(f"Error closing fmq_producer: {e}")
+            finally:
+                self.fmq_a2e_producer = None
 
         # Shutdown engine service process
         try:
