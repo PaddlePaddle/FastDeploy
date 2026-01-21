@@ -63,7 +63,7 @@ def creat_empty_forward_meta(forward_meta: ForwardMeta):
     return res
 
 
-def split_batch_decoder_layers(forward_meta: ForwardMeta):
+def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
     split_num = 2
     res = [creat_empty_forward_meta(forward_meta), forward_meta]
     res[0].tbo_microbatch_id = 0
@@ -85,9 +85,13 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
     # 由于多模的图片理解，需要将多模拟的token聚集在一起！
     # 所以需要将split_sections[0]适当的偏移一下！
 
+    special_tokens = [
+        fd_config.model_config.image_patch_id,
+    ]
+
     ids_remove_padding_cpu = forward_meta.ids_remove_padding.numpy().tolist()
     detect_pos = split_sections[0]
-    while ids_remove_padding_cpu[detect_pos] in [101031, 101032, 101033, 101029]:
+    while ids_remove_padding_cpu[detect_pos] in special_tokens:
         detect_pos += 1
         if detect_pos >= len(ids_remove_padding_cpu):
             print("越界")
