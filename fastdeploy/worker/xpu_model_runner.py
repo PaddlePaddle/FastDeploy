@@ -1114,25 +1114,27 @@ class XPUModelRunner(ModelRunnerBase):
             is_profiling=is_dummy_run,
             forward_meta=self.forward_meta,
         )
-        # Update Batch type for cuda graph for only_decode_batch
-        if_only_decode = self.only_decode()
 
-        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
-        # Update config about moe for better performance
-        # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
-            if self.speculative_decoding:
-                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+        if self.use_cudagraph:
+            # Update Batch type for cuda graph for only_decode_batch
+            if_only_decode = self.only_decode()
 
-        # Update Batch type for cuda graph for only_prefill_batch
-        only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
+            only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+            # Update config about moe for better performance
+            # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
+            if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+                self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                if self.speculative_decoding:
+                    self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
-        self.forward_meta.step_use_cudagraph = (
-            only_prefill_use_cudagraph
-            if self.cudagraph_only_prefill
-            else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
-        )
+            # Update Batch type for cuda graph for only_prefill_batch
+            only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
+
+            self.forward_meta.step_use_cudagraph = (
+                only_prefill_use_cudagraph
+                if self.cudagraph_only_prefill
+                else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
+            )
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
