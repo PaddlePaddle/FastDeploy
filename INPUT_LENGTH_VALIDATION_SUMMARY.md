@@ -30,7 +30,7 @@
 
 #### 1.2 `/fastdeploy/engine/async_llm.py`
 
-**验证点3：异步LLM引擎的输入验证**
+**验证点3：异步LLM引擎的输入验证（input + min_tokens）**
 - 位置：第427-434行
 - 触发条件：`input_ids_len + min_tokens >= self.cfg.model_config.max_model_len`
 - 错误消息（已统一）：
@@ -40,11 +40,21 @@
   `inputs` tokens + `min_tokens` must be <= {max_model_len}.
   ```
 
+**验证点4：异步LLM引擎的输入验证（纯输入长度）**
+- 位置：第436-443行
+- 触发条件：`input_ids_len > self.cfg.model_config.max_model_len`
+- 错误消息（已统一）：
+  ```
+  This model's maximum context length is {max_model_len} tokens. 
+  However, your messages resulted in {input_ids_len} tokens. 
+  Input tokens exceed the configured limit.
+  ```
+
 ### 2. API入口层验证 (API Entrypoint Layer)
 
 #### 2.1 `/fastdeploy/entrypoints/engine_client.py`
 
-**验证点4：引擎客户端的输入验证（input + min_tokens）**
+**验证点5：引擎客户端的输入验证（input + min_tokens）**
 - 位置：第307-314行
 - 触发条件：`input_ids_len + min_tokens >= self.max_model_len`
 - 错误消息（已统一）：
@@ -54,7 +64,7 @@
   `inputs` tokens + `min_tokens` must be <= {max_model_len}.
   ```
 
-**验证点5：引擎客户端的输入验证（纯输入长度）**
+**验证点6：引擎客户端的输入验证（纯输入长度）**
 - 位置：第316-323行
 - 触发条件：`input_ids_len > self.max_model_len`
 - 错误消息（已统一）：
@@ -68,22 +78,22 @@
 
 #### 3.1 `/fastdeploy/engine/sampling_params.py`
 
-**验证点6：max_tokens参数验证**
+**验证点7：max_tokens参数验证**
 - 位置：第199-200行
 - 触发条件：`self.max_tokens is not None and self.max_tokens < 1`
 - 错误消息：`max_tokens must be at least 1, got {self.max_tokens}.`
 
-**验证点7：reasoning_max_tokens vs max_tokens**
+**验证点8：reasoning_max_tokens vs max_tokens**
 - 位置：第202-203行
 - 触发条件：`self.reasoning_max_tokens is not None and self.reasoning_max_tokens > self.max_tokens`
 - 错误消息：`reasoning_max_tokens must be less than max_tokens...`
 
-**验证点8：min_tokens参数验证**
+**验证点9：min_tokens参数验证**
 - 位置：第205-206行
 - 触发条件：`self.min_tokens < 0`
 - 错误消息：`min_tokens must be greater than or equal to 0...`
 
-**验证点9：min_tokens vs max_tokens**
+**验证点10：min_tokens vs max_tokens**
 - 位置：第207-210行
 - 触发条件：`self.max_tokens is not None and self.min_tokens > self.max_tokens`
 - 错误消息：`min_tokens must be less than or equal to max_tokens...`
@@ -177,11 +187,11 @@ FastDeploy采用**分层验证**策略：
 
 ### 4.2 验证覆盖的场景
 
-1. ✅ 输入token数量超过max_model_len
-2. ✅ 输入token数量 + min_tokens >= max_model_len
-3. ✅ max_tokens参数验证（>= 1）
-4. ✅ min_tokens参数验证（>= 0且<= max_tokens）
-5. ✅ reasoning_max_tokens参数验证（<= max_tokens）
+1. ✅ 输入token数量超过max_model_len (验证点2, 4, 6)
+2. ✅ 输入token数量 + min_tokens >= max_model_len (验证点1, 3, 5)
+3. ✅ max_tokens参数验证（>= 1）(验证点7)
+4. ✅ min_tokens参数验证（>= 0且<= max_tokens）(验证点9, 10)
+5. ✅ reasoning_max_tokens参数验证（<= max_tokens）(验证点8)
 6. ✅ stop_seqs数量和长度验证
 
 ### 4.3 LiteLLM兼容性

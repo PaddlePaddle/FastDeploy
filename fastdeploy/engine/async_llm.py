@@ -433,6 +433,15 @@ class AsyncLLM(EngineServiceClient):
                     llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
+                if input_ids_len > self.cfg.model_config.max_model_len:
+                    error_msg = (
+                        f"This model's maximum context length is {self.cfg.model_config.max_model_len} tokens. "
+                        f"However, your messages resulted in {input_ids_len} tokens. "
+                        f"Input tokens exceed the configured limit."
+                    )
+                    llm_logger.error(error_msg)
+                    raise EngineError(error_msg, error_code=400)
+
                 request["preprocess_end_time"] = time.time()
                 preprocess_cost_time = request["preprocess_end_time"] - request["preprocess_start_time"]
                 llm_logger.info(
