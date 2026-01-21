@@ -1653,8 +1653,6 @@ class FDConfig:
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
 
-        self.enable_low_latency_in_mixed = envs.FD_ENABLE_LOW_LANTENCY_IN_MIXED
-
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
