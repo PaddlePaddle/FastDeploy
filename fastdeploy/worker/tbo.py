@@ -94,11 +94,8 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
     while ids_remove_padding_cpu[detect_pos] in special_tokens:
         detect_pos += 1
         if detect_pos >= len(ids_remove_padding_cpu):
-            print("越界")
             return res
             break
-    if split_sections[0] != detect_pos:
-        print("改了")
     split_sections[0] = detect_pos
 
     for i in range(0, split_num):
