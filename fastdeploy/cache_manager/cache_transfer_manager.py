@@ -273,16 +273,6 @@ class CacheTransferManager:
 
     def _init_gpu_cache(self, args):
 
-        try:
-            assert not args.create_cache_tensor
-        except:
-            logger.warn(
-                f"In current implementation, cache transfer manager do not create cache tensors at all, "
-                f"meaning create_cache_tensor should be False, while we got {args.create_cache_tensor}. "
-                f"Cache tensor creation will occur in: 1) model runner in case of mixed deployment; "
-                f"or 2) cache messager in case of disaggregation deployment. "
-                f"Please check the codes and make sure they work correctly."
-            )
         if not args.create_cache_tensor:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create kv cache.")
             while self.cache_ready_signal.value[self.rank] != 1:
@@ -963,14 +953,14 @@ class CacheTransferManager:
         # TODO XPU support RL
         if unset_data_ipc is None:
             return
-        logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
+        logger.info("[RL] Launch a thread to clear/restore kv cache when model weights are cleared/updated.")
         while True:
             # handle cache clearing/restoring
             if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
-                    logger.info(f"Start clearing caches {self.cache_ready_signal.value}")
                     # clear cpu caches
+                    logger.info("[RL] start clearing cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
                         for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
@@ -979,58 +969,68 @@ class CacheTransferManager:
                         self.k_dst_ptrs.clear()
                         self.v_dst_ptrs.clear()
                         gc.collect()
+                        logger.info("[RL] successfully cleared cpu caches")
                         # reset swap_space_ready_signal
                         self.swap_space_ready_signal.value[self.rank] = 0
                         while np.sum(self.swap_space_ready_signal.value) != 0:
                             time.sleep(0.1)
+                        logger.info("[RL] all ranks cleared cpu caches")
+                    else:
+                        logger.info("[RL] skip clearing cpu caches")
 
                     # clear gpu caches
-                    set_device(self.device)
-                    for name, tensor in self.gpu_cache_kvs.items():
-                        unset_data_ipc(tensor, name, True, False)
-                    self.gpu_cache_kvs.clear()
-                    self.gpu_cache_k_tensors.clear()
-                    self.gpu_cache_v_tensors.clear()
+                    logger.info("[RL] start clearing gpu caches")
+                    if args.create_cache_tensor:
+                        self.gpu_cache_kvs.clear()
+                        self.gpu_cache_k_tensors.clear()
+                        self.gpu_cache_v_tensors.clear()
+                        logger.info("[RL] successfully cleared gpu caches")
+                    else:
+                        for name, tensor in self.gpu_cache_kvs.items():
+                            unset_data_ipc(tensor, name, True, False)
+                        logger.info("[RL] successfully cleared gpu caches cuda ipc")
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    logger.info(f"Finish clearing caches {self.cache_ready_signal.value}")
-
-                    # wait for all ranks caches to be cleared
                     if np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
+                    logger.info("[RL] all ranks cleared caches!")
 
                     # reset kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
-                    logger.info(f"All ranks finish clearing caches {self.cache_ready_signal.value}")
 
                 except Exception as e:
-                    logger.error(f"Failed to clear caches: {e}")
+                    logger.error(f"[RL] failed to clear caches: {e}")
 
             elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
-                    logger.info(f"Start restoring caches {self.cache_ready_signal.value}")
                     # restore cpu cache
+                    logger.info("[RL] start restoring cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
+                        logger.info("[RL] successfully restored cpu caches")
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
+                        logger.info("[RL] all ranks restored cpu caches")
+                    else:
+                        logger.info("[RL] skip restoring cpu caches")
 
                     # restore gpu cache and set cache_ready_signal
+                    logger.info("[RL] start restoring gpu caches")
                     self._init_gpu_cache(args)
-                    logger.info(f"Finish restoring caches {self.cache_ready_signal.value}")
+                    logger.info("[RL] successfully restored gpu caches")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
                         time.sleep(0.1)
+                    logger.info("[RL] all ranks restored caches!")
 
                     # set kv_cache_status_signal
-                    logger.info(f"All ranks finish restoring caches {self.cache_ready_signal.value}")
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
-                    logger.error(f"Failed to restore caches: {e}")
+                    logger.error(f"[RL] failed to restore caches: {e}")
 
             time.sleep(0.1)
 
