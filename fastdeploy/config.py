@@ -1694,8 +1694,7 @@ class FDConfig:
         else:
             max_capture_shape = min(512, max_capture_shape)
 
-        if self.graph_opt_config.graph_opt_level > 0:
-            max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
+        max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
