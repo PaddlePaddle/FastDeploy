@@ -4,7 +4,7 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
-from paddle.incubate.nn.functional import swiglu
+from paddle.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
 from fastdeploy.model_executor.ops.gpu import (
@@ -178,7 +178,6 @@ class FusedMoe:
             top_k_weights,
             top_k_indices,
             expert_idx_per_token,
-            _,
         ) = moe_expert_dispatch(hidden_states, scores, None, None, self.top_k, False, self.quant_type, True)
 
         expert_idx_per_token = None
