@@ -453,7 +453,7 @@ class XPUMoEMethod(MoEMethodBase):
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         # 2. Dynamic compute blockwise quantization scales
-        if "a_tokenwise_int8" in self.xpu_moe_quant_type:
+        if "a_tokenwise_int8" in self.xpu_moe_quant_type and x.shape[0] > 0:
             x, x_scale = quant2d_per_token(x)
         else:
             x_scale = None
