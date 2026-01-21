@@ -477,9 +477,9 @@ def update_model_weight(request: Request) -> Response:
     """
     if app.state.dynamic_load_weight:
         status_code, msg = app.state.engine_client.update_model_weight()
-        return Response(content=msg, status_code=status_code)
+        return JSONResponse(content=msg, status_code=status_code)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
 
 @app.get("/clear_load_weight")
@@ -489,9 +489,9 @@ def clear_load_weight(request: Request) -> Response:
     """
     if app.state.dynamic_load_weight:
         status_code, msg = app.state.engine_client.clear_load_weight()
-        return Response(content=msg, status_code=status_code)
+        return JSONResponse(content=msg, status_code=status_code)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
 
 @app.post("/rearrange_experts")
