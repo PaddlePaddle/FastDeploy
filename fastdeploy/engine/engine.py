@@ -285,14 +285,19 @@ class LLMEngine:
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.model_config.max_model_len:
             error_msg = (
-                f"Input text is too long, length of prompt token({input_ids_len}) "
-                f"+ min_dec_len ({min_tokens}) >= max_model_len "
+                f"This model's maximum context length is {self.cfg.model_config.max_model_len} tokens. "
+                f"However, your messages resulted in {input_ids_len} tokens. "
+                f"`inputs` tokens + `min_tokens` must be <= {self.cfg.model_config.max_model_len}."
             )
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.cfg.model_config.max_model_len:
-            error_msg = f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.model_config.max_model_len})."
+            error_msg = (
+                f"This model's maximum context length is {self.cfg.model_config.max_model_len} tokens. "
+                f"However, your messages resulted in {input_ids_len} tokens. "
+                f"Input tokens exceed the configured limit."
+            )
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 

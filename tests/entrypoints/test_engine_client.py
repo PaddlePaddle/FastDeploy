@@ -1457,8 +1457,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
         with self.assertRaises(EngineError) as context:
             await self.engine_client.add_requests(task)
 
-        self.assertIn("Input text is too long", str(context.exception))
-        self.assertIn("input_ids_len (8) + min_tokens(2) >= max_model_len(10)", str(context.exception))
+        self.assertIn("This model's maximum context length is", str(context.exception))
+        self.assertIn("`inputs` tokens + `min_tokens` must be", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
 
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 3)

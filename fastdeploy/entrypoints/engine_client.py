@@ -306,15 +306,18 @@ class EngineClient:
 
         if input_ids_len + min_tokens >= self.max_model_len:
             error_msg = (
-                f"Input text is too long, input_ids_len ({input_ids_len}) "
-                f"+ min_tokens({min_tokens}) >= max_model_len({self.max_model_len})"
+                f"This model's maximum context length is {self.max_model_len} tokens. "
+                f"However, your messages resulted in {input_ids_len} tokens. "
+                f"`inputs` tokens + `min_tokens` must be <= {self.max_model_len}."
             )
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.max_model_len:
             error_msg = (
-                f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.max_model_len})."
+                f"This model's maximum context length is {self.max_model_len} tokens. "
+                f"However, your messages resulted in {input_ids_len} tokens. "
+                f"Input tokens exceed the configured limit."
             )
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)

@@ -446,9 +446,9 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 # 根据实际错误消息调整断言
                 error_msg = str(e).lower()
                 self.assertTrue(
-                    "exceeds the limit" in error_msg
-                    or "input text is too long" in error_msg
-                    or "input_ids_len" in error_msg
+                    "this model's maximum context length is" in error_msg
+                    or "input tokens exceed the configured limit" in error_msg
+                    or "`inputs` tokens + `min_tokens` must be" in error_msg
                 )
             except Exception:
                 # Expected to fail due to length validation
