@@ -18,11 +18,16 @@ import copy
 import json
 import traceback
 from typing import Any, Optional, Tuple, Union
+from unittest.mock import MagicMock
 
 import llguidance
 import llguidance.hf
 import llguidance.torch
-import torch
+
+torch_mock = MagicMock()
+import sys
+
+sys.modules["torch"] = torch_mock
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
@@ -69,13 +74,13 @@ class LLGuidanceProcessor(LogitsProcessorBase):
                 self._printed_error = True
                 llm_logger.warning(f"LLGuidance Matcher error: {err}")
 
-    def allocate_token_bitmask(self) -> torch.Tensor:
+    def allocate_token_bitmask(self):
         """
         Allocate a token bitmask tensor for grammar constraints.
         """
         return llguidance.torch.allocate_token_bitmask(self.batch_size, self.vocab_size)
 
-    def fill_token_bitmask(self, token_bitmask: torch.Tensor, idx: int) -> None:
+    def fill_token_bitmask(self, token_bitmask, idx: int) -> None:
         """
         Fill the token bitmask with allowed tokens for the given index.
         This will automatically provide an EOS mask if the matcher is stopped.
