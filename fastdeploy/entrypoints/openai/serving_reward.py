@@ -14,12 +14,14 @@
 # limitations under the License.
 """
 
+import time
 from collections.abc import AsyncGenerator
 
 from typing_extensions import override
 
+import fastdeploy.envs as envs
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import PoolingRequestOutput, RewardRequestOutput
+from fastdeploy.engine.request import PoolingRequestOutput, Request, RewardRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatRewardData,
     ChatRewardRequest,
@@ -43,12 +45,25 @@ class OpenAIServingReward(ZmqOpenAIServing):
     @override
     def _request_to_dict(self, ctx: ServeContext):
         request: ChatRewardRequest = ctx.request
-        request_dict = super()._request_to_dict(ctx)
-        if hasattr(request, "to_pooling_params"):
-            pooling_params: PoolingParams = request.to_pooling_params()
-            pooling_params.verify("reward", self.cfg.model_config)
-            request_dict["pooling_params"] = pooling_params.to_dict()
-        return request_dict
+        if not envs.ENABLE_V1_DATA_PROCESSOR:
+            request_dict = super()._request_to_dict(ctx)
+            if hasattr(request, "to_pooling_params"):
+                pooling_params: PoolingParams = request.to_pooling_params()
+                pooling_params.verify("reward", self.cfg.model_config)
+                request_dict["pooling_params"] = pooling_params.to_dict()
+                request_dict["metrics"] = {}
+            return request_dict
+        else:
+            request_obj = None
+            if hasattr(request, "to_pooling_params"):
+                pooling_params: PoolingParams = request.to_pooling_params()
+                pooling_params.verify("reward", self.cfg.model_config)
+                request_obj = Request.from_generic_request(
+                    req=request, request_id=ctx.request_id, pooling_params=pooling_params
+                )
+                request_obj.metrics.arrival_time = time.time()
+                super()._process_chat_template_kwargs(request_obj)
+            return request_obj
 
     @override
     def _request_to_batch_dicts(self, ctx: ServeContext):

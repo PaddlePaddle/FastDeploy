@@ -1243,7 +1243,13 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock to_dict_for_infer method to return a proper dict
         def mock_to_dict_for_infer(request_id_idx, prompt):
-            return {"prompt": prompt, "request_id": request_id_idx, "prompt_tokens": 10, "max_tokens": 100}
+            return {
+                "prompt": prompt,
+                "request_id": request_id_idx,
+                "prompt_tokens": 10,
+                "max_tokens": 100,
+                "metrics": {},
+            }
 
         mock_request.to_dict_for_infer = mock_to_dict_for_infer
 

@@ -463,6 +463,7 @@ class DataProcessor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
+        response_dict["outputs"]["enable_parser"] = False
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -470,6 +471,7 @@ class DataProcessor(BaseDataProcessor):
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser:
+            response_dict["outputs"]["enable_parser"] = True
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -484,6 +486,7 @@ class DataProcessor(BaseDataProcessor):
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
             response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
+            response_dict["outputs"]["enable_parser"] = True
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
@@ -538,7 +541,7 @@ class DataProcessor(BaseDataProcessor):
             List[int]: token ids list
         """
 
-        add_special_tokens = kwargs.get("add_special_tokens")
+        add_special_tokens = kwargs.get("add_special_tokens", False)
         if envs.FD_USE_HF_TOKENIZER:
             tokens = self.tokenizer(
                 text,
