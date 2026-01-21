@@ -40,7 +40,8 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_layout,
     unset_data_ipc,
 )
-from fastdeploy.cache_manager.transfer_factory import MooncakeStore
+from fastdeploy.cache_manager.transfer_factory import MooncakeStore, FileStore
+from fastdeploy.cache_manager.transfer_factory.file_store.file_store import FileStoreConfig
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
@@ -109,7 +110,7 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         default=None,
-        choices=["mooncake", "none"],
+        choices=["mooncake", "file", "none"],
         help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
@@ -223,6 +224,11 @@ class CacheTransferManager:
             self.storage_backend = MooncakeStore(tp_rank=self.rank)
             self._init_storage_buffer(args)
             logger.info("Initialized mooncake store successfully")
+        elif args.kvcache_storage_backend == "file":
+            logger.info("Start initialize file store...")
+            self.storage_backend = FileStore(storage_config=FileStoreConfig.create())
+            self._init_storage_buffer(args)
+            logger.info("Initialized file store successfully")
         else:
             raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
 
