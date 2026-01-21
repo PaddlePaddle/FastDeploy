@@ -83,6 +83,7 @@ def _reload_api_server(args):
     fake_envs_mod.TRACES_EXPORTER = "console"
     fake_envs_mod.EXPORTER_OTLP_ENDPOINT = ""
     fake_envs_mod.EXPORTER_OTLP_HEADERS = ""
+    fake_envs_mod.FD_SUPPORT_MAX_CONNECTIONS = 1024
     fake_envs_mod.environment_variables = _FakeEnvVars()
 
     # Save original sys.argv and replace with minimal valid args to avoid parse errors
@@ -397,26 +398,36 @@ async def test_chat_and_completion_routes():
     chat_handler = MagicMock()
     chat_handler.create_chat_completion = AsyncMock(return_value=error_resp)
     api_server.app.state.chat_handler = chat_handler
-    assert (await api_server.create_chat_completion(body, fake_req)).status_code == 500
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        assert (await api_server.create_chat_completion(body, fake_req)).status_code == 500
 
     success_resp = ChatCompletionResponse(id="1", model="m", choices=[], usage=UsageInfo())
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=success_resp)
-    assert (await api_server.create_chat_completion(body, fake_req)).status_code == 200
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        assert (await api_server.create_chat_completion(body, fake_req)).status_code == 200
 
     async def stream_gen():
         yield "data"
 
     api_server.app.state.chat_handler.create_chat_completion = AsyncMock(return_value=stream_gen())
-    assert isinstance(await api_server.create_chat_completion(body, fake_req), api_server.StreamingResponse)
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        assert isinstance(await api_server.create_chat_completion(body, fake_req), api_server.StreamingResponse)
 
     # Completion handler
     completion_handler = MagicMock()
     completion_handler.create_completion = AsyncMock(return_value=error_resp)
     api_server.app.state.completion_handler = completion_handler
-    assert (await api_server.create_completion(body, fake_req)).status_code == 500
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        assert (await api_server.create_completion(body, fake_req)).status_code == 500
 
     api_server.app.state.completion_handler.create_completion = AsyncMock(return_value=success_resp)
-    assert (await api_server.create_completion(body, fake_req)).status_code == 200
+
+    with patch("fastdeploy.entrypoints.openai.api_server.connection_manager", return_value=DummyCM()):
+        assert (await api_server.create_completion(body, fake_req)).status_code == 200
 
     # HTTPException handling
     class RaiseHTTP:

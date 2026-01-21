@@ -542,7 +542,9 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
-            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            # Only v0 use this signal
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
@@ -874,6 +876,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--model-impl",
+        type=str,
+        choices=["auto", "fastdeploy", "paddleformers"],
+        default="auto",
+        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",
@@ -1046,6 +1056,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
         os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
+    elif envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "decode":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "0"
 
     fd_config = FDConfig(
         model_config=model_config,
