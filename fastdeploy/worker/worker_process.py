@@ -271,6 +271,15 @@ class PaddleDisWorkerProc:
                 create=False,
             )
 
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -426,20 +435,6 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            # run eplb
-            self._run_eplb(tp_rank)
-            if tp_rank == 0:
-                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
-                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
-                    )
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
-
             self.insert_step = False
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
@@ -484,9 +479,15 @@ class PaddleDisWorkerProc:
                     while self.model_weights_status.value[0] == ModelWeightsStatus.CLEARED:
                         time.sleep(0.01)
                     continue
-
+            
+            self.skip = False
             if not envs.FD_ENABLE_BATCH_SCHEDULER:
                 req_dicts, num_running_requests = self.get_tasks()
+                if self.skip:
+                    if tp_size > 1:
+                    # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
             else:
                 req_dicts, num_running_requests = self.get_batch_sched_tasks()
             if req_dicts:
@@ -496,7 +497,7 @@ class PaddleDisWorkerProc:
             
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 self._tp_barrier_wait() if tp_size > 1 else None
-
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
             
@@ -507,33 +508,54 @@ class PaddleDisWorkerProc:
             if envs.FD_ENABLE_BATCH_SCHEDULER:
                 if tp_size > 1:
                     self._tp_barrier_wait()
-                if tp_rank == 0:
-                    # Notify the engine that forward has finished
-                    self.infer_finished_signal.value[0] = 1
+                # Notify the engine that forward has finished
+                self.infer_finished_signal.value[0] = 1
             
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            # run eplb
+            self._run_eplb(tp_rank)
+            if tp_rank == 0:
+                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
+            self.engine_forward_signal.value[0] = 0
 
     def get_tasks(self):
         req_dicts, num_running_requests = [], 0
         if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
             logger.info(f"Rank: {self.local_rank} Detected new requests.")
+            self.engine_forward_signal.value[0] = 1
 
             tasks, read_finish = self.task_queue.get_tasks()
             if read_finish:
                 # Ensure that every worker get the task
                 self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
                 self.task_queue.read_finish_flag.set(0)
+            if self.parallel_config.use_ep:
+                dist.barrier(self.parallel_config.ep_group)
 
-            for req_dict, bsz in tasks:
-                num_running_requests = int(bsz)
-                req_dicts.extend(req_dict)
+            if tasks[0][0]:
+                for req_dict, bsz in tasks:
+                    num_running_requests = int(bsz)
+                    req_dicts.extend(req_dict)
 
             req_ids = [req.request_id for req in req_dicts]
+            token_num = [req.num_total_tokens - req.num_computed_tokens for req in req_dicts]
             logger.info(
                 f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                f"num_insert_requests: {len(req_dicts)}, total_num: {sum(token_num)} req_ids: {req_ids}"
             )
+        else:
+            if self.scheduler_config.splitwise_role == "prefill":
+                self.skip = True
 
         return req_dicts, num_running_requests
 
@@ -556,9 +578,10 @@ class PaddleDisWorkerProc:
                 req_dicts.extend(req_dict)
 
         req_ids = [req.request_id for req in req_dicts]
+        token_num = [req.num_total_tokens - req.num_computed_tokens for req in req_dicts]
         logger.info(
             f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-            f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+            f"num_insert_requests: {len(req_dicts)}, token_num: {sum(token_num)}, req_ids: {req_ids}"
         )
 
         return req_dicts, num_running_requests

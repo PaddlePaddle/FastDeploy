@@ -282,6 +282,15 @@ class EngineService:
             create=True,
         )
 
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
@@ -983,8 +992,8 @@ class EngineService:
                 
                 # Currently no new reqs
                 if last_sched_batch_id == -1:
-                    # return False
-                    return True
+                    return False
+                    # return True
                 
                 if not has_recv_data:
                     start_time = time.time()
@@ -1024,9 +1033,6 @@ class EngineService:
         start_time = time.time()
         while self.running:
             try:
-                if self.engine_worker_queue.exist_tasks():
-                    time.sleep(0.001)
-                    continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         is_fetching = True
@@ -1052,20 +1058,18 @@ class EngineService:
                 if envs.FD_ENABLE_BATCH_SCHEDULER:
                     # Some reqs of the scheduled batch still in flight
                     if not _check_recv_full_batch() and not _check_timeout():
-                        time.sleep(0.1)
+                        time.sleep(0.01)
                         continue
-    
+                else:
+                    if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                        time.sleep(0.001)
+                        continue
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
                 # Clear buffered reqs
                 with req_info_lock:
                     buffered_req_info.clear()
-                
-                if envs.FD_ENABLE_BATCH_SCHEDULER and not tasks:
-                    # Insert IDLE task for synchronization
-                    idle_task = Request.from_dict({"request_id": f"idle-{uuid.uuid4()}"})
-                    idle_task.task_type = RequestType.IDLE
-                    tasks = [idle_task]
 
                 # 3. Send to engine
                 if tasks:
@@ -1110,8 +1114,18 @@ class EngineService:
                             if self.cfg.scheduler_config.splitwise_role == "decode":
                                 task.metrics.decode_inference_start_time = time.time()
                             else:
-                                task.metrics.inference_start_time = time.time()
+                                if not task.metrics.inference_start_time:
+                                    task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                else:
+                    if envs.FD_ENABLE_BATCH_SCHEDULER:
+                        # Insert IDLE task for synchronization
+                        idle_task = Request.from_dict({"request_id": f"idle-{uuid.uuid4()}"})
+                        idle_task.task_type = RequestType.IDLE
+                        tasks = [idle_task]
+                        self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    elif self.cfg.parallel_config.enable_expert_parallel:
+                        self.engine_worker_queue.put_tasks(([], self.resource_manager.real_bsz)) 
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1149,6 +1163,7 @@ class EngineService:
                 self.llm_logger.error(err_msg)
 
             last_sched_batch_id, last_sched_batch_cnt = -1, []
+            start_time = time.time()
     
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
