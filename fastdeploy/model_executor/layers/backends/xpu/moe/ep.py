@@ -367,7 +367,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             async_finish=self.ep_engine.async_finish,
         )
 
-        x_scale_tensor = kwargs.get("x_scale_tensor", None)
+        x_scale_tensor = kwargs.get("x_scale", None)
         dispatch_args = {
             "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
             "num_tokens_per_rank": num_tokens_per_rank,
