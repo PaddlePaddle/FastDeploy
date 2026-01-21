@@ -23,7 +23,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12
 First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 ```shell
 # Install stable release
-python -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # Install latest Nightly build
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
@@ -34,7 +34,7 @@ Then install fastdeploy. **Do not install from PyPI**. Use the following methods
 For SM80/90 architecture GPUs(e.g A30/A100/H100/):
 ```
 # Install stable release
-python -m pip install fastdeploy-gpu==2.3.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # Install latest Nightly build
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -43,7 +43,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 For SM86/89 architecture GPUs(e.g A10/4090/L20/L40):
 ```
 # Install stable release
-python -m pip install fastdeploy-gpu==2.3.3 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # Install latest Nightly build
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -64,7 +64,7 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 
 First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 ```shell
-python -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 Then clone the source code and build:
@@ -92,7 +92,7 @@ First, install paddlepaddle-gpu.
 For detailed instructions, please refer to the [PaddlePaddle Installation Guide](https://www.paddlepaddle.org.cn/).
 
 ```shell
-python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 Then, clone the FastDeploy repository and build using the precompiled operator wheels:
