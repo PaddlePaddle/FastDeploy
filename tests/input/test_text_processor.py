@@ -264,7 +264,7 @@ class DummyRequest:
 
 class DataProcessorTestCase(unittest.TestCase):
     @staticmethod
-    def create_dummy_reasoning(tokenizer, reasoning_content="think"):
+    def create_dummy_reasoning(tokenizer, reasoning_content="think", content="content"):
         class DummyReasoning:
             def __init__(self, tokenizer):
                 self.tokenizer = tokenizer
@@ -282,7 +282,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 delta_token_ids: Sequence[int],
                 model_status: str,
             ):
-                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text)
+                return DeltaMessage(reasoning_content=reasoning_content, content=content)
 
         return DummyReasoning(tokenizer)
 
@@ -466,7 +466,9 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_process_response_streaming_with_reasoning_and_tools(self):
         processor = self.processor
         self.processor.model_status_dict["normal"] = "think_start"
-        processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
+        processor.reasoning_parser = self.create_dummy_reasoning(
+            processor.tokenizer, reasoning_content="because", content="tool-text"
+        )
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-text")
         response = {
             "finished": True,
