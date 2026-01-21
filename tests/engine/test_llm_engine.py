@@ -14,14 +14,11 @@
 # limitations under the License.
 """
 
-import os
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
-import paddle
 
-from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 
 
@@ -38,8 +35,8 @@ class TestLLMEngine(unittest.TestCase):
         """Create a mock configuration for testing"""
         cfg = Mock()
         cfg.cache_config = Mock()
-        cfg.cache_config.num_gpu_blocks_override = kwargs.get('num_gpu_blocks_override', 4)
-        cfg.cache_config.enable_prefix_caching = kwargs.get('enable_prefix_caching', False)
+        cfg.cache_config.num_gpu_blocks_override = kwargs.get("num_gpu_blocks_override", 4)
+        cfg.cache_config.enable_prefix_caching = kwargs.get("enable_prefix_caching", False)
         cfg.cache_config.block_size = 128
         cfg.cache_config.num_cpu_blocks = 0
         cfg.cache_config.total_block_num = 100
@@ -50,7 +47,7 @@ class TestLLMEngine(unittest.TestCase):
         cfg.parallel_config.tensor_parallel_size = 1
         cfg.parallel_config.expert_parallel_size = 1
         cfg.parallel_config.chunked_moe_size = 1
-        cfg.parallel_config.data_parallel_size = kwargs.get('data_parallel_size', 1)
+        cfg.parallel_config.data_parallel_size = kwargs.get("data_parallel_size", 1)
         cfg.parallel_config.enable_expert_parallel = False
         cfg.parallel_config.enable_chunked_moe = False
         cfg.parallel_config.use_internode_ll_two_stage = False
@@ -59,7 +56,7 @@ class TestLLMEngine(unittest.TestCase):
         cfg.parallel_config.shutdown_comm_group_if_worker_idle = False
 
         cfg.scheduler_config = Mock()
-        cfg.scheduler_config.splitwise_role = kwargs.get('splitwise_role', 'mixed')
+        cfg.scheduler_config.splitwise_role = kwargs.get("splitwise_role", "mixed")
         cfg.scheduler_config.max_num_seqs = 32
         cfg.scheduler_config.max_num_batched_tokens = 8192
         cfg.scheduler_config.name = "local"
@@ -133,15 +130,17 @@ class TestLLMEngine(unittest.TestCase):
         cfg = self._create_mock_cfg(splitwise_role="prefill")
         cfg.cache_config.enable_prefix_caching = True
 
-        with patch("fastdeploy.engine.engine.LLMEngine._init_worker_signals") as mock_init_signals, \
-             patch("fastdeploy.engine.engine.LLMEngine.launch_components") as mock_launch, \
-             patch("fastdeploy.engine.engine.EngineService.start") as mock_engine_start, \
-             patch("fastdeploy.engine.engine.EngineService.create_data_processor") as mock_create_dp, \
-             patch("fastdeploy.engine.engine.LLMEngine._start_worker_service") as mock_start_worker, \
-             patch("fastdeploy.engine.engine.LLMEngine.check_worker_initialize_status") as mock_check_status, \
-             patch("fastdeploy.platforms.current_platform.is_intel_hpu", return_value=False), \
-             patch("fastdeploy.engine.engine.time.sleep"), \
-             patch("fastdeploy.engine.engine.threading.Thread") as mock_thread:
+        with (
+            patch("fastdeploy.engine.engine.LLMEngine._init_worker_signals") as mock_init_signals,
+            patch("fastdeploy.engine.engine.LLMEngine.launch_components") as mock_launch,
+            patch("fastdeploy.engine.engine.EngineService.start") as mock_engine_start,
+            patch("fastdeploy.engine.engine.EngineService.create_data_processor") as mock_create_dp,
+            patch("fastdeploy.engine.engine.LLMEngine._start_worker_service") as mock_start_worker,
+            patch("fastdeploy.engine.engine.LLMEngine.check_worker_initialize_status") as mock_check_status,
+            patch("fastdeploy.platforms.current_platform.is_intel_hpu", return_value=False),
+            patch("fastdeploy.engine.engine.time.sleep"),
+            patch("fastdeploy.engine.engine.threading.Thread") as mock_thread,
+        ):
 
             # Mock IPC signals
             mock_loaded_signal = Mock()
@@ -173,15 +172,17 @@ class TestLLMEngine(unittest.TestCase):
         """Test worker launch failure error handling (lines 199-200)"""
         cfg = self._create_mock_cfg()
 
-        with patch("fastdeploy.engine.engine.LLMEngine._init_worker_signals") as mock_init_signals, \
-             patch("fastdeploy.engine.engine.LLMEngine.launch_components") as mock_launch, \
-             patch("fastdeploy.engine.engine.EngineService.start") as mock_engine_start, \
-             patch("fastdeploy.engine.engine.EngineService.create_data_processor") as mock_create_dp, \
-             patch("fastdeploy.engine.engine.LLMEngine._start_worker_service") as mock_start_worker, \
-             patch("fastdeploy.engine.engine.LLMEngine.check_worker_initialize_status") as mock_check_status, \
-             patch("fastdeploy.engine.engine.time.sleep"), \
-             patch("fastdeploy.engine.engine.threading.Thread") as mock_thread, \
-             patch("fastdeploy.engine.engine.console_logger") as mock_logger:
+        with (
+            patch("fastdeploy.engine.engine.LLMEngine._init_worker_signals") as mock_init_signals,
+            patch("fastdeploy.engine.engine.LLMEngine.launch_components") as mock_launch,
+            patch("fastdeploy.engine.engine.EngineService.start") as mock_engine_start,
+            patch("fastdeploy.engine.engine.EngineService.create_data_processor") as mock_create_dp,
+            patch("fastdeploy.engine.engine.LLMEngine._start_worker_service") as mock_start_worker,
+            patch("fastdeploy.engine.engine.LLMEngine.check_worker_initialize_status") as mock_check_status,
+            patch("fastdeploy.engine.engine.time.sleep"),
+            patch("fastdeploy.engine.engine.threading.Thread") as mock_thread,
+            patch("fastdeploy.engine.engine.console_logger") as mock_logger,
+        ):
 
             # Mock IPC signals
             mock_loaded_signal = Mock()
@@ -242,19 +243,19 @@ class TestLLMEngine(unittest.TestCase):
         """Test add_requests sampling params handling (lines 261-263, 266-270)"""
         cfg = self._create_mock_cfg()
 
-        with patch("fastdeploy.engine.engine.EngineService") as mock_engine_service, \
-             patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict:
+        with (
+            patch("fastdeploy.engine.engine.EngineService") as mock_engine_service,
+            patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict,
+        ):
 
             engine = LLMEngine(cfg)
 
             # Mock request creation
             mock_request = Mock()
             mock_request_from_dict.return_value = mock_request
-            mock_request.get = Mock(side_effect=lambda key: {
-                "max_tokens": 100,
-                "min_tokens": 10,
-                "stop_seqs_len": None
-            }.get(key))
+            mock_request.get = Mock(
+                side_effect=lambda key: {"max_tokens": 100, "min_tokens": 10, "stop_seqs_len": None}.get(key)
+            )
             mock_request.set = Mock()
 
             # Mock data processor
@@ -273,8 +274,10 @@ class TestLLMEngine(unittest.TestCase):
 
             task = {"prompt": "test", "max_tokens": 50}
 
-            with patch("fastdeploy.engine.engine.time.time", return_value=1234567890.0), \
-                 patch("fastdeploy.engine.engine.llm_logger") as mock_llm_logger:
+            with (
+                patch("fastdeploy.engine.engine.time.time", return_value=1234567890.0),
+                patch("fastdeploy.engine.engine.llm_logger") as mock_llm_logger,
+            ):
 
                 engine.add_requests(task, sampling_params)
 
@@ -291,9 +294,11 @@ class TestLLMEngine(unittest.TestCase):
         cfg = self._create_mock_cfg()
         cfg.model_config.max_model_len = 100
 
-        with patch("fastdeploy.engine.engine.EngineService") as mock_engine_service, \
-             patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict, \
-             patch("fastdeploy.engine.engine.llm_logger") as mock_logger:
+        with (
+            patch("fastdeploy.engine.engine.EngineService") as mock_engine_service,
+            patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict,
+            patch("fastdeploy.engine.engine.llm_logger") as mock_logger,
+        ):
 
             engine = LLMEngine(cfg)
 
@@ -301,11 +306,9 @@ class TestLLMEngine(unittest.TestCase):
             mock_request = Mock()
             mock_request_from_dict.return_value = mock_request
             mock_request.prompt_token_ids_len = 150  # Longer than max_model_len
-            mock_request.get = Mock(side_effect=lambda key: {
-                "max_tokens": 50,
-                "min_tokens": 10,
-                "stop_seqs_len": None
-            }.get(key))
+            mock_request.get = Mock(
+                side_effect=lambda key: {"max_tokens": 50, "min_tokens": 10, "stop_seqs_len": None}.get(key)
+            )
 
             task = {"prompt": "very long prompt" * 50}
 
@@ -320,9 +323,11 @@ class TestLLMEngine(unittest.TestCase):
         """Test guided decoding when checker is None (lines 320-330)"""
         cfg = self._create_mock_cfg()
 
-        with patch("fastdeploy.engine.engine.EngineService") as mock_engine_service, \
-             patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict, \
-             patch("fastdeploy.engine.engine.llm_logger") as mock_logger:
+        with (
+            patch("fastdeploy.engine.engine.EngineService") as mock_engine_service,
+            patch("fastdeploy.engine.engine.Request.from_dict") as mock_request_from_dict,
+            patch("fastdeploy.engine.engine.llm_logger") as mock_logger,
+        ):
 
             engine = LLMEngine(cfg)
             engine.guided_decoding_checker = None  # No checker available
@@ -332,11 +337,9 @@ class TestLLMEngine(unittest.TestCase):
             mock_request_from_dict.return_value = mock_request
             mock_request.prompt_token_ids_len = 50
             mock_request.guided_json = {"test": "guided"}
-            mock_request.get = Mock(side_effect=lambda key: {
-                "max_tokens": 50,
-                "min_tokens": 10,
-                "stop_seqs_len": None
-            }.get(key))
+            mock_request.get = Mock(
+                side_effect=lambda key: {"max_tokens": 50, "min_tokens": 10, "stop_seqs_len": None}.get(key)
+            )
 
             task = {"prompt": "test prompt", "guided_json": {"test": "guided"}}
 
@@ -351,9 +354,11 @@ class TestLLMEngine(unittest.TestCase):
         """Test _exit_sub_services cleanup operations (lines 415-450)"""
         cfg = self._create_mock_cfg()
 
-        with patch("fastdeploy.engine.engine.EngineService") as mock_engine_service, \
-             patch("fastdeploy.engine.engine.os.getpgid") as mock_getpgid, \
-             patch("fastdeploy.engine.engine.os.killpg") as mock_killpg:
+        with (
+            patch("fastdeploy.engine.engine.EngineService") as mock_engine_service,
+            patch("fastdeploy.engine.engine.os.getpgid") as mock_getpgid,
+            patch("fastdeploy.engine.engine.os.killpg") as mock_killpg,
+        ):
 
             engine = LLMEngine(cfg)
             engine.running = True
@@ -410,8 +415,10 @@ class TestLLMEngine(unittest.TestCase):
         """Test generate method basic flow (lines 660-689)"""
         cfg = self._create_mock_cfg()
 
-        with patch("fastdeploy.engine.engine.EngineService") as mock_engine_service, \
-             patch("fastdeploy.engine.engine.llm_logger") as mock_llm_logger:
+        with (
+            patch("fastdeploy.engine.engine.EngineService") as mock_engine_service,
+            patch("fastdeploy.engine.engine.llm_logger") as mock_llm_logger,
+        ):
 
             engine = LLMEngine(cfg)
 
@@ -421,9 +428,11 @@ class TestLLMEngine(unittest.TestCase):
             # Mock _format_and_add_data
             with patch.object(engine, "_format_and_add_data", return_value="test-req-id") as mock_format:
                 # Mock _get_generated_tokens
-                with patch.object(engine, "_get_generated_tokens", return_value=[
-                    Mock(finished=True, to_dict=lambda: {"result": "test"})
-                ]) as mock_get_tokens:
+                with patch.object(
+                    engine,
+                    "_get_generated_tokens",
+                    return_value=[Mock(finished=True, to_dict=lambda: {"result": "test"})],
+                ) as mock_get_tokens:
                     # Mock data processor
                     mock_processor = Mock()
                     mock_processor.process_response = Mock(return_value=Mock(to_dict=lambda: {"output": "test"}))
@@ -447,6 +456,7 @@ class TestLLMEngine(unittest.TestCase):
             # Mock worker healthy signal
             mock_signal = Mock()
             import time
+
             mock_signal.value = np.array([time.time() - 10], dtype=np.float64)  # Recent timestamp
             engine.engine.worker_healthy_live_signal = mock_signal
 
@@ -466,6 +476,7 @@ class TestLLMEngine(unittest.TestCase):
             # Mock worker healthy signal with old timestamp
             mock_signal = Mock()
             import time
+
             mock_signal.value = np.array([time.time() - 100], dtype=np.float64)  # Old timestamp
             engine.engine.worker_healthy_live_signal = mock_signal
 
