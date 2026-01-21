@@ -192,7 +192,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
-        external_rmsnorm: Optional[Callable] = None,
+        proxy_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -218,7 +218,7 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
-        if external_rmsnorm is None:
+        if proxy_rmsnorm is None:
             if current_platform.is_gcu():
                 if residual_input is None:
                     norm_out = rms_norm(x, self.weight, self.eps)
@@ -241,7 +241,7 @@ class RMSNorm(nn.Layer):
         else:
             if residual_input is not None:
                 x = x + residual_input
-            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+            norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
