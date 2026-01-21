@@ -33,7 +33,7 @@
 __global__ void speculate_limit_thinking_content_length_kernel_v3(
     int64_t* next_tokens,          // [bs, tokens_per_step]
     const int* max_think_lens,     // [bs]
-    const int* max_reply_lens,     // [bs]
+    int* max_reply_lens,           // [bs]
     int64_t* step_idx,             // [bs]
     const int64_t* eos_token_ids,  // [eos_len]
     int* limit_status,             // [bs]
@@ -55,7 +55,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
 
   const int max_think_len =
       max_think_lens[bid];  // <0: 不强制截断思考（但仍监听 think_end_id）
-  const int max_reply_len = max_reply_lens[bid];  // <0: 不限制回复
+  int max_reply_len = max_reply_lens[bid];  // <0: 不限制回复
   if (max_think_len < 0 && max_reply_len < 0) return;
 
   // 状态常量（允许 inject_len==0）
@@ -87,6 +87,9 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
       status = done_status;
       // 不截断 accept_num：后续 token 可以继续（但回复计数从下一个 token
       // 才开始）
+      if (max_reply_len >= 0) {
+        max_reply_len += 2;
+      }
     }
 
     // ======================= 2) 仅当启用“思考截断”(max_think_len>=0)
@@ -188,6 +191,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v3(
 
   accept_num[bid] = new_accept_num;
   limit_status[bid] = status;
+  max_reply_lens[bid] = max_reply_len;
 }
 
 void SpeculateLimitThinkingContentLengthV3(
@@ -217,7 +221,7 @@ void SpeculateLimitThinkingContentLengthV3(
                                                       next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
-      max_reply_lens.data<int>(),
+      const_cast<int*>(max_reply_lens.data<int>()),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
       eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_status.data<int>()),
