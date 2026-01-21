@@ -9,3 +9,4 @@ reasoning_parser: ernie-45-vl
 graph_optimization_config:
   use_cudagraph: True
   graph_opt_level: 2
+  max_capture_shape_dy2st: 128
