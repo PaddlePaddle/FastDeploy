@@ -26,7 +26,11 @@ from unittest import mock
 
 import numpy as np
 
-from fastdeploy.entrypoints.openai.protocol import DeltaMessage
+from fastdeploy.entrypoints.openai.protocol import (
+    DeltaFunctionCall,
+    DeltaMessage,
+    DeltaToolCall,
+)
 
 
 class DummyTokenizer:
@@ -307,7 +311,15 @@ class DataProcessorTestCase(unittest.TestCase):
                 model_status: str,
             ):
                 # 模拟流式工具调用解析，返回固定的工具调用数据用于测试
-                return DeltaMessage(tool_calls=mock.MagicMock(), content=content)
+                tool_calls = [
+                    DeltaToolCall(
+                        index=0,
+                        type="function",
+                        id="text",
+                        function=DeltaFunctionCall(name="test").model_dump(exclude_none=True),
+                    )
+                ]
+                return DeltaMessage(tool_calls=tool_calls, content=content)
 
         return DummyToolParser
 
