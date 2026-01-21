@@ -469,7 +469,7 @@ class DataProcessorTestCase(unittest.TestCase):
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
         processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-text")
         response = {
-            "finished": False,
+            "finished": True,
             "request_id": "normal",
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
