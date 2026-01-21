@@ -673,9 +673,11 @@ class CacheTransferManager:
                     # clear gpu caches
                     logger.debug("[RL] start clearing gpu caches")
                     if args.create_cache_tensor:
+                        paddle.set_device(f"gpu:{self.device}")
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()
+                        paddle.device.cuda.empty_cache()
                         logger.debug("[RL] successfully cleared gpu caches")
                     else:
                         for name, tensor in self.gpu_cache_kvs.items():
@@ -690,6 +692,8 @@ class CacheTransferManager:
 
                     # reset kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+
+                    self._log_memory("after clearing caches")
 
                 except Exception as e:
                     logger.error(f"[RL] failed to clear caches: {e}")
@@ -722,10 +726,26 @@ class CacheTransferManager:
                     # set kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
+                    self._log_memory("after restoring caches")
                 except Exception as e:
                     logger.error(f"[RL] failed to restore caches: {e}")
 
             time.sleep(0.1)
+
+    def _log_memory(self, context: str):
+        """Log current GPU memory usage."""
+        max_alloc = paddle.device.cuda.max_memory_allocated() / (1024**3)
+        max_reserved = paddle.device.cuda.max_memory_reserved() / (1024**3)
+        curr_alloc = paddle.device.cuda.memory_allocated() / (1024**3)
+        curr_reserved = paddle.device.cuda.memory_reserved() / (1024**3)
+
+        logger.warning(
+            f"GPU memory usage {context}:"
+            f"max_allocated: {max_alloc:.2f}GB "
+            f"max_reserved: {max_reserved:.2f}GB "
+            f"current_allocated: {curr_alloc:.2f}GB "
+            f"current_reserved: {curr_reserved:.2f}GB"
+        )
 
 
 def main():
