@@ -182,7 +182,7 @@ class ResourceManagerV1(ResourceManager):
             name="need_block_num_signal",
             array=need_block_num_data,
             dtype=np.int32,
-            suffix=self.config.parallel_config.engine_worker_queue_port,
+            suffix=self.config.parallel_config.engine_worker_queue_port[local_data_parallel_id],
             create=True,
         )
 
