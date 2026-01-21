@@ -17,7 +17,7 @@
 
 // 1) 支持 inject_token_ids（任意长度）
 // 2) 支持限制回复长度 max_reply_lens
-// 3) 语义对齐非MTP limit_thinking_content_length_v4：
+// 3) 语义对齐非MTP limit_thinking_content_length_v3：
 //    - max_think_len < 0：不强制截断思考，但仍会监听 think_end_id
 //    来进入回复阶段
 //    - max_reply_len >= 0：仅在“思考结束后的下一个 token”开始计回复长度
@@ -30,7 +30,7 @@
 // - reply_base = done_status + 1
 // - status >= reply_base：回复阶段计数，reply_len = status -
 // reply_base（已输出回复 token 数）
-__global__ void speculate_limit_thinking_content_length_kernel_v4(
+__global__ void speculate_limit_thinking_content_length_kernel_v3(
     int64_t* next_tokens,          // [bs, tokens_per_step]
     const int* max_think_lens,     // [bs]
     const int* max_reply_lens,     // [bs]
@@ -44,7 +44,8 @@ __global__ void speculate_limit_thinking_content_length_kernel_v4(
     const int tokens_per_step,
     const int bs,
     const int eos_token_id_len,
-    const int inject_len) {
+    const int inject_len,
+    const bool splitwise_role_is_decode) {
   const int bid = blockIdx.x * blockDim.x + threadIdx.x;
   if (bid >= bs) return;
 
@@ -78,7 +79,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v4(
     const int prev_status = status;
     bool condition_triggered = false;
 
-    // ======================= 1) 思考阶段监听 think_end_id（语义对齐非MTP v4）
+    // ======================= 1) 思考阶段监听 think_end_id（语义对齐非MTP v3）
     // =======================
     // 注意：这里必须放在“注入触发逻辑”之前，因为如果模型自然输出 </think>，
     // 这一 token 应该把 status 置为 done_status，但“本 token 不计入回复”。
@@ -91,10 +92,24 @@ __global__ void speculate_limit_thinking_content_length_kernel_v4(
     // ======================= 2) 仅当启用“思考截断”(max_think_len>=0)
     // 时触发注入 =======================
     if (max_think_len >= 0 && status < reply_base) {
-      // A) 超长触发：到达 max_think_len 时开始注入（从本 token 起输出
-      // inject_token_ids[0]）
-      if (status == 0 && (current_step - 1) == max_think_len) {
-        status = (inject_len > 0) ? 1 : done_status;
+      if (max_think_len > 0) {
+        // A) 超长触发：到达 max_think_len 时开始注入（从本 token 起输出
+        // inject_token_ids[0]）
+        if (status == 0 &&
+            (current_step - 1) ==
+                max_think_len) {  // current_step - 1 是因为 speculate_verify 里
+                                  // step_idx + 1 了
+          status = (inject_len > 0) ? 1 : done_status;
+        }
+      } else if (max_think_len == 0) {
+        // A) 超长触发：到达 max_think_len 时开始注入
+        if (status == 0 && !splitwise_role_is_decode) {
+          // 如果是集中式或 P 节点：从本 token 起输出 inject_token_ids[0]）
+          status = (inject_len > 0) ? 1 : done_status;
+        } else if (status == 0 && splitwise_role_is_decode) {
+          // 如果是 D 节点下：从本 token 起输出 inject_token_ids[1]）
+          status = (inject_len > 0) ? 2 : done_status + 1;
+        }
       }
 
       // B) 思考阶段提前输出 eos：开始注入（从本 token 起覆盖 eos 为
@@ -126,7 +141,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v4(
                                         (prev_status != done_status) &&
                                         (prev_status < reply_base);
 
-    // ======================= 3) 回复长度限制（对齐非MTP v4）
+    // ======================= 3) 回复长度限制（对齐非MTP v3）
     // ======================= 关键：刚进入 done_status 的这一 token（</think>
     // 或注入 token）不计入回复，也不在这一 token 开始回复计数
     if (max_reply_len >= 0) {
@@ -175,7 +190,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v4(
   limit_status[bid] = status;
 }
 
-void SpeculateLimitThinkingContentLengthV4(
+void SpeculateLimitThinkingContentLengthV3(
     const paddle::Tensor& next_tokens,
     const paddle::Tensor& max_think_lens,
     const paddle::Tensor& max_reply_lens,  // 新增
@@ -185,7 +200,8 @@ void SpeculateLimitThinkingContentLengthV4(
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const paddle::Tensor& inject_token_ids,  // 新增：支持任意长度注入序列
-    const int64_t think_end_id) {
+    const int64_t think_end_id,
+    const bool splitwise_role_is_decode) {
   const int batch_size = next_tokens.shape()[0];
   const int tokens_per_step = next_tokens.shape()[1];
   const int eos_token_id_len = eos_token_ids.shape()[0];
@@ -195,7 +211,7 @@ void SpeculateLimitThinkingContentLengthV4(
   int blocks = (batch_size + threads - 1) / threads;
   if (blocks > 1024) blocks = 1024;
 
-  speculate_limit_thinking_content_length_kernel_v4<<<blocks,
+  speculate_limit_thinking_content_length_kernel_v3<<<blocks,
                                                       threads,
                                                       0,
                                                       next_tokens.stream()>>>(
@@ -212,10 +228,11 @@ void SpeculateLimitThinkingContentLengthV4(
       tokens_per_step,
       batch_size,
       eos_token_id_len,
-      inject_len);
+      inject_len,
+      splitwise_role_is_decode);
 }
 
-PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v4)
+PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v3)
     .Inputs({"next_tokens",
              "max_think_lens",
              "max_reply_lens",
@@ -225,7 +242,7 @@ PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v4)
              "stop_flags",
              "eos_token_ids",
              "inject_token_ids"})
-    .Attrs({"think_end_id: int64_t"})
+    .Attrs({"think_end_id: int64_t", "splitwise_role_is_decode: bool"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
-    .SetKernelFn(PD_KERNEL(SpeculateLimitThinkingContentLengthV4));
+    .SetKernelFn(PD_KERNEL(SpeculateLimitThinkingContentLengthV3));

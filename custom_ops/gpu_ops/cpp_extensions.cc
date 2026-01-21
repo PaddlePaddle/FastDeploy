@@ -1113,8 +1113,9 @@ void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
 
 void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
+                                  const paddle::Tensor& max_reply_lens,
                                   const paddle::Tensor& step_idx,
-                                  const paddle::Tensor& limit_think_status,
+                                  const paddle::Tensor& limit_status,
                                   const paddle::Tensor& stop_flags,
                                   const paddle::Tensor& eos_token_ids,
                                   const paddle::Tensor& inject_token_ids,
@@ -1142,7 +1143,7 @@ void SpeculateLimitThinkingContentLengthV2(
     const int64_t think_end_id,
     const int64_t line_break_id);
 
-void SpeculateLimitThinkingContentLengthV4(
+void SpeculateLimitThinkingContentLengthV3(
     const paddle::Tensor& next_tokens,
     const paddle::Tensor& max_think_lens,
     const paddle::Tensor& max_reply_lens,  // 新增
@@ -1152,7 +1153,8 @@ void SpeculateLimitThinkingContentLengthV4(
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const paddle::Tensor& inject_token_ids,  // 新增：支持任意长度注入序列
-    const int64_t think_end_id);
+    const int64_t think_end_id,
+    const bool splitwise_role_is_decode);
 
 void SpeculateGetLogits(const paddle::Tensor& draft_logits,
                         const paddle::Tensor& next_token_num,
@@ -1824,8 +1826,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculateLimitThinkingContentLengthV2,
         "speculate limit thinking content length function");
 
-  m.def("speculate_limit_thinking_content_length_v4",
-        &SpeculateLimitThinkingContentLengthV4,
+  m.def("speculate_limit_thinking_content_length_v3",
+        &SpeculateLimitThinkingContentLengthV3,
         "speculate limit thinking content length function");
 
   m.def("speculate_get_logits",

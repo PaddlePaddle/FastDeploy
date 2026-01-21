@@ -15,7 +15,7 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-__global__ void limit_thinking_content_length_kernel_v4(
+__global__ void limit_thinking_content_length_kernel_v3(
     int64_t* next_tokens,
     const int* max_think_lens,
     const int* max_reply_lens,
@@ -119,7 +119,7 @@ __global__ void limit_thinking_content_length_kernel_v4(
   limit_status[bid] = status;
 }
 
-void LimitThinkingContentLengthV4(const paddle::Tensor& next_tokens,
+void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
                                   const paddle::Tensor& max_reply_lens,
                                   const paddle::Tensor& step_idx,
@@ -135,7 +135,7 @@ void LimitThinkingContentLengthV4(const paddle::Tensor& next_tokens,
   const int threads = 256;
   const int blocks = (batch_size + threads - 1) / threads;
 
-  limit_thinking_content_length_kernel_v4<<<blocks,
+  limit_thinking_content_length_kernel_v3<<<blocks,
                                             threads,
                                             0,
                                             next_tokens.stream()>>>(
@@ -153,7 +153,7 @@ void LimitThinkingContentLengthV4(const paddle::Tensor& next_tokens,
       inject_len);
 }
 
-PD_BUILD_STATIC_OP(limit_thinking_content_length_v4)
+PD_BUILD_STATIC_OP(limit_thinking_content_length_v3)
     .Inputs({"next_tokens",
              "max_think_lens",
              "max_reply_lens",
@@ -165,4 +165,4 @@ PD_BUILD_STATIC_OP(limit_thinking_content_length_v4)
     .Attrs({"think_end_id: int64_t"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
-    .SetKernelFn(PD_KERNEL(LimitThinkingContentLengthV4));
+    .SetKernelFn(PD_KERNEL(LimitThinkingContentLengthV3));
