@@ -651,7 +651,8 @@ class CacheTransferManager:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
                     # clear cpu caches
-                    logger.info("[RL] start clearing cpu caches")
+                    logger.info("[RL] start clearing caches")
+                    logger.debug("[RL] start clearing cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
                         for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
@@ -660,26 +661,26 @@ class CacheTransferManager:
                         self.k_dst_ptrs.clear()
                         self.v_dst_ptrs.clear()
                         gc.collect()
-                        logger.info("[RL] successfully cleared cpu caches")
+                        logger.debug("[RL] successfully cleared cpu caches")
                         # reset swap_space_ready_signal
                         self.swap_space_ready_signal.value[self.rank] = 0
                         while np.sum(self.swap_space_ready_signal.value) != 0:
                             time.sleep(0.1)
-                        logger.info("[RL] all ranks cleared cpu caches")
+                        logger.debug("[RL] all ranks cleared cpu caches")
                     else:
-                        logger.info("[RL] skip clearing cpu caches")
+                        logger.debug("[RL] skip clearing cpu caches")
 
                     # clear gpu caches
-                    logger.info("[RL] start clearing gpu caches")
+                    logger.debug("[RL] start clearing gpu caches")
                     if args.create_cache_tensor:
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()
-                        logger.info("[RL] successfully cleared gpu caches")
+                        logger.debug("[RL] successfully cleared gpu caches")
                     else:
                         for name, tensor in self.gpu_cache_kvs.items():
                             unset_data_ipc(tensor, name, True, False)
-                        logger.info("[RL] successfully cleared gpu caches cuda ipc")
+                        logger.debug("[RL] successfully cleared gpu caches cuda ipc")
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
@@ -697,20 +698,21 @@ class CacheTransferManager:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
                     # restore cpu cache
-                    logger.info("[RL] start restoring cpu caches")
+                    logger.info("[RL] start restoring caches")
+                    logger.debug("[RL] start restoring cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
-                        logger.info("[RL] successfully restored cpu caches")
+                        logger.debug("[RL] successfully restored cpu caches")
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
-                        logger.info("[RL] all ranks restored cpu caches")
+                        logger.debug("[RL] all ranks restored cpu caches")
                     else:
-                        logger.info("[RL] skip restoring cpu caches")
+                        logger.debug("[RL] skip restoring cpu caches")
 
                     # restore gpu cache and set cache_ready_signal
-                    logger.info("[RL] start restoring gpu caches")
+                    logger.debug("[RL] start restoring gpu caches")
                     self._init_gpu_cache(args)
-                    logger.info("[RL] successfully restored gpu caches")
+                    logger.debug("[RL] successfully restored gpu caches")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
