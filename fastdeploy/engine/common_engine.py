@@ -212,6 +212,15 @@ class EngineService:
             create=True,
         )
 
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
@@ -823,9 +832,6 @@ class EngineService:
 
         while self.running:
             try:
-                if self.engine_worker_queue.num_tasks() > 0:
-                    time.sleep(0.001)
-                    continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         get_request_pool.submit(_fetch_request)
@@ -845,6 +851,10 @@ class EngineService:
                                 break
                             else:
                                 raise
+                if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                    time.sleep(0.001)
+                    continue
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -871,6 +881,11 @@ class EngineService:
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
                         trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                else:
+                    if self.cfg.parallel_config.enable_expert_parallel:
+                        self.engine_worker_queue.put_tasks(
+                            ([], self.resource_manager.real_bsz)
+                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
