@@ -130,8 +130,9 @@ def limit_thinking_content_length(
             step_idx,
             limit_think_status,
             stop_flags,
+            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
+            # inject_token_ids,
             think_end_id,
-            line_break_id,
         )
     else:
         raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
