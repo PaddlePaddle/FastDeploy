@@ -898,7 +898,7 @@ class GraphOptimizationConfig:
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
         self.cudagraph_capture_sizes: Optional[list[int]] = None
-        self.cudagraph_capture_sizes_prefill: Optional[list[int]] = None
+        self.cudagraph_capture_sizes_prefill: list[int] = [1, 2, 4, 8]
         """ Number of warmup runs for cudagraph. """
         self.cudagraph_num_of_warmups: int = 2
         """Whether to copy input tensors for cudagraph.
