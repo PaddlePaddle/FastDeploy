@@ -536,7 +536,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
-        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -593,6 +592,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Check for logprobs in subsequent chunks
                 logprobs_found = False
                 for result in results:
+                    print("1")
+                    print(result)
                     # Skip [DONE] message
                     if result.strip() == "data: [DONE]":
                         continue
