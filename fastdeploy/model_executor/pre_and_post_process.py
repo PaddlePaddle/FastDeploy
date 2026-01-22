@@ -388,7 +388,7 @@ def post_process_normal(
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_gpu,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
@@ -402,6 +402,7 @@ def post_process_normal(
                 model_output.is_block_step,
                 block_size,
             )
+            model_output.not_need_stop.copy_(model_output.not_need_stop_gpu, False)
         else:
             update_inputs(
                 model_output.stop_flags,

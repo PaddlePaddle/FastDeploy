@@ -225,6 +225,7 @@ class ModelOutputData:
         Indicates if stopping conditions should be ignored
     """
     not_need_stop: bool
+    not_need_stop_gpu: paddle.Tensor
 
     """
         Sequence lengths of the encoder
