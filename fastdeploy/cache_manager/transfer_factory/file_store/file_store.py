@@ -90,13 +90,20 @@ class FileStore(KVCacheStorage):
     #     return key + self.config_suffix
 
     def _get_tensor_path(self, key: str) -> str:
-        clean_key = key.split('_key_')[0].split('_value_')[0]
-        
-        # 文件名区分分片。如果是非 TP，会生成 data.pd
-        if self.storage_config.tp_rank is not None:
-            name = f"rank_{self.storage_config.tp_rank}.pd"
+        if '_key_' in key:
+            clean_key, layer_part = key.split('_key_')
+            suffix = f"_key_{layer_part}"
+        elif '_value_' in key:
+            clean_key, layer_part = key.split('_value_')
+            suffix = f"_value_{layer_part}"
         else:
-            name = "data.pd"
+            clean_key = key
+            suffix = ""
+        
+        if self.storage_config.tp_rank is not None:
+            name = f"rank_{self.storage_config.tp_rank}{suffix}.pd"
+        else:
+            name = f"data{suffix}.pd"
             
         return os.path.join(self.file_path, clean_key, name)
 
@@ -140,7 +147,8 @@ class FileStore(KVCacheStorage):
                 os.fsync(os.open(os.path.dirname(tensor_path), os.O_RDONLY))
             elif isinstance(target_location, int) and target_size is not None:
                 tensor = self._tensor_from_ptr(target_location, int(target_size))
-                paddle.save(tensor2save, tensor_path)
+                paddle.save(tensor, tensor_path)
+                os.fsync(os.open(os.path.dirname(tensor_path), os.O_RDONLY))
             else:
                 raise ValueError("target_location must be a paddle.Tensor or a pointer int with target_size.")
             return True
@@ -232,7 +240,6 @@ class FileStore(KVCacheStorage):
         for k in keys:
             p = self._get_tensor_path(k)
             found = os.path.exists(p)
-            # 这一行非常重要，能告诉你卡 2 到底有没有来“找”过
             logger.info(f"--- [CACHE_CHECK] Key: {k[:10]}... Path: {p} Found: {found} ---")
             res[k] = found
         return res
