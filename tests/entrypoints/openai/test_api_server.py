@@ -520,14 +520,14 @@ async def test_reward_embedding_and_weights():
 
     # Weight update/clear
     api_server.app.state.dynamic_load_weight = True
-    api_server.app.state.engine_client.update_model_weight.return_value = (False, "fail")
+    api_server.app.state.engine_client.update_model_weight.return_value = (404, "fail")
     assert api_server.update_model_weight(MagicMock()).status_code == 404
-    api_server.app.state.engine_client.update_model_weight.return_value = (True, "ok")
+    api_server.app.state.engine_client.update_model_weight.return_value = (200, "ok")
     assert api_server.update_model_weight(MagicMock()).status_code == 200
 
-    api_server.app.state.engine_client.clear_load_weight.return_value = (False, "fail")
+    api_server.app.state.engine_client.clear_load_weight.return_value = (404, "fail")
     assert api_server.clear_load_weight(MagicMock()).status_code == 404
-    api_server.app.state.engine_client.clear_load_weight.return_value = (True, "ok")
+    api_server.app.state.engine_client.clear_load_weight.return_value = (200, "ok")
     assert api_server.clear_load_weight(MagicMock()).status_code == 200
 
     # Disabled branch
