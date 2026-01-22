@@ -35,10 +35,6 @@ def get_sm_version():
     return cc
 
 
-@unittest.skipIf(
-    not paddle.is_compiled_with_cuda() or get_sm_version() < 100,
-    "Nvfp4 do not support sm < 100.",
-)
 class TestModelOptNvFp4Config(unittest.TestCase):
     def setUp(self):
         prop = paddle.device.cuda.get_device_properties()
