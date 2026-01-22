@@ -31,7 +31,12 @@ if not hasattr(paddle, "compat"):
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
-from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
+from fastdeploy.engine.request import (
+    Request,
+    RequestMetrics,
+    RequestOutput,
+    RequestStatus,
+)
 from fastdeploy.utils import EngineError
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
@@ -1323,5 +1328,181 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.scheduler.start = Mock()
         eng.launch_components()
         eng.scheduler.start.assert_called()
+        if hasattr(eng, "_finalizer"):
+            eng._finalizer.detach()
+
+    def test_setting_environ_variables_prefill_v0(self):
+        """Cover non-v1 prefill env var branches in _setting_environ_variables."""
+        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
+            cfg = self._make_cfg(splitwise_role="prefill", router="0.0.0.0:30000")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
+            prefix = eng._setting_environ_variables()
+        self.assertIn("FLAGS_use_pd_disaggregation=1", prefix)
+        self.assertIn("FLAGS_fmt_write_cache_completed_signal=1", prefix)
+        self.assertNotIn("FLAGS_use_pd_disaggregation_per_chunk=1", prefix)
+        if hasattr(eng, "_finalizer"):
+            eng._finalizer.detach()
+
+    def test_send_error_response_branches(self):
+        """Cover internal adapter vs normal branches in _send_error_response."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+        eng.send_response_server = Mock()
+
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", False):
+            eng._send_error_response("req-normal", "boom", error_code=400)
+        normal_args = eng.send_response_server.send_response.call_args[0]
+        self.assertEqual(normal_args[0], "req-normal")
+        self.assertEqual(normal_args[1][0].error_code, 400)
+        self.assertEqual(normal_args[1][0].error_msg, "boom")
+
+        eng.send_response_server.reset_mock()
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True):
+            eng._send_error_response("req-internal", "bad")
+        internal_args = eng.send_response_server.send_response.call_args[0]
+        self.assertIsNone(internal_args[0])
+        self.assertEqual(internal_args[1][0][0].request_id, "req-internal")
+        if hasattr(eng, "_finalizer"):
+            eng._finalizer.detach()
+
+    def test_decode_token_returns_text_and_cleans_status(self):
+        """Cover text-return path and decode_status cleanup in _decode_token."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
+
+        class Proc:
+            def __init__(self):
+                self.decode_status = {"req-1": [0, 2]}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "hi", [10, 11, 12], None
+
+        eng.data_processor = Proc()
+        with patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True):
+            delta_text, token_ids = eng._decode_token([10, 11], "req-1", is_end=True)
+        self.assertEqual(delta_text, "hi")
+        self.assertEqual(token_ids, [10, 11])
+        self.assertNotIn("req-1", eng.data_processor.decode_status)
+        if hasattr(eng, "_finalizer"):
+            eng._finalizer.detach()
+
+    def test_insert_zmq_task_abort_preempt_v1(self):
+        """Cover abort handling in _insert_zmq_task_to_scheduler with v1 scheduler."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        eng.running = True
+
+        class ResourceManagerStub:
+            def __init__(self):
+                self.abort_req_ids_set = set()
+                self.requests = {"abort-req": object()}
+                self.real_bsz = 2
+
+            def _prepare_preempt_task(self, req):
+                return "preempt-task"
+
+        eng.resource_manager = ResourceManagerStub()
+        eng.engine_worker_queue = Mock()
+        eng.scheduler = Mock()
+
+        class DummyRecv:
+            def __init__(self, engine):
+                self.engine = engine
+                self.called = False
+
+            def receive_json_once(self, block):
+                if not self.called:
+                    self.called = True
+                    self.engine.running = False
+                    return None, {"status": RequestStatus.ABORT.value, "request_id": "abort-req"}
+                return None, None
+
+        eng.recv_request_server = DummyRecv(eng)
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True),
+            patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_DATA_PROCESSOR", False),
+        ):
+            eng._insert_zmq_task_to_scheduler()
+
+        eng.engine_worker_queue.put_tasks.assert_called_with((["preempt-task"], eng.resource_manager.real_bsz))
+        self.assertIn("abort-req", eng.resource_manager.abort_req_ids_set)
+        if hasattr(eng, "_finalizer"):
+            eng._finalizer.detach()
+
+    def test_zmq_send_generated_tokens_internal_adapter(self):
+        """Cover internal adapter branch in _zmq_send_generated_tokens."""
+        cfg = self._make_cfg(splitwise_role="mixed")
+
+        class DummyQ:
+            def __init__(self, *a, **k):
+                pass
+
+        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
+            eng = EngineService(cfg, start_queue=False, use_async_llm=False)
+        eng.running = True
+
+        class Proc:
+            def __init__(self):
+                self.decode_status = {"req-2": [0, 2]}
+
+            def ids2tokens(self, token_ids, req_id):
+                return "ok", [1, 2, 3], None
+
+        eng.data_processor = Proc()
+        eng.send_response_server = Mock()
+
+        class Outputs:
+            def __init__(self):
+                self.decode_type = 0
+                self.token_ids = [1, 2, 3]
+                self.text = ""
+                self.tool_calls = None
+
+        def get_results_side_effect():
+            if not getattr(eng, "_results_called", False):
+                eng._results_called = True
+                return [[RequestOutput(request_id="req-2", outputs=Outputs(), finished=False)]]
+            eng.running = False
+            return []
+
+        eng.scheduler.get_results = Mock(side_effect=get_results_side_effect)
+
+        with (
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_INTERNAL_ADAPTER", True),
+            patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
+            eng._zmq_send_generated_tokens()
+
+        args = eng.send_response_server.send_response.call_args[0]
+        self.assertIsNone(args[0])
+        self.assertEqual(args[1][0][0].outputs.text, "ok")
+        self.assertEqual(args[1][0][0].outputs.token_ids, [1, 2])
         if hasattr(eng, "_finalizer"):
             eng._finalizer.detach()
