@@ -695,6 +695,7 @@ class CacheTransferManager:
             logger.error(
                 f"An error occurred in _run_write_back_storage, " f"error: {e}, traceback:\n{traceback.format_exc()}"
             )
+            return 0
 
     def write_back_storage_task(self, task: WriteStorageTask):
         """
