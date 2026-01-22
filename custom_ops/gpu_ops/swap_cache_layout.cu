@@ -73,6 +73,11 @@ void SwapCacheImpLayout(
           copy_kind,
           stream);
 
+      PADDLE_ENFORCE_EQ(status,
+                        cudaSuccess,
+                        phi::errors::External("cudaMemcpyAsync failed: %s",
+                                              cudaGetErrorString(status)));
+
 #ifdef SWAP_DEBUG
       cudaStreamSynchronize(stream);
       std::cout << "mode:" << mode << ", layer_idx:" << layer_idx
@@ -81,7 +86,11 @@ void SwapCacheImpLayout(
 #endif
     }
   }
-  cudaStreamSynchronize(stream);
+  cudaError_t sync_status = cudaStreamSynchronize(stream);
+  PADDLE_ENFORCE_EQ(sync_status,
+                    cudaSuccess,
+                    phi::errors::External("cudaStreamSynchronize failed: %s",
+                                          cudaGetErrorString(sync_status)));
 }
 
 void SwapCacheLayout(
