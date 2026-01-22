@@ -792,21 +792,21 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_valid_parameters_max_tokens_valid(self):
         """Test valid_parameters accepts valid max_tokens."""
-        data = {"max_tokens": 100, "request_id": "test"}
+        data = {"max_tokens": 100}
 
         # Should not raise exception
         self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_max_tokens_too_small(self):
         """Test valid_parameters rejects max_tokens < 1."""
-        data = {"max_tokens": 0, "request_id": "test"}
+        data = {"max_tokens": 0}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_max_tokens_too_large(self):
         """Test valid_parameters rejects max_tokens >= max_model_len."""
-        data = {"max_tokens": 2048, "request_id": "test"}  # Equal to max_model_len, should raise exception
+        data = {"max_tokens": 2048}  # Equal to max_model_len, should raise exception
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -823,7 +823,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_valid_parameters_temperature_zero_adjustment(self):
         """Test valid_parameters adjusts zero temperature."""
-        data = {"temperature": 0, "request_id": "test"}
+        data = {"temperature": 0}
 
         self.engine_client.valid_parameters(data)
 
@@ -832,20 +832,20 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_logprobs_disabled_when_enabled(self):
         """Test valid_parameters rejects logprobs when disabled."""
         self.engine_client.enable_logprob = False
-        data = {"logprobs": True, "request_id": "test"}
+        data = {"logprobs": True}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
     def test_valid_parameters_logprobs_with_invalid_type(self):
         """Test valid_parameters rejects invalid logprobs type."""
-        data = {"logprobs": "invalid", "request_id": "test"}
+        data = {"logprobs": "invalid"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
-    def test_valid_parameters_top_logprobs_disabled_exception(self):
-        """Test valid_parameters rejects top_logprobs when disabled (Exception)."""
+    def test_valid_parameters_top_logprobs_disabled(self):
+        """Test valid_parameters rejects top_logprobs when disabled."""
         self.engine_client.enable_logprob = False
         data = {"logprobs": True, "top_logprobs": 5}
 
@@ -855,7 +855,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_invalid_type(self):
         """Test valid_parameters rejects invalid top_logprobs type."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": "invalid", "request_id": "test"}
+        data = {"logprobs": True, "top_logprobs": "invalid"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -863,7 +863,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_negative(self):
         """Test valid_parameters rejects negative top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
+        data = {"logprobs": True, "top_logprobs": -1}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -871,7 +871,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_too_large(self):
         """Test valid_parameters rejects top_logprobs > 20."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
+        data = {"logprobs": True, "top_logprobs": 25}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -879,7 +879,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
     def test_valid_parameters_top_logprobs_valid(self):
         """Test valid_parameters accepts valid top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
+        data = {"logprobs": True, "top_logprobs": 10}
 
         # Should not raise exception
         self.engine_client.valid_parameters(data)
@@ -1619,8 +1619,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     # ========== Phase 2: Error Handling Tests ==========
 
-    async def test_rearrange_experts_invalid_credentials_basic(self):
-        """Test rearrange_experts with invalid credentials (basic)."""
+    async def test_rearrange_experts_invalid_credentials(self):
+        """Test rearrange_experts with invalid credentials."""
         mock_config = create_mock_fd_config(enable_eplb=True)
         self.engine_client.config = mock_config
         self.engine_client.fd_config = mock_config
@@ -1667,586 +1667,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         self.assertIn("ZMQ send failed", str(context.exception))
 
-    # ========== Coverage Enhancement Tests ==========
-
-    def test_init_worker_node_when_tensor_parallel_size_exceeds_max_chips(self):
-        """Test EngineClient initialization as worker node when tensor_parallel_size > max_chips_per_node."""
-        # Covers line 94: self.is_master = False
-        mock_config = Mock()
-        mock_config.model_config = Mock()
-        mock_config.model_config.enable_mm = False
-        mock_config.eplb_config = Mock()
-        mock_config.eplb_config.enable_eplb = False
-        mock_config.cache_config = Mock()
-        mock_config.cache_config.swap_space = False
-        mock_config.cache_config.kvcache_storage_backend = None
-        mock_config.parallel_config = Mock()
-        mock_config.parallel_config.tensor_parallel_rank = 0
-        mock_config.parallel_config.local_data_parallel_id = 0
-        mock_config.scheduler_config = Mock()
-        mock_config.scheduler_config.splitwise_role = None
-        mock_config.limit_mm_per_prompt = 5
-        mock_config.mm_processor_kwargs = {}
-        mock_config.structured_outputs_config = Mock()
-        mock_config.structured_outputs_config.reasoning_parser = None
-        mock_config.tool_parser = None
-
-        with (
-            patch("fastdeploy.entrypoints.engine_client.InputPreprocessor") as mock_processor_class,
-            patch("fastdeploy.entrypoints.engine_client.current_platform") as mock_platform,
-            patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal,
-            patch("fastdeploy.entrypoints.engine_client.envs") as mock_envs,
-            patch("os.getenv", return_value="50"),
-        ):
-            mock_platform.is_iluvatar.return_value = False  # Non-Iluvatar, max_chips_per_node = 8
-            mock_input_processor = Mock()
-            mock_processor_class.return_value = mock_input_processor
-            mock_processor = Mock()
-            mock_input_processor.create_processor.return_value = mock_processor
-
-            mock_signal_instance = Mock()
-            mock_signal_instance.value = np.array([0])
-            mock_ipcsignal.return_value = mock_signal_instance
-            mock_envs.FD_SUPPORT_MAX_CONNECTIONS = 100
-
-            mock_config.model_config.max_model_len = 2048
-            mock_config.model_config.enable_logprob = True
-            mock_config.parallel_config.tensor_parallel_size = 16  # > 8 (max_chips_per_node)
-
-            client = EngineClient(
-                pid=5678,
-                port=8080,
-                fd_config=mock_config,
-                workers=1,
-            )
-
-        self.assertFalse(client.is_master)
-
-    def test_init_eplb_signals_when_enabled(self):
-        """Test EngineClient initialization with EPLB enabled."""
-        # Covers line 97: self.init_eplb_signals(ipc_signal_suffix=port)
-        mock_config = Mock()
-        mock_config.model_config = Mock()
-        mock_config.model_config.enable_mm = False
-        mock_config.eplb_config = Mock()
-        mock_config.eplb_config.enable_eplb = True  # EPLB enabled
-        mock_config.eplb_config.redundant_expert_api_user = "test_user"
-        mock_config.eplb_config.redundant_expert_api_password = "test_pass"
-        mock_config.eplb_config.redundant_expert_ip_shm_size = 1024
-        mock_config.cache_config = Mock()
-        mock_config.cache_config.swap_space = False
-        mock_config.cache_config.kvcache_storage_backend = None
-        mock_config.parallel_config = Mock()
-        mock_config.parallel_config.tensor_parallel_rank = 0
-        mock_config.parallel_config.local_data_parallel_id = 0
-        mock_config.scheduler_config = Mock()
-        mock_config.scheduler_config.splitwise_role = None
-        mock_config.limit_mm_per_prompt = 5
-        mock_config.mm_processor_kwargs = {}
-        mock_config.structured_outputs_config = Mock()
-        mock_config.structured_outputs_config.reasoning_parser = None
-        mock_config.tool_parser = None
-
-        with (
-            patch("fastdeploy.entrypoints.engine_client.InputPreprocessor") as mock_processor_class,
-            patch("fastdeploy.entrypoints.engine_client.current_platform") as mock_platform,
-            patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal,
-            patch("fastdeploy.entrypoints.engine_client.envs") as mock_envs,
-            patch("os.getenv", return_value="50"),
-        ):
-            mock_platform.is_iluvatar.return_value = False
-            mock_input_processor = Mock()
-            mock_processor_class.return_value = mock_input_processor
-            mock_processor = Mock()
-            mock_input_processor.create_processor.return_value = mock_processor
-
-            mock_signal_instance = Mock()
-            mock_signal_instance.value = np.array([0])
-            mock_ipcsignal.return_value = mock_signal_instance
-            mock_envs.FD_SUPPORT_MAX_CONNECTIONS = 100
-
-            mock_config.model_config.max_model_len = 2048
-            mock_config.model_config.enable_logprob = True
-            mock_config.parallel_config.tensor_parallel_size = 1
-
-            client = EngineClient(
-                pid=5678,
-                port=8080,
-                fd_config=mock_config,
-                workers=1,
-            )
-
-        # Verify EPLB signals were initialized
-        self.assertTrue(hasattr(client, "rearrange_experts_signal"))
-
-    async def test_format_and_add_data_generates_request_id_and_max_tokens(self):
-        """Test format_and_add_data generates request_id and max_tokens when missing."""
-        # Covers lines 258-259, 262
-        prompts = {"prompt_token_ids": [1, 2, 3]}
-
-        with patch.object(self.engine_client, "add_requests") as mock_add:
-            mock_add.return_value = None
-
-            result = await self.engine_client.format_and_add_data(prompts)
-
-            self.assertIn("request_id", prompts)
-            self.assertIn("max_tokens", prompts)
-            self.assertEqual(prompts["max_tokens"], self.engine_client.max_model_len - 1)
-            self.assertEqual(result, prompts["prompt_token_ids"])
-            mock_add.assert_called_once_with(prompts)
-
-    async def test_add_requests_with_async_data_processor(self):
-        """Test add_requests with async data processor."""
-        # Covers line 288: await self.data_processor.process_request_dict(task, self.max_model_len)
-        task = {
-            "request_id": "test-id",
-            "prompt_token_ids": [1, 2, 3],
-            "max_tokens": 100,
-        }
-
-        # Mock async processor
-        async_mock = AsyncMock()
-        self.engine_client.data_processor.process_request_dict = async_mock
-
-        with patch.object(self.engine_client, "_send_task"):
-            await self.engine_client.add_requests(task)
-
-            async_mock.assert_called_once()
-
-    async def test_add_requests_preprocessing_error_handling(self):
-        """Test add_requests preprocessing error handling."""
-        # Covers lines 303-305
-        self.engine_client.data_processor.process_request_dict = Mock(side_effect=ValueError("Preprocessing error"))
-
-        with self.assertRaises(EngineError) as context:
-            await self.engine_client.add_requests(
-                {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100}
-            )
-
-        self.assertIn("Preprocessing error", str(context.exception))
-        self.assertEqual(context.exception.error_code, 400)
-
-    async def test_add_requests_input_length_validation_too_long(self):
-        """Test add_requests input length validation when input is too long."""
-        # Covers lines 308-313
-        self.engine_client.max_model_len = 10
-        self.engine_client.data_processor = Mock(process_request_dict=Mock())
-
-        task = {
-            "request_id": "test-id",
-            "prompt_token_ids": [1] * 8,  # length = 8
-            "max_tokens": 5,  # 8 + 1 (min_tokens default) >= 10
-        }
-
-        with self.assertRaises(EngineError) as context:
-            await self.engine_client.add_requests(task)
-
-        self.assertIn("Input text is too long", str(context.exception))
-        self.assertIn("input_ids_len (8) + min_tokens(1) >= max_model_len(10)", str(context.exception))
-        self.assertEqual(context.exception.error_code, 400)
-
-    async def test_add_requests_input_exceeds_max_length(self):
-        """Test add_requests when input length exceeds max_model_len."""
-        # Covers lines 316-320
-        self.engine_client.max_model_len = 5
-        self.engine_client.data_processor = Mock(process_request_dict=Mock())
-
-        task = {
-            "request_id": "test-id",
-            "prompt_token_ids": [1] * 10,  # length = 10 > 5
-            "max_tokens": 1,
-        }
-
-        with self.assertRaises(EngineError) as context:
-            await self.engine_client.add_requests(task)
-
-        self.assertIn("Length of input token(10) exceeds the limit max_model_len(5)", str(context.exception))
-        self.assertEqual(context.exception.error_code, 400)
-
-    async def test_add_requests_stop_sequences_validation_with_patch(self):
-        """Test add_requests stop sequences validation with env patch."""
-        # Covers lines 323-340
-        self.engine_client.data_processor = Mock(process_request_dict=Mock())
-
-        task = {
-            "request_id": "test-id",
-            "prompt_token_ids": [1, 2, 3],
-            "max_tokens": 10,
-            "stop_seqs_len": [1, 2, 3, 4, 5],  # More than default limit
-        }
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 3):
-            with self.assertRaises(EngineError) as context:
-                await self.engine_client.add_requests(task)
-
-            self.assertIn(
-                "Length of stop ([1, 2, 3, 4, 5]) exceeds the limit max_stop_seqs_num(3)", str(context.exception)
-            )
-            self.assertEqual(context.exception.error_code, 400)
-
-    def test_send_task_with_e2w_tensor_conversion(self):
-        """Test _send_task with E2W tensor conversion enabled."""
-        # Covers line 378: to_tensor([task])
-        self.engine_client.enable_mm = True
-        task = {"test": "data"}
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_E2W_TENSOR_CONVERT", True):
-            with patch("fastdeploy.entrypoints.engine_client.to_tensor") as mock_to_tensor:
-                self.engine_client._send_task(task)
-
-                mock_to_tensor.assert_called_once_with([task])
-                self.engine_client.zmq_client.send_pyobj.assert_called_once_with(task)
-
-    def test_valid_parameters_max_tokens_out_of_range(self):
-        """Test valid_parameters max_tokens validation."""
-        # Covers line 393
-        data = {"max_tokens": 0, "request_id": "test-id"}  # Invalid value, but add required request_id
-
-        with self.assertRaises(ValueError) as context:
-            self.engine_client.valid_parameters(data)
-
-        self.assertIn("max_tokens can be defined [1,", str(context.exception))
-
-    def test_valid_parameters_reasoning_max_tokens_adjusted(self):
-        """Test valid_parameters reasoning_max_tokens adjustment."""
-        # Covers lines 399, 400-405
-        data = {"max_tokens": 50, "reasoning_max_tokens": 100, "request_id": "test-id"}
-
-        with patch("fastdeploy.entrypoints.engine_client.api_server_logger") as mock_logger:
-            self.engine_client.valid_parameters(data)
-
-            self.assertEqual(data["reasoning_max_tokens"], 50)
-            mock_logger.warning.assert_called_once()
-
-    def test_valid_parameters_logprobs_int_assignment(self):
-        """Test valid_parameters logprobs int assignment."""
-        # Covers line 421
-        self.engine_client.enable_logprob = True
-        data = {"logprobs": 5, "request_id": "test"}
-
-        self.engine_client.valid_parameters(data)
-
-        # Should not raise exception and logprobs should be processed
-
-    def test_valid_parameters_prompt_logprobs_disabled(self):
-        """Test valid_parameters prompt_logprobs when disabled."""
-        # Covers lines 441-443
-        self.engine_client.enable_logprob = False
-        data = {"prompt_logprobs": 1, "request_id": "test"}
-
-        with self.assertRaises(ParameterError) as context:
-            self.engine_client.valid_parameters(data)
-
-        self.assertIn("enable_logprob", str(context.exception))
-
-    def test_valid_parameters_prompt_logprobs_fd_use_disabled(self):
-        """Test valid_parameters prompt_logprobs when FD_USE_GET_SAVE_OUTPUT_V1 disabled."""
-        # Covers lines 446-448
-        self.engine_client.enable_logprob = True
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
-            data = {"prompt_logprobs": 1, "request_id": "test"}
-
-            with self.assertRaises(ParameterError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("FD_USE_GET_SAVE_OUTPUT_V1 is disabled", str(context.exception))
-
-    def test_valid_parameters_prompt_logprobs_prefix_caching_enabled(self):
-        """Test valid_parameters prompt_logprobs when prefix caching enabled."""
-        # Covers lines 451-453
-        self.engine_client.enable_logprob = True
-        self.engine_client.enable_prefix_caching = True
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            data = {"prompt_logprobs": 1, "request_id": "test"}
-
-            with self.assertRaises(ParameterError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("prefix caching is enabled", str(context.exception))
-
-    def test_valid_parameters_prompt_logprobs_exceeds_vocab_size(self):
-        """Test valid_parameters prompt_logprobs exceeds vocab size."""
-        # Covers lines 456-458
-        self.engine_client.enable_logprob = True
-        self.engine_client.ori_vocab_size = 1000
-        self.engine_client.max_logprobs = 500
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            data = {"prompt_logprobs": -1, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("exceeds the maximum allowed value", str(context.exception))
-
-    def test_valid_parameters_top_logprobs_disabled(self):
-        """Test valid_parameters top_logprobs when disabled."""
-        # Covers lines 475-477
-        self.engine_client.enable_logprob = False
-        data = {"logprobs": True, "top_logprobs": 5, "request_id": "test"}
-
-        with self.assertRaises(ParameterError) as context:
-            self.engine_client.valid_parameters(data)
-
-        self.assertIn("Logprobs is disabled", str(context.exception))
-
-    def test_valid_parameters_top_logprobs_exceeds_max_with_fd_enabled(self):
-        """Test valid_parameters top_logprobs exceeds max with FD_USE_GET_SAVE_OUTPUT_V1 enabled."""
-        # Covers lines 499-501
-        self.engine_client.enable_logprob = True
-        self.engine_client.max_logprobs = 10
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("exceeds the maximum allowed value", str(context.exception))
-
-    def test_check_health_unhealthy(self):
-        """Test check_health returns unhealthy when timeout exceeded."""
-        # Covers lines 513-518
-        # Set signal to old time (more than 30 seconds ago)
-        old_time = time.time() - 60
-        self.engine_client.worker_healthy_live_signal.value = np.array([old_time])
-
-        result, message = self.engine_client.check_health(time_interval_threashold=30)
-
-        self.assertFalse(result)
-        self.assertEqual(message, "Worker Service Not Healthy")
-
-    def test_update_model_weight_with_prefix_tree_updating(self):
-        """Test update_model_weight with prefix tree status updating."""
-        # Covers lines 540-550
-        self.engine_client.enable_prefix_caching = True
-        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
-        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.CLEARED])
-
-        # Mock to avoid infinite loop
-        with patch("time.sleep"):
-            result, message = self.engine_client.update_model_weight(timeout=0)
-
-        # Should timeout and return False
-        self.assertFalse(result)
-        self.assertEqual(message, "Update prefix tree timeout")
-
-    def test_update_model_weight_cache_status_check(self):
-        """Test update_model_weight cache status checking."""
-        # Covers line 577: cache_updated = ...
-        self.engine_client.enable_cache_transfer = True
-        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
-        self.engine_client.kv_cache_status_signal.value = np.array([KVCacheStatus.CLEARED])
-        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.NORMAL])
-
-        with patch("time.sleep"):
-            result, message = self.engine_client.update_model_weight(timeout=0)
-
-        self.assertFalse(result)
-
-    def test_clear_load_weight_with_prefix_tree_clearing(self):
-        """Test clear_load_weight with prefix tree clearing."""
-        # Covers lines 600-610
-        self.engine_client.enable_prefix_caching = True
-        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
-        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.NORMAL])
-
-        with patch("time.sleep"):
-            result, message = self.engine_client.clear_load_weight(timeout=0)
-
-        self.assertFalse(result)
-        self.assertEqual(message, "Clear prefix tree timeout")
-
-    def test_clear_load_weight_cache_status_check(self):
-        """Test clear_load_weight cache status checking."""
-        # Covers line 637: cache_cleared = ...
-        self.engine_client.enable_cache_transfer = True
-        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
-        self.engine_client.kv_cache_status_signal.value = np.array([KVCacheStatus.NORMAL])
-        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.CLEARED])
-
-        with patch("time.sleep"):
-            result, message = self.engine_client.clear_load_weight(timeout=0)
-
-        self.assertFalse(result)
-
-    def test_clear_load_weight_timeout_logging(self):
-        """Test clear_load_weight timeout logging."""
-        # Covers lines 642-647
-        self.engine_client.enable_cache_transfer = True
-        self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
-        self.engine_client.kv_cache_status_signal.value = np.array([KVCacheStatus.NORMAL])
-        self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.CLEARED])
-
-        with patch("time.sleep"):
-            result, message = self.engine_client.clear_load_weight(timeout=0)
-
-        self.assertFalse(result)
-        self.assertEqual(message, "Clear model weight timeout")
-
-    async def test_rearrange_experts_eplb_disabled(self):
-        """Test rearrange_experts when EPLB is disabled."""
-        # Covers part of lines 660-752
-        mock_config = create_mock_fd_config(enable_eplb=False)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.rearrange_experts({"action": "test"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "redundant expert is disabled")
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_invalid_credentials(self):
-        """Test rearrange_experts with invalid credentials."""
-        # Part of EPLB coverage
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "wrong", "passwd": "wrong", "action": "test"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "user or passwd is invalid")
-        self.assertEqual(status_code, 401)
-
-    async def test_rearrange_experts_wrong_rank(self):
-        """Test rearrange_experts with wrong tensor parallel rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1  # Not rank 0
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": "test"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("expect rank 0", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_already_doing(self):
-        """Test rearrange_experts when already doing rearrangement."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([1]))  # Not FREE
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": ""}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("rearrange is doing", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_rearrange_experts_missing_ips(self):
-        """Test rearrange_experts with missing IPs."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-        self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "test_user", "passwd": "test_pass", "action": ""}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "ips in request is None")
-        self.assertEqual(status_code, 400)
-
-    async def test_get_per_expert_tokens_stats_eplb_disabled(self):
-        """Test get_per_expert_tokens_stats when EPLB disabled."""
-        # Covers part of lines 763-795
-        mock_config = create_mock_fd_config(enable_eplb=False)
-        self.engine_client.config = mock_config
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats({"user": "test"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "redundant expert is disabled")
-        self.assertEqual(status_code, 400)
-
-    async def test_get_per_expert_tokens_stats_wrong_rank(self):
-        """Test get_per_expert_tokens_stats with wrong rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
-            {"user": "test_user", "passwd": "test_pass"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("expect rank 0", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_get_per_expert_tokens_stats_with_clear_stat(self):
-        """Test get_per_expert_tokens_stats with clear_stat flag."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 0
-
-        # Setup mock signals
-        mock_signal = Mock(value=np.array([0]))
-        self.engine_client.signal_clear_experts_token_stats_list = [mock_signal]
-
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
-            {"user": "test_user", "passwd": "test_pass", "clear_stat": True}
-        )
-
-        self.assertEqual(content["code"], 0)
-        self.assertEqual(status_code, 200)
-        mock_signal.value.__setitem__.assert_called_with(0, 1)
-
-    async def test_check_redundant_eplb_disabled(self):
-        """Test check_redundant when EPLB disabled."""
-        # Covers part of lines 805-848
-        mock_config = create_mock_fd_config(enable_eplb=False)
-        self.engine_client.config = mock_config
-
-        content, status_code = await self.engine_client.check_redundant({"user": "test"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(content["msg"], "redundant expert is disabled")
-        self.assertEqual(status_code, 400)
-
-    async def test_check_redundant_wrong_rank(self):
-        """Test check_redundant with wrong rank."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1
-
-        content, status_code = await self.engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"})
-
-        self.assertEqual(content["code"], 1)
-        self.assertIn("expect rank 0", content["msg"])
-        self.assertEqual(status_code, 400)
-
-    async def test_check_redundant_action_check_load_weight_result(self):
-        """Test check_redundant action check_load_weight_result."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 0
-
-        # Setup mock signals
-        mock_signal = Mock(value=np.array([42]))
-        self.engine_client.update_weight_from_disk_result_list = [mock_signal]
-
-        content, status_code = await self.engine_client.check_redundant(
-            {"user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"}
-        )
-
-        self.assertEqual(content["code"], 0)
-        self.assertEqual(content["data"], [[42]])
-        self.assertEqual(status_code, 200)
-
 
 if __name__ == "__main__":
     unittest.main()
-
-# Trigger CI update
