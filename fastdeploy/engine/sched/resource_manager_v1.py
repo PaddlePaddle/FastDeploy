@@ -211,7 +211,6 @@ class ResourceManagerV1(ResourceManager):
         )  # int
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
         self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
-        self.can_relax_prefill_strategy = True
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -308,7 +307,6 @@ class ResourceManagerV1(ResourceManager):
                 break
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
         self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
-        self.can_relax_prefill_strategy = False
         return can_schedule
 
     def _update_mm_hashes(self, request):
@@ -565,17 +563,14 @@ class ResourceManagerV1(ResourceManager):
                     request, self.config.cache_config.block_size, request.num_total_tokens - 1
                 )
 
-    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
-        if self.can_relax_prefill_strategy:
-            can_schedule_block_num_threshold = num_chunk_new_block
-        else:
-            can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
-            if self.config.speculative_config.method is not None:
-                can_schedule_block_num_threshold = min(
-                    can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
-                )
+    def _get_can_schedule_prefill_threshold_block(self, num_chunk_new_block):
+        can_schedule_block_num_threshold = (
+            num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+        )
+        if self.config.speculative_config.method is not None:
+            can_schedule_block_num_threshold = min(
+                can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
+            )
         return can_schedule_block_num_threshold
 
     def schedule(self):
@@ -759,7 +754,7 @@ class ResourceManagerV1(ResourceManager):
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
@@ -807,7 +802,7 @@ class ResourceManagerV1(ResourceManager):
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         num_new_block = self.get_new_block_nums(request, num_new_tokens)
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            request, num_new_block
+                            num_new_block
                         )
                         # Allocate blocks to prefill
                         if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
@@ -842,8 +837,6 @@ class ResourceManagerV1(ResourceManager):
                     self.min_reserve_output_block_num,
                     0,
                 )
-                if self.current_reserve_output_block_num == 0:
-                    self.can_relax_prefill_strategy = True
             self.update_metrics()
 
             return scheduled_reqs, error_reqs
