@@ -310,6 +310,8 @@ jobs:
           git config --global user.email "fastdeploy_ci@example.com"
           git log -n 3 --oneline
 
+          cd ./dockerfiles
+
           PRODUCT_NAME=ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:${FD_VERSION}
           docker build --no-cache -t ${PRODUCT_NAME} -f Dockerfile.gpu . \
             --network host \
