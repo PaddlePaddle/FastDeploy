@@ -35,7 +35,7 @@ from fastdeploy.model_executor.utils import (
 )
 from fastdeploy.platforms import current_platform
 
-from .utils import _set_var_distributed, divide, get_tensor
+from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
 
 
 class UnquantizedLinearMethod(QuantMethodBase):
@@ -168,7 +168,12 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if fd_config.quant_config and not skip_quant and fd_config.quant_config.get_quant_method(self):
+        if (
+            fd_config.quant_config
+            and not skip_quant
+            and modules_to_convert(prefix, self.fd_config)
+            and fd_config.quant_config.get_quant_method(self)
+        ):
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()

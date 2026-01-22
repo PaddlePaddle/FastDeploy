@@ -166,6 +166,7 @@ class TestFusedMoeConsistency(unittest.TestCase):
             top_k_weights,
             top_k_indices,
             expert_idx_per_token,
+            _,
         ) = moe_expert_dispatch(hidden_states, scores, None, None, self.top_k, False, topk_only_mode=True)
 
         # Process through experts
