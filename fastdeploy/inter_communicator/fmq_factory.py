@@ -24,60 +24,52 @@ class FMQFactory:
         2. q_e2w: engine --> worker
         3. q_w2e: worker --> engine
         4. q_e2a: engine --> api server
-    API Server: q_a2e producer / q_e2a consumer
-    Engine: q_a2e consumer / q_e2w producer / q_w2e consumer / q_e2a producer
-    Worker: q_e2w consumer / q_w2e producer
-    """
 
-    _fmq = FMQ()
+    NOTE:
+    - FMQ instances are NOT reused
+    - Each call creates a new FMQ object
+    """
 
     # ------------------------------
     # API → Engine
     # ------------------------------
     @classmethod
     def q_a2e_producer(cls):
-        return cls._fmq.queue("q_a2e", role="producer")
+        return FMQ().queue("q_a2e", role="producer")
 
     @classmethod
     def q_a2e_consumer(cls):
-        return cls._fmq.queue("q_a2e", role="consumer")
+        return FMQ().queue("q_a2e", role="consumer")
 
     # ------------------------------
     # Engine → Worker
     # ------------------------------
     @classmethod
     def q_e2w_producer(cls):
-        return cls._fmq.queue("q_e2w", role="producer")
+        return FMQ().queue("q_e2w", role="producer")
 
     @classmethod
     def q_e2w_consumer(cls):
-        return cls._fmq.queue("q_e2w", role="consumer")
+        return FMQ().queue("q_e2w", role="consumer")
 
     # ------------------------------
     # Worker → Engine
     # ------------------------------
     @classmethod
-    def q_w2e_producer(cls):
-        return cls._fmq.queue("q_w2e", role="producer")
+    def q_w2e_producer(cls, name: str):
+        return FMQ().queue(f"q_w2e_{name}", role="producer")
 
     @classmethod
-    def q_w2e_consumer(cls):
-        return cls._fmq.queue("q_w2e", role="consumer")
+    def q_w2e_consumer(cls, name: str):
+        return FMQ().queue(f"q_w2e_{name}", role="consumer")
 
     # ------------------------------
     # Engine → API
     # ------------------------------
     @classmethod
     def q_e2a_producer(cls):
-        return cls._fmq.queue("q_e2a", role="producer")
+        return FMQ().queue("q_e2a", role="producer")
 
     @classmethod
     def q_e2a_consumer(cls):
-        return cls._fmq.queue("q_e2a", role="consumer")
-
-    # ------------------------------
-    # Destroy context
-    # ------------------------------
-    @classmethod
-    async def destroy(cls):
-        await cls._fmq.destroy()
+        return FMQ().queue("q_e2a", role="consumer")

@@ -86,12 +86,12 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
-import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator.fmq_factory import FMQFactory
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.logits_processor import build_logits_processors
@@ -220,29 +220,26 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.routing_replay_config.enable_routing_replay:
             self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
 
-        self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            logger.info(f"zmq client get_save_output_rank{local_rank}")
-            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
-            self.zmq_client.connect()
-            self.zmq_client.socket.SNDTIMEO = 3000
             self.async_output_queue: queue.Queue = queue.Queue()
             self.async_output_copy_thread = Thread(
                 target=self._async_output_busy_loop,
+                args=(local_rank,),
                 daemon=True,
                 name="WorkerAsyncOutputCopy",
             )
             self.async_output_copy_thread.start()
-
         self.enable_entropy = self.model_config.enable_entropy
 
-    def _async_output_busy_loop(self):
+    def _async_output_busy_loop(self, local_rank):
         """Entrypoint for the thread which handles outputs asynchronously."""
+        fmq_model_output = FMQFactory.q_w2e_producer(name=f"get_save_output_rank{local_rank}")
+        logger.info(f"worker {local_rank} start async output loop")
         while True:
             try:
                 output = self.async_output_queue.get()
-                self.zmq_client.send_pyobj(output)
+                fmq_model_output.put(output)
             except Exception as e:
                 logger.exception("Exception in async output loop: %s", e)
 

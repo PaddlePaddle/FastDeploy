@@ -25,7 +25,6 @@ from typing import List
 
 import numpy as np
 import paddle
-import zmq
 
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
@@ -39,7 +38,7 @@ from fastdeploy.engine.request import (
     RequestOutput,
     SpeculateMetrics,
 )
-from fastdeploy.inter_communicator import ZmqIpcServer
+from fastdeploy.inter_communicator.fmq_factory import FMQFactory
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.trace.constants import LoggingEventName
@@ -69,12 +68,6 @@ class TokenProcessor:
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
-
-        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            llm_logger.debug(f"create zmq get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}")
-            self.zmq_server = ZmqIpcServer(
-                name=f"get_save_output_rank{self.cfg.parallel_config.local_data_parallel_id}", mode=zmq.PULL
-            )
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
@@ -348,12 +341,14 @@ class TokenProcessor:
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
+        self.fmq_model_output = FMQFactory.q_w2e_consumer(name=f"get_save_output_rank{rank_id}")
+        llm_logger.info(f"token_processor start async output loop on rank {rank_id}")
         while True:
             try:
                 if (
                     self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
                 ) or (rank_id == 0):
-                    receive_datas = self.zmq_server.recv_pyobj()
+                    receive_datas = self.fmq_model_output.get()
                     assert isinstance(receive_datas, list)
                     if envs.FD_DEBUG:
                         llm_logger.debug(f"token_processor receive_data {receive_datas}")

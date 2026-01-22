@@ -14,78 +14,163 @@
 # limitations under the License.
 """
 
-import asyncio
-import json
-import os
+import threading
+import time
 import unittest
 
-from fastdeploy.inter_communicator.fmq import FMQ, Message
-
-# Prepare environment config for testing
-cfg = {
-    "ipc_root": "/dev/shm",
-    "io_threads": 1,
-    "copy": False,
-    "endpoints": {
-        "test_queue": {"protocol": "ipc", "address": "/dev/shm/fmq_test_queue.ipc", "io_threads": 1, "copy": False},
-        "test_topic": {"protocol": "ipc", "address": "/dev/shm/fmq_test_topic.ipc", "io_threads": 1, "copy": False},
-    },
-}
-os.environ["FMQ_CONFIG_JSON"] = json.dumps(cfg)
+from fastdeploy.inter_communicator.fmq import FMQ, Descriptor, Message
 
 
-class TestFMQ(unittest.TestCase):
+class TestDescriptor(unittest.TestCase):
+
+    def test_create_and_read(self):
+        data = b"hello shared memory"
+        desc = Descriptor.create(data)
+
+        self.assertIsNotNone(desc.shm_name)
+        self.assertEqual(desc.size, len(data))
+
+        read = desc.read_and_unlink()
+        self.assertEqual(read, data)
+
+    def test_read_after_unlink(self):
+        data = b"once"
+        desc = Descriptor.create(data)
+
+        _ = desc.read_and_unlink()
+        again = desc.read_and_unlink()
+
+        self.assertEqual(again, b"")
+
+
+class TestMessage(unittest.TestCase):
+
+    def test_serialize_deserialize(self):
+        msg = Message(payload={"x": 1})
+        raw = msg.serialize()
+        new_msg = Message.deserialize(raw)
+
+        self.assertEqual(new_msg.payload, {"x": 1})
+        self.assertIsNone(new_msg.descriptor)
+
+    def test_message_with_descriptor(self):
+        data = b"x" * 1024
+        desc = Descriptor.create(data)
+        msg = Message(payload=None, descriptor=desc)
+
+        raw = msg.serialize()
+        new_msg = Message.deserialize(raw)
+
+        self.assertIsNotNone(new_msg.descriptor)
+        payload = new_msg.descriptor.read_and_unlink()
+        self.assertEqual(payload, data)
+
+
+class TestQueue(unittest.TestCase):
 
     def setUp(self):
         self.fmq = FMQ()
 
-    def test_queue_send_receive(self):
-        async def run_test():
-            producer = self.fmq.queue("test_queue", role="producer")
-            consumer = self.fmq.queue("test_queue", role="consumer")
+    def tearDown(self):
+        self.fmq.destroy()
 
-            test_data = b"hello world"
-            await producer.put(test_data)
-            msg = await consumer.get(timeout=1000)
+    def test_basic_put_get(self):
+        name = "test_queue_basic"
 
-            self.assertIsNotNone(msg)
-            self.assertEqual(msg.payload, test_data)
+        consumer = self.fmq.queue(name, role="consumer")
+        producer = self.fmq.queue(name, role="producer")
 
-        asyncio.run(run_test())
+        producer.put("hello")
+        result = consumer.get()
 
-    def test_queue_large_shm_transfer(self):
-        async def run_test():
-            producer = self.fmq.queue("test_queue", role="producer")
-            consumer = self.fmq.queue("test_queue", role="consumer")
+        self.assertEqual(result, "hello")
 
-            large_data = b"x" * (2 * 1024 * 1024)  # > 1MB
-            await producer.put(large_data)
-            msg = await consumer.get(timeout=1000)
+    def test_large_bytes_shm(self):
+        name = "test_queue_shm"
 
-            self.assertIsNotNone(msg)
-            self.assertEqual(msg.payload, large_data)
-            self.assertIsNotNone(msg.descriptor)
+        consumer = self.fmq.queue(name, role="consumer")
+        producer = self.fmq.queue(name, role="producer")
 
-        asyncio.run(run_test())
+        data = b"x" * (2 * 1024 * 1024)
+        producer.put(data, shm_threshold=1024)
 
-    def test_topic_pub_sub(self):
+        result = consumer.get()
+        self.assertEqual(result, data)
+
+    def test_wrong_role_put(self):
+        q = self.fmq.queue("test_queue_wrong_put", role="consumer")
+        with self.assertRaises(PermissionError):
+            q.put("fail")
+
+    def test_wrong_role_get(self):
+        q = self.fmq.queue("test_queue_wrong_get", role="producer")
+        with self.assertRaises(PermissionError):
+            q.get()
+
+    def test_cross_thread_usage_detected(self):
+        producer = self.fmq.queue("test_queue_thread", role="producer")
+
+        errors = []
+
+        def target():
+            try:
+                producer.put("bad")
+            except RuntimeError as e:
+                errors.append(e)
+
+        t = threading.Thread(target=target)
+        t.start()
+        t.join()
+
+        self.assertEqual(len(errors), 1)
+        producer.close()
+
+
+class TestTopic(unittest.TestCase):
+
+    def setUp(self):
+        self.fmq = FMQ()
+
+    def tearDown(self):
+        self.fmq.destroy()
+
+    def test_pub_sub(self):
+        topic = self.fmq.topic("test_topic")
+
         received = []
 
-        async def run_test():
-            topic = self.fmq.topic("test_topic")
+        def callback(msg):
+            received.append(msg.payload)
 
-            async def callback(msg: Message):
-                received.append(msg.payload)
+        topic.sub(callback)
+        time.sleep(1)
 
-            await topic.sub(callback)
-            await asyncio.sleep(0.1)  # allow SUB to connect
+        topic.pub("hello")
+        topic.pub("world")
 
-            await topic.pub("hello")
-            await asyncio.sleep(0.2)
+        time.sleep(1)
 
-            self.assertIn("hello", received)
+        self.assertIn("hello", received)
+        self.assertIn("world", received)
 
-        asyncio.run(run_test())
+        topic.stop_sub()
+
+    def test_sub_start_twice(self):
+        topic = self.fmq.topic("test_topic_twice")
+
+        topic.sub(lambda _: None)
+        with self.assertRaises(RuntimeError):
+            topic.sub(lambda _: None)
+
+
+class TestFMQLifecycle(unittest.TestCase):
+
+    def test_create_destroy(self):
+        fmq = FMQ()
+        self.assertIsNotNone(fmq._context)
+
+        fmq.destroy()
+        self.assertIsNone(fmq._context)
 
 
 if __name__ == "__main__":
