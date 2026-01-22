@@ -105,6 +105,7 @@ def xpu_pre_process(
     seq_lens_decoder: Optional[paddle.Tensor] = None,
     is_profiling: bool = False,
     forward_meta=None,
+    use_cudagraph=False,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
@@ -224,11 +225,14 @@ def xpu_pre_process(
     xpu_forward_meta.ids_remove_padding = adjusted_input
     # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
     xpu_forward_meta.is_profiling = is_profiling
-    if forward_meta is None:
-        return xpu_forward_meta
+    if use_cudagraph:
+        if forward_meta is None:
+            return xpu_forward_meta
+        else:
+            forward_meta.copy_from(xpu_forward_meta)
+            return forward_meta
     else:
-        forward_meta.copy_from(xpu_forward_meta)
-        return forward_meta
+        return xpu_forward_meta
 
 
 def xpu_process_output(
