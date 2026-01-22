@@ -363,41 +363,47 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
                             mock_input_processor_instance.create_processor.return_value = mock_data_processor
                             mock_input_processor.return_value = mock_input_processor_instance
 
-                            # Create EngineClient with minimal required parameters
-                            self.engine_client = EngineClient(
-                                pid=1234,
-                                port=8080,
-                                fd_config=mock_config,
-                                workers=1,
-                            )
+                            # Mock main_process_metrics to avoid KeyError
+                            with patch("fastdeploy.entrypoints.engine_client.main_process_metrics") as mock_metrics:
+                                mock_metrics.request_params_max_tokens = MagicMock()
+                                mock_metrics.prompt_tokens_total = MagicMock()
+                                mock_metrics.request_prompt_tokens = MagicMock()
 
-                            # Set up mock attributes for TestEngineClientValidParameters class
-                            self.engine_client.zmq_client = Mock()
-                            self.engine_client.zmq_client.send_json = Mock()
-                            self.engine_client.zmq_client.send_pyobj = Mock()
-                            self.engine_client.max_logprobs = 20
-                            self.engine_client.enable_logprob = True
-                            self.engine_client.ori_vocab_size = 1000
-                            self.engine_client.enable_prefix_caching = False
-                            self.engine_client.enable_splitwise = False
-                            self.engine_client.disable_prefix_mm = False
-                            self.engine_client.max_model_len = 1024
-                            self.engine_client.enable_mm = False
-                            self.engine_client.config = mock_config
-                            self.engine_client.max_chips_per_node = 8
-                            self.engine_client.tensor_parallel_size = 1
-                            self.engine_client.is_master = True
-                            self.engine_client.worker_healthy_live_signal = Mock()
-                            self.engine_client.worker_healthy_live_signal.value = np.array([0])
-                            self.engine_client.model_weights_status_signal = Mock()
-                            self.engine_client.model_weights_status_signal.value = np.array([0])
-                            self.engine_client.clear_update_lock = Mock()
-                            self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
-                            self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
-                            self.engine_client.kv_cache_status_signal = Mock()
-                            self.engine_client.kv_cache_status_signal.value = np.array([0])
-                            self.engine_client.prefix_tree_status_signal = Mock()
-                            self.engine_client.prefix_tree_status_signal.value = np.array([0])
+                                # Create EngineClient with minimal required parameters
+                                self.engine_client = EngineClient(
+                                    pid=1234,
+                                    port=8080,
+                                    fd_config=mock_config,
+                                    workers=1,
+                                )
+
+                                # Set up mock attributes for TestEngineClientValidParameters class
+                                self.engine_client.zmq_client = Mock()
+                                self.engine_client.zmq_client.send_json = Mock()
+                                self.engine_client.zmq_client.send_pyobj = Mock()
+                                self.engine_client.max_logprobs = 20
+                                self.engine_client.enable_logprob = True
+                                self.engine_client.ori_vocab_size = 1000
+                                self.engine_client.enable_prefix_caching = False
+                                self.engine_client.enable_splitwise = False
+                                self.engine_client.disable_prefix_mm = False
+                                self.engine_client.max_model_len = 1024
+                                self.engine_client.enable_mm = False
+                                self.engine_client.config = mock_config
+                                self.engine_client.max_chips_per_node = 8
+                                self.engine_client.tensor_parallel_size = 1
+                                self.engine_client.is_master = True
+                                self.engine_client.worker_healthy_live_signal = Mock()
+                                self.engine_client.worker_healthy_live_signal.value = np.array([0])
+                                self.engine_client.model_weights_status_signal = Mock()
+                                self.engine_client.model_weights_status_signal.value = np.array([0])
+                                self.engine_client.clear_update_lock = Mock()
+                                self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
+                                self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
+                                self.engine_client.kv_cache_status_signal = Mock()
+                                self.engine_client.kv_cache_status_signal.value = np.array([0])
+                                self.engine_client.prefix_tree_status_signal = Mock()
+                                self.engine_client.prefix_tree_status_signal.value = np.array([0])
 
     def test_max_logprobs_valid_values(self):
         """Test valid max_logprobs values"""
