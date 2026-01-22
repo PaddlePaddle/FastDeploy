@@ -1,17 +1,17 @@
 """
-Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-    http://www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
 
 from typing import Optional
@@ -33,6 +33,9 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
     paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+    from flashinfer import fp4_quantize
+    from flashinfer import mm_fp4 as fp4_gemm
+    from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe,
 else:
     logger.warning("FlashInfer is not installed. For nvFp4 inference, please install Flashinfer.")
 
@@ -93,7 +96,7 @@ class ModelOptNvFp4Config(QuantConfigBase):
         # Handle group_size with proper type validation
         group_size_raw = quant_config.get("group_size")
         if group_size_raw is None:
-            group_size = 16  Default value
+            group_size = 16  # Default value
         elif isinstance(group_size_raw, int):
             group_size = group_size_raw
         else:
@@ -324,7 +327,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         output_dtype = x.dtype
 
         # Quantize BF16 or FP16 to (FP4 and interleaved block scale)
-        from flashinfer import fp4_quantize
+        # from flashinfer import fp4_quantize
 
         x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
 
@@ -344,7 +347,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         if backend == "cutlass":
             x_scale_interleaved = x_scale_interleaved.view(paddle.uint8)
             w_scale_interleaved = w_scale_interleaved.view(paddle.uint8)
-        from flashinfer import mm_fp4 as fp4_gemm
+        # from flashinfer import mm_fp4 as fp4_gemm
 
         out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
         if layer.with_bias:
@@ -595,7 +598,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             gate_out,
             layer.gate_correction_bias,
             layer.top_k,
-            True,  apply_norm_weight,
+            True,  # apply_norm_weight,
             False,
         )
 
@@ -608,9 +611,9 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
         if self.backend == "flashinfer-cutlass":
             # flashinfer cutlass
-            from flashinfer.fused_moe import (
-                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
-            )
+            # from flashinfer.fused_moe import (
+            #     cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+            # )
 
             _ = flashinfer_cutlass_fused_moe(
                 input=x,
