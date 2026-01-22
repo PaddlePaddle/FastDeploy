@@ -900,7 +900,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = True
+        self.use_cudagraph: bool = False if paddle.is_compiled_with_xpu() else True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -1850,9 +1850,11 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
-        if not current_platform.is_cuda() and not current_platform.is_maca():
+        if not current_platform.is_cuda() and not current_platform.is_maca() and not current_platform.is_xpu():
             self.graph_opt_config.use_cudagraph = False
-            logger.info("CUDAGraph currently only support on GPU!")
+            logger.info(
+                "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"
+            )
 
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
