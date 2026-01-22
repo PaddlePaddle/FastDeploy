@@ -478,7 +478,7 @@ class PaddleDisWorkerProc:
                     # Ensure that every worker get the task
                     self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
                     self.task_queue.read_finish_flag.set(0)
-                if self.parallel_config.use_ep:
+                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
                     paddle.distributed.barrier(self.parallel_config.ep_group)
                 req_dicts = []
                 if tasks[0][0]:
