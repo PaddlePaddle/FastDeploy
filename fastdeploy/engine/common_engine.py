@@ -44,6 +44,7 @@ from fastdeploy.engine.request import (
     ControlResponse,
     Request,
     RequestOutput,
+    RequestStatus,
     RequestType,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
