@@ -198,7 +198,7 @@ class CudaGraphPiecewiseBackend:
                 if output is not None:
                     output_buffer = paddle.zeros_like(output)
                     output._share_buffer_to(output_buffer)
-                    output._clear
+                    output._clear()
                     entry.output_buffers.append(output_buffer)
                 else:
                     entry.output_buffers.append(None)

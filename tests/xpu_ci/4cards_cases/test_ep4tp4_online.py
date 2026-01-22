@@ -28,7 +28,6 @@ EP4TP4在线服务测试 - Expert Parallel + Tensor Parallel
 import openai
 import pytest
 from conftest import (
-    download_and_build_xdeepep,
     get_model_path,
     get_port_num,
     print_logs_on_failure,
@@ -42,10 +41,6 @@ def test_ep4tp4_online(xpu_env):
     """EP4TP4在线服务测试"""
 
     print("\n============================开始 EP4TP4 在线服务测试!============================")
-
-    # 下载并编译xDeepEP
-    if not download_and_build_xdeepep():
-        pytest.fail("xDeepEP下载或编译失败")
 
     # 设置EP环境变量
     original_env = setup_ep_env()

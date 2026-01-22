@@ -26,6 +26,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
     init_signal_layerwise,
     open_shm_and_get_meta_signal,
 )
+from fastdeploy.model_executor.ops.xpu import block_attn
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -175,16 +176,15 @@ class XPUAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
-        k_quant_scale = getattr(layer, "cache_k_scale", None)
-        v_quant_scale = getattr(layer, "cache_v_scale", None)
-
+        cache_k_scale = getattr(layer, "cache_k_scale", None)
+        cache_v_scale = getattr(layer, "cache_v_scale", None)
         cache_k_out_scale = getattr(layer, "cache_k_out_scale", None)
         cache_v_out_scale = getattr(layer, "cache_v_out_scale", None)
+        cache_k_zp = getattr(self, "cache_k_zp", None)
+        cache_v_zp = getattr(self, "cache_v_zp", None)
 
-        k_zp = getattr(self, "cache_k_zp", None)
-        v_zp = getattr(self, "cache_v_zp", None)
-
-        from fastdeploy.model_executor.ops.xpu import block_attn
+        q_norm_weight = getattr(layer, "q_norm_weight", None)
+        k_norm_weight = getattr(layer, "k_norm_weight", None)
 
         res = block_attn(
             qkv,
@@ -203,16 +203,26 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.decoder_context_len_cache_cpu,
             forward_meta.decoder_batch_map_cpu,
             forward_meta.prefix_len_cpu,
-            k_quant_scale,
-            v_quant_scale,
+            forward_meta.encoder_seq_lod,
+            forward_meta.decoder_seq_lod,
+            forward_meta.encoder_kv_lod,
+            forward_meta.encoder_batch_map,
+            forward_meta.decoder_context_len,
+            forward_meta.decoder_context_len_cache,
+            forward_meta.decoder_batch_map,
+            forward_meta.prefix_len,
+            cache_k_scale,
+            cache_v_scale,
             cache_k_out_scale,
             cache_v_out_scale,
-            k_zp,  # zero_point_quant_scale
-            v_zp,  # zero_point_quant_scale
+            cache_k_zp,
+            cache_v_zp,
             None,  # shift
             None,  # smooth
-            metadata.kv_signal_data_list[layer.layer_id],  # kv_signal_data
-            forward_meta.kv_signal_sender,  # kv_signal_sender
+            q_norm_weight,
+            k_norm_weight,
+            metadata.kv_signal_data_list[layer.layer_id],
+            forward_meta.kv_signal_sender,
             layer.use_neox_rotary_style,
             self.rope_3d,
         )
