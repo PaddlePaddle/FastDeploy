@@ -844,6 +844,14 @@ class TestEngineClientValidParameters(unittest.TestCase):
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
+    def test_valid_parameters_top_logprobs_disabled_exception(self):
+        """Test valid_parameters rejects top_logprobs when disabled (Exception)."""
+        self.engine_client.enable_logprob = False
+        data = {"logprobs": True, "top_logprobs": 5}
+
+        with self.assertRaises(Exception):  # ParameterError
+            self.engine_client.valid_parameters(data)
+
     def test_valid_parameters_top_logprobs_invalid_type(self):
         """Test valid_parameters rejects invalid top_logprobs type."""
         self.engine_client.enable_logprob = True
@@ -1609,7 +1617,20 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("Processing failed", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
 
-        # ========== Phase 2: Error Handling Tests ==========
+    # ========== Phase 2: Error Handling Tests ==========
+
+    async def test_rearrange_experts_invalid_credentials_basic(self):
+        """Test rearrange_experts with invalid credentials (basic)."""
+        mock_config = create_mock_fd_config(enable_eplb=True)
+        self.engine_client.config = mock_config
+        self.engine_client.fd_config = mock_config
+
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "invalid_user", "passwd": "invalid_pass"}
+        )
+
+        self.assertEqual(content["code"], 1)
+        self.assertEqual(status_code, 401)
 
     async def test_get_per_expert_tokens_stats_invalid_auth(self):
         """Test get_per_expert_tokens_stats with invalid credentials."""
@@ -1841,6 +1862,27 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         self.assertIn("Length of input token(10) exceeds the limit max_model_len(5)", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
+
+    async def test_add_requests_stop_sequences_validation_with_patch(self):
+        """Test add_requests stop sequences validation with env patch."""
+        # Covers lines 323-340
+        self.engine_client.data_processor = Mock(process_request_dict=Mock())
+
+        task = {
+            "request_id": "test-id",
+            "prompt_token_ids": [1, 2, 3],
+            "max_tokens": 10,
+            "stop_seqs_len": [1, 2, 3, 4, 5],  # More than default limit
+        }
+
+        with patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 3):
+            with self.assertRaises(EngineError) as context:
+                await self.engine_client.add_requests(task)
+
+            self.assertIn(
+                "Length of stop ([1, 2, 3, 4, 5]) exceeds the limit max_stop_seqs_num(3)", str(context.exception)
+            )
+            self.assertEqual(context.exception.error_code, 400)
 
     def test_send_task_with_e2w_tensor_conversion(self):
         """Test _send_task with E2W tensor conversion enabled."""
