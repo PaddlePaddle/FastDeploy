@@ -411,6 +411,13 @@ class ModelConfig:
                 else:
                     self.model_format = "paddle"
                     logger.info("The model format is Paddle")
+            elif (
+                "quantization_config" in self.model_config
+                and "quant_method" in self.model_config["quantization_config"]
+                and "mxfp4" == self.model_config["quantization_config"]["quant_method"]
+            ):
+                self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
             else:
                 raise ValueError(
                     "Unknown model format. Please ensure your config.json contains "
