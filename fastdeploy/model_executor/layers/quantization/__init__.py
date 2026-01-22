@@ -14,8 +14,9 @@
 """
 quantization module
 """
-from typing import Dict, List, Type
+from typing import List, Type
 
+from fastdeploy import envs
 from fastdeploy.utils import parse_quantization
 
 from .quant_base import QuantConfigBase
@@ -34,6 +35,7 @@ QUANTIZATION_METHODS: List[str] = [
     "tensor_wise_fp8",
     "kvcache",
     "modelopt_fp4",
+    "mxfp4",
 ]
 
 
@@ -137,6 +139,8 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
                 quant_config_name = "modelopt_fp4"
             else:
                 raise ValueError("modelopt only supports NVFP4 quantization.")
+        elif quant_method == "mxfp4":
+            quant_config_name = "mxfp4"
         else:
             raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
     else:
@@ -163,7 +167,10 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
 
-    method_to_config: Dict[str, Type[QuantConfigBase]] = {
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
+        from .mxfp4 import MXFP4Config
+
+    method_to_config = {
         "wint2": WINT2Config,
         "wint4": WINT4Config,
         "wint8": WINT8Config,
@@ -178,5 +185,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "mix_quant": MixQuantConfig,
         "modelopt_fp4": ModelOptNvFp4Config,
     }
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
+        method_to_config["mxfp4"] = MXFP4Config
 
     return method_to_config[quantization]

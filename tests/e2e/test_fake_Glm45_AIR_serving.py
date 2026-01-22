@@ -23,7 +23,7 @@ import time
 import openai
 import pytest
 import requests
-from utils.rollout_routing_repaly_test_utils import check_routing_replay_chat_completion
+from utils.rollout_routing_replay_test_utils import check_routing_replay_chat_completion
 from utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,

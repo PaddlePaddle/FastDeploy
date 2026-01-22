@@ -25,7 +25,6 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     CompletionRequest,
     CompletionResponse,
-    DeltaMessage,
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
@@ -113,7 +112,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         }
 
         if tool_call:
-            outputs["tool_call"] = [
+            outputs["tool_calls"] = [
                 {"index": 0, "type": "function", "function": {"name": tool_call["name"], "arguments": json.dumps({})}}
             ]
 
@@ -150,23 +149,19 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 "top_logprobs": None,
                 "draft_top_logprobs": None,
                 "reasoning_token_num": 0,
+                "skipped": False,
+                "reasoning_content": "",
+                "tool_calls": None,
             }
 
             if tool_call and isinstance(tool_call, dict) and i == total_token_num - 2:
-                delta_msg = DeltaMessage(
-                    content="",
-                    reasoning_content="",
-                    tool_calls=[
-                        {
-                            "index": 0,
-                            "type": "function",
-                            "function": {"name": tool_call["name"], "arguments": json.dumps({})},
-                        }
-                    ],
-                    prompt_token_ids=None,
-                    completion_token_ids=None,
-                )
-                outputs["delta_message"] = delta_msg
+                outputs["tool_calls"] = [
+                    {
+                        "index": 0,
+                        "type": "function",
+                        "function": {"name": tool_call["name"], "arguments": json.dumps({})},
+                    }
+                ]
 
             frame = [
                 {
