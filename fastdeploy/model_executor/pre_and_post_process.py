@@ -441,11 +441,17 @@ def post_process_normal(
                 )
                 async_output_queue.put(output)
         else:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                share_inputs.enable_pd_reorder,
+                ["preempted_idx"],
+            )
             if sampler_output.logprobs_tensors is None:
                 save_output(
                     sampler_output.sampled_token_ids,
                     model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
+                    recover_share_inputs_map["preempted_idx"],
                     model_output.mp_rank,
                     save_each_rank,
                 )
@@ -456,7 +462,7 @@ def post_process_normal(
                     sampler_output.logprobs_tensors.logprobs,
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
+                    recover_share_inputs_map["preempted_idx"],
                     model_output.mp_rank,
                 )
 

@@ -145,7 +145,7 @@ class InputBatch:
         self.stop_nums = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
+        self.bad_tokens_len = [-1] * max_num_seqs
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
@@ -355,7 +355,7 @@ class InputBatch:
 
         # Swap 1D arrays
         swap_data(self.bad_tokens, i1, i2)
-        swap_data(self.bad_tokens_len, i1, i2)
+        self.bad_tokens_len[i1], self.bad_tokens_len[i2] = self.bad_tokens_len[i2], self.bad_tokens_len[i1]
         swap_data(self.next_tokens, i1, i2)
         swap_data(self.is_block_step, i1, i2)
         swap_data(self.is_chunk_step, i1, i2)
@@ -466,8 +466,8 @@ class ProposerInputBatch(InputBatch):
 
     def init_share_inputs(self):
         # share with targe model
-        self.enable_pd_reorder = self.target_model_input_batch.enable_pd_reorder
-        self.index_to_batch_id = self.target_model_input_batch.index_to_batch_id
+        self.enable_pd_reorder = getattr(self.target_model_input_batch, "enable_pd_reorder", False)
+        self.index_to_batch_id = getattr(self.target_model_input_batch, "index_to_batch_id", {})
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
