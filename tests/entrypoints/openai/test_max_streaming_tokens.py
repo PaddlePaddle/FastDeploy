@@ -647,6 +647,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 delta_msg_mock.reasoning_content = "Thinking for bc"
             delta_msg_mock.tool_calls = None
             response["outputs"]["delta_message"] = delta_msg_mock
+            response["outputs"]["enable_parser"] = False
 
             reasoning_content = (
                 delta_msg_mock.reasoning_content if (delta_msg_mock and delta_msg_mock.reasoning_content) else None
@@ -814,7 +815,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             chunks.append(chunk)
             if "[DONE]" in chunk:
                 break
-
         parsed_chunks = []
         for chunk_str in chunks:
             if chunk_str.startswith("data: ") and chunk_str.endswith("\n\n"):

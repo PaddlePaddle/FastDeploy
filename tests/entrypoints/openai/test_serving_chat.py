@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import paddle
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.worker.output import Logprob, LogprobsTensors
@@ -309,6 +310,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -416,6 +418,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -533,6 +536,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -737,6 +741,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -839,6 +844,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -941,6 +947,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -1036,6 +1043,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 

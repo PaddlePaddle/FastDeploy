@@ -402,9 +402,14 @@ class ResourceManagerV1(ResourceManager):
                     position.offset // self.config.cache_config.block_size
                 ) * self.config.cache_config.block_size
                 position_idx -= 1
-            elif matched_token_num < position.offset:
+            elif matched_token_num <= position.offset:
                 position_idx -= 1
             elif matched_token_num >= position.offset + position.length:
+                break
+            else:
+                llm_logger.error(
+                    f"revert_chunked_mm_input error, matched_token_num:{matched_token_num} position:{position}, {mm_inputs['mm_positions']}"
+                )
                 break
         return matched_token_num
 
@@ -454,6 +459,18 @@ class ResourceManagerV1(ResourceManager):
                 start_patch_idx = inputs["patch_idx"][-1]
             else:
                 start_patch_idx = inputs["patch_idx"][pre_end_idx]
+                if (
+                    pre_end_idx > 0
+                    and request.prompt_token_ids[pre_end_idx]
+                    in [
+                        inputs["image_patch_id"],
+                        inputs["video_patch_id"],
+                        inputs["audio_patch_id"],
+                    ]
+                    and request.prompt_token_ids[pre_end_idx] != request.prompt_token_ids[pre_end_idx - 1]
+                ):
+                    # It just hit the starting position of the image / video / audio
+                    start_patch_idx -= 1
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
@@ -606,7 +623,7 @@ class ResourceManagerV1(ResourceManager):
                 ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
                 and self._is_mm_request(request)
                 and self.exist_mm_prefill(scheduled_reqs)
-            ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs))
+            )
 
         with self.lock:
             scheduled_reqs: list[Request] = []

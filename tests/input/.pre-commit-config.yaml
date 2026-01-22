@@ -1,0 +1,66 @@
+exclude: |
+  (?x)^(
+    dockerfiles/.+
+  )$
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+default_stages:
+  - pre-commit # Run locally
+  - commit-msg
+#   - manual # Run in CI
+repos:
+-   repo: https://github.com/psf/black.git
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        files: \.(py|pyi)$
+        additional_dependencies: [toml]
+# 自动排序
+-   repo: https://github.com/PyCQA/isort
+    rev: 5.11.5
+    hooks:
+    -   id: isort
+-   repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+    -   id: flake8
+# 代码检查
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.7
+  hooks:
+  - id: ruff
+    args: [--output-format, github, --fix, --line-length=120, --config, pyproject.toml]
+# For C++ files
+- repo: local
+  hooks:
+    - id: clang-format
+      name: clang-format
+      description: Format files with ClangFormat.
+      entry: clang-format -i
+      language: system
+      files: \.(c|cc|cxx|cpp|cu|h|cuh|hpp|hxx|xpu|kps)$
+# # 拼写检查
+# - repo: https://github.com/codespell-project/codespell
+#   rev: v2.4.1
+#   hooks:
+#   - id: codespell
+#     additional_dependencies: ['tomli']
+#     args: ['--toml', 'pyproject.toml']
+
+# markdown
+- repo: https://github.com/jackdewinter/pymarkdown
+  rev: v0.9.29
+  hooks:
+  - id: pymarkdown
+    args: ["-d", "MD029,MD031", fix]
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: check-merge-conflict
+  - id: check-symlinks
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+  - id: detect-private-key
+  - id: check-symlinks
+  - id: check-added-large-files

@@ -29,7 +29,7 @@ from filelock import FileLock
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import RequestStatus
+from fastdeploy.engine.request import Request, RequestStatus
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -250,19 +250,19 @@ class EngineClient:
         self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, request: Request | dict):
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" not in prompts:
+        if "request_id" not in request:
             request_id = str(uuid.uuid4())
-            prompts["request_id"] = request_id
+            request["request_id"] = request_id
 
-        if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.max_model_len - 1
+        if "max_tokens" not in request:
+            request["max_tokens"] = self.max_model_len - 1
 
-        await self.add_requests(prompts)
-        return prompts["prompt_token_ids"]
+        await self.add_requests(request)
+        return request["prompt_token_ids"]
 
     async def add_requests(self, task):
         """
@@ -276,7 +276,7 @@ class EngineClient:
             None
         """
 
-        task["preprocess_start_time"] = time.time()
+        task["metrics"]["preprocess_start_time"] = time.time()
         request_id = task.get("request_id").split("_")[0]
         tracing.trace_slice_start(tracing.TraceSpanName.PREPROCESSING, request_id)
         trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
@@ -291,11 +291,12 @@ class EngineClient:
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
+            task["need_prefill_tokens"] = task["prompt_token_ids_len"]
 
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
-                del task["messages"]
+                task["messages"] = None
             api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
             main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
             main_process_metrics.prompt_tokens_total.inc(input_ids_len)
@@ -319,7 +320,7 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if "stop_seqs_len" in task:
+        if "stop_seqs_len" in task and task["stop_seqs_len"]:
             stop_seqs_len = task["stop_seqs_len"]
             max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
@@ -339,8 +340,8 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        task["preprocess_end_time"] = time.time()
-        preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
+        task["metrics"]["preprocess_end_time"] = time.time()
+        preprocess_cost_time = task["metrics"]["preprocess_end_time"] - task["metrics"]["preprocess_start_time"]
         api_server_logger.info(
             f"Cache request with request_id ({task.get('request_id')}), "
             f"preprocess time cost {preprocess_cost_time}"
@@ -371,7 +372,7 @@ class EngineClient:
             raise EngineError(str(e), error_code=400)
 
     def _send_task(self, task):
-        if not self.enable_mm:
+        if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
             self.zmq_client.send_json(task)
         else:
             if envs.FD_ENABLE_E2W_TENSOR_CONVERT:
