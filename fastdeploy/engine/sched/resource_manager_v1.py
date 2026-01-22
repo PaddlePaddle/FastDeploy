@@ -1338,8 +1338,11 @@ class ResourceManagerV1(ResourceManager):
     def update_metrics(self):
         # Update metrics
         num_tasks = sum([1 if task else 0 for task in self.tasks_list])
-        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        blocks_used_by_tasks = set()
+        for task in self.tasks_list:
+            if task is not None:
+                blocks_used_by_tasks.update(task.block_tables)
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
