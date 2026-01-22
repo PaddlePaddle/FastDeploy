@@ -987,6 +987,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0] + eplb_config.redundant_experts_num
+        elif hasattr(model_config, "num_local_experts") and model_config.num_local_experts is not None:
+            num_experts = model_config.num_local_experts + eplb_config.redundant_experts_num
         else:
             num_experts = model_config.moe_num_experts + eplb_config.redundant_experts_num
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size

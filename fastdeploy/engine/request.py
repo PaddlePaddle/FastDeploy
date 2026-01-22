@@ -16,19 +16,28 @@
 
 from __future__ import annotations
 
+import json
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Generic, Optional, Union
+from typing import Any, Dict, Generic, Optional
+from typing import TypeVar as TypingTypeVar
+from typing import Union
 
 import numpy as np
+from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.entrypoints.openai.protocol import ToolCall
+from fastdeploy.entrypoints.openai.protocol import (
+    AnyResponseFormat,
+    DeltaMessage,
+    StructuralTagResponseFormat,
+    ToolCall,
+)
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import (
     LogprobsLists,
@@ -59,19 +68,22 @@ class ImagePosition:
     length: int = 0
 
 
+T = TypingTypeVar("T")
+
+
 @dataclass
 class Request:
     def __init__(
         self,
-        request_id: str,
-        prompt: Optional[Union[str, list[str]]],
-        prompt_token_ids: Optional[list[int]],
-        prompt_token_ids_len: Optional[int],
-        messages: Optional[list[list[dict[str, Any]]]],
-        history: Optional[list[list[str]]],
-        tools: Optional[list[Dict]],
-        system: Optional[Union[str, list[str]]],
-        eos_token_ids: Optional[list[int]],
+        request_id: Optional[str],
+        prompt: Optional[Union[str, list[str], list[list[int]], list[int]]] = None,
+        prompt_token_ids: Optional[Union[list[int], list[list[int]]]] = None,
+        prompt_token_ids_len: Optional[int] = None,
+        messages: Optional[list[Any]] = None,
+        tools: Optional[list[Dict]] = None,
+        system: Optional[Union[str, list[str]]] = None,
+        history: Optional[list[list[str]]] = None,
+        eos_token_ids: Optional[list[int]] = None,
         sampling_params: Optional[SamplingParams] = None,
         pooling_params: Optional[PoolingParams] = None,
         multimodal_inputs: Optional[dict] = None,
@@ -85,7 +97,7 @@ class Request:
         guided_grammar: Optional[Any] = None,
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
-        enable_thinking: Optional[bool] = True,
+        enable_thinking: Optional[bool] = None,
         reasoning_max_tokens: Optional[int] = None,
         trace_carrier: dict = dict(),
         dp_rank: Optional[int] = None,
@@ -102,6 +114,19 @@ class Request:
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
         metrics: Optional[RequestMetrics] = None,
+        # from ChatCompletionRequest or CompletionRequest
+        user: Optional[str] = None,
+        metadata: Optional[dict] = None,
+        completion_token_ids: Optional[list[int]] = None,
+        chat_template_kwargs: Optional[dict] = None,
+        prompt_tokens: Optional[str] = None,
+        add_generation_prompt: Optional[bool] = None,
+        response_format: Optional[AnyResponseFormat] = None,
+        mm_hashes: Optional[list] = None,
+        suffix: Optional[dict] = None,
+        top_logprobs: Optional[int] = None,
+        # from PoolingRequest
+        add_special_tokens: Optional[bool] = False,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -176,6 +201,118 @@ class Request:
             self.metrics = RequestMetrics()
         else:
             self.metrics = metrics
+        # from ChatCompletionRequest or CompletionRequest
+        self.user = user
+        self.metadata = metadata
+        self.completion_token_ids = completion_token_ids
+        self.chat_template_kwargs = chat_template_kwargs
+        self.prompt_tokens = prompt_tokens
+        self.add_generation_prompt = add_generation_prompt
+        self.response_format = response_format
+        self.mm_hashes = mm_hashes
+        self.suffix = suffix
+        self.top_logprobs = top_logprobs
+        # from PoolingRequest
+        self.add_special_tokens = add_special_tokens
+
+    @classmethod
+    def _process_guided_json(cls, r: T):
+        guided_json_object = None
+        if hasattr(r, "response_format") and r.response_format is not None:
+            if r.response_format.type == "json_object":
+                guided_json_object = True
+            elif r.response_format.type == "json_schema":
+                json_schema = r.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    r.guided_json = json_schema.model_json_schema()
+                else:
+                    r.guided_json = json_schema
+            elif r.response_format.type == "structural_tag":
+                structural_tag = r.response_format
+                assert structural_tag is not None and isinstance(structural_tag, StructuralTagResponseFormat)
+                r.structural_tag = json.dumps(structural_tag.model_dump(by_alias=True))
+        return guided_json_object
+
+    @classmethod
+    def from_generic_request(
+        cls,
+        req: T,
+        request_id: Optional[str] = None,
+        prompt: Optional[Union[str, list[int]]] = None,
+        pooling_params: Optional[PoolingParams] = None,
+    ):
+        if request_id is not None:
+            setattr(req, "request_id", request_id)
+
+        if pooling_params is None:
+            sampling_params = SamplingParams.from_generic_request(req)
+        else:
+            sampling_params = SamplingParams()
+
+        guided_json_object = cls._process_guided_json(req)
+
+        metrics = RequestMetrics()
+        request = cls(
+            request_id=getattr(req, "request_id", None),
+            prompt_token_ids=getattr(req, "prompt_token_ids", None),
+            prompt=prompt,
+            sampling_params=sampling_params,
+            pooling_params=pooling_params,
+            metrics=metrics,
+            guided_json_object=guided_json_object,
+            disaggregate_info=getattr(req, "disaggregate_info", None),
+            guided_json=getattr(req, "guided_json", None),
+            guided_regex=getattr(req, "guided_regex", None),
+            guided_choice=getattr(req, "guided_choice", None),
+            guided_grammar=getattr(req, "guided_grammar", None),
+            user=getattr(req, "user", None),
+            response_format=(
+                getattr(req, "response_format", None).model_dump()
+                if (hasattr(getattr(req, "response_format", None), "model_dump"))
+                else None
+            ),
+            mm_hashes=getattr(req, "mm_hashes", None),
+            add_special_tokens=getattr(req, "add_special_tokens", False),
+        )
+
+        if hasattr(req, "messages"):
+            if hasattr(req, "prompt_token_ids") and not req.prompt_token_ids:
+                # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+                assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+                if req.disable_chat_template:
+                    request.prompt = req.messages[0]["content"]
+                    request.messages = []
+            request.messages = getattr(req, "messages", None)
+            request.tools = (
+                [tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None
+            )
+            request.reasoning_max_tokens = getattr(req, "reasoning_max_tokens", None)
+            request.disable_chat_template = getattr(req, "disable_chat_template", None)
+            request.top_logprobs = getattr(req, "top_logprobs", None)
+            request.structural_tag = getattr(req, "structural_tag", None)
+            request.chat_template = getattr(req, "chat_template", None)
+            request.ic_req_data = getattr(req, "ic_req_data", None)
+            request.metadata = getattr(req, "metadata", None)
+            request.completion_token_ids = getattr(req, "completion_token_ids", None)
+            request.chat_template_kwargs = getattr(req, "chat_template_kwargs", None)
+
+        if getattr(req, "suffix", None):
+            request.suffix = getattr(req, "suffix", None)
+            for key, value in req.suffix.items():
+                setattr(request, key, value)
+
+        if getattr(req, "metadata", None):
+            assert (
+                "raw_request" not in req.metadata
+            ), "The parameter `raw_request` is not supported now, please use completion api instead."
+            for key, value in req.metadata.items():
+                setattr(request, key, value)
+            from fastdeploy.utils import api_server_logger
+
+            api_server_logger.warning("The parameter metadata is obsolete.")
+
+        return request
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -378,6 +515,34 @@ class Request:
         except Exception as e:
             return f"<Request repr failed: {e}>"
 
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.sampling_params, key):
+            return getattr(self.sampling_params, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        if hasattr(self.sampling_params, key):
+            setattr(self.sampling_params, key, value)
+        else:
+            setattr(self, key, value)
+
+    def __delitem__(self, key):
+        try:
+            if hasattr(self.sampling_params, key):
+                delattr(self.sampling_params, key)
+            else:
+                delattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+    def __contains__(self, key: str) -> bool:
+        if hasattr(self.sampling_params, key):
+            return True
+        return hasattr(self, key)
+
 
 @dataclass(slots=True)
 class CompletionOutput:
@@ -404,6 +569,10 @@ class CompletionOutput:
     tool_calls: Optional[ToolCall] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
     completion_tokens: Optional[str] = None
+    delta_message: Optional[DeltaMessage] = None
+    multipart: Optional[list[Any]] = None
+    num_image_tokens: Optional[int] = None
+    enable_parser: bool = False
 
     def to_dict(self):
         """
@@ -448,6 +617,26 @@ class CompletionOutput:
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
         )
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
 
 
 @dataclass(slots=True)
@@ -590,6 +779,21 @@ class RequestMetrics:
         # for compatibility with old metrics
         self.llm_engine_recv_req_timestamp = self.engine_get_req_time
         self.llm_engine_send_req_to_engine_timestamp = self.inference_start_time
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
 
 
 class RequestOutput:
@@ -771,6 +975,62 @@ class RequestOutput:
             "prompt_token_ids_len": self.prompt_token_ids_len,
             "trace_carrier": self.trace_carrier,
         }
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.outputs, key):
+            return getattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            return getattr(self.metrics, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        if hasattr(self.outputs, key):
+            setattr(self.outputs, key, value)
+        elif hasattr(self.metrics, key):
+            setattr(self.metrics, key, value)
+        else:
+            setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        elif hasattr(self.outputs, key):
+            return getattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            return getattr(self.metrics, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        if hasattr(self.outputs, key):
+            setattr(self.outputs, key, value)
+        elif hasattr(self.metrics, key):
+            setattr(self.metrics, key, value)
+        else:
+            setattr(self, key, value)
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            delattr(self, key)
+        elif hasattr(self.outputs, key):
+            delattr(self.outputs, key)
+        elif hasattr(self.metrics, key):
+            delattr(self.metrics, key)
+        else:
+            raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        if hasattr(self, key):
+            return True
+        elif hasattr(self.outputs, key):
+            return True
+        elif hasattr(self.metrics, key):
+            return True
+        else:
+            return False
 
 
 @dataclass

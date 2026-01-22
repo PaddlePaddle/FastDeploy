@@ -152,10 +152,12 @@ class XPUModelRunner(ModelRunnerBase):
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
 
-        # Cuda Graph
-        self.graph_opt_level = self.graph_opt_config.graph_opt_level
-        self.use_cudagraph = False
+        # CUDA Graph
+        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
+        self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
+
         self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
@@ -289,6 +291,22 @@ class XPUModelRunner(ModelRunnerBase):
             return 1
         else:
             return 0
+
+    def only_prefill(self):
+        """
+        check whether prefill only
+        """
+        if_only_prefill = True
+        decode_exists = None
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            only_prefill_batch_list = []
+            decode_exists = self.exist_decode()
+            paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
+            if_only_prefill = all(only_prefill_batch_list)
+
+        if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
+
+        return if_only_prefill
 
     def only_decode(self):
         """
@@ -1094,7 +1112,30 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_profiling=is_dummy_run,
+            forward_meta=self.forward_meta,
         )
+
+        if self.use_cudagraph:
+            # Update Batch type for cuda graph for only_decode_batch
+            if_only_decode = self.only_decode()
+
+            only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+            # Update config about moe for better performance
+            # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
+            if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+                self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                if self.speculative_decoding:
+                    self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+
+            # Update Batch type for cuda graph for only_prefill_batch
+            only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
+
+            self.forward_meta.step_use_cudagraph = (
+                only_prefill_use_cudagraph
+                if self.cudagraph_only_prefill
+                else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
+            )
+
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
@@ -1429,8 +1470,32 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Trigger CUDA Graph capture for all shapes in 'CudaGraphConfig.cudagraph_capture_sizes'
         """
-        logger.warn("XPU not support cuda graph currently")
-        pass
+        time_before_capture = time.perf_counter()
+        expected_decode_len = 1
+        capture_sizes = self.cudagraph_capture_sizes.copy()
+
+        try:
+            for batch_size in sorted(capture_sizes, reverse=True):
+                self._dummy_run(
+                    num_tokens=self.scheduler_config.max_num_batched_tokens,
+                    batch_size=batch_size,
+                    expected_decode_len=expected_decode_len,
+                    in_capturing=True,
+                )
+                logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                raise RuntimeError(
+                    "CUDA out of memory occurred when warming up CUDAGraph "
+                    f"with the capture sizes {capture_sizes}. Please try "
+                    "lowering `max_num_seqs` or `gpu_memory_utilization` when "
+                    "initializing the engine."
+                ) from e
+            else:
+                raise e
+
+        time_after_capture = time.perf_counter()
+        logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
@@ -1467,6 +1532,11 @@ class XPUModelRunner(ModelRunnerBase):
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
 
+            if is_dummy_run:
+                self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
+            # 2. Padding inputs for cuda grph
+            self.padding_cudagraph_inputs()
+
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
             # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
             # when there is data on other runner, the current runner is required to execute part of the model.
@@ -1486,7 +1556,8 @@ class XPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
-
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
             hidden_states = xpu_process_output(
                 model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
             )
@@ -1688,6 +1759,19 @@ class XPUModelRunner(ModelRunnerBase):
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
         return self.share_inputs["not_need_stop"][0]
+
+    def padding_cudagraph_inputs(self) -> None:
+        """
+        Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
+        In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
+        """
+        # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.share_inputs["seq_lens_this_time"]
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+        return
 
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""

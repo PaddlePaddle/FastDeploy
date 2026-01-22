@@ -31,7 +31,7 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
-from .utils import get_tensor
+from .utils import get_tensor, modules_to_convert
 
 
 class RMSNorm(nn.Layer):
@@ -95,9 +95,21 @@ class RMSNorm(nn.Layer):
                 "float16",
             ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        self.quant_round_type: int = (
+            self.fd_config.quant_config.quant_round_type
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_max_bound: int = (
+            self.fd_config.quant_config.quant_max_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_min_bound: int = (
+            self.fd_config.quant_config.quant_min_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
