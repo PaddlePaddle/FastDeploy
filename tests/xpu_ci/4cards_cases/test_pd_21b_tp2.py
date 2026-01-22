@@ -16,8 +16,9 @@
 PD分离测试 - Prefill/Decode分离部署模式
 
 测试配置:
-- 模型: ERNIE-4.5-0.3B-Paddle
-- Tensor Parallel: 1
+- 模型: ERNIE-4.5-21B-A3B-Paddle
+- 量化: wint4
+- Tensor Parallel: 4
 - 特性: splitwise PD分离, RDMA cache传输
 - 节点: Router + Prefill节点 + Decode节点
 """
@@ -165,36 +166,38 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     prefill_env = os.environ.copy()
     prefill_env["FD_LOG_DIR"] = "log_prefill"
     if xpu_id == 0:
-        prefill_env["XPU_VISIBLE_DEVICES"] = "0"
+        prefill_env["XPU_VISIBLE_DEVICES"] = "0,1"
     else:
-        prefill_env["XPU_VISIBLE_DEVICES"] = "4"
+        prefill_env["XPU_VISIBLE_DEVICES"] = "4,5"
 
     prefill_cmd = [
         "python",
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
         "--model",
-        f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--port",
         str(port_num + 11),
         "--metrics-port",
         str(port_num + 12),
         "--engine-worker-queue-port",
         str(port_num + 13),
-        "--cache-queue-port",
-        str(port_num + 14),
         "--tensor-parallel-size",
-        "1",
+        "2",
         "--max-model-len",
         "32768",
+        "--max-num-seqs",
+        "64",
+        "--quantization",
+        "wint4",
         "--splitwise-role",
         "prefill",
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        str(port_num + 15),
+        f"{port_num + 15},{port_num + 16}",
         "--pd-comm-port",
-        str(port_num + 16),
+        str(port_num + 19),
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -210,36 +213,38 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     decode_env = os.environ.copy()
     decode_env["FD_LOG_DIR"] = "log_decode"
     if xpu_id == 0:
-        decode_env["XPU_VISIBLE_DEVICES"] = "1"
+        decode_env["XPU_VISIBLE_DEVICES"] = "2,3"
     else:
-        decode_env["XPU_VISIBLE_DEVICES"] = "5"
+        decode_env["XPU_VISIBLE_DEVICES"] = "6,7"
 
     decode_cmd = [
         "python",
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
         "--model",
-        f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
         "--port",
         str(port_num + 21),
         "--metrics-port",
         str(port_num + 22),
         "--engine-worker-queue-port",
         str(port_num + 23),
-        "--cache-queue-port",
-        str(port_num + 24),
         "--tensor-parallel-size",
-        "1",
+        "2",
         "--max-model-len",
         "32768",
+        "--max-num-seqs",
+        "64",
+        "--quantization",
+        "wint4",
         "--splitwise-role",
         "decode",
         "--cache-transfer-protocol",
         "rdma",
         "--rdma-comm-ports",
-        str(port_num + 25),
+        f"{port_num + 25},{port_num + 26}",
         "--pd-comm-port",
-        str(port_num + 26),
+        str(port_num + 29),
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -260,6 +265,8 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         print_pd_logs_on_failure()
         stop_processes()
         return False
+    # ensure pd service is ready
+    time.sleep(5)
 
     return True
 
@@ -307,7 +314,7 @@ def test_pd_separation():
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content for keyword in ["AI", "伙伴"]
+            keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nPD分离测试通过!")

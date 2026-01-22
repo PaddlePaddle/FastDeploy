@@ -81,7 +81,6 @@ def stop_processes():
         "ps -efww | grep -E 'gunicorn: worker' | grep -v grep | awk '{print $2}' | xargs echo",
         f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
         f"lsof -t -i :{port_num} | xargs echo",
-        f"lsof -t -i :{port_num + 47873} | xargs echo",
     ]
 
     # Kill additional ports
@@ -331,33 +330,6 @@ def restore_env(original_values):
         else:
             os.environ[key] = value
             print(f"恢复环境变量: {key}={value}")
-
-
-def download_and_build_xdeepep():
-    """下载并编译xDeepEP(用于EP并行测试)"""
-    if os.path.exists("xDeepEP"):
-        print("xDeepEP已存在,跳过下载")
-        return True
-
-    print("下载xDeepEP...")
-    result = subprocess.run("wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz", shell=True)
-    if result.returncode != 0:
-        print("下载xDeepEP失败")
-        return False
-
-    print("解压xDeepEP...")
-    result = subprocess.run("tar -xzf xDeepEP.tar.gz", shell=True)
-    if result.returncode != 0:
-        print("解压xDeepEP失败")
-        return False
-
-    print("编译xDeepEP...")
-    result = subprocess.run("cd xDeepEP && bash build.sh && cd -", shell=True)
-    if result.returncode != 0:
-        print("编译xDeepEP失败")
-        return False
-
-    return True
 
 
 # ============ PD分离相关函数 ============
