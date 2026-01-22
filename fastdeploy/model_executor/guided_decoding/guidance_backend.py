@@ -18,16 +18,10 @@ import copy
 import json
 import traceback
 from typing import Any, Optional, Tuple, Union
-from unittest.mock import MagicMock
 
 import llguidance
 import llguidance.hf
 import llguidance.torch
-
-torch_mock = MagicMock()
-import sys
-
-sys.modules["torch"] = torch_mock
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
