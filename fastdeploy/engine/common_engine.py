@@ -1049,7 +1049,7 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
+                if not self.cfg.model_config.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
                     err, data = self.recv_request_server.receive_json_once(block)
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
@@ -1069,7 +1069,7 @@ class EngineService:
                         self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
                     continue
 
-                request, insert_task = None, []
+                request, insert_task = data, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     status_value = data.get("status", None)
@@ -1092,7 +1092,8 @@ class EngineService:
                         continue
                     err_msg = None
                     try:
-                        request = Request.from_dict(data)
+                        if not envs.ENABLE_V1_DATA_PROCESSOR:
+                            request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))

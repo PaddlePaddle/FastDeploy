@@ -292,6 +292,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             "chat_template": "Hello",
             "max_tokens": 20,
             "tools": [1],
+            "metrics": {},
         }
 
         await self.engine_client.add_requests(request)

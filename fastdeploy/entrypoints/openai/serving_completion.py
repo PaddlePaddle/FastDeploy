@@ -27,7 +27,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -178,8 +178,11 @@ class OpenAIServingCompletion:
             try:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
-                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                    current_req_dict["arrival_time"] = time.time()
+                    if not envs.ENABLE_V1_DATA_PROCESSOR:
+                        current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
+                    else:
+                        current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                    current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
@@ -562,7 +565,7 @@ class OpenAIServingCompletion:
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if not res["finished"] and "delta_message" in output:
+                    if not res["finished"] and output["enable_parser"]:
                         delta_message_output = output["delta_message"]
                         if delta_message_output is None:
                             continue
@@ -737,7 +740,7 @@ class OpenAIServingCompletion:
                     else None
                 ),
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_call"),
+                tool_calls=output.get("tool_call", None),
                 logprobs=aggregated_logprobs,
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
