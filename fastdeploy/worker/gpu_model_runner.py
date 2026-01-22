@@ -1226,6 +1226,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").pin_memory()
         self.share_inputs["not_need_stop_gpu"] = paddle.full([1], False, dtype="bool")
+        self.share_inputs["sampled_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 

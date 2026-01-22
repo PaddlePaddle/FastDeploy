@@ -428,8 +428,9 @@ def post_process_normal(
                 async_output_queue.put(output)
         else:
             if sampler_output.logprobs_tensors is None:
+                share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids)
                 save_output(
-                    sampler_output.sampled_token_ids,
+                    share_inputs["sampled_token_ids"],
                     model_output.not_need_stop,
                     share_inputs["preempted_idx"],
                     model_output.mp_rank,
