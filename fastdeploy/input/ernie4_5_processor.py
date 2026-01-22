@@ -411,6 +411,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if tool_call_delta_message.tool_calls:
                     response_dict["outputs"]["text"] = tool_call_delta_message.content
                     response_dict["outputs"]["tool_calls"] = tool_call_delta_message.tool_calls
+                    response_dict["outputs"]["skipped"] = False
             else:
                 if not is_end:
                     response_dict["outputs"]["skipped"] = True
