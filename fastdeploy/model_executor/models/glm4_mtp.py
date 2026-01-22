@@ -127,8 +127,9 @@ class SharedHead(nn.Module):
         )
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        # NOTE(wangyanpeng04): This only passes through the normalization layer and skips the head layer
-        return self.norm(hidden_states)
+        # NOTE(wangyanpeng04): Just for compute logits
+        hidden_states = self.norm(hidden_states)[0]
+        return self.head(hidden_states)
 
 
 class Glm4MTPLayer(nn.Layer):
@@ -277,7 +278,6 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         self.model = Glm4MTPModel(fd_config)
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
-        self.lm_head = fd_config.speculative_config.sharing_model.lm_head
         self.mtp_start_layer_idx = fd_config.model_config.start_layer_index
         self.num_mtp_layers = fd_config.model_config.num_nextn_predict_layers
 
@@ -346,7 +346,7 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         """
         compute_logits
         """
-        logits = self.lm_head(hidden_state)
+        logits = self.model.layers[str(0)].shared_head(hidden_state)
         logits = logits.astype(paddle.float32)
         logits[:, self.ori_vocab_size :] = -float("inf")
 

@@ -876,6 +876,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--model-impl",
+        type=str,
+        choices=["auto", "fastdeploy", "paddleformers"],
+        default="auto",
+        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",

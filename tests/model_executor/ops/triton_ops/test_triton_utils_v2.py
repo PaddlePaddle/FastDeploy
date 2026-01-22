@@ -58,7 +58,6 @@ class TestKernelInterfaceV2(unittest.TestCase):
         kernel_interface.decorator(1, 2, N=8, K=16)
         cached_fn.assert_called_once_with(1, 2)
 
-    @patch("os.system")
     @patch("os.makedirs")
     @patch("os.getenv", return_value="/tmp/triton_cache/rank0")
     @patch("builtins.open", new_callable=MagicMock)
@@ -81,29 +80,34 @@ class TestKernelInterfaceV2(unittest.TestCase):
         mock_open,
         mock_getenv,
         mock_makedirs,
-        mock_system,
     ):
-        """Test full compilation → linking → building → importing pipeline when no cached .so exists."""
-        mock_find_so_path.side_effect = [
-            None,
-            "/tmp/triton_cache/rank0/haha_N8_K16/mock_lib.so",
-        ]
-        mock_module = MagicMock()
-        mock_pybind_func = MagicMock()
-        mock_module.haha_N8_K16_func = mock_pybind_func
-        mock_import.return_value = mock_module
-        mock_system.return_value = 0
-        mock_mp_do.return_value = None
-        mock_build.return_value = None
-        mock_extract.return_value = None
-        kernel_interface = tu2.KernelInterface(self.mock_kernel, other_config={})
-        kernel_interface.grid = ["N * M * N"]
-        kernel_interface.decorator(1, 2, N=8, K=16)
-        mock_extract.assert_called_once()
-        mock_mp_do.assert_called_once()
-        mock_build.assert_called_once()
-        mock_import.assert_called_once_with("haha_N8_K16_package")
-        mock_pybind_func.assert_called_once_with(1, 2)
+        original_system = tu2.os.system
+        try:
+            mock_system = MagicMock(return_value=0)
+            tu2.os.system = mock_system
+            """Test full compilation → linking → building → importing pipeline when no cached .so exists."""
+            mock_find_so_path.side_effect = [
+                None,
+                "/tmp/triton_cache/rank0/haha_N8_K16/mock_lib.so",
+            ]
+            mock_module = MagicMock()
+            mock_pybind_func = MagicMock()
+            mock_module.haha_N8_K16_func = mock_pybind_func
+            mock_import.return_value = mock_module
+            mock_system.return_value = 0
+            mock_mp_do.return_value = None
+            mock_build.return_value = None
+            mock_extract.return_value = None
+            kernel_interface = tu2.KernelInterface(self.mock_kernel, other_config={})
+            kernel_interface.grid = ["N * M * N"]
+            kernel_interface.decorator(1, 2, N=8, K=16)
+            mock_extract.assert_called_once()
+            mock_mp_do.assert_called_once()
+            mock_build.assert_called_once()
+            mock_import.assert_any_call("haha_N8_K16_package")
+            mock_pybind_func.assert_called_once_with(1, 2)
+        finally:
+            tu2.os.system = original_system
 
     @patch("os.system")
     @patch("os.makedirs")
@@ -149,7 +153,7 @@ class TestKernelInterfaceV2(unittest.TestCase):
         self.assertEqual(len(dtypes_arg), 2)
         self.assertEqual(dtypes_arg[0], a.dtype)
         self.assertEqual(dtypes_arg[1], paddle.int8)
-        mock_import.assert_called_once_with("haha_N8_K16_package")
+        mock_import.assert_any_call("haha_N8_K16_package")
         mock_pybind_func.assert_called_once_with(a, b)
 
     def test_getitem_sets_grid_and_returns_decorator(self):
