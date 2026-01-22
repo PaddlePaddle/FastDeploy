@@ -487,20 +487,7 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {
-            "arrival_time": self.arrival_time,
-            "inference_start_time": self.inference_start_time,
-            "first_token_time": self.first_token_time,
-            "time_in_queue": self.time_in_queue,
-            "preprocess_cost_time": self.preprocess_cost_time,
-            "model_forward_time": self.model_forward_time,
-            "model_execute_time": self.model_execute_time,
-            "request_start_time": self.request_start_time,
-            "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
-            "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
-            "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
-            "speculate_metrics": self.speculate_metrics,
-        }
+        return {k: v for k, v in asdict(self).items()}
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> RequestMetrics:

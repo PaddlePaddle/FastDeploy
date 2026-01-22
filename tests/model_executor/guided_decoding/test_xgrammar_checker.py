@@ -20,10 +20,12 @@ from unittest.mock import MagicMock
 mock_torch = MagicMock()
 mock_xgrammar = MagicMock()
 
-sys.modules["torch"] = mock_torch
+sys.modules["torch"] = None
 sys.modules["xgrammar"] = mock_xgrammar
 
 from fastdeploy.engine.request import Request
+
+sys.modules["torch"] = mock_torch
 from fastdeploy.model_executor.guided_decoding.xgrammar_backend import XGrammarChecker
 
 
