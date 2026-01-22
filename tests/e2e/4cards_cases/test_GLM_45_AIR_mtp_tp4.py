@@ -88,7 +88,7 @@ def setup_and_run_server():
         "--speculative-config",
         json.dumps(speculative_config),
         "--routing-replay-config",
-        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air_mtp"}',
+        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air_mtp_tp4"}',
     ]
     env = os.environ.copy()
     # Start subprocess in new process group
@@ -205,5 +205,5 @@ def openai_client():
 def test_r3_accuracy(openai_client):
     moe_layer_num = 45  # GLM45 AIR moe layer num: 45, Fake GLM AIR moe layer num: 1
     check_routing_replay_chat_completion(
-        openai_client=openai_client, moe_layer_num=moe_layer_num, model_name="glm45air_mtp"
+        openai_client=openai_client, moe_layer_num=moe_layer_num, model_name="glm45air_mtp_tp4"
     )
