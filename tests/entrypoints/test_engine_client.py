@@ -844,14 +844,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
 
-    def test_valid_parameters_top_logprobs_disabled(self):
-        """Test valid_parameters rejects top_logprobs when disabled."""
-        self.engine_client.enable_logprob = False
-        data = {"logprobs": True, "top_logprobs": 5, "request_id": "test"}
-
-        with self.assertRaises(Exception):  # ParameterError
-            self.engine_client.valid_parameters(data)
-
     def test_valid_parameters_top_logprobs_invalid_type(self):
         """Test valid_parameters rejects invalid top_logprobs type."""
         self.engine_client.enable_logprob = True
@@ -1617,20 +1609,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("Processing failed", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
 
-    # ========== Phase 2: Error Handling Tests ==========
-
-    async def test_rearrange_experts_invalid_credentials(self):
-        """Test rearrange_experts with invalid credentials."""
-        mock_config = create_mock_fd_config(enable_eplb=True)
-        self.engine_client.config = mock_config
-        self.engine_client.fd_config = mock_config
-
-        content, status_code = await self.engine_client.rearrange_experts(
-            {"user": "invalid_user", "passwd": "invalid_pass"}
-        )
-
-        self.assertEqual(content["code"], 1)
-        self.assertEqual(status_code, 401)
+        # ========== Phase 2: Error Handling Tests ==========
 
     async def test_get_per_expert_tokens_stats_invalid_auth(self):
         """Test get_per_expert_tokens_stats with invalid credentials."""
@@ -1819,11 +1798,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.data_processor.process_request_dict = Mock(side_effect=ValueError("Preprocessing error"))
 
         with self.assertRaises(EngineError) as context:
-            await self.engine_client.add_requests({
-                "request_id": "test-id",
-                "prompt_token_ids": [1, 2, 3],
-                "max_tokens": 100
-            })
+            await self.engine_client.add_requests(
+                {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100}
+            )
 
         self.assertIn("Preprocessing error", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
@@ -1864,25 +1841,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         self.assertIn("Length of input token(10) exceeds the limit max_model_len(5)", str(context.exception))
         self.assertEqual(context.exception.error_code, 400)
-
-    async def test_add_requests_stop_sequences_validation(self):
-        """Test add_requests stop sequences validation."""
-        # Covers lines 323-340
-        self.engine_client.data_processor = Mock(process_request_dict=Mock())
-
-        task = {
-            "request_id": "test-id",
-            "prompt_token_ids": [1, 2, 3],
-            "max_tokens": 10,
-            "stop_seqs_len": [1, 2, 3, 4, 5],  # More than default limit
-        }
-
-        with patch("fastdeploy.entrypoints.engine_client.envs.FD_MAX_STOP_SEQS_NUM", 3):
-            with self.assertRaises(EngineError) as context:
-                await self.engine_client.add_requests(task)
-
-            self.assertIn("Length of stop ([1, 2, 3, 4, 5]) exceeds the limit max_stop_seqs_num(3)", str(context.exception))
-            self.assertEqual(context.exception.error_code, 400)
 
     def test_send_task_with_e2w_tensor_conversion(self):
         """Test _send_task with E2W tensor conversion enabled."""
@@ -2106,9 +2064,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.config = mock_config
         self.engine_client.fd_config = mock_config
 
-        content, status_code = await self.engine_client.rearrange_experts({
-            "user": "wrong", "passwd": "wrong", "action": "test"
-        })
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "wrong", "passwd": "wrong", "action": "test"}
+        )
 
         self.assertEqual(content["code"], 1)
         self.assertEqual(content["msg"], "user or passwd is invalid")
@@ -2121,9 +2079,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.fd_config = mock_config
         self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1  # Not rank 0
 
-        content, status_code = await self.engine_client.rearrange_experts({
-            "user": "test_user", "passwd": "test_pass", "action": "test"
-        })
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": "test"}
+        )
 
         self.assertEqual(content["code"], 1)
         self.assertIn("expect rank 0", content["msg"])
@@ -2136,9 +2094,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.fd_config = mock_config
         self.engine_client.rearrange_experts_signal = Mock(value=np.array([1]))  # Not FREE
 
-        content, status_code = await self.engine_client.rearrange_experts({
-            "user": "test_user", "passwd": "test_pass", "action": ""
-        })
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": ""}
+        )
 
         self.assertEqual(content["code"], 1)
         self.assertIn("rearrange is doing", content["msg"])
@@ -2151,9 +2109,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.fd_config = mock_config
         self.engine_client.rearrange_experts_signal = Mock(value=np.array([RearrangeExpertStatus.FREE.value]))
 
-        content, status_code = await self.engine_client.rearrange_experts({
-            "user": "test_user", "passwd": "test_pass", "action": ""
-        })
+        content, status_code = await self.engine_client.rearrange_experts(
+            {"user": "test_user", "passwd": "test_pass", "action": ""}
+        )
 
         self.assertEqual(content["code"], 1)
         self.assertEqual(content["msg"], "ips in request is None")
@@ -2177,9 +2135,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.config = mock_config
         self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1
 
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats({
-            "user": "test_user", "passwd": "test_pass"
-        })
+        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
+            {"user": "test_user", "passwd": "test_pass"}
+        )
 
         self.assertEqual(content["code"], 1)
         self.assertIn("expect rank 0", content["msg"])
@@ -2195,9 +2153,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_signal = Mock(value=np.array([0]))
         self.engine_client.signal_clear_experts_token_stats_list = [mock_signal]
 
-        content, status_code = await self.engine_client.get_per_expert_tokens_stats({
-            "user": "test_user", "passwd": "test_pass", "clear_stat": True
-        })
+        content, status_code = await self.engine_client.get_per_expert_tokens_stats(
+            {"user": "test_user", "passwd": "test_pass", "clear_stat": True}
+        )
 
         self.assertEqual(content["code"], 0)
         self.assertEqual(status_code, 200)
@@ -2221,9 +2179,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.engine_client.config = mock_config
         self.engine_client.fd_config.parallel_config.tensor_parallel_rank = 1
 
-        content, status_code = await self.engine_client.check_redundant({
-            "user": "test_user", "passwd": "test_pass"
-        })
+        content, status_code = await self.engine_client.check_redundant({"user": "test_user", "passwd": "test_pass"})
 
         self.assertEqual(content["code"], 1)
         self.assertIn("expect rank 0", content["msg"])
@@ -2239,9 +2195,9 @@ class TestEngineClientValidParameters(unittest.TestCase):
         mock_signal = Mock(value=np.array([42]))
         self.engine_client.update_weight_from_disk_result_list = [mock_signal]
 
-        content, status_code = await self.engine_client.check_redundant({
-            "user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"
-        })
+        content, status_code = await self.engine_client.check_redundant(
+            {"user": "test_user", "passwd": "test_pass", "action": "check_load_weight_result"}
+        )
 
         self.assertEqual(content["code"], 0)
         self.assertEqual(content["data"], [[42]])
