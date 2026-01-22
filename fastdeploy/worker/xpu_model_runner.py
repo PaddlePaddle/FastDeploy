@@ -1113,6 +1113,7 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_profiling=is_dummy_run,
             forward_meta=self.forward_meta,
+            use_cudagraph=self.use_cudagraph,
         )
 
         if self.use_cudagraph:
