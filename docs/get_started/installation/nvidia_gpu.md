@@ -15,7 +15,7 @@ The following installation methods are available when your environment meets the
 **Notice**: The pre-built image only supports SM80/90 GPU(e.g. H800/A800)，if you are deploying on SM86/89GPU(L40/4090/L20), please reinstall ```fastdeploy-gpu``` after you create the container.
 
 ```shell
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.3.3
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.4.0
 ```
 
 ## 2. Pre-built Pip Installation
