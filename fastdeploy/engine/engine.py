@@ -574,6 +574,7 @@ class LLMEngine:
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
             f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
+            f" --model-impl {self.cfg.model_config.model_impl}"
             f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:

@@ -321,10 +321,12 @@ class Ernie4_5Processor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["enable_parser"] = False
         if is_end:
             full_text = previous_texts + delta_text
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
+                response_dict["outputs"]["enable_parser"] = True
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
                     response_dict,
@@ -335,6 +337,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
                 response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             if self.tool_parser_obj:
+                response_dict["outputs"]["enable_parser"] = True
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
@@ -360,6 +363,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
+        response_dict["outputs"]["enable_parser"] = False
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] == self.tokenizer.eos_token_id:
@@ -376,6 +380,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
                 self.model_status_dict[req_id],
             )
+            response_dict["outputs"]["enable_parser"] = True
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
             reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
@@ -389,6 +394,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         else:
             response_dict["outputs"]["text"] = delta_text
         if self.tool_parser_obj:
+            response_dict["outputs"]["enable_parser"] = True
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
