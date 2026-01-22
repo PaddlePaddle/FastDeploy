@@ -28,9 +28,9 @@
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.3.0
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.4.0
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.3.0 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.4.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
@@ -40,7 +40,7 @@ docker exec -it fastdeploy-xpu /bin/bash
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
@@ -52,7 +52,7 @@ python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/
 ### 安装 FastDeploy（**注意不要通过 pypi 源安装**）
 
 ```bash
-python -m pip install fastdeploy-xpu==2.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-xpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
 或者你也可以安装最新版 FastDeploy（不推荐）
@@ -66,7 +66,7 @@ python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/pa
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
