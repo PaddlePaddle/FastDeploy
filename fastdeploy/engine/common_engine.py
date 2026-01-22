@@ -104,7 +104,8 @@ class EngineService:
         tp_size = cfg.parallel_config.tensor_parallel_size
         dp_index = cfg.parallel_config.local_data_parallel_id
         for rank in range(tp_size):
-            name = f"ctrl_w2e_rank{rank+tp_size*dp_index}"
+            engine_worker_queue_port = self.cfg.parallel_config.local_engine_worker_queue_port
+            name = f"ctrl_w2e_rank{rank+tp_size*dp_index}_{engine_worker_queue_port}"
             self.llm_logger.info(f"Init Worker Control Output Queue: {name}(consumer)")
             self._ctrl_worker_output_queues.append(FMQ().queue(name, "consumer"))
 
@@ -1358,14 +1359,10 @@ class EngineService:
                 raise Exception("Worker Update Weights Timeouted after 600s")
             response: ControlResponse = msg.payload
             if response.request_id != request_id:
-                self.llm_logger.info(
-                    f"ignore old control response from worker:{output_queue.name} {response}"
-                )
+                self.llm_logger.info(f"ignore old control response from worker:{output_queue.name} {response}")
                 continue
             if response.error_code != 200:
-                self.llm_logger.info(
-                    f"Call Worker Failed: {output_queue.name} {response.error_message}"
-                )
+                self.llm_logger.info(f"Call Worker Failed: {output_queue.name} {response.error_message}")
                 raise Exception(f"Call Worker error: {response.error_message}")
             self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
             responses.append(response.result)
@@ -1376,6 +1373,7 @@ class EngineService:
         self.engine_worker_queue.put_tasks(([control_request], 1))
         # Use a single asyncio.run() to concurrently wait for all worker responses.
         return asyncio.run(self._wait_all_control_responses(request_id, timeout))
+
     def _send_error_response(self, request_id, error_msg, error_code: int = 500):
         self.llm_logger.error(
             f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}, error_code: {error_code}"

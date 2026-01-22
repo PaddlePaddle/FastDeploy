@@ -168,7 +168,8 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
     def init_control(self):
-        queue_name = f"ctrl_w2e_rank{self.local_rank}"
+        engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
+        queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
         logger.info(f"Init Control Output Queue: {queue_name}(producer)")
         self._ctrl_output = FMQ().queue(queue_name, "producer")
 
