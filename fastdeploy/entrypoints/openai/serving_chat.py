@@ -265,7 +265,9 @@ class OpenAIServingChat:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             if choices:
                                 chunk.choices = choices
@@ -392,11 +394,14 @@ class OpenAIServingChat:
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
                     delta_message = DeltaMessage(
-                        reasoning_content="",
+                        reasoning_content=output["reasoning_content"],
                         prompt_token_ids=None,
-                        tool_calls=None,
+                        tool_calls=output["tool_calls"],
                         completion_token_ids=None,
                     )
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
 
                     if response_processor.enable_multimodal_content():
                         delta_message.multimodal_content = output["multipart"]
@@ -406,15 +411,8 @@ class OpenAIServingChat:
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
 
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.content = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+                    if output["skipped"]:
+                        continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
@@ -558,7 +556,9 @@ class OpenAIServingChat:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -708,7 +708,7 @@ class OpenAIServingChat:
         message = ChatMessage(
             role="assistant",
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
+            tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
@@ -740,7 +740,7 @@ class OpenAIServingChat:
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if output.get("tool_call"):
+            if output.get("tool_calls"):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
