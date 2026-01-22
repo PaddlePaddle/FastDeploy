@@ -92,13 +92,12 @@ class AttentionStore(KVCacheStorage):
                 if "cuda memory not ready" in str(e):
                     logger.debug("[INIT] cuda memory not ready, try again..")
                     time.sleep(delta_t)
+                    t += delta_t
                     continue
                 else:
                     raise RuntimeError(
                         f"Unexpected exception during AttentionStoreSDK initialization: {e}\n{traceback.format_exc()}"
                     )
-            finally:
-                t += delta_t
         raise TimeoutError(f"AttentionStoreSDK initialization timed out after {timeout} seconds")
 
     def read(
