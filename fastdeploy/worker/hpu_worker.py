@@ -26,6 +26,7 @@ from paddle.base import core
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.hpu_model_runner import HPUModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -83,6 +84,9 @@ class HpuWorker(WorkerBase):
             paddle.device.cuda.empty_cache()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner

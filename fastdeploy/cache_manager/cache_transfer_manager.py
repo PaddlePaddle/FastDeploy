@@ -178,7 +178,7 @@ class CacheTransferManager:
             name="cache_ready_signal",
             array=cache_ready_signal_data,
             dtype=np.int32,
-            suffix=self.ipc_suffix,
+            suffix=args.engine_worker_queue_port,
             create=False,
         )
         swap_space_ready_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
@@ -186,7 +186,7 @@ class CacheTransferManager:
             name="swap_space_ready_signal",
             array=swap_space_ready_data,
             dtype=np.int32,
-            suffix=self.ipc_suffix,
+            suffix=args.engine_worker_queue_port,
             create=False,
         )
 
@@ -201,7 +201,7 @@ class CacheTransferManager:
             name="cache_task_broadcast_signal",
             array=cache_task_broadcast_data,
             dtype=np.int32,
-            suffix=args.ipc_suffix,
+            suffix=args.engine_worker_queue_port,
             create=False,
         )
 
@@ -230,7 +230,15 @@ class CacheTransferManager:
             raise ValueError(f"Invalid write policy: {args.write_policy}")
         self.write_policy = args.write_policy
 
-        threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
+        # Initialize update/clear signals for RL
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+        threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
     def _init_storage_buffer(self, args):
         """
@@ -456,8 +464,9 @@ class CacheTransferManager:
     def _run_read_storage(self, k_cache_keys, v_cache_keys, gpu_block_ids, cpu_block_ids):
         try:
             logger.debug(
-                f"_run_read_storage, key_hash_keys: {k_cache_keys}, "
-                f"value_hash_keys: {v_cache_keys}, gpu_block_ids: {gpu_block_ids}"
+                f"_run_read_storage, key_hash_keys_num: {len(k_cache_keys)}, "
+                f"value_hash_keys_num: {len(v_cache_keys)}, gpu_block_ids_num: {len(gpu_block_ids)}, "
+                f"cpu_block_ids_num: {len(cpu_block_ids)}"
             )
 
             block_num = len(gpu_block_ids)
@@ -468,7 +477,9 @@ class CacheTransferManager:
             ]
             kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
             kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+            start_time = time.time()
             result = self.storage_backend.batch_get(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
+            read_cost_time = time.time() - start_time
 
             k_result, v_result = result[:block_num], result[block_num:]
             success_block_num = 0
@@ -480,6 +491,7 @@ class CacheTransferManager:
             valid_cpu_block_ids = cpu_block_ids[:success_block_num]
 
             mode = 1  # cpu ==> gpu
+            start_time = time.time()
             swap_cache_layout(
                 self.gpu_cache_k_tensors,
                 self.storage_key_read_buffer,
@@ -498,6 +510,10 @@ class CacheTransferManager:
                 self.device,
                 mode,
             )
+            swap_cost_time = time.time() - start_time
+            logger.debug(
+                f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
+            )
 
             return valid_gpu_block_ids
         except Exception as e:
@@ -511,8 +527,8 @@ class CacheTransferManager:
         """Read cache from the storage backend to the GPU memory."""
         try:
             logger.debug(
-                f"read_storage_task, task id: {task_id}, hash_keys: {keys}, "
-                f"gpu_block_ids: {gpu_block_ids}, timeout: {timeout}"
+                f"read_storage_task, task id: {task_id}, hash_keys_num: {len(keys)}, "
+                f"gpu_block_ids_num: {len(gpu_block_ids)}, timeout: {timeout}"
             )
             k_cache_keys = [f"{key}_key_{self.rank}" for key in keys]
             v_cache_keys = [f"{key}_value_{self.rank}" for key in keys]
@@ -565,7 +581,9 @@ class CacheTransferManager:
                 self.key_cache_shape[2],
                 self.key_cache_shape[3],
             ]
+
             mode = 0  # gpu ==> cpu
+            start_time = time.time()
             swap_cache_layout(
                 self.gpu_cache_k_tensors,
                 self.storage_key_write_buffer,
@@ -584,6 +602,7 @@ class CacheTransferManager:
                 self.device,
                 mode,
             )
+            swap_cost_time = time.time() - start_time
 
             block_num = len(gpu_block_ids)
             keys = k_cache_keys + v_cache_keys
@@ -595,7 +614,13 @@ class CacheTransferManager:
             ]
             kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
             kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+            start_time = time.time()
             self.storage_backend.batch_set(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
+            write_cost_time = time.time() - start_time
+
+            logger.debug(
+                f"_run_write_back_storage, swap_cost_time: {swap_cost_time:.6f}s, write_cost_time: {write_cost_time:.6f}s"
+            )
         except Exception as e:
             logger.error(
                 f"[rank {self.rank}/{self.n_ranks}] An error occurred in _run_write_back_storage: "
@@ -934,29 +959,19 @@ class CacheTransferManager:
             task_cpu_block_id,
         )
 
-    def clear_or_update_caches(self, args):
+    def check_cache_status(self, args):
         # TODO XPU support RL
         if unset_data_ipc is None:
             return
         logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
-        logger.info(f"FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}")
-        kv_cache_status = np.zeros([1], dtype=np.int32)
-        kv_cache_status_signal = IPCSignal(
-            name="kv_cache_status",
-            array=kv_cache_status,
-            dtype=np.int32,
-            suffix=self.ipc_suffix,
-            create=False,
-        )
         while True:
-            if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
+            # handle cache clearing/restoring
+            if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
-                    logger.info(
-                        f"[rank {self.rank}/{self.n_ranks}] Start clearing caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Start clearing caches {self.cache_ready_signal.value}")
                     # clear cpu caches
-                    if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                    if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
                         for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
                             cuda_host_free(ptrs)
@@ -979,49 +994,43 @@ class CacheTransferManager:
 
                     # reset cache_ready_signal
                     self.cache_ready_signal.value[self.rank] = 0
-                    logger.info(
-                        f"[rank {self.rank}/{self.n_ranks}] Finish clearing caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Finish clearing caches {self.cache_ready_signal.value}")
 
                     # wait for all ranks caches to be cleared
                     if np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
 
                     # reset kv_cache_status_signal
-                    kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
-                    logger.info("All ranks finish clearing caches")
+                    self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+                    logger.info(f"All ranks finish clearing caches {self.cache_ready_signal.value}")
 
                 except Exception as e:
-                    logger.error(f"[rank {self.rank}/{self.n_ranks}] Failed to clear caches: {e}")
+                    logger.error(f"Failed to clear caches: {e}")
 
-            elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
+            elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
-                    logger.info(
-                        f"[rank {self.rank}/{self.n_ranks}] Start restoring caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Start restoring caches {self.cache_ready_signal.value}")
                     # restore cpu cache
-                    if envs.FD_ENABLE_SWAP_SPACE_CLEARING:
+                    if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
 
                     # restore gpu cache and set cache_ready_signal
                     self._init_gpu_cache(args)
-                    logger.info(
-                        f"[rank {self.rank}/{self.n_ranks}] Finish restoring caches {self.cache_ready_signal.value}"
-                    )
+                    logger.info(f"Finish restoring caches {self.cache_ready_signal.value}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
                         time.sleep(0.1)
 
                     # set kv_cache_status_signal
-                    logger.info("All ranks finish restoring caches")
-                    kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+                    logger.info(f"All ranks finish restoring caches {self.cache_ready_signal.value}")
+                    self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                 except Exception as e:
-                    logger.error(f"[rank {self.rank}/{self.n_ranks}] Failed to restore caches: {e}")
+                    logger.error(f"Failed to restore caches: {e}")
 
             time.sleep(0.1)
 

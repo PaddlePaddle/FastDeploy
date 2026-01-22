@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
@@ -28,9 +29,9 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
-from .utils import get_tensor
+from .utils import get_tensor, modules_to_convert
 
 
 class RMSNorm(nn.Layer):
@@ -94,9 +95,21 @@ class RMSNorm(nn.Layer):
                 "float16",
             ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        self.quant_round_type: int = (
+            self.fd_config.quant_config.quant_round_type
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_max_bound: int = (
+            self.fd_config.quant_config.quant_max_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_min_bound: int = (
+            self.fd_config.quant_config.quant_min_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
@@ -105,14 +118,14 @@ class RMSNorm(nn.Layer):
         self.tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
         self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
-        is_last_norm = prefix.endswith(".norm")
+        self.is_last_norm = prefix.endswith(".norm")
         self.split_x = (
             self.fd_config.parallel_config.use_sequence_parallel_moe
             and self.layer_id == self.fd_config.model_config.moe_layer_start_index
             and is_input_norm
         )
         self.allgather_out = self.fd_config.parallel_config.use_sequence_parallel_moe and (
-            (self.layer_id > self.fd_config.model_config.moe_layer_start_index and is_input_norm) or is_last_norm
+            (self.layer_id > self.fd_config.model_config.moe_layer_start_index and is_input_norm)
         )
 
         self.init_weight()
@@ -191,7 +204,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
-        external_rmsnorm: Optional[Callable] = None,
+        proxy_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -217,7 +230,7 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
-        if external_rmsnorm is None:
+        if proxy_rmsnorm is None:
             if current_platform.is_gcu():
                 if residual_input is None:
                     norm_out = rms_norm(x, self.weight, self.eps)
@@ -240,7 +253,7 @@ class RMSNorm(nn.Layer):
         else:
             if residual_input is not None:
                 x = x + residual_input
-            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+            norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
@@ -254,6 +267,92 @@ class RMSNorm(nn.Layer):
             out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out, residual_out
+
+
+class QKRMSNorm(nn.Layer):
+    """
+    QK Normalization layer.
+    """
+
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        head_dim: int,
+        q_size: int,
+        kv_size: int,
+        eps: float = 1e-5,
+        prefix: str = "",
+        begin_norm_axis: int = 1,
+        dtype: str = None,
+    ) -> None:
+        super().__init__()
+        self.fd_config = fd_config
+        self.prefix: str = prefix
+        self.head_dim: int = head_dim
+        self.q_weight_key: Optional[str] = f"{prefix}.q_norm.weight"
+        self.k_weight_key: Optional[str] = f"{prefix}.k_norm.weight"
+        self.eps: float = eps
+        self._norm_weight_dtype = dtype
+        if self._norm_weight_dtype is None:
+            self._norm_weight_dtype = self._helper.get_default_dtype()
+        else:
+            assert dtype in [
+                "float32",
+                "bfloat16",
+                "float16",
+            ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
+
+        self.q_size = q_size
+        self.kv_size = kv_size
+
+        self.q_norm = RMSNorm(
+            fd_config,
+            hidden_size=self.head_dim,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.q_norm",
+            begin_norm_axis=begin_norm_axis,
+        )
+        self.k_norm = RMSNorm(
+            fd_config,
+            hidden_size=self.head_dim,
+            eps=fd_config.model_config.rms_norm_eps,
+            prefix=f"{prefix}.k_norm",
+            begin_norm_axis=begin_norm_axis,
+        )
+        self.qk_norm_fused = current_platform.is_cuda() and _TRITON_AVAILABLE
+
+    def load_state_dict(self, state_dict):
+        self.q_norm.load_state_dict(state_dict)
+        self.k_norm.load_state_dict(state_dict)
+
+    def forward(
+        self,
+        qkv_out,
+        forward_meta,
+    ) -> paddle.Tensor:
+        if self.qk_norm_fused and forward_meta.step_use_cudagraph:
+            qkv_out = qk_rmsnorm_fused(
+                qkv_out,
+                self.q_norm.weight,
+                self.k_norm.weight,
+                self.eps,
+                self.q_size,
+                self.kv_size,
+                self.head_dim,
+            )
+        else:
+            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
+
+            q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
+            q_by_head = self.q_norm(q_by_head)[0]
+            q = q_by_head.reshape(q.shape)
+
+            k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
+            k_by_head = self.k_norm(k_by_head)[0]
+            k = k_by_head.reshape(k.shape)
+
+            qkv_out = paddle.concat([q, k, v], axis=-1)
+        return qkv_out
 
 
 class LayerNorm(nn.Layer):

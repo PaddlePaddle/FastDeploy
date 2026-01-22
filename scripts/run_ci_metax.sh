@@ -86,6 +86,7 @@ declare -a FILTERED_PATHS=()
 
 METAX_CI_CASELIST=(
     "tests/metax_ci/test_fused_moe.py"
+    "tests/metax_ci/test_cache_kv_with_rope.py"
     "tests/operators/test_limit_thinking_content_length.py"
     "tests/operators/test_update_inputs_v1.py"
     "tests/operators/test_set_value_by_flags_and_idx.py"
