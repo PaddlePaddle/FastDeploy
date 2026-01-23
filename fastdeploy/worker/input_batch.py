@@ -727,7 +727,10 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
     index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
     for recover_name in recover_list:
-        recover_tensor = getattr(output_cls, recover_name)
+        if isinstance(output_cls, dict):
+            recover_tensor = output_cls[recover_name]
+        else:
+            recover_tensor = getattr(output_cls, recover_name)
         if is_not_swapped:
             res_map[recover_name] = recover_tensor
             continue
