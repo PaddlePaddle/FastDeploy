@@ -165,7 +165,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "start_layer_index": 0,
     "moe_num_shared_experts": 0,
     "moe_layer_start_index": 0,
-    "num_max_dispatch_tokens_per_rank": int(os.getenv('NUM_MAX_DISPATCH_TOKENS_PER_RANK', 128)),
+    "num_max_dispatch_tokens_per_rank": int(os.getenv("NUM_MAX_DISPATCH_TOKENS_PER_RANK", 128)),
     "moe_use_aux_free": False,
     "vocab_size": -1,
     "hidden_dropout_prob": 0.0,
