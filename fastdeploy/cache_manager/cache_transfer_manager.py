@@ -574,13 +574,10 @@ class CacheTransferManager:
             elif self.storage_backend_type == "file":
                 logger.info(f"FileStore read_storage: reading {len(k_cache_keys)} blocks")
                 
-                # 直接使用FileStore的batch_get接口
                 keys = k_cache_keys + v_cache_keys
                 target_locations = []
                 
-                # 为每个block创建tensor目标位置
                 for i, block_id in enumerate(gpu_block_ids):
-                    # 直接使用GPU缓存作为目标位置
                     cpu_block_id = cpu_block_ids[i] if i < len(cpu_block_ids) else i
                     key_buf_ptr = self.storage_key_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
                     val_buf_ptr = self.storage_value_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
@@ -592,7 +589,6 @@ class CacheTransferManager:
                 results = self.storage_backend.batch_get(keys, target_locations, target_sizes)
                 read_cost_time = time.time() - start_time
                 
-                # 统计成功读取的block数量
                 success_block_num = 0
                 for i in range(len(k_cache_keys)):
                     key_result = results[i]

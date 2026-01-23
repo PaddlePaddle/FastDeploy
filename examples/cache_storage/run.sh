@@ -7,7 +7,7 @@ export FD_DEBUG=1
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
-#bash stop.sh
+bash stop.sh
 
 source ./utils.sh
 
