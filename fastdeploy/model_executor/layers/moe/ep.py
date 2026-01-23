@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import traceback
 from abc import abstractmethod
 
 import paddle
@@ -28,8 +29,12 @@ try:
         import paddlefleet.ops.deep_ep as deep_ep
     else:
         from paddle.distributed.communication import deep_ep
-except:
-    logger.warning(f"import deep_ep Failed! {envs.FD_USE_PFCC_DEEP_EP=}")
+except Exception as e:
+    logger.error(
+        f"import deep_ep failed! FD_USE_PFCC_DEEP_EP={envs.FD_USE_PFCC_DEEP_EP}. " f"type={type(e).__name__}, err={e}"
+    )
+    logger.error("Traceback:\n" + traceback.format_exc())
+    raise
 
 from typing import Optional
 
