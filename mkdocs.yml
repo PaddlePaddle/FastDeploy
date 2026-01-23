@@ -103,6 +103,7 @@ plugins:
             Graph Optimization: 图优化
             Data Parallelism: 数据并行
             PLAS: PLAS
+            KV Cache Block Calculation: KV Cache Block 计算
             Supported Models: 支持模型列表
             Benchmark: 基准测试
             Usage: 用法
@@ -162,6 +163,7 @@ nav:
       - Graph Optimization: features/graph_optimization.md
       - Data Parallelism: features/data_parallel_service.md
       - PLAS: features/plas_attention.md
+      - KV Cache Block Calculation: features/kv_cache_block_calculation.md
   - Supported Models: supported_models.md
   - Benchmark: benchmark.md
   - Usage:
