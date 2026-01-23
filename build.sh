@@ -270,6 +270,8 @@ function extract_ops_from_precompiled_wheel() {
 
 function build_custom_ops() {
   if [ "$FD_UNIFY_BUILD" ]; then
+    mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
+
     custom_ops_dir=${OPS_TMP_DIR}/fastdeploy_ops_86
     build_and_install_ops "[86]" "$custom_ops_dir"
 
