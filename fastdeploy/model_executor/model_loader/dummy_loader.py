@@ -52,13 +52,20 @@ class DummyModelLoader(BaseModelLoader):
             paddle.float64,
             paddle.bfloat16,
         )
+        float8_dtypes = (
+            paddle.float8_e4m3fn,
+            paddle.float8_e5m2,
+        )
         with paddle.no_grad():
             for _, param in model.named_parameters():
                 if param is None:
                     continue
                 if not param.shape or 0 in param.shape:
                     continue
-                if param.dtype in float_dtypes:
+                if param.dtype in float8_dtypes:
+                    tmp = (high - low) * paddle.randn(param.shape, dtype=paddle.float16) + low
+                    param.copy_(tmp.cast(param.dtype), False)
+                elif param.dtype in float_dtypes:
                     param.set_value((high - low) * paddle.randn(param.shape, dtype=param.dtype) + low)
                 else:
                     param.set_value(paddle.zeros(param.shape, dtype=param.dtype))
@@ -95,5 +102,5 @@ class DummyModelLoader(BaseModelLoader):
         model.eval()
         self._initialize_dummy_weights(model)
         process_final_after_loading(model, fd_config)
-        logger.info("dummy weight csot time: {}s".format(time.time() - start_dummy_weight_time))
+        logger.info("dummy weight cost time: {}s".format(time.time() - start_dummy_weight_time))
         return model
