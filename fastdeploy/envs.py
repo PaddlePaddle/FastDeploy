@@ -226,16 +226,16 @@ def __dir__():
 def should_use_shm_queue(nnode: int = 1) -> bool:
     """
     Determine whether to use shared memory for Engine-Worker task queue.
-    
+
     Auto-detection logic:
     - If FD_ENGINE_TASK_QUEUE_WITH_SHM is explicitly set, use that value
     - Otherwise, automatically determine based on nnode:
       - Single node (nnode == 1): Use SHM mode (better performance)
       - Multi-node (nnode > 1): Use TCP mode (required for cross-node communication)
-    
+
     Args:
         nnode: Number of nodes in the deployment (default: 1)
-    
+
     Returns:
         bool: True to use SHM mode, False to use TCP mode
     """
@@ -243,7 +243,7 @@ def should_use_shm_queue(nnode: int = 1) -> bool:
     if env_value is not None:
         # User explicitly set the environment variable, respect it
         return bool(int(env_value))
-    
+
     # Auto-detect based on deployment configuration
     # Single node: use SHM for better performance
     # Multi-node: use TCP for cross-node communication
