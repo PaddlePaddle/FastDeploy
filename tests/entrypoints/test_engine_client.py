@@ -148,6 +148,17 @@ def mock_fd_config_with_eplb():
 class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         """Set up test fixtures before each test method."""
+        # Mock main_process_metrics to avoid KeyError
+        self.metrics_mock = Mock()
+        self.metrics_mock.request_params_max_tokens = Mock()
+        self.metrics_mock.prompt_tokens_total = Mock()
+        self.metrics_mock.request_prompt_tokens = Mock()
+        self.metrics_patcher = patch(
+            "fastdeploy.entrypoints.engine_client.main_process_metrics",
+            self.metrics_mock,
+        )
+        self.metrics_patcher.start()
+
         # Create a properly configured tokenizer mock first
         mock_tokenizer = Mock()
         mock_tokenizer.sp_model = Mock()
@@ -289,6 +300,11 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
         self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
 
+    async def asyncTearDown(self):
+        """Clean up test fixtures after each test method."""
+        if hasattr(self, "metrics_patcher"):
+            self.metrics_patcher.stop()
+
     async def test_add_request(self):
         request = {
             "request_id": "test-request-id",
@@ -336,6 +352,18 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         """Set up test fixtures for valid_parameters tests"""
+        # Ensure metrics patching is active
+        if not hasattr(self.__class__, "metrics_patcher") or self.__class__.metrics_patcher is None:
+            self.__class__.metrics_mock = Mock()
+            self.__class__.metrics_mock.request_params_max_tokens = Mock()
+            self.__class__.metrics_mock.prompt_tokens_total = Mock()
+            self.__class__.metrics_mock.request_prompt_tokens = Mock()
+            self.__class__.metrics_patcher = patch(
+                "fastdeploy.entrypoints.engine_client.main_process_metrics",
+                self.__class__.metrics_mock,
+            )
+            self.__class__.metrics_patcher.start()
+
         # Mock the dependencies
         mock_tokenizer = MagicMock()
         mock_tokenizer.sp_model = MagicMock()
@@ -356,7 +384,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         mock_config.parallel_config = MagicMock()
         mock_config.parallel_config.tensor_parallel_rank = 0
         mock_config.parallel_config.local_data_parallel_id = 0
-        mock_config.parallel_config.tensor_parallel_size = 1  # Add this missing attribute
+        # Fix: Use actual integer instead of Mock for tensor_parallel_size
+        mock_config.parallel_config.tensor_parallel_size = 1
         mock_config.scheduler_config = MagicMock()
         mock_config.scheduler_config.splitwise_role = None
         mock_config.cache_config = MagicMock()  # Add cache_config
@@ -1121,30 +1150,30 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         # Use real enum value instead of mock
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
 
-        result, message = self.engine_client.update_model_weight()
+        status_code, message = self.engine_client.update_model_weight()
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("model weight is updated", message["msg"])
 
     def test_update_model_weight_already_updating(self):
         """Test update_model_weight when already updating."""
         # Use real enum value
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.UPDATING])
 
-        result, message = self.engine_client.update_model_weight()
+        status_code, message = self.engine_client.update_model_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is updating model weight already")
+        self.assertEqual(status_code, 400)
+        self.assertIn("worker is updating model weight already", message["msg"])
 
     def test_update_model_weight_clearing(self):
         """Test update_model_weight when clearing weights."""
         # Use real enum value
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARING])
 
-        result, message = self.engine_client.update_model_weight()
+        status_code, message = self.engine_client.update_model_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is clearing model weight, cannot update now")
+        self.assertEqual(status_code, 403)
+        self.assertIn("worker is clearing model weight, cannot update now", message["msg"])
 
     def test_update_model_weight_timeout(self):
         """Test update_model_weight timeout scenario."""
@@ -1159,40 +1188,40 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         # For prefix_tree, set to NORMAL to avoid getting stuck in prefix tree loop
         self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.NORMAL])
 
-        result, message = self.engine_client.update_model_weight(timeout=1)
+        status_code, message = self.engine_client.update_model_weight(timeout=1)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Update model weight timeout")
+        self.assertEqual(status_code, 404)
+        self.assertIn("update model weight timeout", message["msg"])
 
     def test_clear_load_weight_already_cleared(self):
         """Test clear_load_weight when weights are already cleared."""
         # Use real enum value instead of mock
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
 
-        result, message = self.engine_client.clear_load_weight()
+        status_code, message = self.engine_client.clear_load_weight()
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("model weight is cleared", message["msg"])
 
     def test_clear_load_weight_already_clearing(self):
         """Test clear_load_weight when already clearing."""
         # Use real enum value
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARING])
 
-        result, message = self.engine_client.clear_load_weight()
+        status_code, message = self.engine_client.clear_load_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is clearing model weight already")
+        self.assertEqual(status_code, 400)
+        self.assertIn("worker is clearing model weight already", message["msg"])
 
     def test_clear_load_weight_updating(self):
         """Test clear_load_weight when updating weights."""
         # Use real enum value
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.UPDATING])
 
-        result, message = self.engine_client.clear_load_weight()
+        status_code, message = self.engine_client.clear_load_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is updating model weight, cannot clear now")
+        self.assertEqual(status_code, 403)
+        self.assertIn("worker is updating model weight, cannot clear now", message["msg"])
 
     def test_clear_load_weight_timeout(self):
         """Test clear_load_weight timeout scenario."""
@@ -1205,10 +1234,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         # For prefix_tree, set to CLEARED to avoid getting stuck in prefix tree loop
         self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.CLEARED])
 
-        result, message = self.engine_client.clear_load_weight(timeout=1)
+        status_code, message = self.engine_client.clear_load_weight(timeout=1)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Clear model weight timeout")
+        self.assertEqual(status_code, 404)
+        self.assertIn("clear model weight timeout", message["msg"])
 
     def test_check_model_weight_status(self):
         """Test check_model_weight_status returns correct status."""
@@ -2072,10 +2101,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
             self.engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.NORMAL
 
         with patch("time.sleep", side_effect=fake_sleep):
-            result, message = self.engine_client.update_model_weight(timeout=1)
+            status_code, message = self.engine_client.update_model_weight(timeout=1)
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("update model weight successfully", message["msg"])
 
     def test_clear_load_weight_with_cache_transfer(self):
         """Test clear_load_weight with cache transfer enabled."""
@@ -2088,10 +2117,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
             self.engine_client.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARED
 
         with patch("time.sleep", side_effect=fake_sleep):
-            result, message = self.engine_client.clear_load_weight(timeout=1)
+            status_code, message = self.engine_client.clear_load_weight(timeout=1)
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("clear model weight successfully", message["msg"])
 
     def test_prefix_tree_update_and_clear_paths(self):
         """Test prefix tree update/clear paths with prefix caching enabled."""
@@ -2104,10 +2133,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
             self.engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
 
         with patch("time.sleep", side_effect=fake_sleep_update):
-            result, message = self.engine_client.update_model_weight(timeout=1)
+            status_code, message = self.engine_client.update_model_weight(timeout=1)
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("model weight is updated", message["msg"])
 
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
         self.engine_client.prefix_tree_status_signal.value = np.array([PrefixTreeStatus.NORMAL])
@@ -2116,10 +2145,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
             self.engine_client.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARED
 
         with patch("time.sleep", side_effect=fake_sleep_clear):
-            result, message = self.engine_client.clear_load_weight(timeout=1)
+            status_code, message = self.engine_client.clear_load_weight(timeout=1)
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(status_code, 200)
+        self.assertIn("model weight is cleared", message["msg"])
 
     def test_prefix_tree_update_timeout(self):
         """Test update_model_weight prefix tree timeout path."""
@@ -2129,10 +2158,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.CLEARED])
 
         with patch("time.sleep", return_value=None):
-            result, message = self.engine_client.update_model_weight(timeout=0)
+            status_code, message = self.engine_client.update_model_weight(timeout=0)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Update prefix tree timeout")
+        self.assertEqual(status_code, 404)
+        self.assertIn("update prefix tree timeout", message["msg"])
 
     def test_prefix_tree_clear_timeout(self):
         """Test clear_load_weight prefix tree timeout path."""
@@ -2142,10 +2171,10 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         self.engine_client.model_weights_status_signal.value = np.array([ModelWeightsStatus.NORMAL])
 
         with patch("time.sleep", return_value=None):
-            result, message = self.engine_client.clear_load_weight(timeout=0)
+            status_code, message = self.engine_client.clear_load_weight(timeout=0)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Clear prefix tree timeout")
+        self.assertEqual(status_code, 404)
+        self.assertIn("clear prefix tree timeout", message["msg"])
 
     def test_abort_with_request_suffix_and_disconnect_flag(self):
         """Test abort sends requests with suffix when disconnect flag is enabled."""
