@@ -14,6 +14,9 @@
 # limitations under the License.
 """
 
+import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton.language as tl
 
 from fastdeploy.model_executor.ops.triton_ops.triton_utils_v2 import (

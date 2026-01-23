@@ -22,6 +22,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Check if llguidance can be imported
+import fastdeploy  # noqa: F401
+
 HAS_LLGUIDANCE = False
 try:
     import llguidance

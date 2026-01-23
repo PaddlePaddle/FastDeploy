@@ -20,6 +20,8 @@ import re
 import sys
 
 import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton
 from paddle.base.framework import OpProtoHolder
 

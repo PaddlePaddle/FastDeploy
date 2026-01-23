@@ -7,6 +7,8 @@ from collections.abc import Callable
 from typing import Any, Dict
 
 import paddle
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton
 import triton.language as tl
 

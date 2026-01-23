@@ -54,7 +54,7 @@ from fastdeploy.utils import (
     get_version_info,
 )
 
-paddle.compat.enable_torch_proxy(scope={"triton"})
+# paddle.compat.enable_torch_proxy(scope={"triton"})
 # paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
 # specifically for the 'triton' module. This means `import torch` inside 'triton'
 # will actually import paddle's compatibility layer (acting as torch).

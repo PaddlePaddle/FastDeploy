@@ -24,6 +24,8 @@ from typing import Dict, List, Optional
 
 import paddle
 import paddle.distributed as dist
+
+paddle.compat.enable_torch_proxy(scope={"triton"})
 import triton
 import triton.language as tl
 from paddleformers.utils.log import logger

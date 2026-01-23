@@ -54,7 +54,7 @@ def setup_and_run_server():
     if base_path:
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
-        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+        model_path = "/root/paddlejob/workspace/env_run/output/tbh/ERNIE-4.5-21B-A3B-Paddle"
 
     log_path = "server.log"
     cmd = [
@@ -785,7 +785,7 @@ def test_non_streaming_chat_with_bad_words(openai_client, capsys):
     if base_path:
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
-        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+        model_path = "/root/paddlejob/workspace/env_run/output/tbh/ERNIE-4.5-21B-A3B-Paddle"
     response_0 = openai_client.chat.completions.create(
         model="default",
         messages=[{"role": "user", "content": "Hello, how are you?"}],
@@ -942,7 +942,7 @@ def test_non_streaming_completion_with_bad_words(openai_client, capsys):
     if base_path:
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
-        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+        model_path = "/root/paddlejob/workspace/env_run/output/tbh/ERNIE-4.5-21B-A3B-Paddle"
 
     response_0 = openai_client.completions.create(
         model="default",
