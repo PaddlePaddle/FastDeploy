@@ -290,7 +290,7 @@ class CacheTransferManager:
                 )
                 logger.info("Initialized attention store successfully!")
             else:
-                raise NotImplementedError(f"Unsupported storage backend: {args.storage_backend_type}")
+                raise NotImplementedError(f"Unsupported storage backend: {self.storage_backend_type}")
         except Exception as e:
             err_msg = f"Fail to initialize storage backend, {e}, traceback: {traceback.format_exc()}"
             logger.error(err_msg)
