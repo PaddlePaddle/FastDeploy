@@ -1232,7 +1232,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").cpu()
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
-        self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
         self.share_inputs["bad_tokens_len"] = [-1] * max_num_seqs
@@ -1844,7 +1843,6 @@ class GPUModelRunner(ModelRunnerBase):
             eos_token_id=self.share_inputs["eos_token_id"],
             not_need_stop=self.share_inputs["not_need_stop"],
             input_ids=self.share_inputs["input_ids"],
-            stop_nums=self.share_inputs["stop_nums"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_block_step=self.share_inputs["is_block_step"],
@@ -1946,7 +1944,6 @@ class GPUModelRunner(ModelRunnerBase):
             eos_token_id=self.share_inputs["eos_token_id"],
             not_need_stop=self.share_inputs["not_need_stop"],
             input_ids=self.share_inputs["input_ids"],
-            stop_nums=self.share_inputs["stop_nums"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_block_step=self.share_inputs["is_block_step"],
@@ -2378,7 +2375,6 @@ class GPUModelRunner(ModelRunnerBase):
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],
                 input_ids=self.share_inputs["input_ids"],
-                stop_nums=self.share_inputs["stop_nums"],
                 seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
                 seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
                 is_block_step=self.share_inputs["is_block_step"],
@@ -2499,7 +2495,6 @@ class GPUModelRunner(ModelRunnerBase):
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],
                 input_ids=self.share_inputs["input_ids"],
-                stop_nums=self.share_inputs["stop_nums"],
                 seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
                 seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
                 is_block_step=self.share_inputs["is_block_step"],
@@ -2581,7 +2576,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["accept_tokens"],
                     self.share_inputs["is_block_step"],
                     self.share_inputs["not_need_stop"],
-                    self.share_inputs["stop_nums"],
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
