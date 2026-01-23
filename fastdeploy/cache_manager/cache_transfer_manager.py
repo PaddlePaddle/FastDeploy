@@ -1078,10 +1078,9 @@ class CacheTransferManager:
                         for name, tensor in self.gpu_cache_kvs.items():
                             unset_data_ipc(tensor, name, True, False)
                         logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
+                        self.cache_ready_signal.value[self.rank] = 0
 
-                    # reset cache_ready_signal
-                    # self.cache_ready_signal.value[self.rank] = 0
-                    if np.sum(self.cache_ready_signal.value) != 0:
+                    while np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
                     logger.info("[RL] all ranks cleared caches!")
 
