@@ -237,10 +237,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         # 2. Dynamic compute blockwise quantization scales
-        x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
-        )
-        x_scale_tensor = x_scale_tensor[: x.shape[0]]
+        if x.shape[0] > 0:
+            # NOTE: fp8_quant_blockwise dose not support x.shape[0] == 0.
+            x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                x, using_pow2_scale=False, output_scale_transpose=False
+            )
+            x_scale_tensor = x_scale_tensor[: x.shape[0]]
+        else:
+            x = x.cast(paddle.float8_e4m3fn) 
+            x_scale_tensor = paddle.empty([0, hidden_size // self.quant_config.weight_block_size[0]], dtype=paddle.float32)
 
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
