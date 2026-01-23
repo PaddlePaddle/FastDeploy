@@ -142,6 +142,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.share_inputs.init_share_inputs()
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
+        model_runner.exist_prefill_flag = False
 
         if dist.get_rank() == 0:
             model_runner.share_inputs["ids_remove_padding"] = paddle.ones([10])
@@ -169,7 +170,7 @@ class TestChunkedMoE(unittest.TestCase):
 
         assert self.model_runner.forward_meta.max_moe_num_chunk == 5, (
             f"chunk size is 2, max token_num is 10, max_moe_num_chunk should be 5, "
-            f"but got {self.model_runner.forward_meta.max_moe_num_chunk }"
+            f"but got {self.model_runner.forward_meta.max_moe_num_chunk}"
         )
         if dist.get_rank() == 0:
             assert self.model_runner.forward_meta.moe_num_chunk == 5, (
