@@ -556,6 +556,7 @@ class LLMEngine:
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --rsync_config '{json.dumps(self.cfg.load_config.rsync_config)}'"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
