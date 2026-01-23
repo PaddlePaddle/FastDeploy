@@ -27,6 +27,7 @@ from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
 from fastdeploy.utils import register_custom_python_op
 from fastdeploy.worker.tbo import let_another_thread_run
 
+from ..utils import get_sm_version
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
@@ -41,7 +42,25 @@ try:
         from paddle.distributed.communication import deep_ep
 except:
     logger.warning("import deep_ep Failed!")
-import deep_gemm
+
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda():
+    if get_sm_version() == 100:
+        from deep_gemm import (
+            m_grouped_fp8_gemm_nt_contiguous,
+            m_grouped_fp8_gemm_nt_masked,
+        )
+    else:
+        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
+            m_grouped_gemm_fp8_fp8_bf16_nt_contiguous as m_grouped_fp8_gemm_nt_contiguous,
+        )
+        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
+            m_grouped_gemm_fp8_fp8_bf16_nt_masked as m_grouped_fp8_gemm_nt_masked,
+        )
+else:
+    m_grouped_fp8_gemm_nt_contiguous = None
+    m_grouped_fp8_gemm_nt_masked = None
 
 
 def m_grouped_fp8_gemm_nt_contiguous_custom_python_op_infermeta(
@@ -91,12 +110,12 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         (permute_input.shape[0], layer_added_weight_attrs_0.shape[1]),
         dtype=paddle.bfloat16,
     )
-    deep_gemm.m_grouped_fp8_gemm_nt_contiguous(
+    # disable_ue8m0_cast is False for SM100
+    m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
         (layer_added_weight_attrs_0, layer_added_scale_attrs_0),
         ffn_out,
         m_indices,
-        disable_ue8m0_cast=disable_ue8m0_cast,
     )
 
     # swiglu
@@ -114,12 +133,12 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         (permute_input.shape[0], layer_added_weight_attrs_1.shape[1]),
         dtype=paddle.bfloat16,
     )
-    deep_gemm.m_grouped_fp8_gemm_nt_contiguous(
+    # disable_ue8m0_cast is False for SM100
+    m_grouped_fp8_gemm_nt_contiguous(
         (ffn_in_x, ffn_in_x_scale_tensor),
         (layer_added_weight_attrs_1, layer_added_scale_attrs_1),
         ffn_out,
         m_indices,
-        disable_ue8m0_cast=disable_ue8m0_cast,
     )
     return ffn_out
 
@@ -325,12 +344,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 (token_all_num, getattr(layer, self.added_weight_attrs[0]).shape[1]),
                 dtype=paddle.bfloat16,
             )
-            deep_gemm.m_grouped_fp8_gemm_nt_contiguous(
+            # disable_ue8m0_cast is False for SM100
+            m_grouped_fp8_gemm_nt_contiguous(
                 (permute_input, permute_scale),
                 (getattr(layer, self.added_weight_attrs[0]), getattr(layer, self.added_scale_attrs[0])),
                 ffn_out,
                 m_indices,
-                disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
             )
             del permute_input
 
@@ -350,12 +369,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
             )
-            deep_gemm.m_grouped_fp8_gemm_nt_contiguous(
+            # disable_ue8m0_cast is False for SM100
+            m_grouped_fp8_gemm_nt_contiguous(
                 (ffn_in_x, ffn_in_x_scale_tensor),
                 (getattr(layer, self.added_weight_attrs[1]), getattr(layer, self.added_scale_attrs[1])),
                 ffn_out,
                 m_indices,
-                disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
             )
             del ffn_in_x
 
@@ -425,7 +444,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         expected_m = 128
-        deep_gemm.m_grouped_fp8_gemm_nt_masked(
+        # disable_ue8m0_cast is False for SM100
+        m_grouped_fp8_gemm_nt_masked(
             permute_input,
             (
                 getattr(layer, self.added_weight_attrs[0]),
@@ -434,7 +454,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             up_gate_proj_out,
             token_nums_per_expert,
             expected_m,
-            disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
         act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
 
@@ -445,7 +464,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
         )
 
-        deep_gemm.m_grouped_fp8_gemm_nt_masked(
+        # disable_ue8m0_cast is False for SM100
+        m_grouped_fp8_gemm_nt_masked(
             (act_out_fp8, scale),
             (
                 getattr(layer, self.added_weight_attrs[1]),
@@ -454,7 +474,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_out,
             token_nums_per_expert,
             expected_m,
-            disable_ue8m0_cast=not self.quant_config.deepgemm_scale_ue8m0,
         )
         # 4. EP combine
         return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)

@@ -16,8 +16,19 @@
 
 import paddle
 
-paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-import deep_gemm
+from fastdeploy.platforms import current_platform
+
+from ..utils import get_sm_version
+
+if current_platform.is_cuda():
+    if get_sm_version() == 100:
+        # SM100 should use PFCC DeepGemm
+        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+        import deep_gemm
+    else:
+        from fastdeploy.model_executor.ops.gpu import deep_gemm
+else:
+    deep_gemm = None
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -26,54 +37,6 @@ def ceil_div(x: int, y: int) -> int:
 
 def ceil_align(x: int, y: int) -> int:
     return ceil_div(x, y) * y
-
-
-def create_per_token_group_quant_fp8_output_scale(
-    x_shape,
-    device,
-    group_size,
-    column_major_scales: bool,
-    scale_tma_aligned: bool,
-    scale_ue8m0: bool,
-):
-    if scale_ue8m0:
-        assert column_major_scales and scale_tma_aligned
-        *x_batch, x_q_mn, x_q_k = x_shape
-        x_s_mn, x_s_k = x_q_mn, x_q_k // 128
-        aligned_mn = ceil_align(x_s_mn, 4)
-        aligned_k = ceil_align(x_s_k, 4)
-        # TODO(FIXME): Fix cuda kernel and recover here to empty.
-        return paddle.empty(
-            (*x_batch, aligned_k // 4, aligned_mn),
-            device=device,
-            dtype=paddle.int,
-        ).transpose(
-            -1, -2
-        )[..., :x_s_mn, :]
-    elif column_major_scales:
-        if scale_tma_aligned:
-            # TODO extract "align" function
-            # aligned to 4 * sizeof(float)
-            aligned_size = (x_shape[-2] + 3) // 4 * 4
-            return paddle.empty(
-                x_shape[:-2] + (x_shape[-1] // group_size, aligned_size),
-                device=device,
-                dtype=paddle.float32,
-            ).transpose(-1, -2)[: x_shape[-2], :]
-        else:
-            # 未对齐的列主序layouts
-            return paddle.empty(
-                (x_shape[-1] // group_size,) + x_shape[:-1],
-                device=device,
-                dtype=paddle.float32,
-            ).permute(-1, -2)
-    else:
-        # 行主序layouts
-        return paddle.empty(
-            x_shape[:-1] + (x_shape[-1] // group_size,),
-            device=device,
-            dtype=paddle.float32,
-        )
 
 
 def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
@@ -143,52 +106,5 @@ def quant_weight_ue8m0(weight_dequant, weight_block_size):
             ceil_div(k, weight_block_size[1]),
         )
     )
-
-    return out_w, out_s
-
-
-def block_quant_dequant(
-    x_q_block,
-    x_s,
-    block_size,
-    dtype,
-):
-    """This function converts block-wise quantization to unquantized.
-    The inputs are block-wise quantization tensor `x_q_block`, block-wise quantization scale
-    and the block size.
-    The output is an unquantized tensor with dtype.
-    """
-    block_n, block_k = block_size[0], block_size[1]
-    *_, n, k = x_q_block.shape
-
-    # ... n_scale k_scale -> ... (n_scale block_n) (k_scale block_k)
-    x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(block_k, dim=-1)
-    x_scale_repeat = x_scale_repeat[..., :n, :k]
-
-    return (x_q_block.to(paddle.float32) * x_scale_repeat).to(dtype)
-
-
-def requant_weight_ue8m0(
-    weight,
-    weight_scale_inv,
-    weight_block_size,
-):
-    assert weight_block_size == [128, 128]
-
-    *_, n, k = weight.shape
-
-    weight_dequant = block_quant_dequant(
-        weight,
-        weight_scale_inv,
-        weight_block_size,
-        paddle.bfloat16,
-    )
-
-    out_w, out_s = quant_weight_ue8m0(
-        weight_dequant=weight_dequant,
-        weight_block_size=weight_block_size,
-    )
-
-    out_s = transform_scale_ue8m0(out_s, mn=out_w.shape[-2], weight_block_size=weight_block_size)
 
     return out_w, out_s

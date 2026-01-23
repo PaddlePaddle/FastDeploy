@@ -252,7 +252,7 @@ function extract_ops_from_precompiled_wheel() {
 
   echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
   mkdir -p "$DST_DIR"
-
+  cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
   # Check for modern Python packaging approach (fastdeploy_ops directory)
   # If exists, copy the entire directory; otherwise, fall back to legacy method (individual files)
   if [ -d "$SRC_DIR/fastdeploy_ops" ]; then
@@ -306,8 +306,6 @@ function build_and_install_ops() {
   copy_ops
 
   cd ..
-
-  build_deep_gemm
 }
 
 function build_and_install() {
@@ -360,25 +358,6 @@ function abort() {
   ${python} -m pip uninstall -y fastdeploy-${DEVICE_TYPE}
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
-}
-
-function build_deep_gemm() {
-  # TODO: remove this function and import deep_gemm from paddlefleet
-  echo -e "${BLUE}[build]${NONE} building and installing deep_gemm..."
-  DEEPGEMM_SRC_DIR="custom_ops/third_party/DeepGEMM"
-  rm -rf $DEEPGEMM_SRC_DIR
-  git submodule update --init --recursive
-  cd $DEEPGEMM_SRC_DIR
-  git submodule update --init
-  bash install.sh
-
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}[FAIL]${NONE} build DeepGEMM failed ${NONE}"
-    exit 1
-  fi
-  echo -e "${BLUE}[build]${NONE} ${GREEN}build DeepGEMM success ${NONE}"
-
-  cd ../../../
 }
 
 python_version_check

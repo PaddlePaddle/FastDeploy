@@ -18,9 +18,6 @@ from typing import Optional
 
 import paddle
 
-paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-import deep_gemm
-
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
@@ -37,10 +34,23 @@ from fastdeploy.model_executor.utils import (
     process_weight_transpose,
     set_weight_attrs,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import register_custom_python_op
 
 from ..utils import get_sm_version, get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
+
+if current_platform.is_cuda():
+    if get_sm_version() == 100:
+        # SM100 should use PFCC DeepGemm
+        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+        from deep_gemm import fp8_gemm_nt
+    else:
+        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
+            gemm_fp8_fp8_bf16_nt as fp8_gemm_nt,
+        )
+else:
+    fp8_gemm_nt = None
 
 
 class BlockWiseFP8Config(QuantConfigBase):
@@ -113,14 +123,13 @@ def deep_gemm_fp8_gemm_nt(
     layer_weight: paddle.Tensor,
     layer_weight_scale_inv: paddle.Tensor,
     linear_out: paddle.Tensor,
-    disable_ue8m0_cast: bool,
     layer_output_size: int,
 ):
-    deep_gemm.fp8_gemm_nt(
+    # disable_ue8m0_cast is default False for SM100
+    fp8_gemm_nt(
         (x, x_scale_tensor),
         (layer_weight, layer_weight_scale_inv),
         linear_out,
-        disable_ue8m0_cast=disable_ue8m0_cast,
     )
     return linear_out
 
@@ -281,11 +290,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         if x.shape[0] == 0:
             return linear_out
 
-        # x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
-        #     x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
-        # )
-        # x_scale_tensor = x_scale_tensor[: x.shape[0], ...]
-
         x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
             x,
             using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
@@ -299,7 +303,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             layer.weight,
             layer.weight_scale_inv,
             linear_out,
-            disable_ue8m0_cast=(not self.quant_config.deepgemm_scale_ue8m0),
             layer_output_size=layer.output_size,
         )
         if layer.with_bias:

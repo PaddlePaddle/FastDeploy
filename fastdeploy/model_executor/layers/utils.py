@@ -254,7 +254,10 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     Only used in deep_gemm block wise quant weight.
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
     """
-    from deep_gemm import ceil_div
+    try:
+        from deep_gemm import ceil_div
+    except ModuleNotFoundError:
+        from fastdeploy.model_executor.ops.gpu.deep_gemm import ceil_div
 
     assert x.dim() == 2
     m, n = x.shape
