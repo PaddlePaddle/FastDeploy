@@ -1371,11 +1371,15 @@ class GPUModelRunner(ModelRunnerBase):
                 if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
             ]
             if len(logprobs_reqs):
-                self.max_logprobs = max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
+                self.max_logprobs = (
+                    max(
+                        [
+                            self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                            for req in logprobs_reqs
+                        ]
+                    )
+                    if not self.speculative_decoding
+                    else 20
                 )
                 self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
                 self.top_p_normalized_logprobs = any(

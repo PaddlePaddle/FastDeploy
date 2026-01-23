@@ -26,7 +26,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12
 
 ``` shell
 # Install stable release
-python -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # Install latest Nightly build
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
@@ -38,7 +38,7 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 
 ```
 # 安装稳定版本fastdeploy
-python -m pip install fastdeploy-gpu==2.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -48,7 +48,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 
 ```
 # 安装稳定版本fastdeploy
-python -m pip install fastdeploy-gpu==2.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+python -m pip install fastdeploy-gpu==2.4.0 -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # 安装Nightly Build的最新版本fastdeploy
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/fastdeploy-gpu-86_89/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -70,7 +70,7 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，编译安装
@@ -98,7 +98,7 @@ FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，拉取 whl 包并安装

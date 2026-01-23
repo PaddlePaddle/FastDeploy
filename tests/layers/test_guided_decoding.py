@@ -11,10 +11,12 @@ import paddle
 
 mock_torch = MagicMock()
 mock_xgrammar = MagicMock()
-sys.modules["torch"] = mock_torch
 sys.modules["xgrammar"] = mock_xgrammar
 
+sys.modules["torch"] = None
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
+
+sys.modules["torch"] = mock_torch
 from fastdeploy.model_executor.layers.sample.sampler import GuidedDecoding
 from fastdeploy.reasoning import ReasoningParser
 
