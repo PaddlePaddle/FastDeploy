@@ -113,7 +113,7 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         default=None,
-        choices=["mooncake", "attention_store", "none"],
+        choices=["mooncake", "attention_store"],
         help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
@@ -269,14 +269,14 @@ class CacheTransferManager:
         self.storage_backend_type = args.kvcache_storage_backend
 
         try:
-            if args.kvcache_storage_backend is None or args.kvcache_storage_backend == "none":
+            if self.kvcache_storage_backend is None:
                 self.storage_backend = None
-            elif args.kvcache_storage_backend == "mooncake":
+            elif self.kvcache_storage_backend == "mooncake":
                 logger.info("Start initialize mooncake store...")
                 self.storage_backend = MooncakeStore(tp_rank=self.rank)
                 self._init_storage_buffer(args)
                 logger.info("Initialized mooncake store successfully")
-            elif args.kvcache_storage_backend == "attention_store":
+            elif self.kvcache_storage_backend == "attention_store":
                 logger.info("Start initialize attention store...")
                 self.storage_backend = AttentionStore(
                     namespace=self.model_id,
@@ -1152,11 +1152,12 @@ class CacheTransferManager:
                     self._init_gpu_cache(args)
                     logger.debug("[RL] successfully restored gpu caches")
 
-                    # update version
-                    version_file_path = os.path.join(args.model_path, "version.yaml")
-                    assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
-                    self.key_prefix = get_version(version_file_path)
-                    logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+                    if self.kvcache_storage_backend is not None:
+                        # use key_prefix to distinguish cache for different version of weight in rl
+                        version_file_path = os.path.join(args.model_path, "version.yaml")
+                        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
+                        self.key_prefix = get_version(version_file_path)
+                        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:

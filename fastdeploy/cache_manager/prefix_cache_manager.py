@@ -270,9 +270,9 @@ class PrefixCacheManager:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
-            kvcache_storage_backend_str = cache_config.kvcache_storage_backend
+            storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
         else:
-            kvcache_storage_backend_str = "none"
+            storage_arg_str = " "
 
         if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
@@ -303,7 +303,7 @@ class PrefixCacheManager:
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
                     + (" --create_cache_tensor" if not self.enable_splitwise else "")
-                    + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
+                    + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" --model_path {self.config.model_config.model}"
