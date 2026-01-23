@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import List, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import paddle
@@ -139,6 +139,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
+        self.exist_prefill_flag = False
 
         # VL model config:
         if self.enable_mm:
@@ -251,6 +252,8 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill stage exist
         """
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            return self.exist_prefill_flag
         return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
 
     def exist_decode(self):
@@ -713,6 +716,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.seq_lens_this_time_buffer[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                self.exist_prefill_flag = True
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
@@ -736,6 +740,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    self.exist_prefill_flag = False
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -756,6 +761,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.exist_prefill_flag = False
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
@@ -1151,6 +1157,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
+            self.exist_prefill_flag = True
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.share_inputs["prompt_lens"][idx : idx + 1] = 0
             self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -1521,7 +1528,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
 
-            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
+            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
 
         # 2. Load lora model
 
@@ -1873,6 +1880,7 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
         )
+        self.exist_prefill_flag = False
         return pooler_output
 
     def _dummy_sampler_run(
@@ -1977,6 +1985,7 @@ class GPUModelRunner(ModelRunnerBase):
             line_break_id=self.model_config.line_break_id,
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
+        self.exist_prefill_flag = False
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(
@@ -2584,6 +2593,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
+        self.exist_prefill_flag = False
         # Routing replay
         if self.fd_config.routing_replay_config.enable_routing_replay:
             if (
@@ -2804,6 +2814,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
+
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
 
     def padding_cudagraph_inputs(self) -> None:
         """
