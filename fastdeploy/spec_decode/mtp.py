@@ -850,7 +850,7 @@ class MTPProposer(Proposer):
                 # Note(liuzichang):
                 # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
-                    self.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
+                    self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -985,7 +985,7 @@ class MTPProposer(Proposer):
                 )
 
                 if self.num_model_steps > 1:
-                    self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+                    self.model_inputs.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -1041,7 +1041,7 @@ class MTPProposer(Proposer):
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
-            self.last_seq_lens_this_time,
+            self.model_inputs.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
         )
