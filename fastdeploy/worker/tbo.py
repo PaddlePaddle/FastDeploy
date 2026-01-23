@@ -70,7 +70,7 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
     res[1].tbo_microbatch_id = 1
     total_token_num = forward_meta.ids_remove_padding.shape[0]
 
-    if total_token_num < split_num:
+    if total_token_num < 1024:
         return res
 
     chunk_token_num = (total_token_num + split_num - 1) // split_num
@@ -95,7 +95,6 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
         detect_pos += 1
         if detect_pos >= len(ids_remove_padding_cpu):
             return res
-            break
     split_sections[0] = detect_pos
 
     for i in range(0, split_num):
