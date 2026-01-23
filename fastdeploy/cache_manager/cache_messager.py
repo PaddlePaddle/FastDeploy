@@ -98,6 +98,7 @@ def parse_args():
         help="speculative config",
     )
     parser.add_argument("--local_data_parallel_id", type=int, default=0)
+    parser.add_argument("--nnode", type=int, default=1, help="number of nodes in deployment")
 
     args = parser.parse_args()
     return args
@@ -1020,6 +1021,7 @@ def main():
             gpu_id=device,
             rdma_port=args.rdma_port,
             cache_dtype=args.cache_dtype,
+            nnode=args.nnode,
         )
     else:
         cache_messager = CacheMessager(
@@ -1035,6 +1037,7 @@ def main():
             gpu_id=device,
             rdma_port=args.rdma_port,
             cache_dtype=args.cache_dtype,
+            nnode=args.nnode,
         )
 
     cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
