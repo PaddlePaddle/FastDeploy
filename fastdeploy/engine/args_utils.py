@@ -629,7 +629,6 @@ class EngineArgs:
                 for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
-            console_logger.debug(f"post init {name}: {ports}")
             return ports
 
         num_nodes = len(self.ips) if self.ips else 1
@@ -1077,7 +1076,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake"],
+            choices=["mooncake", "attention_store"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )
