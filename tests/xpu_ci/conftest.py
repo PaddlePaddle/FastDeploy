@@ -437,7 +437,7 @@ def restore_pd_ep_env(original_values):
     restore_pd_env(original_values)
 
 
-def setup_logprobs_env():
+def setup_logprobs_zmq_env():
     """
     设置logprobs相关环境变量
 
@@ -447,8 +447,6 @@ def setup_logprobs_env():
     env_vars = {
         "FD_USE_GET_SAVE_OUTPUT_V1": "1",
     }
-    os.system("sysctl -w kernel.msgmax=131072")
-    os.system("sysctl -w kernel.msgmnb=33554432")
 
     # 保存原始值
     original_values = {}
