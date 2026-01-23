@@ -128,6 +128,15 @@ def parse_args():
     return args
 
 
+def get_version(version_file_path):
+    # the format of version string is RL-STEP{xx}-{timestamp}-{uuid4}
+    with open(version_file_path, "r", encoding="utf-8") as f:
+        line = f.read().strip()
+        parts = line.split("-", 2)
+        key_prefix = "-".join(parts[:2])
+        return key_prefix
+
+
 class CacheTransferManager:
     """
     管理CPU和GPU之间缓存的交换传输
@@ -281,7 +290,7 @@ class CacheTransferManager:
             else:
                 raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
         except Exception as e:
-            err_msg = f"Fail to initialize storage backend: {e}, traceback: {traceback.format_exc()}"
+            err_msg = f"Fail to initialize storage backend, {e}, traceback: {traceback.format_exc()}"
             logger.error(err_msg)
             console_logger.error(err_msg)  # print error message to console
             raise
@@ -293,8 +302,8 @@ class CacheTransferManager:
         self.key_prefix = ""
         version_file_path = os.path.join(args.model_path, "version.yaml")
         if os.path.exists(version_file_path):
-            with open(version_file_path, "r", encoding="utf-8") as f:
-                self.key_prefix = f.read().strip()
+            self.key_prefix = get_version(version_file_path)
+        logger.info(f"The key_prefix of cache storage is {self.key_prefix}")
 
         logger.info("Initialize cache storage successfully")
 
@@ -586,8 +595,8 @@ class CacheTransferManager:
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
             match_block_num = 0
             if self.storage_backend_type == "mooncake":
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
@@ -723,8 +732,8 @@ class CacheTransferManager:
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
 
             match_block_num = 0
             if self.storage_backend_type == "mooncake":
@@ -1144,9 +1153,8 @@ class CacheTransferManager:
                     # update version
                     version_file_path = os.path.join(args.model_path, "version.yaml")
                     assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
-                    with open(version_file_path, "r", encoding="utf-8") as f:
-                        self.key_prefix = f.read().strip()
-                        logger.info(f"Update key_prefix to {self.key_prefix}")
+                    self.key_prefix = get_version(version_file_path)
+                    logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
