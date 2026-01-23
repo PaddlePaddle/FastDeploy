@@ -571,7 +571,6 @@ DeltaFunctionCall:
     arguments: Optional[str] = None
 ```
 
-
 # Other Endpoints
 
 **Operational control endpoints**
