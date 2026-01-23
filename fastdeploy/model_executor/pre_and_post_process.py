@@ -388,7 +388,7 @@ def post_process_normal(
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop_gpu,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
@@ -402,11 +402,11 @@ def post_process_normal(
                 model_output.is_block_step,
                 block_size,
             )
-            model_output.not_need_stop.copy_(model_output.not_need_stop_gpu, False)
+            model_output.not_need_stop.copy_(model_output.not_need_stop_device, False)
         else:
             update_inputs(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
@@ -415,6 +415,7 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+            model_output.not_need_stop.copy_(model_output.not_need_stop_device, False)
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -428,7 +429,7 @@ def post_process_normal(
                 async_output_queue.put(output)
         else:
             if sampler_output.logprobs_tensors is None:
-                share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids)
+                share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
                 save_output(
                     share_inputs["sampled_token_ids"],
                     model_output.not_need_stop,

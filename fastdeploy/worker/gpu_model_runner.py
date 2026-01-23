@@ -1225,7 +1225,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["not_need_stop"] = paddle.full([1], False, dtype="bool").pin_memory()
-        self.share_inputs["not_need_stop_gpu"] = paddle.full([1], False, dtype="bool")
+        self.share_inputs["not_need_stop_device"] = paddle.full([1], False, dtype="bool")
         self.share_inputs["sampled_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.share_inputs["stop_nums"] = paddle.full([1], max_num_seqs, dtype="int64")
@@ -1839,7 +1839,7 @@ class GPUModelRunner(ModelRunnerBase):
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             eos_token_id=self.share_inputs["eos_token_id"],
             not_need_stop=self.share_inputs["not_need_stop"],
-            not_need_stop_gpu=self.share_inputs["not_need_stop_gpu"],
+            not_need_stop_device=self.share_inputs["not_need_stop_device"],
             input_ids=self.share_inputs["input_ids"],
             stop_nums=self.share_inputs["stop_nums"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
@@ -1941,7 +1941,7 @@ class GPUModelRunner(ModelRunnerBase):
             seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
             eos_token_id=self.share_inputs["eos_token_id"],
             not_need_stop=self.share_inputs["not_need_stop"],
-            not_need_stop_gpu=self.share_inputs["not_need_stop_gpu"],
+            not_need_stop_device=self.share_inputs["not_need_stop_device"],
             input_ids=self.share_inputs["input_ids"],
             stop_nums=self.share_inputs["stop_nums"],
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
@@ -2373,7 +2373,7 @@ class GPUModelRunner(ModelRunnerBase):
                 seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],
-                not_need_stop_gpu=self.share_inputs["not_need_stop_gpu"],
+                not_need_stop_device=self.share_inputs["not_need_stop_device"],
                 input_ids=self.share_inputs["input_ids"],
                 stop_nums=self.share_inputs["stop_nums"],
                 seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
@@ -2495,7 +2495,7 @@ class GPUModelRunner(ModelRunnerBase):
                 seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],
-                not_need_stop_gpu=self.share_inputs["not_need_stop_gpu"],
+                not_need_stop_device=self.share_inputs["not_need_stop_device"],
                 input_ids=self.share_inputs["input_ids"],
                 stop_nums=self.share_inputs["stop_nums"],
                 seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
@@ -2757,7 +2757,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
-        return get_stop(self.share_inputs["not_need_stop"])
+        return get_stop(self.share_inputs["not_need_stop"])[0]
 
     def clear_cache(self):
         """Clear cached data from shared inputs and forward metadata"""
