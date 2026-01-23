@@ -29,6 +29,7 @@ class Args:
     mp_num = 1
     device_id = 0
     speculative_config = {}
+    model_id = "test_model"
     ipc_suffix = "test_ipc_suffix"
     cache_queue_port = 9999
     pod_ip = "127.0.0.1"

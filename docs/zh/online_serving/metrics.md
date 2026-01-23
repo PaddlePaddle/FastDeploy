@@ -32,7 +32,7 @@
 | KV缓存 | `fastdeploy:gpu_hit_token_rate`           | Gauge     | token 级别 GPU 前缀缓存命中率   | 百分比   |
 | KV缓存 | `fastdeploy:prefix_cache_token_num`       | Counter   | 前缀缓存token总数           | 个   |
 | KV缓存 | `fastdeploy:prefix_gpu_cache_token_num`   | Counter   | 位于 GPU 上的前缀缓存 token 总数  | 个   |
-| KV缓存 | `fastdeploy:prefix_cpu_cache_token_num`   | Counter   | 位于 GPU 上的前缀缓存 token 总数  | 个   |
+| KV缓存 | `fastdeploy:prefix_cpu_cache_token_num`   | Counter   | 位于 CPU 上的前缀缓存 token 总数  | 个   |
 | KV缓存 | `fastdeploy:available_gpu_block_num`      | Gauge     | 缓存中可用的 GPU 块数量（包含尚未正式释放的前缀缓存块）| 个   |
 | KV缓存 | `fastdeploy:free_gpu_block_num`           | Gauge     | 缓存中的可用块数             | 个   |
 | KV缓存 | `fastdeploy:max_gpu_block_num`            | Gauge     | 服务启动时确定的总块数        | 个   |
