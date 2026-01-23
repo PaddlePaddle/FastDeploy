@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
@@ -40,7 +40,12 @@ class DummyModelLoader(BaseModelLoader):
         """download_model"""
         pass
 
-    def _initialize_dummy_weights(self, model: nn.Layer) -> None:
+    def _initialize_dummy_weights(
+        self,
+        model: nn.Module,
+        low: float = -1e-3,
+        high: float = 1e-3,
+    ) -> None:
         float_dtypes = (
             paddle.float16,
             paddle.float32,
@@ -54,7 +59,7 @@ class DummyModelLoader(BaseModelLoader):
                 if not param.shape or 0 in param.shape:
                     continue
                 if param.dtype in float_dtypes:
-                    param.set_value(paddle.randn(param.shape, dtype=param.dtype))
+                    param.set_value((high - low) * paddle.randn(param.shape, dtype=param.dtype) + low)
                 else:
                     param.set_value(paddle.zeros(param.shape, dtype=param.dtype))
 
