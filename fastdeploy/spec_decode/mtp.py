@@ -394,7 +394,7 @@ class MTPProposer(Proposer):
             )
         self.attn_backends.append(attn_backend)
 
-    def clear_mtp_cache(self, profile):
+    def clear_mtp_cache(self, profile=False):
         """
         Clear allocated cacheKV
         """
