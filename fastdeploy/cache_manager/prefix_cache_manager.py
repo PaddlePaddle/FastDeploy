@@ -297,6 +297,7 @@ class PrefixCacheManager:
                     + (" --create_cache_tensor" if create_cache_tensor else "")
                     + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
                     + f" --write_policy {cache_config.write_policy}"
+                    + f" --kvcache_file_path {cache_config.kvcache_file_path}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
                 )

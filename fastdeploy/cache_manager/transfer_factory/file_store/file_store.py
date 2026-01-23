@@ -1,6 +1,22 @@
-import json
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import os
 import ctypes
+import pickle
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -38,13 +54,8 @@ class FileStore(KVCacheStorage):
             if self.file_path is None:
                 raise ValueError("file_path must be specified for FileStore backend")
 
-            suffix_parts = []
             if self.storage_config.namespace:
-                suffix_parts.append(self.storage_config.namespace)
-            if self.storage_config.tp_rank is not None and self.storage_config.tp_size is not None:
-                suffix_parts.append(f"{self.storage_config.tp_rank}_{self.storage_config.tp_size}")
-            
-            self.config_suffix = f"_{'_'.join(suffix_parts)}" if suffix_parts else ""
+                self.file_path = os.path.join(self.file_path, self.storage_config.namespace)
 
             if not os.path.exists(self.file_path):
                 if self.storage_config.tp_rank in (None, 0):
@@ -53,8 +64,8 @@ class FileStore(KVCacheStorage):
                 else:
                     logger.info(f"Skip mkdir on non-zero tp_rank={self.storage_config.tp_rank}")
             logger.info(
-                f"[INIT] ✅ FileStore initialized successfully! "
-                f"path={self.file_path}, suffix={self.config_suffix}, "
+                f"[INIT] FileStore initialized successfully! "
+                f"path={self.file_path}, "
                 f"config={self.storage_config}"
             )
         except Exception as e:
@@ -64,9 +75,6 @@ class FileStore(KVCacheStorage):
     def register_buffer(self, buffer_ptr, buffer_size) -> None:
         # FileStore does not need to register buffers.
         return None
-
-    # def _get_suffixed_key(self, key: str) -> str:
-    #     return key + self.config_suffix
 
     def _get_tensor_path(self, key: str) -> str:
         if '_key_' in key:
@@ -107,7 +115,6 @@ class FileStore(KVCacheStorage):
     def query(self, k_cache_keys: Optional[List[str]] = None, v_cache_keys: Optional[List[str]] = None, timeout: float = 10.0) -> int:
         try:
             if k_cache_keys is None and v_cache_keys is None:
-                # 返回所有缓存项的计数
                 if not os.path.exists(self.file_path):
                     return 0
                 count = 0
@@ -118,16 +125,20 @@ class FileStore(KVCacheStorage):
                 logger.debug(f"FileStore query: found {count} cache entries")
                 return count
             
-            # 使用现有的exists方法查询keys
-            all_keys = (k_cache_keys or []) + (v_cache_keys or [])
-            if not all_keys:
+            if not k_cache_keys or not v_cache_keys:
                 return 0
             
-            results = self.exists(all_keys)
-            matched_count = sum(1 for found in results.values() if found)
+            assert len(k_cache_keys) == len(v_cache_keys), "k_cache_keys and v_cache_keys must have the same length."
             
-            # 返回匹配的block数量（每个key对应一个block）
-            logger.info(f"FileStore query: checked {len(all_keys)} keys, matched {matched_count} blocks")
+            all_keys = k_cache_keys + v_cache_keys
+            results = self.exists(all_keys)
+            
+            matched_count = 0
+            for k, v in zip(k_cache_keys, v_cache_keys):
+                if results[k] and results[v]:
+                    matched_count += 1
+            
+            logger.info(f"FileStore query: checked {len(k_cache_keys)} block pairs, matched {matched_count} complete blocks")
             return matched_count
             
         except Exception as e:
@@ -153,11 +164,19 @@ class FileStore(KVCacheStorage):
             if isinstance(target_location, paddle.Tensor):
                 tensor2save = target_location.cpu()
                 paddle.save(tensor2save, tensor_path)
-                os.fsync(os.open(os.path.dirname(tensor_path), os.O_RDONLY))
+                dir_fd = os.open(key_dir, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
             elif isinstance(target_location, int) and target_size is not None:
                 tensor = self._tensor_from_ptr(target_location, int(target_size))
                 paddle.save(tensor, tensor_path)
-                os.fsync(os.open(os.path.dirname(tensor_path), os.O_RDONLY))
+                dir_fd = os.open(key_dir, os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
             else:
                 raise ValueError("target_location must be a paddle.Tensor or a pointer int with target_size.")
             return True
@@ -249,7 +268,7 @@ class FileStore(KVCacheStorage):
         for k in keys:
             p = self._get_tensor_path(k)
             found = os.path.exists(p)
-            logger.info(f"--- [CACHE_CHECK] Key: {k[:10]}... Path: {p} Found: {found} ---")
+            logger.debug(f"--- [CACHE_CHECK] Key: {k[:10]}... Path: {p} Found: {found} ---")
             res[k] = found
         return res
 
