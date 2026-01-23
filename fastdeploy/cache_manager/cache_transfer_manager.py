@@ -129,14 +129,14 @@ def parse_args():
     return args
 
 
-def get_version(version_file_path):
+def get_key_prefix_from_version(version_file_path):
     # the format of version string is RL-STEP{xx}-{timestamp}-{uuid4}
     with open(version_file_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-        version_raw = data["version"]
-        parts = version_raw.split("-", 2)
-        version = "-".join(parts[:2])
-        return version
+        version = data["version"]
+        parts = version.split("-", 2)
+        key_prefix = "-".join(parts[:2])
+        return key_prefix
 
 
 class CacheTransferManager:
@@ -304,7 +304,7 @@ class CacheTransferManager:
         self.key_prefix = ""
         version_file_path = os.path.join(args.model_path, "version.yaml")
         if os.path.exists(version_file_path):
-            self.key_prefix = get_version(version_file_path)
+            self.key_prefix = get_key_prefix_from_version(version_file_path)
         logger.info(f"The key_prefix of cache storage is {self.key_prefix}")
 
         logger.info("Initialize cache storage successfully")
@@ -1156,7 +1156,7 @@ class CacheTransferManager:
                         # use key_prefix to distinguish cache for different version of weight in rl
                         version_file_path = os.path.join(args.model_path, "version.yaml")
                         assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
-                        self.key_prefix = get_version(version_file_path)
+                        self.key_prefix = get_key_prefix_from_version(version_file_path)
                         logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
