@@ -269,14 +269,14 @@ class CacheTransferManager:
         self.storage_backend_type = args.kvcache_storage_backend
 
         try:
-            if self.kvcache_storage_backend is None:
+            if self.storage_backend_type is None:
                 self.storage_backend = None
-            elif self.kvcache_storage_backend == "mooncake":
+            elif self.storage_backend_type == "mooncake":
                 logger.info("Start initialize mooncake store...")
                 self.storage_backend = MooncakeStore(tp_rank=self.rank)
                 self._init_storage_buffer(args)
                 logger.info("Initialized mooncake store successfully")
-            elif self.kvcache_storage_backend == "attention_store":
+            elif self.storage_backend_type == "attention_store":
                 logger.info("Start initialize attention store...")
                 self.storage_backend = AttentionStore(
                     namespace=self.model_id,
@@ -290,7 +290,7 @@ class CacheTransferManager:
                 )
                 logger.info("Initialized attention store successfully!")
             else:
-                raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
+                raise NotImplementedError(f"Unsupported storage backend: {args.storage_backend_type}")
         except Exception as e:
             err_msg = f"Fail to initialize storage backend, {e}, traceback: {traceback.format_exc()}"
             logger.error(err_msg)
@@ -1152,7 +1152,7 @@ class CacheTransferManager:
                     self._init_gpu_cache(args)
                     logger.debug("[RL] successfully restored gpu caches")
 
-                    if self.kvcache_storage_backend is not None:
+                    if self.storage_backend_type is not None:
                         # use key_prefix to distinguish cache for different version of weight in rl
                         version_file_path = os.path.join(args.model_path, "version.yaml")
                         assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
