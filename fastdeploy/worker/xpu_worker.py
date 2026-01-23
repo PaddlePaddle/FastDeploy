@@ -184,8 +184,9 @@ class XpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        if self.model_runner.graph_opt_level >= 1:
-            self.model_runner.sot_warmup()
+        # Trigger cuda graph capture
+        if self.model_runner.use_cudagraph:
+            self.model_runner.capture_model()
 
     def check_health(self) -> bool:
         """ """

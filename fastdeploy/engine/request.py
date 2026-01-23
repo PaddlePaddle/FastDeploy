@@ -26,6 +26,7 @@ from typing import TypeVar as TypingTypeVar
 from typing import Union
 
 import numpy as np
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing_extensions import TypeVar
 
@@ -99,7 +100,7 @@ class Request:
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = None,
         reasoning_max_tokens: Optional[int] = None,
-        trace_carrier: dict = dict(),
+        trace_carrier: Optional[Dict[str, Any]] = None,
         dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
         image_start: int = 0,
@@ -542,6 +543,157 @@ class Request:
         if hasattr(self.sampling_params, key):
             return True
         return hasattr(self, key)
+
+
+class ControlRequest:
+    """A generic control request that supports method and args for control operations.
+
+    This request type is used for system-level control operations rather than
+    typical inference requests. It enables dynamic control of engine behavior,
+    resource management, and system configuration via a flexible method-args interface.
+    """
+
+    def __init__(
+        self,
+        request_id: str,
+        method: str,
+        args: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Args:
+            request_id: Unique identifier for the control request.
+            method: The control method to execute (e.g., "reset_scheduler", "get_metrics").
+            args: Optional arguments for the control method.
+        """
+        self.request_id = request_id
+        self.method = method
+        self.args = args or {}
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        """Create ControlRequest instance from dictionary."""
+        return cls(request_id=d["request_id"], method=d["method"], args=d.get("args", {}))
+
+    def to_dict(self) -> dict:
+        """Convert ControlRequest into a serializable dict."""
+        return {"request_id": self.request_id, "method": self.method, "args": self.args}
+
+    def __repr__(self) -> str:
+        """Provide a clean representation of the control request."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"ControlRequest(request_id={self.request_id}, method={self.method})"
+            else:
+                return (
+                    f"ControlRequest("
+                    f"request_id={self.request_id}, "
+                    f"method={self.method}, "
+                    f"args={self.args}"
+                    f")"
+                )
+        except Exception as e:
+            return f"<ControlRequest repr failed: {e}>"
+
+    def get_method(self) -> str:
+        """Get the control method name."""
+        return self.method
+
+    def get_args(self) -> Dict[str, Any]:
+        """Get the control method arguments."""
+        return self.args.copy()
+
+    @staticmethod
+    def is_control_request(d: dict) -> bool:
+        """
+        Check if a dictionary represents a valid ControlRequest.
+
+        Args:
+            d: Dictionary to check
+
+        Returns:
+            bool: True if the dictionary contains the required fields for a ControlRequest
+        """
+
+        # Check if all required fields are present and have correct types
+        if not isinstance(d, dict):
+            return False
+
+        # Check field types
+        if "request_id" not in d or not isinstance(d.get("request_id"), str):
+            return False
+
+        if "method" not in d or not isinstance(d.get("method"), str):
+            return False
+
+        # Args is optional, but if present should be a dict
+        if "args" in d and not isinstance(d["args"], dict):
+            return False
+
+        return True
+
+
+class ControlResponse:
+    """
+    Response for control operations
+    """
+
+    def __init__(
+        self,
+        request_id: str,
+        error_code: int = 200,
+        error_message: Optional[str] = None,
+        result: Optional[dict] = None,
+        finished: bool = True,
+    ) -> None:
+        self.request_id = request_id
+        self.finished = finished
+        self.error_message = error_message
+        self.result = result
+        self.error_code = error_code
+
+    def to_dict(self) -> dict:
+        """Convert ControlResponse into a serializable dict."""
+        return {
+            "request_id": self.request_id,
+            "finished": self.finished,
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+            "result": self.result,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        """Create ControlResponse instance from dictionary."""
+        return cls(
+            request_id=d["request_id"],
+            finished=d.get("finished", True),
+            error_code=d.get("error_code", 200),
+            error_message=d.get("error_message"),
+            result=d.get("result"),
+        )
+
+    def to_api_json_response(self) -> JSONResponse:
+        """Convert ControlResponse into a JSONResponse."""
+        status = "success" if self.error_code == 200 else "error"
+        content = {
+            "request_id": self.request_id,
+            "status": status,
+            "error_message": self.error_message,
+            "result": self.result,
+        }
+        return JSONResponse(status_code=self.error_code, content=content)
+
+    def __repr__(self) -> str:
+        """Provide a clean representation of the control response."""
+        return (
+            f"ControlResponse("
+            f"request_id={self.request_id}, "
+            f"finished={self.finished}, "
+            f"error_code={self.error_code}, "
+            f"error_message={self.error_message}, "
+            f"result={self.result}"
+            f")"
+        )
 
 
 @dataclass(slots=True)
