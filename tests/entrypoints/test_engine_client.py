@@ -182,7 +182,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         mock_config.tool_parser = None
         mock_config.structured_outputs_config = Mock()
         mock_config.structured_outputs_config.reasoning_parser = None
-        mock_config.node_rank = 0
 
         # Create mocks for all the external dependencies
         mock_input_processor = Mock()
@@ -298,7 +297,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             "chat_template": "Hello",
             "max_tokens": 20,
             "tools": [1],
-            "metrics": {},
         }
 
         await self.engine_client.add_requests(request)
@@ -312,15 +310,32 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
     """Test cases for EngineClient.valid_parameters method"""
 
+    @classmethod
+    def setUpClass(cls):
+        cls.metrics_mock = Mock()
+        cls.metrics_mock.request_params_max_tokens = Mock()
+        cls.metrics_mock.prompt_tokens_total = Mock()
+        cls.metrics_mock.request_prompt_tokens = Mock()
+        cls.metrics_patcher = patch(
+            "fastdeploy.entrypoints.engine_client.main_process_metrics",
+            cls.metrics_mock,
+        )
+        cls.metrics_patcher.start()
+        cls.support_connections_patcher = patch(
+            "fastdeploy.entrypoints.engine_client.FD_SUPPORT_MAX_CONNECTIONS",
+            100,
+        )
+        cls.support_connections_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, "metrics_patcher"):
+            cls.metrics_patcher.stop()
+        if hasattr(cls, "support_connections_patcher"):
+            cls.support_connections_patcher.stop()
+
     def setUp(self):
         """Set up test fixtures for valid_parameters tests"""
-        self.metrics_mock = Mock()
-        self.metrics_mock.request_params_max_tokens = Mock()
-        self.metrics_mock.prompt_tokens_total = Mock()
-        self.metrics_mock.request_prompt_tokens = Mock()
-        self.metrics_patcher = patch("fastdeploy.entrypoints.engine_client.main_process_metrics", self.metrics_mock)
-        self.metrics_patcher.start()
-
         # Mock the dependencies
         mock_tokenizer = MagicMock()
         mock_tokenizer.sp_model = MagicMock()
@@ -407,10 +422,6 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
                             self.engine_client.kv_cache_status_signal.value = np.array([0])
                             self.engine_client.prefix_tree_status_signal = Mock()
                             self.engine_client.prefix_tree_status_signal.value = np.array([0])
-
-    def tearDown(self):
-        if hasattr(self, "metrics_patcher"):
-            self.metrics_patcher.stop()
 
     def test_max_logprobs_valid_values(self):
         """Test valid max_logprobs values"""
@@ -1103,6 +1114,7 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
         result, message = self.engine_client.is_workers_alive()
 
         self.assertFalse(result)
+        self.assertEqual(message, "No model weight enabled")
 
     def test_update_model_weight_already_normal(self):
         """Test update_model_weight when weights are already normal."""
@@ -1111,7 +1123,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertEqual(result, 200)
+        self.assertTrue(result)
+        self.assertEqual(message, "")
 
     def test_update_model_weight_already_updating(self):
         """Test update_model_weight when already updating."""
@@ -1120,7 +1133,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertEqual(result, 400)
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is updating model weight already")
 
     def test_update_model_weight_clearing(self):
         """Test update_model_weight when clearing weights."""
@@ -1129,7 +1143,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertEqual(result, 403)
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is clearing model weight, cannot update now")
 
     def test_update_model_weight_timeout(self):
         """Test update_model_weight timeout scenario."""
@@ -1146,7 +1161,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.update_model_weight(timeout=1)
 
-        self.assertEqual(result, 404)
+        self.assertFalse(result)
+        self.assertEqual(message, "Update model weight timeout")
 
     def test_clear_load_weight_already_cleared(self):
         """Test clear_load_weight when weights are already cleared."""
@@ -1155,7 +1171,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertEqual(result, 200)
+        self.assertTrue(result)
+        self.assertEqual(message, "")
 
     def test_clear_load_weight_already_clearing(self):
         """Test clear_load_weight when already clearing."""
@@ -1164,7 +1181,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertEqual(result, 400)
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is clearing model weight already")
 
     def test_clear_load_weight_updating(self):
         """Test clear_load_weight when updating weights."""
@@ -1173,7 +1191,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertEqual(result, 403)
+        self.assertFalse(result)
+        self.assertEqual(message, "worker is updating model weight, cannot clear now")
 
     def test_clear_load_weight_timeout(self):
         """Test clear_load_weight timeout scenario."""
@@ -1188,7 +1207,8 @@ class TestEngineClientValidParameters(unittest.IsolatedAsyncioTestCase):
 
         result, message = self.engine_client.clear_load_weight(timeout=1)
 
-        self.assertEqual(result, 404)
+        self.assertFalse(result)
+        self.assertEqual(message, "Clear model weight timeout")
 
     def test_check_model_weight_status(self):
         """Test check_model_weight_status returns correct status."""
