@@ -12,72 +12,51 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     logger,
 )
 
-import time # for debug
+import time
+import traceback
+import shutil
 
 @dataclass
 class FileStoreConfig:
-    file_path: str
-    namespace: Optional[str] = None
-    tp_rank: Optional[int] = None
-    tp_size: Optional[int] = None
+    file_path: str = "/tmp/fastdeploy_cache"
+    namespace: Optional[str] = ""
+    tp_rank: Optional[int] = 0
+    tp_size: Optional[int] = 1
 
-    @staticmethod
-    def create() -> "FileStoreConfig":
-        config = {}
-        file_path = os.getenv("FD_FILESTORE_CONFIG_PATH")
-
-        if file_path is not None:
-            if not os.path.exists(file_path):
-                raise FileNotFoundError(
-                    f"File path {file_path} for creating FileStoreConfig does not exist."
-                )
-            try:
-                with open(file_path) as fin:
-                    config = json.load(fin)
-            except Exception as e:
-                logger.error(f"Load FileStoreConfig failed: {e}")
-                raise
-
-        storage_dir = config.get(
-            "file_path", os.environ.get("FD_FILESTORE_DIR", "/tmp/fastdeploy_cache")
-        )
-        namespace = config.get("namespace", os.environ.get("FD_FILESTORE_NAMESPACE"))
-        tp_rank = config.get("tp_rank", os.environ.get("FD_FILESTORE_TP_RANK"))
-        tp_size = config.get("tp_size", os.environ.get("FD_FILESTORE_TP_SIZE"))
-
-        logger.info(f"File Configuration loaded: {storage_dir}, namespace: {namespace}, tp_rank: {tp_rank}, tp_size: {tp_size}")
-        
-        return FileStoreConfig(
-            file_path=storage_dir,
-            namespace=namespace,
-            tp_rank=None if tp_rank is None else int(tp_rank),
-            tp_size=None if tp_size is None else int(tp_size),
-        )
 
 
 class FileStore(KVCacheStorage):
     def __init__(
         self,
-        storage_config: FileStoreConfig,
-        file_path: str = "/tmp/fastdeploy_cache",
+        **args
     ):
         try:
             logger.info(f"Using FileStore storage backend...")
 
-            self.storage_config = storage_config
-            self.file_path = os.getenv("FD_FILESTORE_DIR", storage_config.file_path or file_path)
+            self.storage_config = FileStoreConfig(**args)
+            self.file_path = self.storage_config.file_path
+            if self.file_path is None:
+                raise ValueError("file_path must be specified for FileStore backend")
 
             suffix_parts = []
-            if storage_config.namespace:
-                suffix_parts.append(storage_config.namespace)
-            if storage_config.tp_rank is not None and storage_config.tp_size is not None:
-                suffix_parts.append(f"{storage_config.tp_rank}_{storage_config.tp_size}")
+            if self.storage_config.namespace:
+                suffix_parts.append(self.storage_config.namespace)
+            if self.storage_config.tp_rank is not None and self.storage_config.tp_size is not None:
+                suffix_parts.append(f"{self.storage_config.tp_rank}_{self.storage_config.tp_size}")
             
             self.config_suffix = f"_{'_'.join(suffix_parts)}" if suffix_parts else ""
 
-            if not os.path.exists(self.file_path) and storage_config.tp_rank in (None, 0):
-                os.makedirs(self.file_path, exist_ok=True)
-                logger.info(f"Successfully created FileStore storage directory at {self.file_path}")
+            if not os.path.exists(self.file_path):
+                if self.storage_config.tp_rank in (None, 0):
+                    os.makedirs(self.file_path, exist_ok=True)
+                    logger.info(f"Successfully created FileStore storage directory at {self.file_path}")
+                else:
+                    logger.info(f"Skip mkdir on non-zero tp_rank={self.storage_config.tp_rank}")
+            logger.info(
+                f"[INIT] ✅ FileStore initialized successfully! "
+                f"path={self.file_path}, suffix={self.config_suffix}, "
+                f"config={self.storage_config}"
+            )
         except Exception as e:
             logger.error(f"File store initialization failed: {e}, traceback: {traceback.format_exc()}")
             raise
@@ -124,6 +103,36 @@ class FileStore(KVCacheStorage):
             return -1
         ctypes.memmove(ptr, data, size)
         return size
+
+    def query(self, k_cache_keys: Optional[List[str]] = None, v_cache_keys: Optional[List[str]] = None, timeout: float = 10.0) -> int:
+        try:
+            if k_cache_keys is None and v_cache_keys is None:
+                # 返回所有缓存项的计数
+                if not os.path.exists(self.file_path):
+                    return 0
+                count = 0
+                for item in os.listdir(self.file_path):
+                    item_path = os.path.join(self.file_path, item)
+                    if os.path.isdir(item_path):
+                        count += 1
+                logger.debug(f"FileStore query: found {count} cache entries")
+                return count
+            
+            # 使用现有的exists方法查询keys
+            all_keys = (k_cache_keys or []) + (v_cache_keys or [])
+            if not all_keys:
+                return 0
+            
+            results = self.exists(all_keys)
+            matched_count = sum(1 for found in results.values() if found)
+            
+            # 返回匹配的block数量（每个key对应一个block）
+            logger.info(f"FileStore query: checked {len(all_keys)} keys, matched {matched_count} blocks")
+            return matched_count
+            
+        except Exception as e:
+            logger.error(f"Failed to query FileStore storage: {e}")
+            return 0
 
     def set(
         self,

@@ -122,6 +122,12 @@ def parse_args():
         default="write_through",
         help="KVCache write policy",
     )
+    parser.add_argument(
+        "--kvcache_file_path",
+        type=str,
+        default="/tmp/fastdeploy_cache",
+        help="Root path for file store backend"
+    )
 
     args = parser.parse_args()
     return args
@@ -254,7 +260,12 @@ class CacheTransferManager:
             logger.info("Initialized attention store successfully!")
         elif args.kvcache_storage_backend == "file":
             logger.info("Start initialize file store...")
-            self.storage_backend = FileStore(storage_config=FileStoreConfig.create())
+            self.storage_backend = FileStore(
+                namespace=self.model_id,
+                tp_rank=self.rank,
+                tp_size=self.n_ranks,
+                file_path=args.kvcache_file_path,
+            )
             self._init_storage_buffer(args)
             logger.info("Initialized file store successfully")
         else:
@@ -560,6 +571,38 @@ class CacheTransferManager:
                 valid_gpu_block_ids = gpu_block_ids[:read_block_num]
                 logger.debug(f"_run_read_storage, read_cost_time: {read_cost_time:.6f}s")
 
+            elif self.storage_backend_type == "file":
+                logger.info(f"FileStore read_storage: reading {len(k_cache_keys)} blocks")
+                
+                # 直接使用FileStore的batch_get接口
+                keys = k_cache_keys + v_cache_keys
+                target_locations = []
+                
+                # 为每个block创建tensor目标位置
+                for i, block_id in enumerate(gpu_block_ids):
+                    # 直接使用GPU缓存作为目标位置
+                    cpu_block_id = cpu_block_ids[i] if i < len(cpu_block_ids) else i
+                    key_buf_ptr = self.storage_key_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
+                    val_buf_ptr = self.storage_value_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
+                    target_locations.extend([key_buf_ptr, val_buf_ptr])
+                
+                target_sizes = [self.storage_buffer_stride_bytes] * len(keys)
+                
+                start_time = time.time()
+                results = self.storage_backend.batch_get(keys, target_locations, target_sizes)
+                read_cost_time = time.time() - start_time
+                
+                # 统计成功读取的block数量
+                success_block_num = 0
+                for i in range(len(k_cache_keys)):
+                    key_result = results[i]
+                    val_result = results[i + len(k_cache_keys)]
+                    if key_result is not None and val_result is not None:
+                        success_block_num += 1
+                
+                valid_gpu_block_ids = gpu_block_ids[:success_block_num]
+                logger.debug(f"_run_read_storage, FileStore read_cost_time: {read_cost_time:.6f}s, success_blocks: {success_block_num}")
+
             return valid_gpu_block_ids
 
         except Exception as e:
@@ -582,6 +625,8 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(
                     task.task_id, task.token_ids, task.start_read_block_idx, task.timeout
                 )
+            elif self.storage_backend_type == "file":
+                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for read task {task.task_id}")
 
             k_cache_keys = k_cache_keys[:match_block_num]
@@ -697,6 +742,36 @@ class CacheTransferManager:
                 logger.debug(f"_run_write_back_storage, write_cost_time: {write_cost_time:.6f}s")
                 return write_block_num
 
+            elif self.storage_backend_type == "file":
+                logger.info(f"FileStore write_back_storage: writing {len(k_cache_keys)} blocks")
+                
+                keys = k_cache_keys + v_cache_keys
+                target_locations = []
+                
+                for i, block_id in enumerate(gpu_block_ids):
+                    
+                    cpu_block_id = cpu_block_ids[i] if i < len(cpu_block_ids) else i
+                    key_buf_ptr = self.storage_key_write_buffer + cpu_block_id * self.storage_buffer_stride_bytes
+                    val_buf_ptr = self.storage_value_write_buffer + cpu_block_id * self.storage_buffer_stride_bytes
+                    target_locations.extend([key_buf_ptr, val_buf_ptr])
+                
+                target_sizes = [self.storage_buffer_stride_bytes] * len(keys)
+                
+                start_time = time.time()
+                results = self.storage_backend.batch_set(keys, target_locations, target_sizes)
+                write_cost_time = time.time() - start_time
+                
+                # 统计成功写入的block数量
+                success_block_num = 0
+                for i in range(len(k_cache_keys)):
+                    key_result = results[i]
+                    val_result = results[i + len(k_cache_keys)]
+                    if key_result == 0 and val_result == 0:
+                        success_block_num += 1
+                
+                logger.debug(f"_run_write_back_storage, FileStore write_cost_time: {write_cost_time:.6f}s, success_blocks: {success_block_num}")
+                return success_block_num
+
         except Exception as e:
             logger.error(
                 f"An error occurred in _run_write_back_storage, " f"error: {e}, traceback:\n{traceback.format_exc()}"
@@ -718,6 +793,8 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
+            elif self.storage_backend_type == "file":
+                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
 
             if match_block_num >= len(k_cache_keys):
