@@ -27,6 +27,7 @@ from typing import List
 
 import numpy as np
 import paddle
+import yaml
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
@@ -131,10 +132,11 @@ def parse_args():
 def get_version(version_file_path):
     # the format of version string is RL-STEP{xx}-{timestamp}-{uuid4}
     with open(version_file_path, "r", encoding="utf-8") as f:
-        line = f.read().strip()
-        parts = line.split("-", 2)
-        key_prefix = "-".join(parts[:2])
-        return key_prefix
+        data = yaml.safe_load(f)
+        version_raw = data["version"]
+        parts = version_raw.split("-", 2)
+        version = "-".join(parts[:2])
+        return version
 
 
 class CacheTransferManager:
