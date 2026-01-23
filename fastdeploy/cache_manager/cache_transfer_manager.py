@@ -673,19 +673,25 @@ class CacheTransferManager:
                     # clear gpu caches
                     logger.debug("[RL] start clearing gpu caches")
                     if args.create_cache_tensor:
+                        logger.info("[RL] waiting for gpu runner to unlink cuda ipc")
+                        while self.cache_ready_signal.value[self.rank] != 0:
+                            time.sleep(0.1)
+                        logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
                         paddle.set_device(f"gpu:{self.device}")
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()
+                        self.gpu_cache_scales_k_tensors.clear()
+                        self.gpu_cache_scales_v_tensors.clear()
                         paddle.device.cuda.empty_cache()
                         logger.debug("[RL] successfully cleared gpu caches")
                     else:
                         for name, tensor in self.gpu_cache_kvs.items():
                             unset_data_ipc(tensor, name, True, False)
-                        logger.debug("[RL] successfully cleared gpu caches cuda ipc")
+                        logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
 
                     # reset cache_ready_signal
-                    self.cache_ready_signal.value[self.rank] = 0
+                    # self.cache_ready_signal.value[self.rank] = 0
                     if np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
                     logger.info("[RL] all ranks cleared caches!")

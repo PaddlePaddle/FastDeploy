@@ -240,6 +240,16 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.enable_entropy = self.model_config.enable_entropy
 
+        # init signal
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
@@ -1574,15 +1584,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
-        cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
-            create=False,
-        )
-
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. If no need to profile, create kv cache if cache managers do not exist.
@@ -1590,6 +1591,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
 
+        cache_ready_signal = self.cache_ready_signal
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:
@@ -2582,9 +2584,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # 3. gc
-        self.clear_cache(profile=True)
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_mtp_cache(profile=True)
+        self.clear_cache(profile=True)
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -2672,10 +2674,12 @@ class GPUModelRunner(ModelRunnerBase):
             or self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         if not create_cache_tensor:
             for name, tensor in self.cache_kvs_map.items():
                 unset_data_ipc(tensor, name, True, False)
+            self.cache_ready_signal.value[local_rank] = 0
         self.cache_kvs_map.clear()
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
@@ -2691,6 +2695,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+        if self.speculative_method in ["mtp"]:
+            self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
