@@ -23,8 +23,10 @@ import time
 import openai
 import pytest
 import requests
-from utils.rollout_routing_replay_test_utils import check_routing_replay_chat_completion
-from utils.serving_utils import (
+from e2e.utils.rollout_routing_replay_test_utils import (
+    check_routing_replay_chat_completion,
+)
+from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
@@ -50,7 +52,7 @@ def setup_and_run_server():
         shutil.rmtree("log")
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path = os.path.join(base_path, "GLM-4.5-Air-Fake")
+        model_path = os.path.join(base_path, "GLM-4.5-Air")
     else:
         model_path = "./GLM-4.5-Air-Fake"
 
@@ -64,6 +66,8 @@ def setup_and_run_server():
         "--port",
         str(FD_API_PORT),
         "--tensor-parallel-size",
+        "4",
+        "--data-parallel-size",
         "1",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
@@ -77,13 +81,11 @@ def setup_and_run_server():
         "1",
         "--graph-optimization-config",
         '{"use_cudagraph":true}',
-        "--quantization",
-        "wfp8afp8",
         "--load-choices",
         "default_v1",
         "--lm_head-fp32",
         "--routing-replay-config",
-        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air"}',
+        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air_tp4"}',
     ]
     env = os.environ.copy()
     # Start subprocess in new process group
@@ -179,7 +181,7 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     # 校验返回内容与概率信息
     assert (
         resp_json["choices"][0]["message"]["content"]
-        == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
+        == "\n<think>这个问题是关于牛顿的三大运动定律的。牛顿的三大运动定律是经典"
     ), f"The response content is not as expected {resp_json['choices'][0]['message']['content']}."
 
 
@@ -198,7 +200,7 @@ def openai_client():
 
 
 def test_r3_accuracy(openai_client):
-    moe_layer_num = 1  # GLM45 AIR moe layer num: 45, Fake GLM AIR moe layer num: 1
+    moe_layer_num = 45  # GLM45 AIR moe layer num: 45, Fake GLM AIR moe layer num: 1
     check_routing_replay_chat_completion(
-        openai_client=openai_client, moe_layer_num=moe_layer_num, model_name="glm45air"
+        openai_client=openai_client, moe_layer_num=moe_layer_num, model_name="glm45air_tp4"
     )
