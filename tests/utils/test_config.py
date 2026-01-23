@@ -20,7 +20,7 @@ import random
 import shutil
 import tempfile
 import unittest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -429,34 +429,38 @@ class TestConfig(unittest.TestCase):
         # Test default initialization
         plas_config = PlasAttentionConfig({})
         assert plas_config.plas_block_size == 128
-        
+
         # Test with args
-        plas_config = PlasAttentionConfig({
-            "plas_encoder_top_k_left": 2,
-            "plas_encoder_top_k_right": 4,
-            "plas_decoder_top_k_left": 1,
-            "plas_decoder_top_k_right": 3,
-            "plas_block_size": 256,
-        })
+        plas_config = PlasAttentionConfig(
+            {
+                "plas_encoder_top_k_left": 2,
+                "plas_encoder_top_k_right": 4,
+                "plas_decoder_top_k_left": 1,
+                "plas_decoder_top_k_right": 3,
+                "plas_block_size": 256,
+            }
+        )
         assert plas_config.plas_encoder_top_k_left == 2
         assert plas_config.plas_encoder_top_k_right == 4
         assert plas_config.plas_use_encoder_seq_limit == 2 * 256
-        
+
         # Test check_legality_parameters
         plas_config.check_legality_parameters()
-        
+
         # Test to_json_string and __str__
         json_str = plas_config.to_json_string()
         assert isinstance(json_str, str)
         str_repr = str(plas_config)
         assert isinstance(str_repr, str)
-        
+
         # Test invalid parameters
         with self.assertRaises(AssertionError):
-            PlasAttentionConfig({
-                "plas_encoder_top_k_left": 4,
-                "plas_encoder_top_k_right": 2,  # right < left, should fail
-            })
+            PlasAttentionConfig(
+                {
+                    "plas_encoder_top_k_left": 4,
+                    "plas_encoder_top_k_right": 2,  # right < left, should fail
+                }
+            )
 
     def test_early_stop_config(self):
         """Test EarlyStopConfig class."""
@@ -466,31 +470,33 @@ class TestConfig(unittest.TestCase):
         assert early_stop_config.strategy == "repetition"
         assert early_stop_config.window_size == 3000
         assert early_stop_config.threshold == 0.99
-        
+
         # Test with args
-        early_stop_config = EarlyStopConfig({
-            "enable_early_stop": True,
-            "window_size": 5000,
-            "threshold": 0.95,
-        })
+        early_stop_config = EarlyStopConfig(
+            {
+                "enable_early_stop": True,
+                "window_size": 5000,
+                "threshold": 0.95,
+            }
+        )
         assert early_stop_config.enable_early_stop is True
         assert early_stop_config.window_size == 5000
         assert early_stop_config.threshold == 0.95
-        
+
         # Test check_legality_parameters
         early_stop_config.check_legality_parameters()
-        
+
         # Test to_json_string and __str__
         json_str = early_stop_config.to_json_string()
         assert isinstance(json_str, str)
         str_repr = str(early_stop_config)
         assert isinstance(str_repr, str)
-        
+
         # Test update_enable_early_stop
         early_stop_config = EarlyStopConfig({"enable_early_stop": None})
         early_stop_config.update_enable_early_stop(True)
         assert early_stop_config.enable_early_stop is True
-        
+
         # Test invalid parameters
         with self.assertRaises(AssertionError):
             EarlyStopConfig({"window_size": -1})
@@ -500,7 +506,7 @@ class TestConfig(unittest.TestCase):
         pooler_config = PoolerConfig()
         assert pooler_config.pooling_type is None
         assert pooler_config.normalize is None
-        
+
         # Test with values
         pooler_config.pooling_type = "mean"
         pooler_config.normalize = True
@@ -512,12 +518,14 @@ class TestConfig(unittest.TestCase):
         # Test default initialization
         eplb_config = EPLBConfig({})
         assert eplb_config.enable_eplb is False
-        
+
         # Test with args
-        eplb_config = EPLBConfig({
-            "enable_eplb": True,
-            "redundant_experts_num": 2,
-        })
+        eplb_config = EPLBConfig(
+            {
+                "enable_eplb": True,
+                "redundant_experts_num": 2,
+            }
+        )
         assert eplb_config.enable_eplb is True
         assert eplb_config.redundant_experts_num == 2
 
@@ -527,15 +535,17 @@ class TestConfig(unittest.TestCase):
         struct_config = StructuredOutputsConfig({})
         assert struct_config.reasoning_parser is None
         assert struct_config.disable_any_whitespace is True
-        
+
         # Test with args
-        struct_config = StructuredOutputsConfig({
-            "reasoning_parser": "test_parser",
-            "disable_any_whitespace": False,
-        })
+        struct_config = StructuredOutputsConfig(
+            {
+                "reasoning_parser": "test_parser",
+                "disable_any_whitespace": False,
+            }
+        )
         assert struct_config.reasoning_parser == "test_parser"
         assert struct_config.disable_any_whitespace is False
-        
+
         # Test __str__
         str_repr = str(struct_config)
         assert isinstance(str_repr, str)
@@ -546,17 +556,19 @@ class TestConfig(unittest.TestCase):
         routing_config = RoutingReplayConfig({})
         assert routing_config.enable_routing_replay is False
         assert routing_config.routing_store_type == "local"
-        
+
         # Test with args
-        routing_config = RoutingReplayConfig({
-            "enable_routing_replay": True,
-            "routing_store_type": "rdma",
-            "local_store_dir": "/tmp/routing",
-        })
+        routing_config = RoutingReplayConfig(
+            {
+                "enable_routing_replay": True,
+                "routing_store_type": "rdma",
+                "local_store_dir": "/tmp/routing",
+            }
+        )
         assert routing_config.enable_routing_replay is True
         assert routing_config.routing_store_type == "rdma"
         assert routing_config.local_store_dir == "/tmp/routing"
-        
+
         # Test to_json_string
         json_str = routing_config.to_json_string()
         assert isinstance(json_str, str)
@@ -564,21 +576,25 @@ class TestConfig(unittest.TestCase):
     def test_router_config(self):
         """Test RouterConfig class."""
         # Test with http prefix
-        router_config = RouterConfig({
-            "router": "http://127.0.0.1:8000",
-            "port": 8080,
-            "metrics_port": 9090,
-        })
+        router_config = RouterConfig(
+            {
+                "router": "http://127.0.0.1:8000",
+                "port": 8080,
+                "metrics_port": 9090,
+            }
+        )
         assert router_config.router == "http://127.0.0.1:8000"
         assert router_config.api_server_port == 8080
         assert router_config.metrics_port == 9090
-        
+
         # Test without http prefix (should add it)
-        router_config = RouterConfig({
-            "router": "127.0.0.1:8000",
-            "port": 8080,
-            "metrics_port": None,
-        })
+        router_config = RouterConfig(
+            {
+                "router": "127.0.0.1:8000",
+                "port": 8080,
+                "metrics_port": None,
+            }
+        )
         assert router_config.router == "http://127.0.0.1:8000"
         assert router_config.metrics_port == router_config.api_server_port
 
@@ -594,17 +610,19 @@ class TestConfig(unittest.TestCase):
         model_config_mock = Mock()
         model_config_mock.max_model_len = 512
         model_config_mock.architectures = ["test_model"]
-        
+
         # This would require actual model path, so we'll test what we can
         # The validation happens in __init__, which requires a real model path
         pass  # Skip for now as it requires model files
 
     def test_parallel_config_set_communicate_group(self):
         """Test ParallelConfig.set_communicate_group method."""
-        parallel_config = ParallelConfig({
-            "tensor_parallel_size": 2,
-            "data_parallel_size": 2,
-        })
+        ParallelConfig(
+            {
+                "tensor_parallel_size": 2,
+                "data_parallel_size": 2,
+            }
+        )
         # set_communicate_group requires paddle.distributed, skip for now
         pass
 
@@ -616,56 +634,62 @@ class TestConfig(unittest.TestCase):
     def test_speculative_config_methods(self):
         """Test SpeculativeConfig methods."""
         spec_config = SpeculativeConfig({})
-        
+
         # Test enabled_speculative_decoding
         assert spec_config.enabled_speculative_decoding() is False
         spec_config.method = "ngram_match"
         assert spec_config.enabled_speculative_decoding() is True
-        
+
         # Test to_json_string
         json_str = spec_config.to_json_string()
         assert isinstance(json_str, str)
-        
+
         # Test print
         spec_config.print()
-        
+
         # Test read_model_config (requires model path)
         # spec_config.read_model_config()  # Skip as requires model files
-        
+
         # Test reset
         spec_config.reset()
-        
+
         # Test check_legality_parameters with valid values
-        spec_config = SpeculativeConfig({
-            "method": "ngram_match",
-            "num_speculative_tokens": 3,
-            "num_model_steps": 2,
-            "mtp_strategy": "default",
-        })
+        spec_config = SpeculativeConfig(
+            {
+                "method": "ngram_match",
+                "num_speculative_tokens": 3,
+                "num_model_steps": 2,
+                "mtp_strategy": "default",
+            }
+        )
         spec_config.check_legality_parameters()
-        
+
         # Test check_legality_parameters with invalid method
         spec_config_invalid = SpeculativeConfig({"method": "invalid_method"})
         with self.assertRaises(AssertionError):
             spec_config_invalid.check_legality_parameters()
-        
+
         # Test check_legality_parameters with invalid num_speculative_tokens
-        spec_config_invalid = SpeculativeConfig({
-            "method": "ngram_match",
-            "num_speculative_tokens": 10,  # > 5
-        })
+        spec_config_invalid = SpeculativeConfig(
+            {
+                "method": "ngram_match",
+                "num_speculative_tokens": 10,  # > 5
+            }
+        )
         with self.assertRaises(AssertionError):
             spec_config_invalid.check_legality_parameters()
-        
+
         # Test mtp method with num_speculative_tokens < num_model_steps
-        spec_config_mtp = SpeculativeConfig({
-            "method": "mtp",
-            "num_speculative_tokens": 2,
-            "num_model_steps": 3,  # > num_speculative_tokens
-        })
+        spec_config_mtp = SpeculativeConfig(
+            {
+                "method": "mtp",
+                "num_speculative_tokens": 2,
+                "num_model_steps": 3,  # > num_speculative_tokens
+            }
+        )
         spec_config_mtp.check_legality_parameters()
         assert spec_config_mtp.num_speculative_tokens == 3  # Should be reset
-        
+
         # Test __str__
         str_repr = str(spec_config)
         assert isinstance(str_repr, str)
@@ -673,21 +697,21 @@ class TestConfig(unittest.TestCase):
     def test_graph_optimization_config_methods(self):
         """Test GraphOptimizationConfig methods."""
         graph_config = GraphOptimizationConfig({})
-        
+
         # Set cudagraph_capture_sizes before calling init_with_cudagrpah_size
         graph_config.cudagraph_capture_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256]
-        
+
         # Test init_with_cudagrpah_size
         graph_config.init_with_cudagrpah_size(max_capture_size=256)
-        
+
         # Test to_json_string
         json_str = graph_config.to_json_string()
         assert isinstance(json_str, str)
-        
+
         # Test __str__
         str_repr = str(graph_config)
         assert isinstance(str_repr, str)
-        
+
         # Test check_legality_parameters
         graph_config.check_legality_parameters()
 
@@ -703,11 +727,11 @@ class TestConfig(unittest.TestCase):
         eplb_config = EPLBConfig({})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "off"})
         routing_replay_config = RoutingReplayConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -737,12 +761,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_seqs": 128})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
         model_config.enable_mm = False
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -759,26 +783,30 @@ class TestConfig(unittest.TestCase):
 
     def test_fdconfig_postprocess_devices_and_ports(self):
         """Test FDConfig.postprocess_devices_and_ports method."""
-        parallel_config = ParallelConfig({
-            "tensor_parallel_size": 2,
-            "data_parallel_size": 2,
-            "local_data_parallel_id": 0,
-            "device_ids": "0,1,2,3",
-            "engine_worker_queue_port": "8000,8001",
-        })
+        parallel_config = ParallelConfig(
+            {
+                "tensor_parallel_size": 2,
+                "data_parallel_size": 2,
+                "local_data_parallel_id": 0,
+                "device_ids": "0,1,2,3",
+                "engine_worker_queue_port": "8000,8001",
+            }
+        )
         graph_opt_config = GraphOptimizationConfig({})
-        cache_config = CacheConfig({
-            "cache_queue_port": "9000,9001",
-            "pd_comm_port": "7000,7001",
-            "rdma_comm_ports": "6000,6001,6002,6003",
-        })
+        cache_config = CacheConfig(
+            {
+                "cache_queue_port": "9000,9001",
+                "pd_comm_port": "7000,7001",
+                "rdma_comm_ports": "6000,6001,6002,6003",
+            }
+        )
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -800,11 +828,11 @@ class TestConfig(unittest.TestCase):
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -838,37 +866,45 @@ class TestConfig(unittest.TestCase):
     def test_speculative_config_check_legality_parameters_extended(self):
         """Test SpeculativeConfig.check_legality_parameters with more cases."""
         # Test mtp method with valid parameters
-        spec_config = SpeculativeConfig({
-            "method": "mtp",
-            "num_speculative_tokens": 3,
-            "num_model_steps": 2,
-            "mtp_strategy": "default",
-        })
+        spec_config = SpeculativeConfig(
+            {
+                "method": "mtp",
+                "num_speculative_tokens": 3,
+                "num_model_steps": 2,
+                "mtp_strategy": "default",
+            }
+        )
         spec_config.check_legality_parameters()
-        
+
         # Test invalid mtp_strategy
-        spec_config_invalid = SpeculativeConfig({
-            "method": "mtp",
-            "mtp_strategy": "invalid_strategy",
-        })
+        spec_config_invalid = SpeculativeConfig(
+            {
+                "method": "mtp",
+                "mtp_strategy": "invalid_strategy",
+            }
+        )
         with self.assertRaises(AssertionError):
             spec_config_invalid.check_legality_parameters()
 
     def test_graph_optimization_config_filter_capture_size(self):
         """Test GraphOptimizationConfig.filter_capture_size method."""
-        graph_config = GraphOptimizationConfig({
-            "cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32, 64, 128],
-        })
+        graph_config = GraphOptimizationConfig(
+            {
+                "cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32, 64, 128],
+            }
+        )
         graph_config.filter_capture_size(tp_size=4)
         # Should filter sizes based on tp_size
         assert graph_config.cudagraph_capture_sizes is not None
 
     def test_cache_config_with_enc_dec_block_num(self):
         """Test CacheConfig with enc_dec_block_num."""
-        cache_config = CacheConfig({
-            "block_size": 64,
-            "enc_dec_block_num": 4,
-        })
+        cache_config = CacheConfig(
+            {
+                "block_size": 64,
+                "enc_dec_block_num": 4,
+            }
+        )
         assert cache_config.enc_dec_block_num == 4
 
     def test_fdconfig_with_splitwise_role_mixed(self):
@@ -879,12 +915,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"splitwise_role": "mixed"})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -905,12 +941,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"splitwise_role": "decode"})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -932,12 +968,12 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({"splitwise_role": "prefill"})
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({"method": "mtp"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -954,24 +990,28 @@ class TestConfig(unittest.TestCase):
 
     def test_fdconfig_with_sequence_parallel_moe(self):
         """Test FDConfig with sequence parallel MoE."""
-        parallel_config = ParallelConfig({
-            "use_sequence_parallel_moe": True,
-            "tensor_parallel_size": 4,
-        })
-        graph_opt_config = GraphOptimizationConfig({
-            "use_cudagraph": True,
-            "cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32],
-        })
+        parallel_config = ParallelConfig(
+            {
+                "use_sequence_parallel_moe": True,
+                "tensor_parallel_size": 4,
+            }
+        )
+        graph_opt_config = GraphOptimizationConfig(
+            {
+                "use_cudagraph": True,
+                "cudagraph_capture_sizes": [1, 2, 4, 8, 16, 32],
+            }
+        )
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_seqs": 8})  # > tp_size
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -993,12 +1033,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["Ernie5ForCausalLM"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1019,11 +1059,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1045,11 +1085,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({"dynamic_load_weight": False})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1070,16 +1110,18 @@ class TestConfig(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({})
         cache_config = CacheConfig({"enable_chunked_prefill": True})
         load_config = LoadConfig({})
-        scheduler_config = SchedulerConfig({
-            "max_num_seqs": 128,
-            "max_num_batched_tokens": None,  # Will be set in postprocess
-        })
+        scheduler_config = SchedulerConfig(
+            {
+                "max_num_seqs": 128,
+                "max_num_batched_tokens": None,  # Will be set in postprocess
+            }
+        )
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1100,16 +1142,18 @@ class TestConfig(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({})
         cache_config = CacheConfig({"enable_chunked_prefill": True, "block_size": 64})
         load_config = LoadConfig({})
-        scheduler_config = SchedulerConfig({
-            "max_num_seqs": 128,
-            "max_num_batched_tokens": 128,  # >= block_size
-        })
+        scheduler_config = SchedulerConfig(
+            {
+                "max_num_seqs": 128,
+                "max_num_batched_tokens": 128,  # >= block_size
+            }
+        )
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1131,11 +1175,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1159,16 +1203,18 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"name": "local", "splitwise_role": "prefill"})
         device_config = DeviceConfig({})
-        router_config = RouterConfig({
-            "router": "http://127.0.0.1:8000",
-            "port": 8080,
-            "metrics_port": 9090,
-        })
-        
+        router_config = RouterConfig(
+            {
+                "router": "http://127.0.0.1:8000",
+                "port": 8080,
+                "metrics_port": 9090,
+            }
+        )
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1194,11 +1240,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"name": "dp", "splitwise_role": "prefill"})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1222,11 +1268,11 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
         eplb_config = EPLBConfig({"enable_eplb": True})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # This will try to import cuda, which may fail, so we catch ImportError
         try:
             fd_config = FDConfig(
@@ -1272,63 +1318,66 @@ class TestConfig(unittest.TestCase):
         cache_config = CacheConfig({})
         metrics = cache_config.metrics_info()
         assert isinstance(metrics, dict)
-        
+
         # Test _verify_args with valid values
         cache_config.gpu_memory_utilization = 0.8
         cache_config.kv_cache_ratio = 0.7
         cache_config._verify_args()  # Should not raise
-        
+
         # Test _verify_args with invalid values
         cache_config.gpu_memory_utilization = 1.5
         with self.assertRaises(ValueError):
             cache_config._verify_args()
-        
+
         cache_config.gpu_memory_utilization = 0.8
         cache_config.kv_cache_ratio = 1.5
         with self.assertRaises(ValueError):
             cache_config._verify_args()
-        
+
         # Test postprocess
         cache_config = CacheConfig({"block_size": 64, "enc_dec_block_num": 2})
         cache_config.max_block_num_per_seq = 10
         cache_config.num_gpu_blocks_override = 100
         cache_config.postprocess(1000, 5)
         assert hasattr(cache_config, "total_block_num")
-        
+
         # Test reset
         cache_config.reset(50)
         assert cache_config.total_block_num == 50
-        
+
         # Test print (should not raise)
         cache_config.print()
 
     def test_model_config_with_text_config(self):
         """Test ModelConfig with text_config in pretrained_config."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-                "text_config": {
-                    "hidden_size": 512,
-                    "num_attention_heads": 8,
-                    "custom_field": "test_value",
-                }
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                    "text_config": {
+                        "hidden_size": 512,
+                        "num_attention_heads": 8,
+                        "custom_field": "test_value",
+                    },
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 # 创建临时目录和 config.json
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         # 验证 text_config 中的字段被设置
                         assert hasattr(model_config, "custom_field")
@@ -1337,26 +1386,29 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_with_vision_config(self):
         """Test ModelConfig with vision_config."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-                "vision_config": {"hidden_size": 512},
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                    "vision_config": {"hidden_size": 512},
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         assert hasattr(model_config, "vision_config")
                 finally:
@@ -1364,28 +1416,31 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_with_rope_scaling(self):
         """Test ModelConfig with rope_scaling containing mrope_section."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-                "rope_scaling": {
-                    "mrope_section": [1, 2, 3],
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                    "rope_scaling": {
+                        "mrope_section": [1, 2, 3],
+                    },
                 },
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         assert model_config.rope_3d is True
                         assert model_config.freq_allocation == 1  # First element of mrope_section
@@ -1394,40 +1449,47 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_max_logprobs_validation(self):
         """Test ModelConfig max_logprobs validation."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
                     # Test max_logprobs < -1
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         with self.assertRaises(ValueError):
-                            ModelConfig({
-                                "model": tmp_dir,
-                                "max_logprobs": -2,
-                            })
-                    
+                            ModelConfig(
+                                {
+                                    "model": tmp_dir,
+                                    "max_logprobs": -2,
+                                }
+                            )
+
                     # Test max_logprobs > ori_vocab_size
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         with self.assertRaises(ValueError):
-                            ModelConfig({
-                                "model": tmp_dir,
-                                "max_logprobs": 50000,
-                                "ori_vocab_size": 32000,
-                            })
+                            ModelConfig(
+                                {
+                                    "model": tmp_dir,
+                                    "max_logprobs": 50000,
+                                    "ori_vocab_size": 32000,
+                                }
+                            )
                 finally:
                     shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -1439,13 +1501,13 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_batched_tokens": 2048})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
         model_config.enable_mm = True
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1469,11 +1531,11 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})  # Add speculative_config
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "auto"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1487,6 +1549,8 @@ class TestConfig(unittest.TestCase):
             ips="0.0.0.0",
             test_mode=True,
         )
+        # Validate that config was created successfully
+        assert fd_config is not None
         # postprocess converts "auto" to "xgrammar"
         assert structured_outputs_config.guided_decoding_backend == "xgrammar"
 
@@ -1496,16 +1560,18 @@ class TestConfig(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({})
         cache_config = CacheConfig({"enable_chunked_prefill": False})
         load_config = LoadConfig({})
-        scheduler_config = SchedulerConfig({
-            "max_num_seqs": 128,
-            "max_num_batched_tokens": 512,  # >= max_model_len
-        })
+        scheduler_config = SchedulerConfig(
+            {
+                "max_num_seqs": 128,
+                "max_num_batched_tokens": 512,  # >= max_model_len
+            }
+        )
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1528,12 +1594,12 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
         routing_replay_config = RoutingReplayConfig({"enable_routing_replay": True})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1558,12 +1624,12 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({"method": "ngram_match"})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1587,13 +1653,13 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_batched_tokens": 2048})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
         model_config.enable_mm = True
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1610,19 +1676,19 @@ class TestConfig(unittest.TestCase):
     def test_fdconfig_postprocess_with_splitwise_prefill(self):
         """Test FDConfig.postprocess with splitwise_role='prefill'."""
         from fastdeploy.platforms import current_platform
-        
+
         parallel_config = ParallelConfig({})
         graph_opt_config = GraphOptimizationConfig({"cudagraph_only_prefill": True})
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"splitwise_role": "prefill"})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1648,12 +1714,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({"dynamic_load_weight": True})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1675,13 +1741,13 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_batched_tokens": 2048})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
         model_config.enable_mm = True
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1703,16 +1769,16 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_batched_tokens": None})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock envs.ENABLE_V1_KVCACHE_SCHEDULER
         original_value = envs.ENABLE_V1_KVCACHE_SCHEDULER
         try:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = True
-            fd_config = FDConfig(
+            FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
                 cache_config=cache_config,
@@ -1730,21 +1796,23 @@ class TestConfig(unittest.TestCase):
 
     def test_fdconfig_with_sequence_parallel_moe_max_seqs_less_than_tp(self):
         """Test FDConfig with sequence parallel MoE when max_num_seqs < tp_size."""
-        parallel_config = ParallelConfig({
-            "use_sequence_parallel_moe": True,
-            "tensor_parallel_size": 4,
-        })
+        parallel_config = ParallelConfig(
+            {
+                "use_sequence_parallel_moe": True,
+                "tensor_parallel_size": 4,
+            }
+        )
         graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True})
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_seqs": 2})  # < tp_size
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
-        fd_config = FDConfig(
+
+        FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
             cache_config=cache_config,
@@ -1766,15 +1834,15 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock generation_config with to_dict method
         generation_config = Mock()
         generation_config.to_dict.return_value = {"max_tokens": 100, "temperature": 0.7}
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1797,11 +1865,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"name": "local"})  # local but no router
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1827,13 +1895,18 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})  # Add speculative_config
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock xgrammar import
-        with patch('builtins.__import__', side_effect=lambda name, *args, **kwargs: MagicMock() if name == 'xgrammar' else __import__(name, *args, **kwargs)):
+        with patch(
+            "builtins.__import__",
+            side_effect=lambda name, *args, **kwargs: (
+                MagicMock() if name == "xgrammar" else __import__(name, *args, **kwargs)
+            ),
+        ):
             fd_config = FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
@@ -1857,11 +1930,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({"dynamic_load_weight": True})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -1880,25 +1953,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_torch_dtype(self):
         """Test ModelConfig.read_model_config with torch_dtype."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"torch_dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         model_config.read_model_config()
                         assert model_config.model_format == "torch"
@@ -1907,25 +1983,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_dtype(self):
         """Test ModelConfig.read_model_config with dtype."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16", "transformers_version": "4.50.0"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         model_config.read_model_config()
                         assert model_config.model_format == "paddle"
@@ -1934,25 +2013,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_both_dtype(self):
         """Test ModelConfig.read_model_config with both torch_dtype and dtype."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"torch_dtype": "float16", "dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         with self.assertRaises(ValueError):
                             model_config.read_model_config()
@@ -1961,25 +2043,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_no_dtype(self):
         """Test ModelConfig.read_model_config with no dtype."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         with self.assertRaises(ValueError):
                             model_config.read_model_config()
@@ -1994,11 +2079,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -2021,11 +2106,11 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -2041,12 +2126,12 @@ class TestConfig(unittest.TestCase):
         fd_config.test_attr = "1,2,3"
         fd_config._str_to_list("test_attr", int)
         assert fd_config.test_attr == [1, 2, 3]
-        
+
         # Test with list
         fd_config.test_attr2 = [1, 2, 3]
         fd_config._str_to_list("test_attr2", int)
         assert fd_config.test_attr2 == [1, 2, 3]
-        
+
         # Test with None
         fd_config.test_attr3 = None
         fd_config._str_to_list("test_attr3", int)
@@ -2054,25 +2139,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_override_name_from_config(self):
         """Test ModelConfig.override_name_from_config method."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         # Test with infer_model_mp_num
                         model_config.is_unified_ckpt = False
@@ -2080,33 +2168,33 @@ class TestConfig(unittest.TestCase):
                         model_config.override_name_from_config()
                         assert model_config.tensor_parallel_size == 4
                         assert not hasattr(model_config, "infer_model_mp_num")
-                        
+
                         # Test with remove_tail_layer=True
                         model_config.num_hidden_layers = 12
                         model_config.runner = "generate"
                         model_config.remove_tail_layer = True
                         model_config.override_name_from_config()
                         assert model_config.num_hidden_layers == 11
-                        
+
                         # Test with remove_tail_layer as int
                         model_config.num_hidden_layers = 12
                         model_config.remove_tail_layer = 2
                         model_config.override_name_from_config()
                         assert model_config.num_hidden_layers == 10
-                        
+
                         # Test with num_experts
                         model_config.num_experts = 8
                         model_config.moe_num_experts = None
                         model_config.override_name_from_config()
                         assert model_config.moe_num_experts == 8
-                        
+
                         # Test with n_routed_experts (only if moe_num_experts is still None)
                         model_config.moe_num_experts = None
                         model_config.num_experts = None  # Clear num_experts first
                         model_config.n_routed_experts = 6
                         model_config.override_name_from_config()
                         assert model_config.moe_num_experts == 6
-                        
+
                         # Test with n_shared_experts
                         model_config.n_shared_experts = 2
                         model_config.moe_num_shared_experts = None
@@ -2117,31 +2205,34 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_from_env(self):
         """Test ModelConfig.read_from_env method."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         # Test read_from_env with environment variable
                         with patch.dict(os.environ, {"COMPRESSION_RATIO": "0.8"}):
                             model_config.read_from_env()
                             assert model_config.compression_ratio == 0.8
-                        
+
                         # Test read_from_env without environment variable (uses default)
                         # Clear the attribute first to test default value
                         if hasattr(model_config, "compression_ratio"):
@@ -2154,25 +2245,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_transformers_version(self):
         """Test ModelConfig.read_model_config with transformers_version > 4.56.0."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16", "transformers_version": "4.57.0"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         model_config.read_model_config()
                         assert model_config.model_format == "torch"
@@ -2189,14 +2283,14 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "invalid_backend"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # postprocess raises NotImplementedError for invalid backend
         with self.assertRaises(NotImplementedError):
-            fd_config = FDConfig(
+            FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
                 cache_config=cache_config,
@@ -2220,13 +2314,18 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({"method": "ngram_match"})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock xgrammar import
-        with patch('builtins.__import__', side_effect=lambda name, *args, **kwargs: MagicMock() if name == 'xgrammar' else __import__(name, *args, **kwargs)):
+        with patch(
+            "builtins.__import__",
+            side_effect=lambda name, *args, **kwargs: (
+                MagicMock() if name == "xgrammar" else __import__(name, *args, **kwargs)
+            ),
+        ):
             fd_config = FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
@@ -2255,14 +2354,19 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "guidance"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock llguidance.torch import
-        with patch('builtins.__import__', side_effect=lambda name, *args, **kwargs: MagicMock() if name == 'llguidance.torch' else __import__(name, *args, **kwargs)):
-            fd_config = FDConfig(
+        with patch(
+            "builtins.__import__",
+            side_effect=lambda name, *args, **kwargs: (
+                MagicMock() if name == "llguidance.torch" else __import__(name, *args, **kwargs)
+            ),
+        ):
+            FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
                 cache_config=cache_config,
@@ -2288,20 +2392,20 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "guidance"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock llguidance.torch import to raise ImportError
         def mock_import(name, *args, **kwargs):
-            if name == 'llguidance.torch':
+            if name == "llguidance.torch":
                 raise ImportError("No module named 'llguidance'")
             return __import__(name, *args, **kwargs)
-        
-        with patch('builtins.__import__', side_effect=mock_import):
+
+        with patch("builtins.__import__", side_effect=mock_import):
             with self.assertRaises(ImportError):
-                fd_config = FDConfig(
+                FDConfig(
                     parallel_config=parallel_config,
                     graph_opt_config=graph_opt_config,
                     cache_config=cache_config,
@@ -2317,29 +2421,32 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_get_runner_type_with_explicit_runner(self):
         """Test ModelConfig._get_runner_type with explicit runner."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir, "runner": "pooling"})
                         runner_type = model_config._get_runner_type(["TestModel"], "pooling")
                         assert runner_type == "pooling"
-                        
+
                         runner_type = model_config._get_runner_type(["TestModel"], "generate")
                         assert runner_type == "generate"
                 finally:
@@ -2347,29 +2454,32 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_get_convert_type_with_explicit_convert(self):
         """Test ModelConfig._get_convert_type with explicit convert."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir, "convert": "embed"})
                         convert_type = model_config._get_convert_type(["TestModel"], "pooling", "embed")
                         assert convert_type == "embed"
-                        
+
                         convert_type = model_config._get_convert_type(["TestModel"], "generate", "none")
                         assert convert_type == "none"
                 finally:
@@ -2397,25 +2507,28 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_get_default_pooling_task(self):
         """Test ModelConfig._get_default_pooling_task."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestForTextEncoding"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestForTextEncoding"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         task = model_config._get_default_pooling_task(["TestForTextEncoding"])
                         assert task == "embed"
@@ -2429,33 +2542,36 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_init_pooler_config(self):
         """Test ModelConfig._init_pooler_config."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
                     json.dump({"dtype": "float16"}, f)
-                
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir, "runner": "pooling"})
                         model_config.runner_type = "pooling"
                         # Mock _model_info
                         mock_model_info = MagicMock()
                         mock_model_info.default_pooling_type = "mean"
                         model_config._model_info = mock_model_info
-                        
-                        with patch('fastdeploy.config.get_pooling_config', return_value=None):
+
+                        with patch("fastdeploy.config.get_pooling_config", return_value=None):
                             pooler_config = model_config._init_pooler_config()
                             assert pooler_config is not None
                             assert pooler_config.pooling_type == "mean"
@@ -2478,9 +2594,11 @@ class TestConfig(unittest.TestCase):
 
     def test_parallel_config_with_pd_disaggregation_none(self):
         """Test ParallelConfig without pd_disaggregation."""
-        parallel_config = ParallelConfig({
-            "use_pd_disaggregation": False,
-        })
+        parallel_config = ParallelConfig(
+            {
+                "use_pd_disaggregation": False,
+            }
+        )
         assert parallel_config.pd_disaggregation_mode == "None"
 
     def test_fdconfig_check_with_xgrammar_import_error(self):
@@ -2493,18 +2611,18 @@ class TestConfig(unittest.TestCase):
         device_config = DeviceConfig({})
         speculative_config = SpeculativeConfig({})
         structured_outputs_config = StructuredOutputsConfig({"guided_decoding_backend": "xgrammar"})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Mock xgrammar import to raise Exception
         def mock_import(name, *args, **kwargs):
-            if name == 'xgrammar':
+            if name == "xgrammar":
                 raise Exception("xgrammar not found")
             return __import__(name, *args, **kwargs)
-        
-        with patch('builtins.__import__', side_effect=mock_import):
+
+        with patch("builtins.__import__", side_effect=mock_import):
             fd_config = FDConfig(
                 parallel_config=parallel_config,
                 graph_opt_config=graph_opt_config,
@@ -2524,31 +2642,37 @@ class TestConfig(unittest.TestCase):
 
     def test_model_config_read_model_config_with_text_config(self):
         """Test ModelConfig.read_model_config with text_config in config.json."""
-        with patch('fastdeploy.config.PretrainedConfig.get_config_dict') as mock_get_config:
-            mock_get_config.return_value = ({
-                "hidden_size": 768,
-                "num_attention_heads": 12,
-                "vocab_size": 32000,
-                "architectures": ["TestModel"],
-            }, None)
-            
-            with patch('fastdeploy.config.PretrainedConfig.from_dict') as mock_from_dict:
+        with patch("fastdeploy.config.PretrainedConfig.get_config_dict") as mock_get_config:
+            mock_get_config.return_value = (
+                {
+                    "hidden_size": 768,
+                    "num_attention_heads": 12,
+                    "vocab_size": 32000,
+                    "architectures": ["TestModel"],
+                },
+                None,
+            )
+
+            with patch("fastdeploy.config.PretrainedConfig.from_dict") as mock_from_dict:
                 mock_config = MagicMock()
                 mock_from_dict.return_value = mock_config
-                
+
                 tmp_dir = tempfile.mkdtemp()
                 config_path = os.path.join(tmp_dir, "config.json")
                 with open(config_path, "w") as f:
-                    json.dump({
-                        "dtype": "float16",
-                        "text_config": {
-                            "hidden_size": 512,
-                            "custom_field": "test_value",
-                        }
-                    }, f)
-                
+                    json.dump(
+                        {
+                            "dtype": "float16",
+                            "text_config": {
+                                "hidden_size": 512,
+                                "custom_field": "test_value",
+                            },
+                        },
+                        f,
+                    )
+
                 try:
-                    with patch('fastdeploy.config.ModelConfig._post_init'):
+                    with patch("fastdeploy.config.ModelConfig._post_init"):
                         model_config = ModelConfig({"model": tmp_dir})
                         model_config.read_model_config()
                         # text_config fields should be merged into model_config
@@ -2565,11 +2689,13 @@ class TestConfig(unittest.TestCase):
         model_cfg.quantization = None
         model_cfg.quantization_config = {"kv_cache_quant_type": "int8"}
         model_cfg.num_key_value_heads = 32
-        
-        cache_config = CacheConfig({
-            "model_cfg": model_cfg,
-            "tensor_parallel_size": 1,
-        })
+
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_cfg,
+                "tensor_parallel_size": 1,
+            }
+        )
         # int8 is converted to uint8
         assert cache_config.cache_dtype == "uint8"
 
@@ -2582,20 +2708,24 @@ class TestConfig(unittest.TestCase):
         model_cfg.quantization = {"kv_cache_quant_type": "int4"}
         model_cfg.quantization_config = None
         model_cfg.num_key_value_heads = 32
-        
-        cache_config = CacheConfig({
-            "model_cfg": model_cfg,
-            "tensor_parallel_size": 1,
-        })
+
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_cfg,
+                "tensor_parallel_size": 1,
+            }
+        )
         # int4 is converted to uint8
         assert cache_config.cache_dtype == "uint8"
 
     def test_cache_config_postprocess_with_kv_cache_ratio(self):
         """Test CacheConfig.postprocess with kv_cache_ratio."""
-        cache_config = CacheConfig({
-            "block_size": 64,
-            "kv_cache_ratio": 0.8,
-        })
+        cache_config = CacheConfig(
+            {
+                "block_size": 64,
+                "kv_cache_ratio": 0.8,
+            }
+        )
         cache_config.max_block_num_per_seq = 10
         cache_config.postprocess(1000, 5)
         # prefill_kvcache_block_num is calculated based on kv_cache_ratio
@@ -2604,9 +2734,11 @@ class TestConfig(unittest.TestCase):
 
     def test_cache_config_reset(self):
         """Test CacheConfig.reset method."""
-        cache_config = CacheConfig({
-            "block_size": 64,
-        })
+        cache_config = CacheConfig(
+            {
+                "block_size": 64,
+            }
+        )
         cache_config.total_block_num = 100
         cache_config.prefill_kvcache_block_num = 80
         cache_config.max_block_num_per_seq = 10
@@ -2637,12 +2769,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["Glm4MoeForCausalLM"]
         model_config.first_k_dense_replace = 5
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -2656,23 +2788,26 @@ class TestConfig(unittest.TestCase):
         )
         # postprocess sets moe_layer_start_index for Glm4MoeForCausalLM
         assert model_config.moe_layer_start_index == 5
+        assert fd_config is not None
 
     def test_fdconfig_postprocess_with_non_master_node(self):
         """Test FDConfig.postprocess with non-master node."""
-        parallel_config = ParallelConfig({
-            "tensor_parallel_size": 2,
-            "data_parallel_size": 2,
-        })
+        parallel_config = ParallelConfig(
+            {
+                "tensor_parallel_size": 2,
+                "data_parallel_size": 2,
+            }
+        )
         graph_opt_config = GraphOptimizationConfig({})
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Create FDConfig normally, then modify attributes and call postprocess
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -2689,7 +2824,7 @@ class TestConfig(unittest.TestCase):
         fd_config.node_rank = 1
         fd_config.worker_num_per_node = 1
         fd_config.long_prefill_token_threshold = 0
-        
+
         fd_config.postprocess()
         # If tensor_parallel_size > worker_num_per_node and node_rank > 0, is_master should be False
         if parallel_config.tensor_parallel_size > fd_config.worker_num_per_node and fd_config.node_rank > 0:
@@ -2704,16 +2839,16 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_batched_tokens": None})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         original_value = envs.ENABLE_V1_KVCACHE_SCHEDULER
         try:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = True
-            with patch('paddle.is_compiled_with_xpu', return_value=True):
-                fd_config = FDConfig(
+            with patch("paddle.is_compiled_with_xpu", return_value=True):
+                FDConfig(
                     parallel_config=parallel_config,
                     graph_opt_config=graph_opt_config,
                     cache_config=cache_config,
@@ -2737,12 +2872,12 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({"max_num_seqs": 8})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
         model_config.enable_mm = True
-        
+
         original_value = envs.FD_ENABLE_MAX_PREFILL
         try:
             envs.FD_ENABLE_MAX_PREFILL = False
@@ -2770,13 +2905,14 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         from fastdeploy.platforms import current_platform
-        with patch.object(current_platform, 'is_intel_hpu', return_value=True):
+
+        with patch.object(current_platform, "is_intel_hpu", return_value=True):
             with patch.dict(os.environ, {"HPU_VISIBLE_DEVICES": "2,3"}):
                 fd_config = FDConfig(
                     parallel_config=parallel_config,
@@ -2791,6 +2927,7 @@ class TestConfig(unittest.TestCase):
                 )
                 # postprocess sets device_ids from HPU_VISIBLE_DEVICES
                 assert parallel_config.device_ids == "2,3"
+                assert fd_config is not None
 
     def test_fdconfig_check_with_max_batched_tokens_less_than_max_model_len(self):
         """Test FDConfig.check validation logic."""
@@ -2800,15 +2937,17 @@ class TestConfig(unittest.TestCase):
         graph_opt_config = GraphOptimizationConfig({})
         cache_config = CacheConfig({"enable_chunked_prefill": False})
         load_config = LoadConfig({})
-        scheduler_config = SchedulerConfig({
-            "max_num_batched_tokens": None,  # Will be set by postprocess
-        })
+        scheduler_config = SchedulerConfig(
+            {
+                "max_num_batched_tokens": None,  # Will be set by postprocess
+            }
+        )
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         # Disable ENABLE_V1_KVCACHE_SCHEDULER to test the validation
         original_value = envs.ENABLE_V1_KVCACHE_SCHEDULER
         try:
@@ -2834,25 +2973,31 @@ class TestConfig(unittest.TestCase):
 
     def test_fdconfig_check_with_sequence_parallel_moe_and_cudagraph(self):
         """Test FDConfig.check with sequence parallel MoE and cudagraph."""
-        parallel_config = ParallelConfig({
-            "use_sequence_parallel_moe": True,
-            "tensor_parallel_size": 4,
-        })
-        graph_opt_config = GraphOptimizationConfig({
-            "use_cudagraph": True,
-            "cudagraph_capture_sizes": [1, 2, 4, 8],
-        })
+        parallel_config = ParallelConfig(
+            {
+                "use_sequence_parallel_moe": True,
+                "tensor_parallel_size": 4,
+            }
+        )
+        graph_opt_config = GraphOptimizationConfig(
+            {
+                "use_cudagraph": True,
+                "cudagraph_capture_sizes": [1, 2, 4, 8],
+            }
+        )
         cache_config = CacheConfig({})
         load_config = LoadConfig({})
-        scheduler_config = SchedulerConfig({
-            "max_num_seqs": 8,  # >= tp_size
-        })
+        scheduler_config = SchedulerConfig(
+            {
+                "max_num_seqs": 8,  # >= tp_size
+            }
+        )
         device_config = DeviceConfig({})
-        
+
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
-        
+
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -2866,6 +3011,7 @@ class TestConfig(unittest.TestCase):
         )
         # check() should call filter_capture_size when sequence_parallel_moe and cudagraph are enabled
         assert graph_opt_config.cudagraph_capture_sizes is not None
+        assert fd_config is not None
 
     def test_cache_config_with_int4_cache_dtype(self):
         """Test CacheConfig with int4 cache_dtype."""
@@ -2876,11 +3022,13 @@ class TestConfig(unittest.TestCase):
         model_cfg.quantization = {"kv_cache_quant_type": "int4"}
         model_cfg.quantization_config = None
         model_cfg.num_key_value_heads = 32
-        
-        cache_config = CacheConfig({
-            "model_cfg": model_cfg,
-            "tensor_parallel_size": 1,
-        })
+
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_cfg,
+                "tensor_parallel_size": 1,
+            }
+        )
         # int4 should be converted to uint8 with byte_size 0.5
         assert cache_config.cache_dtype == "uint8"
 
@@ -2893,11 +3041,13 @@ class TestConfig(unittest.TestCase):
         model_cfg.quantization = {"kv_cache_quant_type": "int8"}
         model_cfg.quantization_config = None
         model_cfg.num_key_value_heads = 32
-        
-        cache_config = CacheConfig({
-            "model_cfg": model_cfg,
-            "tensor_parallel_size": 1,
-        })
+
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_cfg,
+                "tensor_parallel_size": 1,
+            }
+        )
         # int8 should be converted to uint8 with byte_size 1
         assert cache_config.cache_dtype == "uint8"
 
@@ -2910,11 +3060,13 @@ class TestConfig(unittest.TestCase):
         model_cfg.quantization = {"kv_cache_quant_type": "float8"}
         model_cfg.quantization_config = None
         model_cfg.num_key_value_heads = 32
-        
-        cache_config = CacheConfig({
-            "model_cfg": model_cfg,
-            "tensor_parallel_size": 1,
-        })
+
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_cfg,
+                "tensor_parallel_size": 1,
+            }
+        )
         # float8 should be converted to uint8
         assert cache_config.cache_dtype == "uint8"
 
