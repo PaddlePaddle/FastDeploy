@@ -19,6 +19,7 @@ from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
+
 def decide_module():
     import paddle
 
@@ -34,8 +35,10 @@ def decide_module():
         return f".fastdeploy_ops_{sm_version}.fastdeploy_ops"
     return ".fastdeploy_ops"
 
+
 module_path = decide_module()
 import_custom_ops(PACKAGE, module_path, globals())
+
 
 def tolerant_import_error():
     class NoneModule:
