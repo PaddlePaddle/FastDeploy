@@ -2088,7 +2088,7 @@ class GPUModelRunner(ModelRunnerBase):
                 break
 
             if capture_prefill and self.graph_opt_config.graph_opt_level > 0:
-                # 只 capture prefill 就行
+                # only need to capture prefill
                 break
 
         if self.fd_config.routing_replay_config.enable_routing_replay:
