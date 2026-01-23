@@ -130,6 +130,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner._init_share_inputs(mock_fd_config.scheduler_config.max_num_seqs)
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
+        model_runner.exist_prefill_flag = False
 
         if dist.get_rank() == 0:
             model_runner.share_inputs["ids_remove_padding"] = paddle.ones([10])

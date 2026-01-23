@@ -1034,7 +1034,7 @@ class TokenProcessor:
                 finished=True,
                 metrics=RequestMetrics(
                     arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
+                    request_start_time=task.metrics.arrival_time,
                 ),
             )
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"

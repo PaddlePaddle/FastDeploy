@@ -32,7 +32,6 @@ import openai
 import pytest
 from conftest import (
     cleanup_resources,
-    download_and_build_xdeepep,
     get_model_path,
     get_port_num,
     restore_pd_ep_env,
@@ -135,9 +134,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 
     # 清理资源
     cleanup_resources()
-
-    if not download_and_build_xdeepep():
-        pytest.fail("xDeepEP下载或编译失败")
 
     # 清理并创建日志目录
     for log_dir in ["log_router", "log_prefill", "log_decode"]:
