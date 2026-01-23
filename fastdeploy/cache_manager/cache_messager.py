@@ -135,6 +135,7 @@ class CacheMessager:
         gpu_id=0,
         rdma_port=None,
         cache_dtype="bfloat16",
+        nnode=1,
     ):
         """
         Initialize the CacheMessager object.
@@ -149,6 +150,7 @@ class CacheMessager:
             num_layers (int): model layer number
             gpu_id (int, optional): GPU ID
             rdma_port (int, optional): RDMA port
+            nnode (int, optional): number of nodes (default: 1)
 
         Returns:
             None
@@ -158,7 +160,8 @@ class CacheMessager:
         self.rank = rank
         self.nranks = nranks
         self.cache_dtype = cache_dtype
-        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+        use_shm = envs.should_use_shm_queue(nnode)
+        if not use_shm:
             address = (pod_ip, engine_worker_queue_port)
         else:
             address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
@@ -472,6 +475,7 @@ class CacheMessagerV1:
         block_size=64,
         rdma_port=None,
         cache_dtype="bfloat16",
+        nnode=1,
     ):
         """
         Initialize the CacheMessager object.
@@ -486,6 +490,7 @@ class CacheMessagerV1:
             num_layers (int): model layer number
             gpu_id (int, optional): GPU ID
             rdma_port (int, optional): RDMA port
+            nnode (int, optional): number of nodes (default: 1)
 
         Returns:
             None
@@ -495,7 +500,8 @@ class CacheMessagerV1:
         self.rank = rank
         self.nranks = nranks
         self.cache_dtype = cache_dtype
-        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+        use_shm = envs.should_use_shm_queue(nnode)
+        if not use_shm:
             address = (pod_ip, engine_worker_queue_port)
         else:
             address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"

@@ -44,7 +44,7 @@
 
 > :bulb: 多机张量并行部署暂不支持CUDAGraphs、PrefixCaching与CustomAllReduce，需在部署命令中显示关闭。
 
-> :warning: **重要提示**: 对于跨节点张量并行部署，需要将环境变量 `FD_ENGINE_TASK_QUEUE_WITH_SHM` 设置为 `0` 以使用TCP通信方式，因为文件系统方式仅适用于同节点内部通信。可以在启动命令前添加 `export FD_ENGINE_TASK_QUEUE_WITH_SHM=0`。
+> :warning: **重要提示**: FastDeploy会自动检测部署配置并选择合适的通信方式：单节点部署自动使用文件系统模式（更优性能），多节点部署自动使用TCP模式。如需手动指定，可设置环境变量 `FD_ENGINE_TASK_QUEUE_WITH_SHM=0`（TCP模式）或 `FD_ENGINE_TASK_QUEUE_WITH_SHM=1`（文件系统模式）。
 
 * 离线启动示例：
 

@@ -744,11 +744,12 @@ class LLMEngine:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
+                use_shm = envs.should_use_shm_queue(self.cfg.nnode)
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                    if not use_shm:
                         address = (
                             self.cfg.master_ip,
                             int(self.cfg.parallel_config.engine_worker_queue_port[i]),

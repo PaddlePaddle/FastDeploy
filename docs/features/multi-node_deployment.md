@@ -44,7 +44,7 @@ We recommend using mpirun for one-command startup without manually starting each
 
 > :bulb: Multi-node tensor parallel deployment currently does not support CUDA Graphs, Prefix Caching, or Custom AllReduce, and these features must be explicitly disabled in the deployment command.
 
-> :warning: **Important Note**: For cross-node tensor parallel deployment, you need to set the environment variable `FD_ENGINE_TASK_QUEUE_WITH_SHM` to `0` to use TCP communication mode, as the file system mode is only suitable for intra-node communication. You can add `export FD_ENGINE_TASK_QUEUE_WITH_SHM=0` before the startup command.
+> :warning: **Important Note**: FastDeploy automatically detects the deployment configuration and selects the appropriate communication mode: single-node deployments automatically use file system mode (better performance), while multi-node deployments automatically use TCP mode. If you need to manually specify, you can set the environment variable `FD_ENGINE_TASK_QUEUE_WITH_SHM=0` (TCP mode) or `FD_ENGINE_TASK_QUEUE_WITH_SHM=1` (file system mode).
 
 * Offline startup example:
 

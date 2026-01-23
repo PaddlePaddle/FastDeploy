@@ -642,7 +642,8 @@ class PaddleDisWorkerProc:
 
     def start_task_queue_service(self):
         # Initialize task queue
-        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+        use_shm = envs.should_use_shm_queue(self.fd_config.nnode)
+        if not use_shm:
             task_address = (
                 self.parallel_config.pod_ip,
                 self.parallel_config.local_engine_worker_queue_port,
