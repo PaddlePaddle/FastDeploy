@@ -16,6 +16,7 @@
 
 import copy
 import threading
+import time
 import traceback
 from collections import deque
 from collections.abc import Iterable
@@ -240,6 +241,7 @@ class ResourceManagerV1(ResourceManager):
 
     def reschedule_preempt_task(self, request_id, process_func=None):
         with self.lock:
+            llm_logger.debug(f"reschedule {request_id} into waiting queue")
             if request_id in self.to_be_rescheduled_request_id_set and request_id in self.requests:
                 request = self.requests[request_id]
                 if process_func is not None:
@@ -265,6 +267,39 @@ class ResourceManagerV1(ResourceManager):
             if not req.use_extend_tables:
                 return True
         return False
+
+    def preempted_all(self):
+        with self.lock:
+            preempted_reqs = []
+            for i in range(len(self.running)):
+                req = self.running.pop()
+                # txt2image: req.use_extend_tables is True, req can not be preempted. txt2image is not used in RL.
+                if req.use_extend_tables:
+                    self.running.insert(0, req)
+                    continue
+                req.status = RequestStatus.PREEMPTED
+                req.num_computed_tokens = 0
+                self._free_blocks(req)
+                req.cached_block_num = 0
+                self.to_be_rescheduled_request_id_set.add(req.request_id)
+                preempted_reqs.append(self._prepare_preempt_task(req))
+            return preempted_reqs
+
+    def wait_worker_inflight_requests_finish(self, timeout=60):
+        count = 0
+        while count < timeout * 1000:
+            # wait ongoing running and rescheduled requests finished in worker
+            running_reqs_count = len(self.to_be_rescheduled_request_id_set) + len(self.running)
+            if running_reqs_count == 0:
+                break
+
+            count += 1
+            time.sleep(0.001)
+        if count >= timeout * 1000:
+            llm_logger.info(
+                f"wait_inflight_requests_finish timeout after {timeout} seconds, "
+                f"still {len(self.to_be_rescheduled_request_id_set)} requests running"
+            )
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
@@ -1347,3 +1382,16 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
         main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+
+    def log_status(self):
+        llm_logger.info(
+            f"ResourceManagerV1( "
+            f"waiting={len(self.waiting)}, "
+            f"running={len(self.running)}, "
+            f"preempted={len(self.to_be_rescheduled_request_id_set)}, "
+            f"tasks_list={self.tasks_list}, "
+            f"stop_flags={self.stop_flags}, "
+            f"req_dict={self.req_dict}, "
+            f"requests={self.requests}, "
+            f")"
+        )

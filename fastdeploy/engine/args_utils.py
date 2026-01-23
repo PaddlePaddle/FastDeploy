@@ -195,6 +195,10 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
+    rsync_config: Optional[Dict[str, Any]] = None
+    """
+    rsync weights config info
+    """
     quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
@@ -811,6 +815,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_strategy,
             help="Flag to dynamic load strategy.",
+        )
+        model_group.add_argument(
+            "--rsync-config",
+            type=json.loads,
+            default=EngineArgs.rsync_config,
+            help="Rsync weights config",
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
