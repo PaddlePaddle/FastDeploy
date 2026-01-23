@@ -1131,6 +1131,7 @@ class ResourceManagerV1(ResourceManager):
             main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
             main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
             main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+            main_process_metrics.prefix_storage_cache_token_num.inc(request.metrics.storage_cache_token_num)
 
             return True
         except Exception as e:
