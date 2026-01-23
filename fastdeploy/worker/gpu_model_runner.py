@@ -1681,6 +1681,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             index_to_batch_id=self.share_inputs["index_to_batch_id"],
+            enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
         )
 
         post_process(
@@ -1785,6 +1786,7 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
             index_to_batch_id=self.share_inputs["index_to_batch_id"],
+            enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
         )
 
         post_process(
@@ -2219,6 +2221,7 @@ class GPUModelRunner(ModelRunnerBase):
                 min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 index_to_batch_id=self.share_inputs["index_to_batch_id"],
+                enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
             post_process(
@@ -2343,6 +2346,7 @@ class GPUModelRunner(ModelRunnerBase):
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,
                 index_to_batch_id=self.share_inputs["index_to_batch_id"],
+                enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
             if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":

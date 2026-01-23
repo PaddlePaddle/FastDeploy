@@ -327,6 +327,11 @@ class ModelOutputData:
     """
     min_tokens: paddle.Tensor = None
 
+    """
+        enable_pd_reorder
+    """
+    enable_pd_reorder: bool = False
+
 
 @dataclass
 class ModelRunnerOutput:
