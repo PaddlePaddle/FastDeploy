@@ -24,14 +24,10 @@ V1模式测试 - ERNIE-4.5-21B-A3B 模型
 """
 
 import os
+
 import pytest
 import requests
-from conftest import (
-    get_model_path,
-    get_port_num,
-    print_logs_on_failure,
-    start_server,
-)
+from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
 
 
 def test_logprobs_mode(xpu_env):
@@ -111,7 +107,7 @@ def test_logprobs_mode(xpu_env):
         assert "content" in message
         assert isinstance(message["content"], str)
         assert len(message["content"]) > 0
-        
+
         print(f"\n模型回复: {choice['message']['content']}")
         # ========================
         # logprobs 顶层结构
@@ -181,7 +177,6 @@ def test_logprobs_mode(xpu_env):
         print(f"\nlogprobs 测试失败: {str(e)}")
         print_logs_on_failure()
         pytest.fail(f"logprobs 测试失败: {str(e)}")
-
 
 
 if __name__ == "__main__":
