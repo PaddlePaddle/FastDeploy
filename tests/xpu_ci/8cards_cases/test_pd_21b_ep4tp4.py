@@ -191,7 +191,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--enable-expert-parallel",
-        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -234,7 +233,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--enable-expert-parallel",
-        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
