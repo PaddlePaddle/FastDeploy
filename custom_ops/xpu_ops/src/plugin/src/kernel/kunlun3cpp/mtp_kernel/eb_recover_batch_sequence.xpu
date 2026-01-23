@@ -37,15 +37,15 @@ static __device__ void do_memcpy_1d(_global_ptr_ TX* src,
 }
 
 template <typename TX, typename TY>
-__global__ void eb_mtp_gather_next_token(TX* src,
-                                         TY* dst,
-                                         int* encoder_seqs_lods,
-                                         int* decoder_seqs_lods,
-                                         int* encoder_batch_map,
-                                         int* decoder_batch_map,
-                                         int en_batch,
-                                         int de_batch,
-                                         int64_t copy_size) {
+__global__ void eb_recover_batch_sequence(TX* src,
+                                          TY* dst,
+                                          int* encoder_seqs_lods,
+                                          int* decoder_seqs_lods,
+                                          int* encoder_batch_map,
+                                          int* decoder_batch_map,
+                                          int en_batch,
+                                          int de_batch,
+                                          int64_t copy_size) {
   int tid = core_id() * cluster_num() + cluster_id();
   int nthreads = core_num() * cluster_num();
   __group_shared__ int local_lods_en[MAX_BATCH + 1];
@@ -62,7 +62,7 @@ __global__ void eb_mtp_gather_next_token(TX* src,
   }
   mfence();
   int encoder_len_total = en_batch > 0 ? local_lods_en[en_batch] : 0;
-  int output_len = en_batch + local_lods_de[de_batch];
+  int output_len = local_lods_en[en_batch] + local_lods_de[de_batch];
   int start = 0;
   int end = 0;
   partition(tid, nthreads, output_len, 1, &start, &end);
@@ -78,13 +78,13 @@ __global__ void eb_mtp_gather_next_token(TX* src,
         continue;
       }
       if (dec_idx >= de_batch) {
-        len += 1;
+        len += local_lods_en[enc_idx + 1] - local_lods_en[enc_idx];
         enc_idx++;
         is_enc = true;
         continue;
       }
       if (local_map_en[enc_idx] < local_map_de[dec_idx]) {
-        len += 1;
+        len += local_lods_en[enc_idx + 1] - local_lods_en[enc_idx];
         enc_idx++;
         is_enc = true;
       } else {
@@ -96,7 +96,7 @@ __global__ void eb_mtp_gather_next_token(TX* src,
     _global_ptr_ TX* cur_src = nullptr;
     _global_ptr_ TY* cur_dst = dst + i * copy_size;
     if (is_enc) {
-      cur_src = src + (local_lods_en[enc_idx] - 1) * copy_size;
+      cur_src = src + (local_lods_en[enc_idx] - (len - i)) * copy_size;
     } else {
       cur_src = src + (encoder_len_total + local_lods_de[dec_idx] - (len - i)) *
                           copy_size;
@@ -104,26 +104,26 @@ __global__ void eb_mtp_gather_next_token(TX* src,
     do_memcpy_1d<TX, TY>(cur_src, cur_dst, copy_size);
   }
 }
-#define _XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(TX, TY)           \
-  template __global__ void eb_mtp_gather_next_token<TX, TY>( \
-      TX * src,                                              \
-      TY * dst,                                              \
-      int* encoder_seqs_lods,                                \
-      int* decoder_seqs_lods,                                \
-      int* encoder_batch_map,                                \
-      int* decoder_batch_map,                                \
-      int en_batch,                                          \
-      int de_batch,                                          \
+#define _XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(TX, TY)           \
+  template __global__ void eb_recover_batch_sequence<TX, TY>( \
+      TX * src,                                               \
+      TY * dst,                                               \
+      int* encoder_seqs_lods,                                 \
+      int* decoder_seqs_lods,                                 \
+      int* encoder_batch_map,                                 \
+      int* decoder_batch_map,                                 \
+      int en_batch,                                           \
+      int de_batch,                                           \
       int64_t copy_size);
 
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float16, float16);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(bfloat16, bfloat16);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float, float);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float16, float);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float, float16);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(bfloat16, float16);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float16, bfloat16);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(bfloat16, float);
-_XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float, bfloat16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float16, float16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(bfloat16, bfloat16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float, float);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float16, float);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float, float16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(bfloat16, float16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float16, bfloat16);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(bfloat16, float);
+_XPU_DEF__EB_RECOVER_BATCH_SEQUENCE(float, bfloat16);
 }  // namespace plugin
 }  // namespace xpu3

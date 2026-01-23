@@ -108,7 +108,7 @@ def send_r3_non_streaming_chat(openai_client, user_id: str = ""):
     return response
 
 
-def generated_base_line_routing_index(openai_client, cur_save_routing_path, baseline_path):
+def generated_base_line_routing_index(openai_client, cur_save_routing_path, baseline_path, moe_layer_num):
     # Generate streaming chat routing index
     send_r3_streaming_chat(openai_client, user_id="r3_chat_completion_stream")
     # Generate non streaming chat routing index
@@ -118,8 +118,8 @@ def generated_base_line_routing_index(openai_client, cur_save_routing_path, base
     stream_cur_save_routing_path = os.path.join(cur_save_routing_path, "r3_chat_completion_stream")
     nonstream_cur_save_routing_path = os.path.join(cur_save_routing_path, "r3_chat_completion_nonstream")
 
-    wait_for_file(stream_cur_save_routing_path)
-    wait_for_file(nonstream_cur_save_routing_path)
+    wait_for_file(stream_cur_save_routing_path, moe_layer_num=moe_layer_num)
+    wait_for_file(nonstream_cur_save_routing_path, moe_layer_num=moe_layer_num)
 
     # Move the baseline to the routing_replay_output_baseline folder
     stream_baseline_path = os.path.join(baseline_path, "r3_chat_completion_stream")
@@ -128,7 +128,7 @@ def generated_base_line_routing_index(openai_client, cur_save_routing_path, base
     shutil.move(nonstream_cur_save_routing_path, nonstream_baseline_path)
 
 
-def wait_for_file(file_path, timeout=20, check_interval=0.1):
+def wait_for_file(file_path, timeout=20, check_interval=0.1, moe_layer_num=None):
     start_time = time.perf_counter()
     deadline = start_time + timeout
 
@@ -139,8 +139,11 @@ def wait_for_file(file_path, timeout=20, check_interval=0.1):
             return False
 
         # Check file generated
-        if os.path.exists(file_path):
+        if os.path.exists(file_path) and not os.path.isdir(file_path):
             return True
+        elif os.path.isdir(file_path):
+            if moe_layer_num is not None and (len(os.listdir(file_path)) == moe_layer_num):
+                return True
 
         sleep_time = min(check_interval, deadline - current_time)
         time.sleep(sleep_time)
@@ -160,17 +163,11 @@ def check_routing_replay_chat_completion(openai_client, moe_layer_num: int, mode
 
     # Maybe need to generate baseline routing index
     if not os.path.exists(stream_baseline_path) or not os.path.exists(nonstream_baseline_path):
-        generated_base_line_routing_index(openai_client, cur_save_routing_path, baseline_path)
+        generated_base_line_routing_index(openai_client, cur_save_routing_path, baseline_path, moe_layer_num)
         raise FileNotFoundError(f"Not find the R3 baseline file {nonstream_baseline_path} or {stream_baseline_path} .")
 
     routing_layer_num_1 = len(os.listdir(stream_baseline_path))
     routing_layer_num_2 = len(os.listdir(nonstream_baseline_path))
-    assert (
-        routing_layer_num_1 == moe_layer_num
-    ), f"routing index number {routing_layer_num_1} should equal to moe layer number {moe_layer_num}"
-    assert (
-        routing_layer_num_2 == moe_layer_num
-    ), f"routing index number {routing_layer_num_2} should equal to moe layer number {moe_layer_num}"
 
     # Test streaming chat
     send_r3_streaming_chat(openai_client, user_id="r3_chat_completion_stream")
@@ -204,5 +201,12 @@ def check_routing_replay_chat_completion(openai_client, moe_layer_num: int, mode
         assert (
             overlap_ratio >= 0.999
         ), f"the routing overlap ratio of the layer {layer_index} should be equal to baseline routing index, but got {overlap_ratio}"
+
+    assert (
+        routing_layer_num_1 == moe_layer_num
+    ), f"routing index number {routing_layer_num_1} should equal to moe layer number {moe_layer_num}"
+    assert (
+        routing_layer_num_2 == moe_layer_num
+    ), f"routing index number {routing_layer_num_2} should equal to moe layer number {moe_layer_num}"
 
     # shutil.rmtree(cur_save_routing_path)
