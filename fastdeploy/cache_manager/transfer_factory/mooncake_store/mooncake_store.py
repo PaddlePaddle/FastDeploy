@@ -237,6 +237,21 @@ class MooncakeStore(KVCacheStorage):
         logger.debug(f"The exists fun processes {len(keys)} objects, cost_time: {cost_time:.3f}ms")
         return result
 
+    def query(self, k_keys: List[str], v_keys: List[str], timeout: float = 1.0):
+        """
+        Given the k_keys and v_keys, get the valid blocks number that
+        can be prefetched from storage backend.
+        """
+        assert len(k_keys) == len(v_keys), "k_keys and v_keys must have the same length."
+        result = self.exists(k_keys + v_keys)
+
+        # only consider the case when both key and value exist
+        num = 0
+        for k, v in zip(k_keys, v_keys):
+            if result[k] and result[v]:
+                num += 1
+        return num
+
     def delete(self, key, timeout=5) -> bool:
         while timeout:
             result = self.store.remove(key)

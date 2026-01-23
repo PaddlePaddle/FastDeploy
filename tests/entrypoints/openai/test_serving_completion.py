@@ -83,7 +83,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_call"
-        output = {"tool_call": "tool_call"}
+        output = {"tool_calls": "tool_call"}
         # 调用calc_finish_reason方法
         result = serving_completion.calc_finish_reason(None, 100, output, False)
         # 断言结果为"tool_calls"
@@ -767,6 +767,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "num_cache_tokens": 0,
                     "num_image_tokens": 0,
                     "reasoning_token_num": 0,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "skipped": False,
                 },
                 "finished": True,
             }
@@ -1243,7 +1246,13 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Mock to_dict_for_infer method to return a proper dict
         def mock_to_dict_for_infer(request_id_idx, prompt):
-            return {"prompt": prompt, "request_id": request_id_idx, "prompt_tokens": 10, "max_tokens": 100}
+            return {
+                "prompt": prompt,
+                "request_id": request_id_idx,
+                "prompt_tokens": 10,
+                "max_tokens": 100,
+                "metrics": {},
+            }
 
         mock_request.to_dict_for_infer = mock_to_dict_for_infer
 

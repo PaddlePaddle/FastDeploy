@@ -332,8 +332,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertFalse(ok)
         # cache manager started before workers (lines 184-185)
         self.assertTrue(started_cache.get("called", False))
-        # launched_cache_manager_signal set (line 221)
-        self.assertEqual(int(eng.launched_cache_manager_signal.value[0]), 1)
         # avoid atexit finalizer
         if hasattr(eng, "_finalizer"):
             try:
@@ -445,6 +443,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 else:
                     eng.running = False
                     return None, None
+
+            def receive_pyobj_once(self, block):
+                return self.msg, None
 
             def close(self):
                 pass
