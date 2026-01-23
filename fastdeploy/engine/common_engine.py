@@ -134,6 +134,7 @@ class EngineService:
             )
 
         self.bos_client = None
+        self.mm_max_tokens_per_item = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(

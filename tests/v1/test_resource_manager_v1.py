@@ -206,6 +206,7 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         model_cfg.print = print
         model_cfg.max_model_len = 5120
         model_cfg.architectures = ["test_model"]
+        model_cfg.mm_max_tokens_per_item = None
         cache_cfg.bytes_per_layer_per_block = 1
         cache_cfg.block_size = 64
         parallel_cfg = ParallelConfig(args)
