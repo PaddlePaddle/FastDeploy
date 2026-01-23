@@ -317,6 +317,11 @@ class ModelOutputData:
     """
     min_tokens: paddle.Tensor = None
 
+    """
+        stop nums for every sequence
+    """
+    stop_nums: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
