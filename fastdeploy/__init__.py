@@ -47,7 +47,12 @@ from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import console_logger, current_package_version, envs, get_version_info
+from fastdeploy.utils import (
+    console_logger,
+    current_package_version,
+    envs,
+    get_version_info,
+)
 
 paddle.compat.enable_torch_proxy(scope={"triton"})
 # paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
@@ -81,7 +86,7 @@ try:
     if version_info is not None and "paddle_commit" in version_info:
         build_paddle_commit = version_info["paddle_commit"]
         runtime_paddle_commit = paddle.version.commit
-        
+
         if build_paddle_commit != runtime_paddle_commit:
             console_logger.warning(
                 f"The Paddle version in the current runtime environment is inconsistent with the Paddle code version "

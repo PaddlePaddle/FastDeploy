@@ -172,7 +172,10 @@ class AppendAttentionBackend(AttentionBackend):
                         list(
                             set(
                                 paddle.get_flags(flag)[flag].split(",")
-                                + ["custom_op.static_op_append_attention_with_output_"]
+                                + [
+                                    "custom_op.static_op_append_attention_with_output_",
+                                    "custom_op.static_op_get_block_shape_and_split_kv_block",
+                                ]
                             )
                         )
                     )
@@ -276,6 +279,18 @@ class AppendAttentionBackend(AttentionBackend):
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
         sliding_window = layer.sliding_window
+
+        if self.rope_3d:
+            assert len(forward_meta.rotary_embs.shape) == 6
+        else:
+            assert len(forward_meta.rotary_embs.shape) == 5
+            if layer.use_neox_rotary_style:
+                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
+                # 128 is qwen3
+                # 32 is glm
+                # 64 is gpt-oss
+                assert forward_meta.rotary_embs.shape[4] in [128, 32, 64]
+
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
@@ -350,7 +365,7 @@ class AppendAttentionBackend(AttentionBackend):
                 else:
                     raise NotImplementedError("Only supported attr of quant_max_bound in ['127', '448'].")
             else:
-                res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type)
+                res = paddle.zeros([token_nums, q_num_heads * head_dims], dtype=D_type)
 
             res = append_attention_with_output(
                 qkv,

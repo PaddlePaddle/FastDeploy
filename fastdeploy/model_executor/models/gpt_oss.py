@@ -229,6 +229,13 @@ class GptOssModel(nn.Layer):
 )
 class GptOssForCausalLM(ModelForCasualLM):
     def __init__(self, fd_config: FDConfig):
+        if (
+            hasattr(fd_config, "quant_config")
+            and fd_config.model_config.quantization_config is not None
+            and "modules_to_not_convert" in fd_config.model_config.quantization_config
+        ):
+            fd_config.model_config.quantization_config["modules_to_not_convert"].append("*norm")
+
         super(GptOssForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
         self.model = GptOssModel(fd_config=fd_config)
@@ -268,14 +275,19 @@ class GptOssForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = [
             # (param_name, weight_name, expert_id, shard_id)
-            ("up_gate_proj_weight", "gate_up_proj", None, None),
             ("up_gate_proj_bias", "gate_up_proj_bias", None, None),
-            ("down_proj_weight", "down_proj", None, None),
             ("down_proj_bias", "down_proj_bias", None, None),
+            ("up_gate_proj_weight", "gate_up_proj", None, None),
+            ("down_proj_weight", "down_proj", None, None),
+            ("up_gate_proj_weight", "gate_up_proj_blocks", None, None),
+            ("up_gate_proj_scale", "gate_up_proj_scales", None, None),
+            ("down_proj_weight", "down_proj_blocks", None, None),
+            ("down_proj_scale", "down_proj_scales", None, None),
         ]
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+            matched = False
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -287,26 +299,37 @@ class GptOssForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight, shard_id)
+                matched = True
                 break
-            else:
-                for mapping in expert_params_mapping:
-                    param_name, weight_name, expert_id, shard_id = mapping
+            if not matched:
+                for param_name, weight_name, expert_id, shard_id in expert_params_mapping:
                     if weight_name not in loaded_weight_name:
                         continue
+
                     model_param_name = loaded_weight_name.replace(weight_name, param_name)
                     if model_param_name not in params_dict:
                         continue
+
                     param = params_dict[model_param_name]
                     weight_loader = param.weight_loader
-                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    weight_loader(
+                        param,
+                        loaded_weight,
+                        shard_id=shard_id,
+                        expert_id=expert_id,
+                    )
+
+                    matched = True
                     break
-                else:
-                    model_param_name = loaded_weight_name
-                    if model_param_name not in params_dict:
-                        continue
-                    param = params_dict[model_param_name]
-                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                    weight_loader(param, loaded_weight)
+            if not matched:
+
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
 
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)

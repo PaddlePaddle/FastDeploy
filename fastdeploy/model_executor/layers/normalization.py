@@ -31,7 +31,7 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
-from .utils import get_tensor
+from .utils import get_tensor, modules_to_convert
 
 
 class RMSNorm(nn.Layer):
@@ -95,9 +95,21 @@ class RMSNorm(nn.Layer):
                 "float16",
             ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        self.quant_round_type: int = (
+            self.fd_config.quant_config.quant_round_type
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_max_bound: int = (
+            self.fd_config.quant_config.quant_max_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_min_bound: int = (
+            self.fd_config.quant_config.quant_min_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
@@ -192,7 +204,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
-        external_rmsnorm: Optional[Callable] = None,
+        proxy_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -218,7 +230,7 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
-        if external_rmsnorm is None:
+        if proxy_rmsnorm is None:
             if current_platform.is_gcu():
                 if residual_input is None:
                     norm_out = rms_norm(x, self.weight, self.eps)
@@ -241,7 +253,7 @@ class RMSNorm(nn.Layer):
         else:
             if residual_input is not None:
                 x = x + residual_input
-            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+            norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:

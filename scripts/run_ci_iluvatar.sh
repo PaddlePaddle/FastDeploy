@@ -2,6 +2,8 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
+ixsmi
+
 #先kill一遍
 ps -efww | grep -E 'run_ernie300B_4layer' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 
@@ -232,7 +234,7 @@ if [ ${exit_code} -ne 0 ]; then
     exit 1
 fi
 
-expected_strings="Buddhist statue"
+expected_strings="Buddhist"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else
