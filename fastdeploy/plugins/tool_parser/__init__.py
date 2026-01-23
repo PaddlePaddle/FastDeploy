@@ -14,7 +14,21 @@
 # limitations under the License.
 """
 
-from .attention_store import AttentionStore
-from .mooncake_store import MooncakeStore
+from fastdeploy.plugins.utils import load_plugins_by_group
 
-__all__ = ["MooncakeStore", "AttentionStore"]
+# make sure one process only loads plugins once
+plugins_loaded = False
+PLUGINS_GROUP = "fastdeploy.tool_parser_plugins"
+
+
+def load_tool_parser_plugins():
+    """load_tool_parser_plugins"""
+    global plugins_loaded
+    if plugins_loaded:
+        return
+    plugins_loaded = True
+
+    plugins = load_plugins_by_group(group=PLUGINS_GROUP)
+    # general plugins, we only need to execute the loaded functions
+    for func in plugins.values():
+        func()

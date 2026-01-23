@@ -246,6 +246,20 @@ class TestLocalScheduler(unittest.TestCase):
         # Verify only one request exists in scheduler
         self.assertEqual(len(self.scheduler.requests), 1)
 
+    def test_get_inflight_requests(self):
+        """Test getting inflight requests."""
+        # Add some requests
+        requests = [self.mock_request_1, self.mock_request_2]
+        self.scheduler.put_requests(requests)
+
+        # Get inflight requests
+        inflight_requests = self.scheduler.get_inflight_requests()
+
+        # Verify correct requests are returned
+        self.assertEqual(len(inflight_requests), len(requests))
+        for req in inflight_requests:
+            self.assertIn(req, requests)
+
     def test_put_requests_max_size_limit(self):
         """Test that max size limit is enforced."""
         # Create scheduler with small max size
