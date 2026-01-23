@@ -259,6 +259,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init engine forward signal
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -415,20 +425,6 @@ class PaddleDisWorkerProc:
 
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            # run eplb
-            self._run_eplb(tp_rank)
-            if tp_rank == 0:
-                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
-                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
-                    )
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
-
             self.insert_step = False
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -476,32 +472,40 @@ class PaddleDisWorkerProc:
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
-
+                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 if read_finish:
                     # Ensure that every worker get the task
                     self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
                     self.task_queue.read_finish_flag.set(0)
-
+                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
                 req_dicts = []
-                for req_dict, bsz in tasks:
-                    cur_max_bsz_index = int(bsz)
-                    req_dicts.extend(req_dict)
+                if tasks[0][0]:
+                    for req_dict, bsz in tasks:
+                        cur_max_bsz_index = int(bsz)
+                        req_dicts.extend(req_dict)
 
-                req_ids = [req.request_id for req in req_dicts]
+                    req_ids = [req.request_id for req in req_dicts]
 
-                logger.info(
-                    f"Rank: {self.local_rank}, cur_max_bsz_index: {cur_max_bsz_index}, num_running_requests: {self.worker.get_num_running_request()} "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
-                )
+                    logger.info(
+                        f"Rank: {self.local_rank}, cur_max_bsz_index: {cur_max_bsz_index}, num_running_requests: {self.worker.get_num_running_request()} "
+                        f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                    )
 
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, cur_max_bsz_index)
+                    # Process prefill inputs
+                    self.worker.preprocess_new_task(req_dicts, cur_max_bsz_index)
+            else:
+                if self.scheduler_config.splitwise_role == "prefill":
+                    if tp_size > 1:
+                        # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     self._tp_barrier_wait()
-
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
@@ -511,6 +515,20 @@ class PaddleDisWorkerProc:
             self.worker.execute_model(req_dicts, cur_max_bsz_index)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            # run eplb
+            self._run_eplb(tp_rank)
+            if tp_rank == 0:
+                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                        src=0, group=self.parallel_config.ep_group
+                    )
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
+            self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
