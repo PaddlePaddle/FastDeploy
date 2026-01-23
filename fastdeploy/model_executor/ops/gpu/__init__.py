@@ -36,7 +36,12 @@ def decide_module():
     return ".fastdeploy_ops"
 
 
-module_path = decide_module()
+module_path = ".fastdeploy_ops"
+try:
+    module_path = decide_module()
+except Exception as e:
+    print(f"decide_module error, load custom_ops from .fastdeploy_ops: {e}")
+    pass
 import_custom_ops(PACKAGE, module_path, globals())
 
 
