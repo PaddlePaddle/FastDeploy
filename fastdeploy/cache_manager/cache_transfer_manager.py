@@ -660,6 +660,9 @@ class CacheTransferManager:
                         self.cpu_cache_kvs.clear()
                         self.k_dst_ptrs.clear()
                         self.v_dst_ptrs.clear()
+                        if self.cache_dtype == "block_wise_fp8":
+                            self.k_scales_ptrs.clear()
+                            self.v_scales_ptrs.clear()
                         gc.collect()
                         logger.debug("[RL] successfully cleared cpu caches")
                         # reset swap_space_ready_signal
@@ -681,8 +684,9 @@ class CacheTransferManager:
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
                         self.gpu_cache_v_tensors.clear()
-                        self.gpu_cache_scales_k_tensors.clear()
-                        self.gpu_cache_scales_v_tensors.clear()
+                        if self.cache_dtype == "block_wise_fp8":
+                            self.gpu_cache_scales_k_tensors.clear()
+                            self.gpu_cache_scales_v_tensors.clear()
                         paddle.device.cuda.empty_cache()
                         logger.debug("[RL] successfully cleared gpu caches")
                     else:
