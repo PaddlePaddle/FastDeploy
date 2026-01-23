@@ -42,7 +42,6 @@ from fastdeploy.cache_manager.ops import (
     unset_data_ipc,
 )
 from fastdeploy.cache_manager.transfer_factory import AttentionStore, MooncakeStore, FileStore
-from fastdeploy.cache_manager.transfer_factory.file_store.file_store import FileStoreConfig
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
@@ -574,29 +573,54 @@ class CacheTransferManager:
             elif self.storage_backend_type == "file":
                 logger.info(f"FileStore read_storage: reading {len(k_cache_keys)} blocks")
                 
+                # Use FileStore batch_get to read contiguous blocks into pinned buffers
+                block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
-                target_locations = []
-                
-                for i, block_id in enumerate(gpu_block_ids):
-                    cpu_block_id = cpu_block_ids[i] if i < len(cpu_block_ids) else i
-                    key_buf_ptr = self.storage_key_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
-                    val_buf_ptr = self.storage_value_read_buffer + cpu_block_id * self.storage_buffer_stride_bytes
-                    target_locations.extend([key_buf_ptr, val_buf_ptr])
-                
-                target_sizes = [self.storage_buffer_stride_bytes] * len(keys)
+                k_cache_ptrs = [
+                    self.storage_key_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                ]
+                v_cache_ptrs = [
+                    self.storage_value_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                ]
+                kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
+                kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
                 
                 start_time = time.time()
-                results = self.storage_backend.batch_get(keys, target_locations, target_sizes)
+                results = self.storage_backend.batch_get(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
                 read_cost_time = time.time() - start_time
                 
+                # Count successfully read blocks
+                k_result, v_result = results[:block_num], results[block_num:]
                 success_block_num = 0
-                for i in range(len(k_cache_keys)):
-                    key_result = results[i]
-                    val_result = results[i + len(k_cache_keys)]
-                    if key_result is not None and val_result is not None:
+                for k, v in zip(k_result, v_result):
+                    if k > 0 and v > 0:
                         success_block_num += 1
                 
                 valid_gpu_block_ids = gpu_block_ids[:success_block_num]
+                valid_cpu_block_ids = cpu_block_ids[:success_block_num]
+
+                # Sync successfully read blocks from CPU pinned buffers back to GPU kv cache
+                if success_block_num > 0:
+                    mode = 1  # cpu ==> gpu
+                    swap_cache_layout(
+                        self.gpu_cache_k_tensors,
+                        self.storage_key_read_buffer,
+                        self.key_cache_shape,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
+                    swap_cache_layout(
+                        self.gpu_cache_v_tensors,
+                        self.storage_value_read_buffer,
+                        self.value_cache_shape,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
+                
                 logger.debug(f"_run_read_storage, FileStore read_cost_time: {read_cost_time:.6f}s, success_blocks: {success_block_num}")
 
             return valid_gpu_block_ids
@@ -741,6 +765,36 @@ class CacheTransferManager:
             elif self.storage_backend_type == "file":
                 logger.info(f"FileStore write_back_storage: writing {len(k_cache_keys)} blocks")
                 
+                key_cache_size = [
+                    self.key_cache_shape[0],
+                    self.key_cache_shape[1],
+                    self.key_cache_shape[2],
+                    self.key_cache_shape[3],
+                ]
+
+                mode = 0  # gpu ==> cpu
+
+                start_time = time.time()
+                swap_cache_layout(
+                    self.gpu_cache_k_tensors,
+                    self.storage_key_write_buffer,
+                    key_cache_size,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.device,
+                    mode,
+                )
+                swap_cache_layout(
+                    self.gpu_cache_v_tensors,
+                    self.storage_value_write_buffer,
+                    key_cache_size,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.device,
+                    mode,
+                )
+                swap_cost_time = time.time() - start_time
+
                 keys = k_cache_keys + v_cache_keys
                 target_locations = []
                 
@@ -757,7 +811,6 @@ class CacheTransferManager:
                 results = self.storage_backend.batch_set(keys, target_locations, target_sizes)
                 write_cost_time = time.time() - start_time
                 
-                # 统计成功写入的block数量
                 success_block_num = 0
                 for i in range(len(k_cache_keys)):
                     key_result = results[i]
@@ -765,7 +818,9 @@ class CacheTransferManager:
                     if key_result == 0 and val_result == 0:
                         success_block_num += 1
                 
-                logger.debug(f"_run_write_back_storage, FileStore write_cost_time: {write_cost_time:.6f}s, success_blocks: {success_block_num}")
+                logger.debug(
+                    f"_run_write_back_storage, FileStore swap_cost_time: {swap_cost_time:.6f}s, write_cost_time: {write_cost_time:.6f}s, success_blocks: {success_block_num}"
+                )
                 return success_block_num
 
         except Exception as e:
