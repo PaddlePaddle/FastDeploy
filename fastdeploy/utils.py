@@ -220,6 +220,7 @@ class ErrorCode(str, Enum):
     CONNECTION_ERROR = "connection_error"
     MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
     INTERNAL_ERROR = "internal_error"
+    CLIENT_ABORTED = "client_aborted"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -572,7 +573,7 @@ def check_unified_ckpt(model_dir):
 
     try:
         # check all the file exists
-        safetensors_num = int(model_files[0].strip(".safetensors").split("-")[-1])
+        safetensors_num = int(model_files[0].strip(".safetensors").split("-")[-1]) + 1
         flags = [0] * safetensors_num
         for x in model_files:
             current_index = int(x.strip(".safetensors").split("-")[1])
@@ -1154,7 +1155,7 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
-trace_logger = FastDeployLogger().get_trace_logger("trace_logger", "trace_logger.log")
+trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
 

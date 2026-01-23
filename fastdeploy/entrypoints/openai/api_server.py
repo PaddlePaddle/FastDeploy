@@ -20,6 +20,7 @@ import signal
 import threading
 import time
 import traceback
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -38,6 +39,7 @@ from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
+from fastdeploy.engine.request import ControlRequest
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.middleware import AuthenticationMiddleware
@@ -59,7 +61,11 @@ from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbeddi
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.entrypoints.openai.utils import (
+    UVICORN_CONFIG,
+    make_arg_parser,
+    with_cancellation,
+)
 from fastdeploy.entrypoints.openai.v1.serving_chat import (
     OpenAIServingChat as OpenAIServingChatV1,
 )
@@ -366,6 +372,66 @@ def ping(raw_request: Request) -> Response:
     return health(raw_request)
 
 
+@app.post("/v1/pause")
+async def pause(request: Request) -> Response:
+    # todo: support wait_for_inflight_requests(default False), clear_cache(default True) arguments
+    request_id = f"control-{uuid.uuid4()}"
+    control_request = ControlRequest(request_id, "pause")
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/resume")
+async def resume(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    control_request = ControlRequest(request_id, "resume")
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.get("/v1/is_paused")
+async def is_paused(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    control_request = ControlRequest(request_id, "is_paused")
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/update_weights")
+async def update_weights(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+
+    request_data = await request.json() if await request.body() else {}
+
+    args = {}
+
+    # Validate and extract version parameter
+    if "version" in request_data and request_data["version"] is not None:
+        if not isinstance(request_data["version"], str):
+            return JSONResponse(
+                status_code=400, content={"error": "Invalid parameter type", "message": "version must be a string"}
+            )
+        args["version"] = request_data["version"]
+
+    # Validate and extract rsync_config parameter
+    if "rsync_config" in request_data and request_data["rsync_config"] is not None:
+        if not isinstance(request_data["rsync_config"], dict):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid parameter type", "message": "rsync_config must be a dictionary"},
+            )
+        if "etcd_server" not in request_data["rsync_config"]:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid parameter type", "message": "rsync_config must contain etcd_server"},
+            )
+        args["rsync_config"] = request_data["rsync_config"]
+
+    control_request = ControlRequest(request_id, "update_weights", args)
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
 def wrap_streaming_generator(original_generator: AsyncGenerator):
     """
     Wrap an async generator to release the connection semaphore when the generator is finished.
@@ -410,6 +476,7 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
 
 
 @app.post("/v1/chat/completions")
+@with_cancellation
 async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
@@ -446,6 +513,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
 
 
 @app.post("/v1/completions")
+@with_cancellation
 async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
@@ -529,12 +597,10 @@ def update_model_weight(request: Request) -> Response:
     update model weight
     """
     if app.state.dynamic_load_weight:
-        status, msg = app.state.engine_client.update_model_weight()
-        if not status:
-            return Response(content=msg, status_code=404)
-        return Response(status_code=200)
+        status_code, msg = app.state.engine_client.update_model_weight()
+        return JSONResponse(content=msg, status_code=status_code)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
 
 @app.get("/clear_load_weight")
@@ -544,12 +610,10 @@ def clear_load_weight(request: Request) -> Response:
     clear model weight
     """
     if app.state.dynamic_load_weight:
-        status, msg = app.state.engine_client.clear_load_weight()
-        if not status:
-            return Response(content=msg, status_code=404)
-        return Response(status_code=200)
+        status_code, msg = app.state.engine_client.clear_load_weight()
+        return JSONResponse(content=msg, status_code=status_code)
     else:
-        return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+        return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
 
 @app.post("/rearrange_experts")

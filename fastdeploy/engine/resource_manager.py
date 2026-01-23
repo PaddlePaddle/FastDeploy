@@ -58,6 +58,7 @@ class ResourceManager:
         self.req_dict = dict()
         # current batch status of the engine
         self.real_bsz = 0
+        self.abort_req_ids_set = set()
         llm_logger.info(f"{self.info()}")
         main_process_metrics.max_batch_size.set(max_num_seqs)
 
@@ -376,7 +377,7 @@ class ResourceManager:
         info = (
             f"ResourceManager info, "
             f"total_block_number: {total_block_number}, total_batch_number: {total_batch_number}, "
-            f"available_block_num: {available_block_num}, available_batch: {available_batch_num}\n"
+            f"available_block_num: {available_block_num}, available_batch: {available_batch_num},"
             f"running_reqs: {used_batch_num}, block_usage: {block_usage:.2f}%, batch_usage: {batch_usage:.2f}%"
         )
         return info

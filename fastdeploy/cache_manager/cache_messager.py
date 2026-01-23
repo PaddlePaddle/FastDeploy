@@ -158,6 +158,7 @@ class CacheMessager:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
+        self.cache_dtype = cache_dtype
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
@@ -218,11 +219,19 @@ class CacheMessager:
         block_bytes = math.prod(cache_shape[1:])
         if key_cache.dtype == paddle.bfloat16 or key_cache.dtype == paddle.float16:
             block_bytes *= 2
+
+        scale_block_bytes = 0
+        if cache_dtype == "block_wise_fp8":
+            scale_block_bytes = math.prod(key_cache_scale.shape[1:])
+            if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
+                scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
-            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
+            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
         )
         self.block_bytes = block_bytes
+        self.scale_block_bytes = scale_block_bytes
 
         # 3. initialize the messager
         for protocol in transfer_protocol:
@@ -243,15 +252,17 @@ class CacheMessager:
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
-                    rank,
                     gpu_id,
                     cache_k_ptr_list,
                     cache_v_ptr_list,
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
+                    cache_k_scale_ptr_list=k_scale_ptr_list,
+                    cache_v_scale_ptr_list=v_scale_ptr_list,
+                    scale_block_bytes=scale_block_bytes,
                 )
 
         self.gpu_id = gpu_id
@@ -408,7 +419,7 @@ class CacheMessager:
                             item["status"] = "finished"
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(decode_idx)
-                        logger.info(f"finish write cache {item['request_id']}")
+                        logger.info(f"finish write cache {item['request_id']}, cache dtype: {self.cache_dtype}")
                         self.engine_worker_queue.finish_send_cache_barrier.wait()
                         self.engine_worker_queue.put_finished_req([[item["request_id"], item["status"]]])
                         logger.info(f"put write cache {item['request_id']}, status {item['status']}")
@@ -485,6 +496,7 @@ class CacheMessagerV1:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
+        self.cache_dtype = cache_dtype
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
@@ -548,11 +560,19 @@ class CacheMessagerV1:
         block_bytes = math.prod(cache_shape[1:])
         if key_cache.dtype == paddle.bfloat16:
             block_bytes *= 2
+
+        scale_block_bytes = 0
+        if cache_dtype == "block_wise_fp8":
+            scale_block_bytes = math.prod(key_cache_scale.shape[1:])
+            if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
+                scale_block_bytes *= 2
+            logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
-            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
+            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype} \n"
         )
         self.block_bytes = block_bytes
+        self.scale_block_bytes = scale_block_bytes
 
         # 3. initialize the messager
         for protocol in transfer_protocol:
@@ -574,15 +594,17 @@ class CacheMessagerV1:
 
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
-                    rank,
                     gpu_id,
                     cache_k_ptr_list,
                     cache_v_ptr_list,
                     max_block_num,
                     block_bytes,
                     rdma_port,
-                    nranks,
-                    rank,
+                    prefill_tp_size=nranks,
+                    prefill_tp_idx=rank,
+                    cache_k_scale_ptr_list=k_scale_ptr_list,
+                    cache_v_scale_ptr_list=v_scale_ptr_list,
+                    scale_block_bytes=scale_block_bytes,
                 )
 
         self.gpu_id = gpu_id
@@ -694,7 +716,7 @@ class CacheMessagerV1:
                         else:
                             end_layer_idx = prefilled_layer_idx
                     if sended_layer_idx == prefilled_layer_idx:  # computation not in next layer
-                        time.sleep(0.01)
+                        time.sleep(0.001)
 
                     for layer_idx in range(start_layer_idx, end_layer_idx + 1):
                         for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
@@ -791,7 +813,8 @@ class CacheMessagerV1:
                                         if "error" not in task["status"]:
                                             task["status"] = "finished"
                                             logger.info(
-                                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end} need_prefill_tokens {task['need_prefill_tokens']}"
+                                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end}, "
+                                                f"need_prefill_tokens {task['need_prefill_tokens']}, cache dtype: {self.cache_dtype}"
                                             )
                                     else:
                                         task["sended_layer_id"] = -1
@@ -826,24 +849,23 @@ class CacheMessagerV1:
         kv_signal_data = paddle.full(shape=[512 * 3 + 2], fill_value=-1, dtype="int32")
         while True:
             try:
-                get_output_kv_signal(kv_signal_data, self.rank_id, 0)  # wait_flag
+                get_output_kv_signal(kv_signal_data, self.rank_id, 1)  # wait_flag
                 if not self.cache_info:
                     time.sleep(0.01)
                     continue
                 tasks_count = kv_signal_data[0]
                 if tasks_count == -1:
-                    time.sleep(0.001)
                     continue
-                layer_id = kv_signal_data[1].numpy().tolist()
+                layer_id = kv_signal_data[1].item()
                 if layer_id == self.num_layers - 1:
                     logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}")
                 batch_engine_signals = []
                 # format for signal to put in cache_prefilled_engine_ids_queue: [(engine_idx1, prefilled_token_num1), (engine_idx2, prefilled_token_num2)]
                 with self.engine_cache_task_thread_lock:
                     for bi in range(tasks_count):
-                        engine_idx = kv_signal_data[3 * bi + 2].numpy().tolist()
-                        chuck_token_offset = kv_signal_data[3 * bi + 3].numpy().tolist()
-                        current_seq_len = kv_signal_data[3 * bi + 4].numpy().tolist()
+                        engine_idx = kv_signal_data[3 * bi + 2].item()
+                        chuck_token_offset = kv_signal_data[3 * bi + 3].item()
+                        current_seq_len = kv_signal_data[3 * bi + 4].item()
                         self.engine_cache_tasks[engine_idx]["prefilled_layer_idx"] = layer_id
                         self.engine_cache_tasks[engine_idx]["prefilled_token_num"] = (
                             chuck_token_offset + current_seq_len
@@ -1031,7 +1053,10 @@ if __name__ == "__main__":
 
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
-    logger = get_logger("cache_messager", f"cache_messager_tprank{args.rank}.log")
+    if args.mp_num > 1:
+        logger = get_logger("cache_messager", f"cache_messager_{rank_id}.log")
+    else:
+        logger = get_logger("cache_messager", "cache_messager.log")
 
     logger.info("create cache messager...")
     logger.info(f"{args}")

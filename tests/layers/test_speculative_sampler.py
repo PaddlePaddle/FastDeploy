@@ -141,6 +141,7 @@ def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab
     share_inputs["draft_logits"] = paddle.full(
         [max_num_seqs * (max_draft_token_num + 1), vocab_size], -1, dtype="float32"
     )
+    share_inputs["reasoning_status"] = paddle.zeros([max_num_seqs], dtype="int32")
 
     return share_inputs
 

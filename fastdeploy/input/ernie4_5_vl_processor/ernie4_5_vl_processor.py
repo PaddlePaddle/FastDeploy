@@ -316,5 +316,5 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         outs["input_ids"] = np.array(outs["input_ids"], dtype=np.int64)
         outs["token_type_ids"] = np.array(outs["token_type_ids"], dtype=np.int64)
         outs["position_ids"] = np.array(outs["position_ids"], dtype=np.int64)
-
+        outs["mm_num_token_func"] = self.ernie4_5_processor.mm_num_tokens
         return outs
