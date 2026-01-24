@@ -254,7 +254,7 @@ class PrefixCacheManager:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
 
-        if self.cache_config.enable_hierarchical_cache:
+        if os.environ["LYH_DEBUG"] == "1" or self.cache_config.enable_hierarchical_cache:
             for i in range(tensor_parallel_size):
                 launch_cmd = (
                     "FLAGS_allocator_strategy=auto_growth "
@@ -281,7 +281,7 @@ class PrefixCacheManager:
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
                     + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
+                    + (" --create_cache_tensor" if os.environ["LYH_DEBUG"] == "1" or not self.enable_splitwise else "")
                     + f" >{log_dir}/launch_cache_transfer_manager_tprank{i}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")

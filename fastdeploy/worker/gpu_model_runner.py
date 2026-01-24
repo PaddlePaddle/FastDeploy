@@ -1588,7 +1588,9 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. During profiling, it creates its own kv cache.
         # 2. If no need to profile, create kv cache if cache managers do not exist.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            os.environ["LYH_DEBUG"] == "1"
+            or self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
 
         cache_ready_signal = self.cache_ready_signal
@@ -2670,8 +2672,8 @@ class GPUModelRunner(ModelRunnerBase):
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            os.environ["LYH_DEBUG"] == "1"
+            or self.fd_config.cache_config.num_cpu_blocks > 0
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
