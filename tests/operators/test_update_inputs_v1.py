@@ -83,7 +83,7 @@ def update_inputs_kernel_v1(
                 seq_lens_encoder[thread_idx] = 0
                 topk_ids[thread_idx] = -1
                 stop_flag_now_int[thread_idx] = 1
-    stop_sum = np.sum(stop_flag_now_int)
+    stop_sum = np.sum(stop_flag_now_int).item()
     not_need_stop[0] = stop_sum < max_bsz
 
 
