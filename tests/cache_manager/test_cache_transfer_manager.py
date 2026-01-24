@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 import paddle
 
 import fastdeploy.cache_manager.cache_transfer_manager as cache_transfer_manager
+from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.cache_transfer_manager import CacheTransferManager
 
 
@@ -200,26 +201,6 @@ class TestCacheTransferManager(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager._get_cache_bytes("float32")
 
-    def test_storage_exist_block_num_counts_pairs(self):
-        self.manager.storage_backend = MagicMock()
-        k_keys = ["k1", "k2", "k3"]
-        v_keys = ["v1", "v2", "v3"]
-        self.manager.storage_backend.exists.return_value = {
-            "k1": True,
-            "v1": True,
-            "k2": True,
-            "v2": False,
-            "k3": False,
-            "v3": True,
-        }
-        self.assertEqual(self.manager._storage_exist_block_num(k_keys, v_keys), 1)
-        self.manager.storage_backend.exists.assert_called_once_with(k_keys + v_keys)
-
-    def test_storage_exist_block_num_length_mismatch(self):
-        self.manager.storage_backend = MagicMock()
-        with self.assertRaises(AssertionError):
-            self.manager._storage_exist_block_num(["k1"], ["v1", "v2"])
-
     def test_run_read_storage_swaps_valid_blocks(self):
         self.manager.storage_backend = MagicMock()
         self.manager.storage_key_read_buffer = 1000
@@ -234,7 +215,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.swap_cache_layout") as mock_swap:
             valid_ids = self.manager._run_read_storage(
-                ["k1", "k2"], ["v1", "v2"], gpu_block_ids=[5, 6], cpu_block_ids=[0, 1]
+                "test_task", [1, 2, 3, 4], 0, ["k1", "k2"], ["v1", "v2"], [5, 6], [0, 1], 30.0
             )
 
         self.assertEqual(valid_ids, [5])
@@ -260,46 +241,76 @@ class TestCacheTransferManager(unittest.TestCase):
     def test_read_storage_task_reports_result(self):
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier = MagicMock()
         self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager._storage_exist_block_num = MagicMock(return_value=2)
         self.manager._run_read_storage = MagicMock(return_value=[3])
+        self.manager.block_size = 1
 
-        self.manager.read_storage_task(7, ["a", "b", "c"], [3, 4, 5], timeout=0.2)
+        # Mock storage backend to return 2 matches
+        self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "attention_store"
+        self.manager.storage_backend.query.return_value = 2
+
+        task = ReadStorageTask(
+            task_id="7",
+            keys=["a", "b", "c"],
+            token_ids=[1, 2, 3, 4, 5, 6],  # 3 keys * 2 tokens per key
+            gpu_block_ids=[3, 4, 5],
+            start_read_block_idx=0,
+            timeout=0.2,
+        )
+
+        self.manager.read_storage_task(task)
 
         self.manager._run_read_storage.assert_called_once_with(
-            ["a_key_0", "b_key_0"], ["a_value_0", "b_value_0"], [3, 4], [0, 1]
+            "7", [1, 2], 0, ["a_key_0", "b_key_0"], ["a_value_0", "b_value_0"], [3, 4], [0, 1], 0.2
         )
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier.wait.assert_called_once()
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier.reset.assert_called_once()
         self.manager.cache_task_queue.put_transfer_done_signal.assert_called_once_with(
-            (cache_transfer_manager.CacheStatus.STORAGE2GPU, 7, ["a", "b", "c"], [3])
+            (cache_transfer_manager.CacheStatus.STORAGE2GPU, "7", ["a", "b", "c"], [3])
         )
 
     def test_write_back_storage_task_skips_cached_keys(self):
         self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()
         self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager._storage_exist_block_num = MagicMock(return_value=2)
         self.manager._run_write_back_storage = MagicMock()
 
-        self.manager.write_back_storage_task(5, ["k1", "k2"], [0, 1], timeout=0.3)
+        # Mock storage backend to return all keys exist (2 matches for 2 keys)
+        self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "attention_store"
+        self.manager.storage_backend.query.return_value = 2
+
+        task = WriteStorageTask(
+            task_id="5", keys=["k1", "k2"], token_ids=[1, 2, 3, 4], gpu_block_ids=[0, 1], timeout=0.3
+        )
+
+        self.manager.write_back_storage_task(task)
 
         self.manager._run_write_back_storage.assert_not_called()
         self.manager.cache_task_queue.swap_to_storage_barrier.wait.assert_called_once()
         self.manager.cache_task_queue.swap_to_storage_barrier.reset.assert_called_once()
         self.manager.cache_task_queue.put_transfer_done_signal.assert_called_once_with(
-            (cache_transfer_manager.CacheStatus.GPU2STORAGE, 5, ["k1", "k2"], [])
+            (cache_transfer_manager.CacheStatus.GPU2STORAGE, "5", ["k1", "k2"], [])
         )
 
     def test_read_storage_task_no_matches(self):
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier = MagicMock()
         self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager._storage_exist_block_num = MagicMock(return_value=0)
 
-        self.manager.read_storage_task(3, ["a"], [2], timeout=0.1)
+        # Mock storage backend to return 0 matches
+        self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "attention_store"
+        self.manager.storage_backend.query.return_value = 0
+
+        task = ReadStorageTask(
+            task_id="3", keys=["a"], token_ids=[1, 2], gpu_block_ids=[2], start_read_block_idx=0, timeout=0.1
+        )
+
+        self.manager.read_storage_task(task)
 
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier.wait.assert_called_once()
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier.reset.assert_called_once()
         self.manager.cache_task_queue.put_transfer_done_signal.assert_called_once_with(
-            (cache_transfer_manager.CacheStatus.STORAGE2GPU, 3, ["a"], [])
+            (cache_transfer_manager.CacheStatus.STORAGE2GPU, "3", ["a"], [])
         )
 
     def test_init_cpu_cache_no_blocks_sets_ready(self):
@@ -463,13 +474,21 @@ class TestCacheTransferManager(unittest.TestCase):
     def test_write_back_storage_task_nonzero_rank_no_signal(self):
         self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()
         self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager._storage_exist_block_num = MagicMock(return_value=0)
         self.manager._run_write_back_storage = MagicMock()
         self.manager.rank = 1
 
-        self.manager.write_back_storage_task(9, ["k1"], [0], timeout=0.1)
+        # Mock storage backend to return 0 matches (no keys exist)
+        self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "attention_store"
+        self.manager.storage_backend.query.return_value = 0
 
-        self.manager._run_write_back_storage.assert_called_once_with(["k1_key_1"], ["k1_value_1"], [0], [0])
+        task = WriteStorageTask(task_id="9", keys=["k1"], token_ids=[1, 2], gpu_block_ids=[0], timeout=0.1)
+
+        self.manager.write_back_storage_task(task)
+
+        self.manager._run_write_back_storage.assert_called_once_with(
+            "9", [1, 2], 0, ["k1_key_1"], ["k1_value_1"], [0], [0], 0.1
+        )
         self.manager.cache_task_queue.swap_to_storage_barrier.wait.assert_called_once()
         self.manager.cache_task_queue.put_transfer_done_signal.assert_not_called()
 
@@ -484,7 +503,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.device = 0
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.swap_cache_layout") as mock_swap:
-            self.manager._run_write_back_storage(["k1"], ["v1"], gpu_block_ids=[2], cpu_block_ids=[0])
+            self.manager._run_write_back_storage("test_task", [1, 2], 0, ["k1"], ["v1"], [2], [0], 30.0)
 
         mock_swap.assert_any_call(
             self.manager.gpu_cache_k_tensors,
