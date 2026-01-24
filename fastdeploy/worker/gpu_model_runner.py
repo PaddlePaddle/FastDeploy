@@ -2670,9 +2670,7 @@ class GPUModelRunner(ModelRunnerBase):
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            self.fd_config.cache_config.num_cpu_blocks > 0 or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
