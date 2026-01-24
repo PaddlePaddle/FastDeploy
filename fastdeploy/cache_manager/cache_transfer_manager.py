@@ -451,8 +451,7 @@ class CacheTransferManager:
         with self._pause_cond:
             self._pause_cond.wait_for(lambda: not self.is_paused)
             self.inflight += 1
-
-        thread_pool.submit(inflight_task(task_fn, *args))
+            thread_pool.submit(inflight_task, task_fn, *args)
 
     def do_data_transfer(self):
         """
