@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 import time
 import unittest
 from unittest.mock import MagicMock, patch
 
 import paddle
+
+# Add the root directory to Python path so we can import fastdeploy
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import fastdeploy.cache_manager.cache_transfer_manager as cache_transfer_manager
 from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
@@ -203,6 +207,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
     def test_run_read_storage_swaps_valid_blocks(self):
         self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_read_buffer = 1000
         self.manager.storage_value_read_buffer = 2000
         self.manager.storage_buffer_stride_bytes = 10
@@ -494,6 +499,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
     def test_run_write_back_storage_sets_backend(self):
         self.manager.storage_backend = MagicMock()
+        self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_write_buffer = 3000
         self.manager.storage_value_write_buffer = 4000
         self.manager.storage_buffer_stride_bytes = 8
