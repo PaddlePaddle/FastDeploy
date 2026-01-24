@@ -204,6 +204,10 @@ class CacheTransferManager:
         )
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
+        self._pause_cond = threading.Condition()
+        self.is_paused = False  # transfer manager state
+        self.inflight = 0  # number of inflight transfer tasks
+
     def _init_gpu_cache(self, args):
 
         if not args.create_cache_tensor:
@@ -433,6 +437,23 @@ class CacheTransferManager:
 
         return True, ""
 
+    def submit_task(self, thread_pool: concurrent.futures.ThreadPoolExecutor, task_fn, *args):
+
+        def inflight_task(fn, *args):
+            try:
+                return fn(*args)
+            finally:
+                with self._pause_cond:
+                    self.inflight -= 1
+                    if self.inflight == 0:
+                        self._pause_cond.notify_all()
+
+        with self._pause_cond:
+            self._pause_cond.wait_for(lambda: not self.is_paused)
+            self.inflight += 1
+
+        thread_pool.submit(inflight_task(task_fn, *args))
+
     def do_data_transfer(self):
         """
         do data transfer task
@@ -465,7 +486,8 @@ class CacheTransferManager:
                         transfer_task_id,
                     ) = data
                     if event_type.value == CacheStatus.SWAP2CPU.value:
-                        self.swap_to_cpu_thread_pool.submit(
+                        self.submit_task(
+                            self.swap_to_cpu_thread_pool,
                             self._do_swap_to_cpu_task,
                             swap_node_ids,
                             gpu_block_id,
@@ -474,7 +496,8 @@ class CacheTransferManager:
                             transfer_task_id,
                         )
                     else:
-                        self.swap_to_gpu_thread_pool.submit(
+                        self.submit_task(
+                            self.swap_to_gpu_thread_pool,
                             self._do_swap_to_gpu_task,
                             swap_node_ids,
                             gpu_block_id,
@@ -650,6 +673,9 @@ class CacheTransferManager:
             if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
+                    # wait for inflight transfer tasks to finish and pause transfer manager
+                    self.pause()
+
                     # clear cpu caches
                     logger.info("[RL] start clearing caches")
                     logger.debug("[RL] start clearing cpu caches")
@@ -736,10 +762,26 @@ class CacheTransferManager:
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                     self._log_memory("after restoring caches")
+
+                    # resume transfer
+                    self.resume()
+
                 except Exception as e:
                     logger.error(f"[RL] failed to restore caches: {e}")
 
             time.sleep(0.1)
+
+    def pause(self):
+        logger.info("[RL] wait for inflight transfer tasks to finish and pause transfer manager 🔴")
+        with self._pause_cond:
+            self.is_paused = True
+            self._pause_cond.wait_for(lambda: self.inflight == 0)
+
+    def resume(self):
+        logger.info("[RL] resume transfer manager and start to do transfer tasks 🟢")
+        with self._pause_cond:
+            self.is_paused = False
+            self._pause_cond.notify_all()
 
     def _log_memory(self, context: str):
         """Log current GPU memory usage."""
