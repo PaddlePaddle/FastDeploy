@@ -474,7 +474,11 @@ class PaddleDisWorkerProc:
                     self.kv_cache_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
-                        self.kv_cache_status if self.fd_config.cache_config.num_cpu_blocks > 0 else None,
+                        (
+                            self.kv_cache_status
+                            if os.environ["LYH_DEBUG"] == "1" or self.fd_config.cache_config.num_cpu_blocks > 0
+                            else None
+                        ),
                         # model_weights_signal
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,

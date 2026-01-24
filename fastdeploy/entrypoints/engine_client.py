@@ -79,7 +79,7 @@ class EngineClient:
         )
         self.max_model_len = self.fd_config.model_config.max_model_len
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
-        self.enable_cache_transfer = self.fd_config.cache_config.swap_space
+        self.enable_cache_transfer = os.environ["LYH_DEBUG"] == "1" or self.fd_config.cache_config.swap_space
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.num_dp_per_node = self.max_chips_per_node // self.fd_config.parallel_config.tensor_parallel_size
