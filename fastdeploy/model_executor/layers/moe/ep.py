@@ -26,7 +26,10 @@ from fastdeploy import envs
 try:
     if envs.FD_USE_PFCC_DEEP_EP:
         paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
-        import paddlefleet.ops.deep_ep as deep_ep
+        try:
+            import paddlefleet.ops.deep_ep as deep_ep
+        except ModuleNotFoundError:
+            import deep_ep
     else:
         from paddle.distributed.communication import deep_ep
 except Exception as e:
