@@ -193,17 +193,17 @@ class TestCacheTransferManager(unittest.TestCase):
 
         # mock check_work_status 返回 False，触发 break
         self.manager.check_work_status = MagicMock(return_value=(False, "Not Healthy"))
+        self.manager.cache_task_broadcast_signal = type("DummySignal", (), {"value": [0]})()
 
-        # patch do_data_transfer 本身，避免死循环
-        with patch.object(self.manager, "do_data_transfer") as mock_transfer:
-            mock_transfer.side_effect = lambda: None  # 直接返回，不执行死循环
+        with (
+            patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_CACHE_PROC_ERROR_COUNT", 0),
+            patch("time.sleep", lambda *_: None),
+        ):
             self.manager.do_data_transfer()
 
-        # 验证 check_work_status 已被调用
-        self.assertTrue(self.manager.check_work_status.called or True)
-        # 验证 logger 调用
-        self.assertTrue(cache_transfer_manager.logger.error.called or True)
-        self.assertTrue(cache_transfer_manager.logger.critical.called or True)
+        self.assertGreaterEqual(self.manager.check_work_status.call_count, 1)
+        self.assertGreaterEqual(cache_transfer_manager.logger.error.call_count, 1)
+        self.assertGreaterEqual(cache_transfer_manager.logger.critical.call_count, 1)
 
     # ==========================
     # 工具函数与存储相关测试
@@ -764,6 +764,36 @@ class TestCacheTransferManager(unittest.TestCase):
 
         args = Args()
         args.splitwise_role = "mixed"
+        args.create_cache_tensor = False
+        self.manager.kv_cache_status_signal = DummySignal(cache_transfer_manager.KVCacheStatus.CLEARING)
+        self.manager.cache_ready_signal = DummySignal(0)
+        self.manager.swap_space_ready_signal = DummySignal(0)
+        self.manager.gpu_cache_kvs = {"k": paddle.zeros([1])}
+        self.manager.gpu_cache_k_tensors = [paddle.zeros([1])]
+        self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
+        self.manager.num_cpu_blocks = 0
+
+        with (
+            patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc") as mock_unset,
+            patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
+            patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", False),
+            patch("time.sleep", side_effect=StopIteration),
+        ):
+            with self.assertRaises(StopIteration):
+                self.manager.check_cache_status(args)
+
+        self.assertEqual(self.manager.kv_cache_status_signal.value[0], cache_transfer_manager.KVCacheStatus.CLEARED)
+        self.assertEqual(self.manager.cache_ready_signal.value[0], 0)
+        mock_unset.assert_called_once()
+
+    def test_check_cache_status_clearing_with_create_tensor_clears_gpu_cache(self):
+        class DummySignal:
+            def __init__(self, value):
+                self.value = [value]
+
+        args = Args()
+        args.splitwise_role = "mixed"
+        args.create_cache_tensor = True
         self.manager.kv_cache_status_signal = DummySignal(cache_transfer_manager.KVCacheStatus.CLEARING)
         self.manager.cache_ready_signal = DummySignal(0)
         self.manager.swap_space_ready_signal = DummySignal(0)
@@ -776,6 +806,9 @@ class TestCacheTransferManager(unittest.TestCase):
             patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", False),
+            patch("paddle.device.cuda.empty_cache") as mock_empty,
+            patch("paddle.set_device"),
+            patch.object(self.manager, "_log_memory"),
             patch("time.sleep", side_effect=StopIteration),
         ):
             with self.assertRaises(StopIteration):
@@ -783,6 +816,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         self.assertEqual(self.manager.kv_cache_status_signal.value[0], cache_transfer_manager.KVCacheStatus.CLEARED)
         self.assertEqual(self.manager.gpu_cache_kvs, {})
+        mock_empty.assert_called_once()
 
     def test_check_cache_status_updating_sets_normal(self):
         class DummySignal:
