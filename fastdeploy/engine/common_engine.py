@@ -328,6 +328,17 @@ class EngineService:
             create=True,
         )
 
+        cache_transfer_inited_signal_data = np.zeros(
+            shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32
+        )
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -1750,6 +1761,7 @@ class EngineService:
         self.worker_healthy_live_signal.clear()
         self.cache_ready_signal.clear()
         self.swap_space_ready_signal.clear()
+        self.cache_transfer_inited_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
         self.prefix_tree_status_signal.clear()

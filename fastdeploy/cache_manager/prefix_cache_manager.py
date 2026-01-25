@@ -254,7 +254,7 @@ class PrefixCacheManager:
             array=cache_transfer_inited_signal_data,
             dtype=np.int32,
             suffix=engine_worker_queue_port,
-            create=True,
+            create=False,
         )
 
         # Run command to launch cache transfer managers
@@ -282,7 +282,6 @@ class PrefixCacheManager:
                     + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                     + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
                     + f" {sys.executable} {py_path}"
-                    + f" --model_id {os.path.basename(self.config.model_config.model.rstrip('/'))}"
                     + f" --device_id {int(device_ids[i])}"
                     + f" --rank {i}"
                     + f" --splitwise_role {self.splitwise_role}"
