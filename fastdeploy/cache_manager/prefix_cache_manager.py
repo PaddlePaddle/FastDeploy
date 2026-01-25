@@ -294,7 +294,7 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if create_cache_tensor else "")
+                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
                     + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
