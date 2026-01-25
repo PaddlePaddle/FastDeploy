@@ -28,10 +28,16 @@ try:
         paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
         try:
             import paddlefleet.ops.deep_ep as deep_ep
+
+            logger.info("FD use PaddleFleet/DeepEP now.")
         except ModuleNotFoundError:
             import deep_ep
+
+            logger.info("FD use PFCCLab/DeepEP now.")
     else:
         from paddle.distributed.communication import deep_ep
+
+        logger.info("FD use Paddle/DeepEP now.")
 except Exception as e:
     logger.error(
         f"import deep_ep failed! FD_USE_PFCC_DEEP_EP={envs.FD_USE_PFCC_DEEP_EP}. " f"type={type(e).__name__}, err={e}"
