@@ -143,6 +143,17 @@ def mock_fd_config_with_eplb():
 class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         """Set up test fixtures before each test method."""
+        # Mock main_process_metrics to avoid KeyError
+        self.metrics_mock = Mock()
+        self.metrics_mock.request_params_max_tokens = Mock()
+        self.metrics_mock.prompt_tokens_total = Mock()
+        self.metrics_mock.request_prompt_tokens = Mock()
+        self.metrics_patcher = patch(
+            "fastdeploy.entrypoints.engine_client.main_process_metrics",
+            self.metrics_mock,
+        )
+        self.metrics_patcher.start()
+
         # Create a properly configured tokenizer mock first
         mock_tokenizer = Mock()
         mock_tokenizer.sp_model = Mock()
@@ -284,6 +295,11 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         self.engine_client.clear_update_lock.__enter__ = Mock(return_value=None)
         self.engine_client.clear_update_lock.__exit__ = Mock(return_value=None)
 
+    async def asyncTearDown(self):
+        """Clean up test fixtures after each test method."""
+        if hasattr(self, "metrics_patcher"):
+            self.metrics_patcher.stop()
+
     async def test_add_request(self):
         request = {
             "request_id": "test-request-id",
@@ -307,6 +323,17 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures for valid_parameters tests"""
+        # Mock main_process_metrics to avoid KeyError
+        self.metrics_mock = Mock()
+        self.metrics_mock.request_params_max_tokens = Mock()
+        self.metrics_mock.prompt_tokens_total = Mock()
+        self.metrics_mock.request_prompt_tokens = Mock()
+        self.metrics_patcher = patch(
+            "fastdeploy.entrypoints.engine_client.main_process_metrics",
+            self.metrics_mock,
+        )
+        self.metrics_patcher.start()
+
         # Mock the dependencies
         mock_tokenizer = MagicMock()
         mock_tokenizer.sp_model = MagicMock()
@@ -393,6 +420,11 @@ class TestEngineClientValidParameters(unittest.TestCase):
                             self.engine_client.kv_cache_status_signal.value = np.array([0])
                             self.engine_client.prefix_tree_status_signal = Mock()
                             self.engine_client.prefix_tree_status_signal.value = np.array([0])
+
+    def tearDown(self):
+        """Clean up test fixtures after each test method."""
+        if hasattr(self, "metrics_patcher"):
+            self.metrics_patcher.stop()
 
     def test_max_logprobs_valid_values(self):
         """Test valid max_logprobs values"""
