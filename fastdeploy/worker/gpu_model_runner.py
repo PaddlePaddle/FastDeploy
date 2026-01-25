@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import List, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import paddle
@@ -74,6 +74,7 @@ else:
         share_external_data,
         speculate_schedule_cache,
         set_data_ipc,
+        unset_data_ipc,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -138,6 +139,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
+        self.cache_kvs_map: dict = {}
+        self.exist_prefill_flag = False
 
         # VL model config:
         if self.enable_mm:
@@ -237,6 +240,16 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.enable_entropy = self.model_config.enable_entropy
 
+        # init signal
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
@@ -250,6 +263,8 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill stage exist
         """
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            return self.exist_prefill_flag
         return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
 
     def exist_decode(self):
@@ -712,6 +727,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.seq_lens_this_time_buffer[idx : idx + 1] = length
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                self.exist_prefill_flag = True
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
@@ -735,6 +751,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    self.exist_prefill_flag = False
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -755,6 +772,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.exist_prefill_flag = False
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
@@ -1150,6 +1168,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
+            self.exist_prefill_flag = True
             self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.share_inputs["prompt_lens"][idx : idx + 1] = 0
             self.share_inputs["step_idx"][idx : idx + 1] = 0
@@ -1518,7 +1537,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
 
-            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
+            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
 
         # 2. Load lora model
 
@@ -1593,6 +1612,15 @@ class GPUModelRunner(ModelRunnerBase):
             else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
         )
 
+        # Use static graph splitting to isolate incompatible operators from the CUDA Graph. This splits the graph into subgraphs, allowing Prefill, Decode, and Mixed Batches to run compatible parts via CUDA Graph.
+        if (
+            hasattr(self, "graph_opt_config")
+            and self.use_cudagraph
+            and self.graph_opt_config.graph_opt_level > 0
+            and not self.graph_opt_config.full_cuda_graph
+        ):
+            self.forward_meta.step_use_cudagraph = True
+
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
@@ -1629,20 +1657,16 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
-        cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
-
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
-        create_cache_tensor = profile or self.scheduler_config.splitwise_role == "mixed"
+        # 2. If no need to profile, create kv cache if cache managers do not exist.
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
 
+        cache_ready_signal = self.cache_ready_signal
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:
@@ -1668,9 +1692,11 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
+                self.cache_kvs_map[key_cache_name] = key_cache
                 if value_cache_shape:
                     val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_type)
                     set_data_ipc(val_cache, val_cache_name)
+                    self.cache_kvs_map[val_cache_name] = val_cache
                     cache_kvs_list.extend([key_cache, val_cache])
                 else:
                     cache_kvs_list.extend([key_cache])
@@ -1679,11 +1705,13 @@ class GPUModelRunner(ModelRunnerBase):
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                     )
                     set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
                     if value_cache_shape:
                         val_cache_scales = paddle.full(
                             shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                         )
                         set_data_ipc(val_cache_scales, value_cache_scales_name)
+                        self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                     else:
                         cache_kvs_list.extend([key_cache_scales])
@@ -1691,20 +1719,24 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                self.cache_kvs_map[key_cache_name] = key_cache
                 if kv_cache_quant_type == "block_wise_fp8":
                     key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     key_cache_scales = share_external_data(
                         key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
                     )
+                    self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
                 if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
                     val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
+                    self.cache_kvs_map[val_cache_name] = val_cache
                     cache_kvs_list.extend([key_cache, val_cache])
                     if kv_cache_quant_type == "block_wise_fp8":
                         val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                         val_cache_scales = share_external_data(
                             val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
                         )
+                        self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
@@ -1860,6 +1892,7 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
         )
+        self.exist_prefill_flag = False
         return pooler_output
 
     def _dummy_sampler_run(
@@ -1963,6 +1996,7 @@ class GPUModelRunner(ModelRunnerBase):
             line_break_id=self.model_config.line_break_id,
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
+        self.exist_prefill_flag = False
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(
@@ -2568,6 +2602,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
+        self.exist_prefill_flag = False
         # Routing replay
         if self.fd_config.routing_replay_config.enable_routing_replay:
             if (
@@ -2660,9 +2695,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # 3. gc
-        self.clear_cache()
         if self.speculative_method in ["mtp"]:
-            self.proposer.clear_mtp_cache()
+            self.proposer.clear_mtp_cache(profile=True)
+        self.clear_cache(profile=True)
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -2743,8 +2778,20 @@ class GPUModelRunner(ModelRunnerBase):
         """Stop decoding if the tensor meets the termination condition"""
         return self.share_inputs["not_need_stop"][0]
 
-    def clear_cache(self):
+    def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+
+        if not create_cache_tensor:
+            for name, tensor in self.cache_kvs_map.items():
+                unset_data_ipc(tensor, name, True, False)
+            self.cache_ready_signal.value[local_rank] = 0
+        self.cache_kvs_map.clear()
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
@@ -2759,6 +2806,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+        if self.speculative_method in ["mtp"]:
+            self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
@@ -2780,6 +2829,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
         if self.use_cudagraph:
@@ -2788,6 +2839,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
+
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
 
     def padding_cudagraph_inputs(self) -> None:
         """

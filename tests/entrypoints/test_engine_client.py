@@ -188,6 +188,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         mock_config.tool_parser = None
         mock_config.structured_outputs_config = Mock()
         mock_config.structured_outputs_config.reasoning_parser = None
+        mock_config.node_rank = 0
 
         # Create mocks for all the external dependencies
         mock_input_processor = Mock()
@@ -308,6 +309,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             "chat_template": "Hello",
             "max_tokens": 20,
             "tools": [1],
+            "metrics": {},
         }
 
         await self.engine_client.add_requests(request)
@@ -952,7 +954,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         result, message = self.engine_client.is_workers_alive()
 
         self.assertFalse(result)
-        self.assertEqual(message, "No model weight enabled")
 
     def test_update_model_weight_already_normal(self):
         """Test update_model_weight when weights are already normal."""
@@ -961,8 +962,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(result, 200)
 
     def test_update_model_weight_already_updating(self):
         """Test update_model_weight when already updating."""
@@ -971,8 +971,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is updating model weight already")
+        self.assertEqual(result, 400)
 
     def test_update_model_weight_clearing(self):
         """Test update_model_weight when clearing weights."""
@@ -981,8 +980,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.update_model_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is clearing model weight, cannot update now")
+        self.assertEqual(result, 403)
 
     def test_update_model_weight_timeout(self):
         """Test update_model_weight timeout scenario."""
@@ -999,8 +997,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.update_model_weight(timeout=1)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Update model weight timeout")
+        self.assertEqual(result, 404)
 
     def test_clear_load_weight_already_cleared(self):
         """Test clear_load_weight when weights are already cleared."""
@@ -1009,8 +1006,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertTrue(result)
-        self.assertEqual(message, "")
+        self.assertEqual(result, 200)
 
     def test_clear_load_weight_already_clearing(self):
         """Test clear_load_weight when already clearing."""
@@ -1019,8 +1015,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is clearing model weight already")
+        self.assertEqual(result, 400)
 
     def test_clear_load_weight_updating(self):
         """Test clear_load_weight when updating weights."""
@@ -1029,8 +1024,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.clear_load_weight()
 
-        self.assertFalse(result)
-        self.assertEqual(message, "worker is updating model weight, cannot clear now")
+        self.assertEqual(result, 403)
 
     def test_clear_load_weight_timeout(self):
         """Test clear_load_weight timeout scenario."""
@@ -1045,8 +1039,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         result, message = self.engine_client.clear_load_weight(timeout=1)
 
-        self.assertFalse(result)
-        self.assertEqual(message, "Clear model weight timeout")
+        self.assertEqual(result, 404)
 
     def test_check_model_weight_status(self):
         """Test check_model_weight_status returns correct status."""

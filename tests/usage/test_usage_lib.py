@@ -461,6 +461,7 @@ class TestReportUsageOnce(unittest.TestCase):
             FD_DISABLE_CHUNKED_PREFILL=False,
             FD_USE_HF_TOKENIZER=False,
             FD_PLUGINS="",
+            FD_USAGE_SOURCE="",
         )
 
         # Mock imports
