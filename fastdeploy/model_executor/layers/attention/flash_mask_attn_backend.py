@@ -283,8 +283,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.num_heads,
                 self.kv_num_heads,
                 self.head_dim,
-                q.shape[0],
-                k.shape[0],
             )
             return res_encoder
         else:
