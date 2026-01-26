@@ -935,6 +935,7 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
+                token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
                 (
                     ids_remove_padding,
                     batch_id_per_token,
@@ -943,6 +944,7 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
+                    token_num_cpu,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,
