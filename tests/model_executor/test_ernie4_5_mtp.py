@@ -27,6 +27,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.transformers.conversion_utils import split_or_merge_func
 from paddleformers.utils.log import logger as pf_logger
+
 from fastdeploy.model_executor.models import ernie4_5_mtp
 
 _PADDLEFORMERS_IMPORTS = (PretrainedModel, PretrainedConfig, split_or_merge_func, pf_logger)
@@ -92,8 +93,6 @@ class _StubFinalNorm(paddle.nn.Layer):
     def allgather(self, hidden_states, _total):
         self.allgather_called = True
         return hidden_states + 1
-
-
 
 
 def _make_fd_config(hidden_size=4, num_layers=2, use_sequence_parallel_moe=True):
