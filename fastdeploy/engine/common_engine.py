@@ -1971,7 +1971,6 @@ class EngineService:
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
             f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
-            f" --kvcache_storage_backend {self.cfg.cache_config.kvcache_storage_backend}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -1996,6 +1995,7 @@ class EngineService:
 
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+            "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:
