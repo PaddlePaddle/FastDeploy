@@ -113,15 +113,15 @@ class PrefixCacheManager:
         self.gpu_free_task_future = None
         self.cache_status_lock = Lock()
 
-        logger.info(
-            f"num_gpu_blocks_server_owned {self.num_gpu_blocks} num_cpu_blocks "
-            + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
-        )
-
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
+
+        logger.info(
+            f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
+            f"and {self.num_cpu_blocks} cpu blocks"
+        )
 
     def _get_kv_cache_shape(self, max_block_num):
         from fastdeploy.model_executor.layers.attention import get_attention_backend

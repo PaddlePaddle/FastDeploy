@@ -38,7 +38,7 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_all_layers,
     unset_data_ipc,
 )
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import CacheConfig, SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
@@ -327,12 +327,7 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        if args.cache_dtype == "bfloat16":
-            cache_bytes = 2
-        elif args.cache_dtype == "uint8" or args.cache_dtype == "block_wise_fp8":
-            cache_bytes = 1
-        else:
-            raise ValueError(f"Unsupported cache dtype: {args.cache_dtype}")
+        cache_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
         key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
         value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
