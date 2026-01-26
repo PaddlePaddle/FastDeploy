@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,12 +89,12 @@ def test_w4a8(xpu_env):
             for keyword in ["人工智能", "文心一言", "小度", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
-        print("\nW4A8测试通过!")
+        print("\nW4A8 CudaGraph测试通过!")
 
     except Exception as e:
-        print(f"\nW4A8测试失败: {str(e)}")
+        print(f"\nW4A8 CudaGraph测试失败: {str(e)}")
         print_logs_on_failure()
-        pytest.fail(f"W4A8测试失败: {str(e)}")
+        pytest.fail(f"W4A8 CudaGraph测试失败: {str(e)}")
 
 
 if __name__ == "__main__":
