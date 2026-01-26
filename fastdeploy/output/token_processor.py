@@ -857,17 +857,6 @@ class TokenProcessor:
                         result.outputs.token_ids.append(token_id)
 
                     task.output_token_ids.append(token_id)
-                    if (
-                        envs.ENABLE_V1_KVCACHE_SCHEDULER
-                        and self.cfg.cache_config.enable_prefix_caching
-                        and self.cfg.cache_config.enable_output_caching
-                    ):
-                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0 and (
-                            task_id not in self.resource_manager.to_be_rescheduled_request_id_set
-                        ):
-                            self.resource_manager.cache_output_tokens(
-                                task
-                            )  # when enable prefix caching, cache kv cache for output tokens
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
@@ -917,6 +906,14 @@ class TokenProcessor:
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     llm_logger.info(f"task {task_id} received eos token. Recycling.")
+                    if (
+                        envs.ENABLE_V1_KVCACHE_SCHEDULER
+                        and self.cfg.cache_config.enable_prefix_caching
+                        and self.cfg.cache_config.enable_output_caching
+                    ):
+                        self.resource_manager.cache_output_tokens(
+                            task
+                        )  # when enable prefix caching, cache kv cache for output tokens
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     llm_logger.info(f"eos token {task_id} Recycle end.")
                     break
