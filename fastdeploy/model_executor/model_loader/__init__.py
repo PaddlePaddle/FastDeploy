@@ -20,6 +20,7 @@ from fastdeploy.model_executor.model_loader.default_loader import DefaultModelLo
 from fastdeploy.model_executor.model_loader.default_loader_v1 import (
     DefaultModelLoaderV1,
 )
+from fastdeploy.model_executor.model_loader.dummy_loader import DummyModelLoader
 
 
 def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
@@ -27,6 +28,8 @@ def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
 
     if load_config.load_choices == LoadChoices.DEFAULT_V1:
         return DefaultModelLoaderV1(load_config)
+    if load_config.load_choices == LoadChoices.DUMMY:
+        return DummyModelLoader(load_config)
 
     return DefaultModelLoader(load_config)
 
