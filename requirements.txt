@@ -44,6 +44,6 @@ msgspec
 einops
 setproctitle
 aistudio_sdk
-p2pstore
+p2pstore==0.1.10
 py-cpuinfo
 flashinfer-python-paddle
