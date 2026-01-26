@@ -460,7 +460,6 @@ class MTPProposer(Proposer):
         self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
         self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
         self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
-        self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
         self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
@@ -936,6 +935,7 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
+                token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
                 (
                     ids_remove_padding,
                     batch_id_per_token,
@@ -944,6 +944,7 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
+                    token_num_cpu,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,

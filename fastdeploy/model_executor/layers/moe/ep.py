@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import traceback
 from abc import abstractmethod
 
 import paddle
@@ -25,11 +26,24 @@ from fastdeploy import envs
 try:
     if envs.FD_USE_PFCC_DEEP_EP:
         paddle.compat.enable_torch_proxy(scope={"deep_ep"})  # Enable torch proxy before importing deep_ep
-        import deep_ep
+        try:
+            import paddlefleet.ops.deep_ep as deep_ep
+
+            logger.info("FD use PaddleFleet/DeepEP now.")
+        except ModuleNotFoundError:
+            import deep_ep
+
+            logger.info("FD use PFCCLab/DeepEP now.")
     else:
         from paddle.distributed.communication import deep_ep
-except:
-    logger.warning("import deep_ep Failed!")
+
+        logger.info("FD use Paddle/DeepEP now.")
+except Exception as e:
+    logger.error(
+        f"import deep_ep failed! FD_USE_PFCC_DEEP_EP={envs.FD_USE_PFCC_DEEP_EP}. " f"type={type(e).__name__}, err={e}"
+    )
+    logger.error("Traceback:\n" + traceback.format_exc())
+    raise
 
 from typing import Optional
 
