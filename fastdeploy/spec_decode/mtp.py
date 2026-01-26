@@ -460,7 +460,6 @@ class MTPProposer(Proposer):
         self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
         self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
         self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
-        self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
         self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])

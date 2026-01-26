@@ -397,7 +397,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -410,7 +409,6 @@ def post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
@@ -497,7 +495,6 @@ def post_process_specualate(
         model_output.stop_flags,
         model_output.seq_lens_this_time,
         model_output.is_block_step,
-        model_output.stop_nums,
         model_output.mask_rollback,
     )
 
@@ -930,7 +927,6 @@ def post_process_pooling(
                 dummy_sampled_tokens,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
