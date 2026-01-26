@@ -16,10 +16,9 @@
 
 import ctypes
 import os
-import sys
 import tempfile
 import unittest
-from unittest.mock import MagicMock, Mock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
 import numpy as np
 
@@ -514,6 +513,7 @@ class TestAsyncExpertLoader(unittest.TestCase):
     def test_create_mmap_with_default_size(self):
         """Test create_mmap with default size calculation"""
         with patch("fastdeploy.eplb.async_expert_loader.cudart", create=True) as mock_cudart:
+
             class MockCudaErrorT:
                 cudaSuccess = 0
 
@@ -552,6 +552,7 @@ class TestAsyncExpertLoader(unittest.TestCase):
     def test_create_mmap_cuda_register_failure(self):
         """Test create_mmap when CUDA registration fails"""
         with patch("fastdeploy.eplb.async_expert_loader.cudart", create=True) as mock_cudart:
+
             class MockCudaErrorT:
                 cudaSuccess = 0
                 cudaErrorInvalidValue = 1
