@@ -83,9 +83,6 @@ class TestFlashMaskAttention(unittest.TestCase):
             int(q_input.shape[1]),
             int(k_input.shape[1]),
             int(q_input.shape[2]),
-            int(k_input.shape[0]),
-            int(q_input.shape[0]),
-            int(k_input.shape[0]),
         )
 
     def test_flash_mask_attention(self):
