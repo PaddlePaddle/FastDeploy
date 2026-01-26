@@ -26,6 +26,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -144,10 +145,13 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+                if not envs.ENABLE_V1_DATA_PROCESSOR:
+                    current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+                else:
+                    current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
-                current_req_dict["arrival_time"] = time.time()
+                current_req_dict["metrics"]["arrival_time"] = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 prompt_tokens = current_req_dict.get("prompt_tokens")
@@ -165,7 +169,6 @@ class OpenAIServingChat:
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
                 return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR))
-            del current_req_dict
 
             if request.stream:
                 return self.chat_completion_stream_generator(
@@ -402,11 +405,14 @@ class OpenAIServingChat:
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
 
                     delta_message = DeltaMessage(
-                        reasoning_content="",
+                        reasoning_content=output["reasoning_content"],
                         prompt_token_ids=None,
-                        tool_calls=None,
+                        tool_calls=output["tool_calls"],
                         completion_token_ids=None,
                     )
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
 
                     if response_processor.enable_multimodal_content():
                         delta_message.multimodal_content = output["multipart"]
@@ -416,15 +422,8 @@ class OpenAIServingChat:
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
 
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.content = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+                    if output["skipped"]:
+                        continue
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
@@ -728,7 +727,7 @@ class OpenAIServingChat:
 
     async def _create_chat_completion_choice(
         self,
-        data: dict,
+        data: RequestOutput | dict,
         request: ChatCompletionRequest,
         prompt_token_ids: list,
         prompt_tokens: str,
@@ -755,7 +754,7 @@ class OpenAIServingChat:
         message = ChatMessage(
             role="assistant",
             reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
+            tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
@@ -782,16 +781,16 @@ class OpenAIServingChat:
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
-        num_image_tokens[idx] = output.get("num_image_tokens", 0)
+        num_image_tokens[idx] = output.get("num_image_tokens", 0) or 0
 
         finish_reason = "stop"
         if previous_num_tokens != max_tokens:
             finish_reason = "stop"
-            if output.get("tool_call"):
+            if output.get("tool_calls"):
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
+        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(

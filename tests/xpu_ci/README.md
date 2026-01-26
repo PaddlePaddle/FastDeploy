@@ -272,9 +272,6 @@ def test_ep_example(xpu_env):
     """EP并行示例测试"""
     print("\n============================开始EP并行示例测试!============================")
 
-    if not download_and_build_xdeepep():
-        pytest.fail("xDeepEP下载或编译失败")
-
     original_env = setup_ep_env()
 
     try:
