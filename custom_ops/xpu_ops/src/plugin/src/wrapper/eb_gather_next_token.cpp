@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -108,11 +108,18 @@ int eb_gather_next_token(
                       hidden_dim);
   WRAPPER_DUMP(ctx);
   int encoder_batch = encoder_batch_map.len;
-  int batch = encoder_batch + decoder_batch_map.len;
+  int decoder_batch = decoder_batch_map.len;
+  int max_bsz = 0;
+  if (encoder_batch > 0) {
+    max_bsz = std::max(max_bsz, encoder_batch_map.cpu[encoder_batch - 1] + 1);
+  }
+  if (decoder_batch > 0) {
+    max_bsz = std::max(max_bsz, decoder_batch_map.cpu[decoder_batch - 1] + 1);
+  }
   int max_encoder_lod = encoder_seqs_lods.cpu[encoder_batch];
   int m = encoder_seqs_lods.cpu[encoder_batch] + decoder_batch_map.len;
   WRAPPER_CHECK_PTR(ctx, TX, m * hidden_dim, x);
-  WRAPPER_CHECK_PTR(ctx, TY, batch * hidden_dim, y);
+  WRAPPER_CHECK_PTR(ctx, TY, max_bsz * hidden_dim, y);
   WRAPPER_ASSERT_GT(ctx, hidden_dim, 0);
   // check VectorParam
   WRAPPER_ASSERT_EQ(ctx, encoder_seqs_lods.len, encoder_batch_map.len + 1);

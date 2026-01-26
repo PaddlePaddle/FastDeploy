@@ -29,7 +29,6 @@ __global__ void speculate_schedula_cache(const int64_t *draft_tokens,
                                          int64_t *accept_tokens,
                                          bool *is_block_step,
                                          bool *not_need_stop,
-                                         const int64_t *stop_nums,
                                          const int real_bsz,
                                          const int max_bsz,
                                          const int max_next_step_tokens,
@@ -101,7 +100,7 @@ __global__ void speculate_schedula_cache(const int64_t *draft_tokens,
 
   if (threadIdx.x == 0) {
     // printf("stop_sum %d \n", stop_sum);
-    not_need_stop[0] = stop_sum < stop_nums[0];
+    not_need_stop[0] = stop_sum < max_bsz;
   }
 }
 
@@ -119,7 +118,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &accept_tokens,
                             const paddle::Tensor &is_block_step,
                             const paddle::Tensor &not_need_stop,
-                            const paddle::Tensor &stop_nums,
                             const int block_size,
                             const int max_draft_tokens) {
   const int real_bsz = seq_lens_this_time.shape()[0];
@@ -153,7 +151,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<bool *>(is_block_step.data<bool>()),
           const_cast<bool *>(not_need_stop_gpu.data<bool>()),
-          stop_nums.data<int64_t>(),
           real_bsz,
           max_bsz,
           max_next_step_tokens,
@@ -183,8 +180,7 @@ PD_BUILD_STATIC_OP(speculate_schedule_cache)
              "accept_num",
              "accept_tokens",
              "is_block_step",
-             "not_need_stop",
-             "stop_nums"})
+             "not_need_stop"})
     .Attrs({"block_size: int", "max_draft_tokens: int"})
     .Outputs({"draft_tokens_out",
               "block_tables_out",
