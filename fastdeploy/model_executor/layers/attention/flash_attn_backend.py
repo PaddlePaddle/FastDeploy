@@ -69,7 +69,7 @@ else:
 
 import os
 
-FLASH_ATNN_VERSION = None
+FLASH_ATTN_VERSION = None
 
 
 def init_flash_attn_version():
@@ -79,18 +79,17 @@ def init_flash_attn_version():
     if current_platform.is_cuda():
         prop = paddle.device.cuda.get_device_properties()
         cc = prop.major * 10 + prop.minor
-        global FLASH_ATNN_VERSION
+        global FLASH_ATTN_VERSION
         if flashmask_attention is not None and cc >= 100:
-            FLASH_ATNN_VERSION = 4
+            FLASH_ATTN_VERSION = 4
             logger.info("The current platform supports Flash Attention V4.")
-        elif FLASH_ATNN_VERSION is None:
+        elif FLASH_ATTN_VERSION is None:
             if cc >= 90 and any(num >= 90 for num in paddle.version.cuda_archs()):
-                FLASH_ATNN_VERSION = 3
+                FLASH_ATTN_VERSION = 3
                 logger.info("The current platform supports Flash Attention V3.")
             else:
-                FLASH_ATNN_VERSION = 2
+                FLASH_ATTN_VERSION = 2
                 logger.info("The current platform only support Flash Attention V2.")
-        FLASH_ATNN_VERSION = 2
     else:
         logger.info("Only support CUDA version flash attention.")
 
@@ -109,10 +108,10 @@ def flash_attn_func(
     kv_num_heads: int = None,
     head_dim: int = 128,
 ):
-    if FLASH_ATNN_VERSION is None:
+    if FLASH_ATTN_VERSION is None:
         init_flash_attn_version()
-    assert FLASH_ATNN_VERSION is not None
-    if FLASH_ATNN_VERSION == 4:
+    assert FLASH_ATTN_VERSION is not None
+    if FLASH_ATTN_VERSION == 4:
         assert (
             flashmask_attention_v4 is not None
         ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
@@ -137,13 +136,13 @@ def flash_attn_func(
             finally:
                 paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
         return out
-    elif FLASH_ATNN_VERSION == 3:
+    elif FLASH_ATTN_VERSION == 3:
         if attn_mask_q is not None:
             assert flashmask_attention is not None
             out = flashmask_attention(
-                q,
-                k,
-                v,
+                q.reshape([1, -1, num_heads, head_dim]),
+                k.reshape([1, -1, kv_num_heads, head_dim]),
+                v.reshape([1, -1, kv_num_heads, head_dim]),
                 startend_row_indices=attn_mask_q,
                 causal=False,
             )
@@ -161,9 +160,9 @@ def flash_attn_func(
     else:
         if attn_mask_q is not None:
             out = flashmask_attention(
-                q,
-                k,
-                v,
+                q.reshape([1, -1, num_heads, head_dim]),
+                k.reshape([1, -1, kv_num_heads, head_dim]),
+                v.reshape([1, -1, kv_num_heads, head_dim]),
                 startend_row_indices=attn_mask_q,
                 causal=False,
             )
