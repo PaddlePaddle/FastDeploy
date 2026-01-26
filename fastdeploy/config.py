@@ -1204,6 +1204,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     DEFAULT_V1 = "default_v1"
+    DUMMY = "dummy"
 
 
 class LoadConfig:
@@ -1225,7 +1226,8 @@ class LoadConfig:
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
+        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal", "rsync"]] = "normal"
+        self.rsync_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

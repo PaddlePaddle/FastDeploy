@@ -195,6 +195,10 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
+    rsync_config: Optional[Dict[str, Any]] = None
+    """
+    rsync weights config info
+    """
     quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
@@ -813,6 +817,12 @@ class EngineArgs:
             help="Flag to dynamic load strategy.",
         )
         model_group.add_argument(
+            "--rsync-config",
+            type=json.loads,
+            default=EngineArgs.rsync_config,
+            help="Rsync weights config",
+        )
+        model_group.add_argument(
             "--engine-worker-queue-port",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
@@ -1036,7 +1046,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group

@@ -20,7 +20,6 @@ __global__ void update_inputs_kernel(bool* not_need_stop,
                                      int* seq_lens_encoder,
                                      int* seq_lens_decoder,
                                      int64_t* input_ids,
-                                     const int64_t* stop_nums,
                                      const bool* stop_flags,
                                      const bool* is_block_step,
                                      const int64_t* next_tokens,
@@ -64,7 +63,7 @@ __global__ void update_inputs_kernel(bool* not_need_stop,
   __syncthreads();
   int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_now_int);
   if (thread_idx == 0) {
-    not_need_stop[0] = stop_sum < stop_nums[0];
+    not_need_stop[0] = stop_sum < max_bsz;
   }
 }
 
@@ -74,7 +73,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
                   const paddle::Tensor& input_ids,
-                  const paddle::Tensor& stop_nums,
                   const paddle::Tensor& next_tokens,
                   const paddle::Tensor& is_block_step) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
@@ -95,7 +93,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
       const_cast<int*>(seq_lens_encoder.data<int>()),
       const_cast<int*>(seq_lens_decoder.data<int>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
-      stop_nums.data<int64_t>(),
       stop_flags.data<bool>(),
       is_block_step.data<bool>(),
       next_tokens.data<int64_t>(),
@@ -115,7 +112,6 @@ PD_BUILD_STATIC_OP(update_inputs)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "input_ids",
-             "stop_nums",
              "next_tokens",
              "is_block_step"})
     .Outputs({"not_need_stop_out",
