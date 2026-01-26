@@ -41,12 +41,16 @@ class TestVersion(unittest.TestCase):
         """测试找不到版本行的情况"""
         self.assertEqual(current_package_version(), "Unknown")
 
-    @patch("builtins.open", new_callable=mock_open, read_data="""fastdeploy GIT COMMIT ID: 23d488c488779fdda73b427b49f6be40cf4408ba
+    @patch(
+        "builtins.open",
+        new_callable=mock_open,
+        read_data="""fastdeploy GIT COMMIT ID: 23d488c488779fdda73b427b49f6be40cf4408ba
 Paddle version: 3.3.0.dev20251222
 Paddle GIT COMMIT ID: f68bb752a51aacd333d74336e6ee62b7b3b21231
 CUDA version: 12.6
 CXX compiler version: 11.2.1
-fastdeploy version: 2.4.0.dev20251223""")
+fastdeploy version: 2.4.0.dev20251223""",
+    )
     def test_get_version_info(self, mock_file):
         """测试get_version_info函数"""
         version_info = get_version_info()

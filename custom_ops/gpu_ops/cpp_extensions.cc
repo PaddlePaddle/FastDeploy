@@ -445,7 +445,6 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
                   const paddle::Tensor& input_ids,
-                  const paddle::Tensor& stop_nums,
                   const paddle::Tensor& next_tokens,
                   const paddle::Tensor& is_block_step);
 
@@ -459,7 +458,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& topk_ids,
                     const paddle::Tensor& input_ids,
                     const paddle::Tensor& block_tables,
-                    const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size);
@@ -819,7 +817,6 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& stop_flags,
                      const paddle::Tensor& seq_lens_this_time,
                      const paddle::Tensor& is_block_step,
-                     const paddle::Tensor& stop_nums,
                      const paddle::Tensor& mask_rollback);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
@@ -858,7 +855,6 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
                             const paddle::Tensor& accept_tokens,
                             const paddle::Tensor& is_block_step,
                             const paddle::Tensor& not_need_stop,
-                            const paddle::Tensor& stop_nums,
                             const int block_size,
                             const int max_draft_tokens);
 
