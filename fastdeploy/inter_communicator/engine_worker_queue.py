@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import threading
 import time
 from multiprocessing.managers import (
@@ -331,6 +332,16 @@ class EngineWorkerQueue:
                 "get_worker_process_tp_barrier",
                 callable=lambda idx: self.worker_process_tp_barrier[idx],
             )
+
+            # Clean up stale socket file if using Unix domain socket
+            if isinstance(self.address, str) and self.address.startswith("/"):
+                if os.path.exists(self.address):
+                    try:
+                        os.unlink(self.address)
+                        llm_logger.info(f"Removed stale socket file: {self.address}")
+                    except OSError as e:
+                        llm_logger.warning(f"Failed to remove socket file {self.address}: {e}")
+
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
 
@@ -844,3 +855,12 @@ class EngineWorkerQueue:
         """
         if self.manager is not None and self.is_server:
             self.manager.shutdown()
+
+            # Clean up socket file if using Unix domain socket
+            if isinstance(self.address, str) and self.address.startswith("/"):
+                if os.path.exists(self.address):
+                    try:
+                        os.unlink(self.address)
+                        llm_logger.info(f"Removed socket file on cleanup: {self.address}")
+                    except OSError as e:
+                        llm_logger.warning(f"Failed to remove socket file {self.address} on cleanup: {e}")
