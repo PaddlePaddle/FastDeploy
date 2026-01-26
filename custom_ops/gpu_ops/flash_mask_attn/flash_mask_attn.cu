@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "helper.h"  // NOLINT
+
 #include "flash_mask_attn_kernel.hpp"
-#include "helper.h"
 #include "kernel_traits.h"
 #include "paddle/extension.h"
 
