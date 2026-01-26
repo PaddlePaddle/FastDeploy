@@ -80,7 +80,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
   using cute_type = typename cuteType<T>::type;
 
   if (mask) {
-    PADDLE_ENFORCE(mask.get().dims()[0] == q_token_num, "Unmatched shape");
+    PADDLE_ENFORCE(mask.get().dims()[0] == 2 * q_token_num, "Unmatched shape");
     params.mask = const_cast<int*>(mask.get().data<int>());
     if (attn_out.dtype() == paddle::DataType::FLOAT16) {
       using out_type = phi::dtype::float16;
