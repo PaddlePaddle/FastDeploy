@@ -190,24 +190,5 @@ jobs:
           export PYTHONPATH=/workspace/FastDeploy/
 
           export CUDA_VISIBLE_DEVICES=0,1,2,3
-          echo "============================================================"
-          echo "Running pytest for 4-GPU end-to-end cases"
-
-          python -m pytest -sv --tb=short tests/e2e/4cards_cases/
-          exit_code=$?
-
-          if [ $exit_code -ne 0 ]; then
-              if [ -f "./log/log_0/workerlog.0" ]; then
-                  echo "---------------- log/workerlog.0 -------------------"
-                  cat "./log/log_0/workerlog.0"
-                  echo "----------------------------------------------------"
-              fi
-
-              if [ -f "./server.log" ]; then
-                  echo "---------------- server.log ----------------"
-                  cat "./server.log"
-                  echo "--------------------------------------------"
-              fi
-              exit 1
-          fi
+          bash scripts/run_gpu_4cards.sh
           '
