@@ -137,7 +137,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
             layer.weight_dtype = "float8_e4m3fn"
             # TODO(YuanRisheng): set weight logic should be moved to process_loaded_weights func
             self.skip_quant = False
-            layer.create_parameter(
+            layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
                 is_bias=False,
