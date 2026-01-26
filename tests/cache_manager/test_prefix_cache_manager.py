@@ -185,6 +185,7 @@ def _create_manager(
         swap_space=4,
     )
     model_config = SimpleNamespace(
+        model="test_model",
         num_attention_heads=1,
         num_key_value_heads=1,
         head_dim=1,

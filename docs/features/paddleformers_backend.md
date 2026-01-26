@@ -23,7 +23,6 @@ pip install -e '.[paddlefleet]' --extra-index-url https://www.paddlepaddle.org.c
 
 For more options, refer to the [PaddleFormers Official Installation Guide](https://github.com/PaddlePaddle/PaddleFormers?tab=readme-ov-file#installation).
 
-
 ## Quick Start
 
 ### Online Serving Mode

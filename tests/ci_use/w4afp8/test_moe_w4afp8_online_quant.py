@@ -38,8 +38,8 @@ os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 W4AFP8_CONFIGS = [
     {
-        "id": "w4afp8_default",
-        "load_choices": "default",
+        "id": "w4afp8_default_v1",
+        "load_choices": "default_v1",
         "model_name": "ernie-4_5-21b-a3b-bf16-paddle",
         "model_subdir": None,
     },
