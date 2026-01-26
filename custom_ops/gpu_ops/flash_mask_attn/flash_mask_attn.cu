@@ -45,7 +45,6 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
                                 const int head_num,
                                 const int kv_head_num,
                                 const int head_dim,
-                                const int max_seq_len,
                                 const int q_token_num,
                                 const int k_token_num) {
   constexpr int kBlockM = 128;
@@ -130,7 +129,6 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int head_num,
                         const int kv_head_num,
                         const int head_dim,
-                        const int max_seq_len,
                         const int q_token_num,
                         const int k_token_num) {
   if (q_input.dtype() == paddle::DataType::FLOAT16) {
@@ -146,7 +144,6 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   head_num,
                                   kv_head_num,
                                   head_dim,
-                                  max_seq_len,
                                   q_token_num,
                                   k_token_num);
   } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
@@ -162,7 +159,6 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   head_num,
                                   kv_head_num,
                                   head_dim,
-                                  max_seq_len,
                                   q_token_num,
                                   k_token_num);
   }
@@ -180,7 +176,6 @@ PD_BUILD_STATIC_OP(flash_mask_attention)
     .Attrs({"head_num: int",
             "kv_head_num: int",
             "head_dim: int",
-            "max_seq_len: int",
             "q_token_num: int",
             "k_token_num: int"})
     .Outputs({"out"})

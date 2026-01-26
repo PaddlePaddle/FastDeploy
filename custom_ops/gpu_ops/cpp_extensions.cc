@@ -60,7 +60,6 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int head_num,
                         const int kv_head_num,
                         const int head_dim,
-                        const int max_seq_len,
                         const int q_token_num,
                         const int k_token_num);
 
