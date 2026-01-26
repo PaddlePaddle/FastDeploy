@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import Dict
 
 import paddle
 from paddle import nn
@@ -38,6 +39,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.rl.rollout_model import BaseRLModel
 
 
 class Glm4MTPPretrainedModel(PretrainedModel):
@@ -382,3 +384,94 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         )
 
         return hidden_states
+
+
+class Glm4MTPForCausalLMRL(Glm4MTPForCausalLM, BaseRLModel):
+    """
+    Glm4MTPForCausalLMRL
+    """
+
+    _get_tensor_parallel_mappings = Glm4MTPPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Glm4MTPForCausalLMRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Glm4MTPForCausalLMRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx: int):
+            # MTP specific mappings
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.shared_head.head.weight"] = (
+                f"{base_name}.{layer_idx}.shared_head.head.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.shared_head.norm.weight"] = (
+                f"{base_name}.{layer_idx}.shared_head.norm.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.eh_proj.weight"] = (
+                f"{base_name}.{layer_idx}.eh_proj.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.enorm.weight"] = (
+                f"{base_name}.{layer_idx}.enorm.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.hnorm.weight"] = (
+                f"{base_name}.{layer_idx}.hnorm.weight"
+            )
+
+            # MoE specific mappings
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            )
+
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"
+            )
+
+            # MoE experts mappings
+            for expert_idx in range(self.fd_config.model_config.n_routed_experts):
+                for ph in place_holders:
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
+                    if up_gate_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[up_gate_proj_key] = []
+                    self.infer_to_train_mapping[up_gate_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
+
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.experts.down_proj_weight"
+                    if down_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[down_proj_key] = []
+                    self.infer_to_train_mapping[down_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
+
+        # Process MoE layers
+        for layer_idx in range(
+            self.fd_config.model_config.start_layer_index,
+            self.fd_config.model_config.start_layer_index + self.fd_config.model_config.num_nextn_predict_layers,
+        ):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
+
+        return self.infer_to_train_mapping
