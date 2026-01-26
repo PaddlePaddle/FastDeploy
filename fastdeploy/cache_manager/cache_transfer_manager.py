@@ -42,7 +42,7 @@ from fastdeploy.cache_manager.ops import (
     unset_data_ipc,
 )
 from fastdeploy.cache_manager.transfer_factory import AttentionStore, MooncakeStore
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import CacheConfig, SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
@@ -157,7 +157,7 @@ class CacheTransferManager:
 
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
-        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
+        self.cache_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
 
         # extract other arg values
         self.model_id = args.model_id
@@ -169,6 +169,7 @@ class CacheTransferManager:
         self.local_data_parallel_id = args.local_data_parallel_id
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
+        self.create_cache_tensor = args.create_cache_tensor
         paddle.set_default_dtype(args.default_dtype)
 
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -207,9 +208,9 @@ class CacheTransferManager:
 
         self.num_cpu_blocks = args.num_cpu_blocks
 
-        self._init_gpu_cache(args)
+        self._init_gpu_cache()
         if self.num_cpu_blocks > 0:
-            self._init_cpu_cache(args)
+            self._init_cpu_cache()
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -298,20 +299,20 @@ class CacheTransferManager:
         self.storage_value_write_buffer = write_buffer + total_bytes // 2
         self.storage_backend.register_buffer(write_buffer, total_bytes)
 
-    def _init_gpu_cache(self, args):
+    def _init_gpu_cache(self):
 
-        if not args.create_cache_tensor:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create kv cache.")
+        if not self.create_cache_tensor:
+            logger.info("Waiting for runners or messagers to create kv cache.")
             while self.cache_ready_signal.value[self.rank] != 1:
                 time.sleep(0.1)
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] OK! Stop waiting.")
+            logger.info("OK! Stop waiting.")
 
-        if args.cache_dtype == "block_wise_fp8":
+        if self.cache_dtype == "block_wise_fp8":
             cache_type = "uint8"
         else:
-            cache_type = args.cache_dtype
+            cache_type = self.cache_dtype
 
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing kv cache for all layers.")
+        logger.info("Initializing kv cache for all layers.")
         set_device(self.device)
         for i in range(self.num_layers + self.num_extra_layers):
             num_gpu_blocks = self.num_gpu_blocks if i < self.num_layers else self.num_extra_layer_gpu_blocks
@@ -319,30 +320,18 @@ class CacheTransferManager:
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{self.rank}.device{self.device}"
             value_cache_scales_name = f"value_cache_scales_{i}_rank{self.rank}.device{self.device}"
-            key_cache_shape = [
-                num_gpu_blocks,
-                self.key_cache_shape[1],
-                self.key_cache_shape[2],
-                self.key_cache_shape[3],
-            ]
+            key_cache_shape = [num_gpu_blocks, self.head_num, self.block_size, self.head_dim]
             value_cache_shape = []
             if self.value_cache_shape:
-                value_cache_shape = [
-                    num_gpu_blocks,
-                    self.value_cache_shape[1],
-                    self.value_cache_shape[2],
-                    self.value_cache_shape[3],
-                ]
-            if args.create_cache_tensor:
-                logger.info(
-                    f"[rank {self.rank}/{self.n_ranks}] ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
-                )
+                value_cache_shape = [num_gpu_blocks, self.head_num, self.block_size, self.head_dim]
+            if self.create_cache_tensor:
+                logger.info(f" ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_name)
 
-                if args.cache_dtype == "block_wise_fp8":
+                if self.cache_dtype == "block_wise_fp8":
                     key_cache_scales = paddle.full(
-                        shape=[num_gpu_blocks, self.key_cache_shape[1], self.key_cache_shape[2]],
+                        shape=[num_gpu_blocks, self.head_num, self.block_size],
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
@@ -351,82 +340,88 @@ class CacheTransferManager:
                     val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_type)
                     set_data_ipc(val_cache, val_name)
 
-                    if args.cache_dtype == "block_wise_fp8":
+                    if self.cache_dtype == "block_wise_fp8":
                         value_cache_scales = paddle.full(
-                            shape=[num_gpu_blocks, self.value_cache_shape[1], self.value_cache_shape[2]],
+                            shape=[num_gpu_blocks, self.head_num, self.block_size],
                             fill_value=0,
                             dtype=paddle.get_default_dtype(),
                         )
                         set_data_ipc(value_cache_scales, value_cache_scales_name)
             else:
-                logger.info(
-                    f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
-                )
+                logger.info(f" ..attaching kv cache for layer {i}: {key_cache_shape} {value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 val_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data_(key_cache, key_name, key_cache_shape, True)
-                if args.cache_dtype == "block_wise_fp8":
+                if self.cache_dtype == "block_wise_fp8":
                     key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     key_cache_scales = share_external_data_(
                         key_cache_scales,
                         key_cache_scales_name,
-                        [num_gpu_blocks, self.key_cache_shape[1], self.key_cache_shape[2]],
+                        [num_gpu_blocks, self.head_num, self.block_size],
                         True,
                     )
                 if self.value_cache_shape:
                     val_cache = share_external_data_(val_cache, val_name, value_cache_shape, True)
-                    if args.cache_dtype == "block_wise_fp8":
+                    if self.cache_dtype == "block_wise_fp8":
                         value_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                         value_cache_scales = share_external_data_(
                             value_cache_scales,
                             value_cache_scales_name,
-                            [num_gpu_blocks, self.value_cache_shape[1], self.value_cache_shape[2]],
+                            [num_gpu_blocks, self.head_num, self.block_size],
                             True,
                         )
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
-            if args.cache_dtype == "block_wise_fp8":
+            if self.cache_dtype == "block_wise_fp8":
                 self.gpu_cache_kvs[key_cache_scales_name] = key_cache_scales
                 self.gpu_cache_scales_k_tensors.append(self.gpu_cache_kvs[key_cache_scales_name])
-            if args.value_cache_shape:
+            if self.value_cache_shape:
                 self.gpu_cache_kvs[val_name] = val_cache
                 self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
-                if args.cache_dtype == "block_wise_fp8":
+                if self.cache_dtype == "block_wise_fp8":
                     self.gpu_cache_kvs[value_cache_scales_name] = value_cache_scales
                     self.gpu_cache_scales_v_tensors.append(self.gpu_cache_kvs[value_cache_scales_name])
 
-        if args.create_cache_tensor:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ kv cache is ready!")
+        logger.info("✅ KV cache is initialized!")
+        if self.create_cache_tensor:
             self.cache_ready_signal.value[self.rank] = 1
 
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] device :{self.device}")
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] cache_kv_size_byte : {cache_kv_size_byte}")
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] done init cache (full) gmem alloc : {memory_allocated()}")
+        logger.info(f"device :{self.device}")
+        logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
+        logger.info(f"done init cache (full) gmem alloc : {memory_allocated()}")
 
-    def _init_cpu_cache(self, args):
-        key_cache_size = self.key_cache_shape[1] * self.key_cache_shape[2] * self.key_cache_shape[3]
-        if args.value_cache_shape:
-            value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
-        else:
-            value_cache_size = 0
-        cache_bytes = self._get_cache_bytes(self.cache_dtype)
-        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
-        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
-        if args.cache_dtype == "block_wise_fp8":
+    def _init_cpu_cache(self):
+
+        # Calculate the memory size required by cpu cache in bytes
+        key_cache_size = self.head_num * self.block_size * self.head_dim
+        value_cache_size = 0
+        if self.value_cache_shape:
+            value_cache_size = self.head_num * self.block_size * self.head_dim
+        cache_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
+        key_need_to_allocate_bytes = self.num_cpu_blocks * cache_bytes * key_cache_size
+        value_need_to_allocate_bytes = self.num_cpu_blocks * cache_bytes * value_cache_size
+
+        # Calculate the memory size required by cpu cache scales in bytes
+        if self.cache_dtype == "block_wise_fp8":
             cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-            cache_scales_size = self.key_cache_shape[1] * self.key_cache_shape[2]
-            scales_key_need_to_allocate_bytes = args.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
-            scales_value_need_to_allocate_bytes = args.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
-        logger.info(
-            f"[rank {self.rank}/{self.n_ranks}] ..swap space size : {(key_need_to_allocate_bytes + value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
-        )
-        if args.num_cpu_blocks == 0:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] 💡 no swap space (cpu cache) is specified.")
+            cache_scales_size = self.head_num * self.block_size
+            scales_key_need_to_allocate_bytes = self.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
+            scales_value_need_to_allocate_bytes = self.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
+
+        need_bytes_per_layer = key_need_to_allocate_bytes + value_need_to_allocate_bytes
+        if self.cache_dtype == "block_wise_fp8":
+            need_bytes_per_layer += scales_key_need_to_allocate_bytes
+            need_bytes_per_layer += scales_value_need_to_allocate_bytes
+
+        # Return if no need to allocate cpu blocks
+        if self.num_cpu_blocks == 0:
+            logger.info(" 💡 no swap space (cpu cache) is specified.")
             self.swap_space_ready_signal.value[self.rank] = 1
             return
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing swap space (cpu cache) for all layers.")
+
+        logger.info("Initializing swap space (cpu cache) for all layers.")
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
@@ -437,31 +432,20 @@ class CacheTransferManager:
             val_name = f"value_caches_{i}_rank{self.rank}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{self.rank}"
             value_cache_scales_name = f"value_cache_scales_{i}_rank{self.rank}"
-            logger.info(
-                f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for layer {i}: {(key_need_to_allocate_bytes + value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
-            )
+            logger.info(f" ..allocate swap space for layer {i}: {need_bytes_per_layer / 1024 ** 3:.2f}GB")
             self.cpu_cache_kvs[key_name] = cuda_host_alloc(key_need_to_allocate_bytes)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
-            if args.cache_dtype == "block_wise_fp8":
+            if self.cache_dtype == "block_wise_fp8":
                 self.cpu_cache_kvs[key_cache_scales_name] = cuda_host_alloc(scales_key_need_to_allocate_bytes)
                 self.k_scales_ptrs.append(self.cpu_cache_kvs[key_cache_scales_name])
             if value_need_to_allocate_bytes > 0:
                 self.cpu_cache_kvs[val_name] = cuda_host_alloc(value_need_to_allocate_bytes)
                 self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
-                if args.cache_dtype == "block_wise_fp8":
+                if self.cache_dtype == "block_wise_fp8":
                     self.cpu_cache_kvs[value_cache_scales_name] = cuda_host_alloc(scales_value_need_to_allocate_bytes)
                     self.v_scales_ptrs.append(self.cpu_cache_kvs[value_cache_scales_name])
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
+        logger.info("✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
-
-    def _get_cache_bytes(self, cache_dtype):
-        if cache_dtype == "bfloat16":
-            cache_bytes = 2
-        elif cache_dtype in ["uint8", "block_wise_fp8"]:
-            cache_bytes = 1
-        else:
-            raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
-        return cache_bytes
 
     def _run_read_storage(
         self,
@@ -1099,7 +1083,7 @@ class CacheTransferManager:
                     logger.info("[RL] start restoring caches")
                     logger.debug("[RL] start restoring cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
-                        self._init_cpu_cache(args)
+                        self._init_cpu_cache()
                         logger.debug("[RL] successfully restored cpu caches")
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
@@ -1109,7 +1093,7 @@ class CacheTransferManager:
 
                     # restore gpu cache and set cache_ready_signal
                     logger.debug("[RL] start restoring gpu caches")
-                    self._init_gpu_cache(args)
+                    self._init_gpu_cache()
                     logger.debug("[RL] successfully restored gpu caches")
 
                     # wait for all ranks caches to be ready
