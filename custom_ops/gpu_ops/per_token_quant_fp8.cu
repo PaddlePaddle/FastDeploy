@@ -68,12 +68,12 @@ __global__ void masked_quant_per_token_per_block(
 
       if (use_finegrained_range) amax *= 7.f;
 
-      float scale = FP8_MAX / amax;
+      float scale = amax / FP8_MAX;
 
       // ---------------- quantize ----------------
 #pragma unroll
       for (int i = 0; i < 4; ++i) {
-        float q = v[i] * scale;
+        float q = v[i] * FP8_MAX / amax;
         q = fminf(fmaxf(q, -FP8_MAX), FP8_MAX);
         out[base + i] = static_cast<phi::dtype::float8_e4m3fn>(q);
       }
@@ -82,7 +82,7 @@ __global__ void masked_quant_per_token_per_block(
       if (lane == 0) {
         quanted_scale[expert * hidden_size_scale * num_max_tokens_per_expert +
                       iter * num_max_tokens_per_expert + token_in_expert] =
-            amax / FP8_MAX;
+            scale;
       }
     }
   }
