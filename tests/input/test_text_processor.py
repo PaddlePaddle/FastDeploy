@@ -284,7 +284,6 @@ class DataProcessorTestCase(unittest.TestCase):
                 previous_token_ids: Sequence[int],
                 current_token_ids: Sequence[int],
                 delta_token_ids: Sequence[int],
-                model_status: str,
             ):
                 return DeltaMessage(reasoning_content=reasoning_content, content=content)
 
@@ -308,7 +307,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 previous_token_ids: Sequence[int],
                 current_token_ids: Sequence[int],
                 delta_token_ids: Sequence[int],
-                model_status: str,
+                request: dict,
             ):
                 # 模拟流式工具调用解析，返回固定的工具调用数据用于测试
                 tool_calls = [
@@ -476,7 +475,6 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_response_streaming_with_reasoning_and_tools(self):
         processor = self.processor
-        self.processor.model_status_dict["normal"] = "think_start"
         processor.reasoning_parser = self.create_dummy_reasoning(
             processor.tokenizer, reasoning_content="because", content="tool-text"
         )

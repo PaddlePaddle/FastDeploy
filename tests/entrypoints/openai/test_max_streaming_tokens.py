@@ -104,7 +104,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
+                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -118,7 +118,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -132,7 +132,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -146,7 +146,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -160,7 +160,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -174,7 +174,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None},
+                "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None, "arrival_time": 0.2},
                 "finished": False,
             },
             {
@@ -188,7 +188,12 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
+                "metrics": {
+                    "engine_recv_latest_token_time": 0.7,
+                    "first_token_time": None,
+                    "request_start_time": 0.1,
+                    "arrival_time": 0.2,
+                },
                 "finished": True,
             },
         ]
@@ -276,7 +281,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "tool_calls": None,
                         "skipped": False,
                     },
-                    "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
+                    "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "arrival_time": 0.2},
                     "finished": False,
                 },
                 {
@@ -290,7 +295,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "tool_calls": None,
                         "skipped": False,
                     },
-                    "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None},
+                    "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None, "arrival_time": 0.2},
                     "finished": False,
                 },
             ],
@@ -310,6 +315,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "engine_recv_latest_token_time": 0.7,
                         "first_token_time": None,
                         "request_start_time": 0.1,
+                        "arrival_time": 0.2,
                     },
                     "finished": True,
                 }
@@ -592,7 +598,12 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
+                "metrics": {
+                    "first_token_time": 0.1,
+                    "inference_start_time": 0.1,
+                    "request_start_time": 0.0,
+                    "arrival_time": 0.2,
+                },
                 "finished": False,
             },
             {
@@ -606,7 +617,12 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "skipped": False,
                 },
-                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
+                "metrics": {
+                    "engine_recv_latest_token_time": 0.3,
+                    "first_token_time": None,
+                    "request_start_time": 0.0,
+                    "arrival_time": 0.2,
+                },
                 "finished": True,
             },
         ]
