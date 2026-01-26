@@ -20,6 +20,7 @@
 | Token | `fastdeploy:prompt_tokens_total`          | Counter   | 已处理的 prompt token 总数   | 个   |
 | Token | `fastdeploy:generation_tokens_total`      | Counter   | 已生成的 token 总数          | 个   |
 | Token | `fastdeploy:request_prompt_tokens`        | Histogram | 每个请求的 prompt token 数量 | 个   |
+| Token | `fastdeploy:request_token_ratio`          | Histogram | 每个请求的token生成速率       | 个   |
 | Token | `fastdeploy:request_generation_tokens`    | Histogram | 每个请求的 generation token 数量    | 个   |
 | Token | `fastdeploy:request_params_max_tokens`    | Histogram | 请求的 max_tokens 分布       | 个   |
 | 批处理 | `fastdeploy:available_batch_size`         | Gauge     | Decode 阶段还可以插入的请求数量 | 个   |
