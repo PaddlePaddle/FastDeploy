@@ -187,6 +187,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -209,7 +210,6 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
@@ -397,7 +397,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -411,7 +410,6 @@ def post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
@@ -500,7 +498,6 @@ def post_process_specualate(
         model_output.stop_flags,
         model_output.seq_lens_this_time,
         model_output.is_block_step,
-        model_output.stop_nums,
         model_output.mask_rollback,
     )
 
@@ -933,7 +930,6 @@ def post_process_pooling(
                 dummy_sampled_tokens,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
