@@ -1121,10 +1121,10 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
-std::vector<paddle::Tensor> transform_attn_mask_offsets(
+std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& cu_seqlens_k,
-    const paddle::optional<paddle::Tensor>& attn_mask_offsets,
+    const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
@@ -1725,7 +1725,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
 
-  m.def("transform_attn_mask_offsets",
-        &transform_attn_mask_offsets,
-        "transform_attn_mask_offsets function");
+  m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 }

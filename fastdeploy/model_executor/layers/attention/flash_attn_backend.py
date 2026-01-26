@@ -21,11 +21,17 @@ from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
+from paddleformers.utils.log import logger
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
 except:
     flash_attention_v3_varlen = None
+
+try:
+    from paddle.nn.functional.flash_attention import flashmask_attention
+except:
+    flashmask_attention = None
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -35,6 +41,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
+    get_attn_mask_q,
     get_block_shape_and_split_kv_block,
     gqa_rope_write_cache,
     init_kv_signal_per_query,
@@ -50,85 +57,130 @@ if TYPE_CHECKING:
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        merge_prefill_decode_output,
-        transform_attn_mask_offsets,
-    )
+    from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 
     try:
-        from flash_mask.cute.interface import flashmask_attention
+        from flash_mask.cute.interface import flashmask_attention_v4
     except ImportError:
-        flashmask_attention = None
+        flashmask_attention_v4 = None
 else:
     merge_prefill_decode_output = None
-    flashmask_attention = None
+    flashmask_attention_v4 = None
 
 import os
 
 FLASH_ATNN_VERSION = None
 
 
+def init_flash_attn_version():
+    """
+    init_flash_attn_version
+    """
+    if current_platform.is_cuda():
+        prop = paddle.device.cuda.get_device_properties()
+        cc = prop.major * 10 + prop.minor
+        global FLASH_ATNN_VERSION
+        if flashmask_attention is not None and cc >= 100:
+            FLASH_ATNN_VERSION = 4
+            logger.info("The current platform supports Flash Attention V4.")
+        elif FLASH_ATNN_VERSION is None:
+            if cc >= 90 and any(num >= 90 for num in paddle.version.cuda_archs()):
+                FLASH_ATNN_VERSION = 3
+                logger.info("The current platform supports Flash Attention V3.")
+            else:
+                FLASH_ATNN_VERSION = 2
+                logger.info("The current platform only support Flash Attention V2.")
+        FLASH_ATNN_VERSION = 2
+    else:
+        logger.info("Only support CUDA version flash attention.")
+
+
 def flash_attn_func(
-    q: paddle.Tensor = None,
-    k: paddle.Tensor = None,
-    v: paddle.Tensor = None,
-    cu_seqlens_q: paddle.Tensor = None,
-    cu_seqlens_k: paddle.Tensor = None,
-    max_seqlen_q: paddle.Tensor = None,
-    max_seqlen_k: paddle.Tensor = None,
-    fa4_attn_mask_offsets: paddle.Tensor = None,
+    q: paddle.Tensor,
+    k: paddle.Tensor,
+    v: paddle.Tensor,
+    cu_seqlens_q: Optional[paddle.Tensor] = None,
+    cu_seqlens_k: Optional[paddle.Tensor] = None,
+    max_seqlen_q: Optional[paddle.Tensor] = None,
+    max_seqlen_k: Optional[paddle.Tensor] = None,
+    attn_mask_q: Optional[paddle.Tensor] = None,
     causal: bool = True,
     num_heads: int = None,
     kv_num_heads: int = None,
     head_dim: int = 128,
 ):
+    if FLASH_ATNN_VERSION is None:
+        init_flash_attn_version()
     assert FLASH_ATNN_VERSION is not None
     if FLASH_ATNN_VERSION == 4:
-        assert flashmask_attention is not None, "Cannot import flashmask_attention, please install it first"
-        assert fa4_attn_mask_offsets is not None
+        assert (
+            flashmask_attention_v4 is not None
+        ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
+        assert attn_mask_q is not None, "FA4 requires attn_mask_q"
         assert num_heads is not None
         assert kv_num_heads is not None
         original_flash_attn_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])[
             "FLAGS_flash_attn_version"
         ]
         with paddle.no_grad():
-            paddle.set_flags({"FLAGS_flash_attn_version": 4})
-            out = flashmask_attention(
-                q.reshape([1, -1, num_heads, head_dim]),
-                k.reshape([1, -1, kv_num_heads, head_dim]),
-                v.reshape([1, -1, kv_num_heads, head_dim]),
-                startend_row_indices=fa4_attn_mask_offsets,
-                causal=False,
-                return_softmax_lse=True,
-                training=True,
-            )
-        paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
+            try:
+                paddle.set_flags({"FLAGS_flash_attn_version": 4})
+                out = flashmask_attention(
+                    q.reshape([1, -1, num_heads, head_dim]),
+                    k.reshape([1, -1, kv_num_heads, head_dim]),
+                    v.reshape([1, -1, kv_num_heads, head_dim]),
+                    startend_row_indices=attn_mask_q,
+                    causal=False,
+                    return_softmax_lse=True,
+                    training=True,
+                )
+            finally:
+                paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
         return out
-
     elif FLASH_ATNN_VERSION == 3:
-        out = flash_attention_v3_varlen(
-            q,
-            k,
-            v,
-            cu_seqlens_q=cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k,
-            max_seqlen_q=max_seqlen_q,
-            max_seqlen_k=max_seqlen_k,
-            causal=causal,
-        )
+        if attn_mask_q is not None:
+            assert flashmask_attention is not None
+            out = flashmask_attention(
+                q,
+                k,
+                v,
+                startend_row_indices=attn_mask_q,
+                causal=False,
+            )
+        else:
+            out = flash_attention_v3_varlen(
+                q,
+                k,
+                v,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                causal=causal,
+            )
     else:
-        out = flash_attn_unpadded(
-            q,
-            k,
-            v,
-            cu_seqlens_q=cu_seqlens_q,
-            cu_seqlens_k=cu_seqlens_k,
-            max_seqlen_q=max_seqlen_q,
-            max_seqlen_k=max_seqlen_k,
-            causal=causal,
-            scale=head_dim**-0.5,
-            training=False,
-        )
+        if attn_mask_q is not None:
+            out = flashmask_attention(
+                q,
+                k,
+                v,
+                startend_row_indices=attn_mask_q,
+                causal=False,
+            )
+        else:
+            out = flash_attn_unpadded(
+                q,
+                k,
+                v,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                causal=causal,
+                scale=head_dim**-0.5,
+                training=False,
+            )
+    return out
 
 
 @dataclass
@@ -153,7 +205,7 @@ class FlashAttentionMetadata(AttentionMetadata):
 
     max_len_tensor_cpu_decoder: paddle.Tensor = None
 
-    fa4_attn_mask_offsets: paddle.Tensor = None
+    attn_mask_q: paddle.Tensor = None
 
 
 class FlashAttentionBackend(AttentionBackend):
@@ -163,7 +215,6 @@ class FlashAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: FlashAttentionMetadata
-    flash_attn_func: callable = None
 
     def __init__(
         self,
@@ -203,20 +254,8 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
-        if self.flash_attn_func is None:
-            prop = paddle.device.cuda.get_device_properties()
-            cc = prop.major * 10 + prop.minor
-            global FLASH_ATNN_VERSION
-            if flashmask_attention is not None and cc >= 100:
-                FLASH_ATNN_VERSION = 4
-                print("The current platform supports Flash Attention V4.")
-            elif FLASH_ATNN_VERSION is None:
-                if cc >= 90 and any(num >= 90 for num in paddle.version.cuda_archs()):
-                    FLASH_ATNN_VERSION = 3
-                    print("The current platform supports Flash Attention V3.")
-                else:
-                    FLASH_ATNN_VERSION = 2
-                    print("The current platform only support Flash Attention V2.")
+        init_flash_attn_version()
+
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
@@ -278,12 +317,12 @@ class FlashAttentionBackend(AttentionBackend):
                 forward_meta.max_len_tensor_cpu[2],
                 self.block_size,
             )
-            if FLASH_ATNN_VERSION == 4:
-                metadata.fa4_attn_mask_offsets = transform_attn_mask_offsets(
-                    forward_meta.cu_seqlens_q,
-                    metadata.cu_seqlens_k,
-                    forward_meta.attn_mask_offsets,
-                    metadata.kv_token_num_cpu[0].item(),
+            if forward_meta.attn_mask_offsets is not None:
+                metadata.attn_mask_q = get_attn_mask_q(
+                    cu_seqlens_q=forward_meta.cu_seqlens_q,
+                    cu_seqlens_k=metadata.cu_seqlens_k,
+                    attn_mask_kv=forward_meta.attn_mask_offsets,
+                    kv_token_num=metadata.kv_token_num_cpu[0].item(),
                 )
 
         # pd_disaggregation
@@ -379,7 +418,7 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.cu_seqlens_k,
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
-                fa4_attn_mask_offsets=metadata.fa4_attn_mask_offsets,
+                attn_mask_q=metadata.attn_mask_q,
                 causal=self.causal,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,

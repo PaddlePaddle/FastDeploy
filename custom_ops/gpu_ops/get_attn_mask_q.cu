@@ -15,9 +15,9 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-__global__ void transform_attn_mask_offsets_kernel(
+__global__ void get_attn_mask_q_kernel(
     int* __restrict__ startend_row_indices_ptr,
-    const int* attn_mask_offsets_ptr,
+    const int* attn_mask_kv_ptr,
     const int* cu_seqlens_q,
     const int* cu_seqlens_k,
     const int kv_token_num,
@@ -31,7 +31,6 @@ __global__ void transform_attn_mask_offsets_kernel(
   for (uint32_t cu_seqlens_k_idx = bid * blockDim.x + tid;
        cu_seqlens_k_idx < kv_token_num;
        cu_seqlens_k_idx += blockDim.x * gridDim.x) {
-    // if(cu_seqlens_k_idx >= kv_token_num) return;
     uint32_t batch_id = 0;
 
     for (int i = 0; i < max_batch_size; ++i) {
@@ -56,13 +55,12 @@ __global__ void transform_attn_mask_offsets_kernel(
     for (int this_batch_q_idx = this_batch_q_start;
          this_batch_q_idx < this_batch_q_end;
          ++this_batch_q_idx) {
-      // const int append_mask_k_start = attn_mask_offsets_ptr ?
-      // attn_mask_offsets_ptr[this_batch_q_idx * 2 + 0] : 0;
+      // const int append_mask_k_start = attn_mask_kv_ptr ?
+      // attn_mask_kv_ptr[this_batch_q_idx * 2 + 0] : 0;
       const int append_mask_k_end =
-          attn_mask_offsets_ptr
-              ? attn_mask_offsets_ptr[this_batch_q_idx * 2 + 1] - 1
-              : this_batch_q_idx - this_batch_q_start + kv_len -
-                    (this_batch_q_len);
+          attn_mask_kv_ptr ? attn_mask_kv_ptr[this_batch_q_idx * 2 + 1] - 1
+                           : this_batch_q_idx - this_batch_q_start + kv_len -
+                                 (this_batch_q_len);
       if (cache_k_idx <= append_mask_k_end) {
         startend_row_vec[3] = min(startend_row_vec[3], this_batch_q_idx);
         // 可提前跳出循环
@@ -78,10 +76,10 @@ __global__ void transform_attn_mask_offsets_kernel(
 #endif
 }
 
-std::vector<paddle::Tensor> transform_attn_mask_offsets(
+std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& cu_seqlens_k,
-    const paddle::optional<paddle::Tensor>& attn_mask_offsets,
+    const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num) {
   paddle::Tensor attn_mask_startend_row_indices = GetEmptyTensor(
       {1, 1, kv_token_num, 4}, paddle::DataType::INT32, cu_seqlens_k.place());
@@ -89,13 +87,13 @@ std::vector<paddle::Tensor> transform_attn_mask_offsets(
   constexpr int block_size = 512;
   int grid_size = div_up(kv_token_num, block_size);
   launchWithPdlWhenEnabled(
-      transform_attn_mask_offsets_kernel,
+      get_attn_mask_q_kernel,
       grid_size,
       block_size,
       0,
       cu_seqlens_k.stream(),
       attn_mask_startend_row_indices.data<int>(),
-      attn_mask_offsets ? attn_mask_offsets.get().data<int>() : nullptr,
+      attn_mask_kv ? attn_mask_kv.get().data<int>() : nullptr,
       cu_seqlens_q.data<int>(),
       cu_seqlens_k.data<int>(),
       kv_token_num,
@@ -104,27 +102,27 @@ std::vector<paddle::Tensor> transform_attn_mask_offsets(
   return {attn_mask_startend_row_indices};
 }
 
-std::vector<paddle::DataType> transform_attn_mask_offsetsDtype(
+std::vector<paddle::DataType> GetAttnMaskQInferDtype(
     const paddle::DataType& cu_seqlens_q_dtype,
     const paddle::DataType& cu_seqlens_k_dtype,
-    const paddle::optional<paddle::DataType>& attn_mask_offsets_dtype) {
+    const paddle::optional<paddle::DataType>& attn_mask_kv_dtype) {
   return {paddle::DataType::INT32};
 }
 
-std::vector<std::vector<int64_t>> transform_attn_mask_offsetsInferShape(
+std::vector<std::vector<int64_t>> GetAttnMaskQInferShape(
     const std::vector<int64_t>& cu_seqlens_q_shape,
     const std::vector<int64_t>& cu_seqlens_k_shape,
-    const paddle::optional<std::vector<int64_t>>& attn_mask_offsets_shape,
+    const paddle::optional<std::vector<int64_t>>& attn_mask_kv_shape,
     const int kv_token_num) {
   return {{1, 1, kv_token_num, 4}};
 }
 
-PD_BUILD_STATIC_OP(transform_attn_mask_offsets)
+PD_BUILD_STATIC_OP(get_attn_mask_q)
     .Inputs({"cu_seqlens_q",
              "cu_seqlens_k",
              paddle::Optional("attn_mask_offsets")})
-    .Outputs({"attn_mask_startend_row_indices"})
+    .Outputs({"attn_mask_q"})
     .Attrs({"kv_token_num: int"})
-    .SetKernelFn(PD_KERNEL(transform_attn_mask_offsets))
-    .SetInferShapeFn(PD_INFER_SHAPE(transform_attn_mask_offsetsInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(transform_attn_mask_offsetsDtype));
+    .SetKernelFn(PD_KERNEL(get_attn_mask_q))
+    .SetInferShapeFn(PD_INFER_SHAPE(GetAttnMaskQInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(GetAttnMaskQInferDtype));
