@@ -26,13 +26,13 @@ import paddle
 if not hasattr(paddle, "compat"):
     paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     DeltaMessage,
     LogProbEntry,
     StreamOptions,
 )
-from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.utils import ErrorCode, ParameterError
 from fastdeploy.worker.output import Logprob, LogprobsLists, LogprobsTensors
