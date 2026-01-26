@@ -176,6 +176,9 @@ jobs:
               python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
             fi
 
+            # Temporarily mitigate Tsinghua PyPI mirror issue
+            python -m pip install p2pstore nvidia_cutlass_dsl -i https://mirrors.aliyun.com/pypi/simple --isolated
+
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install --upgrade pip
