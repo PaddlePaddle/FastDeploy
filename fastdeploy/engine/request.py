@@ -250,6 +250,9 @@ class Request:
         else:
             sampling_params = SamplingParams()
 
+        if prompt is None:
+            prompt = getattr(req, "prompt", None)
+
         guided_json_object = cls._process_guided_json(req)
 
         metrics = RequestMetrics()
