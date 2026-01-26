@@ -307,6 +307,11 @@ std::vector<paddle::Tensor> MaskedPerTokenQuant(
     paddle::Tensor& recv_expert_count,
     const int block_size);
 
+std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
+    paddle::Tensor& input,
+    paddle::Tensor& token_nums_per_expert,
+    const int block_size);
+
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
     const paddle::Tensor& expert_scales_float,
@@ -1270,6 +1275,12 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("recv_expert_count"),
         py::arg("block_size"),
         "per token per block quant");
+  m.def("fused_mask_swiglu_fp8_quant",
+        &FusedMaskSwigluFP8Quant,
+        py::arg("input"),
+        py::arg("token_nums_per_expert"),
+        py::arg("block_size"),
+        "fused mask swiglu and fp8 quant");
 
 #ifdef ENABLE_MACHETE
   /*machete/machete_mm.cu
