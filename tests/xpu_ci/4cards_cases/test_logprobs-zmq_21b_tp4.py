@@ -30,7 +30,7 @@ from conftest import (
     get_port_num,
     print_logs_on_failure,
     restore_env,
-    setup_logprobs_env,
+    setup_logprobs_zmq_env,
     start_server,
 )
 
@@ -43,7 +43,7 @@ def test_logprobs_mode(xpu_env):
     port_num = get_port_num()
     model_path = get_model_path()
 
-    original_env = setup_logprobs_env()
+    original_env = setup_logprobs_zmq_env()
 
     server_args = [
         "--model",

@@ -31,7 +31,6 @@ def speculate_update_np(
     stop_flags,
     seq_lens_this_time,
     is_block_step,
-    stop_nums,
     mask_rollback,
 ):
     stop_sum = 0
@@ -79,7 +78,7 @@ def speculate_update_np(
             stop_flag_now_int = 1
 
         stop_sum += stop_flag_now_int
-    not_need_stop[0] = stop_sum < stop_nums[0]
+    not_need_stop[0] = stop_sum < max_bsz
 
     return (
         seq_lens_encoder,
@@ -107,7 +106,6 @@ def gen_inputs(
     accept_num = rng.integers(1, max_draft_tokens, size=max_bsz, dtype=np.int32)
     stop_flags = rng.integers(0, 2, size=max_bsz, dtype=np.bool_)
     is_block_step = rng.integers(0, 2, size=max_bsz, dtype=np.bool_)
-    stop_nums = np.array([5], dtype=np.int64)
     mask_rollback = np.zeros([max_bsz], dtype=np.int32)
 
     seq_lens_this_time = rng.integers(1, max_draft_tokens, size=real_bsz, dtype=np.int32)
@@ -123,7 +121,6 @@ def gen_inputs(
         "stop_flags": stop_flags,
         "seq_lens_this_time": seq_lens_this_time,
         "is_block_step": is_block_step,
-        "stop_nums": stop_nums,
         "mask_rollback": mask_rollback,
     }
 

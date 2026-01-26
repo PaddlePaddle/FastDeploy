@@ -7,7 +7,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:fd-ci"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
