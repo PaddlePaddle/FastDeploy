@@ -187,6 +187,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -209,7 +210,6 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
