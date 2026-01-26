@@ -904,7 +904,7 @@ def parse_args():
         "--load_choices",
         type=str,
         default="default_v1",
-        help="The format of the model weights to load. default/default_v1.",
+        help="The format of the model weights to load. default/default_v1/dummy.",
     )
 
     parser.add_argument(

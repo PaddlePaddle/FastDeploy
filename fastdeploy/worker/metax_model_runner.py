@@ -1352,6 +1352,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.max_logprobs = None
 
         # Remove padding
+        token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -1360,6 +1361,7 @@ class MetaxModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
+            token_num_cpu,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
