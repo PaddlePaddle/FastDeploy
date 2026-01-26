@@ -32,6 +32,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     LogProbEntry,
     StreamOptions,
 )
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.utils import ErrorCode, ParameterError
 from fastdeploy.worker.output import Logprob, LogprobsLists, LogprobsTensors
