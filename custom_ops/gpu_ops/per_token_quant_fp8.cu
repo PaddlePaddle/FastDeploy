@@ -18,95 +18,79 @@ constexpr float epsilon = 1e-10;
 
 template <typename T>
 __global__ void masked_quant_per_token_per_block(
-    const T *input,
-    const int *recv_expert_count,
-    phi::dtype::float8_e4m3fn *quanted_res,
-    float *quanted_scale,
+    const T* __restrict__ input,
+    const int* __restrict__ recv_expert_count,
+    phi::dtype::float8_e4m3fn* __restrict__ quanted_res,
+    float* __restrict__ quanted_scale,
     const int token_num,
     const int hidden_size,
     const int hidden_size_scale,
     const int num_max_tokens_per_expert,
     const bool use_finegrained_range) {
-  const int bid = blockIdx.x;
-  const int tid = threadIdx.x;
-  const int warp_id = tid / 32;
-  const int lane_id = tid % 32;
-  const int num_warp = blockDim.x / 32;
-  static constexpr int NUM_PER_THREADS = 128 / 32;  // 4
-  static constexpr float MAX_VALUE = 448.f;
-  const int end_iter = hidden_size / 128;  // warp_iter_num
-  AlignedVector<T, NUM_PER_THREADS> load_vec;
-  AlignedVector<float, NUM_PER_THREADS> load_vec_float;
-  AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
-  for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
-    const auto expert_id = token_idx / num_max_tokens_per_expert;
-    if (token_idx_in_expert >= recv_expert_count[expert_id]) {
-      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
-      auto num_iters_to_next_expert =
-          (next_expert_start_idx - token_idx - 1) / gridDim.x;
-      token_idx += num_iters_to_next_expert * gridDim.x;
-      continue;
-    }
+  constexpr int BLOCK = 128;
+  constexpr float FP8_MAX = 448.f;
 
-    const T *input_now = input + token_idx * hidden_size;
-    phi::dtype::float8_e4m3fn *quanted_res_now =
-        quanted_res + token_idx * hidden_size;
-    // deal a block per warp
-    for (int iter = warp_id; iter < end_iter; iter += num_warp) {
-      float *quanted_scale_now =
-          quanted_scale +
-          expert_id * hidden_size_scale * num_max_tokens_per_expert +
-          iter * num_max_tokens_per_expert + token_idx_in_expert;
-      const int start_offset = iter * 128;
-      Load<T, NUM_PER_THREADS>(
-          input_now + start_offset + lane_id * NUM_PER_THREADS, &load_vec);
-      // get max value per thread
-      float max_value_thread = -5e4;
+  int bid = blockIdx.x;
+  int tid = threadIdx.x;
+  int warp = tid / 32;
+  int lane = tid % 32;
+
+  int num_warps = blockDim.x / 32;
+  int num_iters = hidden_size / BLOCK;
+
+  for (int token = bid; token < token_num; token += gridDim.x) {
+    int token_in_expert = token % num_max_tokens_per_expert;
+    int expert = token / num_max_tokens_per_expert;
+
+    if (token_in_expert >= recv_expert_count[expert]) continue;
+
+    const T* in = input + token * hidden_size;
+    auto* out = quanted_res + token * hidden_size;
+
+    for (int iter = warp; iter < num_iters; iter += num_warps) {
+      int base = iter * BLOCK + lane * 4;
+      float v[4];
+
 #pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        load_vec_float[vid] = static_cast<float>(load_vec[vid]);
-        max_value_thread = max(abs(load_vec_float[vid]), max_value_thread);
-      }
-      // get max value per warp
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 16),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 8),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 4),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 2),
-                             max_value_thread);
-      max_value_thread = max(__shfl_down_sync(0xffffffff, max_value_thread, 1),
-                             max_value_thread);
-      // broadcast max_value
-      max_value_thread = __shfl_sync(0xFFFFFFFF, max_value_thread, 0);
-      max_value_thread = max(max_value_thread, epsilon);
+      for (int i = 0; i < 4; ++i) v[i] = static_cast<float>(in[base + i]);
 
-      if (use_finegrained_range) {
-        max_value_thread *= 7.0f;
-      }
-
-      float scale_to_store = max_value_thread / MAX_VALUE;
-      // quant
+      // ---------------- amax reduction ----------------
+      float amax = fabsf(v[0]);
 #pragma unroll
-      for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
-        res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-            load_vec_float[vid] * MAX_VALUE / max_value_thread);
+      for (int i = 1; i < 4; ++i) amax = fmaxf(amax, fabsf(v[i]));
+
+#pragma unroll
+      for (int offset = 16; offset > 0; offset >>= 1)
+        amax = fmaxf(amax, __shfl_down_sync(0xffffffff, amax, offset));
+
+      amax = __shfl_sync(0xffffffff, amax, 0);
+      amax = fmaxf(amax, epsilon);
+
+      if (use_finegrained_range) amax *= 7.f;
+
+      float scale = FP8_MAX / amax;
+
+      // ---------------- quantize ----------------
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        float q = v[i] * scale;
+        q = fminf(fmaxf(q, -FP8_MAX), FP8_MAX);
+        out[base + i] = static_cast<phi::dtype::float8_e4m3fn>(q);
       }
-      // store
-      Store<phi::dtype::float8_e4m3fn, NUM_PER_THREADS>(
-          res_vec, quanted_res_now + start_offset + lane_id * NUM_PER_THREADS);
-      if (lane_id == 0) {
-        *quanted_scale_now = scale_to_store;
+
+      // ---------------- store scale ----------------
+      if (lane == 0) {
+        quanted_scale[expert * hidden_size_scale * num_max_tokens_per_expert +
+                      iter * num_max_tokens_per_expert + token_in_expert] =
+            amax / FP8_MAX;
       }
     }
   }
 }
 
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
-    paddle::Tensor &input,
-    paddle::Tensor &recv_expert_count,
+    paddle::Tensor& input,
+    paddle::Tensor& recv_expert_count,
     const int block_size) {
   auto input_dim = input.dims();
   const int num_local_expert = input_dim[0];
@@ -125,11 +109,17 @@ std::vector<paddle::Tensor> MaskedPerTokenQuant(
        num_max_tokens_per_expert},
       paddle::DataType::FLOAT32,
       input.place());
-  const int gridx = min(132 * 2, token_num);
+  // const int gridx = min(132 * 2, token_num);
+  int sm_count = 0;
+  cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, 0);
+
+  constexpr int BLOCKS_PER_SM = 2;
+
+  int gridx = std::min(sm_count * BLOCKS_PER_SM, token_num);
   const int blockx = min(1024, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
-  char *env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
+  char* env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
   if (env_var) {
     use_finegrained_range = static_cast<bool>(std::stoi(env_var));
   }
