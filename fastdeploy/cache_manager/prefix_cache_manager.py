@@ -1629,6 +1629,90 @@ class PrefixCacheManager:
         logger.info(f"build_path: allocate unique node ids {unique_node_ids} for req_id {req_id}")
         return new_last_node
 
+    def cache_output_blocks(self, task, block_size):
+        """
+        Cache blocks already computed.
+        """
+        try:
+            req_id = task.request_id
+            last_node, num_cached_tokens = self.cache_info[req_id]
+            can_cache_computed_tokens = task.num_computed_tokens - task.num_computed_tokens % block_size
+            if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
+                self.leaf_req_map[last_node].remove(req_id)
+            with self.request_release_lock:
+                if isinstance(task.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = task.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = task.prompt_token_ids
+                input_ids = prompt_token_ids + task.output_token_ids
+                total_token_num = len(input_ids)
+                current_match_node = last_node
+                has_modified_gpu_lru_leaf_heap = False
+                has_modified_cpu_lru_leaf_heap = False
+                can_recycle_gpu_block_ids = []
+                can_recycle_cpu_block_ids = []
+                matche_nodes = []
+                gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
+
+                with self.cache_status_lock:
+                    while num_cached_tokens < total_token_num:
+                        token_block = input_ids[num_cached_tokens : num_cached_tokens + block_size]
+                        token_num = len(token_block)
+                        if token_num != block_size:
+                            break
+                        hash_value = self.hash_block_features(token_block)
+                        if hash_value in current_match_node.children:
+                            child = current_match_node.children[hash_value]
+                            matche_nodes.append(child)
+                            if child in self.gpu_lru_leaf_set:
+                                self.gpu_lru_leaf_set.remove(child)
+                                self.gpu_lru_leaf_heap.remove(child)
+                                has_modified_gpu_lru_leaf_heap = True
+                            elif child in self.cpu_lru_leaf_set:
+                                self.cpu_lru_leaf_set.remove(child)
+                                self.cpu_lru_leaf_heap.remove(child)
+                                has_modified_cpu_lru_leaf_heap = True
+                            if child.has_in_gpu:
+                                can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                            else:
+                                if child.cache_status == CacheStatus.SWAP2CPU:
+                                    logger.info(
+                                        f"cache_output_blocks: req_id {task.request_id} matched node"
+                                        + f" {child.node_id} which is being SWAP2CPU"
+                                    )
+                                    child.cache_status = CacheStatus.GPU
+                                    can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                                elif child.cache_status == CacheStatus.CPU:
+                                    can_recycle_cpu_block_ids.append(child.block_id)
+                                    child.cache_status = CacheStatus.GPU
+                                    gpu_block_id = gpu_block_ids_to_cache.pop(0)
+                                    child.block_id = gpu_block_id
+                            num_cached_tokens = num_cached_tokens + block_size
+                            current_match_node = child
+                        else:
+                            break
+
+                if has_modified_gpu_lru_leaf_heap:
+                    heapq.heapify(self.gpu_lru_leaf_heap)
+                if has_modified_cpu_lru_leaf_heap:
+                    heapq.heapify(self.cpu_lru_leaf_heap)
+                self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
+                self.recycle_cpu_blocks(can_recycle_cpu_block_ids)
+                leaf_node = self.mm_build_path(
+                    request=task,
+                    num_computed_tokens=task.num_computed_tokens,
+                    block_size=block_size,
+                    last_node=current_match_node,
+                    num_cached_tokens=num_cached_tokens,
+                )
+                self.req_leaf_map[req_id] = leaf_node
+                self.leaf_req_map[leaf_node].add(req_id)
+                self.cache_info[req_id] = (leaf_node, can_cache_computed_tokens)
+                task.cached_block_num = can_cache_computed_tokens // block_size
+        except Exception as e:
+            logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+            raise e
+
     def _handle_swap_result(self, swap_node_id, task_gpu_block_id, task_cpu_block_id, event_type):
         """
         handle swap resuha
