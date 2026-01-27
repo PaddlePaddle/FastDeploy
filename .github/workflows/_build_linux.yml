@@ -52,7 +52,7 @@ on:
         description: "Enable unified build mode; build once without arch-specific compilation"
         required: false
         type: string
-        default: "false"
+        default: ""
     outputs:
       wheel_path:
         description: "Output path of the generated wheel"

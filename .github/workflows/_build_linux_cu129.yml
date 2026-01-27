@@ -52,7 +52,7 @@ on:
         description: "Enable unified build mode; build once without arch-specific compilation"
         required: false
         type: string
-        default: "false"
+        default: ""
     outputs:
       wheel_path_cu129:
         description: "Output path of the generated wheel"
@@ -190,8 +190,8 @@ jobs:
             python -m pip install wheel
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
-
             export FD_UNIFY_BUILD="${FD_UNIFY_BUILD}"
+
             if [[ "${FD_UNIFY_BUILD}" == "true" ]]; then
               bash build.sh 1 python false
             else

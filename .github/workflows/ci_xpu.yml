@@ -3,7 +3,7 @@ name: CI_XPU
 on:
   pull_request:
     types: [opened, synchronize]
-    branches: [release/**]
+    branches: [develop, release/**]
 permissions: read-all
 
 concurrency:
