@@ -88,7 +88,7 @@ class FileStore(KVCacheStorage):
             suffix = ""
         
         name = f"data{suffix}.pd"    
-        return os.path.join(self.file_path, clean_key, name)
+        return os.path.join(self.file_path, f"{clean_key}_{name}")
         
 
     def _tensor_from_ptr(self, ptr: int, size: int) -> paddle.Tensor:
