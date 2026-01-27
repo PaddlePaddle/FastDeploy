@@ -376,7 +376,7 @@ def test_max_tokens_negative():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     # assert resp.get("detail").get("object") == "error", "max_tokens < 0 未触发校验异常"
-    assert "max_tokens can be defined [1," in resp.get("error").get("message"), "未返回预期的 max_tokens 错误信息"
+    assert "max_tokens must be at least 1" in resp.get("error").get("message"), "未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_min():
