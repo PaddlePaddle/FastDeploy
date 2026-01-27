@@ -225,6 +225,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Suspend rollouting routing replay
     "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
+    # Whether to enable v1 weight updating, which utilizes ZMQ/EngineWorkerQueue/EngineCacheQueue/FMQs
+    # to pass control requests and responses.
+    # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
+    # will adopt this new communication pattern.
+    "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
 }
 
 

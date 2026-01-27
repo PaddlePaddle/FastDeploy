@@ -87,15 +87,19 @@ class TestCacheTransferManager(unittest.TestCase):
         # --------------------------
         # mock IPCSignal
         # --------------------------
-        patcher2 = patch("fastdeploy.cache_manager.cache_transfer_manager.IPCSignal", new=MagicMock())
+        class DummyIPCSignal:
+            def __init__(self, name, array, dtype, suffix, create=False):
+                self.value = array
+
+        patcher2 = patch("fastdeploy.cache_manager.cache_transfer_manager.IPCSignal", new=DummyIPCSignal)
         patcher2.start()
         self.addCleanup(patcher2.stop)
 
         # --------------------------
         # mock _init_cpu_cache 和 _init_gpu_cache
         # --------------------------
-        patcher3 = patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None)
-        patcher4 = patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None)
+        patcher3 = patch.object(CacheTransferManager, "_init_cpu_cache", lambda self: None)
+        patcher4 = patch.object(CacheTransferManager, "_init_gpu_cache", lambda self: None)
         patcher3.start()
         patcher4.start()
         self.addCleanup(patcher3.stop)

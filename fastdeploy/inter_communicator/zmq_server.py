@@ -267,6 +267,9 @@ class ZmqServerBase(ABC):
         has_result_handle = False
         with self.mutex:
             if req_id not in self.req_dict:
+                llm_logger.warning(
+                    f"req_id '{req_id}' not in req_dict, caching response. Available req_ids: {list(self.req_dict.keys())}"
+                )
                 self.cached_results[req_id].append(data)
             else:
                 has_result_handle = True
