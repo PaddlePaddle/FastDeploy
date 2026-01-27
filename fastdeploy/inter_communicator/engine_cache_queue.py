@@ -58,6 +58,9 @@ class EngineCacheQueue:
             client_id: Unique identifier for client instances
             local_data_parallel_size: data parallel size
             local_data_parallel_id: local data parallel id
+
+        TODO(liyonghua): Remove multi-DP initialization. Each DP will have its own cache queue.
+
         """
         self.address: Tuple[str, int] = address
         self.authkey: bytes = authkey
@@ -78,6 +81,7 @@ class EngineCacheQueue:
             # Server-side initialization for shared resources
             self.transfer_task_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.tansfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
+            self.control_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.cache_sync_value_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
             self.transfer_task_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
@@ -85,8 +89,12 @@ class EngineCacheQueue:
             self.transfer_task_done_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
             ]
+            self.control_task_done_lock_init: List[threading.Lock] = [
+                threading.Lock() for _ in range(self.local_data_parallel_size)
+            ]
 
             # Initialize barriers
+            self.barrier = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier0_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier1_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier2_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
@@ -128,6 +136,11 @@ class EngineCacheQueue:
                 proxytype=ListProxy,
             )
             QueueManager.register(
+                "get_control_done_queue",
+                callable=lambda idx: self.control_done_queue_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
                 "get_cache_sync_value",
                 callable=lambda idx: self.cache_sync_value_init[idx],
                 proxytype=ValueProxy,
@@ -142,6 +155,12 @@ class EngineCacheQueue:
                 callable=lambda idx: self.transfer_task_done_lock_init[idx],
                 proxytype=AcquirerProxy,
             )
+            QueueManager.register(
+                "get_control_task_done_lock",
+                callable=lambda idx: self.control_task_done_lock_init[idx],
+                proxytype=AcquirerProxy,
+            )
+            QueueManager.register("get_barrier", callable=lambda idx: self.barrier[idx])
             QueueManager.register("get_barrier0", callable=lambda idx: self.barrier0_init[idx])
             QueueManager.register("get_barrier1", callable=lambda idx: self.barrier1_init[idx])
             QueueManager.register("get_barrier2", callable=lambda idx: self.barrier2_init[idx])
@@ -188,9 +207,12 @@ class EngineCacheQueue:
             ), f"client_id must be between 0 and {self.num_client-1}, got {self.client_id}"
             QueueManager.register("get_transfer_task_queue")
             QueueManager.register("get_tansfer_done_queue")
+            QueueManager.register("get_control_done_queue")
             QueueManager.register("get_cache_sync_value")
             QueueManager.register("get_transfer_task_lock")
             QueueManager.register("get_transfer_task_done_lock")
+            QueueManager.register("get_control_task_done_lock")
+            QueueManager.register("get_barrier")
             QueueManager.register("get_barrier0")
             QueueManager.register("get_barrier1")
             QueueManager.register("get_barrier2")
@@ -210,11 +232,14 @@ class EngineCacheQueue:
         # Get proxy objects for shared resources
         self.transfer_task_queue = self.manager.get_transfer_task_queue(self.local_data_parallel_id)
         self.tansfer_done_queue = self.manager.get_tansfer_done_queue(self.local_data_parallel_id)
+        self.control_done_queue = self.manager.get_control_done_queue(self.local_data_parallel_id)
         self.task_sync_value = self.manager.get_cache_sync_value(self.local_data_parallel_id)
         self.task_lock = self.manager.get_transfer_task_lock(self.local_data_parallel_id)
         self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
+        self.ctrl_done_lock = self.manager.get_control_task_done_lock(self.local_data_parallel_id)
 
         # Get barrier proxies
+        self.barrier = self.manager.get_barrier(self.local_data_parallel_id)
         self.barrier0 = self.manager.get_barrier0(self.local_data_parallel_id)
         self.barrier1 = self.manager.get_barrier1(self.local_data_parallel_id)
         self.barrier2 = self.manager.get_barrier2(self.local_data_parallel_id)
@@ -264,7 +289,12 @@ class EngineCacheQueue:
 
     def put_transfer_task(self, item):
         """
-        put swap task
+        Enqueue a cache transfer task (cpu/gpu swap task, read/write storage task)
+        or a control task (cache clearing/restoring).
+
+        The queue is shared by multiple clients. A task can be enqueued only after
+        the previous task has been read by all clients.
+        `task_sync_value` is used as a bitmask to track per-client read status.
         """
         self.task_lock.acquire()
         if 0 < self.task_sync_value.get() < self.total_num:
@@ -279,7 +309,11 @@ class EngineCacheQueue:
 
     def get_transfer_task(self):
         """
-        get swap task
+        Get the current cache transfer task (cpu/gpu swap task, read/write storage task)
+        or control signal (cache clearing/restoring) from cache task queue.
+
+        Each client reads the same task once. The task is removed from the queue
+        only after all clients have read it, tracked by `task_sync_value`.
         """
         data = None
         read_finish = False
@@ -330,6 +364,21 @@ class EngineCacheQueue:
             logger.info(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
         self.task_done_lock.release()
         return data
+
+    def put_control_done_signal(self, item):
+        """ """
+        self.ctrl_done_lock.acquire()
+        self.control_done_queue.append(item)
+        logger.info(f"put_control_done_signal: put control task {item[-1]} finished signal to queue successful")
+        self.ctrl_done_lock.release()
+
+    def get_control_done_signal(self):
+        data = None
+        self.ctrl_done_lock.acquire()
+        if len(self.control_done_queue) > 0:
+            data = self.control_done_queue.pop(0)
+            logger.info(f"get_control_done_signal: Get control task {data[-1]} finished signal from queue successful")
+        self.ctrl_done_lock.release()
 
     def empty(self):
         """

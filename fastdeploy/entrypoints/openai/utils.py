@@ -19,6 +19,7 @@ import functools
 import heapq
 import random
 import time
+import traceback
 from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
@@ -148,9 +149,14 @@ class DealerConnectionManager:
                             self.request_num[request_id] -= 1
                             if self.request_num[request_id] == 0:
                                 self._update_load(conn_index, -1)
+                    else:
+                        api_server_logger.warning(
+                            f"request_id {request_id} not in request_map, available keys: {list(self.request_map.keys())}"
+                        )
             except Exception as e:
-                api_server_logger.error(f"Listener error: {str(e)}")
+                api_server_logger.error(f"Listener error: {str(e)}\n{traceback.format_exc()}")
                 break
+        api_server_logger.info(f"Listener loop ended for conn_index {conn_index}")
 
     def _update_load(self, conn_index, delta):
         """Update connection load and maintain the heap"""

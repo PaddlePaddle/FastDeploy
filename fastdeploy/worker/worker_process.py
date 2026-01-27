@@ -172,6 +172,8 @@ class PaddleDisWorkerProc:
             not self.speculative_decoding
         )
 
+        self.is_paused = False
+
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
         queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
@@ -481,7 +483,7 @@ class PaddleDisWorkerProc:
             # run eplb
             self._run_eplb(tp_rank)
 
-            if self.fd_config.load_config.dynamic_load_weight:
+            if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
@@ -503,7 +505,7 @@ class PaddleDisWorkerProc:
             # Synchronize the signal set by tp_rank0 visiable to other workers
             self._tp_barrier_wait() if tp_size > 1 else None
 
-            if self.fd_config.load_config.dynamic_load_weight:
+            if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 if self.ranks > 1:
                     paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
@@ -729,14 +731,14 @@ class PaddleDisWorkerProc:
         self.loaded_model_signal.value[0] = 1
 
     def run_control_method(self, control_request: ControlRequest) -> None:
-        logger.info(f"Start run control request: {control_request}")
+        logger.info(f"Rank: {self.local_rank} Start to run control request: {control_request}")
         request_id = control_request.request_id
         method = control_request.method
         kwargs = control_request.args
 
         handler = getattr(self.worker, method, None)
         if handler is None or not callable(handler):
-            error_msg = f"Rank-{self.local_rank}: Unknown control method {method}"
+            error_msg = f"Rank: {self.local_rank} Unknown control method {method}"
             error_result = ControlResponse(request_id, 400, error_msg)
             asyncio.run(self._ctrl_output.put(error_result))
             return
@@ -745,11 +747,11 @@ class PaddleDisWorkerProc:
             result = handler(**kwargs)
             succ_result = ControlResponse(request_id, 200, "Success", result)
             logger.info(
-                f"Rank-{self.local_rank} Success run control request: {control_request}, response: {succ_result}"
+                f"Rank: {self.local_rank} Successfully run control request: {control_request}, response: {succ_result}"
             )
             asyncio.run(self._ctrl_output.put(succ_result, shm_threshold=100 * 1024 * 1024))
         except Exception as e:
-            error_msg = f"Rank-{self.local_rank} Failed run control method {method}: {str(e)}"
+            error_msg = f"Rank: {self.local_rank} Failed to run control method {method}: {str(e)}"
             logger.error(f"{error_msg}\n{traceback.format_exc()}")
             error_result = ControlResponse(request_id, 500, error_msg)
             asyncio.run(self._ctrl_output.put(error_result))

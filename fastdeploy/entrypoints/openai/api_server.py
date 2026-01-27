@@ -282,6 +282,7 @@ async def lifespan(app: FastAPI):
     app.state.completion_handler = completion_handler
     app.state.embedding_handler = embedding_handler
     app.state.reward_handler = reward_handler
+    app.state.event_loop = asyncio.get_running_loop()
 
     if llm_engine is not None and not isinstance(llm_engine, AsyncLLM):
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -604,8 +605,14 @@ def update_model_weight(request: Request) -> Response:
     update model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.update_model_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "wakeup")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.update_model_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
@@ -617,8 +624,14 @@ def clear_load_weight(request: Request) -> Response:
     clear model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.clear_load_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "sleep")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.clear_load_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
