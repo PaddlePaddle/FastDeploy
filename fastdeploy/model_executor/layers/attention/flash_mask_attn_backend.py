@@ -223,6 +223,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.pre_cache_num_blocks_cpu,
                 forward_meta.kv_token_num_cpu,
             ) = pre_cache_len_concat(
+                forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.max_len_tensor_cpu[2],
@@ -267,6 +268,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
+                layer.use_neox_rotary_style,
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )
