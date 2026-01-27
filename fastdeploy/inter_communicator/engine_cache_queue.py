@@ -87,6 +87,7 @@ class EngineCacheQueue:
             ]
 
             # Initialize barriers
+            self.barrier0_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier1_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier2_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier3_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
@@ -129,6 +130,7 @@ class EngineCacheQueue:
                 callable=lambda idx: self.transfer_task_done_lock_init[idx],
                 proxytype=AcquirerProxy,
             )
+            QueueManager.register("get_barrier0", callable=lambda idx: self.barrier0_init[idx])
             QueueManager.register("get_barrier1", callable=lambda idx: self.barrier1_init[idx])
             QueueManager.register("get_barrier2", callable=lambda idx: self.barrier2_init[idx])
             QueueManager.register("get_barrier3", callable=lambda idx: self.barrier3_init[idx])
@@ -168,6 +170,7 @@ class EngineCacheQueue:
             QueueManager.register("get_cache_sync_value")
             QueueManager.register("get_transfer_task_lock")
             QueueManager.register("get_transfer_task_done_lock")
+            QueueManager.register("get_barrier0")
             QueueManager.register("get_barrier1")
             QueueManager.register("get_barrier2")
             QueueManager.register("get_barrier3")
@@ -187,6 +190,7 @@ class EngineCacheQueue:
         self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
 
         # Get barrier proxies
+        self.barrier0 = self.manager.get_barrier0(self.local_data_parallel_id)
         self.barrier1 = self.manager.get_barrier1(self.local_data_parallel_id)
         self.barrier2 = self.manager.get_barrier2(self.local_data_parallel_id)
         self.barrier3 = self.manager.get_barrier3(self.local_data_parallel_id)
