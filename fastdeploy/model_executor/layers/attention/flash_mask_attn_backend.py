@@ -222,7 +222,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        metadata.max_len_tensor_cpu_decoder = paddle.clone(metadata.max_len_tensor_cpu)
+        metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
         metadata.max_len_tensor_cpu_decoder[1] = 0
 
         forward_meta.attention_metadata = metadata
