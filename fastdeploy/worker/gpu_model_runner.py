@@ -2796,7 +2796,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
-        return get_stop(self.share_inputs["not_need_stop"])[0]
+        return get_stop(self.share_inputs["not_need_stop"]).item()
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""

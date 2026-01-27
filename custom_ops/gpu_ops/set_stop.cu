@@ -14,29 +14,17 @@
 
 #include "helper.h"
 
-std::vector<paddle::Tensor> GetStop(paddle::Tensor& not_need_stop) {
+paddle::Tensor GetStop(paddle::Tensor& not_need_stop) {
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
   auto not_need_stop_cpu =
       GetEmptyTensor({1}, paddle::DataType::BOOL, paddle::CPUPlace());
   bool* not_need_stop_cpu_data =
       const_cast<bool*>(not_need_stop_cpu.data<bool>());
   not_need_stop_cpu_data[0] = not_need_stop_data[0];
-  return {not_need_stop_cpu};
+  return not_need_stop_cpu;
 }
 
 void SetStop(paddle::Tensor& not_need_stop, bool flag) {
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
   not_need_stop_data[0] = flag;
 }
-
-PD_BUILD_STATIC_OP(get_stop)
-    .Inputs({"not_need_stop"})
-    .Outputs({"not_need_stop_cpu"})
-    .SetKernelFn(PD_KERNEL(GetStop));
-
-PD_BUILD_STATIC_OP(set_stop)
-    .Inputs({"not_need_stop"})
-    .Attrs({"flag:bool"})
-    .Outputs({"not_need_stop_output"})
-    .SetInplaceMap({{"not_need_stop", "not_need_stop_output"}})
-    .SetKernelFn(PD_KERNEL(SetStop));

@@ -49,6 +49,10 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
+
+void SetStop(paddle::Tensor& not_need_stop, bool flag);
+
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -1714,4 +1718,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
+
+  m.def("get_stop", &GetStop, "get_stop function");
+
+  m.def("set_stop", &SetStop, "set_stop function");
 }

@@ -68,7 +68,7 @@ __global__ void update_inputs_kernel(bool* not_need_stop,
 }
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
-                  const paddle::Tensor& not_need_stop,  // only on cpu
+                  const paddle::Tensor& not_need_stop,  // on gpu
                   const paddle::Tensor& seq_lens_this_time,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,

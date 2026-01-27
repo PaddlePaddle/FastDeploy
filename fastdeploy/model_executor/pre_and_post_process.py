@@ -548,6 +548,7 @@ def post_process_specualate(
         model_output.seq_lens_decoder,
         model_output.step_idx,
     )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process(
@@ -576,7 +577,6 @@ def post_process(
             skip_save_output,
             async_output_queue,
         )
-        share_inputs["preempted_idx"][:] = 0
     else:
         if speculative_decoding:
             post_process_specualate(
@@ -590,7 +590,6 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
-            share_inputs["preempted_idx"][:] = 0
         else:
             post_process_normal(
                 sampler_or_pooler_output,
@@ -942,3 +941,5 @@ def post_process_pooling(
         if save_each_rank or model_output.mp_rank == 0:
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)
+
+    share_inputs["preempted_idx"][:] = 0
