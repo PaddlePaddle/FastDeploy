@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "helper.h"  // NOLINT
+
 #include "flash_mask_attn_kernel.hpp"
 #include "kernel_traits.h"
 #include "paddle/extension.h"
@@ -44,13 +46,20 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
                                 const paddle::optional<paddle::Tensor>& mask,
                                 const int head_num,
                                 const int kv_head_num,
-                                const int head_dim,
-                                const int max_seq_len,
-                                const int q_token_num,
-                                const int k_token_num) {
+                                const int head_dim) {
+  const int q_token_num = q_input.dims()[0];
+  const int k_token_num = k_input.dims()[0];
+  const int batch_size = cu_seq_q.dims()[0] - 1;
+
+  PADDLE_ENFORCE(k_token_num == v_input.dims()[0], "Unmatched shape");
+  PADDLE_ENFORCE(head_dim == 128, "Unmatched shape");
+  PADDLE_ENFORCE(batch_size > 0, "Unmatched shape");
+  PADDLE_ENFORCE(batch_size == seq_len_encoder.dims()[0], "Unmatched shape");
+  PADDLE_ENFORCE(batch_size == cu_seq_k.dims()[0] - 1, "Unmatched shape");
+
   constexpr int kBlockM = 128;
   constexpr int kBlockN = 128;
-  const int batch_size = cu_seq_k.dims()[0] - 1;
+
   Flash_mask_params params;
   memset(&params, 0, sizeof(Flash_mask_params));
 
@@ -72,6 +81,7 @@ void DispatchFlashAttentionMask(const paddle::Tensor& q_input,
   using cute_type = typename cuteType<T>::type;
 
   if (mask) {
+    PADDLE_ENFORCE(mask.get().dims()[0] == 2 * q_token_num, "Unmatched shape");
     params.mask = const_cast<int*>(mask.get().data<int>());
     if (attn_out.dtype() == paddle::DataType::FLOAT16) {
       using out_type = phi::dtype::float16;
@@ -129,10 +139,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::optional<paddle::Tensor>& mask,
                         const int head_num,
                         const int kv_head_num,
-                        const int head_dim,
-                        const int max_seq_len,
-                        const int q_token_num,
-                        const int k_token_num) {
+                        const int head_dim) {
   if (q_input.dtype() == paddle::DataType::FLOAT16) {
     using T = phi::dtype::float16;
     DispatchFlashAttentionMask<T>(q_input,
@@ -145,10 +152,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   mask,
                                   head_num,
                                   kv_head_num,
-                                  head_dim,
-                                  max_seq_len,
-                                  q_token_num,
-                                  k_token_num);
+                                  head_dim);
   } else if (q_input.dtype() == paddle::DataType::BFLOAT16) {
     using T = phi::dtype::bfloat16;
     DispatchFlashAttentionMask<T>(q_input,
@@ -161,10 +165,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                                   mask,
                                   head_num,
                                   kv_head_num,
-                                  head_dim,
-                                  max_seq_len,
-                                  q_token_num,
-                                  k_token_num);
+                                  head_dim);
   }
 }
 
@@ -177,12 +178,7 @@ PD_BUILD_STATIC_OP(flash_mask_attention)
              "seq_len_encoder",
              "attn_out",
              paddle::Optional("mask")})
-    .Attrs({"head_num: int",
-            "kv_head_num: int",
-            "head_dim: int",
-            "max_seq_len: int",
-            "q_token_num: int",
-            "k_token_num: int"})
+    .Attrs({"head_num: int", "kv_head_num: int", "head_dim: int"})
     .Outputs({"out"})
     .SetInplaceMap({{"attn_out", "out"}})
     .SetKernelFn(PD_KERNEL(FlashAttentionMask));

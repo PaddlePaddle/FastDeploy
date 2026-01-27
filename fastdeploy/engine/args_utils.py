@@ -1046,7 +1046,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group

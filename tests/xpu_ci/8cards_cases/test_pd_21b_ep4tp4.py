@@ -109,7 +109,7 @@ def print_pd_logs_on_failure():
     log_dirs = ["log_router", "log_prefill", "log_decode"]
 
     for log_dir in log_dirs:
-        nohup_path = os.path.join(log_dir, "nohup")
+        nohup_path = os.path.join(log_dir, "log_0/worklog.0")
         if os.path.exists(nohup_path):
             print(f"\n========== {nohup_path} ==========")
             with open(nohup_path, "r") as f:
