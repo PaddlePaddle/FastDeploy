@@ -82,6 +82,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
     pre_process,
     rebuild_padding,
+    save_model_output,
     step_cuda,
 )
 
@@ -2445,6 +2446,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
+            post_process_done = paddle.device.cuda.create_event()
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -2603,6 +2605,21 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["not_need_stop"],
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
+                )
+
+            # 8. Save model output
+            if not self.speculative_decoding:
+                self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
+                self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], False)
+                post_process_done.record()
+                post_process_done.synchronize()
+                save_model_output(
+                    model_output=model_output_data,
+                    sampler_output=sampler_output,
+                    share_inputs=self.share_inputs,
+                    async_output_queue=self.async_output_queue,
+                    skip_save_output=skip_save_output,
+                    save_each_rank=self.parallel_config.use_ep,
                 )
 
         self.exist_prefill_flag = False

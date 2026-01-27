@@ -225,6 +225,10 @@ class ModelOutputData:
         Indicates if stopping conditions should be ignored
     """
     not_need_stop: bool
+
+    """
+        Device version of not_need_stop flag for async operations
+    """
     not_need_stop_device: paddle.Tensor
 
     """

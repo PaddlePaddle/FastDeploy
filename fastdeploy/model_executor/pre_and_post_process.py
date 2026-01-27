@@ -316,9 +316,6 @@ def post_process_normal(
     share_inputs: Dict[str, paddle.Tensor],
     sampling_metadata: SamplingMetadata,
     block_size: int = 64,
-    save_each_rank: bool = False,
-    skip_save_output: bool = False,
-    async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
     enable_entropy: bool = False,
@@ -401,7 +398,6 @@ def post_process_normal(
                 model_output.is_block_step,
                 block_size,
             )
-            model_output.not_need_stop.copy_(model_output.not_need_stop_device, False)
         else:
             update_inputs(
                 model_output.stop_flags,
@@ -413,9 +409,18 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-            model_output.not_need_stop.copy_(model_output.not_need_stop_device, False)
-    # 3. Transmit the model's output and stop generation signal via message queue.
-    #    In the future, we will abandon this approach.
+
+
+def save_model_output(
+    model_output: ModelOutputData,
+    sampler_output: SamplerOutput,
+    share_inputs: Dict[str, paddle.Tensor],
+    async_output_queue: queue.Queue = None,
+    skip_save_output: bool = False,
+    save_each_rank: bool = False,
+):
+    # Transmit the model's output and stop generation signal via message queue.
+    # In the future, we will abandon this approach.
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
@@ -427,7 +432,6 @@ def post_process_normal(
                 async_output_queue.put(output)
         else:
             if sampler_output.logprobs_tensors is None:
-                share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
                 save_output(
                     share_inputs["sampled_token_ids"],
                     model_output.not_need_stop,
@@ -591,9 +595,6 @@ def post_process(
                 share_inputs,
                 sampling_metadata,
                 block_size,
-                save_each_rank,
-                skip_save_output,
-                async_output_queue,
                 think_end_id,
                 line_break_id,
                 enable_entropy,

@@ -440,7 +440,7 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const bool beam_search);
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
-                  const paddle::Tensor& not_need_stop,  // only on cpu
+                  const paddle::Tensor& not_need_stop,  // on device
                   const paddle::Tensor& seq_lens_this_time,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
@@ -449,7 +449,7 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& is_block_step);
 
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
-                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& not_need_stop,  // on device
                     const paddle::Tensor& seq_lens_this_time,
                     const paddle::Tensor& seq_lens_encoder,
                     const paddle::Tensor& seq_lens_decoder,
