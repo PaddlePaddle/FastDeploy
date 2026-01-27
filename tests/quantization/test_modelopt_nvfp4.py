@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2026  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -12,9 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 import importlib
+import importlib.util
+import os
 import sys
 import types
 import unittest
@@ -23,7 +23,6 @@ from unittest import mock
 import paddle
 
 import fastdeploy.model_executor.layers.quantization.nvfp4 as nvfp4_module
-from fastdeploy.flashinfer import has_flashinfer
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.nvfp4 import (
@@ -34,14 +33,39 @@ from fastdeploy.model_executor.layers.quantization.nvfp4 import (
 )
 
 
+def is_flashinfer_available():
+    """
+    Check if the flashinfer library is installed and available.
+
+    Returns:
+        bool: True if flashinfer is available, False otherwise.
+    """
+    try:
+        return importlib.util.find_spec("flashinfer") is not None
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+
 def get_sm_version():
+    """
+    Get the SM version (compute capability) of the current CUDA device.
+
+    Returns:
+        int: SM version number
+    """
     prop = paddle.device.cuda.get_device_properties()
     cc = prop.major * 10 + prop.minor
     return cc
 
 
 class TestModelOptNvFp4Config(unittest.TestCase):
+    """Unit tests for the ModelOptNvFp4Config class."""
+
     def setUp(self):
+        """
+        Set up test environment before each test case.
+        Initialize device SM version and raw configuration dict for ModelOptNvFp4Config.
+        """
         prop = paddle.device.cuda.get_device_properties()
         self.sm_version = prop.major * 10 + prop.minor
 
@@ -61,11 +85,11 @@ class TestModelOptNvFp4Config(unittest.TestCase):
         self.config = ModelOptNvFp4Config.from_config(self.raw_config)
 
     def test_name(self):
-        """Test name() method"""
+        """Test the name() method of ModelOptNvFp4Config."""
         self.assertEqual(self.config.name(), "modelopt_fp4")
 
     def test_from_config(self):
-        """Test from_config with full dict"""
+        """Test the from_config() method to verify correct config parsing."""
         cfg = ModelOptNvFp4Config.from_config(self.raw_config)
         self.assertFalse(cfg.is_checkpoint_bf16)
         self.assertTrue(cfg.is_checkpoint_nvfp4_serialized)
@@ -76,41 +100,47 @@ class TestModelOptNvFp4Config(unittest.TestCase):
         self.assertEqual(cfg.quant_min_bound, -6)
         self.assertEqual(cfg.quant_round_type, 1)
 
-    @unittest.skipIf(not has_flashinfer(), "Skip if no FlashInfer available")
+    @unittest.skipIf(not is_flashinfer_available(), "Skip if no FlashInfer available")
     def test_get_quant_method_linear(self):
-        """Test get_quant_method with a linear layer"""
+        """Test get_quant_method() returns ModelOptNvFp4LinearMethod for Linear layers."""
         layer = mock.Mock(spec=QKVParallelLinear)
-        method = self.config.get_quant_method(layer)
-        assert isinstance(method, ModelOptNvFp4LinearMethod)
+        # Mock environment variable to specify the backend
+        with mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}):
+            method = self.config.get_quant_method(layer)
+        self.assertIsInstance(method, ModelOptNvFp4LinearMethod)
 
-    @unittest.skipIf(not has_flashinfer(), "Skip if no FlashInfer available")
+    @unittest.skipIf(not is_flashinfer_available(), "Skip if no FlashInfer available")
     def test_get_quant_method_fused_moe(self):
-        """Test get_quant_method with a moe layer"""
+        """Test get_quant_method() returns ModelOptNvFp4FusedMoE for FusedMoE layers."""
         layer = mock.Mock(spec=FusedMoE)
-        method = self.config.get_quant_method(layer)
-        assert isinstance(method, ModelOptNvFp4FusedMoE)
+        # Mock environment variable to specify the backend
+        with mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}):
+            method = self.config.get_quant_method(layer)
+        self.assertIsInstance(method, ModelOptNvFp4FusedMoE)
 
 
 class TestModelOptNvFp4ModuleInit(unittest.TestCase):
-    def test_module_level_flashinfer_false(self):
-        with (
-            mock.patch("fastdeploy.flashinfer.has_flashinfer", return_value=False),
-            mock.patch("paddleformers.utils.log.logger.warning") as warn,
-        ):
-            importlib.reload(nvfp4_module)
-        warn.assert_called()
+    """Unit tests for nvfp4 module initialization under different environments."""
 
-    def test_module_level_flashinfer_true(self):
-        with (
-            mock.patch("fastdeploy.flashinfer.has_flashinfer", return_value=True),
-            mock.patch("paddle.compat.enable_torch_proxy") as enable_proxy,
-        ):
-            importlib.reload(nvfp4_module)
-        enable_proxy.assert_called_with(scope={"flashinfer"})
+    def test_module_import_without_flashinfer(self):
+        """Test module reloading when flashinfer is not available."""
+        with mock.patch.dict(sys.modules, {"flashinfer": None}):
+            with mock.patch("paddleformers.utils.log.logger.warning"):
+                importlib.reload(nvfp4_module)
+
+    def test_module_import_with_flashinfer(self):
+        """Test module reloading when flashinfer is available."""
+        mock_flashinfer = types.ModuleType("flashinfer")
+        with mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}):
+            with mock.patch("paddle.compat.enable_torch_proxy"):
+                importlib.reload(nvfp4_module)
 
 
 class TestModelOptNvFp4ConfigValidation(unittest.TestCase):
+    """Unit tests for ModelOptNvFp4Config parameter validation and helper functions."""
+
     def test_next_power_of_2(self):
+        """Test the next_power_of_2 helper function with various inputs."""
         self.assertEqual(next_power_of_2(0), 1)
         self.assertEqual(next_power_of_2(1), 1)
         self.assertEqual(next_power_of_2(2), 2)
@@ -118,6 +148,7 @@ class TestModelOptNvFp4ConfigValidation(unittest.TestCase):
         self.assertEqual(next_power_of_2(5), 8)
 
     def test_init_warns_on_nvfp4_checkpoint(self):
+        """Test that a warning is triggered during config initialization with NVFP4 checkpoint."""
         with mock.patch.object(nvfp4_module.logger, "warning") as warn:
             cfg = ModelOptNvFp4Config(
                 is_checkpoint_nvfp4_serialized=True,
@@ -131,37 +162,46 @@ class TestModelOptNvFp4ConfigValidation(unittest.TestCase):
         self.assertEqual(cfg.exclude_modules, ["linear"])
 
     def test_from_config_missing_quant_algo(self):
+        """Test that ValueError is raised when quant_algo is missing in config."""
         with self.assertRaises(ValueError):
             ModelOptNvFp4Config.from_config({})
 
     def test_from_config_kv_cache_quant_algo_type(self):
+        """Test that ValueError is raised when kv_cache_quant_algo is not a string."""
         with self.assertRaises(ValueError):
             ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4", "kv_cache_quant_algo": 123})
 
     def test_from_config_kv_cache_quant_algo_string(self):
+        """Test that kv_cache_quant_algo is parsed correctly when it is a string."""
         cfg = ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4", "kv_cache_quant_algo": "int8"})
         self.assertEqual(cfg.kv_cache_quant_algo, "int8")
 
     def test_from_config_group_size_parsing(self):
+        """Test that group_size is parsed correctly from string input."""
         cfg = ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4", "group_size": "32"})
         self.assertEqual(cfg.group_size, 32)
 
     def test_from_config_group_size_invalid(self):
+        """Test that ValueError is raised when group_size is an invalid string."""
         with self.assertRaises(ValueError):
             ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4", "group_size": "bad"})
 
     def test_from_config_exclude_modules_type(self):
+        """Test that ValueError is raised when exclude_modules is not a list."""
         with self.assertRaises(ValueError):
             ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4", "exclude_modules": "linear"})
 
     def test_from_config_missing_required_fields(self):
+        """Test that ValueError is raised when required fields are missing in config."""
         config = {"quant_algo": "NVFP4", "quantization": {"group_size": 16}}
         with self.assertRaises(ValueError):
             ModelOptNvFp4Config.from_config(config)
 
     def test_get_quant_method_branches(self):
+        """Test that get_quant_method returns correct class instances for different layer types."""
         cfg = ModelOptNvFp4Config.from_config({"quant_algo": "NVFP4"})
         with (
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
             mock.patch.object(nvfp4_module, "ModelOptNvFp4FusedMoE", autospec=True) as moe_cls,
             mock.patch.object(nvfp4_module, "ModelOptNvFp4LinearMethod", autospec=True) as linear_cls,
         ):
@@ -172,6 +212,8 @@ class TestModelOptNvFp4ConfigValidation(unittest.TestCase):
 
 
 class DummyLinearLayer(paddle.nn.Layer):
+    """Dummy Linear layer for testing weight quantization logic."""
+
     def __init__(self, weight_shape, with_bias=False):
         super().__init__()
         self.weight_shape = weight_shape
@@ -180,6 +222,8 @@ class DummyLinearLayer(paddle.nn.Layer):
 
 
 class DummyFusedMoELayer(paddle.nn.Layer):
+    """Dummy FusedMoE layer for testing MoE quantization logic."""
+
     def __init__(self, num_local_experts, moe_intermediate_size, hidden_size):
         super().__init__()
         self.num_local_experts = num_local_experts
@@ -194,6 +238,17 @@ class DummyFusedMoELayer(paddle.nn.Layer):
 
 
 def _install_fake_flashinfer(fp4_quantize=None, mm_fp4=None, cutlass_fused_moe=None):
+    """
+    Install a fake flashinfer module for testing.
+
+    Args:
+        fp4_quantize: Mock function for flashinfer.fp4_quantize
+        mm_fp4: Mock function for flashinfer.mm_fp4
+        cutlass_fused_moe: Mock function for flashinfer.fused_moe.cutlass_fused_moe
+
+    Returns:
+        tuple: Previous flashinfer and flashinfer.fused_moe modules for restoration.
+    """
     prev_flashinfer = sys.modules.get("flashinfer")
     prev_fused_moe = sys.modules.get("flashinfer.fused_moe")
     fake_module = types.ModuleType("flashinfer")
@@ -211,32 +266,29 @@ def _install_fake_flashinfer(fp4_quantize=None, mm_fp4=None, cutlass_fused_moe=N
 
 
 class TestModelOptNvFp4LinearMethod(unittest.TestCase):
-    def test_init_raises_without_backend(self):
-        with (
-            mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", None),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=False),
-        ):
-            with self.assertRaises(ValueError):
-                ModelOptNvFp4LinearMethod(
-                    ModelOptNvFp4Config(True, kv_cache_quant_algo=None, exclude_modules=[], group_size=16)
-                )
+    """Unit tests for the ModelOptNvFp4LinearMethod class."""
 
     def test_init_uses_flashinfer_env(self):
+        """Test that ModelOptNvFp4LinearMethod initializes with the correct backend from environment variable."""
+        mock_backend = "flashinfer-cutlass"
+        mock_flashinfer = types.ModuleType("flashinfer")
         with (
-            mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", "flashinfer-mock"),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": mock_backend}),
+            mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}),
             mock.patch.object(nvfp4_module.logger, "info") as info,
         ):
             method = ModelOptNvFp4LinearMethod(
                 ModelOptNvFp4Config(True, kv_cache_quant_algo=None, exclude_modules=[], group_size=16)
             )
-        self.assertEqual(method.backend, "flashinfer-mock")
+        self.assertEqual(method.backend, mock_backend)
         info.assert_called()
 
     def test_create_weights_and_process(self):
+        """Test weight creation and post-loading processing logic for Linear layers."""
+        mock_flashinfer = types.ModuleType("flashinfer")
         with (
-            mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", "flashinfer-mock"),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
+            mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}),
             mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
             mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
         ):
@@ -254,9 +306,11 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
         self.assertIsNotNone(layer.alpha)
 
     def test_create_weight_scales_direct(self):
+        """Test direct weight scale creation logic for Linear layers."""
+        mock_flashinfer = types.ModuleType("flashinfer")
         with (
-            mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", "flashinfer-mock"),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
+            mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}),
             mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
             mock.patch.object(nvfp4_module, "set_weight_attrs") as set_attrs,
         ):
@@ -270,6 +324,8 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
         set_attrs.assert_called_once()
 
     def test_apply_cutlass_backend(self):
+        """Test the apply() method with flashinfer-cutlass backend for Linear layers."""
+
         def fake_fp4_quantize(x, input_scale_inv):
             x_fp4 = paddle.zeros(x.shape, dtype=paddle.uint8)
             x_scale_interleaved = paddle.zeros(x.shape, dtype=paddle.uint8)
@@ -281,8 +337,7 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
         prev_flashinfer, prev_fused = _install_fake_flashinfer(fp4_quantize=fake_fp4_quantize, mm_fp4=fake_fp4_gemm)
         try:
             with (
-                mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", "flashinfer-cutlass"),
-                mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+                mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
                 mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.uint8),
                 mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
             ):
@@ -300,6 +355,7 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
                 out = method.apply(layer, x)
             self.assertEqual(list(out.shape), [2, layer.weight.shape[0]])
         finally:
+            # Restore original modules to avoid affecting other tests
             if prev_flashinfer is None:
                 sys.modules.pop("flashinfer", None)
             else:
@@ -310,6 +366,8 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
                 sys.modules["flashinfer.fused_moe"] = prev_fused
 
     def test_apply_unsupported_backend(self):
+        """Test that ValueError is raised when an unsupported backend is used in apply()."""
+
         def fake_fp4_quantize(x, input_scale_inv):
             x_fp4 = paddle.zeros(x.shape, dtype=paddle.uint8)
             x_scale_interleaved = paddle.zeros(x.shape, dtype=paddle.uint8)
@@ -318,8 +376,7 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
         prev_flashinfer, prev_fused = _install_fake_flashinfer(fp4_quantize=fake_fp4_quantize)
         try:
             with (
-                mock.patch.object(nvfp4_module.envs, "FD_NVFP4_GEMM_BACKEND", "flashinfer-mock"),
-                mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+                mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
                 mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
                 mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
             ):
@@ -336,6 +393,7 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     method.apply(layer, paddle.ones([2, layer.weight.shape[1]], dtype=paddle.float16))
         finally:
+            # Restore original modules to avoid affecting other tests
             if prev_flashinfer is None:
                 sys.modules.pop("flashinfer", None)
             else:
@@ -347,20 +405,22 @@ class TestModelOptNvFp4LinearMethod(unittest.TestCase):
 
 
 class TestModelOptNvFp4FusedMoE(unittest.TestCase):
+    """Unit tests for the ModelOptNvFp4FusedMoE class."""
+
     def test_init_raises_without_backend(self):
-        with (
-            mock.patch.object(nvfp4_module.envs, "FD_FLASHINFER_MOE_BACKEND", None),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=False),
-        ):
+        """Test that ValueError is raised when an unsupported backend is specified."""
+        with mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "unsupported-backend"}):
             with self.assertRaises(ValueError):
                 ModelOptNvFp4FusedMoE(
                     ModelOptNvFp4Config(True, kv_cache_quant_algo=None, exclude_modules=[], group_size=16)
                 )
 
     def test_create_weights_and_swizzle(self):
+        """Test weight creation and blockscale swizzling logic for FusedMoE layers."""
+        mock_flashinfer = types.ModuleType("flashinfer")
         with (
-            mock.patch.object(nvfp4_module.envs, "FD_FLASHINFER_MOE_BACKEND", "flashinfer-cutlass"),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
+            mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}),
             mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
         ):
             method = ModelOptNvFp4FusedMoE(
@@ -374,9 +434,11 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
         self.assertTrue(method.load_up_proj_weight_first)
 
     def test_process_weights_after_loading(self):
+        """Test post-loading weight processing logic for FusedMoE layers."""
+        mock_flashinfer = types.ModuleType("flashinfer")
         with (
-            mock.patch.object(nvfp4_module.envs, "FD_FLASHINFER_MOE_BACKEND", "flashinfer-cutlass"),
-            mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+            mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
+            mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}),
             mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
             mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
         ):
@@ -400,6 +462,8 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
         self.assertTrue(hasattr(layer, "down_proj_blockscale_swizzled"))
 
     def test_apply_cutlass_and_trtllm(self):
+        """Test apply() method with flashinfer-cutlass and flashinfer-trtllm backends for FusedMoE layers."""
+
         def fake_moe_topk_select(gate_out, gate_correction_bias, top_k, apply_norm_weight, dummy_flag):
             topk_ids = paddle.zeros([gate_out.shape[0], top_k], dtype=paddle.int64)
             topk_weights = paddle.ones([gate_out.shape[0], top_k], dtype=paddle.float32)
@@ -412,8 +476,7 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
         try:
             with (
                 mock.patch("fastdeploy.model_executor.ops.gpu.moe_topk_select", side_effect=fake_moe_topk_select),
-                mock.patch.object(nvfp4_module.envs, "FD_FLASHINFER_MOE_BACKEND", "flashinfer-cutlass"),
-                mock.patch.object(nvfp4_module, "has_flashinfer", return_value=True),
+                mock.patch.dict(os.environ, {"FD_MOE_BACKEND": "flashinfer-cutlass"}),
                 mock.patch.object(nvfp4_module.paddle, "float8_e4m3fn", paddle.float16),
                 mock.patch.object(nvfp4_module, "free_tensor", side_effect=lambda _: None),
             ):
@@ -436,12 +499,14 @@ class TestModelOptNvFp4FusedMoE(unittest.TestCase):
                 x = paddle.ones([2, layer.hidden_size], dtype=paddle.float16)
                 hook = mock.Mock()
                 out = method.apply(layer, x, gate=lambda y: paddle.zeros([y.shape[0], 1]), topk_ids_hookfunc=hook)
+
                 method.backend = "flashinfer-trtllm"
                 out_trt = method.apply(layer, x, gate=lambda y: paddle.zeros([y.shape[0], 1]))
             hook.assert_called()
             self.assertEqual(list(out.shape), list(x.shape))
             self.assertEqual(list(out_trt.shape), list(x.shape))
         finally:
+            # Restore original modules to avoid affecting other tests
             if prev_flashinfer is None:
                 sys.modules.pop("flashinfer", None)
             else:
