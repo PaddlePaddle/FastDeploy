@@ -8,7 +8,7 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn==0.29.0
+uvicorn>=0.38.0
 fastapi
 paddleformers @ https://paddle-qa.bj.bcebos.com/ernie/paddleformers-0.4.0.post20251222-py3-none-any.whl
 redis

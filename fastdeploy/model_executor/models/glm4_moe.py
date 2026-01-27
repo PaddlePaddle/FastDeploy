@@ -239,6 +239,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         self,
         fd_config: FDConfig,
         prefix: str = "",
+        is_mtp: bool = False,
     ) -> None:
         super().__init__()
 
@@ -249,9 +250,8 @@ class Glm4MoeDecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (
-            fd_config.model_config.n_routed_experts is not None
-            and layer_id >= fd_config.model_config.first_k_dense_replace
+        if fd_config.model_config.n_routed_experts is not None and (
+            layer_id >= fd_config.model_config.first_k_dense_replace or is_mtp
         ):
             self.mlp = Glm4Moe(fd_config, layer_id, prefix=f"{prefix}.mlp")
         else:

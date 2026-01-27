@@ -2,82 +2,43 @@ name: CI_XPU
 
 on:
   pull_request:
-    branches:
-      - develop
-      - 'release/*'
-  workflow_dispatch:
+    types: [opened, synchronize]
+    branches: [develop, release/**]
+permissions: read-all
 
 concurrency:
-  group: ${{ github.event.pull_request.number }}-xpu-ci
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
-  CI_XPU:
-    timeout-minutes: 60
-    runs-on: [self-hosted, XPU-P800-8Card]
-    steps:
-      - name: Print current runner name
-        run: |
-          echo "Current runner name: ${{ runner.name }}"
-      # Because the system version is lower than 2.23, the checkout cannot be used.
-      # - name: Checkout code
-      #   uses: actions/checkout@v4
+  clone:
+    name: FD-Clone-Linux-XPU
+    uses: ./.github/workflows/_clone_linux.yml
 
-      - name: Code Checkout
-        env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
-        run: |
-          REPO="https://github.com/${{ github.repository }}.git"
-          FULL_REPO="${{ github.repository }}"
-          REPO_NAME="${FULL_REPO##*/}"
-          BASE_BRANCH="${{ github.base_ref }}"
-          # Clean the repository directory before starting
-          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
-          -e "REPO_NAME=${REPO_NAME}" \
-          -e "BASE_BRANCH=${BASE_BRANCH}" \
-          ${docker_image} /bin/bash -c '
-            if [ -d ${REPO_NAME} ]; then
-              echo "Directory ${REPO_NAME} exists, removing it..."
-              rm -rf ${REPO_NAME}
-            fi
-          '
-          git config --global user.name "FastDeployCI"
-          git config --global user.email "fastdeploy_ci@example.com"
-          git clone ${REPO} ${REPO_NAME} -b ${BASE_BRANCH}
-          cd FastDeploy
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
-            git merge pr/${{ github.event.pull_request.number }}
-            git log -n 3 --oneline
-          else
-            git checkout ${{ github.sha }}
-            git log -n 3 --oneline
-          fi
+  xpu_build_test:
+    name: xpu_build_test
+    needs: [clone]
+    uses: ./.github/workflows/_build_xpu.yml
+    with:
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
 
-      - name: Run CI unittest
-        env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
-        run: |
-          runner_name="${{ runner.name }}"
-          last_char="${runner_name: -1}"
+  xpu_4cards_case_test:
+    name: xpu_4cards_case_test
+    needs: [clone, xpu_build_test]
+    uses: ./.github/workflows/_xpu_4cards_case_test.yml
+    with:
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
+      FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
+      MODEL_PATH: /ssd3/model
 
-          if [[ "$last_char" == "1" ]]; then
-            xpu_id="4"
-          else
-            xpu_id="0"
-          fi
-          PARENT_DIR=$(dirname "$WORKSPACE")
-          echo "PARENT_DIR:$PARENT_DIR"
-          docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
-          -v $(pwd):/workspace -w /workspace \
-          -v "/ssd3:/ssd3" \
-          -e "MODEL_PATH=/ssd3/model" \
-          -e "http_proxy=$(git config --global --get http.proxy)" \
-          -e "https_proxy=$(git config --global --get https.proxy)" \
-          -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,127.0.0.1,localhost" \
-          -e "XPU_ID=${xpu_id}" \
-           ${docker_image} /bin/bash -c "
-          git config --global --add safe.directory /workspace/FastDeploy
-          cd FastDeploy
-          bash scripts/run_xpu_ci_pytest.sh
-          "
+  xpu_8cards_case_test:
+    name: xpu_8cards_case_test
+    needs: [clone, xpu_build_test]
+    uses: ./.github/workflows/_xpu_8cards_case_test.yml
+    with:
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
+      FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
+      MODEL_PATH: /ssd3/model

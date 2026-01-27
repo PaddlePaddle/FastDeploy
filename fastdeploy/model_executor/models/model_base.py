@@ -170,6 +170,60 @@ class ModelRegistry:
 
         return architecture
 
+    def _try_resolve_paddleformers(
+        self,
+        architecture: str,
+        model_config: ModelConfig,
+        is_fallback: bool = False,
+    ) -> str | None:
+        """Try to resolve to PaddleFormers backend.
+
+        Args:
+            architecture: The model architecture name
+            model_config: The model configuration
+            is_fallback: If True, this is being called as a fallback when no native impl exists
+
+        Returns:
+            The PaddleFormers backend architecture name if applicable, None otherwise
+        """
+        model_impl = getattr(model_config, "model_impl", "auto")
+
+        # Explicit paddleformers backend requested
+        if model_impl == "paddleformers":
+            backend_arch = "PaddleFormersForCausalLM"
+        elif model_impl == "auto" and is_fallback:
+            # Auto mode fallback when no native implementation exists
+            backend_arch = "PaddleFormersForCausalLM"
+        elif model_impl == "fastdeploy":
+            return None
+        else:
+            return None
+
+        architectures = getattr(model_config, "architectures", None) or []
+        if not architectures:
+            if model_impl == "paddleformers":
+                raise ValueError(
+                    f"{model_impl} backend requested but no architectures were found in the pretrained configuration."
+                )
+            return None
+
+        runner_type = getattr(model_config, "runner_type", None)
+        if runner_type is not None and runner_type != "generate":
+            if model_impl == "paddleformers":
+                raise ValueError(
+                    f"{model_impl} backend (--model-impl {model_impl}) currently supports only text-generation models."
+                )
+            return None
+
+        if backend_arch not in self.models:
+            if model_impl == "paddleformers":
+                raise ValueError(
+                    f"{model_impl} backend is unavailable. Ensure fastdeploy.model_executor.models.paddleformers is imported."
+                )
+            return None
+
+        return backend_arch
+
     def _raise_for_unsupported(self, architectures: list[str]):
         all_supported_archs = self.get_supported_archs()
 
@@ -193,11 +247,32 @@ class ModelRegistry:
         if not architectures:
             raise ValueError("No model architectures are specified")
 
+        # First, check if PaddleFormers is explicitly requested
+        if model_config is not None and architectures:
+            backend_override = self._try_resolve_paddleformers(architectures[0], model_config, is_fallback=False)
+            if backend_override is not None:
+                model_info = self._try_inspect_model_cls(backend_override)
+                if model_info is None:
+                    raise ValueError("Failed to inspect PaddleFormers backend; please check installation logs.")
+                return (model_info, model_info.architecture)
+
+        # Try to find native FastDeploy implementation
         for arch in architectures:
             normalized_arch = self._normalize_arch(arch, model_config)
             model_info = self._try_inspect_model_cls(normalized_arch)
             if model_info is not None:
                 return (model_info, arch)
+
+        # If no native implementation found and model_impl is 'auto', try PaddleFormers fallback
+        if model_config is not None:
+            model_impl = getattr(model_config, "model_impl", "auto")
+            if model_impl == "auto":
+                fallback_backend = self._try_resolve_paddleformers(architectures[0], model_config, is_fallback=True)
+                if fallback_backend is not None:
+                    model_info = self._try_inspect_model_cls(fallback_backend)
+                    if model_info is not None:
+                        print(f"Using PaddleFormers backend as fallback for {model_info.architecture}")
+                        return (model_info, model_info.architecture)
 
         return self._raise_for_unsupported(architectures)
 

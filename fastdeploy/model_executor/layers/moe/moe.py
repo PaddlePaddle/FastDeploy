@@ -254,7 +254,12 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(
-        self, param, loaded_weight, expert_id, shard_id: Optional[str] = None, source: Optional[str] = None
+        self,
+        param,
+        loaded_weight,
+        expert_id,
+        shard_id: Optional[str] = None,
+        source: Optional[str] = None,
     ):
         """
         source:Avoid redundant transpose of fused weights when weight_loader is called iteratively
@@ -376,7 +381,7 @@ class FusedMoE(nn.Layer):
         h2d_copy(dst=expert_param, src=loaded_weight)
 
     def _load_fused_experts_weight(self, param, loaded_weight):
-        if self.tp_size > 1:
+        if self.tp_size > 1 and self.moe_quant_type != "mxfp4":
             dim = -1
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
@@ -386,9 +391,11 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
+
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
+
         h2d_copy(dst=param, src=loaded_weight)
 
         if hasattr(param, "tensor_track"):
@@ -659,6 +666,12 @@ class FusedMoE(nn.Layer):
                     tp_group=self.fd_config.parallel_config.tp_group,
                 )
 
+        if current_platform.is_intel_hpu():
+            out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
+            if self.reduce_results and (self.ep_size > 1 or self.tp_size > 1):
+                tensor_model_parallel_all_reduce_custom(out)
+            return out
+
         token_num = x.shape[0]
         if (
             self.ep_size > 1
@@ -678,10 +691,7 @@ class FusedMoE(nn.Layer):
             out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
 
         if self.reduce_results and self.tp_size > 1:
-            if current_platform.is_intel_hpu():
-                tensor_model_parallel_all_reduce_custom(out)
-            else:
-                out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(
