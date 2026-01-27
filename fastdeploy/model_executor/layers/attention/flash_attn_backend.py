@@ -236,7 +236,7 @@ class FlashAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
-            # FA3 outperforms append_attention when token nums > 2048.
+            # FA3 outperforms append_attention when token nums > 1k.
             max_encoder_q_token_num = forward_meta.max_len_tensor_cpu[1].item()
             max_encoder_kv_token_num = forward_meta.max_len_tensor_cpu[5].item()
             forward_meta.use_fa_do_prefill = max_encoder_q_token_num > 1024 or max_encoder_kv_token_num > 1024
