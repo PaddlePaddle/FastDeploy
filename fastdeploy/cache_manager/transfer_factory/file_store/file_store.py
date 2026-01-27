@@ -154,26 +154,26 @@ class FileStore(KVCacheStorage):
             logger.debug(f"Key {key} already exists. Skipped.")
             return True
         try:
-            key_dir = os.path.dirname(tensor_path)
-            if not os.path.exists(key_dir):
-                os.makedirs(key_dir, exist_ok=True)
+            if not os.path.exists(self.file_path):
+                os.makedirs(self.file_path, exist_ok=True)
 
             if isinstance(target_location, paddle.Tensor):
-                tensor2save = target_location.cpu()
-                paddle.save(tensor2save, tensor_path)
-                dir_fd = os.open(key_dir, os.O_RDONLY)
-                try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
+                # tensor2save = target_location.cpu()
+                # paddle.save(tensor2save, tensor_path)
+                # file_fd = os.open(tensor_path, os.O_RDONLY)
+                # try:
+                #     os.fsync(file_fd)
+                # finally:
+                #     os.close(file_fd)
+                logger.debug("[ERROR] Tensor type is not supported, yet")
             elif isinstance(target_location, int) and target_size is not None:
                 tensor = self._tensor_from_ptr(target_location, int(target_size))
                 paddle.save(tensor, tensor_path)
-                dir_fd = os.open(key_dir, os.O_RDONLY)
+                file_fd = os.open(tensor_path, os.O_RDONLY)
                 try:
-                    os.fsync(dir_fd)
+                    os.fsync(file_fd)
                 finally:
-                    os.close(dir_fd)
+                    os.close(file_fd)
             else:
                 raise ValueError("target_location must be a paddle.Tensor or a pointer int with target_size.")
             return True
@@ -226,10 +226,11 @@ class FileStore(KVCacheStorage):
             if target_location is None:
                 return loaded
             if isinstance(target_location, paddle.Tensor):
-                if list(loaded.shape) != list(target_location.shape):
-                    loaded = paddle.reshape(loaded, target_location.shape)
-                paddle.assign(loaded, output=target_location)
-                return target_location
+                # if list(loaded.shape) != list(target_location.shape):
+                #     loaded = paddle.reshape(loaded, target_location.shape)
+                # paddle.assign(loaded, output=target_location)
+                # return target_location
+                logger.debug("[ERROR] Tensor type is not supported, yet")
             if isinstance(target_location, int) and target_size is not None:
                 if target_size <= 0:
                     logger.error(f"Invalid target_size: {target_size}")
