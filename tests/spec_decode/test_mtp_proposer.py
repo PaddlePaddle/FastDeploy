@@ -70,7 +70,6 @@ class TestMTPProposer(unittest.TestCase):
             "prompt_lens": paddle.zeros([2, 1], dtype="int64"),
             "step_idx": paddle.zeros([2, 1], dtype="int64"),
             "stop_flags": paddle.zeros([2, 1], dtype="bool"),
-            "stop_nums": paddle.zeros([2, 1], dtype="int32"),
             "pre_ids": paddle.zeros([2, 2048], dtype="int64"),
             "output_cum_offsets": paddle.zeros([2], dtype="int32"),
             "output_padding_offset": paddle.zeros([2], dtype="int32"),

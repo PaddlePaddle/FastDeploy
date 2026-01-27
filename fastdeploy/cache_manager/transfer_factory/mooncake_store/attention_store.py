@@ -80,6 +80,7 @@ class AttentionStore(KVCacheStorage):
             logger.error(
                 f"[INIT] ❌ AttentionStore initialization failed, error: {e}, traceback:\n{traceback.format_exc()}"
             )
+            raise
 
     def wait_for_sdk_ready(self, timeout: float, delta_t: float):
         t = 0
