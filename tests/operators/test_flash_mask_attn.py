@@ -34,27 +34,31 @@ class TestFlashMaskAttention(unittest.TestCase):
 
     def naive_attn(self, q_input, k_input, v_input, mask):
 
-        q_num = q_input.shape[0]
-        k_num = k_input.shape[0]
-        new_q = q_input.reshape([q_num, self.num_head, self.head_dim])
-        new_k = k_input.reshape([k_num, 1, self.head_dim]).tile([1, self.num_head, 1]).contiguous()
-        new_v = v_input.reshape([k_num, 1, self.head_dim]).tile([1, self.num_head, 1]).contiguous()
-
-        import numpy as np
+        new_q = q_input.reshape([self.q_seq_len, self.num_head, self.head_dim])
+        new_k = (
+            k_input.reshape([self.k_seq_len + self.q_seq_len, 1, self.head_dim])
+            .tile([1, self.num_head, 1])
+            .contiguous()
+        )
+        new_v = (
+            v_input.reshape([self.k_seq_len + self.q_seq_len, 1, self.head_dim])
+            .tile([1, self.num_head, 1])
+            .contiguous()
+        )
 
         p = paddle.einsum("ilk, jlk->lij", new_q, new_k)
         p = p / (np.sqrt(self.head_dim))
 
-        tmp_zeros = np.zeros((q_num, k_num)) - 1
+        tmp_zeros = np.zeros((self.q_seq_len, self.q_seq_len + self.k_seq_len)) - 1
         cpu_mask = mask.cpu().numpy()
-        for i in range(q_num):
+        for i in range(self.q_seq_len):
             tmp_zeros[i][cpu_mask[2 * i] : cpu_mask[2 * i + 1]] = 0
         mask = tmp_zeros * 1000
         mask = paddle.to_tensor(mask, dtype=q_input.dtype)
         p = p + mask[None, :]
         p = paddle.nn.functional.softmax(p, -1)
 
-        out = paddle.einsum("lij, jlk->ilk", p, new_v).reshape([q_num, self.num_head * self.head_dim])
+        out = paddle.einsum("lij, jlk->ilk", p, new_v).reshape([self.q_seq_len, self.num_head * self.head_dim])
         return out
 
     def paddle_flash_attn_mask(self, q_input, k_input, v_input, attn_out, mask):
