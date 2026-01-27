@@ -252,6 +252,11 @@ class GPUModelRunner(ModelRunnerBase):
             create=False,
         )
 
+        # for overlap
+        self.last_model_output_data = None
+        self.last_sampler_output = None
+        self.last_post_process_done = None
+
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
         while True:
@@ -2348,6 +2353,48 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
+        model_output, p_done_idxs = self._preprocess_and_execute_model(model_forward_batch, num_running_requests)
+        if model_output is not None:
+            model_output_data, sampler_output, post_process_done = self._postprocess(
+                model_output, p_done_idxs, model_forward_batch, num_running_requests
+            )
+            if model_output_data is not None and not self.speculative_decoding:
+                self._save_model_output(model_output_data, sampler_output, post_process_done)
+
+    def execute_model_overlap(
+        self,
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
+        """
+        The Entrance of model execute overlap mode.
+        Args:
+            model_forward_batch: 'Request' contains information related to prompt and is an abstract
+            class at the server level, which is too granular for ModelRunner.
+            We plan to replace it with 'ModelForwardBatch'.
+            intermediate_tensors:
+            num_running_requests: batch_size
+        """
+        model_output, p_done_idxs = self._preprocess_and_execute_model(model_forward_batch, num_running_requests)
+        if self.last_model_output_data is not None and not self.speculative_decoding:
+            self._save_model_output(self.last_model_output_data, self.last_sampler_output, self.last_post_process_done)
+        if model_output is not None:
+            model_output_data, sampler_output, post_process_done = self._postprocess(
+                model_output, p_done_idxs, model_forward_batch, num_running_requests
+            )
+            self.last_model_output_data = model_output_data
+            self.last_sampler_output = sampler_output
+            self.last_post_process_done = post_process_done
+        else:
+            self.last_model_output_data = None
+            self.last_sampler_output = None
+            self.last_post_process_done = None
+
+    def _preprocess_and_execute_model(
+        self,
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
 
@@ -2379,10 +2426,19 @@ class GPUModelRunner(ModelRunnerBase):
         # Then there is data on other runner, the current runner is required to execute part of the model.
         # But not need to run the below code.
         if not self.not_need_stop():
-            return None
+            return None, None
 
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
+        return model_output, p_done_idxs
+
+    def _postprocess(
+        self,
+        model_output: paddle.Tensor,
+        p_done_idxs: List[int],
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
@@ -2431,8 +2487,9 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
+            self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], True)
 
-            return None
+            return None, None, None
         else:
             hidden_states = rebuild_padding(
                 model_output,
@@ -2607,20 +2664,11 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
-            # 8. Save model output
+            # 8. Async cpy
             if not self.speculative_decoding:
                 self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
                 self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], False)
                 post_process_done.record()
-                post_process_done.synchronize()
-                save_output_normal(
-                    model_output=model_output_data,
-                    sampler_output=sampler_output,
-                    share_inputs=self.share_inputs,
-                    async_output_queue=self.async_output_queue,
-                    skip_save_output=skip_save_output,
-                    save_each_rank=self.parallel_config.use_ep,
-                )
 
         self.exist_prefill_flag = False
         # Routing replay
@@ -2632,7 +2680,22 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.share_inputs["is_chunk_step"].sum() == 0
             ):
                 self.routing_replay_manager.put_table_to_store()
-            return None
+        return model_output_data, sampler_output, post_process_done
+
+    def _save_model_output(
+        self,
+        model_output_data,
+        sampler_output,
+        post_process_done,
+    ):
+        post_process_done.synchronize()
+        save_output_normal(
+            model_output=model_output_data,
+            sampler_output=sampler_output,
+            share_inputs=self.share_inputs,
+            async_output_queue=self.async_output_queue,
+            save_each_rank=self.parallel_config.use_ep,
+        )
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())

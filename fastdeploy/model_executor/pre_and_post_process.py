@@ -416,39 +416,37 @@ def save_output_normal(
     sampler_output: SamplerOutput,
     share_inputs: Dict[str, paddle.Tensor],
     async_output_queue: queue.Queue = None,
-    skip_save_output: bool = False,
     save_each_rank: bool = False,
 ):
     # Transmit the model's output and stop generation signal via message queue.
     # In the future, we will abandon this approach.
-    if not skip_save_output:
-        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(
-                    sampler_output.sampled_token_ids,
-                    logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs_list=model_output.prompt_logprobs_list,
-                )
-                async_output_queue.put(output)
+    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+        if save_each_rank or model_output.mp_rank == 0:
+            output = _build_stream_transfer_data(
+                sampler_output.sampled_token_ids,
+                logprobs=sampler_output.logprobs_tensors,
+                prompt_logprobs_list=model_output.prompt_logprobs_list,
+            )
+            async_output_queue.put(output)
+    else:
+        if sampler_output.logprobs_tensors is None:
+            save_output(
+                share_inputs["sampled_token_ids"],
+                model_output.not_need_stop,
+                share_inputs["preempted_idx"],
+                model_output.mp_rank,
+                save_each_rank,
+            )
         else:
-            if sampler_output.logprobs_tensors is None:
-                save_output(
-                    share_inputs["sampled_token_ids"],
-                    model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
-                    model_output.mp_rank,
-                    save_each_rank,
-                )
-            else:
-                save_output_topk(
-                    sampler_output.sampled_token_ids,
-                    sampler_output.logprobs_tensors.logprob_token_ids,
-                    sampler_output.logprobs_tensors.logprobs,
-                    sampler_output.logprobs_tensors.selected_token_ranks,
-                    model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
-                    model_output.mp_rank,
-                )
+            save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                model_output.not_need_stop,
+                share_inputs["preempted_idx"],
+                model_output.mp_rank,
+            )
     share_inputs["preempted_idx"][:] = 0
 
 
