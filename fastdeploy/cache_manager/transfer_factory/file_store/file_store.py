@@ -87,12 +87,9 @@ class FileStore(KVCacheStorage):
             clean_key = key
             suffix = ""
         
-        if self.storage_config.tp_rank is not None:
-            name = f"rank_{self.storage_config.tp_rank}{suffix}.pd"
-        else:
-            name = f"data{suffix}.pd"
-            
+        name = f"data{suffix}.pd"    
         return os.path.join(self.file_path, clean_key, name)
+        
 
     def _tensor_from_ptr(self, ptr: int, size: int) -> paddle.Tensor:
         raw = ctypes.string_at(ptr, size)
