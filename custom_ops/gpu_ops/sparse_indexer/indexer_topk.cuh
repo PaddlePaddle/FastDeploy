@@ -815,8 +815,8 @@ __global__ void __launch_bounds__(BLOCK_THREADS) RadixTopKKernel_Unified(
     IdType* lengths,             // [num_rows] per-row lengths, nullptr for Basic (uses stride)
     const IdType* row_to_batch,  // [num_rows] batch mapping for PageTable, nullptr otherwise
     int64_t aux_stride,          // src_page_table stride for PageTable mode, 0 otherwise
-    IdType* seq_len_pd,  //NOTE (changwenbin) Support FD P/D indexer topk
-    IdType* batch_id_per_token,//NOTE (changwenbin) Support FD P/D indexer topk
+    const IdType* seq_len_decoder,  //NOTE (changwenbin) Support FD P/D indexer topk
+    const IdType* batch_id_per_token,//NOTE (changwenbin) Support FD P/D indexer topk
     uint32_t top_k_val, uint32_t stride, uint32_t num_rows, RadixRowState* row_states,
     uint32_t chunk_size, uint32_t ctas_per_group) {
   using Traits = RadixTopKTraits<DType>;
@@ -857,18 +857,31 @@ __global__ void __launch_bounds__(BLOCK_THREADS) RadixTopKKernel_Unified(
     uint32_t row_idx = group_id + iter * num_groups;
     
     if (row_idx >= num_rows) break;
-    const auto  batch_id = batch_id_per_token[row_idx/4];
-    if (batch_id == -1) continue;
+    
+    //NOTE (changwenbin) Support FD Metadata
+    int batch_id;
+    if (batch_id_per_token != nullptr){
+       batch_id = batch_id_per_token[row_idx/4];
+      if (batch_id == -1) continue;
+    }
+
     
     // Mode-specific: get row length and k value
     uint32_t length, k;
+    int q_head=4;
     if constexpr (MODE == RadixTopKMode::Basic) {
       length = stride;                                            // Fixed length for all rows
       k = (aux_data != nullptr) ? aux_data[row_idx] : top_k_val;  // aux_data = top_k_arr
     } else {
-      // length = lengths[row_idx];  // Per-row length
-      //NOTE (changwenbin) Support FD Metadata
-      length = seq_len_pd[batch_id];
+      //NOTE (changwenbin) decode 
+      if(seq_len_decoder !=nullptr && batch_id_per_token != nullptr){
+        length = (seq_len_decoder[batch_id]+1); //for pack q k
+      }else{
+        //NOTE (changwenbin) prefill for pack q k
+        // length = lengths[row_idx];  // Per-row length
+        // length = (lengths[((row_idx/4) *9) +8] + 7) / 8;
+        length = lengths[row_idx/q_head];  // Per-row length
+      }
       k = top_k_val;              // Fixed k
     }
 
@@ -1706,8 +1719,8 @@ template <typename DType, typename IdType>
 cudaError_t RadixTopKRaggedTransformMultiCTA(DType* input, IdType* output_indices,
                                              const IdType* offsets, IdType* lengths,
                                              uint32_t num_rows, 
-                                             IdType* seq_len_pd,
-                                             IdType* batch_id_per_token,
+                                             const IdType* seq_len_decoder,
+                                             const IdType* batch_id_per_token,
                                              uint32_t top_k_val,
                                              uint32_t max_len, RadixRowState* row_states_buffer,
                                              cudaStream_t stream = 0) {
@@ -1760,7 +1773,7 @@ cudaError_t RadixTopKRaggedTransformMultiCTA(DType* input, IdType* output_indice
       dim3 nthrs(BLOCK_THREADS);
       void* args[] = {&input,         &output_indices, &output_values,     &offsets,
                       &lengths,       &row_to_batch,   &aux_stride,
-                      &seq_len_pd,
+                      &seq_len_decoder,
                       &batch_id_per_token,
                       &top_k_val,
                       &max_len,       &num_rows,       &row_states_buffer, &chunk_size,
@@ -1775,7 +1788,7 @@ cudaError_t RadixTopKRaggedTransformMultiCTA(DType* input, IdType* output_indice
       dim3 nthrs(BLOCK_THREADS);
       void* args[] = {&input,         &output_indices, &output_values,     &offsets,
                       &lengths,       &row_to_batch,   &aux_stride,        
-                      &seq_len_pd,
+                      &seq_len_decoder,
                       &batch_id_per_token,
                       &top_k_val,
                       &max_len,       &num_rows,       &row_states_buffer, &chunk_size,
@@ -1981,8 +1994,8 @@ __global__ void __launch_bounds__(FILTERED_TOPK_BLOCK_THREADS)
                               int64_t aux_stride,                       // src_stride for PageTable
                               const IdType* __restrict__ row_to_batch,  // for PageTable
                               const IdType* __restrict__ lengths, uint32_t num_rows, 
-                              IdType* __restrict__ seq_len_pd,
-                              IdType* __restrict__ batch_id_per_token,
+                              const IdType* __restrict__ seq_len_decoder,
+                              const IdType* __restrict__ batch_id_per_token,
                               uint32_t top_k,
                               uint32_t max_len) {
   constexpr uint32_t BLOCK_SIZE = FILTERED_TOPK_BLOCK_THREADS;
@@ -1994,11 +2007,23 @@ __global__ void __launch_bounds__(FILTERED_TOPK_BLOCK_THREADS)
 
   if (bid >= num_rows) return;
 
-  // const int length = (lengths != nullptr) ? lengths[bid] : static_cast<int>(max_len);
-  const auto batch_id = batch_id_per_token[bid/4];
-  if (batch_id ==-1) return;
-  const auto length = seq_len_pd[batch_id];
-  if (length == 0) return;
+  //NOTE:(changwenbin) Support FD Metadata
+  int batch_id,length;
+  int q_head =4;
+  // int k_share_tokens = 8;
+  // int q_share_tokens = 8;
+  if (seq_len_decoder != nullptr){//decode
+    batch_id = batch_id_per_token[bid/q_head];
+    if (batch_id ==-1) return;
+    length = (seq_len_decoder[batch_id]+1); //for pack q k
+    if (length == 0) return;
+  }else{//prefill
+    // length = (lengths != nullptr) ? lengths[bid] : static_cast<int>(max_len);
+    //NOTE: changwenbin FD pack qk 
+    // length = (lengths != nullptr) ? (lengths[bid/4 *9 +8]+7)/8 : static_cast<int>(max_len);
+    length = (lengths != nullptr) ? lengths[bid/q_head] : static_cast<int>(max_len);
+  }
+
   const DType* score = input + bid * max_len;
   IdType* dst = output + bid * top_k;
 
@@ -2306,8 +2331,8 @@ cudaError_t FilteredTopKPageTableTransform(DType* input, IdType* output_page_tab
 template <typename DType, typename IdType>
 cudaError_t FilteredTopKRaggedTransform(DType* input, IdType* output_indices, const IdType* offsets,
                                         IdType* lengths, uint32_t num_rows,
-                                        IdType* seq_len_pd,
-                                        IdType* batch_id_per_token,
+                                        const IdType* seq_len_decoder,
+                                        const IdType* batch_id_per_token,
                                         uint32_t top_k_val,
                                         uint32_t max_len, cudaStream_t stream = 0) {
   constexpr size_t smem_size = FILTERED_TOPK_SMEM_DYNAMIC;
@@ -2320,7 +2345,7 @@ cudaError_t FilteredTopKRaggedTransform(DType* input, IdType* output_indices, co
   const IdType* row_to_batch = nullptr;  // Not used for Ragged mode
   void* args[] = {&input,        &output_indices, &aux_output, &offsets,   &aux_stride,
                   &row_to_batch, &lengths,        &num_rows,
-                  &seq_len_pd,   &batch_id_per_token,   &top_k_val, &max_len};
+                  &seq_len_decoder,   &batch_id_per_token,   &top_k_val, &max_len};
 
   const int vec_size = ComputeFilteredTopKVecSize<DType>(max_len);
 
@@ -2475,21 +2500,21 @@ inline bool ShouldUseFilteredTopK(uint32_t num_rows, uint32_t top_k_val, uint32_
 template <typename DType, typename IdType>
 cudaError_t TopKRaggedTransformDispatch(DType* input, IdType* output_indices, const IdType* offsets,
                                         IdType* lengths, uint32_t num_rows, 
-                                        IdType* seq_len_pd,
-                                        IdType* batch_id_per_token,
+                                        const IdType* seq_len_decoder,
+                                        const IdType* batch_id_per_token,
                                         uint32_t top_k_val,
                                         uint32_t max_len, RadixRowState* row_states_buffer,
                                         cudaStream_t stream = 0) {
   if (ShouldUseFilteredTopK<DType>(num_rows, top_k_val, max_len)) {
     return FilteredTopKRaggedTransform<DType, IdType>(input, output_indices, offsets, lengths,
                                                       num_rows, 
-                                                      seq_len_pd,
+                                                      seq_len_decoder,
                                                       batch_id_per_token,
                                                       top_k_val, max_len, stream);
   }
   return RadixTopKRaggedTransformMultiCTA<DType, IdType>(input, output_indices, offsets, lengths,
                                                          num_rows,
-                                                         seq_len_pd,
+                                                         seq_len_decoder,
                                                          batch_id_per_token,
                                                          top_k_val, max_len,
                                                          row_states_buffer, stream);

@@ -20,6 +20,7 @@ from .block_multihead_attn_backend import BlockAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .flash_mask_attn_backend import FlashMaskAttentionBackend
 from .token_sparse_attn_backend import TokenSparseAttnBackend
+from .token_sparse_attn_v2_backend import TokenSparseAttnV2Backend
 from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
@@ -38,4 +39,5 @@ __all__ = [
     "PlasAttentionBackend",
     "FlashMaskAttentionBackend",
     "TokenSparseAttnBackend",
+    "TokenSparseAttnV2Backend",
 ]

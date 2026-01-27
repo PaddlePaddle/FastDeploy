@@ -239,6 +239,7 @@ class AppendAttentionBackend(AttentionBackend):
         k_pe: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        token_sparse_index: paddle.Tensor,
     ) -> paddle.Tensor:
         """
         forward_mixed

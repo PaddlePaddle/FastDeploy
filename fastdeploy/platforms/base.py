@@ -30,6 +30,7 @@ class _Backend(enum.Enum):
     HPU_ATTN = enum.auto()
     FLASH_MASK_ATTN = enum.auto()
     TSA_ATTN = enum.auto()
+    TSA_ATTN_V2 = enum.auto()
 
 
 class Platform:
