@@ -668,7 +668,7 @@ class CacheTransferManager:
         timeout,
     ):
         try:
-            if self.storage_backend_type == "mooncake", "file":
+            if self.storage_backend_type == "mooncake" or "file":
                 key_cache_size = [
                     self.key_cache_shape[0],
                     self.key_cache_shape[1],
