@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -49,21 +50,12 @@ if current_platform.is_cuda():
 else:
     merge_prefill_decode_output = None
 
-import os
-
 
 @dataclass
 class FlashMaskAttentionMetadata(AttentionMetadata):
     """
     FlashAttentionMetadata
     """
-
-    cu_seqlens_k: paddle.Tensor = None
-
-    pre_cache_batch_ids = None
-    pre_cache_tile_ids_per_batch = None
-    pre_cache_num_blocks_cpu = None
-    kv_token_num_cpu = None
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
@@ -72,7 +64,6 @@ class FlashMaskAttentionMetadata(AttentionMetadata):
     _fuse_kernel_compute_dtype: str = "bf16"
     _dtype: paddle.dtype = paddle.bfloat16
 
-    max_len_tensor_cpu: paddle.Tensor = None
     max_len_tensor_cpu_decoder: paddle.Tensor = None
 
 
@@ -145,61 +136,14 @@ class FlashMaskAttentionBackend(AttentionBackend):
         Calculate kv cache shape
         """
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
-        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            key_cache_shape = [
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            ]
-            value_cache_shape = [
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            ]
+            key_cache_shape[-1] = self.head_dim // 2
+        value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashMaskAttentionMetadata()
-        get_block_shape_and_split_kv_block(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.decoder_batch_ids,
-            forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks_cpu,
-            forward_meta.decoder_num_blocks_device,
-            forward_meta.decoder_chunk_size_device,
-            forward_meta.max_len_tensor_cpu,
-            forward_meta.encoder_batch_ids,
-            forward_meta.encoder_tile_ids_per_batch,
-            forward_meta.encoder_num_blocks_x_cpu,
-            forward_meta.kv_batch_ids,
-            forward_meta.kv_tile_ids_per_batch,
-            forward_meta.kv_num_blocks_x_cpu,
-            self.encoder_block_shape_q,
-            self.decoder_block_shape_q,
-            self.group_size,
-            self.block_size,
-        )
-
-        (
-            metadata.cu_seqlens_k,
-            metadata.pre_cache_batch_ids,
-            metadata.pre_cache_tile_ids_per_batch,
-            metadata.pre_cache_num_blocks_cpu,
-            metadata.kv_token_num_cpu,
-        ) = pre_cache_len_concat(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.max_len_tensor_cpu[2],
-            self.block_size,
-        )
-
-        # pd_disaggregation
+        # metadata only save pd_disaggregation info.
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
             if not self.keep_pd_step_flag and not forward_meta.is_dummy_or_profile_run:
@@ -248,6 +192,45 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
+        if layer.layer_id == 0:
+            get_block_shape_and_split_kv_block(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.decoder_num_blocks_device,
+                forward_meta.decoder_chunk_size_device,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
+                self.encoder_block_shape_q,
+                self.decoder_block_shape_q,
+                self.group_size,
+                self.block_size,
+            )
+
+            # here we add five members，this is ugly, just for now.
+            if use_fa_do_prefill:
+                (
+                    forward_meta.attn_cu_seqlens_k,
+                    forward_meta.pre_cache_batch_ids,
+                    forward_meta.pre_cache_tile_ids_per_batch,
+                    forward_meta.pre_cache_num_blocks_cpu,
+                    forward_meta.kv_token_num_cpu,
+                ) = pre_cache_len_concat(
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.max_len_tensor_cpu[2],
+                    self.block_size,
+                )
+
         if use_fa_do_prefill:
             res_encoder = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], dtype=qkv.dtype)
             q, k, v, _ = gqa_rope_write_cache(
@@ -255,7 +238,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
                 forward_meta.cu_seqlens_q,
-                metadata.cu_seqlens_k,
+                forward_meta.attn_cu_seqlens_k,
                 forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
@@ -265,9 +248,9 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.kv_batch_ids,
                 forward_meta.kv_tile_ids_per_batch,
                 forward_meta.kv_num_blocks_x_cpu,
-                metadata.pre_cache_batch_ids,
-                metadata.pre_cache_tile_ids_per_batch,
-                metadata.pre_cache_num_blocks_cpu,
+                forward_meta.pre_cache_batch_ids,
+                forward_meta.pre_cache_tile_ids_per_batch,
+                forward_meta.pre_cache_num_blocks_cpu,
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
                 getattr(layer, "cache_k_scale", None),
@@ -277,7 +260,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_k_zp", None),
                 getattr(layer, "cache_v_zp", None),
                 metadata.kv_signal_data_list[layer.layer_id],
-                metadata.kv_token_num_cpu[0].item(),
+                forward_meta.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
                 getattr(layer, "rms_norm_eps", 1e-6),
                 layer.use_neox_rotary_style,
@@ -290,7 +273,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 k,
                 v,
                 forward_meta.cu_seqlens_q,
-                metadata.cu_seqlens_k,
+                forward_meta.attn_cu_seqlens_k,
                 forward_meta.seq_lens_encoder,
                 res_encoder,
                 forward_meta.attn_mask_offsets,
