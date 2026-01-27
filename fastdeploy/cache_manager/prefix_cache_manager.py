@@ -31,7 +31,9 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
+from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.ops import get_all_visible_devices
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -47,7 +49,7 @@ class PrefixCacheManager:
 
     def __init__(
         self,
-        config,
+        config: FDConfig,
         tensor_parallel_size,
         splitwise_role="mixed",
         local_data_parallel_id=0,
@@ -207,7 +209,6 @@ class PrefixCacheManager:
         key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
         key_cache_shape = ",".join([str(i) for i in key_cache_shape])
         val_cache_shape = ",".join([str(i) for i in val_cache_shape])
-        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
         if self.enable_splitwise:
             cache_messager_processes = self.launch_cache_messager(
                 cache_config,
@@ -247,6 +248,14 @@ class PrefixCacheManager:
             suffix=engine_worker_queue_port,
             create=False,
         )
+        cache_transfer_inited_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=False,
+        )
 
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
@@ -261,9 +270,9 @@ class PrefixCacheManager:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
-            kvcache_storage_backend_str = cache_config.kvcache_storage_backend
+            storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
         else:
-            kvcache_storage_backend_str = "none"
+            storage_arg_str = " "
 
         if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
@@ -292,14 +301,19 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if create_cache_tensor else "")
-                    + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
+                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
+                    + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
+                    + f" --model_path {self.config.model_config.model}"
                     + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+
+            logger.info("PrefixCacheManager is waiting for cache transfer manager to be initialized.")
+            while np.sum(self.cache_transfer_inited_signal.value) != tensor_parallel_size:
+                time.sleep(1)
 
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
@@ -390,7 +404,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
+                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -789,9 +803,15 @@ class PrefixCacheManager:
                         f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
                     )
                     start_time = time.time()
-                    storage_matched_block_ids = self.issue_prefetch_storage_task(
-                        req_id, no_match_block_keys, gpu_recv_storage_block_ids
+                    read_storage_task = ReadStorageTask(
+                        task_id=req_id,
+                        keys=no_match_block_keys,
+                        token_ids=input_token_ids,
+                        gpu_block_ids=gpu_recv_storage_block_ids,
+                        start_read_block_idx=match_token_num // block_size,
                     )
+                    logger.debug(f"issue read storage task: {read_storage_task}")
+                    storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
                     storage_matched_block_num = len(storage_matched_block_ids)
                     storage_match_token_num = storage_matched_block_num * block_size
                     cost_time = time.time() - start_time
@@ -1006,6 +1026,12 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        if self.config.cache_config.enable_output_caching:
+            token_ids += request.output_token_ids
+
         req_id = request.request_id
         keys = []
         node = self.req_leaf_map[req_id]
@@ -1018,24 +1044,33 @@ class PrefixCacheManager:
 
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
+        write_storage_task = WriteStorageTask(
+            task_id=req_id,
+            keys=keys,
+            token_ids=token_ids,
+            gpu_block_ids=gpu_block_ids,
+        )
+        logger.debug(f"issue write storage task: {write_storage_task}")
         tic = time.time()
-        self.issue_write_back_storage_task(req_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
-    def issue_write_back_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
         if self.kvcache_storage_backend is None:
             return
 
-        if len(hash_keys) != len(gpu_block_ids):
-            err_msg = f"write_back_storage error: hash_keys({len(hash_keys)}) != gpu_block_ids({len(gpu_block_ids)})"
+        if len(task.keys) != len(task.gpu_block_ids):
+            err_msg = (
+                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[req_id] = Event()
-        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, req_id, hash_keys, gpu_block_ids, timeout))
+        self.task_write_back_event[task.task_id] = Event()
+        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
-            self.wait_write_storage_task(req_id)
+            self.wait_write_storage_task(task.task_id)
 
     def wait_write_storage_task(self, req_id):
         """
@@ -1045,16 +1080,19 @@ class PrefixCacheManager:
             self.task_write_back_event[req_id].wait()
             del self.task_write_back_event[req_id]
 
-    def issue_prefetch_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
         Prefetch cache from storage task
         """
+        if self.kvcache_storage_backend is None:
+            return []
+
         storage_block_ids = []
-        self.task_prefetch_event[req_id] = Event()
+        self.task_prefetch_event[task.task_id] = Event()
         # issue task to cache_transfer_manager
-        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
+        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
         if is_sync:
-            storage_block_ids = self.wait_prefetch_storage_task(req_id)
+            storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
         return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):

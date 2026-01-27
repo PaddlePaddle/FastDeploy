@@ -224,9 +224,9 @@ class TokenProcessor:
                 )
                 is_decode = self.cfg.scheduler_config.splitwise_role == "decode"
                 inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                llm_logger.info(
-                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
-                )
+                token_ratio = self.tokens_counter[task_id] / (time.time() - inference_start_time)
+                llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                main_process_metrics.request_token_ratio.observe(token_ratio)
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
@@ -908,9 +908,9 @@ class TokenProcessor:
                         f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
                     )
                     inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                    llm_logger.info(
-                        f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
-                    )
+                    token_ratio = self.tokens_counter[task_id] / (time.time() - inference_start_time)
+                    llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                    main_process_metrics.request_token_ratio.observe(token_ratio)
                     llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
@@ -1034,7 +1034,7 @@ class TokenProcessor:
                 finished=True,
                 metrics=RequestMetrics(
                     arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
+                    request_start_time=task.metrics.arrival_time,
                 ),
             )
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"

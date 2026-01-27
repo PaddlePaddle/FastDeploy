@@ -57,7 +57,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```chat_template``` | `str` | Specify the template used for model concatenation, It supports both string input and file path input. The default value is None. If not specified, the model's default template will be used. |
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
-| ```load_choices```       | `str`      | Weight loader selection, default: "default_v1". Supports "default" and "default_v1", latter for loading torch weights and weight acceleration|
+| ```load_choices```       | `str`      | Weight loader selection, default: "default_v1". Supports "default", "default_v1", and "dummy". "default_v1" is used for loading torch weights and weight acceleration. "dummy" is used for quickly and randomly initializes weights for testing|
 | ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable), default: -1 (auto-calculated) |
 | ```max_processor_cache```  | `float` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable), default: -1 (auto-calculated) |
 | ```api_key```  |`list[str]`| Validate API keys in the service request headers, supporting multiple key inputs. Same effect as environment variable `FD_API_KEY`, with higher priority|

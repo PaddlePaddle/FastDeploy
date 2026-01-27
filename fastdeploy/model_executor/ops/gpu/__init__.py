@@ -19,7 +19,30 @@ from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
-import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
+
+def decide_module():
+    import paddle
+
+    prop = paddle.device.cuda.get_device_properties()
+    sm_version = prop.major * 10 + prop.minor
+    print(f"current sm_version={sm_version}")
+
+    import os
+
+    curdir = os.path.dirname(os.path.abspath(__file__))
+    sm_version_path = os.path.join(curdir, f"fastdeploy_ops_{sm_version}")
+    if os.path.exists(sm_version_path):
+        return f".fastdeploy_ops_{sm_version}.fastdeploy_ops"
+    return ".fastdeploy_ops"
+
+
+module_path = ".fastdeploy_ops"
+try:
+    module_path = decide_module()
+except Exception as e:
+    print(f"decide_module error, load custom_ops from .fastdeploy_ops: {e}")
+    pass
+import_custom_ops(PACKAGE, module_path, globals())
 
 
 def tolerant_import_error():

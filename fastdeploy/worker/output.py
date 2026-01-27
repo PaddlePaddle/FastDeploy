@@ -262,11 +262,6 @@ class ModelOutputData:
     input_ids: paddle.Tensor
 
     """
-        stop nums for every sequence
-    """
-    stop_nums: paddle.Tensor
-
-    """
         for speculative decoding
         full hidden states before lm_head
     """
@@ -321,6 +316,11 @@ class ModelOutputData:
         the minimum tokens that will be generated
     """
     min_tokens: paddle.Tensor = None
+
+    """
+        stop nums for every sequence
+    """
+    stop_nums: paddle.Tensor = None
 
 
 @dataclass

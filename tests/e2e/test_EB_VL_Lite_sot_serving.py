@@ -91,7 +91,7 @@ def setup_and_run_server():
         "--reasoning-parser",
         "ernie-45-vl",
         "--graph-optimization-config",
-        '{"graph_opt_level": 2, "use_cudagraph": true, "full_cuda_graph": false}',
+        '{"graph_opt_level": 2, "use_cudagraph": true, "full_cuda_graph": true}',  # TODO(DrRyanHuang): we will support full_cuda_graph=false for VL model in next PR
     ]
 
     # Start subprocess in new process group
