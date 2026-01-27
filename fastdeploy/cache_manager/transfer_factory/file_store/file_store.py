@@ -34,7 +34,8 @@ import shutil
 
 @dataclass
 class FileStoreConfig:
-    file_path: str = "/tmp/fastdeploy_cache"
+    from fastdeploy import envs
+    file_path: str = envs.FILE_BACKEND_STORAGE_DIR
     namespace: Optional[str] = ""
     tp_rank: Optional[int] = 0
     tp_size: Optional[int] = 1

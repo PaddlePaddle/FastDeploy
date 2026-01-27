@@ -253,10 +253,6 @@ class EngineArgs:
     """
     The policy of write cache to storage.
     """
-    kvcache_file_path: str = "/tmp/fastdeploy_cache"
-    """
-    Root path for file store backend when kvcache_storage_backend is set to 'file'.
-    """
 
     # System configuration parameters
     use_warmup: int = 0
@@ -1101,13 +1097,6 @@ class EngineArgs:
             choices=["write_through"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
-        )
-
-        cache_group.add_argument(
-            "--kvcache-file-path",
-            type=str,
-            default=EngineArgs.kvcache_file_path,
-            help="Root path for file store backend when kvcache_storage_backend is set to 'file'.",
         )
 
         # Cluster system parameters group

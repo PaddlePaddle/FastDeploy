@@ -121,12 +121,6 @@ def parse_args():
         default="write_through",
         help="KVCache write policy",
     )
-    parser.add_argument(
-        "--kvcache_file_path",
-        type=str,
-        default="/tmp/fastdeploy_cache",
-        help="Root path for file store backend"
-    )
 
     args = parser.parse_args()
     return args
@@ -263,7 +257,6 @@ class CacheTransferManager:
                 namespace=self.model_id,
                 tp_rank=self.rank,
                 tp_size=self.n_ranks,
-                file_path=args.kvcache_file_path,
             )
             self._init_storage_buffer(args)
             logger.info("Initialized file store successfully")

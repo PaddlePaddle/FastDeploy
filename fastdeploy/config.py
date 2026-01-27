@@ -1389,7 +1389,6 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
-        self.kvcache_file_path = "/tmp/fastdeploy_cache"
         self.num_cpu_blocks = None
 
         for key, value in args.items():
