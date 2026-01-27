@@ -153,6 +153,7 @@ jobs:
             -e "COMPILE_ARCH=${compile_arch}" \
             -e "FD_VERSION=${fd_version}" \
             -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            -e "FD_UNIFY_BUILD=${FD_UNIFY_BUILD}" \
             -e "PADDLEVERSION=${PADDLEVERSION}" \
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
@@ -189,6 +190,8 @@ jobs:
             python -m pip install wheel
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
+
+            export FD_UNIFY_BUILD="${FD_UNIFY_BUILD}"
             if [[ "${FD_UNIFY_BUILD}" == "true" ]]; then
               bash build.sh 1 python false
             else
