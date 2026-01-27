@@ -1,3 +1,4 @@
+[简体中文](../zh/quantization/nvfp4.md)
 
 # NVFP4 Quantization
 NVFP4 is an innovative 4-bit floating-point format introduced by NVIDIA. For detailed information, please refer to [Introducing NVFP4 for Efficient and Accurate Low-Precision Inference](https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference/).
