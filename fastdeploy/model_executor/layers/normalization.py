@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
@@ -28,10 +29,9 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
-from .utils import get_tensor
+from .utils import get_tensor, modules_to_convert
 
 
 class RMSNorm(nn.Layer):
@@ -95,9 +95,21 @@ class RMSNorm(nn.Layer):
                 "float16",
             ], f"Unsupported dtype: {dtype}. Must be one of: float32, bfloat16, float16"
 
-        self.quant_round_type: int = self.fd_config.quant_config.quant_round_type if fd_config.quant_config else 0
-        self.quant_max_bound: int = self.fd_config.quant_config.quant_max_bound if fd_config.quant_config else 0
-        self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
+        self.quant_round_type: int = (
+            self.fd_config.quant_config.quant_round_type
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_max_bound: int = (
+            self.fd_config.quant_config.quant_max_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
+        self.quant_min_bound: int = (
+            self.fd_config.quant_config.quant_min_bound
+            if fd_config.quant_config and modules_to_convert(prefix, self.fd_config)
+            else 0
+        )
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
@@ -192,7 +204,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
-        external_rmsnorm: Optional[Callable] = None,
+        proxy_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -218,7 +230,7 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
-        if external_rmsnorm is None:
+        if proxy_rmsnorm is None:
             if current_platform.is_gcu():
                 if residual_input is None:
                     norm_out = rms_norm(x, self.weight, self.eps)
@@ -241,7 +253,7 @@ class RMSNorm(nn.Layer):
         else:
             if residual_input is not None:
                 x = x + residual_input
-            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+            norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
@@ -307,7 +319,7 @@ class QKRMSNorm(nn.Layer):
             prefix=f"{prefix}.k_norm",
             begin_norm_axis=begin_norm_axis,
         )
-        self.qk_norm_fused = _TRITON_AVAILABLE
+        self.qk_norm_fused = current_platform.is_cuda() and _TRITON_AVAILABLE
 
     def load_state_dict(self, state_dict):
         self.q_norm.load_state_dict(state_dict)
@@ -316,8 +328,9 @@ class QKRMSNorm(nn.Layer):
     def forward(
         self,
         qkv_out,
+        forward_meta,
     ) -> paddle.Tensor:
-        if self.qk_norm_fused:
+        if self.qk_norm_fused and forward_meta.step_use_cudagraph:
             qkv_out = qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,

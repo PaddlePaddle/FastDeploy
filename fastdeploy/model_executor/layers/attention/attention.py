@@ -37,7 +37,7 @@ import os
 from safetensors import safe_open
 
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import default_weight_loader
+from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
 
 
 class Attention(nn.Layer):
@@ -136,6 +136,13 @@ class Attention(nn.Layer):
                 dtype=self._dtype,
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                self.sinks,
+                {
+                    "output_dim": True,
+                },
             )
 
         if (

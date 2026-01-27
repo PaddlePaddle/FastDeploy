@@ -17,7 +17,7 @@
 from fastdeploy.platforms import current_platform
 
 from .kvcache_storage import KVCacheStorage
-from .mooncake_store import MooncakeStore
+from .mooncake_store import AttentionStore, MooncakeStore
 from .rdma_cache_transfer import RDMACommManager
 
 if current_platform.is_cuda():
@@ -31,4 +31,5 @@ __all__ = [
     "RDMACommManager",
     "KVCacheStorage",
     "MooncakeStore",
+    "AttentionStore",
 ]

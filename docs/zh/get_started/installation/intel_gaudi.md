@@ -79,3 +79,43 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 ```json
 {"id":"chatcmpl-3bd98ae2-fafe-46ae-a552-d653a8526503","object":"chat.completion","created":1757653575,"model":"ERNIE-4.5-21B-A3B-Paddle","choices":[{"index":0,"message":{"role":"assistant","content":"**AI (Artificial Intelligence)** refers to the development of computer systems that can perform tasks typically requiring human intelligence.","multimodal_content":null,"reasoning_content":null,"tool_calls":null,"prompt_token_ids":null,"completion_token_ids":null,"prompt_tokens":null,"completion_tokens":null},"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":11,"total_tokens":35,"completion_tokens":24,"prompt_tokens_details":{"cached_tokens":0}}}
 ```
+
+## Tensorwise FP8 量化模型
+
+Intel® Gaudi® 支持 FP8 数据类型, 目前 intel_HPU 支持 FastDeploy 运行于 `tensor_wise_fp8` 量化模式. 使用此模式进行推理的整体流程如下:
+- 将现有 BF16 模型转化为 FP8 量化模型
+  - 测量 BF16 模型运行时 activation 的范围, 生成校准文件
+  - 将相关权重静态量化为 FP8 格式, 与校准文件共同生成 FP8 量化模型.
+- 执行 FP8 模型推理.
+
+具体流程如下:
+
+### 1. 生成校准文件
+
+设置环境变量, 通过 offline_demo.py 脚本运行 BF16 模型.
+
+``` bash
+export FD_HPU_MEASUREMENT_MODE=1
+```
+
+该过程会自动触发模型运行于测量模式, 并将统计结果合并更新在 `model_measurement.txt` 文件中, 支持多卡和多次测量 (多卡模式下会生成多个测量文件, 但最终会合并生成统一量化模型, 模型文件本身不会根据卡数拆分).
+
+### 2. 离线生成 FP8 模型
+
+运行位于 PaddleCustomDevice 的 [Model_convert.py](https://github.com/PaddlePaddle/PaddleCustomDevice/blob/develop/backends/intel_hpu/tools/Model_convert.py) 脚本, 将模型相关模块 `weights` 静态量化为 FP8 数据类型, 同时写入对应的 `weight_scale`. 将测量校准的 `activation_scale` 同时记录到 FP8 模型文件当中.
+
+``` bash
+python Model_convert.py [bf16_model_path] [fp8_model_path] [model_measurement_name_or_path] <ranks_total_number>
+```
+
+- `bf16_model_path`: BF16 模型输入路径
+- `fp8_model_path`: FP8 模型输出路径
+- `model_measurement_name_or_path`: 测量生成文件名或文件夹.
+  - 可以是单一测量文件
+  - 可以是包含所有测量文件 (如多次测量或多卡) 的文件夹
+  - 可以是多个测量文件的文件名前缀, 会根据 `ranks_total_number` 自动添加 `_{i}` 序号后缀
+- `ranks_total_number`: 可选, 配合 `model_measurement_name_or_path` 为文件名前缀时使用
+
+### 3. 运行 FP8 模型
+
+所有 `tensor_wise_fp8` 相关配置会通过 Model_convert.py 脚本自动配置在 config.json 中. 运行时只要指定 `model_name_or_path` 为离线生成的 FP8 模型 (`fp8_model_path`) 即可, 不需要额外参数配置.
