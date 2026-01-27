@@ -39,6 +39,8 @@ import zmq
 from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
+from fastdeploy.cache_manager.cache_data import CacheStatus
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.register_manager import RegisterManager
 from fastdeploy.engine.request import (
     ControlRequest,
@@ -84,7 +86,7 @@ class EngineService:
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg, start_queue=True, use_async_llm=False):
+    def __init__(self, cfg: FDConfig, start_queue=True, use_async_llm=False):
         """
         Initializes the LLMEngine with the provided configuration.
 
@@ -104,14 +106,22 @@ class EngineService:
         self.is_paused = False  # pause request generation
         self._pause_cond = threading.Condition()
 
-        self._ctrl_worker_output_queues = []
+        self._ctrl_output_queues = {}
         tp_size = cfg.parallel_config.tensor_parallel_size
         dp_index = cfg.parallel_config.local_data_parallel_id
-        for rank in range(tp_size):
+        for tp_rank in range(tp_size):
+            # create worker control response queue
             engine_worker_queue_port = self.cfg.parallel_config.local_engine_worker_queue_port
-            name = f"ctrl_w2e_rank{rank+tp_size*dp_index}_{engine_worker_queue_port}"
-            self.llm_logger.info(f"Init Worker Control Output Queue: {name}(consumer)")
-            self._ctrl_worker_output_queues.append(FMQ().queue(name, "consumer"))
+            name = f"ctrl_w2e_rank{tp_rank+tp_size*dp_index}_{engine_worker_queue_port}"
+            self.llm_logger.info(f"Init Worker Control Output Queue: {name} (consumer)")
+            self._ctrl_output_queues[name] = FMQ().queue(name, "consumer")
+
+            # create cache control response queue
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                engine_cache_queue_port = self.cfg.cache_config.local_cache_queue_port
+                name = f"ctrl_c2e_rank{tp_rank+tp_size*dp_index}_{engine_cache_queue_port}"
+                self.llm_logger.info(f"Init Cache Control Output Queue: {name} (consumer)")
+                self._ctrl_output_queues[name] = FMQ().queue(name, "consumer")
 
         self.scheduler = cfg.scheduler_config.scheduler()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
@@ -1374,7 +1384,16 @@ class EngineService:
             self._send_error_response(req.request_id, "Request is aborted since LLM Engine is paused.")
         self.scheduler.reset()
 
+        # pause cache transfer
+        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+            self.llm_logger.info("Pause cache transfer")
+            pause_transfer_request = ControlRequest(request_id="pause_transfer", method="pause")
+            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
+            # Wait for cache_transfer responses
+            asyncio.run(self._wait_for_control_responses("pause_transfer", 60, executors=["cache_transfer"]))
+
         self.resource_manager.cache_manager.reset()
+        self.llm_logger.info("END Pause Request Generation")
         return None
 
     def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
@@ -1393,6 +1412,15 @@ class EngineService:
                 return None
             self.is_paused = False
             self._pause_cond.notify_all()
+
+        # resume cache transfer
+        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+            self.llm_logger.info("Resume cache transfer")
+            resume_transfer_request = ControlRequest(request_id="resume_transfer", method="resume")
+            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, resume_transfer_request))
+            # Wait for cache_transfer responses
+            asyncio.run(self._wait_for_control_responses("resume_transfer", 60, executors=["cache_transfer"]))
+
         self.llm_logger.info("END Resume Request Generation")
         return None
 
@@ -1447,15 +1475,129 @@ class EngineService:
 
         return responses
 
-    async def _wait_all_control_responses(self, request_id: str, timeout: int):
-        """Wait for control responses from all workers with a global timeout.
-
-        This method concurrently waits for responses from all control workers
-        and enforces an overall timeout to avoid leaking pending tasks.
+    def _control_sleep(self, control_request: ControlRequest):
         """
-        timeout_ms = timeout * 1000
-        # Create one get() coroutine per worker output queue
-        tasks = [output_queue.get(timeout=timeout_ms) for output_queue in self._ctrl_worker_output_queues]
+        Offload gpu memory occupation for certain parts, e.g. weight, cache.
+
+        Args:
+            control_request: Control request object containing parameters for offloading memory
+                tags: list of tags to offload, supported values: ["weight", "cache"]
+
+        TODO: support different level of offloading, to provide options for release memory forever
+            or merely offloading to cpu memory for now.
+        """
+        # Args check
+        allowed_tags = ["weight", "kv_cache"]
+        tags = control_request.args.get("tags", "")
+
+        for tag in tags.split(","):
+            if tag not in allowed_tags:
+                raise ValueError(f"unsupported tag [{tag}] in [{tags}], expected one of {allowed_tags}")
+
+        # Make sure llm engine is paused.
+        self.llm_logger.warning(
+            "Implicitly pause LLM engine before sleeping. This behavior will be deprecated in future versions. "
+            "Please explicitly request to /pause the engine before /sleep."
+        )
+        self._control_pause(None)
+
+        # Determine which executors are needed for the sleep command
+        executors = set()
+        if "weight" in tags:
+            executors.add("worker")
+        if "kv_cache" in tags:
+            executors.add("worker")
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                executors.add("cache_transfer")
+            if self.cfg.cache_config.enable_prefix_caching:
+                self.resource_manager.cache_manager.reset()
+        self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
+
+        # Dispatch sleep request to executors
+        self._dispatch_control_request(control_request, executors)
+        return asyncio.run(self._wait_for_control_responses(control_request.request_id, 60, executors=executors))
+
+    def _control_wakeup(self, control_request: ControlRequest):
+        """
+        Reload offloaded gpu memory occupation for certain parts, e.g. weight, cache.
+
+        Args:
+            control_request: Control request object containing parameters for reloading memory
+                tags: list of tags to reload, supported values: ["weight", "kv_cache"]
+        """
+        # Args check
+        allowed_tags = ["weight", "kv_cache"]
+        tags = control_request.args.get("tags", "")
+
+        for tag in tags.split(","):
+            if tag not in allowed_tags:
+                raise ValueError(f"unsupported tag {tag} in {tags}, expected one of {allowed_tags}")
+
+        # Determine which executors are needed for the wakeup command
+        executors = set()
+        if "weight" in tags:
+            executors.add("worker")
+        if "kv_cache" in tags:
+            executors.add("worker")
+            if self.cfg.cache_config.swap_space or self.cfg.cache_config.kvcache_storage_backend:
+                executors.add("cache_transfer")
+
+        # Dispatch wakeup request to executors
+        self._dispatch_control_request(control_request, executors)
+        result = asyncio.run(self._wait_for_control_responses(control_request.request_id, 60, executors=executors))
+
+        # Resume the engine after wakeup
+        self._control_resume(None)
+
+        return result
+
+    def _dispatch_control_request(self, control_request: ControlRequest, executors: List[str]):
+        """
+        Dispatch control requests to workers, cache managers or engine itself.
+
+        Args:
+            control_request: ControlRequest
+            executors: List
+        """
+        if "worker" in executors:
+            self.engine_worker_queue.put_tasks(([control_request], 1))
+        if "cache_transfer" in executors:
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, control_request))
+        return
+
+    async def _wait_for_control_responses(self, request_id: str, timeout: int, executors: List[str] = None):
+        """Wait for control responses from specified queues.
+
+        Args:
+            request_id: The request ID to match responses against
+            timeout: Global timeout in seconds
+            executors: List of executors to wait for, e.g., ["worker", "cache_transfer"]
+                        If None, waits for all queues
+        """
+        timeout_ms = timeout * 1000 if timeout else None
+
+        # determine which queues to wait for by executors
+        queues = {}
+        if executors is None:
+            queues = self._ctrl_output_queues
+        else:
+            if "worker" in executors:
+                for name, queue in self._ctrl_output_queues.items():
+                    if "w2e" in name:
+                        queues[name] = queue
+            if "cache_transfer" in executors:
+                for name, queue in self._ctrl_output_queues.items():
+                    if "c2e" in name:
+                        queues[name] = queue
+
+        if not queues:
+            self.llm_logger.info(f"No queues to wait for, executors: {executors}")
+            return
+        self.llm_logger.info(f"Waiting for control responses from {len(queues)} queues: {list(queues.keys())}")
+
+        # Create one get() coroutine per queue
+        tasks = [q.get(timeout=timeout_ms) for q in queues.values()]
 
         try:
             results = await asyncio.wait_for(
@@ -1464,24 +1606,23 @@ class EngineService:
             )
         except asyncio.TimeoutError:
             # Keep the error message consistent with previous behavior
-            raise Exception("Worker Update Weights Timeouted after 600s")
+            raise Exception(f"Control request {request_id} timeouted after {timeout}s")
 
         responses = []
-        for output_queue, msg in zip(self._ctrl_worker_output_queues, results):
+        for name, msg in zip(queues.keys(), results):
             if isinstance(msg, Exception):
-                self.llm_logger.error(f"Call Worker Failed: {output_queue.name} {repr(msg)}")
-                raise Exception(f"Call Worker error: {repr(msg)}")
+                self.llm_logger.error(f"Call {name} failed: {repr(msg)}")
+                raise Exception(f"Call {name} error: {repr(msg)}")
             if msg is None:
-                # Preserve original semantics when no message is received
-                raise Exception("Worker Update Weights Timeouted after 600s")
+                raise Exception(f"No message received from {name}")
             response: ControlResponse = msg.payload
             if response.request_id != request_id:
-                self.llm_logger.info(f"ignore old control response from worker:{output_queue.name} {response}")
+                self.llm_logger.info(f"ignore old control response from {name}: {response}")
                 continue
             if response.error_code != 200:
-                self.llm_logger.info(f"Call Worker Failed: {output_queue.name} {response.error_message}")
-                raise Exception(f"Call Worker error: {response.error_message}")
-            self.llm_logger.info(f"Call Worker Succeed: {output_queue.name} {response.result}")
+                self.llm_logger.info(f"Call {name} failed: {response.error_message}")
+                raise Exception(f"Call {name} error: {response.error_message}")
+            self.llm_logger.info(f"Call {name} succeed: {response.result}")
             responses.append(response.result)
         return responses
 
@@ -1489,7 +1630,7 @@ class EngineService:
         request_id = control_request.request_id
         self.engine_worker_queue.put_tasks(([control_request], 1))
         # Use a single asyncio.run() to concurrently wait for all worker responses.
-        return asyncio.run(self._wait_all_control_responses(request_id, timeout))
+        return asyncio.run(self._wait_for_control_responses(request_id, timeout, executors=["worker"]))
 
     def _send_error_response(self, request_id, error_msg, error_code: int = 500, worker_pid=None):
         self.llm_logger.error(
@@ -1533,6 +1674,8 @@ class EngineService:
         """
         while self.running:
             try:
+                with self._pause_cond:
+                    self._pause_cond.wait_for(lambda: not self.is_paused)
                 results = self.scheduler.get_results()
                 if len(results) == 0:
                     time.sleep(0.005)

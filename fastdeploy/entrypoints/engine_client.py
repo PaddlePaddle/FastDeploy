@@ -614,6 +614,23 @@ class EngineClient:
             error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
             api_server_logger.error(f"Error Run Control Method: {error_response}")
             return error_response
+        except Exception as e:
+            import traceback
+
+            api_server_logger.error(f"Error in run_control_method: {str(e)}\n{traceback.format_exc()}")
+            error_response = ControlResponse(request_id, 500, str(e))
+            return error_response
+
+    def run_control_method_sync(self, request: ControlRequest, event_loop):
+        """
+        Support running control methods by a synchronous caller.
+
+        NOTE: Since asyncio.Queue operations must occur in the same event loop,
+        this method bridges synchronous and asynchronous execution by running
+        the async run_control_method in the specified event loop.
+        """
+        future = asyncio.run_coroutine_threadsafe(self.run_control_method(request), event_loop)
+        return future.result()
 
     def is_workers_alive(self):
         """

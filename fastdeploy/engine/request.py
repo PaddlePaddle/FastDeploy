@@ -572,6 +572,16 @@ class ControlRequest:
         self.method = method
         self.args = args or {}
 
+        self._post_init()
+
+    def _post_init(self):
+        if self.method == "sleep":
+            if not self.args.get("tags"):
+                self.args["tags"] = "weight,kv_cache"
+        elif self.method == "wakeup":
+            if not self.args.get("tags"):
+                self.args["tags"] = "weight,kv_cache"
+
     @classmethod
     def from_dict(cls, d: dict):
         """Create ControlRequest instance from dictionary."""

@@ -54,6 +54,7 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
+from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
@@ -2672,6 +2673,46 @@ class GPUModelRunner(ModelRunnerBase):
 
     def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
         return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
+
+    def sleep(self, tags):
+        logger.info(f">>> start offloading memory, tags: {tags}")
+        start_time = time.perf_counter()
+        if "weight" in tags.split(","):
+            if self.use_cudagraph:
+                self.model.clear_grpah_opt_backend()
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.clear_deepep_buffer()
+            self.dynamic_weight_manager.clear_model_weight()
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.clear_communication_group()
+        if "kv_cache" in tags.split(","):
+            if self.speculative_method in ["mtp"]:
+                self.proposer.clear_mtp_cache()
+            self.clear_cache()
+        paddle.device.cuda.empty_cache()
+        logger.info(f"<<< finish offloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
+        print_gpu_memory_use(self.local_rank, f"After offloading memory [{tags}]")
+
+    def wakeup(self, tags):
+        logger.info(f">>> start reloading memory, tags: {tags}")
+        start_time = time.perf_counter()
+        if "weight" in tags.split(","):
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.restart_communication_group()
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.recreate_deepep_buffer()
+            self.dynamic_weight_manager.reload_model_weights()
+
+        # Reinitialize KV cache
+        if "kv_cache" in tags.split(","):
+            self.initialize_kv_cache()
+
+        # Recapture CUDA graph if enabled
+        if "weight" in tags.split(",") and self.use_cudagraph:
+            self.capture_model()
+
+        logger.info(f"<<< finish reloading memory! time cost: {time.perf_counter()-start_time:.3f}s")
+        print_gpu_memory_use(self.local_rank, f"After reloading memory [{tags}]")
 
     def padding_cudagraph_inputs(self) -> None:
         """
