@@ -95,3 +95,10 @@ class KVCacheStorage(ABC):
         Clear all keys in storage
         """
         pass
+
+    @abstractmethod
+    def query(self) -> int:
+        """
+        Query the number of blocks stored in the storage.
+        """
+        pass

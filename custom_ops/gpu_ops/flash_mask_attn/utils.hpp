@@ -360,21 +360,6 @@ __inline__ __device__ T BlockScanSum(T val) {
 }
 
 template <typename T>
-struct MaxOp {
-  __device__ __forceinline__ T operator()(T const &x, T const &y) {
-    return x > y ? x : y;
-  }
-};
-
-template <>
-struct MaxOp<float> {
-  // This is slightly faster
-  __device__ __forceinline__ float operator()(float const &x, float const &y) {
-    return max(x, y);
-  }
-};
-
-template <typename T>
 struct MinOp {
   __device__ __forceinline__ T operator()(T const &x, T const &y) {
     return x < y ? x : y;

@@ -379,9 +379,7 @@ class RoutingStoreLocal(RoutingStoreBase):
     def clear_store(self):
         """Clear the routing indices store"""
         if os.path.isdir(self.local_store_dir):
-            for file_name in os.listdir(self.local_store_dir):
-                file_path = os.path.join(self.local_store_dir, file_name)
-                shutil.rmtree(file_path)
+            shutil.rmtree(self.local_store_dir)
 
     async def clear_prefix_batch(self, roullout_id_prefixes: List[str]):
         # async delete

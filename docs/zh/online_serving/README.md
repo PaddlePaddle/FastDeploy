@@ -555,3 +555,11 @@ DeltaFunctionCall:
     name: Optional[str] = None
     arguments: Optional[str] = None
 ```
+
+# 其他接口说明
+
+**控制接口**
+
+/v1/pause - 暂停推理生成（会导致服务拒绝推理请求）。正在进行中的请求会被中止，缓存会被重置。
+/v1/resume - 恢复推理生成。
+/v1/is_paused - 检查推理生成是否已暂停。

@@ -1,4 +1,4 @@
-[English](../../usage/usage.md)
+[English](../../usage/usage_stats_collection.md)
 
 # 使用信息收集
 

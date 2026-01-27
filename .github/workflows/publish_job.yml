@@ -405,6 +405,8 @@ jobs:
           git config --global user.email "fastdeploy_ci@example.com"
           git log -n 3 --oneline
 
+          cd ./dockerfiles
+
           PRODUCT_NAME=ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:${FD_VERSION}
           docker build --no-cache -t ${PRODUCT_NAME} -f Dockerfile.gpu . \
             --network host \
@@ -419,6 +421,18 @@ jobs:
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  four_cards_test:
+    name: Run Four Cards Tests
+    needs: [ clone,build_sm8090 ]
+    uses: ./.github/workflows/_gpu_4cards_case_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
