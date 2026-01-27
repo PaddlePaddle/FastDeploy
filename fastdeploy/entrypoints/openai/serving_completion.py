@@ -181,7 +181,9 @@ class OpenAIServingCompletion:
                     if not envs.ENABLE_V1_DATA_PROCESSOR:
                         current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     else:
-                        current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                        current_req_dict = Request.from_generic_request(
+                            request, request_id=request_id_idx, prompt=prompt
+                        )
                     current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
