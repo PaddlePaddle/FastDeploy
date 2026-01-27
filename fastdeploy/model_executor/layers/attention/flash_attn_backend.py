@@ -213,6 +213,8 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
+        use_fa_do_prefill = False
+
         if layer.layer_id == 0:
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
@@ -236,7 +238,9 @@ class FlashAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
-            if forward_meta.max_len_tensor_cpu[1] > 0:
+            use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 2048
+
+            if use_fa_do_prefill:
                 (
                     metadata.cu_seqlens_k,
                     metadata.pre_cache_batch_ids,
@@ -250,8 +254,6 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
-
-        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
         if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
