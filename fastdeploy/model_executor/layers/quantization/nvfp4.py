@@ -21,7 +21,6 @@ from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy import envs
-from fastdeploy.flashinfer import has_flashinfer
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
@@ -31,10 +30,7 @@ from fastdeploy.model_executor.utils import (
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
-if has_flashinfer():
-    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-else:
-    logger.warning("FlashInfer is not installed. For nvFp4 inference, please install Flashinfer.")
+paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 
 def next_power_of_2(n: int):
@@ -155,11 +151,9 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
 
         self.backend = "none"
         if envs.FD_NVFP4_GEMM_BACKEND is None:
-            if has_flashinfer():
-                self.backend = "flashinfer-cutlass"
+            self.backend = "flashinfer-cutlass"
         elif envs.FD_NVFP4_GEMM_BACKEND.startswith("flashinfer-"):
             self.backend = envs.FD_NVFP4_GEMM_BACKEND
-            assert has_flashinfer(), f"FlashInfer is required for {self.backend}"
 
         if self.backend == "none":
             raise ValueError(
@@ -376,13 +370,11 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         self.quant_config = quant_config
         self.backend = "none"
 
-        if envs.FD_FLASHINFER_MOE_BACKEND is None:
+        if envs.FD_MOE_BACKEND is None:
             # currently support flashinfer-cutlass,  flashinfer-trtllm will support in the future
-            if has_flashinfer():
-                self.backend = "flashinfer-cutlass"
-        elif envs.FD_FLASHINFER_MOE_BACKEND.startswith("flashinfer-"):
-            self.backend = envs.FD_FLASHINFER_MOE_BACKEND
-            assert has_flashinfer(), f"FlashInfer is required for MoE backend {self.backend}"
+            self.backend = "flashinfer-cutlass"
+        elif envs.FD_MOE_BACKEND.startswith("flashinfer-"):
+            self.backend = envs.FD_MOE_BACKEND
 
         if self.backend == "none":
             raise ValueError(

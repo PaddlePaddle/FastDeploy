@@ -277,7 +277,15 @@ def free_tensor(tensor):
     del tensor
 
 
-def create_parameter_and_copy(layer, name, weight):
+def create_parameter_and_copy(layer: paddle.nn.Layer, name: str, weight: paddle.Tensor) -> None:
+    """
+    Create a parameter in the layer and copy data from weight.
+
+    Args:
+        layer (paddle.nn.Layer): The layer where the parameter will be created.
+        name (str): The name of the parameter.
+        weight (paddle.Tensor): The source weight tensor.
+    """
     setattr(
         layer,
         name,
