@@ -552,9 +552,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 ],
                 "draft_top_logprobs": None,
                 "multipart": [{"type": "text", "text": "Hi"}],
-                "reasoning_content": "",
-                "tool_calls": None,
-                "skipped": False,
             },
             "finished": True,
             "num_cached_tokens": 0,
@@ -617,8 +614,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Check for logprobs in subsequent chunks
                 logprobs_found = False
                 for result in results:
-                    print("1")
-                    print(result)
                     # Skip [DONE] message
                     if result.strip() == "data: [DONE]":
                         continue

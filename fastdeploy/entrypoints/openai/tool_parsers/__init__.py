@@ -14,11 +14,8 @@
 # limitations under the License.
 """
 
-from fastdeploy.plugins import load_tool_parser_plugins
-
 from .abstract_tool_parser import ToolParser, ToolParserManager
 from .ernie_45_vl_thinking_tool_parser import Ernie45VLThinkingToolParser
 from .ernie_x1_tool_parser import ErnieX1ToolParser
 
 __all__ = ["ToolParser", "ToolParserManager", "ErnieX1ToolParser", "Ernie45VLThinkingToolParser"]
-load_tool_parser_plugins()

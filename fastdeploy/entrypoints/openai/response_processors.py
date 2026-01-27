@@ -147,9 +147,6 @@ class ChatResponseProcessor:
                             image_output = self._end_image_code_request_output
                             image_output["outputs"]["multipart"] = [image]
                             image_output["outputs"]["token_ids"] = all_tokens
-                            image_output["outputs"]["tool_calls"] = None
-                            image_output["outputs"]["reasoning_content"] = ""
-                            image_output["outputs"]["skipped"] = False
                             image_output["outputs"]["num_image_tokens"] = count_tokens(all_tokens)
                             yield image_output
 
@@ -215,8 +212,5 @@ class ChatResponseProcessor:
 
                     lasrt_request_output = self._multipart_buffer[-1]["request_output"]
                     lasrt_request_output["outputs"]["multipart"] = multipart
-                    lasrt_request_output["outputs"]["tool_calls"] = None
-                    lasrt_request_output["outputs"]["reasoning_content"] = ""
-                    lasrt_request_output["outputs"]["skipped"] = False
                     lasrt_request_output["outputs"]["num_image_tokens"] = num_image_tokens
                     yield lasrt_request_output
