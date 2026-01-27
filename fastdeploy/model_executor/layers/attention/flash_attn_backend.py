@@ -213,8 +213,6 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
-        use_fa_do_prefill = False
-
         if layer.layer_id == 0:
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
@@ -239,9 +237,11 @@ class FlashAttentionBackend(AttentionBackend):
             )
 
             # FA3 outperforms append_attention when token nums > 2048.
-            use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 2048
+            max_encoder_q_token_num = forward_meta.max_len_tensor_cpu[1].item()
+            max_encoder_kv_token_num = forward_meta.max_len_tensor_cpu[5].item()
+            forward_meta.use_fa_do_prefill = max_encoder_q_token_num > 2048 or max_encoder_kv_token_num > 2048
 
-            if use_fa_do_prefill:
+            if forward_meta.use_fa_do_prefill:
                 (
                     metadata.cu_seqlens_k,
                     metadata.pre_cache_batch_ids,
@@ -255,6 +255,8 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
+
+        use_fa_do_prefill = forward_meta.use_fa_do_prefill
 
         if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
