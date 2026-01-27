@@ -133,7 +133,6 @@ class FlashAttentionBackend(AttentionBackend):
             is_current_sm_supported = cc >= 90
             is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
             if is_current_sm_supported and is_paddle_supported:
-                os.environ["FLAGS_flash_attn_version"] = "3"
                 self.flash_attn_func = flash_attention_v3_varlen
                 print("The current platform supports Flash Attention V3.")
                 self.flash_attn_kwargs = {}
