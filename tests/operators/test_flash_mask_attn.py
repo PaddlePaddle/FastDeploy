@@ -35,8 +35,16 @@ class TestFlashMaskAttention(unittest.TestCase):
     def naive_attn(self, q_input, k_input, v_input, mask):
 
         new_q = q_input.reshape([self.q_len, self.num_head, self.head_dim])
-        new_k = k_input.reshape([self.k_len + self.q_len, 1, self.head_dim]).tile([1, self.num_head, 1]).contiguous()
-        new_v = v_input.reshape([self.k_len + self.q_len, 1, self.head_dim]).tile([1, self.num_head, 1]).contiguous()
+        new_k = (
+            k_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
+            .tile([1, self.num_head, 1])
+            .contiguous()
+        )
+        new_v = (
+            v_input.reshape([self.k_len + self.q_len, self.num_kv_head, self.head_dim])
+            .tile([1, self.num_head, 1])
+            .contiguous()
+        )
 
         p = paddle.einsum("ilk, jlk->lij", new_q, new_k)
         p = p / (np.sqrt(self.head_dim))
