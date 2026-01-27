@@ -394,7 +394,7 @@ def test_max_tokens_min():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     # assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
-    assert "max_tokens can be defined [1," in resp.get("error").get(
+    assert "max_tokens must be at least 1" in resp.get("error").get(
         "message"
     ), "max_tokens未0时API未拦截住,未返回预期的 max_tokens 错误信息"
 
