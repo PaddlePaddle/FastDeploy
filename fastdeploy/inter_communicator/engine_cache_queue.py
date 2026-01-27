@@ -272,7 +272,8 @@ class EngineCacheQueue:
                 time.sleep(0.001)
             self.task_lock.acquire()
         self.task_sync_value.set(0)
-        self.transfer_task_queue.clear()
+        while len(self.transfer_task_queue) > 0:
+            self.transfer_task_queue.pop(0)
         logger.info("clear_transfer_task: done")
         self.task_lock.release()
 
