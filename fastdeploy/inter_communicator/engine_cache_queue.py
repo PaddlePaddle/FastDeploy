@@ -281,6 +281,18 @@ class EngineCacheQueue:
         self.task_lock.release()
         return data, read_finish
 
+    def clear_transfer_task(self):
+        self.task_lock.acquire()
+        if 0 < self.task_sync_value.get() < self.total_num:
+            self.task_lock.release()
+            while 0 < self.task_sync_value.get() < self.total_num:
+                time.sleep(0.001)
+            self.task_lock.acquire()
+        self.task_sync_value.set(0)
+        self.transfer_task_queue.clear()
+        logger.info("clear_transfer_task: done")
+        self.task_lock.release()
+
     def put_transfer_done_signal(self, item):
         """
         put swap result

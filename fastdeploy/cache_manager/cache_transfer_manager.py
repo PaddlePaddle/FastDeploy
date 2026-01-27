@@ -842,6 +842,8 @@ class CacheTransferManager:
 
         while True:
             try:
+                self._pause_cond.acquire()
+                self._pause_cond.wait_for(lambda: not self.is_paused)
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
                         self.cache_task_broadcast_signal.value[0] = 1
@@ -926,6 +928,9 @@ class CacheTransferManager:
 
             except Exception as e:
                 logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
+
+            finally:
+                self._pause_cond.release()
 
     def _transfer_data(
         self,
@@ -1161,6 +1166,7 @@ class CacheTransferManager:
         logger.info("[RL] wait for inflight transfer tasks to finish and pause transfer manager 🔴")
         with self._pause_cond:
             self.is_paused = True
+            logger.info(f"[RL] unfinished inflight tasks: {self.inflight}")
             self._pause_cond.wait_for(lambda: self.inflight == 0)
 
     def resume(self):
