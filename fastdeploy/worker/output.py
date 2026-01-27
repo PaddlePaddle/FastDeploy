@@ -227,11 +227,6 @@ class ModelOutputData:
     not_need_stop: bool
 
     """
-        Device version of not_need_stop flag for async operations
-    """
-    not_need_stop_device: paddle.Tensor
-
-    """
         Sequence lengths of the encoder
     """
     seq_lens_encoder: paddle.Tensor
@@ -326,6 +321,11 @@ class ModelOutputData:
         stop nums for every sequence
     """
     stop_nums: paddle.Tensor = None
+
+    """
+        Device version of not_need_stop flag for async operations
+    """
+    not_need_stop_device: paddle.Tensor = None
 
 
 @dataclass

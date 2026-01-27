@@ -82,7 +82,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
     pre_process,
     rebuild_padding,
-    save_model_output,
+    save_output_normal,
     step_cuda,
 )
 
@@ -2613,7 +2613,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], False)
                 post_process_done.record()
                 post_process_done.synchronize()
-                save_model_output(
+                save_output_normal(
                     model_output=model_output_data,
                     sampler_output=sampler_output,
                     share_inputs=self.share_inputs,

@@ -411,7 +411,7 @@ def post_process_normal(
             )
 
 
-def save_model_output(
+def save_output_normal(
     model_output: ModelOutputData,
     sampler_output: SamplerOutput,
     share_inputs: Dict[str, paddle.Tensor],
@@ -449,6 +449,7 @@ def save_model_output(
                     share_inputs["preempted_idx"],
                     model_output.mp_rank,
                 )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process_specualate(
@@ -575,6 +576,7 @@ def post_process(
             skip_save_output,
             async_output_queue,
         )
+        share_inputs["preempted_idx"][:] = 0
     else:
         if speculative_decoding:
             post_process_specualate(
@@ -588,6 +590,7 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
+            share_inputs["preempted_idx"][:] = 0
         else:
             post_process_normal(
                 sampler_or_pooler_output,
@@ -599,7 +602,6 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
-    share_inputs["preempted_idx"][:] = 0
 
 
 def step_cuda(
