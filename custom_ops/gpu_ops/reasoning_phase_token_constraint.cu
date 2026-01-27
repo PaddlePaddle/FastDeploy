@@ -90,8 +90,8 @@ __global__ void update_reasoning_status_kernel(
 
   // x = 0 -> x = 1
   if (status == 0) {
-    if (!enable_thinking_flag) {
-      // x = 0 -> x = 2(thinking disabled)
+    if (!enable_thinking_flag && seq_lens_encoder[tid] > 0 && cur_step == 0) {
+      // x = 0 -> x = 2 (only for first token when thinking is disabled)
       new_status = 2;
     } else if (t0 == think_end_id || t1 == think_end_id || t2 == think_end_id ||
                t3 == think_end_id) {
