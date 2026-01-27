@@ -238,6 +238,7 @@ class FlashAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
+            # FA3 outperforms append_attention when token nums > 2048.
             use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 2048
 
             if use_fa_do_prefill:
