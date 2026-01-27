@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+from .attention_store import AttentionStore
 from .mooncake_store import MooncakeStore
 
-__all__ = ["MooncakeStore"]
+__all__ = ["MooncakeStore", "AttentionStore"]

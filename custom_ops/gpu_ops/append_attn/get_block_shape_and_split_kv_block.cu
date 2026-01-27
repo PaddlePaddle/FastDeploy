@@ -141,13 +141,16 @@ __global__ void search_chunk_size_for_mla(
   }
 }
 
-__global__ void split_block_for_mla(const int *__restrict__ seq_lens_q,
-                                    const int *__restrict__ seq_lens_encoder,
-                                    const int *__restrict__ seq_lens_decoder,
-                                    int *__restrict__ batch_ids,
-                                    int *__restrict__ tile_ids_per_batch,
-                                    const int bsz,
-                                    const int chunk_size) {
+__global__ void split_block_for_mla(
+    const int *__restrict__ seq_lens_q,
+    const int *__restrict__ seq_lens_encoder,
+    const int *__restrict__ seq_lens_decoder,
+    int *__restrict__ batch_ids,
+    int *__restrict__ tile_ids_per_batch,
+    const int bsz,
+    int *__restrict__ decoder_chunk_size_device) {
+  const int chunk_size = decoder_chunk_size_device[0];
+
   if (threadIdx.x == 0) {
     int index = 0;
     for (uint32_t bid = 0; bid < bsz; bid++) {
@@ -305,10 +308,12 @@ void GetBlockShapeAndSplitKVBlock(
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 
+  const bool mla_backend = checkAttentionBackend();
+
   // decoder
   if (max_dec_len_this_time > 0) {
-    const bool mla_backend = checkAttentionBackend();
-    if (mla_backend && group_size <= 64) {
+    if (mla_backend) {
+      PADDLE_ENFORCE(group_size <= 64, "now only group_size <= 64");
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
       CUDA_CHECK(cudaMemsetAsync(
@@ -336,12 +341,6 @@ void GetBlockShapeAndSplitKVBlock(
                                  block_size,
                                  sm_cout);
 
-      decoder_num_blocks_cpu.copy_(
-          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-      auto decoder_chunk_size_cpu =
-          decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
-      const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
-
       CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
                                  0,
                                  decoder_batch_ele_num * sizeof(int32_t),
@@ -358,20 +357,13 @@ void GetBlockShapeAndSplitKVBlock(
           decoder_batch_ids.data<int>(),
           decoder_tile_ids_per_batch.data<int>(),
           bsz,
-          chunk_size);
+          decoder_chunk_size_device.data<int>());
 
     } else {
       CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
-                                 0,
+                                 0xFF,
                                  decoder_batch_ele_num * sizeof(int32_t),
                                  stream));
-      CUDA_CHECK(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
-                                 0,
-                                 decoder_batch_ele_num * sizeof(int32_t),
-                                 stream));
-      CUDA_CHECK(cudaMemsetAsync(
-          decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
-
       split_q_block<<<1, 32, 0, stream>>>(
           seq_lens_this_time.data<int>(),
           seq_lens_encoder.data<int>(),
@@ -390,6 +382,8 @@ void GetBlockShapeAndSplitKVBlock(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
     }
   }
+  // mla_backend not need run the following code.
+  if (mla_backend) return;
 
   // encoder
   if (max_enc_len_this_time > 0) {

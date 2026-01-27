@@ -83,6 +83,7 @@ def _create_default_sampling_metadata(
 def _create_fd_config(max_model_len):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
+    model_config.architectures = ["test_model"]
     speculative_config = SpeculativeConfig({})
     graph_opt_config = GraphOptimizationConfig({})
     scheduler_config = SchedulerConfig({})
@@ -140,6 +141,7 @@ def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab
     share_inputs["draft_logits"] = paddle.full(
         [max_num_seqs * (max_draft_token_num + 1), vocab_size], -1, dtype="float32"
     )
+    share_inputs["reasoning_status"] = paddle.zeros([max_num_seqs], dtype="int32")
 
     return share_inputs
 

@@ -59,7 +59,9 @@ elif current_platform.is_maca():
         set_stop_value_multi_ends,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
+        speculate_step_system_cache,
         step_paddle,
+        step_system_cache,
         update_inputs,
         update_inputs_v1,
     )
@@ -185,6 +187,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -207,7 +210,6 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
@@ -395,7 +397,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -408,7 +409,6 @@ def post_process_normal(
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
@@ -428,6 +428,7 @@ def post_process_normal(
                 save_output(
                     sampler_output.sampled_token_ids,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                     save_each_rank,
                 )
@@ -438,6 +439,7 @@ def post_process_normal(
                     sampler_output.logprobs_tensors.logprobs,
                     sampler_output.logprobs_tensors.selected_token_ranks,
                     model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
                     model_output.mp_rank,
                 )
 
@@ -461,6 +463,8 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
+            stop_flags=share_inputs["stop_flags"],
+            eos_token_ids=share_inputs["eos_token_id"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
@@ -491,7 +495,6 @@ def post_process_specualate(
         model_output.stop_flags,
         model_output.seq_lens_this_time,
         model_output.is_block_step,
-        model_output.stop_nums,
         model_output.mask_rollback,
     )
 
@@ -503,6 +506,7 @@ def post_process_specualate(
                 model_output.not_need_stop,
                 model_output.seq_lens_decoder,
                 model_output.prompt_lens,
+                share_inputs["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
@@ -518,6 +522,7 @@ def post_process_specualate(
                 model_output.not_need_stop,
                 model_output.seq_lens_decoder,
                 model_output.prompt_lens,
+                share_inputs["preempted_idx"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
@@ -590,6 +595,7 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def step_cuda(
@@ -921,7 +927,6 @@ def post_process_pooling(
                 dummy_sampled_tokens,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,

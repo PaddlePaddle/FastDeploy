@@ -153,7 +153,10 @@ class ZmqServerBase(ABC):
         if len(data) > 1:
             for response in data[1:]:
                 result.add(response)
-        result = ForkingPickler.dumps([result.to_dict()])
+        if not envs.ENABLE_V1_DATA_PROCESSOR:
+            result = ForkingPickler.dumps([result.to_dict()])
+        else:
+            result = ForkingPickler.dumps([result])
         return result
 
     def receive_json_once(self, block=False):
@@ -281,7 +284,10 @@ class ZmqServerBase(ABC):
                 if self.aggregate_send:
                     result = self.pack_aggregated_data(new_data)
                 else:
-                    result = ForkingPickler.dumps([response.to_dict() for response in new_data])
+                    if not envs.ENABLE_V1_DATA_PROCESSOR:
+                        result = ForkingPickler.dumps([response.to_dict() for response in new_data])
+                    else:
+                        result = ForkingPickler.dumps(new_data)
                 with self.response_token_lock:
 
                     _zmq_metrics_stats = ZMQMetricsStats()

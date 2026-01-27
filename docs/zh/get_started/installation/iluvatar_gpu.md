@@ -10,14 +10,14 @@
 Pull the Docker image
 
 ```bash
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:paddle-ocr-vl-1107
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
 ```
 
 ## 3. 准备容器
 ### 3.1 启动容器
 
 ```bash
-docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:paddle-ocr-vl-1107
+docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0
 docker exec -it paddle_infer bash
 ```
 
@@ -26,8 +26,8 @@ docker exec -it paddle_infer bash
 ### 3.2 安装paddle
 
 ```bash
-pip3 install paddlepaddle==3.3.0.dev20251103 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-pip3 install paddle-iluvatar-gpu==3.0.0.dev20251107 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle==3.3.0.dev20251219 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+pip3 install paddle-iluvatar-gpu==3.0.0.dev20251223 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 ```
 
 ### 3.3 安装fastdeploy
@@ -480,7 +480,7 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
        --cache-queue-port 55660 \
        --max-model-len 16384 \
        --max-num-batched-tokens 16384 \
-       --max-num-seqs 32 \
+       --max-num-seqs 64 \
        --workers 2 \
        --block-size 16
 ```

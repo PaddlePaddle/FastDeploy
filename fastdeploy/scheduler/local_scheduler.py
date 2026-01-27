@@ -158,6 +158,10 @@ class LocalScheduler:
             else:
                 self.ids_read_cursor -= len(expired_ids)
 
+    def get_inflight_requests(self) -> List[Request]:
+        with self.mutex:
+            return [request.raw for request in self.requests.values()]
+
     def put_requests(self, requests: List[Request]) -> List[Tuple[str, Optional[str]]]:
         """
         Add new requests to the scheduler queue.

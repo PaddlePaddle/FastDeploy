@@ -15,6 +15,7 @@
 """
 
 import os
+import time
 from typing import List
 
 import numpy as np
@@ -24,6 +25,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -45,6 +47,7 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
+        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -65,6 +68,8 @@ else:
         speculate_get_logits,
         speculate_save_output_topk,
         update_attn_mask_offsets,
+        set_data_ipc,
+        unset_data_ipc,
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -94,11 +99,12 @@ class MTPProposer(Proposer):
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
+        self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
+        self.cache_kvs_map = {}
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
-        if current_platform.is_xpu():
-            self.role = "mixed"
+        self.pd_disaggregation_mode = fd_config.parallel_config.pd_disaggregation_mode
 
         if current_platform.is_xpu():
             self._propose = self._propose_xpu
@@ -128,10 +134,12 @@ class MTPProposer(Proposer):
         self.forward_meta: ForwardMeta = None
         self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
+        # TODO (wangyanpeng): The number of MTP layers should be read from model config
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
-        self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
-        self.model_config.prefix_layer_name = "mtp_block"
+        if "Ernie" in self.model_config.architectures[0]:
+            self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+            self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
@@ -203,60 +211,120 @@ class MTPProposer(Proposer):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        if not profile and self.scheduler_config.splitwise_role != "mixed":
+
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
+        # Check if gpu runner needs to create kv cache
+        # 1. During profiling, it creates its own kv cache.
+        # 2. If no need to profile, create kv cache if cache managers do not exist.
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
+
+        if not create_cache_tensor:
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
+            while cache_ready_signal.value[local_rank] != 1:
+                time.sleep(1)
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
+
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
+
+        if not create_cache_tensor:
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
+                logger.info(
+                    f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                key_cache = self._share_external_data(key_cache, key_cache_name, key_cache_shape)
+                self.cache_kvs_map[key_cache_name] = key_cache
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
+                value_cache = self._share_external_data(value_cache, val_cache_name, value_cache_shape)
+                self.cache_kvs_map[val_cache_name] = value_cache
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
                     scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-                    key_scale_cache = share_external_data(key_scale_cache, scale_key_cache_name, kv_cache_scale_shape)
+                    key_scale_cache = self._share_external_data(
+                        key_scale_cache, scale_key_cache_name, kv_cache_scale_shape
+                    )
+                    self.cache_kvs_map[scale_key_cache_name] = key_scale_cache
                     cache_kvs_list.append(key_scale_cache)
                     value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-                    value_scale_cache = share_external_data(
+                    value_scale_cache = self._share_external_data(
                         value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
                     )
+                    self.cache_kvs_map[scale_val_cache_name] = value_scale_cache
                     cache_kvs_list.append(value_scale_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
-                self.cache_kvs[f"key_caches_{i}"] = paddle.full(
+            cache_kvs_list = []
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
+                logger.info(f"..creating kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+                key_cache = paddle.full(
                     shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
-                self.cache_kvs[f"value_caches_{i}"] = paddle.full(
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                set_data_ipc(key_cache, key_cache_name)
+                self.cache_kvs_map[key_cache_name] = key_cache
+                cache_kvs_list.append(key_cache)
+
+                val_cache = paddle.full(
                     shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                set_data_ipc(val_cache, val_cache_name)
+                self.cache_kvs_map[val_cache_name] = val_cache
+                cache_kvs_list.append(val_cache)
+
                 if kv_cache_quant_type == "block_wise_fp8":
-                    self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
+                    key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-                    self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
+                    key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
+                    cache_kvs_list.append(key_cache_scales)
+
+                    val_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-            self.model_inputs["caches"] = list(self.cache_kvs.values())
-            for value in self.cache_kvs.values():
-                del value
+                    val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    set_data_ipc(val_cache_scales, val_cache_scales_name)
+                    self.cache_kvs_map[val_cache_scales_name] = val_cache_scales
+                    cache_kvs_list.append(val_cache_scales)
+
+            self.model_inputs["caches"] = cache_kvs_list
+
         self._empty_cache()
 
     def _initialize_attn_backend(
@@ -331,10 +399,19 @@ class MTPProposer(Proposer):
             )
         self.attn_backends.append(attn_backend)
 
-    def clear_mtp_cache(self):
+    def clear_mtp_cache(self, profile=False):
         """
         Clear allocated cacheKV
         """
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
+        if not create_cache_tensor:
+            for name, tensor in self.cache_kvs_map.items():
+                unset_data_ipc(tensor, name, True, False)
+        self.cache_kvs_map.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
@@ -383,7 +460,6 @@ class MTPProposer(Proposer):
         self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
         self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
         self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
-        self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
         self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
@@ -413,6 +489,7 @@ class MTPProposer(Proposer):
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
+            partial_rotary_factor=self.model_config.partial_rotary_factor,
         )
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
@@ -681,7 +758,7 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"][0] = True
         self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
-    def _initialize_forward_meta(self, step_use_cudagraph: bool = False):
+    def _initialize_forward_meta(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, substep: int = 0):
         """
         Initialize forward meta and attention meta data
         """
@@ -717,7 +794,12 @@ class MTPProposer(Proposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.draft_model_use_cudagraph
+        # Notes(liuzichang):
+        # 1. CUDA Graph capture sizes must be recorded in descending order (large → small).
+        # 2. In multi-step execution, only the first step should be captured.
+        self.forward_meta.step_use_cudagraph = (
+            step_use_cudagraph and self.draft_model_use_cudagraph and not (substep > 0 and is_dummy_run)
+        )
 
     def _initialize_forward_meta_xpu(self):
 
@@ -735,6 +817,8 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
         self.forward_meta.attn_backend = self.attn_backends[0]
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -851,6 +935,7 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
+                token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
                 (
                     ids_remove_padding,
                     batch_id_per_token,
@@ -859,6 +944,7 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
+                    token_num_cpu,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,
@@ -893,7 +979,9 @@ class MTPProposer(Proposer):
                 self.model_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
                 # Initialize forward meta data
-                self._initialize_forward_meta(step_use_cudagraph=step_use_cudagraph)
+                self._initialize_forward_meta(
+                    step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
+                )
                 self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
                 # Padding inputs for cuda graph
@@ -918,9 +1006,10 @@ class MTPProposer(Proposer):
                     top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
                     share_inputs=self.model_inputs,
                 )
-
+                # Note(liuzichang):
+                # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
-                    self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+                    self.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -942,9 +1031,11 @@ class MTPProposer(Proposer):
                 )
 
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hidden_states)
-                if self.enable_logprob and substep == 0:
-                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
+                if self.enable_logprob and self.enable_draft_logprob and substep == 0:
+                    first_token_logits = self.model.compute_logits(
+                        self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
+                    )
 
                     speculate_get_logits(
                         self.model_inputs["draft_logits"],
@@ -1008,6 +1099,7 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        # TODO(chenhuan09)：check multi step
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1055,7 +1147,7 @@ class MTPProposer(Proposer):
                     model_output, self.model_inputs["cum_offsets"], self.forward_meta, self.model_inputs
                 )
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hidden_states)
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 sampled_token_ids, sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
@@ -1225,3 +1317,9 @@ class MTPProposer(Proposer):
         else:
             raise NotImplementedError
         return cache_type
+
+    def _share_external_data(self, cache, cache_name, cache_shape):
+        if current_platform.is_xpu():
+            return share_external_data(cache, cache_name, cache_shape, False)
+        else:
+            return share_external_data(cache, cache_name, cache_shape)

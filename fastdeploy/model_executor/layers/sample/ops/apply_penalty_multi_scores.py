@@ -207,3 +207,43 @@ def apply_speculative_penalty_multi_scores(
     )
     # inplace
     return logits
+
+
+def reasoning_phase_token_constraint(
+    logits: paddle.Tensor,
+    pre_token_ids: paddle.Tensor,
+    stop_flags: paddle.Tensor,
+    seq_lens_this_time: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    step_idx: paddle.Tensor,
+    reasoning_allowed_tokens: paddle.Tensor,
+    reasoning_status: paddle.Tensor,
+    output_padding_offset: paddle.Tensor,
+    output_cum_offsets: paddle.Tensor,
+    think_end_id: int,
+    line_break_id: int,
+):
+    """
+    reasoning_phase_token_constraint
+    """
+    if current_platform.is_cuda():
+        from fastdeploy.model_executor.ops.gpu import reasoning_phase_token_constraint
+
+        reasoning_phase_token_constraint(
+            logits,
+            pre_token_ids,
+            stop_flags,
+            seq_lens_this_time,
+            seq_lens_encoder,
+            step_idx,
+            reasoning_allowed_tokens,
+            reasoning_status,
+            output_padding_offset,
+            output_cum_offsets,
+            think_end_id,
+            line_break_id,
+        )
+    else:
+        raise NotImplementedError
+    # inplace
+    return logits

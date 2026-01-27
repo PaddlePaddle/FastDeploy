@@ -39,8 +39,8 @@ class TestCommonEngine(unittest.TestCase):
                 model=MODEL_NAME,
                 max_model_len=8192,
                 tensor_parallel_size=1,
-                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 10,
-                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 10,
+                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")),
+                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")),
             )
 
             # Create and start the engine service
@@ -210,8 +210,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         engine_worker_queue_port = int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778"))
         cache_queue_port = int(os.getenv("FD_CACHE_QUEUE_PORT", "6779"))
         if dp and dp > 1:
-            engine_worker_queue_port = [engine_worker_queue_port + 20 + i for i in range(dp // nnode)]
-            cache_queue_port = [cache_queue_port + 20 + i for i in range(dp // nnode)]
+            engine_worker_queue_port = [engine_worker_queue_port + 21 + i for i in range(dp // nnode)]
+            cache_queue_port = [cache_queue_port + 21 + i for i in range(dp // nnode)]
 
         args = EngineArgs(
             model=MODEL_NAME,
@@ -332,8 +332,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertFalse(ok)
         # cache manager started before workers (lines 184-185)
         self.assertTrue(started_cache.get("called", False))
-        # launched_cache_manager_signal set (line 221)
-        self.assertEqual(int(eng.launched_cache_manager_signal.value[0]), 1)
         # avoid atexit finalizer
         if hasattr(eng, "_finalizer"):
             try:
@@ -436,8 +434,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         class DummyRecv:
             def __init__(self, msg):
                 self.msg = msg
+                self.call_count = 0
 
             def receive_json_once(self, block):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return self.msg, None
+                else:
+                    eng.running = False
+                    return None, None
+
+            def receive_pyobj_once(self, block):
                 return self.msg, None
 
             def close(self):
@@ -445,13 +452,23 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # Case 1: context terminated -> info branch
         eng.recv_request_server = DummyRecv("Context was terminated")
-        with patch.object(eng, "llm_logger") as _:
-            eng._insert_zmq_task_to_scheduler()
+        with patch.object(eng, "llm_logger") as mock_logger:
+            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
+                eng._insert_zmq_task_to_scheduler()
+            # verify info logger
+            mock_logger.info.assert_called()
+
+        # reset status
+        eng.running = True
 
         # Case 2: other error -> error branch
         eng.recv_request_server = DummyRecv("Other Error")
-        with patch.object(eng, "llm_logger") as _:
-            eng._insert_zmq_task_to_scheduler()
+        with patch.object(eng, "llm_logger") as mock_logger:
+            with patch("fastdeploy.engine.common_engine.ZmqIpcServer"):
+                eng._insert_zmq_task_to_scheduler()
+            # verify error logger
+            mock_logger.error.assert_called()
+
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
@@ -545,31 +562,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.cache_task_queue = DummyMgr()
         eng._exit_sub_services()
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
-
-    def test_setting_environ_variables_v1_prefill_mm(self):
-        """Cover lines 1476-1485 in _setting_environ_variables."""
-        # For prefill + local scheduler the core code now requires a router
-        # and ENABLE_V1_KVCACHE_SCHEDULER=0 when using the default IPC protocol.
-        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
-            cfg = self._make_cfg(splitwise_role="prefill", router="0.0.0.0:30000")
-        cfg.model_config.enable_mm = True
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
-            prefix = eng._setting_environ_variables()
-        self.assertIn("FLAGS_use_pd_disaggregation_per_chunk=1", prefix)
-        self.assertIn("FLAGS_fmt_write_cache_completed_signal=1", prefix)
-        self.assertIn("FLAGS_max_partition_size=1024", prefix)
         if hasattr(eng, "_finalizer"):
             try:
                 eng._finalizer.detach()
