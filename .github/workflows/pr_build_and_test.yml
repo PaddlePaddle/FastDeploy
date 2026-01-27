@@ -24,6 +24,7 @@ jobs:
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
       FD_VERSION: "0.0.0"
+      FD_UNIFY_BUILD: "true"
 
   resultshow:
     name: Use Build Output
