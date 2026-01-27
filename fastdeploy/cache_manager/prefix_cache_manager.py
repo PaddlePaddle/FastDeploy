@@ -1726,12 +1726,8 @@ class PrefixCacheManager:
 
         logger.info("Resetting the RadixTree!")
 
-        # wait for swap tasks to finish
-        if self.gpu_free_task_future is not None:
-            self.gpu_free_task_future.result()
-            self.gpu_free_task_future = None
-        for event in list(self.task_swapping_event.values()):
-            event.wait()
+        # clear task swapping event
+        self.gpu_free_task_future = None
         self.task_swapping_event.clear()
 
         # clear node map
