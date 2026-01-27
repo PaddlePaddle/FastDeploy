@@ -826,9 +826,6 @@ class CacheTransferManager:
                         self._pause_cond.notify_all()
 
         with self._pause_cond:
-            if self.is_paused:
-                logger.info(f"refuse to submit task {task_fn.__name__} as cache transfer manager has stopped!")
-                return
             self.inflight += 1
 
         thread_pool.submit(inflight_task, task_fn, *args)
@@ -845,6 +842,13 @@ class CacheTransferManager:
 
         while True:
             try:
+                with self._pause_cond:
+                    self._pause_cond.wait_for(lambda: not self.is_paused)
+                if self.n_ranks > 1:
+                    self.cache_task_queue.barrier0.wait()
+                    if self.rank == 0:
+                        self.cache_task_queue.barrier0.reset()
+
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
                         self.cache_task_broadcast_signal.value[0] = 1
