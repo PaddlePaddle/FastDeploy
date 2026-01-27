@@ -195,6 +195,10 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
+    rsync_config: Optional[Dict[str, Any]] = None
+    """
+    rsync weights config info
+    """
     quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
@@ -629,7 +633,6 @@ class EngineArgs:
                 for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
-            console_logger.debug(f"post init {name}: {ports}")
             return ports
 
         num_nodes = len(self.ips) if self.ips else 1
@@ -812,6 +815,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_strategy,
             help="Flag to dynamic load strategy.",
+        )
+        model_group.add_argument(
+            "--rsync-config",
+            type=json.loads,
+            default=EngineArgs.rsync_config,
+            help="Rsync weights config",
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
@@ -1037,7 +1046,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group
@@ -1077,7 +1086,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake"],
+            choices=["mooncake", "attention_store"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )

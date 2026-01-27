@@ -54,6 +54,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin" and "triton" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
+    # Set mxfp4 backend."flashinfer" can be set currently.
+    "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
     # Whether to use Machete for wint4 dense gemm.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
     # Set whether to disable recompute the request when the KV cache is full.

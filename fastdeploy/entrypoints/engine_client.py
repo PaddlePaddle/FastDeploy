@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import asyncio
 import inspect
 import os
 import re
@@ -29,7 +30,12 @@ from filelock import FileLock
 import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request, RequestStatus
+from fastdeploy.engine.request import (
+    ControlRequest,
+    ControlResponse,
+    Request,
+    RequestStatus,
+)
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -87,6 +93,14 @@ class EngineClient:
         )
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.num_dp_per_node = self.max_chips_per_node // self.fd_config.parallel_config.tensor_parallel_size
+        self.data_parallel_rank = (
+            self.fd_config.node_rank * self.num_dp_per_node + self.fd_config.parallel_config.local_data_parallel_id
+        )
+        self.data_parallel_info = {
+            "dp_rank": self.data_parallel_rank,
+            "local_dp_rank": self.fd_config.parallel_config.local_data_parallel_id,
+        }
 
         if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
@@ -518,6 +532,23 @@ class EngineClient:
 
         return True, ""
 
+    async def run_control_method(self, request: ControlRequest):
+        api_server_logger.info(f"Start Run Control Method: {request}")
+        self.zmq_client.send_json(request.to_dict())
+        request_id = request.request_id
+        dealer, response_queue = await self.connection_manager.get_connection(request_id)
+        dealer.write([b"", request_id.encode("utf-8")])
+        try:
+            # todo: support user specified timeout. default 600s is enough for most control cases
+            response = await asyncio.wait_for(response_queue.get(), timeout=600)
+            response = ControlResponse.from_dict(response[0])
+            api_server_logger.info(f"End Run Control Method: {response}")
+            return response
+        except asyncio.TimeoutError:
+            error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
+            api_server_logger.error(f"Error Run Control Method: {error_response}")
+            return error_response
+
     def is_workers_alive(self):
         """
         Check the health of the model server by checking whether all workers are alive.
@@ -547,18 +578,18 @@ class EngineClient:
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
-                        return False, "Update prefix tree timeout"
+                        return 404, {**self.data_parallel_info, "msg": "update prefix tree timeout"}
                     api_server_logger.info(
                         f"<<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
 
             # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
-                return True, ""
+                return 200, {**self.data_parallel_info, "msg": "model weight is updated"}
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight already"
+                return 400, {**self.data_parallel_info, "msg": "worker is updating model weight already"}
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight, cannot update now"
+                return 403, {**self.data_parallel_info, "msg": "worker is clearing model weight, cannot update now"}
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
             api_server_logger.info(
@@ -579,13 +610,13 @@ class EngineClient:
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
-                return False, "Update model weight timeout"
+                return 404, {**self.data_parallel_info, "msg": "update model weight timeout"}
             api_server_logger.info(
-                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
                 if not self.enable_cache_transfer
                 else f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
             )
-            return True, ""
+            return 200, {**self.data_parallel_info, "msg": "update model weight successfully"}
 
     def clear_load_weight(self, timeout=300):
         """
@@ -607,18 +638,18 @@ class EngineClient:
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
-                        return False, "Clear prefix tree timeout"
+                        return 404, {**self.data_parallel_info, "msg": "clear prefix tree timeout"}
                     api_server_logger.info(
                         f"<<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
 
             # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
-                return True, ""
+                return 200, {**self.data_parallel_info, "msg": "model weight is cleared"}
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
-                return False, "worker is clearing model weight already"
+                return 400, {**self.data_parallel_info, "msg": "worker is clearing model weight already"}
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
-                return False, "worker is updating model weight, cannot clear now"
+                return 403, {**self.data_parallel_info, "msg": "worker is updating model weight, cannot clear now"}
 
             self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
             api_server_logger.info(
@@ -639,13 +670,13 @@ class EngineClient:
                 time.sleep(1)
                 timeout -= 1
             if timeout < 0:
-                return False, "Clear model weight timeout"
+                return 404, {**self.data_parallel_info, "msg": "clear model weight timeout"}
             api_server_logger.info(
-                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]})"
                 if not self.enable_cache_transfer
                 else f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
             )
-            return True, ""
+            return 200, {**self.data_parallel_info, "msg": "clear model weight successfully"}
 
     def check_model_weight_status(self):
         return self.model_weights_status_signal.value[0] < 0
