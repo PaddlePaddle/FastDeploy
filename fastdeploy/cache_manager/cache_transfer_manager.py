@@ -826,9 +826,12 @@ class CacheTransferManager:
                         self._pause_cond.notify_all()
 
         with self._pause_cond:
-            self._pause_cond.wait_for(lambda: not self.is_paused)
+            if self.is_paused:
+                logger.info(f"refuse to submit task {task_fn.__name__} as cache transfer manager has stopped!")
+                return
             self.inflight += 1
-            thread_pool.submit(inflight_task, task_fn, *args)
+
+        thread_pool.submit(inflight_task, task_fn, *args)
 
     def do_data_transfer(self):
         """
@@ -842,8 +845,6 @@ class CacheTransferManager:
 
         while True:
             try:
-                self._pause_cond.acquire()
-                self._pause_cond.wait_for(lambda: not self.is_paused)
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
                         self.cache_task_broadcast_signal.value[0] = 1
@@ -928,9 +929,6 @@ class CacheTransferManager:
 
             except Exception as e:
                 logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
-
-            finally:
-                self._pause_cond.release()
 
     def _transfer_data(
         self,
