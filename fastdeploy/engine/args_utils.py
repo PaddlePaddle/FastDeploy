@@ -132,6 +132,13 @@ class EngineArgs:
     Convert the model using adapters. The most common use case is to
     adapt a text generation model to be used for pooling tasks.
     """
+    model_impl: str = "auto"
+    """
+    The model implementation backend to use. Options: auto, fastdeploy, paddleformers.
+    'auto': Use native FastDeploy implementation when available, fallback to PaddleFormers.
+    'fastdeploy': Use only native FastDeploy implementations.
+    'paddleformers': Use PaddleFormers backend with FastDeploy optimizations.
+    """
     override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
     """
     Override configuration for the pooler.
@@ -187,6 +194,10 @@ class EngineArgs:
     load_strategy: str = "normal"
     """
     dynamic load weight strategy
+    """
+    rsync_config: Optional[Dict[str, Any]] = None
+    """
+    rsync weights config info
     """
     quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
@@ -583,6 +594,12 @@ class EngineArgs:
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
                 )
 
+        valid_model_impls = ["auto", "fastdeploy", "paddleformers"]
+        if self.model_impl not in valid_model_impls:
+            raise NotImplementedError(
+                f"not support model_impl: '{self.model_impl}'. " f"Must be one of: {', '.join(valid_model_impls)}"
+            )
+
         self.post_init_all_ports()
 
     def post_init_all_ports(self):
@@ -616,7 +633,6 @@ class EngineArgs:
                 for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
-            console_logger.debug(f"post init {name}: {ports}")
             return ports
 
         num_nodes = len(self.ips) if self.ips else 1
@@ -801,6 +817,12 @@ class EngineArgs:
             help="Flag to dynamic load strategy.",
         )
         model_group.add_argument(
+            "--rsync-config",
+            type=json.loads,
+            default=EngineArgs.rsync_config,
+            help="Rsync weights config",
+        )
+        model_group.add_argument(
             "--engine-worker-queue-port",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.engine_worker_queue_port,
@@ -895,6 +917,18 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_entropy,
             help="Enable output of token-level entropy.",
+        )
+        model_group.add_argument(
+            "--model-impl",
+            type=str,
+            choices=["auto", "fastdeploy", "paddleformers"],
+            default=EngineArgs.model_impl,
+            help=(
+                "Model implementation backend. "
+                "'auto': Use native FastDeploy when available, fallback to PaddleFormers. "
+                "'fastdeploy': Use only native FastDeploy implementations. "
+                "'paddleformers': Use PaddleFormers backend with FastDeploy optimizations."
+            ),
         )
 
         # Parallel processing parameters group
@@ -1012,7 +1046,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group
@@ -1052,7 +1086,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake"],
+            choices=["mooncake", "attention_store"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )

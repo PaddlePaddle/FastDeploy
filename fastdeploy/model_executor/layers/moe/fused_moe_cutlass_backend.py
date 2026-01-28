@@ -323,6 +323,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     topk_only_mode=True,
                 )
                 dequant_scale = None
+                max_tokens_per_expert = None
             else:
                 (
                     permute_input,
@@ -365,6 +366,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     topk_only_mode=False,
                 )
                 dequant_scale = None
+                max_tokens_per_expert = None
             else:
                 (
                     permute_input,
