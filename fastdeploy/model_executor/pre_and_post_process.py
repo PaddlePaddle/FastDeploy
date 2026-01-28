@@ -444,6 +444,142 @@ def post_process_normal(
                 )
 
 
+def post_process_delay(
+    sampler_output: SamplerOutput,
+    model_output: ModelOutputData,
+    share_inputs: Dict[str, paddle.Tensor],
+    sampling_metadata: SamplingMetadata,
+    think_end_id: int = -1,
+    line_break_id: int = -1,
+    enable_entropy: bool = False,
+):
+    """Post-processing steps after completing a single token generation."""
+    if think_end_id > 0:
+        limit_thinking_content_length(
+            limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
+            sampled_token_ids=sampler_output.sampled_token_ids,
+            max_think_lens=share_inputs["max_think_lens"],
+            step_idx=share_inputs["step_idx"],
+            limit_think_status=share_inputs["limit_think_status"],
+            stop_flags=share_inputs["stop_flags"],
+            eos_token_ids=share_inputs["eos_token_id"],
+            think_end_id=think_end_id,
+            line_break_id=line_break_id,
+        )
+    # 1. Set stop value
+    paddle.assign(
+        paddle.where(
+            model_output.stop_flags,
+            model_output.step_idx,
+            model_output.step_idx + 1,
+        ),
+        model_output.step_idx,
+    )
+    length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
+    paddle.assign(
+        paddle.logical_or(model_output.stop_flags, length_cond),
+        model_output.stop_flags,
+    )
+
+    if (
+        current_platform.is_cuda()
+        or current_platform.is_iluvatar()
+        or current_platform.is_dcu()
+        or current_platform.is_maca()
+    ):
+        set_stop_value_multi_ends(
+            sampler_output.sampled_token_ids,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
+            model_output.pre_ids,
+            model_output.step_idx,
+            model_output.stop_token_ids,
+            model_output.stop_seqs_len,
+            model_output.min_tokens,
+            False,
+        )  # multi ends
+    else:
+        set_stop_value_multi_ends(
+            sampler_output.sampled_token_ids,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
+            False,
+        )
+
+    if enable_entropy:
+        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+
+
+def save_output_delay(
+    sampler_output, model_output, share_inputs, async_output_queue, block_size, save_each_rank, skip_save_output
+):
+    # 2. Update the input buffer of the model
+    with paddle.framework._no_check_dy2st_diff():
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            update_inputs_v1(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                share_inputs["step_seq_lens_decoder"],
+                share_inputs["prompt_lens"],
+                sampler_output.sampled_token_ids,
+                model_output.input_ids,
+                share_inputs["block_tables"],
+                model_output.stop_nums,
+                model_output.next_tokens,
+                model_output.is_block_step,
+                block_size,
+            )
+        else:
+            update_inputs(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                model_output.input_ids,
+                model_output.stop_nums,
+                sampler_output.sampled_token_ids,
+                model_output.is_block_step,
+            )
+    # 3. Transmit the model's output and stop generation signal via message queue.
+    #    In the future, we will abandon this approach.
+    if not skip_save_output:
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(
+                    sampler_output.sampled_token_ids,
+                    logprobs=sampler_output.logprobs_tensors,
+                    prompt_logprobs_list=model_output.prompt_logprobs_list,
+                )
+                async_output_queue.put(output)
+        else:
+            if sampler_output.logprobs_tensors is None:
+                save_output(
+                    sampler_output.sampled_token_ids,
+                    model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
+            else:
+                save_output_topk(
+                    sampler_output.sampled_token_ids,
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    model_output.not_need_stop,
+                    share_inputs["preempted_idx"],
+                    model_output.mp_rank,
+                )
+
+
 def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
@@ -555,6 +691,7 @@ def post_process(
     think_end_id: int = -1,
     line_break_id: int = -1,
     enable_entropy: bool = False,
+    delay_save: bool = False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -582,20 +719,30 @@ def post_process(
                 enable_entropy,
             )
         else:
-            post_process_normal(
-                sampler_or_pooler_output,
-                model_output,
-                share_inputs,
-                sampling_metadata,
-                block_size,
-                save_each_rank,
-                skip_save_output,
-                async_output_queue,
-                think_end_id,
-                line_break_id,
-                enable_entropy,
-            )
-    share_inputs["preempted_idx"][:] = 0
+            if delay_save:
+                post_process_delay(
+                    sampler_or_pooler_output,
+                    model_output,
+                    share_inputs,
+                    sampling_metadata,
+                    think_end_id,
+                    line_break_id,
+                    enable_entropy,
+                )
+            else:
+                post_process_normal(
+                    sampler_or_pooler_output,
+                    model_output,
+                    share_inputs,
+                    sampling_metadata,
+                    block_size,
+                    save_each_rank,
+                    skip_save_output,
+                    async_output_queue,
+                    think_end_id,
+                    line_break_id,
+                    enable_entropy,
+                )
 
 
 def step_cuda(

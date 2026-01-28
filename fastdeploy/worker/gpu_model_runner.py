@@ -81,6 +81,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
     pre_process,
     rebuild_padding,
+    save_output_delay,
     step_cuda,
 )
 
@@ -2371,7 +2372,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Then there is data on other runner, the current runner is required to execute part of the model.
         # But not need to run the below code.
         if not self.not_need_stop():
-            return None
+            return None, None
 
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
@@ -2423,7 +2424,7 @@ class GPUModelRunner(ModelRunnerBase):
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
-            return None
+            return None, None
         else:
             hidden_states = rebuild_padding(
                 model_output,
@@ -2549,7 +2550,8 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
-                enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                enable_entropy=self.enable_entropy,
+                delay_save=True,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
@@ -2606,7 +2608,24 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.share_inputs["is_chunk_step"].sum() == 0
             ):
                 self.routing_replay_manager.put_table_to_store()
-            return None
+            return None, None
+        return model_output_data, sampler_output
+
+    def save_output(self, model_output_data, sampler_output) -> None:
+        skip_save_output = (
+            True
+            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill"
+            else False
+        )
+        save_output_delay(
+            sampler_output,
+            model_output_data,
+            self.share_inputs,
+            self.async_output_queue,
+            self.cache_config.block_size,
+            self.parallel_config.use_ep,
+            skip_save_output,
+        )
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
