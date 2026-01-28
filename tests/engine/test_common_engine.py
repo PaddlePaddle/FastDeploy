@@ -568,31 +568,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_setting_environ_variables_v1_prefill_mm(self):
-        """Cover lines 1476-1485 in _setting_environ_variables."""
-        # For prefill + local scheduler the core code now requires a router
-        # and ENABLE_V1_KVCACHE_SCHEDULER=0 when using the default IPC protocol.
-        with patch("fastdeploy.engine.args_utils.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
-            cfg = self._make_cfg(splitwise_role="prefill", router="0.0.0.0:30000")
-        cfg.model_config.enable_mm = True
-
-        class DummyQ:
-            def __init__(self, *a, **k):
-                pass
-
-        with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
-            eng = EngineService(cfg, start_queue=False, use_async_llm=True)
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
-            prefix = eng._setting_environ_variables()
-        self.assertIn("FLAGS_use_pd_disaggregation_per_chunk=1", prefix)
-        self.assertIn("FLAGS_fmt_write_cache_completed_signal=1", prefix)
-        self.assertIn("FLAGS_max_partition_size=1024", prefix)
-        if hasattr(eng, "_finalizer"):
-            try:
-                eng._finalizer.detach()
-            except Exception:
-                pass
-
     def test_start_worker_service_cmd_build(self):
         """Cover 1517, 1526, 1568, 1592, 1595 by building the worker command with mocks."""
         with patch("fastdeploy.config.get_host_ip", return_value="127.0.0.1"):

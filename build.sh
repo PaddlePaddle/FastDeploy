@@ -71,6 +71,7 @@ function init() {
 }
 
 function copy_ops(){
+    local tmp_dir=${1:-$OPS_TMP_DIR}
     OPS_VERSION="0.0.0"
     PY_MAIN_VERSION=`${python} -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $1}'`
     PY_SUB_VERSION=`${python} -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $2}'`
@@ -81,21 +82,21 @@ function copy_ops(){
     EGG_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
 
     # Add compatibility for modern python packaging methods
-    LEGACY_PACKAGE_DIR="${OPS_TMP_DIR}/${EGG_NAME}"
-    MODERN_PACKAGE_DIR="${OPS_TMP_DIR}/fastdeploy_ops"
-    LEGACY_PACKAGE_DIR_CPU="${OPS_TMP_DIR}/${EGG_CPU_NAME}"
-    MODERN_PACKAGE_DIR_CPU="${OPS_TMP_DIR}/fastdeploy_cpu_ops"
+    LEGACY_PACKAGE_DIR="${tmp_dir}/${EGG_NAME}"
+    MODERN_PACKAGE_DIR="${tmp_dir}/fastdeploy_ops"
+    LEGACY_PACKAGE_DIR_CPU="${tmp_dir}/${EGG_CPU_NAME}"
+    MODERN_PACKAGE_DIR_CPU="${tmp_dir}/fastdeploy_cpu_ops"
 
     # Handle GPU ops directory compatibility between modern and legacy naming
     if [ -d "${MODERN_PACKAGE_DIR}" ]; then
         echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_NAME} to target directory"
-        TMP_PACKAGE_DIR="${OPS_TMP_DIR}"
+        TMP_PACKAGE_DIR="${tmp_dir}"
     # If modern directory doesn't exist, check for legacy directory, this branch should be removed in the future
     elif [ -d "${LEGACY_PACKAGE_DIR}" ]; then
         echo -e "${YELLOW}[Warning]${NONE} ${EGG_NAME} directory exists. This is a legacy packaging and distribution method."
         TMP_PACKAGE_DIR="${LEGACY_PACKAGE_DIR}"
     else
-        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for gpu ops found in ${OPS_TMP_DIR}"
+        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for gpu ops found in ${tmp_dir}"
         echo -e "${BLUE}[Info]${NONE} Maybe the compilation failed, please clean the build directory (currently ${BUILD_DIR}) and egg directory (currently ${EGG_DIR}) and try again."
         echo -e "${BLUE}[Info]${NONE} If the build still fails, please try to use a clean FastDeploy code and a clean environment to compile again."
         exit 1
@@ -104,13 +105,13 @@ function copy_ops(){
     # Handle CPU ops directory compatibility between modern and legacy naming
     if [ -d "${MODERN_PACKAGE_DIR_CPU}" ]; then
         echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_CPU_NAME} to target directory"
-        TMP_PACKAGE_DIR_BASE="${OPS_TMP_DIR}"
+        TMP_PACKAGE_DIR_BASE="${tmp_dir}"
     # If modern directory doesn't exist, check for legacy directory, this branch should be removed in the future
     elif [ -d "${LEGACY_PACKAGE_DIR_CPU}" ]; then
         echo -e "${YELLOW}[Warning]${NONE} ${EGG_CPU_NAME} directory exists. This is a legacy packaging and distribution method."
         TMP_PACKAGE_DIR_BASE="${LEGACY_PACKAGE_DIR_CPU}"
     else
-        echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory for cpu ops found in ${OPS_TMP_DIR}"
+        echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory for cpu ops found in ${tmp_dir}"
     fi
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
@@ -176,7 +177,7 @@ function copy_ops(){
 
     DEVICE_TYPE="cpu"
     cd ../../../../
-    cp -r ${OPS_TMP_DIR}/${WHEEL_CPU_NAME}/* ../fastdeploy/model_executor/ops/cpu
+    cp -r ${tmp_dir}/${WHEEL_CPU_NAME}/* ../fastdeploy/model_executor/ops/cpu
     echo -e "CPU ops have been copy to fastdeploy"
     return
 }
@@ -267,31 +268,54 @@ function extract_ops_from_precompiled_wheel() {
   rm -rf "${PRE_WHEEL_DIR}"
 }
 
+function build_custom_ops() {
+  if [ "$FD_UNIFY_BUILD" ]; then
+    mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
+
+    custom_ops_dir=${OPS_TMP_DIR}/fastdeploy_ops_86
+    build_and_install_ops "[86]" "$custom_ops_dir"
+
+    custom_ops_dir=${OPS_TMP_DIR}/fastdeploy_ops_89
+    build_and_install_ops "[89]" "$custom_ops_dir"
+
+    build_and_install_ops "[80, 90]" "${OPS_TMP_DIR}"
+    cp -r $OPS_SRC_DIR/$OPS_TMP_DIR/* ./fastdeploy/model_executor/ops/gpu
+  else
+    build_and_install_ops "$FD_BUILDING_ARCS" "$OPS_TMP_DIR"
+    cd $OPS_SRC_DIR
+    copy_ops $OPS_TMP_DIR
+    cd ..
+  fi
+}
+
 function build_and_install_ops() {
+  local building_arcs=${1:-$FD_BUILDING_ARCS}
+  local tmp_dir=${2:-$OPS_TMP_DIR}
+  echo "BUILD CUSTOM OPS: ${building_arcs}, ${tmp_dir}"
   cd $OPS_SRC_DIR
   export no_proxy=bcebos.com,paddlepaddle.org.cn,${no_proxy}
   echo -e "${BLUE}[build]${NONE} build and install fastdeploy_ops..."
-  TMP_DIR_REAL_PATH=`readlink -f ${OPS_TMP_DIR}`
+  TMP_DIR_REAL_PATH=`readlink -f ${tmp_dir}`
   is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
   if [ "$is_xpu" = "True" ]; then
     cd xpu_ops
     bash build.sh ${TMP_DIR_REAL_PATH}
     cd ..
   elif [ "$FD_CPU_USE_BF16" == "true" ]; then
-    if [ "$FD_BUILDING_ARCS" == "" ]; then
-      FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+    if [ "$building_arcs" == "" ]; then
+      FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${tmp_dir}
     else
-      FD_BUILDING_ARCS=${FD_BUILDING_ARCS} FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+      FD_BUILDING_ARCS=${building_arcs} FD_CPU_USE_BF16=True ${python} setup_ops.py install --install-lib ${tmp_dir}
     fi
-    find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+    find ${tmp_dir} -type f -name "*.o" -exec rm -f {} \;
   elif [ "$FD_CPU_USE_BF16" == "false" ]; then
-    if [ "$FD_BUILDING_ARCS" == "" ]; then
-      ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+    if [ "$building_arcs" == "" ]; then
+      ${python} setup_ops.py install --install-lib ${tmp_dir}
     else
-      FD_BUILDING_ARCS=${FD_BUILDING_ARCS} ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+      FD_BUILDING_ARCS=${building_arcs} ${python} setup_ops.py install --install-lib ${tmp_dir}
     fi
-    if [ -d "${OPS_TMP_DIR}" ]; then
-      find ${OPS_TMP_DIR} -type f -name "*.o" -exec rm -f {} \;
+    if [ -d "${tmp_dir}" ]; then
+      find ${tmp_dir} -type f -name "*.o" -exec rm -f {} \;
     fi
   else
       echo "Error: Invalid parameter '$FD_CPU_USE_BF16'. Please use true or false."
@@ -302,8 +326,6 @@ function build_and_install_ops() {
     exit 1
   fi
   echo -e "${BLUE}[build]${NONE} ${GREEN}build fastdeploy_ops success ${NONE}"
-
-  copy_ops
 
   cd ..
 }
@@ -401,7 +423,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 
   if [ "$FD_USE_PRECOMPILED" -eq 0 ]; then
     echo -e "${BLUE}[MODE]${NONE} Building from source (ops)..."
-    build_and_install_ops
+    build_custom_ops
     echo -e "${BLUE}[MODE]${NONE} Building full wheel from source..."
     build_and_install
     cleanup
@@ -432,7 +454,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   trap : 0
 else
   init
-  build_and_install_ops
+  build_custom_ops
   version_info
   rm -rf $BUILD_DIR $EGG_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR

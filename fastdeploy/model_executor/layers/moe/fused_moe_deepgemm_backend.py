@@ -21,9 +21,10 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy import envs
+from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import register_custom_python_op
 from fastdeploy.worker.tbo import let_another_thread_run
 
@@ -31,22 +32,9 @@ from ..utils import get_sm_version
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
-paddle_compat_scope = {"deep_gemm"}
-try:
-    if envs.FD_USE_PFCC_DEEP_EP:
-        paddle_compat_scope.add("deep_ep")
-        paddle.compat.enable_torch_proxy(scope=paddle_compat_scope)  # Enable torch proxy before importing deep_ep
-        import deep_ep
-    else:
-        paddle.compat.enable_torch_proxy(scope=paddle_compat_scope)
-        from paddle.distributed.communication import deep_ep
-except:
-    logger.warning("import deep_ep Failed!")
-
-from fastdeploy.platforms import current_platform
-
 if current_platform.is_cuda():
     if get_sm_version() == 100:
+        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
         from deep_gemm import (
             m_grouped_fp8_gemm_nt_contiguous,
             m_grouped_fp8_gemm_nt_masked,
