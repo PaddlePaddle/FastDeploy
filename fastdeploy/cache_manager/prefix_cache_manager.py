@@ -1651,7 +1651,6 @@ class PrefixCacheManager:
                 has_modified_cpu_lru_leaf_heap = False
                 can_recycle_gpu_block_ids = []
                 can_recycle_cpu_block_ids = []
-                matche_nodes = []
                 gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
                 current_time = time.time()
 
@@ -1667,7 +1666,6 @@ class PrefixCacheManager:
                             child.increment_shared_count()
                             child.last_used_time = current_time
                             child.req_id_set.add(req_id)
-                            matche_nodes.append(child)
                             if child in self.gpu_lru_leaf_set:
                                 self.gpu_lru_leaf_set.remove(child)
                                 self.gpu_lru_leaf_heap.remove(child)
