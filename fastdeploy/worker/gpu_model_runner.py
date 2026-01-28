@@ -676,7 +676,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         batch_pooling_params = []
         self.share_inputs["num_running_requests"] = num_running_requests
-        self.share_inputs["running_requests_ids"] = range(num_running_requests)
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)

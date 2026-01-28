@@ -144,7 +144,7 @@ class InputBatch:
         self.stop_nums = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
+        self.bad_tokens_len = [-1] * max_num_seqs
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
@@ -330,8 +330,6 @@ class InputBatch:
         swap_data(self.min_dec_len, i1, i2)
         swap_data(self.max_dec_len, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
-        if self.enable_expert_parallel:
-            swap_data(self.seq_lens_this_time, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_seq_lens_encoder, i1, i2)
@@ -347,7 +345,7 @@ class InputBatch:
 
         # Swap 1D arrays
         swap_data(self.bad_tokens, i1, i2)
-        swap_data(self.bad_tokens_len, i1, i2)
+        self.bad_tokens_len[i1], self.bad_tokens_len[i2] = self.bad_tokens_len[i2], self.bad_tokens_len[i1]
         swap_data(self.next_tokens, i1, i2)
         swap_data(self.is_block_step, i1, i2)
         swap_data(self.is_chunk_step, i1, i2)
@@ -400,15 +398,18 @@ class InputBatch:
         Running requests are identified by self.running_requests_ids.
         Also updates index_to_batch_id to remove mappings for non-running requests.
         """
-        # Get the indices of running requests from index_to_batch_id
+        running_mask = ~self.stop_flags.squeeze(-1)
+        self.running_requests_ids = [
+            self.index_to_batch_id[idx] for idx in paddle.nonzero(running_mask).squeeze(-1).cpu().tolist()
+        ]
         running_indices = [
             idx for idx, batch_id in self.index_to_batch_id.items() if batch_id in self.running_requests_ids
         ]
-
         # Sort the indices to maintain order
         running_indices.sort()
-
         # Move data of running requests to the front
+        if self.num_running_requests == len(self.index_to_batch_id):
+            return
         for new_idx, old_idx in enumerate(running_indices):
             if new_idx != old_idx:
                 self.swap_states(new_idx, old_idx)

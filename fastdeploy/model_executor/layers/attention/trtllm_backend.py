@@ -239,12 +239,13 @@ class TrtllmAttentionBackend(AttentionBackend):
         metadata.active_seq_lens_encoder = forward_meta.seq_lens_encoder[: metadata.num_running_requests]
         metadata.active_seq_lens_this_time = forward_meta.seq_lens_this_time[: metadata.num_running_requests]
         metadata.active_total_seq_len = metadata.active_seq_lens_decoder + metadata.active_seq_lens_this_time
-        num_blocks = (metadata.active_total_seq_len + (self.block_size - 1)) // self.block_size
-        # for trtllm prefill
-        metadata.active_block_kv_indptr_gpu = self.block_kv_indptr_gpu[1 : metadata.num_running_requests + 1]
-        metadata.active_block_kv_indptr_gpu = paddle.cumsum(num_blocks)
+        # num_blocks = (metadata.active_total_seq_len + (self.block_size - 1)) // self.block_size
         metadata.active_block_tables = forward_meta.block_tables[: metadata.num_running_requests]
         metadata.filter_mask = metadata.active_seq_lens_this_time.squeeze(-1) != 0
+        # for trtllm prefill
+        metadata.active_block_kv_indptr_gpu = self.block_kv_indptr_gpu[: metadata.num_running_requests + 1]
+        metadata.active_cu_seqlens_q = forward_meta.cu_seqlens_q[: metadata.num_running_requests + 1]
+        # metadata.active_block_kv_indptr_gpu = paddle.cumsum(num_blocks)
         self.attention_metadata: AttentionMetadata = metadata
 
     def forward_mixed(
@@ -260,10 +261,31 @@ class TrtllmAttentionBackend(AttentionBackend):
         **kwargs,
     ):
         metadata = self.attention_metadata
+        # if layer.layer_id==0:
+        #     print('所有的formeta相关的信息：')
+        #     print('forward_meta.cu_seqlens_q:', forward_meta.cu_seqlens_q)
+        #     print('forward_meta.seq_lens_this_time:', forward_meta.seq_lens_this_time)
+        #     print("forward_meta.seq_lens_encoder:",forward_meta.seq_lens_encoder)
+        #     print("forward_meta.seq_lens_decoder:",forward_meta.seq_lens_decoder)
+        #     print("forward_meta.block_tables:",forward_meta.block_tables)
+        #     print(f"num_prefill_tokens:{metadata.num_prefill_tokens} ,metadata.num_decode_tokens:{metadata.num_decode_tokens} ,metadata.num_decodes:{metadata.num_decodes}, metadata.num_prefills:{metadata.num_prefills}")
+
         output = kwargs.get("output")
         workspace_buffer = paddle.empty(394 * 1024 * 1024, dtype=paddle.int8)
         self.bmm1_scale = float(1.0 / (self.head_dim**0.5))
         if metadata.num_prefill_tokens > 0:
+            # if layer.layer_id==0:
+            #     print("写prefill的cachekv")
+            #     print("forward_meta.kv_num_blocks_x_cpu:",forward_meta.kv_num_blocks_x_cpu)
+            #     print("forward_meta.cu_seqlens_q:",forward_meta.cu_seqlens_q)
+            #     print('forward_meta.batch_id_per_token:',forward_meta.batch_id_per_token)
+            #     print("forward_meta.kv_batch_ids:",forward_meta.kv_batch_ids)
+            #     print("forward_meta.kv_tile_ids_per_batch:",forward_meta.kv_tile_ids_per_batch)
+            #     print("metadata.pre_cache_batch_ids:",metadata.pre_cache_batch_ids)
+            #     print("metadata.pre_cache_tile_ids_per_batch:",metadata.pre_cache_tile_ids_per_batch)
+            #     print("metadata.pre_cache_num_blocks_cpu:",metadata.pre_cache_num_blocks_cpu)
+            #     print("self.max_seq_len:",self.max_seq_len)
+            #     print("metadata.kv_token_num_cpu[0].item():",metadata.kv_token_num_cpu[0].item())
             q, _, _, _ = gqa_rope_write_cache(
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
@@ -301,16 +323,20 @@ class TrtllmAttentionBackend(AttentionBackend):
             prefill_start = metadata.num_decodes
             prefill_q = q[metadata.num_decode_tokens :]
             seq_lens_prefill = metadata.active_seq_lens_encoder[prefill_start:][metadata.filter_mask[prefill_start:]]
-            cu_seqlens_q = forward_meta.cu_seqlens_q[metadata.num_decode_tokens :]
-            cu_seqlens_q = cu_seqlens_q - metadata.num_decode_tokens
+            cum_seq_lens_q = metadata.active_cu_seqlens_q[prefill_start:]
+            cum_seq_lens_q = cum_seq_lens_q - metadata.num_decode_tokens
             out = output[metadata.num_decode_tokens :]
             mock_block_tables_prefill = metadata.active_block_tables[prefill_start:][
                 metadata.filter_mask[prefill_start:]
             ]
+            cum_seq_lens_kv = metadata.active_block_kv_indptr_gpu[prefill_start:]
+            total_seq_len = metadata.active_total_seq_len[prefill_start:][metadata.filter_mask[prefill_start:]]
+            max_q_len = paddle.max(metadata.active_seq_lens_this_time[prefill_start:])
+            max_kv_len = paddle.max(total_seq_len)
 
             prefill_q = prefill_q.contiguous()
             seq_lens_prefill = seq_lens_prefill.contiguous()
-            cu_seqlens_q = cu_seqlens_q.contiguous()
+            cum_seq_lens_q = cum_seq_lens_q.contiguous()
 
             assert prefill_q.is_contiguous()
             assert forward_meta.caches[2 * layer.layer_id].is_contiguous()
@@ -318,6 +344,14 @@ class TrtllmAttentionBackend(AttentionBackend):
             assert workspace_buffer.is_contiguous()
             assert mock_block_tables_prefill.is_contiguous()
             assert seq_lens_prefill.is_contiguous()
+            # if layer.layer_id==0:
+            #     print('running prefill')
+            #     print('prefill_q', prefill_q.shape)
+            #     print('mock_block_tables_prefill:', mock_block_tables_prefill)
+            #     print("seq_lens_prefill:",seq_lens_prefill)
+            #     # print("cu_seqlens_q:",cu_seqlens_q)
+            #     print("cum_seq_lens_q:",cum_seq_lens_q)
+            #     print("cum_seq_lens_kv:",cum_seq_lens_kv)
 
             trtllm_batch_context_with_kv_cache(
                 query=prefill_q,
@@ -325,13 +359,13 @@ class TrtllmAttentionBackend(AttentionBackend):
                 workspace_buffer=workspace_buffer,
                 block_tables=mock_block_tables_prefill,
                 seq_lens=seq_lens_prefill,
-                max_q_len=forward_meta.max_len_tensor_cpu[0].item(),
-                max_kv_len=forward_meta.max_len_tensor_cpu[3].item(),
+                max_q_len=max_q_len.item(),
+                max_kv_len=max_kv_len.item(),
                 bmm1_scale=self.bmm1_scale,
                 bmm2_scale=1.0,
                 batch_size=metadata.num_prefills,
-                cum_seq_lens_q=cu_seqlens_q,
-                cum_seq_lens_kv=self.block_kv_indptr_gpu,
+                cum_seq_lens_q=cum_seq_lens_q,
+                cum_seq_lens_kv=cum_seq_lens_kv,
                 # window_left=-1,
                 out=out,
                 # nvfp4
@@ -378,6 +412,13 @@ class TrtllmAttentionBackend(AttentionBackend):
             mock_block_tables_decode = metadata.active_block_tables[:decode_end][metadata.filter_mask[:decode_end]]
             total_seq_len = metadata.active_total_seq_len[:decode_end][metadata.filter_mask[:decode_end]]
             out = output[: metadata.num_decode_tokens]
+            max_seq_len = paddle.max(total_seq_len)
+
+            # if layer.layer_id==0:
+            #     print('trtllm_batch_decode_with_kv_cache')
+            #     print('decode_q', decode_q.shape)
+            #     print('mock_block_tables_decode:', mock_block_tables_decode)
+            #     print("total_seq_len:",total_seq_len)
 
             trtllm_batch_decode_with_kv_cache(
                 query=decode_q,
@@ -385,7 +426,7 @@ class TrtllmAttentionBackend(AttentionBackend):
                 workspace_buffer=workspace_buffer,
                 block_tables=mock_block_tables_decode,
                 seq_lens=total_seq_len,
-                max_seq_len=forward_meta.max_len_tensor_cpu[3].item(),
+                max_seq_len=max_seq_len.item(),
                 bmm1_scale=self.bmm1_scale,
                 bmm2_scale=1.0,
                 window_left=-1,
