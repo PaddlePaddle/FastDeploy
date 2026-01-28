@@ -156,6 +156,7 @@ for round in $(seq 1 $TOTAL_ROUNDS); do
     echo "[Step 1] Clearing load weight..."
     curl_get_status -i "$BASE_URL/clear_load_weight"
     assert_eq "$http_code" "200" "/clear_load_weight failed with HTTP $http_code"
+    sleep 5
 
     # Step 2: Check GPU memory usage
     echo "[Step 2] Checking GPU memory..."

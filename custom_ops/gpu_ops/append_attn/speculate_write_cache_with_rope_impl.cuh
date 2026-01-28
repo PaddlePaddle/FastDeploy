@@ -601,6 +601,166 @@ __global__ void append_speculate_cache_neox_rope_kernel(
   }
 }
 
+template <typename T, int VecSize = 1, typename InT = T>
+__global__ void append_speculate_cache_neox_partial_rope_kernel(
+    const InT* __restrict__ qkv,  // [token_num, num_heads + 2 * gqa_group_size,
+                                  // head_size]
+    T* __restrict__ key_cache,    // [num_blocks, gqa_group_size, block_size,
+                                  // head_size // 2]
+    T* __restrict__ value_cache,  // [num_blocks, gqa_group_size, block_size,
+                                  // head_size // 2]
+    T* __restrict__ qkv_out,
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
+    const int* __restrict__ batch_id_per_token,  // [num_tokens]
+    const int* __restrict__ cu_seqlens_q,
+    const int* __restrict__ seq_lens_decoder,  // [bsz]
+    const int* __restrict__ seq_lens_encoder,  // [bsz]
+    const float* __restrict__ cos_emb,
+    const float* __restrict__ sin_emb,
+    const float*
+        qkv_out_scales,   // [(num_heads + 2 * gqa_group_size) * head_size]
+    const T* qkv_biases,  // [num_head + 2 * gqa_group_size, dim_head]
+    const int max_seq_len,
+    const int max_blocks_per_seq,
+    const int num_heads,
+    const int output_inner_dim,
+    const int head_size,
+    const int rotary_dim,
+    const int block_size,
+    const int elem_cnt,
+    const int gqa_group_size,
+    const bool rope_3d) {
+  using LoadT = AlignedVector<T, VecSize>;
+  using LoadFloat = AlignedVector<float, VecSize>;
+  using LoadInT = AlignedVector<InT, VecSize>;
+  constexpr int HalfVecSize = VecSize / 2;
+  using LoadEmbT = AlignedVector<float, VecSize>;
+  LoadInT left_vec, right_vec;
+  LoadT left_bias_vec, right_bias_vec;
+  LoadFloat left_out_scale_vec, right_out_scale_vec;
+  LoadEmbT cos_emb_vec;
+  LoadEmbT sin_emb_vec;
+
+  int64_t global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
+  const int64_t hidden_size = (num_heads + 2 * gqa_group_size) * head_size;
+  const int half_head_size = head_size / 2;
+  const int half_rotary_dim = rotary_dim / 2;
+  const int64_t half_hidden_size = hidden_size / 2;
+  for (int32_t linear_index = global_thread_idx * VecSize,
+               step = gridDim.x * blockDim.x * VecSize;
+       linear_index < elem_cnt;
+       linear_index += step) {
+    const int token_id = linear_index / half_hidden_size;
+    const int ori_bi = batch_id_per_token[token_id];
+    if (ori_bi == -1) continue;  // NOTE(gongshaotian): For CUDAGraph padding
+    if (seq_lens_encoder[ori_bi] > 0) continue;
+    const int bias = linear_index % half_hidden_size;
+    const int hi = bias / half_head_size;  // q + k + v
+    const int h_bias = bias % half_head_size;
+    if (hi < num_heads && h_bias >= half_rotary_dim) {
+      continue;
+    }
+    const int start_token_idx = cu_seqlens_q[ori_bi];
+    const int write_seq_id =
+        seq_lens_decoder[ori_bi] + token_id - start_token_idx;
+    if (write_seq_id == 0) continue;
+
+    const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
+    const int block_idx = block_table_now[write_seq_id / block_size];
+    if (block_idx < 0) {
+      continue;  // NOTE(gongshaotian): For CUDAGraph padding
+    }
+    const int block_offset = write_seq_id % block_size;
+
+    const int bias_idx_left = hi * head_size + h_bias;
+    const int bias_idx_right = bias_idx_left + half_head_size;
+    int ori_idx_left = token_id * hidden_size + hi * head_size + h_bias;
+    int ori_idx_right = ori_idx_left + half_head_size;
+    if (hi < num_heads) {
+      ori_idx_right = ori_idx_left + half_rotary_dim;
+    } else if (hi < num_heads + gqa_group_size) {
+      if (h_bias < half_rotary_dim) {
+        ori_idx_right = ori_idx_left + half_rotary_dim;
+      } else {
+        ori_idx_left = ori_idx_left + half_rotary_dim;
+        ori_idx_right = ori_idx_left + half_rotary_dim;
+      }
+    }
+    Load<InT, VecSize>(&qkv[ori_idx_left], &left_vec);
+    Load<InT, VecSize>(&qkv[ori_idx_right], &right_vec);
+    if (qkv_biases) {
+      Load<T, VecSize>(&qkv_biases[bias_idx_left], &left_bias_vec);
+      Load<T, VecSize>(&qkv_biases[bias_idx_right], &right_bias_vec);
+    }
+    if (qkv_out_scales) {
+      Load<float, VecSize>(&qkv_out_scales[bias_idx_left], &left_out_scale_vec);
+      Load<float, VecSize>(&qkv_out_scales[bias_idx_right],
+                           &right_out_scale_vec);
+    }
+    if (hi < num_heads + gqa_group_size) {
+      // q k rope
+      const int64_t emb_idx = write_seq_id * half_rotary_dim + h_bias;
+      int64_t new_emb_idx =
+          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2 : emb_idx;
+      if (h_bias < half_rotary_dim) {
+        Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
+        Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      // add_bias + rope
+      float input_left = static_cast<float>(left_vec[i]);
+      float input_right = static_cast<float>(right_vec[i]);
+      if (qkv_out_scales) {
+        input_left *= left_out_scale_vec[i];
+        input_right *= right_out_scale_vec[i];
+      }
+      if (qkv_biases) {
+        input_left = input_left + static_cast<float>(left_bias_vec[i]);
+        input_right = input_right + static_cast<float>(right_bias_vec[i]);
+      }
+      if (hi < num_heads + gqa_group_size && h_bias < half_rotary_dim) {
+        const float cos_tmp = cos_emb_vec[i];
+        const float sin_tmp = sin_emb_vec[i];
+        left_bias_vec[i] =
+            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+        right_bias_vec[i] =
+            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+      } else {
+        left_bias_vec[i] = static_cast<T>(input_left);
+        right_bias_vec[i] = static_cast<T>(input_right);
+      }
+    }
+    if (hi < num_heads) {
+      // write q
+      Store<T, VecSize>(left_bias_vec, &qkv_out[ori_idx_left]);
+      Store<T, VecSize>(right_bias_vec, &qkv_out[ori_idx_right]);
+    } else {
+      //  write k/v
+      const int kv_head_idx = (hi - num_heads) % gqa_group_size;
+      int tgt_idx_left = (block_idx * gqa_group_size * block_size * head_size +
+                          kv_head_idx * block_size * head_size +
+                          block_offset * head_size + h_bias);
+      uint32_t tgt_idx_right = tgt_idx_left + half_head_size;
+      // write
+      if (hi < num_heads + gqa_group_size) {
+        if (h_bias < half_rotary_dim) {
+          tgt_idx_right = tgt_idx_left + half_rotary_dim;
+        } else {
+          tgt_idx_left = tgt_idx_left + half_rotary_dim;
+          tgt_idx_right = tgt_idx_left + half_rotary_dim;
+        }
+        Store<T, VecSize>(left_bias_vec, &key_cache[tgt_idx_left]);
+        Store<T, VecSize>(right_bias_vec, &key_cache[tgt_idx_right]);
+      } else {
+        Store<T, VecSize>(left_bias_vec, &value_cache[tgt_idx_left]);
+        Store<T, VecSize>(right_bias_vec, &value_cache[tgt_idx_right]);
+      }
+    }
+  }
+}
+
 template <typename T,
           int VecSize = 4,
           int RoundType = 0,

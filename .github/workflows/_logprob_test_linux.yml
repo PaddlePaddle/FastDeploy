@@ -156,7 +156,7 @@ jobs:
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+          python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -185,7 +185,7 @@ jobs:
             -d "{\"messages\": [{\"role\": \"user\", \"content\": \"1+1=?\"}], \"logprobs\": true}"
           set +e
           rm -rf ./baseline_output
-          cp -r baseline/ERNIE-4.5-0.3B-Paddle ./baseline_output
+          cp -r baseline_24/ERNIE-4.5-0.3B-Paddle ./baseline_output
           LOGPROB_EXIT_CODE=0
           python3.10 lanucher.py --request_template TOKEN_LOGPROB --url http://localhost:${FD_API_PORT}/v1/chat/completions  --case ./cases/demo.yaml  --concurrency 1 --name demo --exe logprob || LOGPROB_EXIT_CODE=$?
           echo "LOGPROB_EXIT_CODE=${LOGPROB_EXIT_CODE}" > /workspace/exit_code.env

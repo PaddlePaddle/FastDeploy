@@ -445,7 +445,7 @@ struct CollectiveMainloopAttn {
 
     if constexpr (NeedMask) {
       const int lane_id = thread_idx % 32;
-      mask_start_idx = mask[0] / kBlockN - 1;
+      mask_start_idx = mask[0] / kBlockN;
 
       mask_row_id = thread_idx / 32 * 16 + lane_id / 4;
 
@@ -485,12 +485,6 @@ struct CollectiveMainloopAttn {
       consumer_wait(pipeline_k, smem_pipe_read_k);
       warp_scheduler_barrier_sync();
 
-      if constexpr (NeedMask) {
-        if (n_block >= mask_start_idx) {
-          app_mask(tSrS, mask, mask_row_id, col_base + n_block * kBlockN);
-        }
-      }
-
       gemm</*zero_init=*/true, /*wg_wait=*/-1>(
           tiled_mma0, tSrQ, tSrK(_, _, _, smem_pipe_read_k.index()), tSrS);
       softmax.rescale_o(tOrO, scores_scale);
@@ -500,6 +494,14 @@ struct CollectiveMainloopAttn {
       warp_scheduler_barrier_arrive();
       warpgroup_wait<1>();
       pipeline_k.consumer_release(smem_pipe_read_k);  // release K
+
+      if constexpr (NeedMask) {
+        if (n_block - 1 >= mask_start_idx) {
+          app_mask(
+              tSrS, mask, mask_row_id, col_base + n_block * kBlockN - kBlockN);
+        }
+      }
+
       cute::copy(softmax.template max</*Is_first=*/false>(
                      tSrS, mainloop_params.softmax_scale_log2),
                  scores_scale);

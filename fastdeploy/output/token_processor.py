@@ -692,7 +692,9 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                if len(token_ids) > 0 and token_ids[-1] <= 0:
+                    llm_logger.warning(f"Invalid token is generated! token_id {token_ids[-1]} at task {task_id}")
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             self.resource_manager.reschedule_preempt_task(task_id)

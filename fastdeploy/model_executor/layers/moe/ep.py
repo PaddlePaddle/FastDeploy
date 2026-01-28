@@ -14,22 +14,62 @@
 # limitations under the License.
 """
 
+from __future__ import annotations
+
+import traceback
 from abc import abstractmethod
+from types import ModuleType
+from typing import Optional
 
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-try:
-    from paddle.distributed.communication import deep_ep
-except:
-    logger.warning("import deep_ep Failed!")
-
-from typing import Optional
-
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
+
+
+def load_deep_ep() -> ModuleType:
+    """
+    Load DeepEP module according to FastDeploy env switch.
+
+    Returns:
+        Imported deep_ep module object.
+    """
+
+    try:
+        if envs.FD_USE_PFCC_DEEP_EP:
+            # Enable torch proxy before importing deep_ep (required by PFCC/PaddleFleet variants)
+            paddle.compat.enable_torch_proxy(scope={"deep_ep"})
+            try:
+                import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
+
+                logger.info("FD use PaddleFleet/DeepEP now.")
+                return deep_ep
+            except ModuleNotFoundError:
+                import deep_ep  # type: ignore
+
+                logger.info("FD use PFCCLab/DeepEP now.")
+                return deep_ep
+        else:
+            from paddle.distributed.communication import deep_ep  # type: ignore
+
+            logger.info("FD use Paddle/DeepEP now.")
+            return deep_ep
+    except Exception as e:
+        logger.error(
+            "import deep_ep failed! FD_USE_PFCC_DEEP_EP=%s. type=%s, err=%s",
+            envs.FD_USE_PFCC_DEEP_EP,
+            type(e).__name__,
+            e,
+        )
+        logger.error("Traceback:\n%s", traceback.format_exc())
+        raise
+
+
+deep_ep = load_deep_ep()
 
 
 class DeepEPBufferManager:
@@ -280,23 +320,40 @@ class DeepEPEngine:
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
 
-        (
-            packed_recv_x,
-            recv_expert_count,
-            handle,
-            _,
-            dispatch_hook,
-        ) = self.deepep_engine.low_latency_dispatch(
-            hidden_states,
-            topk_idx,
-            expertwise_scale,
-            self.buffer.num_max_dispatch_tokens_per_rank,
-            self.num_experts,
-            use_fp8=use_fp8,
-            async_finish=False,
-            return_recv_hook=True,
-            num_per_channel=quant_group_size,
-        )
+        if envs.FD_USE_PFCC_DEEP_EP:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+            )
+        else:
+            (
+                packed_recv_x,
+                recv_expert_count,
+                handle,
+                _,
+                dispatch_hook,
+            ) = self.deepep_engine.low_latency_dispatch(
+                hidden_states,
+                topk_idx,
+                expertwise_scale,
+                self.buffer.num_max_dispatch_tokens_per_rank,
+                self.num_experts,
+                use_fp8=use_fp8,
+                async_finish=False,
+                return_recv_hook=True,
+                num_per_channel=quant_group_size,
+            )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
