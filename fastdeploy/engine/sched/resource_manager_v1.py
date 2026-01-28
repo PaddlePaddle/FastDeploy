@@ -1076,9 +1076,21 @@ class ResourceManagerV1(ResourceManager):
         Match and fetch cache for a task.
         """
         try:
-            (common_block_ids, matched_token_num, metrics) = self.cache_manager.request_match_blocks(
-                request, self.config.cache_config.block_size
-            )
+            (
+                common_block_ids,
+                matched_token_num,
+                metrics,
+                match_node_ids,
+            ) = self.cache_manager.request_match_blocks(request, self.config.cache_config.block_size)
+
+            match_block_node_map = {}
+            if self.cache_manager.kvcache_storage_backend is None:
+                assert len(common_block_ids) == len(
+                    match_node_ids
+                ), f"{len(common_block_ids)} != {len(match_node_ids)}, matched_token_num: {matched_token_num}"
+
+                for idx in range(len(common_block_ids)):
+                    match_block_node_map[common_block_ids[idx]] = match_node_ids[idx]
 
             matched_block_num = len(common_block_ids)
             no_cache_block_num = self.cache_manager.get_required_block_num(
@@ -1112,6 +1124,9 @@ class ResourceManagerV1(ResourceManager):
 
                 revert_block_idx = len(common_block_ids) - revert_tokens_num // self.config.cache_config.block_size - 1
                 for block_idx in range(len(common_block_ids) - 1, revert_block_idx, -1):
+                    if common_block_ids[block_idx] in match_block_node_map:
+                        del match_block_node_map[common_block_ids[block_idx]]
+
                     if common_block_ids[block_idx] in metrics["match_gpu_block_ids"]:
                         metrics["gpu_match_token_num"] -= self.config.cache_config.block_size
                     elif common_block_ids[block_idx] in metrics["gpu_recv_block_ids"]:
@@ -1119,6 +1134,7 @@ class ResourceManagerV1(ResourceManager):
                     elif common_block_ids[block_idx] in metrics["match_storage_block_ids"]:
                         metrics["storage_match_token_num"] -= self.config.cache_config.block_size
 
+            request.match_block_node_map = match_block_node_map
             request.metrics.gpu_cache_token_num = metrics["gpu_match_token_num"]
             request.metrics.cpu_cache_token_num = metrics["cpu_match_token_num"]
             request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]

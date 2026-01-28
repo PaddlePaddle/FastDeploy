@@ -740,6 +740,7 @@ class PrefixCacheManager:
                     match_block_node,
                     gpu_match_token_num,
                     cpu_match_token_num,
+                    match_node_ids,
                 ) = self.mm_match_block(task, block_size)
 
                 #  update matched node info
@@ -855,7 +856,7 @@ class PrefixCacheManager:
                 # are recorded into radix tree in update_cache_blocks
                 self.req_to_radix_tree_info[req_id] = [match_block_node, gpu_match_token_num + cpu_match_token_num]
                 task.num_cached_blocks = len(common_block_ids)
-                return common_block_ids, match_token_num, metrics
+                return common_block_ids, match_token_num, metrics, match_node_ids
             except Exception as e:
                 logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
                 raise e
@@ -1544,6 +1545,7 @@ class PrefixCacheManager:
             current_match_node,
             gpu_match_token_num,
             cpu_match_token_num,
+            match_node_ids,
         )
 
     def match_block(self, req_id, input_ids, block_size):
