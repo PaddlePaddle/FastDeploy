@@ -14,27 +14,24 @@
 # limitations under the License.
 """
 
-import os
 import ctypes
+import os
 import pickle
+import subprocess
+import time
+import traceback
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import paddle
 
-import subprocess
-
+from fastdeploy import envs
 from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
 )
 
-import time
-import traceback
-import shutil
-
-from fastdeploy import envs
 
 @dataclass
 class FileStoreConfig:
@@ -44,14 +41,10 @@ class FileStoreConfig:
     tp_size: Optional[int] = 1
 
 
-
 class FileStore(KVCacheStorage):
-    def __init__(
-        self,
-        **args
-    ):
+    def __init__(self, **args):
         try:
-            logger.info(f"Using FileStore storage backend...")
+            logger.info("Using FileStore storage backend...")
 
             self.storage_config = FileStoreConfig(**args)
             self.file_path = self.storage_config.file_path
@@ -80,9 +73,8 @@ class FileStore(KVCacheStorage):
         # FileStore does not need to register buffers.
         return None
 
-    def _get_tensor_path(self, key: str) -> str: 
+    def _get_tensor_path(self, key: str) -> str:
         return os.path.join(self.file_path, f"{key}.pd")
-        
 
     def _tensor_from_ptr(self, ptr: int, size: int) -> paddle.Tensor:
         raw = ctypes.string_at(ptr, size)
@@ -102,24 +94,28 @@ class FileStore(KVCacheStorage):
         ctypes.memmove(ptr, data, size)
         return size
 
-    def query(self, k_cache_keys: Optional[List[str]] = None, v_cache_keys: Optional[List[str]] = None, timeout: float = 10.0) -> int:
+    def query(
+        self, k_cache_keys: Optional[List[str]] = None, v_cache_keys: Optional[List[str]] = None, timeout: float = 10.0
+    ) -> int:
         try:
             if not k_cache_keys or not v_cache_keys:
                 return 0
-            
+
             assert len(k_cache_keys) == len(v_cache_keys), "k_cache_keys and v_cache_keys must have the same length."
-            
+
             all_keys = k_cache_keys + v_cache_keys
             results = self.exists(all_keys)
-            
+
             matched_count = 0
             for k, v in zip(k_cache_keys, v_cache_keys):
                 if results[k] and results[v]:
                     matched_count += 1
-            
-            logger.info(f"FileStore query: checked {len(k_cache_keys)} block pairs, matched {matched_count} complete blocks")
+
+            logger.info(
+                f"FileStore query: checked {len(k_cache_keys)} block pairs, matched {matched_count} complete blocks"
+            )
             return matched_count
-            
+
         except Exception as e:
             logger.error(f"Failed to query FileStore storage: {e}")
             return 0
@@ -127,8 +123,8 @@ class FileStore(KVCacheStorage):
     def set(
         self,
         key: str,
-        target_location: Optional[Any] = None,
-        target_size: Optional[Any] = None,
+        target_location: int,
+        target_size: int,
     ) -> int:
         logger.info(f"Set key {key} in FileStore storage...")
         tensor_path = self._get_tensor_path(key)
@@ -136,16 +132,13 @@ class FileStore(KVCacheStorage):
             logger.debug(f"Key {key} already exists. Skipped.")
             return 0
         try:
-            if isinstance(target_location, int) and target_size is not None:
-                tensor = self._tensor_from_ptr(target_location, int(target_size))
-                paddle.save(tensor, tensor_path)
-                file_fd = os.open(tensor_path, os.O_RDONLY)
-                try:
-                    os.fsync(file_fd)
-                finally:
-                    os.close(file_fd)
-            else:
-                raise ValueError("target_location must be a paddle.Tensor or a pointer int with target_size.")
+            tensor = self._tensor_from_ptr(target_location, int(target_size))
+            paddle.save(tensor, tensor_path)
+            file_fd = os.open(tensor_path, os.O_RDONLY)
+            try:
+                os.fsync(file_fd)
+            finally:
+                os.close(file_fd)
             return 0
         except Exception as e:
             logger.error(f"Failed to save tensor {key}: {e}")
@@ -154,14 +147,16 @@ class FileStore(KVCacheStorage):
     def batch_set(
         self,
         keys: List[str],
-        target_locations: Optional[List[Any]] = None,
-        target_sizes: Optional[List[Any]] = None,
+        target_locations: List[int],
+        target_sizes: List[int],
     ) -> List[int]:
         logger.info(f"Batch set {len(keys)} keys in FileStore storage...")
         results = []
         try:
             if len(target_locations) != len(keys) or len(target_sizes) != len(keys):
-                logger.error(f"Length of target_locations ({len(target_locations)}) or target_sizes ({len(target_sizes)}) does not match length of keys ({len(keys)}).")
+                logger.error(
+                    f"Length of target_locations ({len(target_locations)}) or target_sizes ({len(target_sizes)}) does not match length of keys ({len(keys)})."
+                )
                 return [-1] * len(keys)
 
             for key, loc, size in zip(keys, target_locations, target_sizes):
@@ -181,8 +176,8 @@ class FileStore(KVCacheStorage):
     def get(
         self,
         key: str,
-        target_location: Optional[Any] = None,
-        target_size: Optional[int] = None,
+        target_location: int,
+        target_size: int,
     ) -> int:
         tensor_path = self._get_tensor_path(key)
         if not os.path.exists(tensor_path):
@@ -190,17 +185,14 @@ class FileStore(KVCacheStorage):
             return -1
         try:
             loaded = paddle.load(tensor_path)
-            if target_location is None:
-                return int(loaded.numel() * loaded.element_size())
-            if isinstance(target_location, int) and target_size is not None:
-                if target_size <= 0:
-                    logger.error(f"Invalid target_size: {target_size}")
-                    return -1
-                if not loaded.is_contiguous():
-                    loaded = loaded.contiguous()
-                return self._copy_tensor_to_ptr(loaded, target_location, target_size)
-            logger.error(f"Unsupported target_location type: {type(target_location)}")
-            return -1
+
+            if target_size <= 0:
+                logger.error(f"Invalid target_size: {target_size}")
+                return -1
+            if not loaded.is_contiguous():
+                loaded = loaded.contiguous()
+            return self._copy_tensor_to_ptr(loaded, target_location, target_size)
+
         except (FileNotFoundError, pickle.UnpicklingError, ValueError) as e:
             logger.error(f"Failed to load tensor {key}: {e}")
             return -1
@@ -211,23 +203,28 @@ class FileStore(KVCacheStorage):
     def batch_get(
         self,
         keys: List[str],
-        target_locations: Optional[Any] = None,
-        target_sizes: Optional[Any] = None,
+        target_locations: List[int],
+        target_sizes: List[int],
     ) -> List[int]:
         num_keys = len(keys)
-        
-        target_locations = target_locations or [None] * num_keys
-        target_sizes = target_sizes or [None] * num_keys
+
+        if len(target_locations) != num_keys or len(target_sizes) != num_keys:
+            logger.error(
+                f"Length of target_locations ({len(target_locations)}) or target_sizes ({len(target_sizes)}) "
+                f"does not match length of keys ({num_keys})."
+            )
+            return [-1] * num_keys
+
         logger.debug(f"{time.localtime()}:[DEBUG] Batch get {num_keys} keys from FileStore storage")
         results = []
-        
+
         for i in range(num_keys):
             res = self.get(keys[i], target_location=target_locations[i], target_size=target_sizes[i])
             results.append(res)
             if res < 0:
                 logger.warning(f"Failed to get key {keys[i]}")
-        
-        return results  
+
+        return results
 
     def exists(self, keys: List[str]) -> Dict[str, bool]:
         res = {}
@@ -243,11 +240,7 @@ class FileStore(KVCacheStorage):
             path = self.file_path
             if path in ("/", ""):
                 raise RuntimeError(f"Refuse to clear dangerous path: {path}")
-            subprocess.run(
-                ["bash", "-c", f"rm -f '{path}'/*.pd"], 
-                check=True, 
-                stderr=subprocess.DEVNULL
-            )
+            subprocess.run(["bash", "-c", f"rm -f '{path}'/*.pd"], check=True, stderr=subprocess.DEVNULL)
             logger.info(f"Cleared all .pd entries in FileStore storage at {path}.")
             return True
         except subprocess.CalledProcessError as e:
