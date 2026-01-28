@@ -2183,7 +2183,7 @@ class GPUModelRunner(ModelRunnerBase):
                 for num_tokens in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
                         num_tokens=num_tokens,
-                        batch_size=self.scheduler_config.max_num_seqs,
+                        batch_size=self.fd_config.get_max_chunk_tokens(),
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
                         capture_prefill=True,
