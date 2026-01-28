@@ -422,7 +422,7 @@ def post_process_normal(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
+        recover_batch_index_for_sampler_output(sampler_output, share_inputs)
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
                 recover_model_output_map = recover_batch_index_for_output(
@@ -524,7 +524,7 @@ def post_process_specualate(
                 envs.ENABLE_V1_KVCACHE_SCHEDULER,
             )
         else:
-            recover_batch_index_for_sampler_output(sampler_output, model_output.index_to_batch_id)
+            recover_batch_index_for_sampler_output(sampler_output, share_inputs)
             recover_model_output_map = recover_batch_index_for_output(
                 model_output, model_output.index_to_batch_id, ["seq_lens_decoder", "prompt_lens"]
             )

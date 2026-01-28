@@ -421,6 +421,9 @@ class InputBatch:
             for key in list(self.index_to_batch_id.keys())
             if self.index_to_batch_id[key] not in self.running_requests_ids
         ]
+        assert (
+            len(self.index_to_batch_id) - len(keys_to_remove) == self.num_running_requests
+        ), f"self.index_to_batch_id:{self.index_to_batch_id},self.running_requests_ids:{self.running_requests_ids},keys_to_remove:{keys_to_remove},running_indices:{running_indices}"
         for key in keys_to_remove:
             del self.index_to_batch_id[key]
 
@@ -734,7 +737,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, recover_list):
     return res_map
 
 
-def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
+def recover_batch_index_for_sampler_output(sampler_output, share_input):
     """
     Reorder sampled_token_ids according to index_to_batch_id mapping.
 
@@ -745,15 +748,17 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id):
     Returns:
         Updated sampler_output object with reordered sampled_token_ids
     """
-    if all(i == v for i, v in index_to_batch_id.items()):
+    if all(i == v for i, v in share_input.index_to_batch_id.items()):
         return
 
     sampled_token_ids = sampler_output.sampled_token_ids
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+    sorted_keys = sorted(share_input.index_to_batch_id.keys())
+    index_to_batch_id_tmp = [share_input.index_to_batch_id[key] for key in sorted_keys]
     index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
-
+    assert (
+        index_to_batch_id_tensor.shape[0] == sampled_token_ids.shape[0]
+    ), f"index_to_batch_id_tensor:{index_to_batch_id_tensor},sampled_token_ids:{sampled_token_ids},share_input.num_running_requests:{share_input.num_running_requests}"
     real_token_ids = paddle.scatter_nd(
         paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
     )
