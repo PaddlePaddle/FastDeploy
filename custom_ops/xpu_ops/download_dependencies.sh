@@ -12,7 +12,7 @@ rm -rf "$THIRDPARTY_DIR"
 mkdir -p "$THIRDPARTY_DIR" || exit 1
 
 if [ "$1" == "stable" ]; then
-    version_xvllm="20251219"
+    version_xvllm="20260112"
     version_xtdk="4.4.41.1"
 else
     version_xvllm="latest"

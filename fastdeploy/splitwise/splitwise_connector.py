@@ -73,8 +73,8 @@ class SplitwiseConnector:
         self.router_socket.setsockopt(zmq.LINGER, 0)
         self.router_socket.setsockopt(zmq.SNDHWM, 1000)
         self.router_socket.setsockopt(zmq.ROUTER_MANDATORY, 1)
-        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[0]}")
-        self.logger.info(f"_init_network: bind {self.cfg.cache_config.pd_comm_port}")
+        self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[self.local_data_parallel_id]}")
+        self.logger.info(f"_init_network: bind {self.cfg.cache_config.pd_comm_port[self.local_data_parallel_id]}")
 
         self.poller = zmq.Poller()
         self.poller.register(self.router_socket, zmq.POLLIN)
