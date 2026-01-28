@@ -306,10 +306,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
-            self.task_queue.worker_process_tp_barrier.wait()
-        else:
-            paddle.distributed.barrier(self.parallel_config.tp_group)
+        self.task_queue.worker_process_tp_barrier.wait()
 
     def _init_eplb_signal(self):
         if not self.eplb_config.enable_eplb:
