@@ -1429,9 +1429,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
-        # Update bad tokens len
-        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
-
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
@@ -1452,7 +1449,8 @@ class GPUModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
+            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_len=self.share_inputs["bad_tokens_len"],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,
