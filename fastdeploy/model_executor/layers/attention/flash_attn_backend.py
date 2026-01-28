@@ -69,7 +69,7 @@ else:
 
 import os
 
-FLASH_ATTN_VERSION = 2
+FLASH_ATTN_VERSION = None
 
 
 def init_flash_attn_version(fa_version: int = None):
@@ -111,9 +111,13 @@ def flash_attn_func(
     num_heads: int = None,
     kv_num_heads: int = None,
     head_dim: int = 128,
-    version: int = 2,
+    version: Optional[int] = None,
 ):
-    if version == 4 or FLASH_ATTN_VERSION == 4:
+    if version is None:
+        if FLASH_ATTN_VERSION is None:
+            init_flash_attn_version()
+        version = FLASH_ATTN_VERSION
+    if version == 4:
         assert (
             flashmask_attention_v4 is not None
         ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
@@ -149,7 +153,7 @@ def flash_attn_func(
             causal=False,
         )
     else:
-        if version == 3 or FLASH_ATTN_VERSION == 3:
+        if version == 3:
             out = flash_attention_v3_varlen(
                 q,
                 k,

@@ -32,8 +32,12 @@ class TestAttentionPerformance(unittest.TestCase):
         """
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
+        prop = paddle.device.cuda.get_device_properties()
+        self.sm_version = prop.major * 10 + prop.minor
 
     def test_fa3(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
         head_dim = 128
         num_heads = 12
         kv_num_heads = 4
@@ -66,6 +70,8 @@ class TestAttentionPerformance(unittest.TestCase):
         )
 
     def test_fa3_with_mask(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
         head_dim = 128
         num_heads = 12
         kv_num_heads = 4
@@ -80,7 +86,11 @@ class TestAttentionPerformance(unittest.TestCase):
         max_seqlen_q = seq_len
         max_seqlen_k = seq_len
 
-        attn_mask_q = paddle.ones([1, 1, token_num, 4], dtype=paddle.int32)
+        attn_mask_q = paddle.zeros([1, 1, token_num, 4], dtype=paddle.int32)
+        for bid in range(batch_size):
+            attn_mask_q[:, :, seq_len * bid : seq_len * (bid + 1), :2] = seq_len * (bid + 1)
+        for kv_token_id in range(token_num):
+            attn_mask_q[:, :, kv_token_id, 3] = kv_token_id
         paddle.set_flags({"FLAGS_flash_attn_version": 3})
         flash_attn_func(
             q,
@@ -145,7 +155,11 @@ class TestAttentionPerformance(unittest.TestCase):
         max_seqlen_q = seq_len
         max_seqlen_k = seq_len
 
-        attn_mask_q = paddle.ones([1, 1, token_num, 4], dtype=paddle.int32)
+        attn_mask_q = paddle.zeros([1, 1, token_num, 4], dtype=paddle.int32)
+        for bid in range(batch_size):
+            attn_mask_q[:, :, seq_len * bid : seq_len * (bid + 1), :2] = seq_len * (bid + 1)
+        for kv_token_id in range(token_num):
+            attn_mask_q[:, :, kv_token_id, 3] = kv_token_id
         paddle.set_flags({"FLAGS_flash_attn_version": 2})
         flash_attn_func(
             q,
@@ -161,6 +175,32 @@ class TestAttentionPerformance(unittest.TestCase):
             kv_num_heads=kv_num_heads,
             head_dim=head_dim,
             version=2,
+        )
+
+    def test_fa4(self):
+        if self.sm_version < 100:
+            self.skipTest("Flash Attention V4 requires SM100+.")
+        head_dim = 128
+        num_heads = 12
+        kv_num_heads = 4
+        seq_len = 1024
+        batch_size = 4
+        token_num = batch_size * seq_len
+        q = paddle.rand((token_num, num_heads, head_dim), dtype=paddle.float32).cast("bfloat16")
+        k = paddle.rand((token_num, kv_num_heads, head_dim), dtype=paddle.float32).cast("bfloat16")
+        v = paddle.rand((token_num, kv_num_heads, head_dim), dtype=paddle.float32).cast("bfloat16")
+
+        attn_mask_q = paddle.zeros([1, 1, token_num, 4], dtype=paddle.int32)
+        for bid in range(batch_size):
+            attn_mask_q[:, :, seq_len * bid : seq_len * (bid + 1), :2] = seq_len * (bid + 1)
+        for kv_token_id in range(token_num):
+            attn_mask_q[:, :, kv_token_id, 3] = kv_token_id
+        flash_attn_func(
+            q,
+            k,
+            v,
+            attn_mask_q=attn_mask_q,
+            version=4,
         )
 
 

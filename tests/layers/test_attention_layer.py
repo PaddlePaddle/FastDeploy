@@ -23,7 +23,6 @@ import unittest
 import numpy as np
 import paddle
 import paddle.device.cuda.graphs as graphs
-import pytest
 
 from fastdeploy.config import (
     CacheConfig,
@@ -180,7 +179,6 @@ class TestAttentionPerformance(unittest.TestCase):
                 for i in range(seq_len):
                     attn_mask_offsets_numpy[:, i, 1] = i + 1
                 attn_mask_offsets = paddle.to_tensor(attn_mask_offsets_numpy.reshape([-1, 2]))
-                print(attn_mask_offsets)
         elif mode == ForwardMode.DECODE:
             seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
             seq_lens_decoder = paddle.full([batch_size], seq_len, dtype="int32")
@@ -411,7 +409,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
     def test_flash_attn_v3(self):
         if self.sm_version < 89 or self.sm_version >= 100:
-            pytest.skip("Flash Attention V3 requires SM89+ but less than SM100.")
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
         # Test parameters
         test_steps = 100
 
@@ -530,6 +528,76 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_backend=attn_backend,
             cache_quant_type_str=cache_quant_type_str,
             has_attn_mask=True,
+        )
+
+        attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+        paddle.device.synchronize()
+
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
+
+            self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+            end_events[i].record()
+        paddle.device.synchronize()
+
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+
+    def test_flash_attn_v4(self):
+        if self.sm_version < 100:
+            self.skipTest("Flash Attention V4 requires SM100+.")
+        # Test parameters
+        test_steps = 100
+
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
+
+        model_dir = self.model_dir
+        tp_size = paddle.distributed.get_world_size()
+        quantization = {
+            "dense_quant_type": "block_wise_fp8",
+            "moe_quant_type": "block_wise_fp8",
+        }
+        fd_config = self.create_fd_config_from_model_path(
+            model_dir, tensor_parallel_size=tp_size, quantization=quantization
+        )
+        fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
+            fd_config,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = fd_config.model_config.num_hidden_layers
+        attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
+            attention_layer[i].load_state_dict(state_dict)
+
+        cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
+
+        print("===== flash_attn_v4 Initialization Complete =====")
+
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=fd_config,
+            attn_backend=attn_backend,
+            cache_quant_type_str=cache_quant_type_str,
         )
 
         attn_backend.init_attention_metadata(forward_meta)
