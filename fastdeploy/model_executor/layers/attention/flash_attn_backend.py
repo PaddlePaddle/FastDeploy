@@ -88,7 +88,7 @@ def init_flash_attn_version(fa_version: int = None):
             FLASH_ATTN_VERSION = 4
             logger.info("The current platform supports Flash Attention V4.")
         elif FLASH_ATTN_VERSION == 2:
-            if sm_version >= 90 and any(num >= 90 for num in paddle.version.cuda_archs()):
+            if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
                 FLASH_ATTN_VERSION = 3
                 logger.info("The current platform supports Flash Attention V3.")
             else:
@@ -138,17 +138,18 @@ def flash_attn_func(
             finally:
                 paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
         return out
-    elif version == 3 or FLASH_ATTN_VERSION == 3:
-        if attn_mask_q is not None:
-            assert flashmask_attention is not None
-            out = flashmask_attention(
-                q.reshape([1, -1, num_heads, head_dim]),
-                k.reshape([1, -1, kv_num_heads, head_dim]),
-                v.reshape([1, -1, kv_num_heads, head_dim]),
-                startend_row_indices=attn_mask_q,
-                causal=False,
-            )
-        else:
+
+    if attn_mask_q is not None:
+        assert flashmask_attention is not None
+        out = flashmask_attention(
+            q.reshape([1, -1, num_heads, head_dim]),
+            k.reshape([1, -1, kv_num_heads, head_dim]),
+            v.reshape([1, -1, kv_num_heads, head_dim]),
+            startend_row_indices=attn_mask_q,
+            causal=False,
+        )
+    else:
+        if version == 3 or FLASH_ATTN_VERSION == 3:
             out = flash_attention_v3_varlen(
                 q,
                 k,
@@ -158,16 +159,6 @@ def flash_attn_func(
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
                 causal=causal,
-            )
-    else:
-        if attn_mask_q is not None:
-            assert flashmask_attention is not None
-            out = flashmask_attention(
-                q.reshape([1, -1, num_heads, head_dim]),
-                k.reshape([1, -1, kv_num_heads, head_dim]),
-                v.reshape([1, -1, kv_num_heads, head_dim]),
-                startend_row_indices=attn_mask_q,
-                causal=False,
             )
         else:
             out = flash_attn_unpadded(

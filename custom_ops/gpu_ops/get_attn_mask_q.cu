@@ -86,6 +86,15 @@ std::vector<paddle::Tensor> get_attn_mask_q(
   const int max_batch_size = cu_seqlens_k.dims()[0] - 1;
   constexpr int block_size = 512;
   int grid_size = div_up(kv_token_num, block_size);
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  get_attn_mask_q_kernel<<<grid_size, block_size, 0, cu_seqlens_k.stream()>>>(
+      attn_mask_startend_row_indices.data<int>(),
+      attn_mask_kv ? attn_mask_kv.get().data<int>() : nullptr,
+      cu_seqlens_q.data<int>(),
+      cu_seqlens_k.data<int>(),
+      kv_token_num,
+      max_batch_size);
+#else
   launchWithPdlWhenEnabled(
       get_attn_mask_q_kernel,
       grid_size,
@@ -98,7 +107,7 @@ std::vector<paddle::Tensor> get_attn_mask_q(
       cu_seqlens_k.data<int>(),
       kv_token_num,
       max_batch_size);
-
+#endif
   return {attn_mask_startend_row_indices};
 }
 

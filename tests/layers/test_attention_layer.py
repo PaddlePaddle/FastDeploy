@@ -23,6 +23,7 @@ import unittest
 import numpy as np
 import paddle
 import paddle.device.cuda.graphs as graphs
+import pytest
 
 from fastdeploy.config import (
     CacheConfig,
@@ -66,8 +67,11 @@ class TestAttentionPerformance(unittest.TestCase):
         print("Setting up test environment...")
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
+        prop = paddle.device.cuda.get_device_properties()
+        self.sm_version = prop.major * 10 + prop.minor
         init_distributed_environment()
         self.model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
+        self.create_model_config_json(self.model_dir)
 
     # region Helper Functions
     def create_model_config_json(self, model_dir) -> str:
@@ -284,7 +288,6 @@ class TestAttentionPerformance(unittest.TestCase):
         prefill_seq_len = 4096 * 2
 
         model_dir = self.model_dir
-        self.create_model_config_json(model_dir)
         tp_size = paddle.distributed.get_world_size()
         quantization = {
             "dense_quant_type": "block_wise_fp8",
@@ -407,14 +410,15 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.stop()
 
     def test_flash_attn_v3(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            pytest.skip("Flash Attention V3 requires SM89+ but less than SM100.")
         # Test parameters
         test_steps = 100
 
         prefill_batch_size = 1
         prefill_seq_len = 4096 * 2
 
-        model_dir = tempfile.mkdtemp(prefix="tmp_model_config_flash_attn")
-        self.create_model_config_json(model_dir)
+        model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
         quantization = {
             "dense_quant_type": "block_wise_fp8",
@@ -483,8 +487,7 @@ class TestAttentionPerformance(unittest.TestCase):
         prefill_batch_size = 1
         prefill_seq_len = 4096 * 2
 
-        model_dir = tempfile.mkdtemp(prefix="tmp_model_config_flash_attn")
-        self.create_model_config_json(model_dir)
+        model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
         quantization = {
             "dense_quant_type": "block_wise_fp8",
