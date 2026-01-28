@@ -276,7 +276,7 @@ class PaddleDisWorkerProc:
             name="engine_forward_signal",
             array=engine_forward_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
