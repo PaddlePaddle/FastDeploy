@@ -241,7 +241,7 @@ class FlashAttentionBackend(AttentionBackend):
             max_encoder_kv_token_num = forward_meta.max_len_tensor_cpu[5].item()
             forward_meta.use_fa_do_prefill = max_encoder_q_token_num > 1024 or max_encoder_kv_token_num > 1024
 
-            if forward_meta.use_fa_do_prefill:
+            if forward_meta.use_fa_do_prefill > 0:
                 (
                     metadata.cu_seqlens_k,
                     metadata.pre_cache_batch_ids,
