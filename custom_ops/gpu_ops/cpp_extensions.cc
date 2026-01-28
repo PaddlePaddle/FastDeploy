@@ -53,6 +53,8 @@ paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
 
 void SetStop(paddle::Tensor& not_need_stop, bool flag);
 
+paddle::Tensor ComputeTokenNum(const paddle::Tensor& seq_len_this_time_cpu);
+
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -1720,4 +1722,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("set_stop", &SetStop, "set_stop function");
+
+  m.def("compute_token_num", &ComputeTokenNum, "compute_token_num function");
 }

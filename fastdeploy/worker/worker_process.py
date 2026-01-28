@@ -306,7 +306,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or not self.scheduler_config.disable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -1005,6 +1005,12 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--disable_overlap_schedule",
+        action="store_true",
+        help="disable overlap schedule",
     )
 
     args = parser.parse_args()
