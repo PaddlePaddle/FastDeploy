@@ -133,9 +133,6 @@ class FileStore(KVCacheStorage):
             logger.debug(f"Key {key} already exists. Skipped.")
             return True
         try:
-            if not os.path.exists(self.file_path):
-                os.makedirs(self.file_path, exist_ok=True)
-
             if isinstance(target_location, paddle.Tensor):
                 logger.debug("[ERROR] Tensor type is not supported, yet")
             elif isinstance(target_location, int) and target_size is not None:
