@@ -307,6 +307,11 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         self.reasoning_status = paddle.to_tensor([0, 0], dtype="int32")
         self.enable_thinking = paddle.to_tensor([False, False], dtype="bool")
 
+        self.step_idx = paddle.to_tensor([0, 0], dtype="int64")
+
+        self.seq_lens_this_time = paddle.to_tensor([15, 15], dtype="int32")
+        self.seq_lens_encoder = paddle.to_tensor([15, 15], dtype="int32")
+
         logits_before = self.logits.numpy().copy()
 
         reasoning_phase_token_constraint(
