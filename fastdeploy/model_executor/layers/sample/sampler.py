@@ -35,8 +35,8 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
+    apply_token_constraint_policy,
     min_p_sampling,
-    reasoning_phase_token_constraint,
     speculate_get_target_logits,
     speculate_insert_first_token,
     top_k_top_p_sampling,
@@ -762,7 +762,7 @@ class SpeculativeSampler(nn.Layer):
         )
 
         if self.enf_gen_phase_tag:
-            reasoning_phase_token_constraint(
+            apply_token_constraint_policy(
                 logits,
                 sampling_metadata.pre_token_ids,
                 share_inputs["stop_flags"],

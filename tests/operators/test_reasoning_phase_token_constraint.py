@@ -3,10 +3,8 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import (
-    reasoning_phase_token_constraint,
-    speculate_get_output_padding_offset,
-)
+from fastdeploy.model_executor.layers.sample.ops import apply_token_constraint_policy
+from fastdeploy.model_executor.ops.gpu import speculate_get_output_padding_offset
 
 
 class TestReasoningPhaseTokenConstraint(unittest.TestCase):
@@ -101,7 +99,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         # call custom op
         # ------------------------
-        reasoning_phase_token_constraint(
+        apply_token_constraint_policy(
             self.logits,
             self.pre_ids,
             self.stop_flags,
@@ -178,7 +176,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         # call op
         # ------------------------
-        reasoning_phase_token_constraint(
+        apply_token_constraint_policy(
             self.logits,
             self.pre_ids,
             self.stop_flags,
@@ -221,7 +219,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         logits_before = self.logits.numpy().copy()
 
-        reasoning_phase_token_constraint(
+        apply_token_constraint_policy(
             self.logits,
             self.pre_ids,
             self.stop_flags,
@@ -256,7 +254,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         logits_before = self.logits.numpy().copy()
 
-        reasoning_phase_token_constraint(
+        apply_token_constraint_policy(
             self.logits,
             self.pre_ids,
             self.stop_flags,
@@ -301,7 +299,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         logits_before = self.logits.numpy().copy()
 
-        reasoning_phase_token_constraint(
+        apply_token_constraint_policy(
             self.logits,
             self.pre_ids,
             self.stop_flags,
@@ -404,7 +402,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # warmup
         # ------------------------
         for _ in range(5):
-            reasoning_phase_token_constraint(
+            apply_token_constraint_policy(
                 logits,
                 pre_ids,
                 stop_flags,
@@ -430,7 +428,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         start.record()
         for _ in range(iters):
-            reasoning_phase_token_constraint(
+            apply_token_constraint_policy(
                 logits,
                 pre_ids,
                 stop_flags,

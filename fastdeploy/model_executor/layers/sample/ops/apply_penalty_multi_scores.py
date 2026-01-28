@@ -209,7 +209,7 @@ def apply_speculative_penalty_multi_scores(
     return logits
 
 
-def reasoning_phase_token_constraint(
+def apply_token_constraint_policy(
     logits: paddle.Tensor,
     pre_token_ids: paddle.Tensor,
     stop_flags: paddle.Tensor,
@@ -224,7 +224,7 @@ def reasoning_phase_token_constraint(
     line_break_id: int,
 ):
     """
-    reasoning_phase_token_constraint
+    apply_token_constraint_policy
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import reasoning_phase_token_constraint
