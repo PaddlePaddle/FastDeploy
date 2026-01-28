@@ -112,17 +112,6 @@ class FileStore(KVCacheStorage):
 
     def query(self, k_cache_keys: Optional[List[str]] = None, v_cache_keys: Optional[List[str]] = None, timeout: float = 10.0) -> int:
         try:
-            if k_cache_keys is None and v_cache_keys is None:
-                if not os.path.exists(self.file_path):
-                    return 0
-                count = 0
-                for item in os.listdir(self.file_path):
-                    item_path = os.path.join(self.file_path, item)
-                    if os.path.isdir(item_path):
-                        count += 1
-                logger.debug(f"FileStore query: found {count} cache entries")
-                return count
-            
             if not k_cache_keys or not v_cache_keys:
                 return 0
             
@@ -159,13 +148,6 @@ class FileStore(KVCacheStorage):
                 os.makedirs(self.file_path, exist_ok=True)
 
             if isinstance(target_location, paddle.Tensor):
-                # tensor2save = target_location.cpu()
-                # paddle.save(tensor2save, tensor_path)
-                # file_fd = os.open(tensor_path, os.O_RDONLY)
-                # try:
-                #     os.fsync(file_fd)
-                # finally:
-                #     os.close(file_fd)
                 logger.debug("[ERROR] Tensor type is not supported, yet")
             elif isinstance(target_location, int) and target_size is not None:
                 tensor = self._tensor_from_ptr(target_location, int(target_size))
@@ -191,9 +173,6 @@ class FileStore(KVCacheStorage):
         logger.info(f"Batch set {len(keys)} keys in FileStore storage...")
         results = []
         try:
-            target_locations = target_locations or [None] * len(keys)
-            target_sizes = target_sizes or [None] * len(keys)
-
             if len(target_locations) != len(keys) or len(target_sizes) != len(keys):
                 logger.error(f"Length of target_locations ({len(target_locations)}) or target_sizes ({len(target_sizes)}) does not match length of keys ({len(keys)}).")
                 return [-1] * len(keys)
@@ -227,10 +206,6 @@ class FileStore(KVCacheStorage):
             if target_location is None:
                 return loaded
             if isinstance(target_location, paddle.Tensor):
-                # if list(loaded.shape) != list(target_location.shape):
-                #     loaded = paddle.reshape(loaded, target_location.shape)
-                # paddle.assign(loaded, output=target_location)
-                # return target_location
                 logger.debug("[ERROR] Tensor type is not supported, yet")
             if isinstance(target_location, int) and target_size is not None:
                 if target_size <= 0:
