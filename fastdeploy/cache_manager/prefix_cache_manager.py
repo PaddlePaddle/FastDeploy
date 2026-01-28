@@ -1639,25 +1639,25 @@ class PrefixCacheManager:
         Cache blocks already computed.
         """
         try:
-            req_id = task.request_id
-            last_node, num_cached_tokens = self.cache_info[req_id]
-            can_cache_computed_tokens = task.num_computed_tokens - task.num_computed_tokens % block_size
-            if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
-                self.leaf_req_map[last_node].remove(req_id)
             with self.request_release_lock:
+                req_id = task.request_id
+                last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
+                if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
+                    self.leaf_req_map[last_node].remove(req_id)
                 if isinstance(task.prompt_token_ids, np.ndarray):
                     prompt_token_ids = task.prompt_token_ids.tolist()
                 else:
                     prompt_token_ids = task.prompt_token_ids
                 input_ids = prompt_token_ids + task.output_token_ids
                 total_token_num = len(input_ids)
+                can_cache_computed_tokens = total_token_num - total_token_num % block_size
                 current_match_node = last_node
                 has_modified_gpu_lru_leaf_heap = False
                 has_modified_cpu_lru_leaf_heap = False
                 can_recycle_gpu_block_ids = []
                 can_recycle_cpu_block_ids = []
-                matche_nodes = []
                 gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
+                current_time = time.time()
 
                 with self.cache_status_lock:
                     while num_cached_tokens < total_token_num:
@@ -1668,7 +1668,9 @@ class PrefixCacheManager:
                         hash_value = self.hash_block_features(token_block)
                         if hash_value in current_match_node.children:
                             child = current_match_node.children[hash_value]
-                            matche_nodes.append(child)
+                            child.increment_shared_count()
+                            child.last_used_time = current_time
+                            child.req_id_set.add(req_id)
                             if child in self.gpu_lru_leaf_set:
                                 self.gpu_lru_leaf_set.remove(child)
                                 self.gpu_lru_leaf_heap.remove(child)
@@ -1703,16 +1705,17 @@ class PrefixCacheManager:
                     heapq.heapify(self.cpu_lru_leaf_heap)
                 self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
                 self.recycle_cpu_blocks(can_recycle_cpu_block_ids)
+
                 leaf_node = self.mm_build_path(
                     request=task,
-                    num_computed_tokens=task.num_computed_tokens,
+                    num_computed_tokens=can_cache_computed_tokens,
                     block_size=block_size,
                     last_node=current_match_node,
                     num_cached_tokens=num_cached_tokens,
                 )
                 self.req_leaf_map[req_id] = leaf_node
                 self.leaf_req_map[leaf_node].add(req_id)
-                self.cache_info[req_id] = (leaf_node, can_cache_computed_tokens)
+                self.req_to_radix_tree_info[req_id] = (leaf_node, can_cache_computed_tokens)
                 task.cached_block_num = can_cache_computed_tokens // block_size
         except Exception as e:
             logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
