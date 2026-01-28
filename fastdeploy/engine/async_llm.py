@@ -401,6 +401,7 @@ class AsyncLLM(EngineServiceClient):
         try:
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
+            prompt = Request.from_dict(prompt)
 
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 request = await self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
