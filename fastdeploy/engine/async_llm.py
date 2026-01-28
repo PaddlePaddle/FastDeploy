@@ -401,7 +401,8 @@ class AsyncLLM(EngineServiceClient):
         try:
             # Check if already preprocessed by api_server
             is_preprocessed = prompt.get("_preprocessed", False)
-            prompt = Request.from_dict(prompt)
+            if envs.ENABLE_V1_DATA_PROCESSOR:
+                prompt = Request.from_dict(prompt)
 
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 request = await self.data_processor.process_request_dict(prompt, self.cfg.model_config.max_model_len)
@@ -443,10 +444,10 @@ class AsyncLLM(EngineServiceClient):
                     f"Cache request with request_id ({request.get('request_id')}), "
                     f"preprocess time cost {preprocess_cost_time}"
                 )
-            if not envs.ENABLE_V1_DATA_PROCESSOR and self.cfg.model_config.enable_mm:
-                self.request_client.send_pyobj(request)
-            else:
+            if not envs.ENABLE_V1_DATA_PROCESSOR and not self.cfg.model_config.enable_mm:
                 self.request_client.send_json(request)
+            else:
+                self.request_client.send_pyobj(request)
 
         except EngineError:
             raise
