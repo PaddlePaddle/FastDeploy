@@ -194,9 +194,9 @@ void reasoning_phase_token_constraint(
   // int block1 = (bs + 31) / 32 * 32;
 
   const int block_size = 512;
-  const int gird_size = (bs + block_size - 1) / block_size;
+  const int grid_size = (bs + block_size - 1) / block_size;
 
-  update_reasoning_status_kernel<<<gird_size, block_size, 0, stream>>>(
+  update_reasoning_status_kernel<<<grid_size, block_size, 0, stream>>>(
       stop_flags.data<bool>(),
       seq_lens_encoder.data<int>(),
       step_idx.data<int64_t>(),
