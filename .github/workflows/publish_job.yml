@@ -183,6 +183,7 @@ jobs:
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89,80,90"
       WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
@@ -196,6 +197,7 @@ jobs:
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "86,89,80,90"
       WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
