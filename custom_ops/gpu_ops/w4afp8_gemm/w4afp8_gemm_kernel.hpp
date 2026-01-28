@@ -284,22 +284,24 @@ void __global__ __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
 
 template <int Experts>
 auto get_gmem_layout(const int Rows, const int Cols) {
-  return make_layout(make_shape(static_cast<int64_t>(Rows),
-                                static_cast<int64_t>(Cols),
-                                static_cast<int64_t>(Experts)),
-                     make_stride(static_cast<int64_t>(Cols),
-                                 cute::_1{},
-                                 static_cast<int64_t>(Rows * Cols)));
+  return make_layout(
+      make_shape(static_cast<int64_t>(Rows),
+                 static_cast<int64_t>(Cols),
+                 static_cast<int64_t>(Experts)),
+      make_stride(static_cast<int64_t>(Cols),
+                  cute::_1{},
+                  static_cast<int64_t>(Rows) * static_cast<int64_t>(Cols)));
 }
 
 template <int Experts>
 auto get_scale_layout(const int Rows, const int Cols) {
-  return make_layout(make_shape(static_cast<int64_t>(Cols),
-                                static_cast<int64_t>(Rows),
-                                static_cast<int64_t>(Experts)),
-                     make_stride(cute::_1{},
-                                 static_cast<int64_t>(Cols),
-                                 static_cast<int64_t>(Rows * Cols)));
+  return make_layout(
+      make_shape(static_cast<int64_t>(Cols),
+                 static_cast<int64_t>(Rows),
+                 static_cast<int64_t>(Experts)),
+      make_stride(cute::_1{},
+                  static_cast<int64_t>(Cols),
+                  static_cast<int64_t>(Rows) * static_cast<int64_t>(Cols)));
 }
 
 template <typename InputType,
@@ -317,7 +319,8 @@ void run_gemm(const InputType *A,
               const float *input_dequant_scale,
               const int64_t *tokens,
               const int max_tokens,
-              cudaStream_t stream) {
+              cudaStream_t stream,
+              const int64_t *max_tokens_per_expert = nullptr) {
   using ElementOutput = typename Kernel_traits::ElementOutput;
   using Element = typename Kernel_traits::Element;
   using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
@@ -325,8 +328,53 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  const int N_nums =
-      (max_tokens + Kernel_traits::kBlockN1 - 1) / Kernel_traits::kBlockN1;
+
+  int effective_max_tokens = max_tokens;
+
+  if (max_tokens_per_expert != nullptr && TokenPackSize == 0) {
+    static thread_local int64_t *pinned_max = nullptr;
+    static thread_local bool pinned_allocated = false;
+    static thread_local int cached_effective = -1;
+    static thread_local cudaEvent_t d2h_done;
+
+    if (!pinned_allocated) {
+      cudaHostAlloc(&pinned_max, sizeof(int64_t), cudaHostAllocDefault);
+      *pinned_max = 0;
+      cudaEventCreateWithFlags(&d2h_done, cudaEventDisableTiming);
+      pinned_allocated = true;
+    }
+
+    cudaStreamCaptureStatus cap_status;
+    cudaStreamIsCapturing(stream, &cap_status);
+
+    if (cap_status == cudaStreamCaptureStatusActive) {
+      if (cached_effective > 0 && cached_effective <= max_tokens) {
+        effective_max_tokens = cached_effective;
+      } else {
+        effective_max_tokens = max_tokens;
+      }
+    } else {
+      cudaMemcpyAsync(pinned_max,
+                      max_tokens_per_expert,
+                      sizeof(int64_t),
+                      cudaMemcpyDeviceToHost,
+                      stream);
+      cudaEventRecord(d2h_done, stream);
+      cudaEventSynchronize(d2h_done);
+
+      int64_t v = *pinned_max;
+      if (v > 0 && v <= max_tokens) {
+        effective_max_tokens = static_cast<int>(v);
+        cached_effective = effective_max_tokens;
+      } else if (cached_effective > 0 && cached_effective <= max_tokens) {
+        effective_max_tokens = cached_effective;
+      }
+    }
+  }
+
+  const int N_nums = (effective_max_tokens + Kernel_traits::kBlockN1 - 1) /
+                     Kernel_traits::kBlockN1;
+
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
   static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);

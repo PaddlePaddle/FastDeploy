@@ -74,6 +74,7 @@ class _DummyResourceManager:
         self.req_dict = {}
         self.requests = {}
         self.to_be_rescheduled_request_id_set = set()
+        self.abort_req_ids_set = set()
         self.recycled = []
         self.cached_tasks = []
         self.cleared = False
@@ -185,6 +186,7 @@ class _Metrics:
         self.available_gpu_block_num = _Metric()
         self.batch_size = _Metric()
         self.available_batch_size = _Metric()
+        self.request_token_ratio = _Metric()
 
     def _init_speculative_metrics(self, method, num_speculative_tokens):
         return None

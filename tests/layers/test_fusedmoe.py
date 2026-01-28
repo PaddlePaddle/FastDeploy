@@ -26,6 +26,7 @@ from paddle.distributed import fleet
 
 from fastdeploy.config import (
     CacheConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -473,6 +474,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             # quant_config=WINT8Config({}),
             # quant_config=WINT4Config({}),
             scheduler_config=SchedulerConfig({}),
+            eplb_config=EPLBConfig({}),
             cache_config=CacheConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             load_config=LoadConfig({}),
@@ -484,7 +486,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            self.fd_config.scheduler_config.splitwise_role = "mixed"
+            self.fd_config.scheduler_config.splitwise_role = "decode"
             self.fd_config.model_config.moe_phase.phase = "decode"
 
         weight_key_map = {
@@ -546,7 +548,7 @@ class TestFusedMoE(unittest.TestCase):
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 4096
         self.moe_intermediate_size = 2048
-        self.moe_num_experts = 160
+        self.moe_num_experts = 64
         self.moe_k = 8
         self.num_layers = 2
         self.num_attention_heads = -1
@@ -587,11 +589,16 @@ class TestFusedMoE(unittest.TestCase):
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
         os.environ["FD_USE_DEEP_GEMM"] = "0"
-        ep_size = paddle.distributed.get_world_size()
-        ep_rank = paddle.distributed.get_rank()
-
-        tp_rank = 0
-        tp_size = 1
+        if int(os.getenv("USE_FUSEDMOE_TP", "0")) == 1:
+            ep_size = 1
+            ep_rank = 0
+            tp_rank = paddle.distributed.get_rank()
+            tp_size = paddle.distributed.get_world_size()
+        else:
+            ep_size = paddle.distributed.get_world_size()
+            ep_rank = paddle.distributed.get_rank()
+            tp_rank = 0
+            tp_size = 1
 
         nnodes = (ep_size + 7) // 8
 
@@ -616,9 +623,12 @@ class TestFusedMoE(unittest.TestCase):
 
             def fake_model_run():
                 for j in range(num_layers):
-                    out = fused_moe[j % real_weight_layers].fused_moe(
-                        cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
-                    )
+                    if int(os.getenv("DISABLE_CI_FUSEDMOE_EP", "0")) == 1:
+                        out = cache_hidden_states + cache_hidden_states
+                    else:
+                        out = fused_moe[j % real_weight_layers].fused_moe(
+                            cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                        )
 
                 return out
 

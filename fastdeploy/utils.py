@@ -220,6 +220,7 @@ class ErrorCode(str, Enum):
     CONNECTION_ERROR = "connection_error"
     MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
     INTERNAL_ERROR = "internal_error"
+    CLIENT_ABORTED = "client_aborted"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -572,7 +573,7 @@ def check_unified_ckpt(model_dir):
 
     try:
         # check all the file exists
-        safetensors_num = int(model_files[0].strip(".safetensors").split("-")[-1])
+        safetensors_num = int(model_files[0].strip(".safetensors").split("-")[-1]) + 1
         flags = [0] * safetensors_num
         for x in model_files:
             current_index = int(x.strip(".safetensors").split("-")[1])
