@@ -18,10 +18,10 @@ from typing import Callable
 
 import paddle
 from paddle import nn
-from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 from fastdeploy.utils import register_custom_python_op

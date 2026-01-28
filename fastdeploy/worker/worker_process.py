@@ -1001,6 +1001,11 @@ def parse_args():
         default=0,
         help="Number of cpu blocks.",
     )
+    parser.add_argument(
+        "--kvcache_storage_backend",
+        type=str,
+        help="KVCache storage backend.",
+    )
 
     args = parser.parse_args()
     return args

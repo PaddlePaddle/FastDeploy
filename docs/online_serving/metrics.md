@@ -20,6 +20,7 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | Token | `fastdeploy:prompt_tokens_total` | Counter | Total number of processed prompt tokens | count |
 | Token | `fastdeploy:generation_tokens_total` | Counter | Total number of generated tokens | count |
 | Token | `fastdeploy:request_prompt_tokens` | Histogram | Prompt token count per request | count |
+| Token | `fastdeploy:request_token_ratio`   | Histogram | Token generation rate per Request | count |
 | Token | `fastdeploy:request_generation_tokens` | Histogram | Generation token count per request | count |
 | Token | `fastdeploy:request_params_max_tokens` | Histogram | Distribution of `max_tokens` per request | count |
 | Batch | `fastdeploy:available_batch_size` | Gauge | Number of additional requests that can be inserted during Decode | count |

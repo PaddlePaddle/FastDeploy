@@ -59,10 +59,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::optional<paddle::Tensor>& mask,
                         const int head_num,
                         const int kv_head_num,
-                        const int head_dim,
-                        const int max_seq_len,
-                        const int q_token_num,
-                        const int k_token_num);
+                        const int head_dim);
 
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
