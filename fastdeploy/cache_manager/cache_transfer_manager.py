@@ -527,7 +527,7 @@ class CacheTransferManager:
         Read storage data from the given blocks to the corresponding cache tensors on the current rank's GPU.
         """
         try:
-            if self.storage_backend_type == "mooncake" or "file":
+            if self.storage_backend_type in ("mooncake", "file"):
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
@@ -538,7 +538,7 @@ class CacheTransferManager:
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
                 kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
-                start_time = time.time()
+                start_time = time.time()           
                 result = self.storage_backend.batch_get(
                     keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
                 )
@@ -609,14 +609,12 @@ class CacheTransferManager:
             k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
             v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
             match_block_num = 0
-            if self.storage_backend_type == "mooncake":
+            if self.storage_backend_type in ("mooncake", "file"):
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(
                     task.task_id, task.token_ids, task.start_read_block_idx, task.timeout
                 )
-            elif self.storage_backend_type == "file":
-                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for read task {task.task_id}")
 
             k_cache_keys = k_cache_keys[:match_block_num]
@@ -668,7 +666,7 @@ class CacheTransferManager:
         timeout,
     ):
         try:
-            if self.storage_backend_type == "mooncake" or "file":
+            if self.storage_backend_type in ("mooncake", "file"):
                 key_cache_size = [
                     self.key_cache_shape[0],
                     self.key_cache_shape[1],
@@ -749,12 +747,10 @@ class CacheTransferManager:
             v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
 
             match_block_num = 0
-            if self.storage_backend_type == "mooncake":
+            if self.storage_backend_type == ("mooncake", "file"):
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
-            elif self.storage_backend_type == "file":
-                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
 
             if match_block_num >= len(k_cache_keys):

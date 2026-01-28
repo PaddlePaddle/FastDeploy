@@ -23,6 +23,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import paddle
 
+import subprocess
+
 from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
@@ -32,9 +34,10 @@ import time
 import traceback
 import shutil
 
+from fastdeploy import envs
+
 @dataclass
 class FileStoreConfig:
-    from fastdeploy import envs
     file_path: str = envs.FILE_BACKEND_STORAGE_DIR
     namespace: Optional[str] = ""
     tp_rank: Optional[int] = 0
@@ -126,16 +129,14 @@ class FileStore(KVCacheStorage):
         key: str,
         target_location: Optional[Any] = None,
         target_size: Optional[Any] = None,
-    ) -> bool:
+    ) -> int:
         logger.info(f"Set key {key} in FileStore storage...")
         tensor_path = self._get_tensor_path(key)
         if os.path.exists(tensor_path):
             logger.debug(f"Key {key} already exists. Skipped.")
-            return True
+            return 0
         try:
-            if isinstance(target_location, paddle.Tensor):
-                logger.debug("[ERROR] Tensor type is not supported, yet")
-            elif isinstance(target_location, int) and target_size is not None:
+            if isinstance(target_location, int) and target_size is not None:
                 tensor = self._tensor_from_ptr(target_location, int(target_size))
                 paddle.save(tensor, tensor_path)
                 file_fd = os.open(tensor_path, os.O_RDONLY)
@@ -145,10 +146,10 @@ class FileStore(KVCacheStorage):
                     os.close(file_fd)
             else:
                 raise ValueError("target_location must be a paddle.Tensor or a pointer int with target_size.")
-            return True
+            return 0
         except Exception as e:
             logger.error(f"Failed to save tensor {key}: {e}")
-            return False
+            return -1
 
     def batch_set(
         self,
@@ -165,7 +166,7 @@ class FileStore(KVCacheStorage):
 
             for key, loc, size in zip(keys, target_locations, target_sizes):
                 ok = self.set(key, target_location=loc, target_size=size)
-                results.append(0 if ok else -1)
+                results.append(ok)
             return results
         except (ValueError, TypeError) as e:
             logger.error(f"Input validation failed in batch_set: {e}")
@@ -182,46 +183,51 @@ class FileStore(KVCacheStorage):
         key: str,
         target_location: Optional[Any] = None,
         target_size: Optional[int] = None,
-    ) -> Optional[Any]:
+    ) -> int:
         tensor_path = self._get_tensor_path(key)
         if not os.path.exists(tensor_path):
             logger.warning(f"Failed to fetch {key} from FileStore storage.")
-            return None
+            return -1
         try:
             loaded = paddle.load(tensor_path)
             if target_location is None:
-                return loaded
-            if isinstance(target_location, paddle.Tensor):
-                logger.debug("[ERROR] Tensor type is not supported, yet")
+                return int(loaded.numel() * loaded.element_size())
             if isinstance(target_location, int) and target_size is not None:
                 if target_size <= 0:
                     logger.error(f"Invalid target_size: {target_size}")
-                    return None
+                    return -1
                 if not loaded.is_contiguous():
                     loaded = loaded.contiguous()
                 return self._copy_tensor_to_ptr(loaded, target_location, target_size)
             logger.error(f"Unsupported target_location type: {type(target_location)}")
-            return None
+            return -1
         except (FileNotFoundError, pickle.UnpicklingError, ValueError) as e:
             logger.error(f"Failed to load tensor {key}: {e}")
-            return None
+            return -1
         except Exception as e:
             logger.error(f"Unexpected error loading tensor {key}: {e}")
-            return None
+            return -1
 
     def batch_get(
         self,
         keys: List[str],
         target_locations: Optional[Any] = None,
         target_sizes: Optional[Any] = None,
-    ) -> List[Any | None]:
-        target_locations = target_locations or [None] * len(keys)
-        target_sizes = target_sizes or [None] * len(keys)
-        logger.info(f"{time.localtime()}:[DEBUG] Batch get {len(keys)} keys from FileStore storage")
-        return [
-            self.get(key, target_location=loc, target_size=size)
-            for key, loc, size in zip(keys, target_locations, target_sizes)
-        ]
+    ) -> List[int]:
+        num_keys = len(keys)
+        
+        target_locations = target_locations or [None] * num_keys
+        target_sizes = target_sizes or [None] * num_keys
+        logger.debug(f"{time.localtime()}:[DEBUG] Batch get {num_keys} keys from FileStore storage")
+        results = []
+        
+        for i in range(num_keys):
+            res = self.get(keys[i], target_location=target_locations[i], target_size=target_sizes[i])
+            results.append(res)
+            if res < 0:
+                logger.warning(f"Failed to get key {keys[i]}")
+        
+        return results  
 
     def exists(self, keys: List[str]) -> Dict[str, bool]:
         res = {}
@@ -234,14 +240,16 @@ class FileStore(KVCacheStorage):
 
     def clear(self) -> bool:
         try:
-            for filename in os.listdir(self.file_path):
-                file_path = os.path.join(self.file_path, filename)
-                if os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-                elif os.path.isfile(file_path):
-                    os.remove(file_path)
-            logger.info("Cleared all entries in FileStore storage.")
+            path = self.file_path
+            if path in ("/", ""):
+                raise RuntimeError(f"Refuse to clear dangerous path: {path}")
+            subprocess.run(
+                ["bash", "-c", f"rm -f '{path}'/*.pd"], 
+                check=True, 
+                stderr=subprocess.DEVNULL
+            )
+            logger.info(f"Cleared all .pd entries in FileStore storage at {path}.")
             return True
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
             logger.error(f"Failed to clear FileStore storage: {e}")
             return False
