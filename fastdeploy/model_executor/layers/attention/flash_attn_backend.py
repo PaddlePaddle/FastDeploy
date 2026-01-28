@@ -24,7 +24,7 @@ from paddle import _C_ops
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 
 
-def flash_attn_varlen_func(
+def flash_attention_v3_varlen(
     query,
     key,
     value,
@@ -184,7 +184,7 @@ class FlashAttentionBackend(AttentionBackend):
             is_current_sm_supported = cc >= 90
             is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
             if is_current_sm_supported and is_paddle_supported:
-                self.flash_attn_func = flash_attn_varlen_func
+                self.flash_attn_func = flash_attention_v3_varlen
                 print("The current platform supports Flash Attention V3.")
                 self.flash_attn_kwargs = {}
             else:
