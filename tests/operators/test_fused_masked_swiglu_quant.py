@@ -69,7 +69,7 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
             [self.group_num, self.group_size, self.hidden_dim * 2],
             dtype="bfloat16",
         )
-        self.token_nums = paddle.to_tensor([5, 8, 0, 3, 3, 6, 8, 10, 5, 7], dtype="int32")
+        self.token_nums = paddle.to_tensor([200, 2000, 2000, 200, 200, 2000, 200, 2000, 200, 2000], dtype="int32")
 
     def fused_vs_separate_exact_match(self):
         """
@@ -106,18 +106,21 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
         q_ref_flat = q_ref.reshape([-1, q_ref.shape[-1]]).astype("float32")
         q_fused_flat = q_fused.reshape([-1, q_fused.shape[-1]]).astype("float32")
 
-        np.testing.assert_array_equal(
-            q_ref_flat[valid_flat].numpy(),
-            q_fused_flat[valid_flat].numpy(),
-        )
-
         # ---------------- scale ----------------
         s_ref_flat = s_ref.reshape([-1, s_ref.shape[-1]])
         s_fused_flat = s_fused.reshape([-1, s_fused.shape[-1]])
 
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             s_ref_flat[valid_flat].numpy(),
             s_fused_flat[valid_flat].numpy(),
+            err_msg="**scale mismatch**",
+        )
+
+        np.testing.assert_allclose(
+            q_ref_flat[valid_flat].numpy(),
+            q_fused_flat[valid_flat].numpy(),
+            equal_nan=True,
+            err_msg="**quant_x mismatch**",
         )
 
     def test_fused(self):

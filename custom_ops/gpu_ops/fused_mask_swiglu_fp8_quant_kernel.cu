@@ -14,15 +14,8 @@
 
 #include "helper.h"
 
-constexpr float kEpsilon = 1e-10f;
+constexpr float kEpsilon = 1e-10;
 constexpr float kFP8Max = 448.f;
-
-__device__ __forceinline__ float fp32_to_bf16_to_fp32(float x) {
-  uint32_t bits = reinterpret_cast<uint32_t&>(x);
-  bits += 0x00008000;  // round
-  bits &= 0xFFFF0000;  // truncate
-  return reinterpret_cast<float&>(bits);
-}
 
 template <typename T, typename index_t>
 __global__ void fused_swiglu_fp8_quant_kernel(
@@ -34,7 +27,6 @@ __global__ void fused_swiglu_fp8_quant_kernel(
     int group_size,
     int hidden_size,
     int hidden_size_scale,
-    int num_max_tokens_per_expert,
     bool use_finegrained_range) {
   constexpr int BLOCK = 128;
 
@@ -43,85 +35,98 @@ __global__ void fused_swiglu_fp8_quant_kernel(
   int warp = tid >> 5;
   int num_warps = blockDim.x >> 5;
 
-  int block_id = blockIdx.x;
+  int block_id = static_cast<int64_t>(blockIdx.x);
 
-  // ================= token mapping =================
-  int expert = -1;
-  int token_in_expert = -1;
+  using VecBF16 = AlignedVector<T, 4>;
+  VecBF16 x1_vec, x2_vec;
+  using VecFP8 = AlignedVector<phi::dtype::float8_e4m3fn, 4>;
+  VecFP8 q_vec;
 
-  if (lane == 0) {
-    int cumsum = 0;
-    for (int i = 0; i < group_num; ++i) {
-      int cnt = token_nums_per_expert[i];
-      if (block_id >= cumsum && block_id < cumsum + cnt) {
-        expert = i;
-        token_in_expert = block_id - cumsum;
-        break;
-      }
-      cumsum += cnt;
-    }
-  }
+  while (true) {
+    // ================= token mapping =================
+    int expert = -1;
+    int token_in_expert = -1;
 
-  expert = __shfl_sync(0xffffffff, expert, 0);
-  token_in_expert = __shfl_sync(0xffffffff, token_in_expert, 0);
-
-  if (expert < 0 || token_in_expert >= group_size) return;
-
-  // ================= base pointers =================
-  int token = expert * num_max_tokens_per_expert + token_in_expert;
-
-  const T* in =
-      input + (expert * group_size + token_in_expert) * hidden_size * 2;
-
-  auto* out = out_fp8 + token * hidden_size;
-
-  int num_iters = hidden_size / BLOCK;
-
-  // ================= main loop =================
-  for (int iter = warp; iter < num_iters; iter += num_warps) {
-    int base = iter * BLOCK + lane * 4;
-
-    float v[4];
-    float amax = 0.f;
-
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      float x1 = static_cast<float>(in[base + i]);
-      float x2 = static_cast<float>(in[base + i + hidden_size]);
-
-      float y = x2 * x1 / (1.f + expf(-x1));
-      float y_r = fp32_to_bf16_to_fp32(
-          y);  // To simulate the data transformation before the fusion of
-               // swiglu and quant operators
-      v[i] = y_r;
-      amax = fmaxf(amax, fabsf(y_r));
-    }
-
-    // ---------- warp reduce amax ----------
-#pragma unroll
-    for (int offset = 16; offset > 0; offset >>= 1)
-      amax = fmaxf(amax, __shfl_down_sync(0xffffffff, amax, offset));
-
-    amax = __shfl_sync(0xffffffff, amax, 0);
-    amax = fmaxf(amax, kEpsilon);
-
-    if (use_finegrained_range) amax *= 7.f;
-
-    float scale = amax / kFP8Max;
-
-    // ---------- quantize ----------
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      float q = v[i] * kFP8Max / amax;
-      q = fminf(fmaxf(q, -kFP8Max), kFP8Max);
-      out[base + i] = static_cast<phi::dtype::float8_e4m3fn>(q);
-    }
-
-    // ---------- store scale ----------
     if (lane == 0) {
-      out_scale[expert * hidden_size_scale * num_max_tokens_per_expert +
-                iter * num_max_tokens_per_expert + token_in_expert] = scale;
+      int cumsum = 0;
+      for (int i = 0; i < group_num; ++i) {
+        int cnt = token_nums_per_expert[i];
+        if (block_id >= cumsum && block_id < cumsum + cnt) {
+          expert = i;
+          token_in_expert = block_id - cumsum;
+          break;
+        }
+        cumsum += cnt;
+      }
     }
+
+    expert = __shfl_sync(0xffffffff, expert, 0);
+    token_in_expert = __shfl_sync(0xffffffff, token_in_expert, 0);
+
+    if (expert < 0 || token_in_expert >= group_size) break;
+
+    // ================= base pointers =================
+    int token = expert * group_size + token_in_expert;
+
+    const T* in = input + token * hidden_size * 2;
+
+    auto* out = out_fp8 + token * hidden_size;
+
+    int num_iters = hidden_size / BLOCK;
+
+    // ================= main loop =================
+    for (int iter = warp; iter < num_iters; iter += num_warps) {
+      int base = iter * BLOCK + lane * 4;
+
+      // vec load
+      Load(in + base, &x1_vec);
+      Load(in + base + hidden_size, &x2_vec);
+
+      float v[4];
+      float amax = -5e4;
+
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        float x1 = static_cast<float>(x1_vec[i]);
+        float x2 = static_cast<float>(x2_vec[i]);
+
+        float y = x2 * x1 / (1.f + expf(-x1));
+        float y_r = static_cast<float>(
+            static_cast<T>(y));  // To simulate the data transformation before
+                                 // the fusion of swiglu and quant operators
+        v[i] = y_r;
+        amax = max(amax, abs(y_r));
+      }
+
+      // ---------- warp reduce amax ----------
+#pragma unroll
+      for (int offset = 16; offset > 0; offset >>= 1)
+        amax = max(amax, __shfl_down_sync(0xffffffff, amax, offset));
+
+      amax = __shfl_sync(0xffffffff, amax, 0);
+      amax = max(amax, kEpsilon);
+
+      if (use_finegrained_range) amax *= 7.f;
+
+      float scale = amax / kFP8Max;
+
+      // ---------- quantize ----------
+
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        float q = v[i] * kFP8Max / amax;
+        q_vec[i] = static_cast<phi::dtype::float8_e4m3fn>(q);
+      }
+
+      Store(q_vec, out + base);
+
+      // ---------- store scale ----------
+      if (lane == 0) {
+        out_scale[expert * hidden_size_scale * group_size + iter * group_size +
+                  token_in_expert] = scale;
+      }
+    }
+    block_id += gridDim.x;
   }
 }
 
@@ -134,19 +139,15 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
   const int group_size = dim[1];
   const int hidden_size = dim[2] / 2;
   const int hidden_size_scale = hidden_size / block_size;
-  const int num_max_tokens_per_expert = group_size;
-  const int token_num = group_num * num_max_tokens_per_expert;
+  const int token_num = group_num * group_size;
 
-  auto out_fp8 =
-      GetEmptyTensor({group_num, num_max_tokens_per_expert, hidden_size},
-                     paddle::DataType::FLOAT8_E4M3FN,
-                     input.place());
+  auto out_fp8 = GetEmptyTensor({group_num, group_size, hidden_size},
+                                paddle::DataType::FLOAT8_E4M3FN,
+                                input.place());
 
   auto out_scale =
-      GetEmptyTensor({group_num, num_max_tokens_per_expert, hidden_size_scale},
-                     {hidden_size_scale * num_max_tokens_per_expert,
-                      1,
-                      num_max_tokens_per_expert},
+      GetEmptyTensor({group_num, group_size, hidden_size_scale},
+                     {hidden_size_scale * group_size, 1, group_size},
                      paddle::DataType::FLOAT32,
                      input.place());
 
@@ -172,7 +173,6 @@ std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
             group_size,
             hidden_size,
             hidden_size_scale,
-            num_max_tokens_per_expert,
             use_finegrained_range);
   } else {
     PD_THROW("Only BF16 supported");
