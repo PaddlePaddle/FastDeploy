@@ -35,10 +35,6 @@ def ceil_div(x: int, y: int) -> int:
     return (x + y - 1) // y
 
 
-def ceil_align(x: int, y: int) -> int:
-    return ceil_div(x, y) * y
-
-
 def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
     x: paddle.Tensor,
 ):
