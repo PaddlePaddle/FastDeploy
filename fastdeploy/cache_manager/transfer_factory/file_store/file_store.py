@@ -77,19 +77,8 @@ class FileStore(KVCacheStorage):
         # FileStore does not need to register buffers.
         return None
 
-    def _get_tensor_path(self, key: str) -> str:
-        if '_key_' in key:
-            clean_key, layer_part = key.split('_key_')
-            suffix = f"_key_{layer_part}"
-        elif '_value_' in key:
-            clean_key, layer_part = key.split('_value_')
-            suffix = f"_value_{layer_part}"
-        else:
-            clean_key = key
-            suffix = ""
-        
-        name = f"data{suffix}.pd"    
-        return os.path.join(self.file_path, f"{clean_key}_{name}")
+    def _get_tensor_path(self, key: str) -> str: 
+        return os.path.join(self.file_path, f"{key}.pd")
         
 
     def _tensor_from_ptr(self, ptr: int, size: int) -> paddle.Tensor:
