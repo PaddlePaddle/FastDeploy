@@ -239,6 +239,7 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
         if self.max_logprobs < -1:
             raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
 
