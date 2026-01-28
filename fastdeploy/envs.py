@@ -196,6 +196,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # Data type for MoE gate weight, can set "BFLOAT16" or "FLOAT32".
+    "FD_MOE_GATE_WEIGHT_DTYPE": lambda: os.getenv("FD_MOE_GATE_WEIGHT_DTYPE", "FLOAT32"),
 }
 
 

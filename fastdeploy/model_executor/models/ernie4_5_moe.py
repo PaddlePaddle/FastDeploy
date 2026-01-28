@@ -28,6 +28,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -182,7 +183,7 @@ class Ernie4_5_MoE(nn.Layer):
             output_size=fd_config.model_config.moe_num_experts,
             with_bias=False,
             skip_quant=True,
-            weight_dtype="float32",
+            weight_dtype=envs.FD_MOE_GATE_WEIGHT_DTYPE.lower(),
         )
 
         self.experts = FusedMoE(
