@@ -1665,7 +1665,7 @@ class PrefixCacheManager:
                         token_num = len(token_block)
                         if token_num != block_size:
                             break
-                        hash_value = self.hash_block_features(token_block)
+                        hash_value = get_hash_str(token_block)
                         if hash_value in current_match_node.children:
                             child = current_match_node.children[hash_value]
                             child.increment_shared_count()
