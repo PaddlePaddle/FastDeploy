@@ -184,6 +184,14 @@ class CacheTransferManager:
             create=False,
         )
 
+        self.cache_task_is_paused_signal = IPCSignal(
+            name="cache_task_is_paused",
+            array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(max_chips_per_node, args.mp_num)
         worker_healthy_live_array = np.zeros(shape=[array_size], dtype=np.int32)
@@ -448,9 +456,6 @@ class CacheTransferManager:
                     if self.inflight == 0:
                         self._pause_cond.notify_all()
 
-        with self._pause_cond:
-            self.inflight += 1
-
         thread_pool.submit(inflight_task, task_fn, *args)
 
     def do_data_transfer(self):
@@ -465,12 +470,14 @@ class CacheTransferManager:
 
         while True:
             try:
-                with self._pause_cond:
-                    self._pause_cond.wait_for(lambda: not self.is_paused)
+                if self.rank == 0:
+                    self.cache_task_is_paused_signal.value[0] = 1 if self.is_paused else 0
                 if self.n_ranks > 1:
                     self.cache_task_queue.barrier0.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier0.reset()
+                if self.cache_task_is_paused_signal.value[0] == 0:
+                    continue
 
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
@@ -479,7 +486,10 @@ class CacheTransferManager:
                     self.cache_task_queue.barrier1.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier1.reset()
+
                 if self.cache_task_broadcast_signal.value[0] == 1:
+                    with self._pause_cond:
+                        self.inflight += 1
                     data, read_finish = self.cache_task_queue.get_transfer_task()
                     logger.debug(f"transfer data: get_transfer_task {data}")
                     if read_finish:

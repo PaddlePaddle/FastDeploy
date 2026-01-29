@@ -183,6 +183,14 @@ class PrefixCacheManager:
             create=True,
         )
 
+        self.cache_task_is_paused_signal = IPCSignal(
+            name="cache_task_is_paused",
+            array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=True,
+        )
+
         self.cache_task_queue = EngineCacheQueue(
             address=(pod_ip, cache_config.cache_queue_port),
             authkey=b"cache_queue_service",
