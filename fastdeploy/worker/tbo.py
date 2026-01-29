@@ -90,6 +90,11 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
     ]
 
     ids_remove_padding_cpu = forward_meta.ids_remove_padding.numpy().tolist()
+
+    # 这里针对图片暂时关闭TBO！
+    if special_tokens[0] in ids_remove_padding_cpu:
+        return res
+
     detect_pos = split_sections[0]
     while ids_remove_padding_cpu[detect_pos] in special_tokens:
         detect_pos += 1
