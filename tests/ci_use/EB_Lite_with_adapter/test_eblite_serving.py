@@ -31,6 +31,8 @@ if project_root not in sys.path:
 
 from ci_use.EB_Lite_with_adapter.zmq_client import LLMControlClient, LLMReqClient
 
+from fastdeploy.engine.request import Request
+
 env = os.environ.copy()
 
 # Read ports from environment variables; use default values if not set
@@ -266,6 +268,7 @@ def test_request_and_response(zmq_req_client):
         "top_p": 0.8,
         "frequency_penalty": 0.0,
     }
+    request = Request.from_dict(request)
     result_queue = queue.Queue()
     zmq_req_client.start(result_queue)
     zmq_req_client.send_request(request)

@@ -445,7 +445,12 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                     return None, None
 
             def receive_pyobj_once(self, block):
-                return self.msg, None
+                self.call_count += 1
+                if self.call_count == 1:
+                    return self.msg, None
+                else:
+                    eng.running = False
+                    return None, None
 
             def close(self):
                 pass
