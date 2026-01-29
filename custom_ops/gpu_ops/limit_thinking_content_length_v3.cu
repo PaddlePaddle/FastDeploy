@@ -18,7 +18,7 @@
 __global__ void limit_thinking_content_length_kernel_v3(
     int64_t* next_tokens,
     const int* max_think_lens,
-    const int* max_reply_lens,
+    int* max_reply_lens,
     const int64_t* step_idx,
     const int64_t* eos_token_ids,
     int* limit_status,
@@ -35,7 +35,7 @@ __global__ void limit_thinking_content_length_kernel_v3(
 
   const int max_think_len =
       max_think_lens[bid];  // <0: 不强制截断思考，但仍有思考阶段
-  const int max_reply_len = max_reply_lens[bid];  // <0: 不限制回复
+  int max_reply_len = max_reply_lens[bid];  // <0: 不限制回复
 
   // 两者都不限制，且你不需要维护状态机的话，可以直接 return
   // 但如果你希望一直维护状态（便于后续调试/统计），也可以不 return。
@@ -65,10 +65,6 @@ __global__ void limit_thinking_content_length_kernel_v3(
   // =======================
   if (max_think_len >= 0 && status < reply_base) {
     // A) 超长触发：到达 max_think_len 时开始注入
-    if (status == 0 && step == max_think_len) {
-      status = (inject_len > 0) ? 1 : done_status;
-    }
-
     if (max_think_len > 0) {
       // A) 超长触发：到达 max_think_len 时开始注入（从本 token 起输出
       // inject_token_ids[0]）
@@ -138,6 +134,7 @@ __global__ void limit_thinking_content_length_kernel_v3(
 
   next_tokens[bid] = next_token;
   limit_status[bid] = status;
+  max_reply_lens[bid] = max_reply_len;
 }
 
 void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
@@ -163,7 +160,7 @@ void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
                                             next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
-      max_reply_lens.data<int>(),
+      const_cast<int*>(max_reply_lens.data<int>()),
       step_idx.data<int64_t>(),
       eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_status.data<int>()),
