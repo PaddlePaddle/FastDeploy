@@ -164,9 +164,7 @@ def test_generate_and_chat_branches():
     llm._add_request = lambda **_: ["r1"]
     with pytest.raises(ValueError, match="input dict"):
         llm.generate({"x": 1}, sampling_params=SamplingParams(max_tokens=1), use_tqdm=False)
-    assert (
-        llm.generate("hi", sampling_params=SamplingParams(max_tokens=1), use_tqdm=False, stream=True) == "streamed"
-    )
+    assert llm.generate("hi", sampling_params=SamplingParams(max_tokens=1), use_tqdm=False, stream=True) == "streamed"
 
     llm._check_master = lambda: False
     with pytest.raises(ValueError, match="master node"):
