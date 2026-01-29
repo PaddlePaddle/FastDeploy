@@ -818,7 +818,6 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -853,6 +852,21 @@ class EngineService:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
+                                    if msg == "task is aborted":
+                                        self.llm_logger.info(f"task {task.request_id} is aborted.")
+                                        self.scheduler.put_results(
+                                            [
+                                                RequestOutput(
+                                                    request_id=task.request_id,
+                                                    finished=True,
+                                                    error_code=499,
+                                                    error_msg=msg,
+                                                )
+                                            ]
+                                        )
+                                        need_delete_tasks.append(task)
+                                        self.resource_manager.abort_req_ids_set.remove(task.request_id)
+                                        break
                                     self.llm_logger.error(
                                         f"D failed to allocate resource for request {task.request_id}, try again."
                                     )
@@ -878,17 +892,31 @@ class EngineService:
                             status, msg = self.split_connector.check_decode_allocated(task)
                             task.metrics.ask_decode_resource_finish_time = time.time()
                             if not status:
-                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                                self.scheduler.put_results(
-                                    [
-                                        RequestOutput(
-                                            request_id=task.request_id,
-                                            finished=True,
-                                            error_code=500,
-                                            error_msg=msg,
-                                        )
-                                    ]
-                                )
+                                if msg == "task is aborted":
+                                    self.llm_logger.info(f"task {task.request_id} is aborted.")
+                                    self.scheduler.put_results(
+                                        [
+                                            RequestOutput(
+                                                request_id=task.request_id,
+                                                finished=True,
+                                                error_code=499,
+                                                error_msg=msg,
+                                            )
+                                        ]
+                                    )
+                                    self.resource_manager.abort_req_ids_set.remove(task.request_id)
+                                else:
+                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                    self.scheduler.put_results(
+                                        [
+                                            RequestOutput(
+                                                request_id=task.request_id,
+                                                finished=True,
+                                                error_code=500,
+                                                error_msg=msg,
+                                            )
+                                        ]
+                                    )
                                 need_delete_tasks.append(task)
                                 continue
                     for tmp_task in need_delete_tasks:
@@ -1118,21 +1146,7 @@ class EngineService:
                 if data:
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
-                        req_id = data["request_id"]
-                        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
-                        self.resource_manager.abort_req_ids_set.add(req_id)
-                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            if req_id in self.resource_manager.requests:
-                                req = self.resource_manager.requests[req_id]
-                                task = self.resource_manager._prepare_preempt_task(req)
-                                self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
-                                self.llm_logger.info(f"put abort task in engine worker queue, req_id: {req_id}")
-                            else:
-                                self.scheduler._recycle(req_id)
-                                self.llm_logger.info(
-                                    f"req_id:{req_id} has not been allocated any resources, recycled it in scheduler"
-                                )
-                                self.resource_manager.abort_req_ids_set.remove(req_id)
+                        self._process_abort_task(data)
                         continue
                     err_msg = None
                     try:
@@ -1509,8 +1523,24 @@ class EngineService:
                         f"D has received tasks to preallocate resource for tasks: {[task.request_id for task in tasks]}"
                     )
                     for task in tasks:
+                        if task.request_id in self.resource_manager.abort_req_ids_set:
+                            self.llm_logger.info(
+                                f"Skipping aborted task {task.request_id} in allocate_resource_requests fetch"
+                            )
+                            self.scheduler.put_results(
+                                [
+                                    RequestOutput(
+                                        request_id=task.request_id,
+                                        finished=True,
+                                        error_code=499,
+                                        error_msg=f"Your request with request_id:{task.request_id} is aborted.",
+                                    )
+                                ]
+                            )
+                            self.resource_manager.abort_req_ids_set.remove(task.request_id)
+                            continue
                         task.metrics.decode_recv_req_time = time.time()
-                    allocate_resource_requests.extend(tasks)
+                        allocate_resource_requests.append(task)
                 elif isinstance(tasks[0], RequestOutput):
                     self.llm_logger.debug(
                         f"D has received tasks to process prefilled tasks: {[task.request_id for task in tasks]}"
@@ -1518,6 +1548,17 @@ class EngineService:
                     if not isinstance(tasks, list):
                         tasks = [tasks]
                     for task in tasks:
+                        if task.request_id in self.resource_manager.abort_req_ids_set:
+                            self.llm_logger.info(
+                                f"Skipping aborted task {task.request_id} in allocate_resource_requests fetch"
+                            )
+                            self.resource_manager.pre_recycle_resource(task.request_id)
+                            if task.request_id in self.token_processor.tokens_counter:
+                                del self.token_processor.tokens_counter[task.request_id]
+                            task.finished = True
+                            self.scheduler.put_results([task])
+                            self.resource_manager.abort_req_ids_set.remove(task.request_id)
+                            continue
                         task.finished = False
                         task.metrics.decode_recv_first_token_time = time.time()
                     prefilled_request_ouputs.extend(tasks)
@@ -1525,6 +1566,23 @@ class EngineService:
         def _process_allocate_resource_requests():
             processed_indices = []
             for idx, task in enumerate(allocate_resource_requests):
+                if task.request_id in self.resource_manager.abort_req_ids_set:
+                    self.llm_logger.info(
+                        f"Skipping aborted task {task.request_id} during allocate_resource_requests processing"
+                    )
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=task.request_id,
+                                finished=True,
+                                error_code=499,
+                                error_msg=f"Your request with request_id:{task.request_id} is aborted.",
+                            )
+                        ]
+                    )
+                    self.resource_manager.abort_req_ids_set.remove(task.request_id)
+                    processed_indices.append(idx)
+                    continue
                 is_success = False
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1562,6 +1620,17 @@ class EngineService:
             waiting_request_outputs = []
 
             for req_output in prefilled_request_ouputs:
+                if req_output.request_id in self.resource_manager.abort_req_ids_set:
+                    self.llm_logger.info(
+                        f"Skipping aborted request {req_output.request_id} during prefilled_request processing"
+                    )
+                    self.resource_manager.pre_recycle_resource(req_output.request_id)
+                    if req_output.request_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[req_output.request_id]
+                    req_output.finished = True
+                    self.scheduler.put_results([req_output])
+                    self.resource_manager.abort_req_ids_set.remove(req_output.request_id)
+                    continue
                 if hasattr(self.scheduler, "has_request") and not self.scheduler.has_request(req_output.request_id):
                     # ensure the api_server and scheduler in decode have
                     # received the request sent by the client
@@ -2169,3 +2238,81 @@ class EngineService:
         except Exception:
             pass
         return True
+
+    def _process_abort_task(self, data: dict):
+        req_id = data["request_id"]
+        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
+        self.resource_manager.abort_req_ids_set.add(req_id)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if req_id in self.resource_manager.requests:
+                req = self.resource_manager.requests[req_id]
+                if req in self.resource_manager.running:
+                    task = self.resource_manager._prepare_abort_task(req)
+                    self.engine_worker_queue.put_tasks(([task], self.resource_manager.real_bsz))
+                    self.llm_logger.info(
+                        f"a runing task need to be aborted, put abort task in engine worker queue, req_id: {req_id}"
+                    )
+                elif req in self.resource_manager.waiting:
+                    self.llm_logger.info(f"a waiting task need to be aborted, req_id: {req_id}")
+                    self.resource_manager.waiting.remove(req)
+                    self.resource_manager.abort_recycle_resource(req)
+                    if req_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.to_be_rescheduled_request_id_set.remove(req_id)
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=req_id,
+                                finished=True,
+                                error_code=499,
+                                error_msg=f"Your request with request_id:{req_id} is aborted.",
+                            )
+                        ]
+                    )
+                    self.llm_logger.info(f"waiting req aborted, put a fininsed result in scheduler, req_id: {req_id}")
+                elif req_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                    self.resource_manager.to_be_rescheduled_request_id_set.remove(req_id)
+                    self.resource_manager.abort_recycle_resource(req)
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=req_id,
+                                finished=True,
+                                error_code=499,
+                                error_msg=f"Your request with request_id:{req_id} is aborted.",
+                            )
+                        ]
+                    )
+                    self.llm_logger.info(f"req_id:{req_id} has been aborted from to_be_rescheduled_request_id_set")
+                else:
+                    if self.cfg.scheduler_config.splitwise_role == "decode":
+                        self.resource_manager.abort_recycle_resource(req)
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=req_id,
+                                finished=True,
+                                error_code=499,
+                                error_msg=f"Your request with request_id:{req_id} is aborted.",
+                            )
+                        ]
+                    )
+                    if self.cfg.scheduler_config.splitwise_role == "mixed":
+                        self.resource_manager.abort_req_ids_set.remove(req_id)
+                    self.llm_logger.info(f"req_id:{req_id} has been aborted")
+            else:
+                self.scheduler.put_results(
+                    [
+                        RequestOutput(
+                            request_id=req_id,
+                            finished=True,
+                            error_code=499,
+                            error_msg=f"Your request with request_id:{req_id} is aborted.",
+                        )
+                    ]
+                )
+                if self.cfg.scheduler_config.splitwise_role == "mixed":
+                    self.resource_manager.abort_req_ids_set.remove(req_id)
+                self.llm_logger.info(
+                    f"req_id:{req_id} has not been allocated any resources, put a fininsed result in scheduler"
+                )
+            self.resource_manager.update_metrics()

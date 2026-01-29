@@ -129,8 +129,14 @@ class LocalScheduler:
         if request_id is not None:
             self.requests.pop(request_id, None)
             self.responses.pop(request_id, None)
-            self.ids.pop(self.ids.index(request_id))
-            self.ids_read_cursor -= 1
+            idx = self.ids.index(request_id)
+            scheduler_logger.debug(
+                f"request: {request_id} in ids: {idx} should be recycled, ids_read_cursor:{self.ids_read_cursor}"
+            )
+            self.ids.pop(idx)
+            if idx < self.ids_read_cursor:
+                self.ids_read_cursor -= 1
+            scheduler_logger.debug(f"ids_read_cursor after pop: {self.ids_read_cursor}")
             return
 
         if self.max_size <= 0:
@@ -150,13 +156,18 @@ class LocalScheduler:
         for i, expired_id in enumerate(expired_ids):
             self.requests.pop(expired_id, None)
             self.responses.pop(expired_id, None)
-            self.ids.pop(i)
+            scheduler_logger.debug(
+                f"expired request: {expired_id} in ids: {self.ids.index(expired_id)} should be recycled, ids_read_cursor:{self.ids_read_cursor}"
+            )
+            self.ids.pop(self.ids.index(expired_id))
 
         if len(expired_ids) > 0:
             if len(expired_ids) - 1 >= self.ids_read_cursor:
                 self.ids_read_cursor = 0
+                scheduler_logger.debug(f"ids_read_cursor after expired pop: {self.ids_read_cursor}")
             else:
                 self.ids_read_cursor -= len(expired_ids)
+                scheduler_logger.debug(f"ids_read_cursor after expired pop: {self.ids_read_cursor}")
 
     def get_inflight_requests(self) -> List[Request]:
         with self.mutex:
