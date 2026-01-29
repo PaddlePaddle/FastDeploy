@@ -1716,7 +1716,7 @@ class PrefixCacheManager:
                 self.req_leaf_map[req_id] = leaf_node
                 self.leaf_req_map[leaf_node].add(req_id)
                 self.req_to_radix_tree_info[req_id] = (leaf_node, can_cache_computed_tokens)
-                task.cached_block_num = can_cache_computed_tokens // block_size
+                task.num_cached_blocks = can_cache_computed_tokens // block_size
         except Exception as e:
             logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
             raise e
