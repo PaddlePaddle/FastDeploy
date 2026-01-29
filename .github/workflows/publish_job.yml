@@ -313,7 +313,7 @@ jobs:
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu129.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu129.outputs.wheel_path_cu129 }}
     steps:
       - uses: actions/setup-python@v5
         with:
