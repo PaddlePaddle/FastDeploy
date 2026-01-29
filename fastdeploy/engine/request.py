@@ -793,6 +793,9 @@ class CompletionOutput:
         if hasattr(self, key):
             setattr(self, key, value)
 
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
 
 @dataclass(slots=True)
 class RequestMetrics:

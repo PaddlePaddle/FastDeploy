@@ -528,7 +528,7 @@ class AsyncLLM(EngineServiceClient):
 
                 for response_item in response_list:
                     if (
-                        isinstance(response_item, dict) or isinstance(response_item, Request)
+                        isinstance(response_item, dict) or isinstance(response_item, RequestOutput)
                     ) and "request_id" in response_item:
                         req_id = response_item.get("request_id")
 
