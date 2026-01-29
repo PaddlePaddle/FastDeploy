@@ -41,10 +41,11 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
   for (int i = tid; i < batch_size; i += blockDim.x) {
     const int seq_len_this_time = seq_lens_this_time[i];
     const int seq_len_decoder = seq_lens_decoder[i];
+    const int seq_len_encoder = seq_lens_encoder[i];
     max_len_this_time_this_thread =
         max(seq_len_this_time, max_len_this_time_this_thread);
     max_len_encoder_this_thread =
-        max(seq_lens_encoder[i], max_len_encoder_this_thread);
+        max(seq_len_encoder, max_len_encoder_this_thread);
     max_len_decoder_this_thread =
         max(seq_len_decoder, max_len_decoder_this_thread);
 
@@ -54,8 +55,7 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
     }
 
     if (seq_len_this_time <= 0) continue;
-    const int max_just_dec_len_now =
-        seq_lens_encoder[i] > 0 ? 0 : seq_len_decoder;
+    const int max_just_dec_len_now = seq_len_encoder > 0 ? 0 : seq_len_decoder;
     max_len_this_thread =
         max(seq_len_decoder + seq_len_this_time, max_len_this_thread);
     max_just_dec_len_this_thread =
