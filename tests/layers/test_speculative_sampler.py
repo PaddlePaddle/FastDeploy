@@ -71,6 +71,7 @@ def _create_default_sampling_metadata(
         repetition_penalties=_create_penalty_tensor(batch_size, 1.0),
         min_dec_lens=paddle.full(shape=[batch_size, 1], fill_value=min_seq_len, dtype="int64"),
         bad_words_token_ids=paddle.full(shape=[batch_size], fill_value=-1, dtype="int64"),
+        bad_words_token_len=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
         min_p=paddle.randn([batch_size]),
         seed=paddle.full(shape=[batch_size], fill_value=0, dtype="int64"),
