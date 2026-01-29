@@ -629,7 +629,7 @@ def test_chat_with_reasoning_max_tokens(openai_client):
     except openai.InternalServerError as e:
         error_message = str(e)
         assertion_executed = True
-        assert "reasoning_max_tokens must be greater than 1" in error_message
+        assert "reasoning_max_tokens must be greater than 0" in error_message
     assert assertion_executed, "Assertion was not executed (no exception raised)"
 
 
