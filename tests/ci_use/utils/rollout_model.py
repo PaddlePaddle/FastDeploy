@@ -47,8 +47,7 @@ if args.enable_mm:
     init_kwargs["enable_mm"] = True
 if args.enable_speculative_decoding:
     init_kwargs["speculative_method"] = "mtp"
-    init_kwargs["speculative_max_draft_token_num"] = 1
-    init_kwargs["speculative_model_name_or_path"] = model_path
+    init_kwargs["num_nextn_predict_layers"] = 1
 
 
 rollout_config = RolloutModelConfig(**init_kwargs)
