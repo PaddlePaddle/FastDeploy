@@ -574,10 +574,9 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             fd_config (FDConfig): Configurations for the LLM model.
         """
         super(Glm4MoeForCausalLMRL, self).__init__(fd_config)
-        self.num_nextn_predict_layers = fd_config.model_config.num_nextn_predict_layers
         self.speculative_decoding = fd_config.speculative_config.method is not None
 
-        if self.speculative_decoding and self.num_nextn_predict_layers > 0:
+        if self.speculative_decoding:
             fd_config.parallel_config.tp_group = None
             fd_config.parallel_config.ep_group = None
             self.mtp_fd_config = copy.deepcopy(fd_config)
@@ -656,7 +655,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
         self._complete_missing_mappings()
 
         # extra for mtp
-        if self.speculative_decoding and self.num_nextn_predict_layers > 0:
+        if self.speculative_decoding:
             mtp_infer_to_train_mapping = self.mtp_layers.get_name_mappings_to_training(trainer_degree)
             self.infer_to_train_mapping.update(mtp_infer_to_train_mapping)
 
