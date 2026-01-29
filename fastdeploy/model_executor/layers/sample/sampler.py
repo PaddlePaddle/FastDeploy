@@ -775,6 +775,7 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["reasoning_status"],
                 share_inputs["output_padding_offset"],
                 share_inputs["output_cum_offsets"],
+                share_inputs["enable_thinking"],
                 self.think_end_id,
                 self.line_break_id,
             )
