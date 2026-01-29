@@ -27,7 +27,8 @@ __global__ void limit_thinking_content_length_kernel_v3(
     const int64_t* inject_token_ids,
     const int bs,
     const int eos_token_id_len,
-    const int inject_len) {
+    const int inject_len,
+    const bool splitwise_role_is_decode) {
   int bid = threadIdx.x + blockIdx.x * blockDim.x;
   if (bid >= bs) return;
   if (stop_flags[bid]) return;
@@ -55,6 +56,9 @@ __global__ void limit_thinking_content_length_kernel_v3(
   // </think>，也要把状态置为 done_status
   if (status == 0 && next_token == think_end_id) {
     status = done_status;
+    if (max_reply_len >= 0) {
+      max_reply_len += 2;
+    }
   }
 
   // ======================= 2) 仅当启用“思考截断”时，才触发注入/覆盖 eos
@@ -63,6 +67,23 @@ __global__ void limit_thinking_content_length_kernel_v3(
     // A) 超长触发：到达 max_think_len 时开始注入
     if (status == 0 && step == max_think_len) {
       status = (inject_len > 0) ? 1 : done_status;
+    }
+
+    if (max_think_len > 0) {
+      // A) 超长触发：到达 max_think_len 时开始注入（从本 token 起输出
+      // inject_token_ids[0]）
+      if (status == 0 && step == max_think_len) {
+        status = (inject_len > 0) ? 1 : done_status;
+      }
+    } else if (max_think_len == 0) {
+      // A) 超长触发：到达 max_think_len 时开始注入
+      if (status == 0 && !splitwise_role_is_decode) {
+        // 如果是集中式或 P 节点：从本 token 起输出 inject_token_ids[0]）
+        status = (inject_len > 0) ? 1 : done_status;
+      } else if (status == 0 && splitwise_role_is_decode) {
+        // 如果是 D 节点下：从本 token 起输出 inject_token_ids[1]）
+        status = (inject_len > 0) ? 2 : done_status + 1;
+      }
     }
 
     // B) 思考阶段提前输出 eos：开始注入（覆盖 eos）
@@ -127,7 +148,8 @@ void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& stop_flags,
                                   const paddle::Tensor& eos_token_ids,
                                   const paddle::Tensor& inject_token_ids,
-                                  const int64_t think_end_id) {
+                                  const int64_t think_end_id,
+                                  const bool splitwise_role_is_decode) {
   const int batch_size = next_tokens.shape()[0];
   const int eos_token_id_len = eos_token_ids.shape()[0];
   const int inject_len = inject_token_ids.shape()[0];
@@ -150,7 +172,8 @@ void LimitThinkingContentLengthV3(const paddle::Tensor& next_tokens,
       inject_token_ids.data<int64_t>(),
       batch_size,
       eos_token_id_len,
-      inject_len);
+      inject_len,
+      splitwise_role_is_decode);
 }
 
 PD_BUILD_STATIC_OP(limit_thinking_content_length_v3)
@@ -162,7 +185,7 @@ PD_BUILD_STATIC_OP(limit_thinking_content_length_v3)
              "stop_flags",
              "eos_token_ids",
              "inject_token_ids"})
-    .Attrs({"think_end_id: int64_t"})
+    .Attrs({"think_end_id: int64_t", "splitwise_role_is_decode: bool"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
     .SetKernelFn(PD_KERNEL(LimitThinkingContentLengthV3));
