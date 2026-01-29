@@ -16,7 +16,6 @@
 
 import numpy as np
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.input.v1.text_processor import DataProcessor as TextProcessor
 from fastdeploy.utils import data_processor_logger
@@ -184,11 +183,7 @@ class QwenVLProcessor(TextProcessor):
         Returns:
             Request: Processed request with model inputs
         """
-        task = request.to_dict()
-        task["enable_thinking"] = kwargs.get("enable_thinking", False)
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
+        self.process_request_dict(request, max_model_len)
         return request
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
