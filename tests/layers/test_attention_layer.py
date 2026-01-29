@@ -479,6 +479,8 @@ class TestAttentionPerformance(unittest.TestCase):
         print(times[-5:])
 
     def test_flash_attn_v3_with_mask(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
         # Test parameters
         test_steps = 100
 

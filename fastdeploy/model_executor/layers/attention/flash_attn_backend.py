@@ -60,7 +60,9 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 
     try:
-        from flash_mask.cute.interface import flashmask_attention_v4
+        from flash_mask.cute.interface import (
+            flashmask_attention as flashmask_attention_v4,
+        )
     except ImportError:
         flashmask_attention_v4 = None
 else:

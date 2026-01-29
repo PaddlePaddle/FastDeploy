@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,12 +23,10 @@ from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
 )
 
 
-class TestAttentionPerformance(unittest.TestCase):
+class TestFlashAttnFunc(unittest.TestCase):
     def setUp(self):
         """
-        Set up the testing environment before each test.
-        This includes creating configurations, initializing the model,
-        and preparing a random state dictionary.
+        Set up the testing environment before each test..
         """
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
