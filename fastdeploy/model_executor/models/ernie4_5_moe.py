@@ -54,6 +54,7 @@ from fastdeploy.model_executor.models.model_base import (
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
+from fastdeploy.model_executor.utils import adapt_moe_gate_parameter_dtype
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -627,6 +628,25 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 if model_param_name not in params_dict.keys():
                     continue
                 param = params_dict[model_param_name]
+
+            if not envs.FD_MOE_GATE_WEIGHT_DTYPE:
+                param = adapt_moe_gate_parameter_dtype(self, model_param_name, param, loaded_weight, params_dict)
+            # Get weight loader from parameter and set weight
+            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+            sig = inspect.signature(weight_loader)
+            if "expert_id" in sig.parameters:
+                weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
+            else:
+                weight_loader(param, loaded_weight, shard_id)
+
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
+            process_weights_after_loading_fn(model_sublayer_name, param)
+        if getattr(self, "tie_word_embeddings", False):
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))

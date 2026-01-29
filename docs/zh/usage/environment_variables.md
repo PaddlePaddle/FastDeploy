@@ -231,7 +231,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Worker 进程响应等待时的健康检查超时时间（秒），默认 30 秒
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 
-    # moe层gate的权重类型，默认为float32
-    "FD_MOE_GATE_WEIGHT_DTYPE": lambda: os.getenv("FD_MOE_GATE_WEIGHT_DTYPE", "FLOAT32"),
+    # moe层gate的权重类型，可以设置float32,bfloat16,默认为空
+    "FD_MOE_GATE_WEIGHT_DTYPE": lambda: os.getenv("FD_MOE_GATE_WEIGHT_DTYPE", ""),
 }
 ```
