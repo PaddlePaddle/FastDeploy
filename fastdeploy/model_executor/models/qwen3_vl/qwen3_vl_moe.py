@@ -25,7 +25,11 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.graph_optimization.decorator import (
+    support_graph_optimization,
+)
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
+from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.model_base import ModelCategory, ModelRegistry
@@ -36,12 +40,10 @@ from fastdeploy.model_executor.models.qwen3moe import (
     Qwen3DecoderLayer as Qwen3MoeDecoderLayer,
 )
 
-# from fastdeploy.model_executor.graph_optimization.decorator import support_graph_optimization
 
-
-# @support_graph_optimization
-class Qwen3MoeVLModel(nn.Layer):
-    """Language backbone for Qwen3-VL."""
+@support_graph_optimization
+class Qwen3VLMoeModel(nn.Layer):
+    """Language backbone for Qwen3-VL-MOE."""
 
     def __init__(self, fd_config: FDConfig) -> None:
         super().__init__()
@@ -92,7 +94,6 @@ class Qwen3MoeVLModel(nn.Layer):
         self,
         input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
         deepstack_inputs: Optional[List[paddle.Tensor]] = None,
     ) -> paddle.Tensor:
@@ -118,9 +119,58 @@ class Qwen3MoeVLModel(nn.Layer):
 )
 class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
     def __init__(self, fd_config: FDConfig) -> None:
-        super().__init__(fd_config)
-        self.config = fd_config.model_config
-        self.model = Qwen3MoeVLModel(fd_config=fd_config)
+        # Skip one layer of super to prevent cudagraph from initializing Qwen3_VLModel
+        super(Qwen3VLForConditionalGeneration, self).__init__(fd_config)
+        self.visual = self._init_vision_model(fd_config.model_config)
+        self.model = Qwen3VLMoeModel(fd_config=fd_config)
+
+        # Persistent buffers for CUDA graphs.
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._buffer_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
+
+        # token ids (convenience aliases)
+        self.image_token_id = fd_config.model_config.image_token_id
+        self.video_token_id = fd_config.model_config.video_token_id
+        self.context_hidden_size = fd_config.model_config.hidden_size
+
+        vision_config = fd_config.model_config.vision_config
+        self.visual_hidden_size = vision_config.out_hidden_size
+        self.deepstack_visual_indexes = vision_config.deepstack_visual_indexes
+
+        self.use_deepstack = hasattr(vision_config, "deepstack_visual_indexes")
+        self.deepstack_num_level = len(vision_config.deepstack_visual_indexes) if self.use_deepstack else 0
+        self._deepstack_cache_capacity = fd_config.model_config.max_model_len if self.use_deepstack else 0
+        self._deepstack_cache_len = 0
+        self.deepstack_input_embeds: Optional[List[paddle.Tensor]] = None
+        if self.use_deepstack:
+            dtype = fd_config.model_config.dtype
+            # Persistent buffers for CUDA graphs.
+            # Note that the current multimodal model does not limit the number of tokens
+            # per batch to max_num_batched_tokens, so we use model_config.max_model_len here
+            buffer_seq_len = fd_config.model_config.max_model_len
+            # self.deepstack_input_embeds = [
+            #     paddle.zeros([fd_config.scheduler_config.max_num_batched_tokens, self.context_hidden_size], dtype=dtype)
+            #     for _ in range(self.deepstack_num_level)
+            # ]
+            self.deepstack_input_embeds = [
+                paddle.zeros([buffer_seq_len, self.context_hidden_size], dtype=dtype)
+                for _ in range(self.deepstack_num_level)
+            ]
+
+        self.visual_dim = vision_config.out_hidden_size
+        self.multiscale_dim = self.visual_dim * self.deepstack_num_level
+        self.ori_vocab_size = fd_config.model_config.ori_vocab_size
+        self.lm_head = ParallelLMHead(
+            fd_config=fd_config,
+            embedding_dim=fd_config.model_config.hidden_size,
+            num_embeddings=fd_config.model_config.vocab_size,
+            prefix="lm_head",
+        )
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
+        self.fd_config = fd_config
 
     @classmethod
     def name(cls) -> str:
@@ -177,6 +227,8 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
             ("visual", "model.visual", None),
+            ("qk_norm.q_norm", "q_norm", None),
+            ("qk_norm.k_norm", "k_norm", None),
         ]
 
         expert_params_mapping = self.get_expert_mapping()  # Not actually used
@@ -186,7 +238,7 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
             ("experts.up_gate_proj_weight", "experts.gate_up_proj", 0, "gate"),
             ("experts.down_proj_weight", "experts.down_proj", 0, "down"),
         ]
-        num_experts = self.config.num_experts
+        num_experts = self.fd_config.model_config.num_experts
         # params_name model.embed_tokens.embeddings.weight
         # weight_name model.language_model.embed_tokens.weight
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
@@ -249,9 +301,6 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
                             )
                         break
                     else:
-
-                        if weight_name not in loaded_weight_name:
-                            continue
                         model_param_name = loaded_weight_name.replace(weight_name, param_name)
                         if model_param_name not in params_dict:
                             continue

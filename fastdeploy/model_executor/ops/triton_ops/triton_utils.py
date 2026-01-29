@@ -30,6 +30,17 @@ link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
 
+def enable_compat_on_triton_kernel(triton_kernel):
+    class WrappedTritonKernel:
+        def __init__(self, kernel):
+            self.kernel = kernel
+
+        def __getitem__(self, index):
+            return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
+
+    return WrappedTritonKernel(triton_kernel)
+
+
 def SubstituteTemplate(template, values):
     """
     Substitute all variables in the given template string using the provided values dictionary.

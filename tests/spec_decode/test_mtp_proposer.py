@@ -34,6 +34,7 @@ class TestMTPProposer(unittest.TestCase):
         self.fd_config.model_config.rope_theta = 10000.0
         self.fd_config.model_config.enable_logprob = False
         self.fd_config.model_config.max_model_len = 2048
+        self.fd_config.model_config.partial_rotary_factor = 1.0
         self.fd_config.speculative_config = SpeculativeConfig({})
         self.fd_config.speculative_config.method = "mtp"
         self.fd_config.speculative_config.num_speculative_tokens = 1
@@ -69,7 +70,6 @@ class TestMTPProposer(unittest.TestCase):
             "prompt_lens": paddle.zeros([2, 1], dtype="int64"),
             "step_idx": paddle.zeros([2, 1], dtype="int64"),
             "stop_flags": paddle.zeros([2, 1], dtype="bool"),
-            "stop_nums": paddle.zeros([2, 1], dtype="int32"),
             "pre_ids": paddle.zeros([2, 2048], dtype="int64"),
             "output_cum_offsets": paddle.zeros([2], dtype="int32"),
             "output_padding_offset": paddle.zeros([2], dtype="int32"),
@@ -100,6 +100,7 @@ class TestMTPProposer(unittest.TestCase):
             "max_dec_len": paddle.ones([2, 1], dtype="int64") * 512,
             "min_dec_len": paddle.zeros([2, 1], dtype="int64"),
             "bad_tokens": paddle.zeros([2], dtype="int64"),
+            "bad_tokens_len": paddle.ones([2], dtype="int32"),
             "draft_tokens": paddle.zeros([2, 2], dtype="int64"),
             "accept_tokens": paddle.zeros([2, 2], dtype="int64"),
             "accept_num": paddle.ones([2], dtype="int32"),
