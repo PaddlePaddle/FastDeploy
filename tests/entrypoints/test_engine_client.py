@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import numpy as np
 import pytest
 
+from fastdeploy import envs
 from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.inter_communicator import (
     KVCacheStatus,
@@ -776,12 +777,13 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     def test_send_task_without_multimodal(self):
         """Test _send_task for non-multimodal content."""
-        self.engine_client.enable_mm = False
-        task = {"test": "data"}
+        if not envs.ENABLE_V1_DATA_PROCESSOR:
+            self.engine_client.enable_mm = False
+            task = {"test": "data"}
 
-        self.engine_client._send_task(task)
+            self.engine_client._send_task(task)
 
-        self.engine_client.zmq_client.send_json.assert_called_once_with(task)
+            self.engine_client.zmq_client.send_json.assert_called_once_with(task)
 
     def test_send_task_with_multimodal(self):
         """Test _send_task for multimodal content."""

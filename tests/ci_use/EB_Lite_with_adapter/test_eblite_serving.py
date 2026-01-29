@@ -138,10 +138,10 @@ def kill_process_on_port(port: int):
         pass
 
     # Method 3: Use fuser if available
-    try:
-        subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-        pass
+    # try:
+    #     subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
+    # except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+    #     pass
 
 
 def clean_ports():
@@ -178,7 +178,9 @@ def setup_and_run_server():
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
         model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
+    model_path = "/root/paddlejob/models/ERNIE-4.5-21B-A3B-Paddle"
 
+    model_path = "/root/paddlejob/models/ERNIE-4.5-21B-A3B-Paddle/"
     log_path = "server.log"
     cmd = [
         sys.executable,
@@ -244,7 +246,7 @@ def setup_and_run_server():
 
 def test_request_and_response(zmq_req_client):
     prompt_token_ids = [5300, 93956, 55791]
-    req_id = "test"
+    req_id = "test_0"
     request = {
         "req_id": req_id,
         "request_id": req_id,

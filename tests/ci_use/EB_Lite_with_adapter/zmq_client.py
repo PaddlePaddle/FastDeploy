@@ -15,10 +15,13 @@
 import threading
 import time
 import uuid
+from multiprocessing.reduction import ForkingPickler
 from threading import Event
 
 import msgpack
 import zmq
+
+from fastdeploy.utils import envs
 
 
 class LLMReqClient:
@@ -41,7 +44,12 @@ class LLMReqClient:
         self.response_socket_lock = threading.Lock()
 
     def send_request(self, req_data):
-        self.send_req_client.send_json(req_data)
+        if not envs.ENABLE_V1_DATA_PROCESSOR:
+            self.send_req_client.send_json(req_data)
+        else:
+            envelope = {"__meta": {"send_ts": time.perf_counter()}, "data": req_data}
+            serialized_data = ForkingPickler.dumps(envelope)
+            self.send_req_client.send(serialized_data, copy=False, flags=0)
 
     def request_result(self, req_id):
         with self.response_socket_lock:

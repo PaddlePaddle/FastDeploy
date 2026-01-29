@@ -57,12 +57,14 @@ class OpenAIServingReward(ZmqOpenAIServing):
             request_obj = None
             if hasattr(request, "to_pooling_params"):
                 pooling_params: PoolingParams = request.to_pooling_params()
-                pooling_params.verify("reward", self.cfg.model_config)
+                pooling_params.verify("embed", self.cfg.model_config)
                 request_obj = Request.from_generic_request(
                     req=request, request_id=ctx.request_id, pooling_params=pooling_params
                 )
-                request_obj.metrics.arrival_time = time.time()
-                super()._process_chat_template_kwargs(request_obj)
+            else:
+                request_obj = Request.from_generic_request(req=request, request_id=ctx.request_id)
+            request_obj.metrics.arrival_time = time.time()
+            super()._process_chat_template_kwargs(request_obj)
             return request_obj
 
     @override

@@ -542,7 +542,7 @@ class AsyncLLM(EngineServiceClient):
                             )
                         else:
                             processed_output = response_item
-                        if not envs.ENABLE_V1_DATA_PROCESSOR:
+                        if envs.ENABLE_V1_DATA_PROCESSOR:
                             processed_output = RequestOutput.from_dict(processed_output)
                         # Enrich outputs with prompt metadata on the first packet
                         if req_id:

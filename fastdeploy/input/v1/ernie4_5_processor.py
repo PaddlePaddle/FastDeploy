@@ -123,16 +123,17 @@ class Ernie4_5Processor(BaseDataProcessor):
                         f"request_ids: {request.request_id}, prompt: {prompt}, tokens: {tokens}, token_ids: {token_ids}"
                     )
             elif request.messages is not None:
-                task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
+                if not chat_template_kwargs:
+                    chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task or task[k] is None:
-                                task[k] = v
+                            if not getattr(request, k, None):
+                                setattr(request, k, v)
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
+                request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 

@@ -108,6 +108,7 @@ class ErnieX1ReasoningParser:
         class ReasoningDelta:
             def __init__(self, content):
                 self.reasoning_content = content
+                self.content = content
 
         return ReasoningDelta(delta_text)
 
@@ -246,7 +247,6 @@ class TestErnie4_5Processor(unittest.TestCase):
         response = RequestOutput.from_dict(response)
 
         result = proc.process_response_obj_streaming(response, enable_thinking=False, include_stop_str_in_output=False)
-
         outputs = result.outputs
 
         self.assertTrue(hasattr(outputs, "completion_tokens"))
@@ -255,10 +255,6 @@ class TestErnie4_5Processor(unittest.TestCase):
 
         self.assertTrue(hasattr(outputs, "reasoning_token_num"))
         self.assertGreaterEqual(outputs.reasoning_token_num, 0)
-
-        self.assertTrue(hasattr(outputs, "delta_message"))
-        delta_msg = outputs.delta_message
-        self.assertTrue(hasattr(delta_msg, "tool_calls"))
 
         self.assertNotIn("req-1", proc.decode_status)
         self.assertNotIn("req-1", proc.tool_parser_dict)

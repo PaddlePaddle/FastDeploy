@@ -147,10 +147,12 @@ class OpenAIServingChat:
             try:
                 if not envs.ENABLE_V1_DATA_PROCESSOR:
                     current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+                    if "chat_template" not in current_req_dict:
+                        current_req_dict["chat_template"] = self.chat_template
                 else:
                     current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
-                if "chat_template" not in current_req_dict:
-                    current_req_dict["chat_template"] = self.chat_template
+                    if current_req_dict.chat_template is None:
+                        current_req_dict.chat_template = self.chat_template
                 current_req_dict["metrics"]["arrival_time"] = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)

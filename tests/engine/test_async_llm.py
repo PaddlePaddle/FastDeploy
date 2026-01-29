@@ -22,6 +22,7 @@ import weakref
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.utils import EngineError
 
@@ -319,13 +320,12 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
-
+            response = RequestOutput.from_dict(response_dict)
             # Process the output
-            result = processor._process_output(response_dict)
-
+            result = processor._process_output(response)
             # Verify text was set to empty string on error
-            self.assertIn("outputs", result)
-            self.assertEqual(result["outputs"].get("text", ""), "")
+            self.assertTrue(hasattr(result, "outputs"))
+            self.assertEqual(result.outputs.text, None)
 
             return True
 
@@ -356,13 +356,13 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 },
                 "metrics": {"arrival_time": 0.0},
             }
-
+            response = RequestOutput.from_dict(response_dict)
             # Process the output
-            result = processor._process_output(response_dict)
+            result = processor._process_output(response)
 
             # Verify text was set to empty string when processor returns None
-            self.assertIn("outputs", result)
-            self.assertEqual(result["outputs"].get("text", ""), "")
+            self.assertTrue(hasattr(result, "outputs"))
+            self.assertEqual(result.outputs.text, None)
 
             return True
 
@@ -659,13 +659,11 @@ class TestAsyncLLMEngine(unittest.TestCase):
             metrics = RequestMetrics(arrival_time=0.0)
             completion = CompletionOutput(index=0, send_idx=0, token_ids=[], text="")
             ro = RequestOutput(request_id="cmpl-test_0", outputs=completion, finished=True, metrics=metrics)
-            ro_dict = ro.to_dict()
 
             engine = self.engine
-
             # Mock connection_manager and response queue
             mock_queue = AsyncMock()
-            mock_queue.get.return_value = [ro_dict]
+            mock_queue.get.return_value = [ro]
             mock_dealer = AsyncMock()
             mock_cm = AsyncMock()
             mock_cm.get_connection.return_value = (mock_dealer, mock_queue)
@@ -695,7 +693,6 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 # We should get exactly one finished output and no exception
                 self.assertEqual(len(outputs), 1)
                 self.assertTrue(outputs[0].finished)
-
             return True
 
         result = self.run_async_test(_test())

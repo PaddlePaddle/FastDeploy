@@ -17,10 +17,11 @@
 import asyncio
 import unittest
 from typing import List
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import paddle
 
+from fastdeploy.engine.request import Request
 from fastdeploy.entrypoints.openai.serving_completion import (
     CompletionRequest,
     OpenAIServingCompletion,
@@ -1236,7 +1237,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
 
         # Create mock request
-        mock_request = Mock()
+        mock_request = MagicMock()
         mock_request.prompt = "Hello, world!"
         mock_request.prompt_token_ids = None
         mock_request.stream = False
@@ -1260,7 +1261,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.format_and_add_data.side_effect = asyncio.CancelledError("Test cancellation")
 
         # Call method and expect CancelledError to be handled
-        result = await serving_completion.create_completion(mock_request)
+        with patch.object(Request, "from_generic_request") as mock_method:
+            mock_method.return_value = {"metrics": {}}
+            result = await serving_completion.create_completion(mock_request)
 
         # Verify that error was handled properly
         self.assertIsNotNone(result)
