@@ -17,7 +17,7 @@
 import asyncio
 import unittest
 from typing import List
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import paddle
 
@@ -1237,7 +1237,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         serving_completion = OpenAIServingCompletion(mock_engine_client, None, "pid", None, 360)
 
         # Create mock request
-        mock_request = MagicMock()
+        mock_request = Mock()
         mock_request.prompt = "Hello, world!"
         mock_request.prompt_token_ids = None
         mock_request.stream = False
