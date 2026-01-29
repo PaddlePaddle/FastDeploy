@@ -1012,7 +1012,15 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
+                    if isinstance(feature, paddle.Tensor):
+                        feature_info = f"type=paddle.Tensor, shape={feature.shape}, dtype={feature.dtype}"
+                    elif isinstance(feature, np.ndarray):
+                        feature_info = f"type=np.ndarray, shape={feature.shape}, dtype={feature.dtype}"
+                    else:
+                        feature_info = f"type={type(feature).__name__}"
+
+                    llm_logger.info(f"request {request.request_id} async download feature success: {feature_info}")
+
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
