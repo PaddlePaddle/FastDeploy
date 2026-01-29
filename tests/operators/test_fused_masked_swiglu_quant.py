@@ -173,22 +173,23 @@ def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size, use_
     return quanted_x, quanted_scale
 
 
-def run_fused(x, token_nums, block_size):
+def run_fused(x, token_nums, block_size, use_ue8m0=False):
     import fastdeploy.model_executor.ops.gpu as ops
 
-    return ops.fused_mask_swiglu_fp8_quant(
-        x,
-        token_nums,
-        block_size,
-    )
+    return ops.fused_mask_swiglu_fp8_quant(x, token_nums, block_size, use_ue8m0)
 
 
-def run_separate(x, token_nums, block_size, use_ue8m0):
+def run_separate(x, token_nums, block_size, use_ue8m0=False):
     """Run separate operations (FastDeploy non-fused kernels)"""
     from fastdeploy.model_executor.ops.gpu import group_swiglu_with_masked
 
     swiglu = group_swiglu_with_masked(x, token_nums)
-    q, scale = masked_per_token_quant_ref(swiglu, token_nums, block_size, use_ue8m0)
+    if use_ue8m0:
+        q, scale = masked_per_token_quant_ref(swiglu, token_nums, block_size, use_ue8m0)
+    else:
+        from fastdeploy.model_executor.ops.gpu import masked_per_token_quant
+
+        q, scale = masked_per_token_quant(swiglu, token_nums, block_size)
     return q, scale
 
 
@@ -233,18 +234,18 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
             [self.group_num, self.group_size, self.hidden_dim * 2],
             dtype="bfloat16",
         )
-        self.token_nums = paddle.to_tensor([200, 2000, 2000, 200, 200, 2000, 200, 2000, 200, 2000], dtype="int32")
+        self.token_nums = paddle.to_tensor([50, 51, 50, 50, 50, 50, 50, 49, 51, 51], dtype="int32")
 
-    def fused_vs_separate_exact_match(self):
+    def fused_vs_separate_exact_match(self, use_ue8m0=False):
         """
         Test fused kernel vs separate operations - should be exact match
         This compares FastDeploy's fused kernel vs FastDeploy's separate kernels
         """
         # Run separate operations
-        q_ref, s_ref = run_separate(self.x, self.token_nums, self.block_size)
+        q_ref, s_ref = run_separate(self.x, self.token_nums, self.block_size, use_ue8m0)
 
         # Run fused kernel
-        q_fused, s_fused = run_fused(self.x, self.token_nums, self.block_size)
+        q_fused, s_fused = run_fused(self.x, self.token_nums, self.block_size, use_ue8m0)
 
         def run_sep():
             run_separate(self.x, self.token_nums, self.block_size)
@@ -288,7 +289,8 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
         )
 
     def test_fused(self):
-        self.fused_vs_separate_exact_match()
+        self.fused_vs_separate_exact_match(use_ue8m0=True)
+        self.fused_vs_separate_exact_match(use_ue8m0=False)
 
 
 if __name__ == "__main__":
