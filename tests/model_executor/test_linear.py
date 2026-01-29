@@ -219,6 +219,15 @@ def test_merged_and_column_weight_paths():
             return paddle.to_tensor(self._array[item])
 
     layer_mc.weight_loader(param_shape, _Wrapper(np.ones((4, 4), dtype="float32")), loaded_shard_id="up")
+    layer_merge_t = MergedReplicatedLinear.__new__(MergedReplicatedLinear)
+    layer_merge_t.__dict__.update(fd_config=make_fd_config(model_format="paddle"), output_sizes=[1, 1])
+    param_t = TinyParam(paddle.zeros([2, 2], dtype="float32"), initialized=False, with_track=True)
+    param_t.weight_need_transpose = True
+    param_up = TinyParam(paddle.zeros([2, 2], dtype="float32"), initialized=True, with_track=True)
+    param_up.weight_need_transpose = True
+    layer_merge_t.weight_loader(param_t, np.arange(4, dtype="float32").reshape(2, 2), loaded_shard_id=None)
+    layer_merge_t.weight_loader(param_up, np.arange(2, dtype="float32").reshape(1, 2), loaded_shard_id="up")
+    assert param_t.tensor_track.calls and param_up.tensor_track.calls
     layer_bias = MergedColumnParallelLinear(
         fd_config=make_fd_config(), prefix="mlp.up_gate_proj", input_size=4, output_size=4, with_bias=True
     )
@@ -230,6 +239,18 @@ def test_merged_and_column_weight_paths():
         }
     )
     np.testing.assert_allclose(layer_bias.bias.numpy(), np.ones((4,), dtype="float32"))
+
+
+def test_column_parallel_load_state_dict_weight_key(monkeypatch):
+    layer = MergedColumnParallelLinear.__new__(MergedColumnParallelLinear)
+    layer.weight_key = "proj.weight"
+    layer.with_bias = False
+    layer.is_quantized = False
+    layer.bias_key = "proj.bias"
+    monkeypatch.setattr(LinearBase, "load_state_dict", lambda self, sd: None)
+    state_dict = {"proj.weight": np.ones((2, 2), dtype="float32")}
+    MergedColumnParallelLinear.load_state_dict(layer, state_dict)
+    assert isinstance(state_dict["proj.weight"], paddle.Tensor)
 
 
 def test_qkv_paths():
@@ -282,6 +303,12 @@ def test_qkv_paths():
         }
     )
     np.testing.assert_allclose(layer_bias.bias.numpy(), np.ones((8,), dtype="float32"))
+    layer_fused = QKVParallelLinear.__new__(QKVParallelLinear)
+    layer_fused.weight_key = f"{prefix}.weight"
+    called = []
+    layer_fused.quant_method = SimpleNamespace(process_loaded_weights=lambda *_: called.append(True))
+    layer_fused.load_weight({f"{prefix}.weight": np.ones((2, 2), dtype="float32")})
+    assert called
 
 
 def test_row_parallel_paths(monkeypatch):
@@ -315,6 +342,8 @@ def test_row_parallel_paths(monkeypatch):
     monkeypatch.setattr(paddle.distributed, "alltoall", lambda out, x, group=None: out.set_value(x))
     out_decode = layer_decode.all2all_transpose(paddle.ones([1, 2], dtype="float32"))
     assert out_decode.shape[0] == 1
+    out_decode_full = layer_decode.all2all_transpose(paddle.ones([2, 2], dtype="float32"))
+    assert out_decode_full.shape[0] == 1
     monkeypatch.setattr(current_platform, "is_xpu", lambda: True)
     layer_prefill = RowParallelLinear(
         fd_config=make_fd_config(tensor_parallel_size=2, splitwise_role="prefill"),
@@ -326,6 +355,15 @@ def test_row_parallel_paths(monkeypatch):
     )
     out_prefill = layer_prefill.all2all_transpose(paddle.ones([1, 1], dtype="float32"))
     assert out_prefill.shape == [1, 2]
+    layer_bias = RowParallelLinear(
+        fd_config=make_fd_config(tensor_parallel_size=2, splitwise_role="prefill"),
+        prefix="row",
+        input_size=4,
+        output_size=2,
+        with_bias=True,
+        layer_id=-1,
+    )
+    assert getattr(layer_bias.bias, "tp_row_bias", False) is True
 
 
 def test_kvbatch_paths():
@@ -354,6 +392,8 @@ def test_kvbatch_paths():
     layer_v1.weight_dtype = "float64"
     layer_v1.process_weights_after_loading()
     assert layer_v1.kv_b_proj is None
+    layer_v1.fd_config.load_config.dynamic_load_weight = True
+    layer_v1.process_weights_after_loading()
     x_k = paddle.ones([2, 1, 1], dtype="float64")
     x_v = paddle.ones([2, 1, 2], dtype="float64")
     out_k = layer_v1.forward_k_b(x_k)
@@ -364,3 +404,21 @@ def test_kvbatch_paths():
     layer_v1.forward(x_v, proj_type="v")
     with pytest.raises(ValueError):
         layer_v1.forward(x_k, proj_type="bad")
+
+    def _make_err_layer():
+        return KVBatchLinear(
+            fd_config=make_fd_config(load_choices="default_v1"),
+            kv_b_proj=paddle.nn.Linear(2, 4, bias_attr=False),
+            prefix="kv_b_proj",
+            kv_lora_rank=2,
+            num_attention_heads=2,
+            qk_nope_head_dim=1,
+            v_head_dim=None,
+        )
+
+    for fn in (
+        lambda obj: obj.process_weights_after_loading(),
+        lambda obj: obj.load_state_dict({"kv_b_proj.weight": paddle.arange(8, dtype="float32").reshape([2, 4])}),
+    ):
+        with pytest.raises(ValueError, match="v_head_dim"):
+            fn(_make_err_layer())
