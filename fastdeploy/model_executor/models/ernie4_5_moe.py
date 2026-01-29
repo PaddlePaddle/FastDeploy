@@ -645,23 +645,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
             )
 
-            # Get weight loader from parameter and set weight
-            weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-            sig = inspect.signature(weight_loader)
-            if "expert_id" in sig.parameters:
-                weight_loader(param, loaded_weight, expert_id=expert_id, shard_id=shard_id)
-            else:
-                weight_loader(param, loaded_weight, shard_id)
-
-            model_sublayer_name = re.sub(
-                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
-            )
-            process_weights_after_loading_fn(model_sublayer_name, param)
-        if getattr(self, "tie_word_embeddings", False):
-            self.lm_head.linear.weight.set_value(
-                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
-            )
-
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
         logits = logits.astype(paddle.float32)
