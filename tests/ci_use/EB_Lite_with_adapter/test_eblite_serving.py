@@ -178,9 +178,6 @@ def setup_and_run_server():
         model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
     else:
         model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
-    model_path = "/root/paddlejob/models/ERNIE-4.5-21B-A3B-Paddle"
-
-    model_path = "/root/paddlejob/models/ERNIE-4.5-21B-A3B-Paddle/"
     log_path = "server.log"
     cmd = [
         sys.executable,
