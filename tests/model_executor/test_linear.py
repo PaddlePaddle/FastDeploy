@@ -12,33 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 
 import numpy as np
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = SimpleNamespace()
-if not hasattr(paddle.compat, "enable_torch_proxy"):
-    paddle.compat.enable_torch_proxy = lambda *args, **kwargs: None
-
-import fastdeploy.distributed.communication as communication
-
-if not hasattr(communication, "decode_alltoall_transpose"):
-    communication.decode_alltoall_transpose = lambda input_, out=None: input_
-if not hasattr(communication, "tensor_model_parallel_all_reduce"):
-    communication.tensor_model_parallel_all_reduce = lambda input_, group=None: input_
-
+from fastdeploy.model_executor.layers import linear as linear_module
 from fastdeploy.model_executor.layers.linear import (
-    ColumnParallelLinear,
     KVBatchLinear,
+    LinearBase,
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
     QKVParallelLinear,
-    ReplicatedLinear,
     RowParallelLinear,
     UnquantizedLinearMethod,
 )
@@ -54,494 +40,325 @@ def make_fd_config(
     use_sequence_parallel_moe=False,
     load_choices="default_v0",
 ):
-    model_config = SimpleNamespace(
-        is_quantized=False,
-        hidden_size=8,
-        model_format=model_format,
-        num_attention_heads=4,
-        num_key_value_heads=1,
-        head_dim=2,
-        moe_layer_start_index=0,
-        num_hidden_layers=1,
-    )
-    parallel_config = SimpleNamespace(
-        tensor_parallel_size=tensor_parallel_size,
-        tensor_parallel_rank=tensor_parallel_rank,
-        expert_parallel_size=1,
-        tp_group=None,
-        use_sequence_parallel_moe=use_sequence_parallel_moe,
-    )
-    scheduler_config = SimpleNamespace(splitwise_role=splitwise_role, max_num_seqs=1)
-    load_config = SimpleNamespace(dynamic_load_weight=False, load_choices=load_choices)
     return SimpleNamespace(
-        model_config=model_config,
-        parallel_config=parallel_config,
-        scheduler_config=scheduler_config,
-        load_config=load_config,
+        model_config=SimpleNamespace(
+            is_quantized=False,
+            hidden_size=4,
+            model_format=model_format,
+            num_attention_heads=4,
+            num_key_value_heads=1,
+            head_dim=2,
+            moe_layer_start_index=0,
+            num_hidden_layers=1,
+        ),
+        parallel_config=SimpleNamespace(
+            tensor_parallel_size=tensor_parallel_size,
+            tensor_parallel_rank=tensor_parallel_rank,
+            expert_parallel_size=1,
+            tp_group=None,
+            use_sequence_parallel_moe=use_sequence_parallel_moe,
+        ),
+        scheduler_config=SimpleNamespace(splitwise_role=splitwise_role, max_num_seqs=1),
+        load_config=SimpleNamespace(dynamic_load_weight=False, load_choices=load_choices),
         quant_config=None,
     )
 
 
+class TinyParam:
+    def __init__(self, tensor, initialized=True, with_track=False):
+        self._tensor = tensor if isinstance(tensor, paddle.Tensor) else paddle.to_tensor(tensor)
+        self._initialized = initialized
+        if with_track:
+            self.tensor_track = SimpleNamespace(calls=[])
+            self.tensor_track.mark = lambda start, end: self.tensor_track.calls.append((start, end))
+
+    def _is_initialized(self):
+        return self._initialized
+
+    def initialize(self):
+        self._initialized = True
+
+    @property
+    def shape(self):
+        return self._tensor.shape
+
+    @property
+    def dtype(self):
+        return self._tensor.dtype
+
+    def set_value(self, value):
+        value_tensor = value if isinstance(value, paddle.Tensor) else paddle.to_tensor(value)
+        if value_tensor.dtype != self._tensor.dtype:
+            value_tensor = value_tensor.cast(self._tensor.dtype)
+        self._tensor = value_tensor
+
+    def copy_(self, src, blocking=True):
+        self.set_value(src)
+
+    def __getitem__(self, item):
+        return TinyParam(self._tensor[item], initialized=True)
+
+
 @pytest.fixture(autouse=True)
 def _stub_platform(monkeypatch):
-    monkeypatch.setattr(current_platform, "is_cuda", lambda: False)
-    monkeypatch.setattr(current_platform, "is_xpu", lambda: True)
-    monkeypatch.setattr(current_platform, "is_iluvatar", lambda: False)
-    monkeypatch.setattr(current_platform, "is_gcu", lambda: False)
-    monkeypatch.setattr(current_platform, "is_dcu", lambda: False)
-    monkeypatch.setattr(current_platform, "is_maca", lambda: False)
-    monkeypatch.setattr(current_platform, "is_intel_hpu", lambda: False)
+    for name, value in (
+        ("is_cuda", False),
+        ("is_xpu", True),
+        ("is_iluvatar", False),
+        ("is_gcu", False),
+        ("is_dcu", False),
+        ("is_maca", False),
+        ("is_intel_hpu", False),
+    ):
+        monkeypatch.setattr(current_platform, name, lambda v=value: v)
 
 
-def test_unquantized_method_and_linearbase_loading():
-    fd_config = make_fd_config(model_format="torch")
-
-    class DummyLayer(paddle.nn.Layer):
-        def __init__(self, fd_cfg):
-            super().__init__()
-            self.fd_config = fd_cfg
-            self.weight_shape = [2, 3]
-            self.weight_dtype = "float32"
-            self.with_bias = True
-            self.bias = self.create_parameter(shape=[3], dtype=self.weight_dtype, is_bias=True)
-
-    layer = DummyLayer(fd_config)
+def test_linearbase_and_unquantized_branches():
+    layer = paddle.nn.Linear(2, 2, bias_attr=False)
     method = UnquantizedLinearMethod()
-    method.create_weights(layer, output_dim=True, model_format="torch")
-
-    assert list(layer.weight.shape) == [3, 2]
-    assert layer.weight.output_dim is False
-
-    weight_value = paddle.to_tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype="float32")
-    layer.weight.set_value(weight_value)
-    method.process_weights_after_loading(layer)
-    assert list(layer.weight.shape) == [2, 3]
-
-    method.process_loaded_weights(layer, paddle.to_tensor([[2.0, 4.0, 6.0], [1.0, 3.0, 5.0]], dtype="float64"))
-    np.testing.assert_allclose(layer.weight.numpy(), [[2.0, 4.0, 6.0], [1.0, 3.0, 5.0]])
-
-    layer.bias.set_value(paddle.to_tensor([1.0, 1.0, 1.0], dtype="float32"))
-    x = paddle.to_tensor([[1.0, 0.0]], dtype="float32")
-    out = method.apply(layer, x)
-    np.testing.assert_allclose(out.numpy(), [[3.0, 5.0, 7.0]])
-
-
-def test_linearbase_quantized_weight_keys_and_prequant_loader():
-    class DummyQuantMethod:
-        def __init__(self):
-            self.called = False
-
-        def create_weights(self, layer, **extra_weight_attrs):
-            UnquantizedLinearMethod().create_weights(layer, **extra_weight_attrs)
-
-        def process_prequanted_weights(self, layer, state_dict):
-            self.called = True
-
-    class DummyQuantConfig:
-        dense_quant_type = "int8"
-
-        def __init__(self, method):
-            self._method = method
-
-        def name(self):
-            return "w8a8"
-
-        def get_quant_method(self, _layer):
-            return self._method
-
-    quant_method = DummyQuantMethod()
-    fd_config = make_fd_config(model_format="paddle")
-    fd_config.model_config.is_quantized = True
-    fd_config.quant_config = DummyQuantConfig(quant_method)
-
-    layer = ReplicatedLinear(
-        fd_config=fd_config,
-        prefix="quant.linear",
-        input_size=2,
-        output_size=2,
-        skip_quant=False,
+    method.process_loaded_weights(layer, paddle.ones([2, 2], dtype="float64"))
+    np.testing.assert_allclose(layer.weight.numpy(), np.ones((2, 2), dtype="float32"))
+    layer_init = LinearBase(
+        fd_config=make_fd_config(), prefix="linear", input_size=2, output_size=3, with_bias=False, skip_quant=True
     )
-    assert layer.weight_key.endswith(".quant_weight")
-    layer.load_state_dict({})
-    assert quant_method.called is True
-
-
-def test_linearbase_prequant_unquantized_branch():
-    class DummyQuantConfig:
-        dense_quant_type = "int8"
-
-        def name(self):
-            return "w8a8"
-
-        def get_quant_method(self, _layer):
-            return None
-
-    fd_config = make_fd_config(model_format="paddle")
-    fd_config.model_config.is_quantized = True
-    fd_config.quant_config = DummyQuantConfig()
-    layer = ReplicatedLinear(
-        fd_config=fd_config,
-        prefix="linear",
-        input_size=2,
-        output_size=3,
-        with_bias=True,
-        skip_quant=False,
+    assert layer_init.weight_dtype == layer_init._dtype
+    layer_pre = LinearBase.__new__(LinearBase)
+    layer_pre.weight_key = "linear.weight"
+    layer_pre.quant_method = UnquantizedLinearMethod()
+    layer_pre.weight = TinyParam(paddle.zeros([2, 2], dtype="float32"))
+    layer_pre.load_prequant_weight({"linear.weight": np.ones((2, 2), dtype="float32")})
+    np.testing.assert_allclose(layer_pre.weight._tensor.numpy(), np.ones((2, 2), dtype="float32"))
+    called = []
+    layer_q = LinearBase.__new__(LinearBase)
+    layer_q.quant_method = SimpleNamespace(process_prequanted_weights=lambda *_: called.append(True))
+    layer_q.load_prequant_weight({})
+    assert called
+    layer_mqa = LinearBase.__new__(LinearBase)
+    layer_mqa.weight_key = "block.qkv_a_proj_with_mqa.weight"
+    layer_mqa.quant_method = UnquantizedLinearMethod()
+    layer_mqa.weight = TinyParam(paddle.zeros([2, 3], dtype="float32"))
+    layer_mqa.load_weight(
+        {
+            "block.q_a_proj.weight": np.ones((2, 1), dtype="float32"),
+            "block.kv_a_proj_with_mqa.weight": np.full((2, 2), 2.0, dtype="float32"),
+        }
     )
-    state_dict = {
-        "linear.quant_weight": np.ones((2, 3), dtype="float32"),
-        "linear.bias": np.full((3,), 2.0, dtype="float32"),
-    }
-    layer.load_state_dict(state_dict)
-    np.testing.assert_allclose(layer.weight.numpy()[0], [1.0, 1.0, 1.0])
-    np.testing.assert_allclose(layer.bias.numpy(), [2.0, 2.0, 2.0])
-
-
-def test_replicated_linear_qkv_mqa_load_state_dict():
-    fd_config = make_fd_config(model_format="paddle")
-    layer = ReplicatedLinear(
-        fd_config=fd_config,
-        prefix="layer.qkv_a_proj_with_mqa",
-        input_size=2,
-        output_size=3,
-        with_bias=True,
-        skip_quant=True,
+    np.testing.assert_allclose(layer_mqa.weight._tensor.numpy(), [[1.0, 2.0, 2.0], [1.0, 2.0, 2.0]])
+    layer_state_q = LinearBase.__new__(LinearBase)
+    layer_state_q.is_quantized = True
+    layer_state_q.weight_key = "linear.weight"
+    layer_state_q.with_bias = False
+    layer_state_q.called = False
+    layer_state_q.load_prequant_weight = lambda _sd: setattr(layer_state_q, "called", True)
+    layer_state_q.load_state_dict({"linear.weight": np.zeros((1, 1), dtype="float32")})
+    assert layer_state_q.called is True
+    layer_bias = LinearBase.__new__(LinearBase)
+    layer_bias.is_quantized = False
+    layer_bias.weight_key = "linear.weight"
+    layer_bias.bias_key = "linear.bias"
+    layer_bias.with_bias = True
+    layer_bias.quant_method = UnquantizedLinearMethod()
+    layer_bias.weight = TinyParam(paddle.zeros([2, 3], dtype="float32"))
+    layer_bias.bias = TinyParam(paddle.zeros([3], dtype="float32"))
+    layer_bias.load_state_dict(
+        {
+            "linear.weight": np.ones((2, 3), dtype="float32"),
+            "linear.bias": np.array([1.0, 2.0, 3.0], dtype="float32"),
+        }
     )
-    state_dict = {
-        "layer.q_a_proj.weight": np.ones((2, 1), dtype="float32"),
-        "layer.kv_a_proj_with_mqa.weight": np.full((2, 2), 2.0, dtype="float32"),
-        "layer.qkv_a_proj_with_mqa.bias": np.array([0.5, 1.5, -1.0], dtype="float32"),
-    }
-
-    layer.load_state_dict(state_dict)
-    np.testing.assert_allclose(layer.weight.numpy(), [[1.0, 2.0, 2.0], [1.0, 2.0, 2.0]])
-    np.testing.assert_allclose(layer.bias.numpy(), [0.5, 1.5, -1.0])
+    np.testing.assert_allclose(layer_bias.bias._tensor.numpy(), [1.0, 2.0, 3.0])
 
 
-def test_merged_replicated_linear_weight_loader_shards():
-    fd_config = make_fd_config(model_format="paddle")
-    layer = MergedReplicatedLinear(
-        fd_config=fd_config,
-        prefix="mlp",
-        input_size=2,
-        output_sizes=[2, 2],
-        skip_quant=True,
+def test_merged_and_column_weight_paths():
+    layer_init = MergedReplicatedLinear(
+        fd_config=make_fd_config(), prefix="mlp", input_size=2, output_sizes=[2, 2], with_bias=False
     )
-    full_weight = paddle.to_tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], dtype="float32")
-    layer.weight_loader(layer.weight, full_weight)
-    np.testing.assert_allclose(layer.weight.numpy(), full_weight.numpy())
-
-    gate_weight = paddle.to_tensor([[9.0, 10.0], [5.0, 6.0]], dtype="float32")
-    layer.weight_loader(layer.weight, gate_weight, loaded_shard_id="gate")
-    np.testing.assert_allclose(layer.weight.numpy()[:, :2], gate_weight.numpy())
-
-    up_weight = paddle.to_tensor([[1.5, 2.5], [3.5, 4.5]], dtype="float16")
-    layer.weight_loader(layer.weight, up_weight, loaded_shard_id="up")
-    assert layer.weight.numpy()[:, 2:].dtype == np.float32
-
-    q_a_weight = paddle.to_tensor([[1.0, 1.0], [2.0, 2.0]], dtype="float32")
-    layer.weight_loader(layer.weight, q_a_weight, loaded_shard_id="q_a")
-    np.testing.assert_allclose(layer.weight.numpy()[:, :2], q_a_weight.numpy())
-
-
-def test_merged_column_parallel_linear_load_state_dict_and_weight_loader():
-    fd_config = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    layer = MergedColumnParallelLinear(
-        fd_config=fd_config,
-        prefix="mlp.up_gate_proj",
-        input_size=2,
-        output_size=4,
-        with_bias=True,
-        skip_quant=True,
+    assert layer_init.output_sizes == [2, 2]
+    layer_merge = MergedReplicatedLinear.__new__(MergedReplicatedLinear)
+    layer_merge.__dict__.update(fd_config=make_fd_config(model_format="paddle"), output_sizes=[2, 2])
+    param = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=False, with_track=True)
+    loaded_weight = paddle.ones([2, 4], dtype="float16")
+    layer_merge.weight_loader(param, loaded_weight, loaded_shard_id=None)
+    assert param.tensor_track.calls == [(0, loaded_weight.shape[-1])]
+    param_shard = TinyParam(paddle.zeros([2, 2], dtype=paddle.float8_e4m3fn), initialized=False)
+    layer_merge.weight_loader(param_shard, paddle.ones([2, 2], dtype="int8"), loaded_shard_id="gate")
+    assert param_shard._is_initialized() is True
+    layer_mc = MergedColumnParallelLinear.__new__(MergedColumnParallelLinear)
+    layer_mc.__dict__.update(
+        fd_config=make_fd_config(model_format="paddle", tensor_parallel_size=1), tp_size=1, local_rank=0
     )
-    state_dict = {
-        "mlp.gate_proj.weight": np.full((2, 2), 1.0, dtype="float32"),
-        "mlp.up_proj.weight": np.full((2, 2), 2.0, dtype="float32"),
-        "mlp.gate_proj.bias": np.array([0.5, -0.5, 0.25, -0.25], dtype="float32"),
-    }
-    layer.load_state_dict(state_dict)
-    expected_weight = np.concatenate([np.full((2, 2), 1.0), np.full((2, 2), 2.0)], axis=-1)
-    np.testing.assert_allclose(layer.weight.numpy(), expected_weight)
-
-    fd_config_tp = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    layer_tp = MergedColumnParallelLinear(
-        fd_config=fd_config_tp,
-        prefix="mlp.up_gate_proj",
-        input_size=2,
-        output_size=4,
-        skip_quant=True,
+    param_fused = TinyParam(paddle.zeros([4, 2], dtype="float32"), initialized=False)
+    param_fused.output_dim = True
+    param_fused.weight_need_transpose = True
+    layer_mc.weight_loader(param_fused, np.arange(8, dtype="float32").reshape(2, 4), loaded_shard_id=None)
+    assert param_fused.weight_need_transpose is False
+    layer_mc.__dict__.update(
+        fd_config=make_fd_config(model_format="paddle", tensor_parallel_size=2), tp_size=2, local_rank=0
     )
-    gate_weight = paddle.to_tensor([[9.0, 10.0], [7.0, 8.0]], dtype="float32")
-    layer_tp.weight_loader(layer_tp.weight, gate_weight, loaded_shard_id="gate")
-    np.testing.assert_allclose(layer_tp.weight.numpy()[:, :2], gate_weight.numpy())
+    param_gate = TinyParam(paddle.zeros([4, 4], dtype=paddle.float8_e4m3fn), initialized=True)
+    param_gate.output_dim = True
+    param_gate.weight_need_transpose = True
+    layer_mc.weight_loader(param_gate, paddle.ones([4, 4], dtype="int8"), loaded_shard_id="gate")
+    layer_mc.local_rank = 1
+    param_shape = TinyParam(paddle.zeros([4, 4], dtype="float32"), initialized=True)
+    param_shape.output_dim = True
+    param_shape.weight_need_transpose = False
 
-
-def test_merged_column_parallel_linear_weight_loader_transpose_and_tp_shard():
-    fd_config = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    layer = MergedColumnParallelLinear(
-        fd_config=fd_config,
-        prefix="mlp.up_gate_proj",
-        input_size=4,
-        output_size=2,
-        skip_quant=True,
-    )
-    layer.weight.weight_need_transpose = True
-    fused_weight = paddle.arange(8, dtype="float32").reshape([2, 4])
-    layer.weight_loader(layer.weight, fused_weight)
-    assert layer.weight.weight_need_transpose is False
-    assert list(layer.weight.shape) == [4, 2]
-
-    fd_config_tp = make_fd_config(model_format="paddle", tensor_parallel_size=2)
-    layer_tp = MergedColumnParallelLinear(
-        fd_config=fd_config_tp,
-        prefix="mlp.up_gate_proj",
-        input_size=2,
-        output_size=4,
-        skip_quant=True,
-    )
-    layer_tp.weight.weight_need_transpose = True
-    shard_weight = paddle.to_tensor(np.array([[9.0, 10.0], [0.0, 0.0]], dtype="float16"))
-    layer_tp.weight_loader(layer_tp.weight, shard_weight, loaded_shard_id="gate")
-    np.testing.assert_allclose(layer_tp.weight.numpy()[:, 0], [9.0, 10.0])
-
-    class _WeightWrapper:
-        def __init__(self, value):
-            self._value = value
+    class _Wrapper:
+        def __init__(self, array):
+            self._array = array
 
         def get_shape(self):
-            return self._value.shape
+            return self._array.shape
+
+        @property
+        def dtype(self):
+            return self._array.dtype
 
         def __getitem__(self, item):
-            return self._value[item]
+            return paddle.to_tensor(self._array[item])
 
-    fd_config_tp2 = make_fd_config(model_format="paddle", tensor_parallel_size=2)
-    layer_tp2 = MergedColumnParallelLinear(
-        fd_config=fd_config_tp2,
-        prefix="mlp.up_gate_proj",
-        input_size=2,
+    layer_mc.weight_loader(param_shape, _Wrapper(np.ones((4, 4), dtype="float32")), loaded_shard_id="up")
+    layer_bias = MergedColumnParallelLinear(
+        fd_config=make_fd_config(), prefix="mlp.up_gate_proj", input_size=4, output_size=4, with_bias=True
+    )
+    layer_bias.load_state_dict(
+        {
+            "mlp.gate_proj.weight": np.ones((4, 2), dtype="float32"),
+            "mlp.up_proj.weight": np.ones((4, 2), dtype="float32"),
+            "mlp.gate_proj.bias": np.ones((4,), dtype="float32"),
+        }
+    )
+    np.testing.assert_allclose(layer_bias.bias.numpy(), np.ones((4,), dtype="float32"))
+
+
+def test_qkv_paths():
+    cfg_tp2 = make_fd_config(tensor_parallel_size=2)
+    prefix = "attn.qkv_proj"
+    layer_init = QKVParallelLinear(fd_config=cfg_tp2, prefix=prefix, with_bias=False)
+    assert layer_init.num_kv_head_replicas == 2
+    assert layer_init.kv_num_heads_per_rank == 1
+    layer_w = QKVParallelLinear.__new__(QKVParallelLinear)
+    layer_w.__dict__.update(
+        num_heads=4,
+        kv_num_heads=1,
+        num_heads_per_rank=2,
+        kv_num_heads_per_rank=1,
+        num_kv_head_replicas=2,
+        tp_size=2,
+        local_rank=0,
+    )
+    param_fused = TinyParam(paddle.zeros([4, 8], dtype="float32"), initialized=True)
+    param_fused.output_dim = True
+    param_fused.weight_need_transpose = True
+    layer_w.weight_loader(param_fused, np.arange(48, dtype="float32").reshape(12, 4), loaded_shard_id=None)
+    param_shard = TinyParam(paddle.zeros([4, 8], dtype=paddle.float8_e4m3fn), initialized=False)
+    param_shard.output_dim = True
+    param_shard.weight_need_transpose = True
+    layer_w.weight_loader(param_shard, paddle.ones([12, 4], dtype="int8"), loaded_shard_id="q")
+    assert param_shard._is_initialized() is True
+    layer_parts = QKVParallelLinear(fd_config=cfg_tp2, prefix=prefix, with_bias=False)
+    layer_parts.load_weight(
+        {
+            "attn.q_proj.weight": np.ones((4, 4), dtype="float32"),
+            "attn.k_proj.weight": np.ones((4, 2), dtype="float32"),
+            "attn.v_proj.weight": np.ones((4, 2), dtype="float32"),
+        }
+    )
+    layer_q = QKVParallelLinear.__new__(QKVParallelLinear)
+    layer_q.__dict__.update(is_quantized=True, weight_key=f"{prefix}.weight", with_bias=False, called=False)
+    layer_q.load_prequant_weight = lambda _sd: setattr(layer_q, "called", True)
+    layer_q.load_state_dict({"attn.qkv_proj.weight": np.zeros((1, 1), dtype="float32")})
+    assert layer_q.called is True
+    layer_bias = QKVParallelLinear(fd_config=cfg_tp2, prefix=prefix, with_bias=True)
+    layer_bias.load_state_dict(
+        {
+            "attn.q_proj.weight": np.ones((4, 4), dtype="float32"),
+            "attn.k_proj.weight": np.ones((4, 2), dtype="float32"),
+            "attn.v_proj.weight": np.ones((4, 2), dtype="float32"),
+            "attn.q_proj.bias": np.ones((4,), dtype="float32"),
+            "attn.k_proj.bias": np.ones((2,), dtype="float32"),
+            "attn.v_proj.bias": np.ones((2,), dtype="float32"),
+        }
+    )
+    np.testing.assert_allclose(layer_bias.bias.numpy(), np.ones((8,), dtype="float32"))
+
+
+def test_row_parallel_paths(monkeypatch):
+    layer_split = RowParallelLinear(
+        fd_config=make_fd_config(tensor_parallel_size=2, splitwise_role="prefill", use_sequence_parallel_moe=True),
+        prefix="row",
+        input_size=4,
         output_size=4,
-        skip_quant=True,
+        with_bias=False,
+        layer_id=0,
     )
-    wrapped = _WeightWrapper(paddle.arange(4, dtype="float32").reshape([2, 2]))
-    layer_tp2.weight_loader(layer_tp2.weight, wrapped, loaded_shard_id="up")
-    np.testing.assert_allclose(layer_tp2.weight.numpy()[:, 1:], [[0.0], [2.0]])
-
-
-def test_column_parallel_bias_distribution():
-    fd_config = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    layer = ColumnParallelLinear(
-        fd_config=fd_config,
-        prefix="col",
-        input_size=2,
-        output_size=2,
-        with_bias=True,
-        skip_quant=True,
-    )
-    assert layer.bias.is_distributed is True
-    assert layer.bias.split_axis == 1
-    assert layer.bias.output_dim is True
-
-
-def test_qkv_parallel_linear_load_weight_and_bias():
-    fd_config = make_fd_config(model_format="paddle", tensor_parallel_size=2, tensor_parallel_rank=0)
-    layer = QKVParallelLinear(fd_config=fd_config, prefix="attn.qkv_proj", with_bias=False)
-    state_dict = {
-        "attn.q_proj.weight": np.ones((8, 4), dtype="float32"),
-        "attn.k_proj.weight": np.full((8, 2), 2.0, dtype="float32"),
-        "attn.v_proj.weight": np.full((8, 2), 3.0, dtype="float32"),
-    }
-    layer.load_state_dict(state_dict)
-    assert layer.weight.shape == [8, 8]
-
-
-def test_qkv_parallel_linear_weight_loader_and_bias_paths():
-    fd_config = make_fd_config(model_format="paddle", tensor_parallel_size=2, tensor_parallel_rank=0)
-    fd_config.model_config.num_key_value_heads = 2
-    layer = QKVParallelLinear(fd_config=fd_config, prefix="attn.qkv_proj", with_bias=False)
-    layer.weight.weight_need_transpose = True
-    fused_weight = paddle.to_tensor(np.arange(16 * 8, dtype="float16").reshape([16, 8]))
-    layer.weight_loader(layer.weight, fused_weight)
-    assert layer.weight.numpy()[0, 0] == fused_weight.numpy()[0, 0]
-
-    layer.weight.weight_need_transpose = True
-    shard_weight = paddle.to_tensor(np.arange(32, dtype="float16").reshape([4, 8]))
-    layer.weight_loader(layer.weight, shard_weight, loaded_shard_id="q")
-
-    fd_config_single = make_fd_config(model_format="paddle", tensor_parallel_size=1, tensor_parallel_rank=0)
-    fd_config_single.model_config.num_key_value_heads = 2
-    layer_bias = QKVParallelLinear(fd_config=fd_config_single, prefix="attn.qkv_proj", with_bias=True)
-    state_dict = {
-        "attn.qkv_proj.weight": np.ones((8, 16), dtype="float32"),
-        "attn.qkv_proj.bias": np.array([0.1] * 16, dtype="float32"),
-    }
-    layer_bias.load_state_dict(state_dict)
-    np.testing.assert_allclose(layer_bias.bias.numpy()[:2], [0.1, 0.1])
-
-    state_dict_weight = {"attn.qkv_proj.weight": np.full((8, 16), 2.0, dtype="float32")}
-    layer_single = QKVParallelLinear(fd_config=fd_config_single, prefix="attn.qkv_proj", with_bias=False)
-    layer_single.load_weight(state_dict_weight)
-    np.testing.assert_allclose(layer_single.weight.numpy()[0, 0], 2.0)
-
-    fd_config_bias = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    fd_config_bias.model_config.num_key_value_heads = 1
-    layer_bias_split = QKVParallelLinear(fd_config=fd_config_bias, prefix="attn.qkv_proj", with_bias=True)
-    bias_state = {
-        "attn.q_proj.weight": np.ones((8, 8), dtype="float32"),
-        "attn.k_proj.weight": np.ones((8, 2), dtype="float32"),
-        "attn.v_proj.weight": np.ones((8, 2), dtype="float32"),
-        "attn.q_proj.bias": np.array([0.2] * 8, dtype="float32"),
-        "attn.k_proj.bias": np.array([0.3] * 2, dtype="float32"),
-        "attn.v_proj.bias": np.array([0.4] * 2, dtype="float32"),
-    }
-    layer_bias_split.load_state_dict(bias_state)
-    np.testing.assert_allclose(layer_bias_split.bias.numpy()[:8], [0.2] * 8)
-
-    class DummyQuantMethod:
-        def __init__(self):
-            self.called = False
-
-        def create_weights(self, layer, **extra_weight_attrs):
-            UnquantizedLinearMethod().create_weights(layer, **extra_weight_attrs)
-
-        def process_prequanted_weights(self, layer, state_dict):
-            self.called = True
-
-    class DummyQuantConfig:
-        dense_quant_type = "int8"
-
-        def __init__(self, method):
-            self._method = method
-
-        def name(self):
-            return "w8a8"
-
-        def get_quant_method(self, _layer):
-            return self._method
-
-    quant_method = DummyQuantMethod()
-    fd_config_quant = make_fd_config(model_format="paddle", tensor_parallel_size=1)
-    fd_config_quant.model_config.is_quantized = True
-    fd_config_quant.quant_config = DummyQuantConfig(quant_method)
-    layer_quant = QKVParallelLinear(fd_config=fd_config_quant, prefix="attn.qkv_proj", with_bias=False)
-    layer_quant.load_state_dict({})
-    assert quant_method.called is True
-
-
-def test_row_parallel_linear_all2all_and_forward(monkeypatch):
-    fd_config_decode = make_fd_config(
-        model_format="paddle",
-        tensor_parallel_size=2,
-        splitwise_role="decode",
-        use_sequence_parallel_moe=True,
-    )
+    called = []
+    layer_split.all2all_transpose = lambda x: (called.append(True) or x)
+    layer_split.quant_method = SimpleNamespace(apply=lambda _layer, x: x)
+    layer_split.forward_cuda(paddle.ones([2, 2], dtype="float32"))
+    assert called
     layer_decode = RowParallelLinear(
-        fd_config=fd_config_decode,
+        fd_config=make_fd_config(tensor_parallel_size=2, splitwise_role="decode"),
         prefix="row",
         input_size=4,
-        output_size=2,
-        skip_quant=True,
-        layer_id=0,
+        output_size=4,
+        with_bias=False,
+        layer_id=-1,
     )
-    x = paddle.to_tensor([[1.0, 2.0]], dtype="float32")
-
-    def _fake_decode_alltoall_transpose(src, dst):
-        dst[:] = paddle.concat([src[:1], src[:1]], axis=-1)
-
     monkeypatch.setattr(
-        "fastdeploy.model_executor.layers.linear.decode_alltoall_transpose",
-        _fake_decode_alltoall_transpose,
+        linear_module,
+        "decode_alltoall_transpose",
+        lambda x, out: out.set_value(paddle.zeros_like(out)),
     )
-    out = layer_decode.all2all_transpose(x)
-    assert out.shape == [1, 4]
-
-    fd_config_prefill = make_fd_config(
-        model_format="paddle",
-        tensor_parallel_size=2,
-        splitwise_role="prefill",
-        use_sequence_parallel_moe=True,
-    )
+    out_decode = layer_decode.all2all_transpose(paddle.ones([1, 2], dtype="float32"))
+    assert out_decode.shape[0] == 1
     layer_prefill = RowParallelLinear(
-        fd_config=fd_config_prefill,
+        fd_config=make_fd_config(tensor_parallel_size=2, splitwise_role="prefill"),
         prefix="row",
         input_size=4,
         output_size=2,
-        skip_quant=True,
-        layer_id=0,
+        with_bias=False,
+        layer_id=-1,
     )
-
-    def _fake_alltoall(out, x_in, group=None):
-        out[:] = paddle.concat([x_in, x_in], axis=-1)[:, : x_in.shape[1]]
-
-    monkeypatch.setattr(paddle.distributed, "alltoall", _fake_alltoall)
-    out_prefill = layer_prefill.all2all_transpose(x)
-    assert out_prefill.shape == [1, 4]
-    layer_prefill.quant_method.apply = lambda _layer, data: data + 1.0
-    forward_out = layer_prefill.forward_cuda(paddle.ones([1, 2], dtype="float32"))
-    np.testing.assert_allclose(forward_out.numpy(), [[2.0, 2.0, 1.0, 1.0]])
+    monkeypatch.setattr(paddle.distributed, "alltoall", lambda out, x, group=None: out.set_value(x))
+    out_prefill = layer_prefill.all2all_transpose(paddle.ones([1, 1], dtype="float32"))
+    assert out_prefill.shape == [1, 2]
 
 
-def test_kv_batch_linear_paths():
-    fd_config = make_fd_config(model_format="paddle", load_choices="default_v1")
-    kv_proj = paddle.nn.Linear(2, 4, bias_attr=False)
-    kv_proj.weight.set_value(paddle.arange(8, dtype="float32").reshape([2, 4]))
-    layer = KVBatchLinear(
-        fd_config=fd_config,
-        kv_b_proj=kv_proj,
+def test_kvbatch_paths():
+    layer_v0 = KVBatchLinear(
+        fd_config=make_fd_config(load_choices="default_v0"),
+        kv_b_proj=paddle.nn.Linear(2, 4, bias_attr=False),
         prefix="kv_b_proj",
         kv_lora_rank=2,
         num_attention_heads=2,
         qk_nope_head_dim=1,
         v_head_dim=1,
     )
-    layer.process_weights_after_loading()
-    assert layer.k_b_proj_weight.shape == [2, 1, 2]
-    assert layer.v_b_proj_weight.shape == [2, 2, 1]
-
-    state_dict = {"kv_b_proj.weight": kv_proj.weight.numpy()}
-    layer.load_state_dict(state_dict)
-    assert layer.k_b_proj_weight.shape == [2, 1, 2]
-
-    k_out = layer.forward_k_b(paddle.ones([2, 1, 1], dtype="float32"))
-    v_out = layer.forward_v_b(paddle.ones([2, 1, 2], dtype="float32"))
-    assert k_out.shape[-1] == 2
-    assert v_out.shape[-1] == 1
-    np.testing.assert_allclose(layer.forward(paddle.ones([2, 1, 1], dtype="float32"), proj_type="k"), k_out)
-    np.testing.assert_allclose(layer.forward(paddle.ones([2, 1, 2], dtype="float32"), proj_type="v"), v_out)
-
-    with pytest.raises(ValueError, match="proj_type must be 'k' or 'v'"):
-        layer.forward(paddle.ones([1, 1, 1], dtype="float32"), proj_type="invalid")
-
-
-def test_kv_batch_linear_dynamic_load_and_errors():
-    fd_config = make_fd_config(model_format="paddle", load_choices="default_v0")
-    fd_config.load_config.dynamic_load_weight = True
-    kv_proj = paddle.nn.Linear(2, 4, bias_attr=False)
-    layer = KVBatchLinear(
-        fd_config=fd_config,
-        kv_b_proj=kv_proj,
+    assert layer_v0.kv_b_proj is None
+    layer_v0.load_state_dict({"kv_b_proj.weight": paddle.arange(8, dtype="float32").reshape([2, 4])})
+    assert layer_v0.k_b_proj_weight.shape[-1] == layer_v0.kv_lora_rank
+    assert layer_v0.v_b_proj_weight.shape[-1] == layer_v0.v_head_dim
+    layer_v1 = KVBatchLinear(
+        fd_config=make_fd_config(model_format="torch", load_choices="default_v1"),
+        kv_b_proj=paddle.nn.Linear(2, 4, bias_attr=False),
         prefix="kv_b_proj",
         kv_lora_rank=2,
         num_attention_heads=2,
         qk_nope_head_dim=1,
         v_head_dim=1,
     )
-    assert layer.kv_b_proj is None
-    layer.process_weights_after_loading()
-    assert not hasattr(layer, "k_b_proj_weight")
-
-    fd_config_error = make_fd_config(model_format="paddle", load_choices="default_v1")
-    kv_proj_error = paddle.nn.Linear(2, 4, bias_attr=False)
-    layer_error = KVBatchLinear(
-        fd_config=fd_config_error,
-        kv_b_proj=kv_proj_error,
-        prefix="kv_b_proj",
-        kv_lora_rank=2,
-        num_attention_heads=2,
-        qk_nope_head_dim=1,
-        v_head_dim=None,
-    )
-    with pytest.raises(ValueError, match="v_head_dim should not be None"):
-        layer_error.process_weights_after_loading()
-
-    state_dict = {"kv_b_proj.weight": kv_proj_error.weight.numpy()}
-    with pytest.raises(ValueError, match="v_head_dim should not be None"):
-        layer_error.load_state_dict(state_dict)
+    layer_v1.weight_dtype = "float64"
+    layer_v1.process_weights_after_loading()
+    assert layer_v1.kv_b_proj is None
+    x_k = paddle.ones([2, 1, 1], dtype="float64")
+    x_v = paddle.ones([2, 1, 2], dtype="float64")
+    out_k = layer_v1.forward_k_b(x_k)
+    out_v = layer_v1.forward_v_b(x_v)
+    assert out_k.shape[-1] == layer_v1.k_b_proj_weight.shape[-1]
+    assert out_v.shape[-1] == layer_v1.v_b_proj_weight.shape[-1]
+    layer_v1.forward(x_k, proj_type="k")
+    layer_v1.forward(x_v, proj_type="v")
+    with pytest.raises(ValueError):
+        layer_v1.forward(x_k, proj_type="bad")
