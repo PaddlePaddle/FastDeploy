@@ -311,6 +311,7 @@ def test_row_parallel_paths(monkeypatch):
         "decode_alltoall_transpose",
         lambda x, out: out.set_value(paddle.zeros_like(out)),
     )
+    monkeypatch.setattr(paddle.distributed, "alltoall", lambda out, x, group=None: out.set_value(x))
     out_decode = layer_decode.all2all_transpose(paddle.ones([1, 2], dtype="float32"))
     assert out_decode.shape[0] == 1
     layer_prefill = RowParallelLinear(
@@ -321,7 +322,6 @@ def test_row_parallel_paths(monkeypatch):
         with_bias=False,
         layer_id=-1,
     )
-    monkeypatch.setattr(paddle.distributed, "alltoall", lambda out, x, group=None: out.set_value(x))
     out_prefill = layer_prefill.all2all_transpose(paddle.ones([1, 1], dtype="float32"))
     assert out_prefill.shape == [1, 2]
 
