@@ -134,6 +134,7 @@ def apply_penalty_multi_scores(
             presence_penalties,
             temperature,
             bad_words_token_ids,
+            bad_words_token_len,
             step_idx,
             min_dec_lens,
             eos_token_ids,
