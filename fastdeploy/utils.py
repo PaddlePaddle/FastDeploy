@@ -1236,7 +1236,10 @@ def to_tensor(tasks: List[Any]):
     """
     try:
         for task in tasks:
-            multimodal_inputs = getattr(task, "multimodal_inputs", None)
+            if isinstance(task, dict):
+                multimodal_inputs = task.get("multimodal_inputs", None)
+            else:
+                multimodal_inputs = getattr(task, "multimodal_inputs", None)
             if not multimodal_inputs:
                 continue
             # tensor keys
