@@ -54,7 +54,6 @@ from fastdeploy.model_executor.models.model_base import (
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
-from fastdeploy.model_executor.utils import adapt_moe_gate_parameter_dtype
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
@@ -629,8 +628,6 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                     continue
                 param = params_dict[model_param_name]
 
-            if not envs.FD_MOE_GATE_WEIGHT_DTYPE:
-                param = adapt_moe_gate_parameter_dtype(self, model_param_name, param, loaded_weight, params_dict)
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)

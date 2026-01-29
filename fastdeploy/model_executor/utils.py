@@ -524,34 +524,3 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
-
-
-def adapt_moe_gate_parameter_dtype(model, model_param_name, param, loaded_weight, params_dict):
-    if not model_param_name.endswith(".gate.weight"):
-        return param
-
-    if param.dtype != loaded_weight.dtype:
-        new_param = paddle.create_parameter(
-            shape=param.shape,
-            dtype=loaded_weight.dtype,
-            is_bias=getattr(param, "is_bias", False),
-            default_initializer=paddle.nn.initializer.Constant(0),
-        )
-
-        for k, v in param.__dict__.items():
-            if not k.startswith("_"):
-                setattr(new_param, k, v)
-
-        parts = model_param_name.split(".")
-        obj = model
-        for part in parts[:-1]:
-            if part.isdigit() and isinstance(obj, (paddle.nn.LayerList, list)):
-                obj = obj[int(part)]
-            else:
-                obj = getattr(obj, part)
-        setattr(obj, parts[-1], new_param)
-
-        params_dict[model_param_name] = new_param
-        return new_param
-
-    return param
