@@ -893,7 +893,7 @@ class CacheTransferManager:
                     self.cache_task_queue.barrier0.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier0.reset()
-                if self.cache_task_is_paused_signal.value[0] == 0:
+                if self.cache_task_is_paused_signal.value[0] == 1:
                     continue
 
                 if self.rank == 0:
