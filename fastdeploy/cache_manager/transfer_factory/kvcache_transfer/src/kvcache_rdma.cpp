@@ -544,24 +544,26 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   }
 
   // Allocate RDMA read and register read buffers
-  ctx->conn.read_bufs.resize(block_number, nullptr);
-  ctx->conn.read_mrs.resize(block_number, nullptr);
+  if (KVCacheConfig::getInstance().is_gdrcopy_flush_enabled()) {
+    ctx->conn.read_bufs.resize(block_number, nullptr);
+    ctx->conn.read_mrs.resize(block_number, nullptr);
 
-  for (size_t i = 0; i < block_number; ++i) {
-    // Allocate memory for read buffer
-    ctx->conn.read_bufs[i] = malloc(block_size_byte);
-    if (!ctx->conn.read_bufs[i]) {
-      ERR("Failed to allocate read buffer");
-      return static_cast<int>(ConnStatus::kError);
-    }
-    // Register memory region for read buffer
-    ctx->conn.read_mrs[i] = ibv_reg_mr(ctx->pd,
-                                       ctx->conn.read_bufs[i],
-                                       block_size_byte,
-                                       IBV_ACCESS_LOCAL_WRITE);
-    if (!ctx->conn.read_mrs[i]) {
-      ERR("Failed to register memory for RDMA Read buffer");
-      return static_cast<int>(ConnStatus::kError);
+    for (size_t i = 0; i < block_number; ++i) {
+      // Allocate memory for read buffer
+      ctx->conn.read_bufs[i] = malloc(block_size_byte);
+      if (!ctx->conn.read_bufs[i]) {
+        ERR("Failed to allocate read buffer");
+        return static_cast<int>(ConnStatus::kError);
+      }
+      // Register memory region for read buffer
+      ctx->conn.read_mrs[i] = ibv_reg_mr(ctx->pd,
+                                         ctx->conn.read_bufs[i],
+                                         block_size_byte,
+                                         IBV_ACCESS_LOCAL_WRITE);
+      if (!ctx->conn.read_mrs[i]) {
+        ERR("Failed to register memory for RDMA Read buffer");
+        return static_cast<int>(ConnStatus::kError);
+      }
     }
   }
 
@@ -791,11 +793,22 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     return false;
   }
 
+  // Reuse if already registered
+  if (!write_cache_key_server_mr_list.empty() ||
+      !write_cache_value_server_mr_list.empty()) {
+    ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
+    ctx->conn.write_cache_value_server_mr_list =
+        write_cache_value_server_mr_list;
+    return true;
+  }
+
   write_cache_key_server_mr_list.clear();
   write_cache_value_server_mr_list.clear();
 
   const uint32_t access_flags =
       IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ;
+
+  bool failed = false;
 
   for (int i = 0; i < layer_number; ++i) {
     void* key_ptr = reinterpret_cast<void*>(local_cache_key_ptr_layer_head_[i]);
@@ -807,7 +820,8 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
         ctx->pd, key_ptr, size, "key_" + std::to_string(i), access_flags);
     if (!key_mr) {
       ERR("Failed to register key MR at layer %d", i);
-      goto fail;
+      failed = true;
+      break;
     }
 
     struct ibv_mr* value_mr = register_memory_region(
@@ -815,28 +829,30 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     if (!value_mr) {
       ERR("Failed to register value MR at layer %d", i);
       ibv_dereg_mr(key_mr);
-      goto fail;
+      failed = true;
+      break;
     }
 
     write_cache_key_server_mr_list.push_back(key_mr);
     write_cache_value_server_mr_list.push_back(value_mr);
   }
 
+  if (failed) {
+    for (auto* mr : write_cache_key_server_mr_list) {
+      if (mr) ibv_dereg_mr(mr);
+    }
+    for (auto* mr : write_cache_value_server_mr_list) {
+      if (mr) ibv_dereg_mr(mr);
+    }
+
+    write_cache_key_server_mr_list.clear();
+    write_cache_value_server_mr_list.clear();
+    return false;
+  }
+
   ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
   ctx->conn.write_cache_value_server_mr_list = write_cache_value_server_mr_list;
   return true;
-
-fail:
-  for (auto* mr : write_cache_key_server_mr_list) {
-    if (mr) ibv_dereg_mr(mr);
-  }
-  for (auto* mr : write_cache_value_server_mr_list) {
-    if (mr) ibv_dereg_mr(mr);
-  }
-
-  write_cache_key_server_mr_list.clear();
-  write_cache_value_server_mr_list.clear();
-  return false;
 }
 
 int RDMACommunicator::write_cache(const std::string& ip,
@@ -1020,12 +1036,10 @@ void RDMACommunicator::prepare_write_requests(
   auto block_num = local_block_ids.size();
 
   for (size_t i = 0; i < block_num; ++i) {
-    sge_list[i].addr =
-        (uintptr_t)(is_key
-                        ? local_cache_key_ptr_per_layer[layer_idx]
-                                                       [local_block_ids[i]]
-                        : local_cache_value_ptr_per_layer[layer_idx]
-                                                         [local_block_ids[i]]);
+    sge_list[i].addr = (uintptr_t)(
+        is_key
+            ? local_cache_key_ptr_per_layer[layer_idx][local_block_ids[i]]
+            : local_cache_value_ptr_per_layer[layer_idx][local_block_ids[i]]);
     sge_list[i].length = block_size_byte;
     sge_list[i].lkey = (is_key ? write_mr_key_list[layer_idx]->lkey
                                : write_mr_value_list[layer_idx]->lkey);
