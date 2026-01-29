@@ -63,23 +63,43 @@ def creat_empty_forward_meta(forward_meta: ForwardMeta):
     return res
 
 
-def split_batch_decoder_layers(forward_meta: ForwardMeta):
+def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
     split_num = 2
-    res = [forward_meta] * split_num
+    res = [creat_empty_forward_meta(forward_meta), forward_meta]
+    res[0].tbo_microbatch_id = 0
+    res[1].tbo_microbatch_id = 1
     total_token_num = forward_meta.ids_remove_padding.shape[0]
 
-    if total_token_num < split_num:
-        res = [creat_empty_forward_meta(forward_meta), forward_meta]
-        res[0].tbo_microbatch_id = 0
-        res[1].tbo_microbatch_id = 1
+    if total_token_num < 1024:
         return res
 
     chunk_token_num = (total_token_num + split_num - 1) // split_num
 
+    split_sections = []
     for i in range(0, split_num):
         start_token_id = i * chunk_token_num
         end_token_id = start_token_id + chunk_token_num
         end_token_id = min(total_token_num, end_token_id)
+        split_sections.append(end_token_id)
+
+    # 由于多模的图片理解，需要将多模拟的token聚集在一起！
+    # 所以需要将split_sections[0]适当的偏移一下！
+
+    special_tokens = [
+        fd_config.model_config.image_patch_id,
+    ]
+
+    ids_remove_padding_cpu = forward_meta.ids_remove_padding.numpy().tolist()
+    detect_pos = split_sections[0]
+    while ids_remove_padding_cpu[detect_pos] in special_tokens:
+        detect_pos += 1
+        if detect_pos >= len(ids_remove_padding_cpu):
+            return res
+    split_sections[0] = detect_pos
+
+    for i in range(0, split_num):
+        start_token_id = 0 if i == 0 else split_sections[i - 1]
+        end_token_id = split_sections[i]
 
         res[i] = ForwardMeta(
             ids_remove_padding=None,

@@ -409,6 +409,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
     const int hadamard_block_size,
+    const int max_tokens_per_expert,
     const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(
@@ -1214,6 +1215,7 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    const paddle::Tensor& reasoning_status,
                                    const paddle::Tensor& output_padding_offset,
                                    const paddle::Tensor& output_cum_offsets,
+                                   const paddle::Tensor& enable_thinking,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
