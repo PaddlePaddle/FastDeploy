@@ -30,7 +30,7 @@ on:
 
 jobs:
   stable_tests:
-    runs-on: [self-hosted, GPU-h1z1-2Cards]
+    runs-on: [self-hosted, GPU-h20-2Cards]
     timeout-minutes: 60
     steps:
       - name: Code Prepare

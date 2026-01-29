@@ -322,6 +322,11 @@ class ModelOutputData:
     """
     stop_nums: paddle.Tensor = None
 
+    """
+        Device version of not_need_stop flag for async operations
+    """
+    not_need_stop_device: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
