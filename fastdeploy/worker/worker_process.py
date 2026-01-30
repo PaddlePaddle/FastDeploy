@@ -446,6 +446,10 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
+                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                    src=0, group=self.parallel_config.tp_group
+                )
             self.insert_step = False
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -586,10 +590,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                         src=0, group=self.parallel_config.ep_group
                     )
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
+
             self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
