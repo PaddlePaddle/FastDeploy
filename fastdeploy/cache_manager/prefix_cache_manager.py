@@ -200,6 +200,14 @@ class PrefixCacheManager:
             create=True,
         )
 
+        self.cache_task_inflight_signal = IPCSignal(
+            name="cache_task_inflight",
+            array=np.zeros([tensor_parallel_size], dtype=np.int32),
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=True,
+        )
+
         self.cache_task_queue = EngineCacheQueue(
             address=(pod_ip, cache_config.local_cache_queue_port),
             authkey=b"cache_queue_service",

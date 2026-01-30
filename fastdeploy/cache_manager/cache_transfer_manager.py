@@ -233,9 +233,20 @@ class CacheTransferManager:
             create=False,
         )
 
+        # NOTE: `cache_task_is_paused_signal` indicates if do_data_transfer thread
+        # of the FIRST rank (rank#0) has received a pause signal
         self.cache_task_is_paused_signal = IPCSignal(
             name="cache_task_is_paused",
             array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+        # NOTE: `cache_task_inflight_signal` indicates if do_data_transfer thread
+        # of each rank has finished remaining tasks and finally paused
+        self.cache_task_inflight_signal = IPCSignal(
+            name="cache_task_inflight",
+            array=np.zeros([self.n_ranks], dtype=np.int32),
             dtype=np.int32,
             suffix=args.engine_worker_queue_port,
             create=False,
@@ -262,7 +273,6 @@ class CacheTransferManager:
         )
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
-        self._pause_cond = threading.Condition()
         self.is_paused = False  # transfer manager state
         self.inflight = 0  # number of inflight transfer tasks
 
@@ -868,10 +878,7 @@ class CacheTransferManager:
             try:
                 return fn(*args)
             finally:
-                with self._pause_cond:
-                    self.inflight -= 1
-                    if self.inflight == 0:
-                        self._pause_cond.notify_all()
+                self.inflight -= 1
 
         thread_pool.submit(inflight_task, task_fn, *args)
 
@@ -893,8 +900,18 @@ class CacheTransferManager:
                     self.cache_task_queue.barrier0.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier0.reset()
+
+                # let all ranks simultaneously do one of the following thing:
+                # (1) wait for a short time and check out rank#0 status again
+                # (2) pull tasks from cache task queue
                 if self.cache_task_is_paused_signal.value[0] == 1:
+                    while self.inflight != 0:
+                        time.sleep(0.1)
+                    self.cache_task_inflight_signal[self.rank] = 0
+                    time.sleep(1)
                     continue
+                else:
+                    self.cache_task_inflight_signal[self.rank] = 1
 
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
@@ -905,8 +922,7 @@ class CacheTransferManager:
                         self.cache_task_queue.barrier1.reset()
 
                 if self.cache_task_broadcast_signal.value[0] == 1:
-                    with self._pause_cond:
-                        self.inflight += 1
+                    self.inflight += 1
                     data, read_finish = self.cache_task_queue.get_transfer_task()
                     logger.debug(f"do_data_transfer: {data}")
                     if read_finish:
@@ -1169,7 +1185,8 @@ class CacheTransferManager:
                     logger.info("[RL] all ranks cleared caches!")
 
                     # reset kv_cache_status_signal
-                    self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+                    if self.rank == 0:
+                        self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
                     self._log_memory("after clearing caches")
 
@@ -1208,13 +1225,14 @@ class CacheTransferManager:
                         time.sleep(0.1)
                     logger.info("[RL] all ranks restored caches!")
 
-                    # set kv_cache_status_signal
-                    self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
-
-                    self._log_memory("after restoring caches")
-
                     # resume transfer
                     self.resume()
+
+                    # set kv_cache_status_signal
+                    if self.rank == 0:
+                        self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+
+                    self._log_memory("after restoring caches")
 
                 except Exception as e:
                     logger.error(f"[RL] failed to restore caches: {e}")
@@ -1223,16 +1241,22 @@ class CacheTransferManager:
 
     def pause(self):
         logger.info("[RL] wait for inflight transfer tasks to finish and pause transfer manager 🔴")
-        with self._pause_cond:
-            self.is_paused = True
-            logger.info(f"[RL] unfinished inflight tasks: {self.inflight}")
-            self._pause_cond.wait_for(lambda: self.inflight == 0)
+        self.is_paused = True
+        while True:
+            if self.cache_task_is_paused_signal.value[0] == 1 and np.sum(self.cache_task_inflight_signal.value) == 0:
+                break
+            else:
+                time.sleep(1)
 
     def resume(self):
+        if self.n_ranks > 1:
+            self.cache_task_queue.resume_barrier.wait()
+            if self.rank == 0:
+                self.cache_task_queue.resume_barrier.reset()
+        self.is_paused = False
+        while np.sum(self.cache_task_inflight_signal.value) != self.n_ranks:
+            time.sleep(1)
         logger.info("[RL] resume transfer manager and start to do transfer tasks 🟢")
-        with self._pause_cond:
-            self.is_paused = False
-            self._pause_cond.notify_all()
 
     def _log_memory(self, context: str):
         """Log current GPU memory usage."""
