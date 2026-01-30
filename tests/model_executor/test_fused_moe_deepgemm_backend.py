@@ -113,7 +113,7 @@ def test_infermeta_shape():
     assert out.shape == [2, 4]
 
 
-def test_deepgemm_weights_and_apply_paths():
+def test_deepgemm_weights_and_apply_paths(monkeypatch):
     _ensure_dist_init()
     method = deepgemm_backend.DeepGemmFusedMoeMethod(_QuantConfig())
     layer = _DummyLayer()
@@ -136,6 +136,22 @@ def test_deepgemm_weights_and_apply_paths():
     ]
     method.process_prequanted_weights(layer, state_dict=state_list, is_rearrange=False)
     assert layer.up_gate_proj_weight_scale_inv.shape[0] == layer.num_local_experts
+
+    from paddle.distributed.communication import deep_ep
+
+    orig_dispatch = deep_ep.Buffer.get_dispatch_config
+    orig_combine = deep_ep.Buffer.get_combine_config
+
+    monkeypatch.setattr(
+        deep_ep.Buffer,
+        "get_dispatch_config",
+        staticmethod(lambda num_ranks: orig_dispatch(2) if num_ranks == 1 else orig_dispatch(num_ranks)),
+    )
+    monkeypatch.setattr(
+        deep_ep.Buffer,
+        "get_combine_config",
+        staticmethod(lambda num_ranks: orig_combine(2) if num_ranks == 1 else orig_combine(num_ranks)),
+    )
 
     method.ep_prefill_runner = EPPrefillRunner(
         top_k=layer.top_k,
