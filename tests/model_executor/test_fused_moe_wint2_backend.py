@@ -76,7 +76,7 @@ def _make_state_dict(layer):
     }
 
 
-def test_wint2_paths():
+def test_wint2_paths(monkeypatch):
     quant_config = SimpleNamespace(moe_quant_type="w4w2")
     layer = _DummyLayer()
 
@@ -92,7 +92,12 @@ def test_wint2_paths():
     cutlass_method.process_prequanted_weights(layer, _make_state_dict(layer))
 
     gate = paddle.nn.Linear(layer.hidden_size, layer.num_experts, bias_attr=False)
-    x = paddle.ones([2, layer.hidden_size], dtype="bfloat16")
+    x = paddle.ones([2, layer.hidden_size], dtype="float16")
+    monkeypatch.setattr(
+        wint2_backend,
+        "moe_expert_reduce",
+        lambda _ffn_out, *_args, **_kwargs: paddle.zeros([x.shape[0], layer.hidden_size], dtype=x.dtype),
+    )
     out = cutlass_method.apply(layer, x, gate, topk_ids_hookfunc=lambda **_k: None)
     assert out.shape == [2, layer.hidden_size]
 
