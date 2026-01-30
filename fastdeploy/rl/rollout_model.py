@@ -738,7 +738,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
         """state_dict"""
         main_state_dict = super().state_dict()
         state_dict = {k: v for k, v in main_state_dict.items() if not k.startswith("mtp_layers")}
-        if self.num_nextn_predict_layers > 0:
+        if self.speculative_decoding:
             mtp_state_dict = self.mtp_layers.state_dict()
             state_dict.update(mtp_state_dict)
         return state_dict
