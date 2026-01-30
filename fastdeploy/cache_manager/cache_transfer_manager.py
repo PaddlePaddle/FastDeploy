@@ -484,12 +484,14 @@ class CacheTransferManager:
                     if self.rank == 0:
                         self.cache_task_queue.barrier0.reset()
 
-                # let all ranks simultaneously do one of the following thing:
-                # (1) wait for a short time and check out rank#0 status again
-                # (2) pull tasks from cache task queue
+                # Ensure all ranks synchronically do one of the following things:
+                # (1) If rank#0 is paused, wait for a short time and check out rank#0 status again;
+                # (2) otherwise, all ranks are allowed to pull tasks from cache task queue
                 if self.cache_task_is_paused_signal.value[0] == 1:
+                    # wait for inflight tasks to finish first
                     while self.inflight != 0:
                         time.sleep(0.1)
+                    # mark the current rank as not having inflight tasks
                     self.cache_task_inflight_signal.value[self.rank] = 0
                     time.sleep(1)
                     continue
@@ -806,13 +808,15 @@ class CacheTransferManager:
             time.sleep(0.1)
 
     def pause(self):
-        logger.info("[RL] wait for inflight transfer tasks to finish and pause transfer manager 🔴")
+        if self.n_ranks > 1:
+            self.cache_task_queue.pause_barrier.wait()
+            if self.rank == 0:
+                self.cache_task_queue.pause_barrier.reset()
+        logger.info("[RL] 🟠 wait for inflight transfer tasks to finish")
         self.is_paused = True
-        while True:
-            if self.cache_task_is_paused_signal.value[0] == 1 and np.sum(self.cache_task_inflight_signal.value) == 0:
-                break
-            else:
-                time.sleep(1)
+        while np.sum(self.cache_task_inflight_signal.value) != 0:
+            time.sleep(1)
+        logger.info("[RL] 🔴 pause transfer manager and stop do transfer tasks")
 
     def resume(self):
         if self.n_ranks > 1:
@@ -822,7 +826,7 @@ class CacheTransferManager:
         self.is_paused = False
         while np.sum(self.cache_task_inflight_signal.value) != self.n_ranks:
             time.sleep(1)
-        logger.info("[RL] resume transfer manager and start to do transfer tasks 🟢")
+        logger.info("[RL] 🟢 resume transfer manager and start to do transfer tasks")
 
     def _log_memory(self, context: str):
         """Log current GPU memory usage."""

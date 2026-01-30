@@ -91,6 +91,9 @@ class EngineCacheQueue:
             self.barrier1_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier2_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
             self.barrier3_init = [threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)]
+            self.pause_barrier_init = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
             self.resume_barrier_init = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
@@ -137,6 +140,7 @@ class EngineCacheQueue:
             QueueManager.register("get_barrier1", callable=lambda idx: self.barrier1_init[idx])
             QueueManager.register("get_barrier2", callable=lambda idx: self.barrier2_init[idx])
             QueueManager.register("get_barrier3", callable=lambda idx: self.barrier3_init[idx])
+            QueueManager.register("get_pause_barrier", callable=lambda idx: self.pause_barrier_init[idx])
             QueueManager.register("get_resume_barrier", callable=lambda idx: self.resume_barrier_init[idx])
             QueueManager.register(
                 "get_swap_to_cpu_barrier1",
@@ -178,6 +182,7 @@ class EngineCacheQueue:
             QueueManager.register("get_barrier1")
             QueueManager.register("get_barrier2")
             QueueManager.register("get_barrier3")
+            QueueManager.register("get_pause_barrier")
             QueueManager.register("get_resume_barrier")
             QueueManager.register("get_swap_to_cpu_barrier1")
             QueueManager.register("get_swap_to_cpu_barrier2")
@@ -199,6 +204,7 @@ class EngineCacheQueue:
         self.barrier1 = self.manager.get_barrier1(self.local_data_parallel_id)
         self.barrier2 = self.manager.get_barrier2(self.local_data_parallel_id)
         self.barrier3 = self.manager.get_barrier3(self.local_data_parallel_id)
+        self.pause_barrier = self.manager.get_pause_barrier(self.local_data_parallel_id)
         self.resume_barrier = self.manager.get_resume_barrier(self.local_data_parallel_id)
         self.swap_to_cpu_barrier1 = self.manager.get_swap_to_cpu_barrier1(self.local_data_parallel_id)
         self.swap_to_cpu_barrier2 = self.manager.get_swap_to_cpu_barrier2(self.local_data_parallel_id)
