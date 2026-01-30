@@ -17,8 +17,14 @@ from typing import Optional
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.layers.utils import get_sm_version
 from fastdeploy.platforms import current_platform
+
+
+def get_sm_version():
+    prop = paddle.device.cuda.get_device_properties()
+    cc = prop.major * 10 + prop.minor
+    return cc
+
 
 _ENABLE_MACHETE = False
 if current_platform.is_cuda() and get_sm_version() == 90:
