@@ -132,6 +132,7 @@ nav:
       - Monitor Metrics: online_serving/metrics.md
       - Scheduler: online_serving/scheduler.md
       - Graceful Shutdown: online_serving/graceful_shutdown_service.md
+      - Load-Balancing Scheduling Router: online_serving/router.md
   - Offline Inference: offline_inference.md
   - Best Practices:
       - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
