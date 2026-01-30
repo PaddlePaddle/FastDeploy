@@ -340,7 +340,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		}
 
 		destURL = decodeURL
-		releaseTargets = []string{prefillURL, decodeURL}
+		releaseTargets = []string{decodeURL}
 
 		// Expose scheduling results to caller for debugging/validating scheduling strategy
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
