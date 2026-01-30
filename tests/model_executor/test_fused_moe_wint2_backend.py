@@ -59,6 +59,7 @@ class _DummyLayer(paddle.nn.Layer):
 
 
 def _make_state_dict(layer):
+    super_dtype = layer.up_gate_proj_super_scales.dtype if hasattr(layer, "up_gate_proj_super_scales") else "float32"
     up = [paddle.ones([layer.hidden_size // 4, layer.moe_intermediate_size * 2], dtype="uint8")]
     down = [paddle.ones([layer.moe_intermediate_size // 4, layer.hidden_size], dtype="uint8")]
     return {
@@ -66,8 +67,8 @@ def _make_state_dict(layer):
         "down": down,
         "up_scale_0": paddle.ones([layer.hidden_size // 128, layer.moe_intermediate_size * 2], dtype="uint8"),
         "down_scale_0": paddle.ones([layer.moe_intermediate_size // 128, layer.hidden_size], dtype="uint8"),
-        "up_super_0": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
-        "down_super_0": paddle.ones([layer.hidden_size], dtype="float32"),
+        "up_super_0": paddle.ones([layer.moe_intermediate_size * 2], dtype=super_dtype),
+        "down_super_0": paddle.ones([layer.hidden_size], dtype=super_dtype),
         "up_code_scale_0": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
         "down_code_scale_0": paddle.ones([layer.hidden_size], dtype="float32"),
         "up_code_zp_0": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
@@ -80,7 +81,10 @@ def test_wint2_paths():
     layer = _DummyLayer()
 
     cutlass_method = wint2_backend.CutlassWint2FusedMoeMethod(quant_config)
+    prev_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype("float16")
     cutlass_method.create_weights(layer)
+    paddle.set_default_dtype(prev_dtype)
     up, down = _make_state_dict(layer)["up"], _make_state_dict(layer)["down"]
     cutlass_method.check(layer, up, down)
     wint2_backend.Wint2MoeMethod.process_loaded_weights(cutlass_method, layer, None)
