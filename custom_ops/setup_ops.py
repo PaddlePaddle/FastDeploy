@@ -270,6 +270,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
         "gpu_ops/set_flags.cu",
+        "gpu_ops/set_stop.cu",
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/step.cu",

@@ -49,6 +49,10 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
+
+void SetStop(paddle::Tensor& not_need_stop, bool flag);
+
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -59,10 +63,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::optional<paddle::Tensor>& mask,
                         const int head_num,
                         const int kv_head_num,
-                        const int head_dim,
-                        const int max_seq_len,
-                        const int q_token_num,
-                        const int k_token_num);
+                        const int head_dim);
 
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
@@ -440,7 +441,7 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const bool beam_search);
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
-                  const paddle::Tensor& not_need_stop,  // only on cpu
+                  const paddle::Tensor& not_need_stop,  // on device
                   const paddle::Tensor& seq_lens_this_time,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
@@ -449,7 +450,7 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& is_block_step);
 
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
-                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& not_need_stop,  // on device
                     const paddle::Tensor& seq_lens_this_time,
                     const paddle::Tensor& seq_lens_encoder,
                     const paddle::Tensor& seq_lens_decoder,
@@ -763,6 +764,7 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor& pre_ids,
                                  const paddle::Tensor& presence_scores,
                                  const paddle::Tensor& temperatures,
                                  const paddle::Tensor& bad_tokens,
+                                 const paddle::Tensor& bad_tokens_len,
                                  const paddle::Tensor& cur_len,
                                  const paddle::Tensor& min_len,
                                  const paddle::Tensor& eos_token_id,
@@ -1114,6 +1116,7 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    const paddle::Tensor& reasoning_status,
                                    const paddle::Tensor& output_padding_offset,
                                    const paddle::Tensor& output_cum_offsets,
+                                   const paddle::Tensor& enable_thinking,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
@@ -1714,4 +1717,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
+
+  m.def("get_stop", &GetStop, "get_stop function");
+
+  m.def("set_stop", &SetStop, "set_stop function");
 }
