@@ -635,15 +635,8 @@ class CacheTransferManager:
                 finally:
                     try:
                         if (self.rank == 0) and self.storage_backend_type == "attention_store":
-                            self.storage_backend.flush_token_index(
-                                task.task_id,
-                                task.token_ids,
-                                0,
-                                True
-                            )
-                        logger.info(
-                            f"Report cache index in HBM to cache storage for task {task.task_id}"
-                        )
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, True)
+                        logger.info(f"Report cache index in HBM to cache storage for task {task.task_id}")
                     except Exception as e:
                         logger.info(
                             f"Failed to report cache index in HBM to cache storage for task {task.task_id}, error: {e}"
@@ -789,19 +782,12 @@ class CacheTransferManager:
                 finally:
                     try:
                         if (self.rank == 0) and self.storage_backend_type == "attention_store":
-                            self.storage_backend.flush_token_index(
-                                task.task_id,
-                                task.token_ids,
-                                0,
-                                False
-                            )
-                        logger.info(
-                            f"Report cache index out HBM to cache storage for task {task.task_id}"
-                        )
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, False)
+                        logger.info(f"Report cache index out HBM to cache storage for task {task.task_id}")
                     except Exception as e:
                         logger.info(
                             f"Failed to report cache index out HBM to cache storage for task {task.task_id}, error: {e}"
-                        ) 
+                        )
 
             result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, gpu_block_ids)
             self.cache_task_queue.swap_to_storage_barrier.wait()

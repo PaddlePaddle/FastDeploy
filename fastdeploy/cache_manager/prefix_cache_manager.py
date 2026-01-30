@@ -1653,6 +1653,7 @@ class PrefixCacheManager:
         try:
             with self.request_release_lock:
                 req_id = task.request_id
+                logger.info(f"Cache output tokens for task {req_id}")
                 last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
                 if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                     self.leaf_req_map[last_node].remove(req_id)
