@@ -33,7 +33,6 @@ import openai
 import pytest
 from conftest import (
     cleanup_resources,
-    download_and_build_xdeepep,
     get_model_path,
     get_port_num,
     restore_pd_ep_env,
@@ -111,7 +110,7 @@ def print_pd_logs_on_failure():
     log_dirs = ["log_router", "log_prefill", "log_decode"]
 
     for log_dir in log_dirs:
-        nohup_path = os.path.join(log_dir, "nohup")
+        nohup_path = os.path.join(log_dir, "log_0/worklog.0")
         if os.path.exists(nohup_path):
             print(f"\n========== {nohup_path} ==========")
             with open(nohup_path, "r") as f:
@@ -136,8 +135,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
 
     # 清理资源
     cleanup_resources()
-    if not download_and_build_xdeepep():
-        pytest.fail("xDeepEP下载或编译失败")
 
     # 清理并创建日志目录
     for log_dir in ["log_router", "log_prefill", "log_decode"]:

@@ -35,7 +35,7 @@ from fastdeploy.model_executor.utils import (
 )
 from fastdeploy.platforms import current_platform
 
-from .utils import _set_var_distributed, divide, get_tensor
+from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
 
 
 class UnquantizedLinearMethod(QuantMethodBase):
@@ -168,7 +168,12 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if fd_config.quant_config and not skip_quant and fd_config.quant_config.get_quant_method(self):
+        if (
+            fd_config.quant_config
+            and not skip_quant
+            and modules_to_convert(prefix, self.fd_config)
+            and fd_config.quant_config.get_quant_method(self)
+        ):
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
@@ -352,14 +357,26 @@ class MergedReplicatedLinear(ReplicatedLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if not param._is_initialized():
             param.initialize()
+        # for xpu and other backend
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if loaded_shard_id is None:
-            axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
+            if weight_need_transpose:
+                loaded_weight = get_tensor(loaded_weight)
+                loaded_weight = loaded_weight.transpose([1, 0])
+                axis = -1
+            else:
+                axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=0, end=loaded_weight.shape[axis])
 
         else:
             assert loaded_shard_id in ["q_a", "kv_a", "gate", "up"]
-
+            if weight_need_transpose:
+                loaded_weight = get_tensor(loaded_weight)
+                loaded_weight = loaded_weight.transpose([1, 0])
+                param_dim = True
+            else:
+                param_dim = (self.fd_config.model_config.model_format == "torch") ^ True
             if loaded_shard_id in ["q_a", "gate"]:
                 param_shard_offset = 0
                 param_shard_size = self.output_sizes[0]
@@ -371,7 +388,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
             param = slice_fn(
                 param,
-                (self.fd_config.model_config.model_format == "torch") ^ True,
+                param_dim,
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
@@ -891,7 +908,7 @@ class RowParallelLinear(LinearBase):
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]
         token_num_pad = (token_num + self.tp_size - 1) // self.tp_size * self.tp_size
-        if self.fd_config.scheduler_config.splitwise_role == "decode":
+        if self.fd_config.scheduler_config.splitwise_role == "decode" and not current_platform.is_xpu():
             if not (token_num_pad > token_num):
                 x_padded = x
             else:

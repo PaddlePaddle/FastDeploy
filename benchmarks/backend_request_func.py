@@ -281,6 +281,11 @@ async def async_request_eb_openai_chat_completions(
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
+                                if output.prompt_len == 0:
+                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                        output.prompt_len = (
+                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                        )
 
                             most_recent_timestamp = timestamp
                             token_timestamps.append(time.time())

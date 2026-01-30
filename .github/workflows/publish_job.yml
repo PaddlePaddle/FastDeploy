@@ -176,61 +176,37 @@ jobs:
         run: |
           echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
 
-  build_sm8090:
-    name: BUILD_SM8090
+  build_cu126:
+    name: BUILD_cu126
     needs: [clone, publish_pre_check]
     uses: ./.github/workflows/_build_linux.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "80,90"
+      COMPILE_ARCH: "86,89,80,90"
       WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+      FD_UNIFY_BUILD: "true"
 
-  build_sm8689:
-    name: BUILD_SM8689
+  build_cu129:
+    name: BUILD_cu129
     needs: [clone, publish_pre_check]
-    uses: ./.github/workflows/_build_linux.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "86,89"
-      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
-      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
-      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
-      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
-
-  build_sm8090_cu129:
-    name: BUILD_SM8090_cu129
-    needs: [ clone, publish_pre_check ]
     uses: ./.github/workflows/_build_linux_cu129.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "80,90"
+      COMPILE_ARCH: "86,89,80,90"
       WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
       FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
       PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
       PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
-
-  build_sm8689_cu129:
-    name: BUILD_SM8689_cu129
-    needs: [ clone, publish_pre_check ]
-    uses: ./.github/workflows/_build_linux_cu129.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "86,89"
-      WITH_NIGHTLY_BUILD: ${{ needs.publish_pre_check.outputs.with_nightly_build }}
-      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
-      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
-      PADDLE_WHL_URL: ${{ needs.publish_pre_check.outputs.compile_use_paddle_whl_url }}
+      FD_UNIFY_BUILD: "true"
 
   build_fd_router:
     name: BUILD_FD_ROUTER
-    needs: [ clone, publish_pre_check ]
+    needs: [clone, publish_pre_check]
     uses: ./.github/workflows/_build_linux_fd_router.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
@@ -297,16 +273,15 @@ jobs:
           echo "commit fd-router url is ${FD_ROUTER_PATH}"
           echo "latest fd-router url is ${FD_ROUTER_PATH_LATEST}"
 
-  paddle_pypi_upload_sm8090:
+  paddle_pypi_upload_cu126:
     environment: PaddleSourceUpload
-    name: PADDLE_PYPI_UPLOAD_8090
-    needs: build_sm8090
+    name: PADDLE_PYPI_UPLOAD_cu126
+    needs: build_cu126
     runs-on: ubuntu-latest
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
-      COMPILE_ARCH: "80,90"
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -318,9 +293,9 @@ jobs:
           wget -q --no-check-certificate ${FASTDEPLOY_WHEEL_URL}
           filename=$(basename ${FASTDEPLOY_WHEEL_URL})
           if [[ "${{ github.ref_name }}" == "develop" ]];then
-            target_path=paddle-whl/nightly/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+            target_path=paddle-whl/nightly/cu126/fastdeploy-gpu
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            target_path=paddle-whl/stable/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+            target_path=paddle-whl/stable/cu126/fastdeploy-gpu
           else
             echo "Not develop or tag, do nothing"
           fi
@@ -330,16 +305,15 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
 
-  paddle_pypi_upload_sm8689:
+  paddle_pypi_upload_cu129:
     environment: PaddleSourceUpload
-    name: PADDLE_PYPI_UPLOAD_8689
-    needs: build_sm8689
+    name: PADDLE_PYPI_UPLOAD_cu129
+    needs: build_cu129
     runs-on: ubuntu-latest
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
-      COMPILE_ARCH: "86,89"
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu129.outputs.wheel_path_cu129 }}
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -351,9 +325,9 @@ jobs:
           wget -q --no-check-certificate ${FASTDEPLOY_WHEEL_URL}
           filename=$(basename ${FASTDEPLOY_WHEEL_URL})
           if [[ "${{ github.ref_name }}" == "develop" ]];then
-            target_path=paddle-whl/nightly/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+            target_path=paddle-whl/nightly/cu129/fastdeploy-gpu
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            target_path=paddle-whl/stable/fastdeploy-gpu-${COMPILE_ARCH//,/_}/fastdeploy-gpu
+            target_path=paddle-whl/stable/cu129/fastdeploy-gpu
           else
             echo "Not develop or tag, do nothing"
           fi
@@ -365,7 +339,7 @@ jobs:
 
   images_build:
     name: Run FD Image Build
-    needs: [clone, publish_pre_check, build_sm8090]
+    needs: [clone, publish_pre_check, build_cu126]
     runs-on: [self-hosted, Docker-Build]
     if: |
       github.event.repository.fork == false &&
@@ -405,6 +379,8 @@ jobs:
           git config --global user.email "fastdeploy_ci@example.com"
           git log -n 3 --oneline
 
+          cd ./dockerfiles
+
           PRODUCT_NAME=ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:${FD_VERSION}
           docker build --no-cache -t ${PRODUCT_NAME} -f Dockerfile.gpu . \
             --network host \
@@ -415,62 +391,74 @@ jobs:
 
   unittest_coverage:
     name: Run FastDeploy Unit Tests and Coverage
-    needs: [clone,build_sm8090]
+    needs: [clone,build_cu126]
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
+      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  four_cards_test:
+    name: Run Four Cards Tests
+    needs: [clone,build_cu126]
+    uses: ./.github/workflows/_gpu_4cards_case_test.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
   logprob_test:
     name: Run FastDeploy LogProb Tests
-    needs: [build_sm8090]
+    needs: [build_cu126]
     uses: ./.github/workflows/_logprob_test_linux.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   pre_ce_test:
     name: Extracted partial CE model tasks to run in CI.
-    needs: [clone,build_sm8090]
+    needs: [clone,build_cu126]
     uses: ./.github/workflows/_pre_ce_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   base_test:
     name: Run Base Tests
-    needs: [clone,build_sm8090]
+    needs: [clone,build_cu126]
     uses: ./.github/workflows/_base_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   accuracy_test:
     name: Run Accuracy Tests
-    needs: [clone,build_sm8090]
+    needs: [clone,build_cu126]
     uses: ./.github/workflows/_accuracy_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
 
   stable_test:
     name: Run Stable Tests
-    needs: [clone,build_sm8090]
+    needs: [clone,build_cu126]
     uses: ./.github/workflows/_stable_test.yml
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"

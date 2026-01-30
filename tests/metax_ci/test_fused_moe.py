@@ -4,7 +4,7 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
-from paddle.incubate.nn.functional import swiglu
+from paddle.nn.functional import swiglu
 from paddle.nn.quant import weight_only_linear, weight_quantize
 
 from fastdeploy.model_executor.ops.gpu import (
