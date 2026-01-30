@@ -760,8 +760,7 @@ class CacheTransferManager:
                     logger.info("[RL] all ranks cleared caches!")
 
                     # reset kv_cache_status_signal
-                    if self.rank == 0:
-                        self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
+                    self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
 
                     self._log_memory("after clearing caches")
 
@@ -797,8 +796,7 @@ class CacheTransferManager:
                     self.resume()
 
                     # set kv_cache_status_signal
-                    if self.rank == 0:
-                        self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
+                    self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                     self._log_memory("after restoring caches")
 
