@@ -145,12 +145,12 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
     monkeypatch.setattr(
         deep_ep.Buffer,
         "get_dispatch_config",
-        staticmethod(lambda num_ranks: orig_dispatch(2) if num_ranks == 1 else orig_dispatch(num_ranks)),
+        staticmethod(lambda num_ranks: orig_dispatch(2) if num_ranks in (-1, 1) else orig_dispatch(num_ranks)),
     )
     monkeypatch.setattr(
         deep_ep.Buffer,
         "get_combine_config",
-        staticmethod(lambda num_ranks: orig_combine(2) if num_ranks == 1 else orig_combine(num_ranks)),
+        staticmethod(lambda num_ranks: orig_combine(2) if num_ranks in (-1, 1) else orig_combine(num_ranks)),
     )
 
     method.ep_prefill_runner = EPPrefillRunner(
