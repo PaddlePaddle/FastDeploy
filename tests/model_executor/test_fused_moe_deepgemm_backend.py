@@ -123,13 +123,15 @@ def test_deepgemm_weights_and_apply_paths():
     method.process_loaded_weights(layer, {"up": up, "down": down})
     assert layer.up_gate_proj_weight.shape[0] == layer.num_local_experts
 
-    up_scale = paddle.ones(_scale_shape(layer.hidden_size, layer.moe_intermediate_size * 2), dtype="float32")
+    prequant_up = [paddle.ones([layer.hidden_size, layer.moe_intermediate_size], dtype="float16")]
+    prequant_down = [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], dtype="float16")]
+    up_scale = paddle.ones(_scale_shape(layer.hidden_size, layer.moe_intermediate_size), dtype="float32")
     down_scale = paddle.ones(_scale_shape(layer.moe_intermediate_size, layer.hidden_size), dtype="float32")
     state_list = [
         ("up_scale_0", up_scale),
         ("down_scale_0", down_scale),
-        ("up", up),
-        ("down", down),
+        ("up", prequant_up),
+        ("down", prequant_down),
         ("ids", [0]),
     ]
     method.process_prequanted_weights(layer, state_dict=state_list, is_rearrange=False)
