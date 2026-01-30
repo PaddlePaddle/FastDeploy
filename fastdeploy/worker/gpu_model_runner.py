@@ -1484,11 +1484,9 @@ class GPUModelRunner(ModelRunnerBase):
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
 
             if self.fd_config.speculative_config.method == "mtp":
-                self.dynamic_weight_manager = DynamicWeightManager(
-                    self.fd_config, [self.model, self.proposer.model], self.local_rank
-                )
+                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, [self.model, self.proposer.model])
             else:
-                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
+                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
     def get_model(self) -> nn.Layer:
         """Get current model"""
