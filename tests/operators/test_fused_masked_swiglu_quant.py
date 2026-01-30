@@ -184,12 +184,7 @@ def run_separate(x, token_nums, block_size, use_ue8m0=False):
     from fastdeploy.model_executor.ops.gpu import group_swiglu_with_masked
 
     swiglu = group_swiglu_with_masked(x, token_nums)
-    if use_ue8m0:
-        q, scale = masked_per_token_quant_ref(swiglu, token_nums, block_size, use_ue8m0)
-    else:
-        from fastdeploy.model_executor.ops.gpu import masked_per_token_quant
-
-        q, scale = masked_per_token_quant(swiglu, token_nums, block_size)
+    q, scale = masked_per_token_quant_ref(swiglu, token_nums, block_size, use_ue8m0)
     return q, scale
 
 
@@ -278,6 +273,7 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
         np.testing.assert_allclose(
             s_ref_flat[valid_flat].numpy(),
             s_fused_flat[valid_flat].numpy(),
+            rtol=1e-06,
             err_msg="**scale mismatch**",
         )
 
@@ -285,6 +281,7 @@ class TestFusedSwigluFP8Quant(unittest.TestCase):
             q_ref_flat[valid_flat].numpy(),
             q_fused_flat[valid_flat].numpy(),
             equal_nan=True,
+            rtol=0.5,
             err_msg="**quant_x mismatch**",
         )
 

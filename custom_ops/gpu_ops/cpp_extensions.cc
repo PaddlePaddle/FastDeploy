@@ -303,10 +303,6 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
                                           const int block_size);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
                                                  const int block_size);
-std::vector<paddle::Tensor> MaskedPerTokenQuant(
-    paddle::Tensor& input,
-    paddle::Tensor& recv_expert_count,
-    const int block_size);
 
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
@@ -1272,13 +1268,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("norm_topk_prob"),
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
-
-  m.def("masked_per_token_quant",
-        &MaskedPerTokenQuant,
-        py::arg("input"),
-        py::arg("recv_expert_count"),
-        py::arg("block_size"),
-        "per token per block quant");
 
   m.def("fused_mask_swiglu_fp8_quant",
         &FusedMaskSwigluFP8Quant,
