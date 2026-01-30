@@ -1646,6 +1646,93 @@ class PrefixCacheManager:
             node.req_id_set.add(req_id)
             node = node.parent
 
+    def cache_output_blocks(self, task, block_size):
+        """
+        Cache blocks already computed.
+        """
+        try:
+            with self.request_release_lock:
+                req_id = task.request_id
+                last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
+                if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
+                    self.leaf_req_map[last_node].remove(req_id)
+                if isinstance(task.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = task.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = task.prompt_token_ids
+                input_ids = prompt_token_ids + task.output_token_ids
+                total_token_num = len(input_ids)
+                can_cache_computed_tokens = total_token_num - total_token_num % block_size
+                current_match_node = last_node
+                has_modified_gpu_lru_leaf_heap = False
+                has_modified_cpu_lru_leaf_heap = False
+                can_recycle_gpu_block_ids = []
+                can_recycle_cpu_block_ids = []
+                gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
+                current_time = time.time()
+
+                with self.cache_status_lock:
+                    while num_cached_tokens < total_token_num:
+                        token_block = input_ids[num_cached_tokens : num_cached_tokens + block_size]
+                        token_num = len(token_block)
+                        if token_num != block_size:
+                            break
+                        hash_value = get_hash_str(token_block)
+                        if hash_value in current_match_node.children:
+                            child = current_match_node.children[hash_value]
+                            child.increment_shared_count()
+                            child.last_used_time = current_time
+                            child.req_id_set.add(req_id)
+                            if child in self.gpu_lru_leaf_set:
+                                self.gpu_lru_leaf_set.remove(child)
+                                self.gpu_lru_leaf_heap.remove(child)
+                                has_modified_gpu_lru_leaf_heap = True
+                            elif child in self.cpu_lru_leaf_set:
+                                self.cpu_lru_leaf_set.remove(child)
+                                self.cpu_lru_leaf_heap.remove(child)
+                                has_modified_cpu_lru_leaf_heap = True
+                            if child.has_in_gpu:
+                                can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                            else:
+                                if child.cache_status == CacheStatus.SWAP2CPU:
+                                    logger.info(
+                                        f"cache_output_blocks: req_id {task.request_id} matched node"
+                                        + f" {child.node_id} which is being SWAP2CPU"
+                                    )
+                                    child.cache_status = CacheStatus.GPU
+                                    can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                                elif child.cache_status == CacheStatus.CPU:
+                                    can_recycle_cpu_block_ids.append(child.block_id)
+                                    child.cache_status = CacheStatus.GPU
+                                    gpu_block_id = gpu_block_ids_to_cache.pop(0)
+                                    child.block_id = gpu_block_id
+                            num_cached_tokens = num_cached_tokens + block_size
+                            current_match_node = child
+                        else:
+                            break
+
+                if has_modified_gpu_lru_leaf_heap:
+                    heapq.heapify(self.gpu_lru_leaf_heap)
+                if has_modified_cpu_lru_leaf_heap:
+                    heapq.heapify(self.cpu_lru_leaf_heap)
+                self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
+                self.recycle_cpu_blocks(can_recycle_cpu_block_ids)
+
+                leaf_node = self.mm_build_path(
+                    request=task,
+                    num_computed_tokens=can_cache_computed_tokens,
+                    block_size=block_size,
+                    last_node=current_match_node,
+                    num_cached_tokens=num_cached_tokens,
+                )
+                self.req_leaf_map[req_id] = leaf_node
+                self.leaf_req_map[leaf_node].add(req_id)
+                self.req_to_radix_tree_info[req_id] = (leaf_node, can_cache_computed_tokens)
+                task.num_cached_blocks = can_cache_computed_tokens // block_size
+        except Exception as e:
+            logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+            raise e
+
     def mm_build_path(self, request, num_computed_tokens, block_size, last_node, num_cached_tokens):
         """
         Constructs a caching path in radix tree for multimodal requests by processing computed tokens.

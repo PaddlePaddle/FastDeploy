@@ -3,6 +3,7 @@ package gateway
 import (
 	"bufio"
 	"bytes"
+	"context"
 	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -34,6 +35,8 @@ func newRequestID() string {
 	}
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
 }
+
+type PromptExtractor func(rawReq map[string]any) string
 
 // extractPromptFromChatRequest extracts text prompt from OpenAI ChatCompletions style request
 func extractPromptFromChatRequest(rawReq map[string]any) string {
@@ -95,12 +98,55 @@ func extractPromptFromChatRequest(rawReq map[string]any) string {
 	return builder.String()
 }
 
+func extractPromptFromCompletionsRequest(rawReq map[string]any) string {
+	promptVal, ok := rawReq["prompt"]
+	if !ok {
+		return ""
+	}
+
+	var builder strings.Builder
+
+	appendText := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		if builder.Len() > 0 {
+			builder.WriteByte(' ')
+		}
+		builder.WriteString(s)
+	}
+
+	switch v := promptVal.(type) {
+
+	case string:
+		appendText(v)
+
+	case []string:
+		for _, s := range v {
+			appendText(s)
+		}
+
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				appendText(s)
+			}
+		}
+
+	default:
+		// Other structures are ignored for now
+	}
+
+	return builder.String()
+}
+
 // PostToPD sends requests to both Prefill and Decode instances, only returns Decode node response
-func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte) (*http.Response, error) {
+func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isStream bool, completionEndpoint string) (*http.Response, error) {
 	ctx := c.Request.Context()
 
-	decodeEndpoint := fmt.Sprintf("%s/v1/%s", decodeURL, "chat/completions")
-	prefillEndpoint := fmt.Sprintf("%s/v1/%s", prefillURL, "chat/completions")
+	decodeEndpoint := fmt.Sprintf("%s/v1/%s", decodeURL, completionEndpoint)
+	prefillEndpoint := fmt.Sprintf("%s/v1/%s", prefillURL, completionEndpoint)
 
 	// Construct two requests
 	decodeReq, err := http.NewRequestWithContext(ctx, "POST", decodeEndpoint, bytes.NewReader(reqBody))
@@ -160,14 +206,71 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte) (*ht
 	}
 
 	if prefillRes.resp != nil {
-		prefillRes.resp.Body.Close()
+		go readPrefillRecv(ctx, prefillURL, isStream, prefillRes.resp)
 	}
 
 	return decodeRes.resp, nil
 }
 
+func readPrefillRecv(ctx context.Context, url string, isStream bool, backendResp *http.Response) {
+	if backendResp == nil || backendResp.Body == nil {
+		return
+	}
+	defer backendResp.Body.Close()
+
+	if isStream {
+		buffer := bytebufferpool.Get()
+		buffer.Reset()
+		defer bytebufferpool.Put(buffer)
+
+		scanner := bufio.NewScanner(backendResp.Body)
+		scanner.Buffer(buffer.B, maxCapacity)
+
+		released := false
+		defer func() {
+			// Fallback to ensure release
+			if !released {
+				scheduler_handler.Release(ctx, url)
+				logger.Debug("[prefill] release in defer (fallback) url=%s", url)
+			}
+		}()
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// First read that returns data
+			if !released {
+				scheduler_handler.Release(ctx, url)
+				released = true
+
+				logger.Debug("[prefill] first chunk received, release scheduler url=%s", url)
+			}
+			logger.Debug("[prefill] recv result: %s", line)
+		}
+
+		if err := scanner.Err(); err != nil {
+			logger.Debug("[prefill] scanner error: %v", err)
+		}
+	} else {
+		_, err := io.Copy(io.Discard, backendResp.Body)
+		if err != nil {
+			logger.Debug("[prefill] copy error: %v", err)
+		}
+	}
+}
+
 // ChatCompletions implements request forwarding to actual large model inference service
 func ChatCompletions(c *gin.Context) {
+	completionEndpoint := "chat/completions"
+	CommonCompletions(c, extractPromptFromChatRequest, completionEndpoint)
+}
+
+func Completions(c *gin.Context) {
+	completionEndpoint := "completions"
+	CommonCompletions(c, extractPromptFromCompletionsRequest, completionEndpoint)
+}
+
+func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndpoint string) {
 	ctx := c.Request.Context()
 
 	bodyBytes, err := io.ReadAll(c.Request.Body)
@@ -190,13 +293,15 @@ func ChatCompletions(c *gin.Context) {
 		destURL         string
 		releaseTargets  []string
 		requestBodyData []byte
+		prefillURL      string
+		decodeURL       string
 	)
 
 	if isSplitwise {
 		// PD mode: select instances for Prefill/Decode separately
-		message := extractPromptFromChatRequest(rawReq)
+		message := extractor(rawReq)
 
-		prefillURL, decodeURL, err := manager.SelectWorkerPair(ctx, message)
+		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
 			c.Writer.WriteHeader(http.StatusBadGateway)
 			c.Writer.Write([]byte(`{"error": "Failed to select worker pair"}`))
@@ -207,6 +312,9 @@ func ChatCompletions(c *gin.Context) {
 			c.Writer.Write([]byte(`{"error": "No available prefill/decode workers"}`))
 			return
 		}
+
+		// Prefill node token count was added in SelectWorker, release when request ends
+		defer scheduler_handler.ReleasePrefillTokens(ctx, prefillURL, message)
 
 		// Construct disaggregate_info to ensure selected P/D work in pairs within FastDeploy
 		disagg, err := manager.BuildDisaggregateInfo(ctx, prefillURL, decodeURL)
@@ -237,9 +345,6 @@ func ChatCompletions(c *gin.Context) {
 		// Expose scheduling results to caller for debugging/validating scheduling strategy
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
 		c.Writer.Header().Set("X-Router-Decode-URL", decodeURL)
-
-		// Prefill node token count was added in SelectWorker, release when request ends
-		defer scheduler_handler.ReleasePrefillTokens(ctx, prefillURL, message)
 	} else {
 		// Non-PD mode: use Mixed instance
 		dest, err := manager.SelectWorker(ctx, "")
@@ -260,10 +365,18 @@ func ChatCompletions(c *gin.Context) {
 		}
 	}()
 
+	isStream := false
+	if v, ok := rawReq["stream"]; ok {
+		stream, ok := v.(bool)
+		if ok && stream {
+			isStream = true
+		}
+	}
+
 	// Send request
 	var backendResp *http.Response
 	if isSplitwise {
-		backendResp, err = PostToPD(c, destURL, releaseTargets[0], requestBodyData)
+		backendResp, err = PostToPD(c, decodeURL, prefillURL, requestBodyData, isStream, completionEndpoint)
 	} else {
 		backendResp, err = GetClientWithRetry(c, requestBodyData, destURL)
 	}
@@ -289,14 +402,6 @@ func ChatCompletions(c *gin.Context) {
 	//c.Writer.Header().Set("Transfer-Encoding", "chunked") // Set chunked transfer
 	if backendResp.StatusCode == http.StatusOK {
 		c.Writer.WriteHeader(backendResp.StatusCode)
-	}
-
-	isStream := false
-	if v, ok := rawReq["stream"]; ok {
-		stream, ok := v.(bool)
-		if ok && stream {
-			isStream = true
-		}
 	}
 
 	redirect(c, isStream, backendResp)

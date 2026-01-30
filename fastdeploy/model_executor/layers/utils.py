@@ -254,10 +254,7 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     Only used in deep_gemm block wise quant weight.
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
     """
-    try:
-        from deep_gemm import ceil_div
-    except ModuleNotFoundError:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import ceil_div
+    from fastdeploy.model_executor.ops.gpu.deep_gemm import ceil_div
 
     assert x.dim() == 2
     m, n = x.shape
@@ -552,12 +549,6 @@ def vocab_range_from_per_partition_vocab_size(per_partition_vocab_size: int, ran
 def vocab_range_from_global_vocab_size(global_vocab_size: int, rank: int, world_size: int, offset: int = 0):
     per_partition_vocab_size = divide(global_vocab_size, world_size)
     return vocab_range_from_per_partition_vocab_size(per_partition_vocab_size, rank, offset=offset)
-
-
-def get_sm_version():
-    prop = paddle.device.cuda.get_device_properties()
-    cc = prop.major * 10 + prop.minor
-    return cc
 
 
 def modules_to_convert(prefix: str, fd_config: FDConfig):
