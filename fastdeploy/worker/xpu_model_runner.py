@@ -1237,7 +1237,12 @@ class XPUModelRunner(ModelRunnerBase):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
-        create_cache_tensor = profile or self.scheduler_config.splitwise_role == "mixed"
+        # create_cache_tensor = profile or self.scheduler_config.splitwise_role == "mixed"
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:
@@ -1685,7 +1690,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
-            num_tokens=int(self.scheduler_config.max_num_batched_tokens),
+            num_tokens=min(int(self.scheduler_config.max_num_batched_tokens), 64),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 
