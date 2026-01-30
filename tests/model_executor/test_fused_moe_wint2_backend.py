@@ -92,7 +92,7 @@ def test_wint2_paths():
     cutlass_method.process_prequanted_weights(layer, _make_state_dict(layer))
 
     gate = paddle.nn.Linear(layer.hidden_size, layer.num_experts, bias_attr=False)
-    x = paddle.ones([2, layer.hidden_size], dtype="float16")
+    x = paddle.ones([2, layer.hidden_size], dtype="bfloat16")
     out = cutlass_method.apply(layer, x, gate, topk_ids_hookfunc=lambda **_k: None)
     assert out.shape == [2, layer.hidden_size]
 
