@@ -14,8 +14,9 @@
 # limitations under the License.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
+from enum import IntEnum
 
 import paddle
 
@@ -122,6 +123,19 @@ class LogprobsTensors(NamedTuple):
                 paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
                 paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
                 paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+            )
+    
+    def clone(self):
+        with paddle.no_grad():
+            return LogprobsTensors(
+                self.logprob_token_ids.clone().cpu()
+                if self.logprob_token_ids is not None else None,
+
+                self.logprobs.clone().cpu()
+                if self.logprobs is not None else None,
+
+                self.selected_token_ranks.clone().cpu()
+                if self.selected_token_ranks is not None else None,
             )
 
 
@@ -328,6 +342,14 @@ class ModelOutputData:
     not_need_stop_device: paddle.Tensor = None
 
 
+class DecodeMode(IntEnum):
+    """
+    The mode of decoding.
+    """
+    TARGET = 3
+    DRAFT = 4
+
+
 @dataclass
 class ModelRunnerOutput:
     """
@@ -335,26 +357,27 @@ class ModelRunnerOutput:
     """
 
     """
-        [num_reqs]
+    The mode of decoding.
     """
-    req_ids: list[str]
+    decode_mode: DecodeMode | None = DecodeMode.TARGET
 
     """
-        req_id -> index
+    [num_reqs, num_generated_tokens]
     """
-    req_id_to_index: dict[str, int]
+    sampled_token_ids: list[list[int]] = field(default_factory=list)
 
     """
-        [num_reqs, num_generated_tokens]
+    [num_reqs, num_generated_tokens]
     """
-    sampled_token_ids: list[list[int]]
+    logprobs: LogprobsTensors | None = None
 
     """
-        [num_reqs, num_spec_tokens]
+    [num_reqs, num_prompt_tokens]
     """
-    spec_token_ids: Optional[list[list[int]]]
+    prompt_logprobs: LogprobsTensors | None = None
 
     """
     [num_reqs, hidden_size]
     """
-    pooler_output: list[Optional[paddle.Tensor]]
+    pooler_output: list[paddle.Tensor | None] | None = None
+

@@ -64,10 +64,8 @@ from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
-from fastdeploy.utils import get_logger, optional_type
+from fastdeploy.utils import optional_type, worker_logger as logger
 from fastdeploy.worker.worker_base import WorkerBase
-
-logger = get_logger("worker_process", "worker_process.log")
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:

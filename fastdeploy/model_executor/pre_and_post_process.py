@@ -102,7 +102,8 @@ from fastdeploy.model_executor.entropy_utils import (
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput, DecodeMode, ModelRunnerOutput
+from fastdeploy.utils import worker_logger
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -270,6 +271,88 @@ def pre_process(
         output_padding_offset,
     )
 
+def async_generate_output(
+    async_output_queue: queue.Queue,
+    sampled_tokens: paddle.Tensor,
+    accept_token_nums: list[int],
+    prompt_logprobs_list: Optional[list[Optional[LogprobsTensors]]] = None,
+    logprobs_tensors: Optional[LogprobsTensors] = None,
+    decode_mode: DecodeMode = DecodeMode.TARGET,
+):
+    """
+    Pack sampled tokens and logprobs, then send to async_output_queue.
+    Args:
+        sampled_tokens: [B, T]
+        accept_token_nums: [B']
+        prompt_logprobs_list: [B', 3]
+        logprobs_tensors: [B', T']
+        decode_mode: TARGET or DRAFT
+    """
+    assert async_output_queue is not None, "async_output_queue must not be None"
+
+    worker_logger.debug(
+        "async_generate_output detail:\n"
+        "  decode_mode: %s\n"
+        "  sampled_tokens shape: %s\n"
+        "  accept_token_nums: %s\n"
+        "  prompt_logprobs_list: %s\n"
+        "  logprobs_tensors: %s",
+        decode_mode,
+        getattr(sampled_tokens, "shape", None),
+        accept_token_nums,
+        prompt_logprobs_list,
+        logprobs_tensors,
+    )
+
+    # paddle.Tensor -> list (no grad, no device)
+    sampled_tokens_np = sampled_tokens.numpy().tolist()
+
+    sampled_token_ids: list = []
+
+    # accept_token_nums of per-seq
+    for idx, accept_num in enumerate(accept_token_nums):
+        if accept_num <= 0:
+            sampled_token_ids.append([])
+            continue
+
+        if decode_mode == DecodeMode.DRAFT:
+            # shape: [total_len] or [B, total_len]
+            sampled_token_ids.append(
+                sampled_tokens_np[idx : idx + accept_num]
+            )
+        else:
+            # TARGET: shape usually [B, T]
+            sampled_token_ids.append(
+                sampled_tokens_np[idx][:accept_num]
+            )
+
+    # clone prompt_logprobs
+    prompt_logprobs: Optional[list[Optional[LogprobsTensors]]] = None
+    if prompt_logprobs_list is not None:
+        prompt_logprobs = [
+            pl.clone() if pl is not None else None
+            for pl in prompt_logprobs_list
+        ]
+
+    # clone logprobs_tensors
+    if logprobs_tensors is not None:
+        logprobs_tensors = logprobs_tensors.clone()
+
+    generate_output = ModelRunnerOutput(
+        decode_mode=decode_mode,
+        sampled_token_ids=sampled_token_ids,
+        logprobs=logprobs_tensors,
+        prompt_logprobs=prompt_logprobs,
+    )
+
+    async_output_queue.put(generate_output)
+
+def async_pooling_output(
+    pooler_outputs: List[PoolingSequenceGroupOutput],
+    async_output_queue: queue.Queue,
+):
+    pass
+
 
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
@@ -422,12 +505,15 @@ def save_output_normal(
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
-            output = _build_stream_transfer_data(
-                sampler_output.sampled_token_ids,
-                logprobs=sampler_output.logprobs_tensors,
+            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+            accept_token_nums = [1] * real_bsz
+            async_generate_output(
+                async_output_queue=async_output_queue,
+                sampled_tokens=sampler_output.sampled_token_ids,
+                accept_token_nums=accept_token_nums,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
+                logprobs_tensors=sampler_output.logprobs_tensors,
             )
-            async_output_queue.put(output)
     else:
         if sampler_output.logprobs_tensors is None:
             save_output(
@@ -460,6 +546,7 @@ def post_process_specualate(
     think_end_id: int = -1,
     line_break_id: int = -1,
     enable_entropy: bool = False,
+    async_output_queue: queue.Queue = None,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -505,7 +592,20 @@ def post_process_specualate(
     )
 
     if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
+        
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+            accept_token_nums = model_output.accept_num[:real_bsz]
+            if save_each_rank or model_output.mp_rank == 0:
+                async_generate_output(
+                    async_output_queue=async_output_queue,
+                    sampled_tokens=sampler_output.sampled_token_ids,
+                    accept_token_nums=accept_token_nums,
+                    prompt_logprobs_list=model_output.prompt_logprobs_list,
+                    logprobs_tensors=sampler_output.logprobs_tensors,
+                    decode_mode=DecodeMode.TARGET,
+                )
+        elif sampler_output.logprobs_tensors is None:
             speculate_save_output(
                 model_output.accept_tokens,
                 model_output.accept_num,
@@ -587,6 +687,7 @@ def post_process(
                 think_end_id,
                 line_break_id,
                 enable_entropy,
+                async_output_queue,
             )
         else:
             post_process_normal(
