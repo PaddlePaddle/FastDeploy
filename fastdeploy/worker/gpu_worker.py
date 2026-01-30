@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import paddle
 import pynvml
@@ -188,6 +188,10 @@ class GpuWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        """update weights in place"""
+        return self.model_runner.update_weights(version, rsync_config)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -209,13 +213,28 @@ class GpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Perform the warm-up and the graph optimization
+        Perform the warm-up and the graph optimization.
+
+        Execution modes:
+        | Mode                              | Prefill + Mixed          | Decode                   |
+        |-----------------------------------|--------------------------|--------------------------|
+        | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
+        | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
+        | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
         if self.fd_config.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.vision_encoder_compile()
-        # Trigger cuda graph capture
+
+        # Static split graph mode: capture CUDAGraph for prefill/mixed phase
+        if (
+            self.fd_config.graph_opt_config.graph_opt_level >= 1
+            and not self.fd_config.graph_opt_config.full_cuda_graph
+        ):
+            self.model_runner.capture_model_prefill_and_mixed()
+
+        # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

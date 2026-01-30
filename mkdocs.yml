@@ -97,6 +97,7 @@ plugins:
             Reasoning Output: 思考链内容
             Early Stop: 早停功能
             Plugins: 插件机制
+            PaddleFormers Backend: PaddleFormers 后端
             Sampling: 采样策略
             MultiNode Deployment: 多机部署
             Graph Optimization: 图优化
@@ -131,6 +132,7 @@ nav:
       - Monitor Metrics: online_serving/metrics.md
       - Scheduler: online_serving/scheduler.md
       - Graceful Shutdown: online_serving/graceful_shutdown_service.md
+      - Load-Balancing Scheduling Router: online_serving/router.md
   - Offline Inference: offline_inference.md
   - Best Practices:
       - ERNIE-4.5-0.3B: best_practices/ERNIE-4.5-0.3B-Paddle.md
@@ -155,6 +157,7 @@ nav:
       - Reasoning Output: features/reasoning_output.md
       - Early Stop: features/early_stop.md
       - Plugins: features/plugins.md
+      - PaddleFormers Backend: features/paddleformers_backend.md
       - Sampling: features/sampling.md
       - MultiNode Deployment: features/multi-node_deployment.md
       - Graph Optimization: features/graph_optimization.md

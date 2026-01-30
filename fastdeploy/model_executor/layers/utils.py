@@ -23,6 +23,7 @@ from paddle import Tensor, nn
 from paddle.framework import in_dynamic_mode
 from scipy.linalg import block_diag
 
+from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() and current_platform.available():
@@ -219,6 +220,35 @@ def group_wise_int4_weight_quantize(weight: paddle.Tensor, group_size: int = 128
     return quant_weight.astype(paddle.int8), weight_scale
 
 
+def scale_wrapper(x_amax: paddle.Tensor, eps: float = 0.0) -> paddle.Tensor:
+    """
+    Paddle implementation of CUDA ScaleWrapper logic.
+    Args:
+        x_amax (paddle.Tensor): amax tensor (float32 recommended)
+        eps (float): epsilon to avoid division by zero
+    Returns:
+        paddle.Tensor: scale tensor, same shape as x_amax
+    """
+    fp8_max = 448.0
+    float_max = paddle.finfo(paddle.float32).max
+    amax_mod = paddle.maximum(
+        x_amax,
+        paddle.full_like(x_amax, eps),
+    )
+    scale = fp8_max / amax_mod
+    scale = paddle.where(
+        amax_mod == 0,
+        paddle.ones_like(scale),
+        scale,
+    )
+    scale = paddle.where(
+        paddle.isinf(scale),
+        paddle.full_like(scale, float_max),
+        scale,
+    )
+    return scale
+
+
 def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:
     """
     Only used in deep_gemm block wise quant weight.
@@ -236,12 +266,18 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
         dtype=x.dtype,
     )
     x_padded[:m, :n] = x
-    from paddle.incubate.nn.functional.fp8 import fp8_quant_blockwise
-
-    x_q, scale = fp8_quant_blockwise(
-        x_padded, quant_method="128x128", input_transpose=False, output_scale_transpose=False, using_pow2_scale=False
+    x_view = paddle.view(
+        x_padded,
+        (-1, block_size[0], x_padded.shape[1] // block_size[1], block_size[1]),
     )
-    return x_q[:m, :n].contiguous(), scale
+
+    x_abs = paddle.abs(x_view).astype(paddle.float32)
+    x_amax = paddle.amax(x_abs, axis=(1, 3), keepdim=True)
+    scale = scale_wrapper(x_amax)
+    x_scaled = (x_view * scale).astype(paddle.float8_e4m3fn)
+    return x_scaled.view_as(x_padded)[:m, :n].contiguous(), (
+        paddle.view(1.0 / scale, (x_view.shape[0], x_view.shape[2]))
+    )
 
 
 def per_token_cast_to_fp8(x: Tensor) -> Tuple[Tensor, Tensor]:
@@ -513,3 +549,20 @@ def vocab_range_from_per_partition_vocab_size(per_partition_vocab_size: int, ran
 def vocab_range_from_global_vocab_size(global_vocab_size: int, rank: int, world_size: int, offset: int = 0):
     per_partition_vocab_size = divide(global_vocab_size, world_size)
     return vocab_range_from_per_partition_vocab_size(per_partition_vocab_size, rank, offset=offset)
+
+
+def modules_to_convert(prefix: str, fd_config: FDConfig):
+    import fnmatch
+
+    if (
+        hasattr(fd_config.model_config, "quantization_config")
+        and fd_config.model_config.quantization_config is not None
+    ):
+        if "modules_to_not_convert" in fd_config.model_config.quantization_config:
+            patterns = fd_config.model_config.quantization_config["modules_to_not_convert"]
+            for p in patterns:
+                if fnmatch.fnmatch(prefix, p) or fnmatch.fnmatch(prefix, p + ".*"):
+                    return False
+        return True
+    else:
+        return True

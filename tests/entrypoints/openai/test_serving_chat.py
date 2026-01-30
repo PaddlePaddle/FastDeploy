@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import paddle
 
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.worker.output import Logprob, LogprobsTensors
@@ -309,6 +310,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -416,6 +418,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -524,6 +527,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 ],
                 "draft_top_logprobs": None,
                 "multipart": [{"type": "text", "text": "Hi"}],
+                "reasoning_content": "",
+                "tool_calls": None,
+                "skipped": False,
             },
             "finished": True,
             "num_cached_tokens": 0,
@@ -586,6 +592,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Check for logprobs in subsequent chunks
                 logprobs_found = False
                 for result in results:
+                    print("1")
+                    print(result)
                     # Skip [DONE] message
                     if result.strip() == "data: [DONE]":
                         continue
@@ -734,6 +742,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -836,6 +845,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -938,6 +948,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -1033,6 +1044,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
         }
+        mock_response = RequestOutput.from_dict(mock_response)
 
         mock_response_queue.get.return_value = mock_response
 
@@ -1161,6 +1173,10 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "top_logprobs": None,
                     "draft_top_logprobs": None,
                     "multipart": [{"type": "text", "text": "Hi"}],
+                    "enable_parser": False,
+                    "reasoning_content": "",
+                    "tool_calls": None,
+                    "skipped": False,
                 },
                 "finished": False,
                 "num_cached_tokens": 0,

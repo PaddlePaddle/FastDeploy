@@ -224,9 +224,9 @@ class TokenProcessor:
                 )
                 is_decode = self.cfg.scheduler_config.splitwise_role == "decode"
                 inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                llm_logger.info(
-                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
-                )
+                token_ratio = self.tokens_counter[task_id] / (time.time() - inference_start_time)
+                llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                main_process_metrics.request_token_ratio.observe(token_ratio)
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
@@ -857,17 +857,6 @@ class TokenProcessor:
                         result.outputs.token_ids.append(token_id)
 
                     task.output_token_ids.append(token_id)
-                    if (
-                        envs.ENABLE_V1_KVCACHE_SCHEDULER
-                        and self.cfg.cache_config.enable_prefix_caching
-                        and self.cfg.cache_config.enable_output_caching
-                    ):
-                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0 and (
-                            task_id not in self.resource_manager.to_be_rescheduled_request_id_set
-                        ):
-                            self.resource_manager.cache_output_tokens(
-                                task
-                            )  # when enable prefix caching, cache kv cache for output tokens
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
@@ -908,15 +897,23 @@ class TokenProcessor:
                         f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
                     )
                     inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                    llm_logger.info(
-                        f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - inference_start_time)}"
-                    )
+                    token_ratio = self.tokens_counter[task_id] / (time.time() - inference_start_time)
+                    llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                    main_process_metrics.request_token_ratio.observe(token_ratio)
                     llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     llm_logger.info(f"task {task_id} received eos token. Recycling.")
+                    if (
+                        envs.ENABLE_V1_KVCACHE_SCHEDULER
+                        and self.cfg.cache_config.enable_prefix_caching
+                        and self.cfg.cache_config.enable_output_caching
+                    ):
+                        self.resource_manager.cache_output_tokens(
+                            task
+                        )  # when enable prefix caching, cache kv cache for output tokens
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     llm_logger.info(f"eos token {task_id} Recycle end.")
                     break
@@ -1034,7 +1031,7 @@ class TokenProcessor:
                 finished=True,
                 metrics=RequestMetrics(
                     arrival_time=time.time(),
-                    request_start_time=task.arrival_time,
+                    request_start_time=task.metrics.arrival_time,
                 ),
             )
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
