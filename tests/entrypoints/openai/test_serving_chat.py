@@ -768,7 +768,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "request_id": "req_0",
             "outputs": {
                 **base_output,
-                "tool_call": [{"id": "call_1", "type": "function", "function": {"name": "tool", "arguments": "{}"}}],
+                "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "tool", "arguments": "{}"}}],
             },
             "metrics": {"request_start_time": 1.0},
         }
