@@ -389,7 +389,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	defer backendResp.Body.Close()
 
 	if isSplitwise {
-		metrics.InferenceRequests.WithLabelValues("", releaseTargets[0], destURL, strconv.Itoa(backendResp.StatusCode)).Inc()
+		metrics.InferenceRequests.WithLabelValues("", prefillURL, decodeURL, strconv.Itoa(backendResp.StatusCode)).Inc()
 	} else {
 		metrics.InferenceRequests.WithLabelValues(destURL, "", "", strconv.Itoa(backendResp.StatusCode)).Inc()
 	}
