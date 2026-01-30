@@ -724,6 +724,25 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
         """name"""
         return "Glm4MoeForCausalLMRL"
 
+    def update_mtp_config(self, mtp_fd_config):
+        mtp_fd_config.model_config.architectures[0] = mtp_fd_config.model_config.architectures[0].replace("Moe", "MTP")
+        mtp_fd_config.speculative_config.sharing_model = None
+        mtp_fd_config.model_config.num_hidden_layers = 1
+        mtp_fd_config.model_config.model = mtp_fd_config.speculative_config.model
+        if mtp_fd_config.speculative_config.quantization != "":
+            mtp_fd_config.model_config.quantization = mtp_fd_config.speculative_config.quantization
+        mtp_fd_config.model_config.start_layer_index = mtp_fd_config.model_config.num_hidden_layers
+        mtp_fd_config.speculative_config.model_type = "mtp"
+
+    def state_dict(self):
+        """state_dict"""
+        main_state_dict = super().state_dict()
+        state_dict = {k: v for k, v in main_state_dict.items() if not k.startswith("mtp_layers")}
+        if self.num_nextn_predict_layers > 0:
+            mtp_state_dict = self.mtp_layers.state_dict()
+            state_dict.update(mtp_state_dict)
+        return state_dict
+
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
         if self._mappings_built:
