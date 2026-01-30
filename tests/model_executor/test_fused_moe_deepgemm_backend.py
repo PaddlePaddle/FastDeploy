@@ -19,9 +19,10 @@ from types import SimpleNamespace
 
 import paddle
 
-from fastdeploy.model_executor.layers.moe import fused_moe_deepgemm_backend as deepgemm_backend
+from fastdeploy.model_executor.layers.moe import (
+    fused_moe_deepgemm_backend as deepgemm_backend,
+)
 from fastdeploy.model_executor.layers.moe.ep import EPDecoderRunner, EPPrefillRunner
-
 
 paddle.set_device("gpu")
 
