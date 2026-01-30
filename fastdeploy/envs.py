@@ -52,7 +52,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-    # Set moe backend."cutlass","marlin" and "triton" can be set currently.
+    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Set mxfp4 backend."flashinfer" can be set currently.
     "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
@@ -136,6 +136,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
     # Timeout for cache_transfer_manager process exit
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+    # FP4 dense GEMM backend, could be flashinfer-cutlass, flashinfer-trtllm, flashinfer-cudnn or None (default is None)
+    "FD_NVFP4_GEMM_BACKEND": lambda: os.getenv("FD_NVFP4_MOE_BACKEND", None),
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
     # API_KEY required for service authentication

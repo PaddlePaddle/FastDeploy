@@ -100,6 +100,7 @@ class TestMTPProposer(unittest.TestCase):
             "max_dec_len": paddle.ones([2, 1], dtype="int64") * 512,
             "min_dec_len": paddle.zeros([2, 1], dtype="int64"),
             "bad_tokens": paddle.zeros([2], dtype="int64"),
+            "bad_tokens_len": paddle.ones([2], dtype="int32"),
             "draft_tokens": paddle.zeros([2, 2], dtype="int64"),
             "accept_tokens": paddle.zeros([2, 2], dtype="int64"),
             "accept_num": paddle.ones([2], dtype="int32"),

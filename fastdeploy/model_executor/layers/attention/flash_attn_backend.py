@@ -236,7 +236,7 @@ class FlashAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
-            if forward_meta.max_len_tensor_cpu[1] > 0:
+            if forward_meta.max_len_tensor_cpu[1].item() > 0:
                 (
                     metadata.cu_seqlens_k,
                     metadata.pre_cache_batch_ids,
