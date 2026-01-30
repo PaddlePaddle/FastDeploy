@@ -1685,7 +1685,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
-            num_tokens=min(int(self.scheduler_config.max_num_batched_tokens), 64),
+            num_tokens=(
+                self.scheduler_config.max_num_seqs
+                if self.scheduler_config.splitwise_role == "decode"
+                else self.scheduler_config.max_num_batched_tokens
+            ),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 

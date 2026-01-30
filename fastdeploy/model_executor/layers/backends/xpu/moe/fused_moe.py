@@ -301,7 +301,7 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
-    def apply_tp_scatter_op(
+    def apply_tp(
         self,
         layer: nn.Layer,
         x: paddle.Tensor,
@@ -370,19 +370,6 @@ class XPUMoEMethod(MoEMethodBase):
         )
 
         return tmp_ffn_out
-
-    def apply_tp(
-        self,
-        layer: nn.Layer,
-        x: paddle.Tensor,
-        gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
-    ) -> paddle.Tensor:
-        """
-        apply tp
-        """
-        fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
-        return fused_moe_out
 
     def compute_ffn(
         self,
