@@ -254,7 +254,12 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(
-        self, param, loaded_weight, expert_id, shard_id: Optional[str] = None, source: Optional[str] = None
+        self,
+        param,
+        loaded_weight,
+        expert_id,
+        shard_id: Optional[str] = None,
+        source: Optional[str] = None,
     ):
         """
         source:Avoid redundant transpose of fused weights when weight_loader is called iteratively
@@ -320,10 +325,10 @@ class FusedMoE(nn.Layer):
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
-        if shard_id == "gate":
+        switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
+        if (shard_id == "gate" and not switch_w13) or (shard_id == "up" and switch_w13):
             param_shard_offset = 0
         else:
-            # shard_id == "up":
             param_shard_offset = param_shard_size
         expert_param = slice_fn(
             expert_param, shard_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size
@@ -337,8 +342,22 @@ class FusedMoE(nn.Layer):
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
+
         if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+            if len(expert_param.shape) != len(loaded_weight.shape):
+                logger.warning(
+                    "[MoE] Expert weight rank mismatch detected "
+                    f"(loaded: {loaded_weight.shape}, expected: {expert_param.shape}). "
+                    "Reshaping loaded weight for compatibility."
+                )
+                loaded_weight = loaded_weight.reshape(expert_param.shape)
+            else:
+                logger.warning(
+                    "[MoE] Expert weight layout mismatch detected "
+                    f"(loaded: {loaded_weight.shape}, expected: {expert_param.shape}). "
+                    "Applying transpose to match parameter layout."
+                )
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
@@ -376,7 +395,7 @@ class FusedMoE(nn.Layer):
         h2d_copy(dst=expert_param, src=loaded_weight)
 
     def _load_fused_experts_weight(self, param, loaded_weight):
-        if self.tp_size > 1:
+        if self.tp_size > 1 and self.moe_quant_type != "mxfp4":
             dim = -1
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
@@ -386,14 +405,42 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
+
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
+
         h2d_copy(dst=param, src=loaded_weight)
 
         if hasattr(param, "tensor_track"):
             for i in range(self.num_local_experts):
                 param.tensor_track.mark(start=0, batch_id=i)
+
+    def _load_per_tensor_weight_scale(
+        self,
+        param,
+        expert_id,
+        loaded_weight,
+        shard_id,
+    ):
+        loaded_weight = get_tensor(loaded_weight)
+        expert_param = param[expert_id - self.expert_id_offset]
+        if shard_id in ["gate", "up"]:
+            idx = 0 if shard_id == "gate" else 1
+            if expert_param[idx].shape != loaded_weight.shape:
+                if len(expert_param[idx].shape) != len(loaded_weight.shape):
+                    loaded_weight = loaded_weight.reshape(expert_param[idx].shape)
+                else:
+                    loaded_weight = loaded_weight.transpose([1, 0])
+
+            expert_param[idx].set_value(loaded_weight)
+        elif shard_id == "down":
+            if expert_param.shape != loaded_weight.shape:
+                if len(expert_param.shape) != len(loaded_weight.shape):
+                    loaded_weight = loaded_weight.reshape(expert_param.shape)
+                else:
+                    loaded_weight = loaded_weight.transpose([1, 0])
+            expert_param.set_value(loaded_weight)
 
     def _load_expert_weight(
         self,
@@ -403,7 +450,10 @@ class FusedMoE(nn.Layer):
         shard_id,
         shard_dim=None,
     ):
-        if shard_id == "down":
+        weight_type = getattr(param, "weight_type", None)
+        if weight_type in ["weight_scale_2", "input_scale"]:
+            self._load_per_tensor_weight_scale(param, expert_id, loaded_weight, shard_id)
+        elif shard_id == "down":
             self._load_down_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
         elif shard_id in ["gate", "up"]:
             self._load_gate_up_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
@@ -644,18 +694,26 @@ class FusedMoE(nn.Layer):
         """
         topk_ids_hookfunc = None
         if self.enable_routing_replay:
-            if forward_meta is not None:  # forward_meta is None when execute empty_input_forward
+            # When execute empty_input_forward forward_meta is None. When execute mtp layer routing_replay_table is None.
+            if forward_meta is not None and forward_meta.routing_replay_table is not None:
+                moe_layer_idx = self.layer_idx - self.fd_config.model_config.moe_layer_start_index
                 topk_ids_hookfunc = partial(
                     save_routing_to_buffer,
                     routing_replay_table=forward_meta.routing_replay_table,
                     batch_id_per_token=forward_meta.batch_id_per_token,
                     seq_lens_decoder=forward_meta.seq_lens_decoder,
                     cu_seqlens_q=forward_meta.cu_seqlens_q,
-                    layer_idx=self.layer_idx,
+                    layer_idx=moe_layer_idx,
                     tp_size=self.fd_config.parallel_config.tensor_parallel_size,
                     ep_size=self.fd_config.parallel_config.expert_parallel_size,
                     tp_group=self.fd_config.parallel_config.tp_group,
                 )
+
+        if current_platform.is_intel_hpu():
+            out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
+            if self.reduce_results and (self.ep_size > 1 or self.tp_size > 1):
+                tensor_model_parallel_all_reduce_custom(out)
+            return out
 
         token_num = x.shape[0]
         if (
@@ -676,10 +734,7 @@ class FusedMoE(nn.Layer):
             out = self.forward_normal(x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc)
 
         if self.reduce_results and self.tp_size > 1:
-            if current_platform.is_intel_hpu():
-                tensor_model_parallel_all_reduce_custom(out)
-            else:
-                out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(

@@ -278,6 +278,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             topk_idx,
             expert_idx_per_token,
             dequant_scale,
+            _,
         ) = moe_expert_dispatch(
             x,
             gate_out,

@@ -550,6 +550,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
+            self.share_inputs["preempted_idx"] = []
 
         req_len = len(req_dicts)
         has_prefill_task = False
@@ -575,6 +576,7 @@ class MetaxModelRunner(ModelRunnerBase):
             logits_info = None
             prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 # guided decoding
                 if (
                     request.guided_json is not None
@@ -597,6 +599,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+
                 if self.enable_mm:
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
@@ -669,9 +672,11 @@ class MetaxModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
+                self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -712,12 +717,12 @@ class MetaxModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -935,12 +940,12 @@ class MetaxModelRunner(ModelRunnerBase):
 
             if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
                 bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
+                self.share_inputs["bad_tokens_len"][idx] = bad_words_len
                 self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
                     request.get("bad_words_token_ids"), dtype="int64"
                 )
             else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
+                self.share_inputs["bad_tokens_len"][idx] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
             if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
@@ -1308,6 +1313,7 @@ class MetaxModelRunner(ModelRunnerBase):
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -1346,6 +1352,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 self.max_logprobs = None
 
         # Remove padding
+        token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -1354,6 +1361,7 @@ class MetaxModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
+            token_num_cpu,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
@@ -1373,9 +1381,6 @@ class MetaxModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
-
-        # Update bad tokens len
-        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1397,7 +1402,8 @@ class MetaxModelRunner(ModelRunnerBase):
             presence_penalties=self.share_inputs["presence_score"],
             repetition_penalties=self.share_inputs["penalty_score"],
             min_dec_lens=self.share_inputs["min_dec_len"],
-            bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
+            bad_words_token_ids=self.share_inputs["bad_tokens"],
+            bad_words_token_len=self.share_inputs["bad_tokens_len"],
             eos_token_ids=self.share_inputs["eos_token_id"],
             max_num_logprobs=self.max_logprobs,
             enable_early_stop=self.enable_early_stop,

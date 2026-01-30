@@ -53,7 +53,6 @@ void SwapCacheImpLayout(
     const paddle::Tensor& cache_gpu = cache_gpu_tensors[layer_idx];
     data_t* cache_gpu_ptr = const_cast<data_t*>(cache_gpu.data<data_t>());
     auto* cache_cpu_ptr = reinterpret_cast<data_t*>(cache_cpu_pointer);
-    // auto stream = cache_gpu.stream();
 
     for (int block_idx = 0; block_idx < gpu_block_ids.size(); block_idx++) {
       auto cur_gpu_block_id = gpu_block_ids[block_idx];
@@ -73,6 +72,11 @@ void SwapCacheImpLayout(
           copy_kind,
           stream);
 
+      PADDLE_ENFORCE_EQ(status,
+                        cudaSuccess,
+                        phi::errors::External("cudaMemcpyAsync failed: %s",
+                                              cudaGetErrorString(status)));
+
 #ifdef SWAP_DEBUG
       cudaStreamSynchronize(stream);
       std::cout << "mode:" << mode << ", layer_idx:" << layer_idx
@@ -81,7 +85,11 @@ void SwapCacheImpLayout(
 #endif
     }
   }
-  cudaStreamSynchronize(stream);
+  cudaError_t sync_status = cudaStreamSynchronize(stream);
+  PADDLE_ENFORCE_EQ(sync_status,
+                    cudaSuccess,
+                    phi::errors::External("cudaStreamSynchronize failed: %s",
+                                          cudaGetErrorString(sync_status)));
 }
 
 void SwapCacheLayout(

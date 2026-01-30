@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import io
 import os
 import time
 from multiprocessing.shared_memory import SharedMemory
@@ -24,16 +25,41 @@ import paddle
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.inter_communicator import ModelWeightsStatus
+from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
+
+
+def sync_weights_by_rdma(config, step, rank):
+    from checkpoint_transfer.core import RDMAWeightsDownloader
+
+    downloader = RDMAWeightsDownloader(config)
+    downloader.initialize()
+    logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
+    data = downloader.get_weights(step, rank)
+    if data is None:
+        logger.error("Failed to get weights!")
+        raise Exception("Failed to rsync weights through checkpoint_transfer")
+    logger.info(f"Successfully retrieved data. Type: {type(data)}")
+    if isinstance(data, np.ndarray):
+        data_bytes = data.tobytes()
+    elif isinstance(data, (bytes, bytearray)):
+        data_bytes = data
+    else:
+        data_bytes = bytes(data)
+    logger.info(f"Data size: {len(data_bytes)} bytes")
+
+    buffer = io.BytesIO(data_bytes)
+    new_state_dict = paddle.load(buffer)
+    return new_state_dict
 
 
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
 
-    def __init__(self, fd_config: FDConfig, models):
+    def __init__(self, fd_config: FDConfig, models, local_rank: int):
         """Initialize with config and model instances."""
         self.fd_config = fd_config
         self.load_config = fd_config.load_config
+        self.local_rank = local_rank
         self.parallel_config = fd_config.parallel_config
         self.state_dict: Dict[str, paddle.Tensor] = {}
         self.rank = fd_config.parallel_config.tensor_parallel_rank
@@ -46,7 +72,10 @@ class DynamicWeightManager:
         else:
             self.model_list = models
         self._capture_model_state()
-        self.update_parameters()
+        if self.load_config.load_strategy == "rsync":
+            self.update_weights_by_rdma()
+        else:
+            self.update_parameters()
         self.finalize_update()
 
         logger.info(
@@ -61,6 +90,74 @@ class DynamicWeightManager:
             for name, param in model.state_dict().items():
                 logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
                 self.state_dict[name] = param
+
+    def update_weights_by_rdma(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        def valid_parameters(old_state_dict, new_state_dict):
+            is_valid = True
+            for key in old_state_dict:
+                if key not in new_state_dict:
+                    is_valid = False
+                    logger.error(f"Invalid parameter: {key} not in new_state_dict")
+                elif old_state_dict[key].shape != new_state_dict[key].shape:
+                    is_valid = False
+                    logger.error(
+                        f"Invalid parameter: {key} shape mismatch, "
+                        f"new shape:{new_state_dict[key].shape}, "
+                        f"old shape:{old_state_dict[key].shape}"
+                    )
+                elif old_state_dict[key].dtype != new_state_dict[key].dtype:
+                    is_valid = False
+                    logger.error(f"Invalid parameter: {key} dtype mismatch")
+            return is_valid
+
+        if rsync_config is None:
+            rsync_config = self.fd_config.load_config.rsync_config
+        if rsync_config is None or len(rsync_config) == 0:
+            raise Exception(
+                "rsync config not set, please set it in 1) launch arguments '--rsync-config' "
+                "or 2) interface arguments 'rsync_config'"
+            )
+
+        if version is None or version == "":
+            version = self.read_model_version_from_file()
+        if version is None or version == "":
+            raise Exception(
+                "rsync model version not set, please set it in 1) {model_version}/version.txt "
+                "or 2) interface arguments 'version'"
+            )
+
+        logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
+        rank = self.local_rank
+
+        sync_start = time.perf_counter()
+        new_state_dict = sync_weights_by_rdma(rsync_config, version, rank)
+        sync_cost = time.perf_counter() - sync_start
+        logger.info(f"weights sync cost {sync_cost:.2f} seconds")
+
+        old_state_dict = self.state_dict
+        if not valid_parameters(old_state_dict, new_state_dict):
+            error_msg = "Invalid new_state_dict, update parameters failed"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        update_start = time.perf_counter()
+        for name, param in old_state_dict.items():
+            param.set_value(new_state_dict[name])
+        update_cost = time.perf_counter() - update_start
+        logger.info(f"params set value cost {update_cost:.2f} seconds")
+
+        total_cost = time.perf_counter() - sync_start
+        logger.info(
+            f"END update_weights_by_rdma, cost {total_cost:.2f} seconds"
+            f" version:{version}, rsync_config: {rsync_config}",
+        )
+        return {
+            "sync_cost": sync_cost,
+            "update_cost": update_cost,
+            "total_cost": total_cost,
+            "version": version,
+            "rank": rank,
+        }
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""
@@ -257,19 +354,37 @@ class DynamicWeightManager:
         if self.rank == 0:
             value[self.rank] = status
 
+    def read_model_version_from_file(self):
+        model_dir = self.fd_config.model_config.model
+        version_file = os.path.join(model_dir, "version.txt")
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                version = f.read().strip()
+            return version
+        except (FileNotFoundError, OSError, IOError) as e:
+            logger.error(f"Failed to read model version file '{version_file}': {e}")
+            return None
+
     @staticmethod
-    def check_model_weights_status(model_weights_status, model_runner, pid, block):
+    def check_model_weights_status(model_weights_status, kv_cache_status, model_runner, pid, block):
         """
-        check model weights status
+        A function to handle the state of model weights, check the model weights state,
+        and perform corresponding operations as needed.
+
+        - model_weights_status (`IPCSignal`): The signal indicating the status of model weights.
+        - kv_cache_status (`IPCSignal`): The signal indicating the status of key-value cache.
+        - model_runner (`ModelRunnerBase`): The model runner instance.
+        - block (`bool`): Block mode keeps the worker process blocked in the status-check loop,
+            avoiding communication operations in the worker event loop.
         """
-        # logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
         while model_weights_status.value[0] != ModelWeightsStatus.NORMAL and (
             block or model_weights_status.value[0] != ModelWeightsStatus.CLEARED
         ):
-            # 如果为 block 模式，那么循环不会退出，直到权重更新、通信组重建
-            # 如果为非 block 模式，那么循环在权重更新或清理后均会退出
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+                if kv_cache_status:
+                    kv_cache_status.value[0] = KVCacheStatus.UPDATING
                 model_runner.clear_requests()
                 model_runner.update_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
@@ -277,9 +392,12 @@ class DynamicWeightManager:
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+                if kv_cache_status:
+                    kv_cache_status.value[0] = KVCacheStatus.CLEARING
                 model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
                     time.sleep(0.01)
                 logger.info("finished clearing checkpoint")
-            time.sleep(0.01)
+            else:
+                time.sleep(0.01)

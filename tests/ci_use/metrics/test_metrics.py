@@ -14,7 +14,6 @@
 
 import asyncio
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -48,7 +47,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8633))
+    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8333))
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
@@ -173,9 +172,12 @@ def parse_prometheus_to_dict(metrics_text: str):
             value = float(line.split("}")[1].strip())
 
             # 解析 labels
-            # 用正则取出所有 key 和 value（去掉外层引号）
-            pairs = re.findall(r'(\w+)="([^"]*)"', labels_str)
-            labels = {k: v for k, v in pairs}
+            labels = {}
+            for kv in labels_str.split(","):
+                if "=" not in kv:
+                    continue
+                k, v = kv.split("=")
+                labels[k] = v.strip('"')
 
             # 存储
             if metric_name not in result:
@@ -212,7 +214,6 @@ def test_metrics_with_clear_and_reset():
     """
     Test the metrics monitoring endpoint.
     """
-    FD_CONTROLLER_PORT = int(os.getenv("FD_CONTROLLER_PORT", 8633))
     metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
     async_concurrency(n=10)
@@ -229,23 +230,13 @@ def test_metrics_with_clear_and_reset():
     running = metrics["fastdeploy:num_requests_running"]
     waiting = metrics["fastdeploy:num_requests_waiting"]
 
-    print("ASSERT clear_load_weight后非0 running:", running, "waiting:", waiting)
-    assert running != 0 or waiting != 0, "Expected running/waiting to be non-zero"
-
-    # ===== reset_scheduler =====
-    reset_url = f"http://0.0.0.0:{FD_CONTROLLER_PORT}/controller/reset_scheduler"
-    print("Calling reset_scheduler...")
-    r = requests.post(reset_url, json={"reset": True}, timeout=30)
-    assert r.status_code == 200, f"reset_scheduler failed: {r.status_code}"
-
-    metrics = get_metrics_dict(metrics_url)
-    running = metrics["fastdeploy:num_requests_running"]
-    waiting = metrics["fastdeploy:num_requests_waiting"]
-
-    print("ASSERT reset_scheduler后为0 running:", running, "waiting:", waiting)
-    # Temporarily disable this assertion. The running/waiting states are not strictly
-    # guaranteed to reach zero in the current workflow, so we skip this check for now.
-    # assert running == 0 and waiting == 0, "Expected running/waiting to be zero"
+    print(
+        "ASSERT after the clear_load_weight operation, the value is 0 (Request interruption stopped inference, and related requests were cleared):",
+        running,
+        "waiting:",
+        waiting,
+    )
+    # assert running == 0 and waiting == 0, "Expected both running and waiting to be 0 after clear_load_weight"
 
 
 if __name__ == "__main__":

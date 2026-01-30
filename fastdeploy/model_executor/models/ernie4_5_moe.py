@@ -38,6 +38,7 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     QKVParallelLinear,
     ReplicatedLinear,
     RowParallelLinear,
@@ -62,27 +63,49 @@ class Ernie4_5_MLP(nn.Layer):
         self,
         fd_config: FDConfig,
         intermediate_size: int,
+        layer_id: int = -1,
         prefix: str = "",
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.up_gate_proj = MergedColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.up_gate_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size * 2,
-            with_bias=False,
-            activation=fd_config.model_config.hidden_act,
-        )
+        # shared experts not split when use_sequence_parallel_moe in ep + tp
+        if (
+            fd_config.parallel_config.use_sequence_parallel_moe
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+        ):
+            self.up_gate_proj = MergedReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_sizes=[intermediate_size, intermediate_size],
+                with_bias=False,
+            )
 
-        self.down_proj = RowParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.down_proj",
-            input_size=intermediate_size,
-            output_size=fd_config.model_config.hidden_size,
-            with_bias=False,
-            reduce_results=reduce_results,
-        )
+            self.down_proj = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+            )
+        else:
+            self.up_gate_proj = MergedColumnParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=intermediate_size * 2,
+                with_bias=False,
+                activation=fd_config.model_config.hidden_act,
+            )
+
+            self.down_proj = RowParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+                reduce_results=reduce_results,
+            )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
@@ -211,6 +234,7 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts = Ernie4_5_MLP(
                 fd_config=fd_config,
                 intermediate_size=shared_experts_hidden_dim,
+                layer_id=layer_id,
                 prefix=f"{prefix}.shared_experts",
             )
 
@@ -322,6 +346,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             self.mlp = Ernie4_5_MLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
+                layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -565,6 +590,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("attn.cache_v_scale", "cachev_matmul.activation_scale", None, None),
             ("attn.cache_k_zp", "cachek_matmul.activation_zero_point", None, None),
             ("attn.cache_v_zp", "cachev_matmul.activation_zero_point", None, None),
+            ("act_scale", "in_scale", None, None),
+            ("attn.q_scale", "q_matmul.in_scale", None, None),
+            ("attn.s_scale", "s_matmul.in_scale", None, None),
+            ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
+            ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
+            ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
         ]
 
         expert_params_mapping = []
@@ -590,7 +621,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
         ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
         checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
-            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+            fd_config=self.fd_config,
+            ckpt_weight_suffix="quant_weight",
+            ckpt_scale_suffix="weight_scale",
+            ckpt_act_suffix="activation_scale",
         )
         params_dict = dict(self.named_parameters())
 

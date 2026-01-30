@@ -208,12 +208,12 @@ DINLINE void multi_gpu_barrier(const RankSignals& sg,
         &self_sg->peer_counter[val % 2][blockIdx.x][threadIdx.x];
     if constexpr (need_fence) {
       st_flag_release(peer_counter_ptr, val);
-      while (ld_flag_acquire(self_counter_ptr) != val)
-        ;
+      while (ld_flag_acquire(self_counter_ptr) != val) {
+      }
     } else {
       st_flag_volatile(peer_counter_ptr, val);
-      while (ld_flag_volatile(self_counter_ptr) != val)
-        ;
+      while (ld_flag_volatile(self_counter_ptr) != val) {
+      }
     }
   }
   if constexpr (is_start || need_fence) __syncthreads();
@@ -227,6 +227,38 @@ DINLINE P packed_reduce(const P* ptrs[], int idx) {
     packed_assign_add(tmp, upcast(ptrs[i][idx]));
   }
   return downcast<P>(tmp);
+}
+
+template <typename T, int ngpus>
+__global__ void __launch_bounds__(512, 1) decode_alltoall_transpose_kernel(
+    RankData* _dp,  // [tp_size, m / tp_size, part_hidden_size]
+    RankSignals sg,
+    Signal* self_sg,
+    T* __restrict__ result,  // [m / tp_size, part_hidden_size * tp_size]
+    const int rank,
+    const int token_num,
+    const int hidden_size,
+    const int size) {
+  using P = typename packed_t<T>::P;
+  using A = typename packed_t<T>::A;
+  // note: we don't reorder the address so the accumulation order is the same
+  // for all ranks, ensuring bitwise identical results
+  const int hidden_size_p = hidden_size / packed_t<T>::P::size;
+  const int part_hidden_size_p = hidden_size_p / ngpus;
+  const int rank_token_id = token_num / ngpus * rank;
+  auto dp = *_dp;
+  multi_gpu_barrier<ngpus, true>(sg, self_sg, rank);
+  // alltoall and transpose
+  for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < size;
+       idx += gridDim.x * blockDim.x) {
+    const int token_idx = idx / hidden_size_p;
+    const int src_token_idx = token_idx + rank_token_id;
+    const int src_rank = (idx % hidden_size_p) / part_hidden_size_p;
+    const int src_idx =
+        src_token_idx * part_hidden_size_p + (idx % part_hidden_size_p);
+    ((P*)result)[idx] = ((const P**)&dp.ptrs[0])[src_rank][src_idx];
+  }
+  multi_gpu_barrier<ngpus, false>(sg, self_sg, rank);
 }
 
 template <typename T, int ngpus>
@@ -459,6 +491,87 @@ class CustomAllreduce {
                          cudaMemcpyHostToDevice));
     d_rank_data_base_ += num_buffers;
     graph_unreg_buffers_.clear();
+  }
+
+  /**
+   * alltoall and transpose in decode.
+   */
+  template <typename T>
+  void decode_alltoall_transpose(cudaStream_t stream,
+                                 T* input,
+                                 T* output,
+                                 int token_num,
+                                 int part_hidden_size,
+                                 int size,
+                                 int threads = 512,
+                                 int block_limit = 36) {
+    auto d = packed_t<T>::P::size;
+    int hidden_size = part_hidden_size * world_size_;
+    if (size % d != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input length to "
+          "be multiple "
+          "of " +
+          std::to_string(d));
+    if (size / d % world_size_ != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input length to "
+          "be multiple "
+          "of " +
+          std::to_string(d) + " and " + std::to_string(world_size_));
+    if (token_num % world_size_ != 0)
+      throw std::runtime_error(
+          "custom decode_alltoall_transpose currently requires input token_num "
+          "to be multiple "
+          "of " +
+          std::to_string(world_size_));
+    if (block_limit > kMaxBlocks)
+      throw std::runtime_error("max supported block limit is " +
+                               std::to_string(kMaxBlocks) + ". Got " +
+                               std::to_string(block_limit));
+
+    RankData* ptrs;
+    cudaStreamCaptureStatus status;
+    CUDACHECK(cudaStreamIsCapturing(stream, &status));
+    if (status == cudaStreamCaptureStatusActive) {
+      ptrs = d_rank_data_base_ + graph_unreg_buffers_.size();
+      graph_unreg_buffers_.push_back(input);
+    } else {
+      auto it = buffers_.find(input);
+      if (it == buffers_.end())
+        throw std::runtime_error(
+            "buffer address " +
+            std::to_string(reinterpret_cast<uint64_t>(input)) +
+            " is not registered!");
+      ptrs = it->second;
+    }
+
+    size /= d;
+    auto bytes = size * sizeof(typename packed_t<T>::P);
+    int blocks = std::min(block_limit, (size + threads - 1) / threads);
+#define KL(ngpus, name)                           \
+  name<T, ngpus><<<blocks, threads, 0, stream>>>( \
+      ptrs, sg_, self_sg_, output, rank_, token_num, hidden_size, size);
+
+#define REDUCE_CASE(ngpus)                       \
+  case ngpus: {                                  \
+    KL(ngpus, decode_alltoall_transpose_kernel); \
+    break;                                       \
+  }
+
+    switch (world_size_) {
+      REDUCE_CASE(2)
+      REDUCE_CASE(4)
+      REDUCE_CASE(6)
+      REDUCE_CASE(8)
+      default:
+        throw std::runtime_error(
+            "custom allreduce only supports num gpus in (2,4,6,8). Actual num "
+            "gpus = " +
+            std::to_string(world_size_));
+    }
+#undef REDUCE_CASE
+#undef KL
   }
 
   /**
