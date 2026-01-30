@@ -109,7 +109,7 @@ def print_pd_logs_on_failure():
     log_dirs = ["log_router", "log_prefill", "log_decode"]
 
     for log_dir in log_dirs:
-        nohup_path = os.path.join(log_dir, "nohup")
+        nohup_path = os.path.join(log_dir, "log_0/worklog.0")
         if os.path.exists(nohup_path):
             print(f"\n========== {nohup_path} ==========")
             with open(nohup_path, "r") as f:
@@ -191,7 +191,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--enable-expert-parallel",
-        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
@@ -234,7 +233,6 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         "--cache-transfer-protocol",
         "rdma",
         "--enable-expert-parallel",
-        "--disable-sequence-parallel-moe",
         "--router",
         f"0.0.0.0:{port_num}",
     ]
