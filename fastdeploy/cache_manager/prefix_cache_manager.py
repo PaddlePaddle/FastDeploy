@@ -1670,6 +1670,7 @@ class PrefixCacheManager:
                 can_recycle_cpu_block_ids = []
                 gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
                 current_time = time.time()
+                prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
 
                 with self.cache_status_lock:
                     while num_cached_tokens < total_token_num:
@@ -1677,7 +1678,8 @@ class PrefixCacheManager:
                         token_num = len(token_block)
                         if token_num != block_size:
                             break
-                        hash_value = get_hash_str(token_block)
+                        hash_value = get_hash_str(token_block, prefix_block_key)
+                        prefix_block_key = [hash_value]
                         if hash_value in current_match_node.children:
                             child = current_match_node.children[hash_value]
                             child.increment_shared_count()
