@@ -490,11 +490,11 @@ class CacheTransferManager:
                 if self.cache_task_is_paused_signal.value[0] == 1:
                     while self.inflight != 0:
                         time.sleep(0.1)
-                    self.cache_task_inflight_signal[self.rank] = 0
+                    self.cache_task_inflight_signal.value[self.rank] = 0
                     time.sleep(1)
                     continue
                 else:
-                    self.cache_task_inflight_signal[self.rank] = 1
+                    self.cache_task_inflight_signal.value[self.rank] = 1
 
                 if self.rank == 0:
                     if not self.cache_task_queue.empty():
