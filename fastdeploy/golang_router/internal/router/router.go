@@ -24,7 +24,7 @@ func New(cfg *config.Config) *gin.Engine {
 	v1 := r.Group("/v1")
 	{
 		v1.POST("/chat/completions", gateway.ChatCompletions)
-		v1.POST("/completions", gateway.ChatCompletions)
+		v1.POST("/completions", gateway.Completions)
 	}
 	r.POST("/register", manager.RegisterInstance)
 	r.GET("/registered_number", manager.RegisteredNumber)
