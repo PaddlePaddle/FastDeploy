@@ -2154,7 +2154,10 @@ class FDConfig:
             mm_max_tokens_per_item = self.model_config.mm_max_tokens_per_item
 
         if self.scheduler_config.splitwise_role == "decode":
-            num_tokens = self.scheduler_config.max_num_seqs
+            if paddle.is_compiled_with_xpu():
+                num_tokens = self.scheduler_config.max_num_batched_tokens
+            else:
+                num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
             if mm_max_tokens_per_item is not None:
