@@ -26,7 +26,7 @@ paddle.set_device("gpu")
 
 
 class _DummyLayer(paddle.nn.Layer):
-    def __init__(self, hidden_size=32, moe_intermediate_size=16, topk_method="topk"):
+    def __init__(self, hidden_size=64, moe_intermediate_size=32, topk_method="topk"):
         super().__init__()
         self.num_local_experts = 1
         self.num_experts = 1
@@ -59,9 +59,9 @@ def test_marlin_process_and_apply_paths():
     up, down = _make_weights(layer)
     method.process_loaded_weights(layer, {"up": up, "down": down})
 
-    scales = paddle.arange(64, dtype="float32").reshape([2, 32])
-    permuted = marlin_backend.marlin_permute_scales(scales, size_k=16, size_n=32, group_size=8)
-    assert permuted.shape == [2, 32]
+    scales = paddle.arange(128, dtype="float32").reshape([2, 64])
+    permuted = marlin_backend.marlin_permute_scales(scales, size_k=16, size_n=64, group_size=8)
+    assert permuted.shape == [2, 64]
 
     gate = paddle.nn.Linear(layer.hidden_size, layer.num_experts, bias_attr=False)
     x = paddle.ones([2, layer.hidden_size], dtype="float16")
