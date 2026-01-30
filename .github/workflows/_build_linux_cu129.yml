@@ -48,6 +48,11 @@ on:
         required: false
         type: string
         default: ""
+      FD_UNIFY_BUILD:
+        description: "Enable unified build mode; build once without arch-specific compilation"
+        required: false
+        type: string
+        default: ""
     outputs:
       wheel_path_cu129:
         description: "Output path of the generated wheel"
@@ -118,6 +123,7 @@ jobs:
           PADDLEVERSION: ${{ inputs.PADDLEVERSION }}
           PADDLE_WHL_URL: ${{ inputs.PADDLE_WHL_URL }}
           WITH_NIGHTLY_BUILD: ${{ inputs.WITH_NIGHTLY_BUILD }}
+          FD_UNIFY_BUILD: ${{ inputs.FD_UNIFY_BUILD }}
         run: |
             set -x
             runner_name="${{ runner.name }}"
@@ -147,6 +153,7 @@ jobs:
             -e "COMPILE_ARCH=${compile_arch}" \
             -e "FD_VERSION=${fd_version}" \
             -e "WITH_NIGHTLY_BUILD=${WITH_NIGHTLY_BUILD}" \
+            -e "FD_UNIFY_BUILD=${FD_UNIFY_BUILD}" \
             -e "PADDLEVERSION=${PADDLEVERSION}" \
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
@@ -183,7 +190,13 @@ jobs:
             python -m pip install wheel
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
-            bash build.sh 1 python false [${COMPILE_ARCH}]
+            export FD_UNIFY_BUILD="${FD_UNIFY_BUILD}"
+
+            if [[ "${FD_UNIFY_BUILD}" == "true" ]]; then
+              bash build.sh 1 python false
+            else
+              bash build.sh 1 python false [${COMPILE_ARCH}]
+            fi
             ls ./dist/*.whl
             '
       - name: Package Upload

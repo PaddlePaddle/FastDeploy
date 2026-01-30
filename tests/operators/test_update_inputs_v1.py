@@ -156,7 +156,7 @@ class TestUpdateInputsV1(unittest.TestCase):
         is_block_step = np.random.randint(0, 2, [max_bs]).astype("bool")
 
         stop_flags = paddle.to_tensor(stop_flags)
-        not_need_stop = paddle.to_tensor(not_need_stop, place=paddle.CPUPlace())
+        not_need_stop = paddle.to_tensor(not_need_stop)
         seq_lens_this_time = paddle.to_tensor(seq_lens_this_time)
         seq_lens_encoder = paddle.to_tensor(seq_lens_encoder)
         seq_lens_decoder = paddle.to_tensor(seq_lens_decoder)

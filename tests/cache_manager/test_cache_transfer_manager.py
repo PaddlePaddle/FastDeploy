@@ -44,6 +44,7 @@ class Args:
     default_dtype = "bfloat16"
     kvcache_storage_backend = None
     write_policy = "write_through"
+    model_path = "test_model"
 
 
 # ==========================
