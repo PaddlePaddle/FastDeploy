@@ -1,5 +1,5 @@
-name: Stable Test
-description: "Run Stable Tests"
+name: 4-GPU E2E Tests
+description: "Run FastDeploy e2e tests on 4 GPUs"
 
 on:
   workflow_call:
@@ -8,7 +8,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -27,11 +27,14 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
-  stable_tests:
-    runs-on: [self-hosted, GPU-h1z1-2Cards]
-    timeout-minutes: 60
+  run_4_cards_tests:
+    runs-on: [self-hosted, GPU-h20-4Cards]
+    timeout-minutes: 30
     steps:
       - name: Code Prepare
         shell: bash
@@ -81,14 +84,21 @@ jobs:
           git config --global user.email "fastdeploy_ci@example.com"
           git log -n 3 --oneline
 
-      - name: Run FastDeploy Stable Tests
+      - name: Run Four Cards Tests
         shell: bash
         env:
           docker_image: ${{ inputs.DOCKER_IMAGE }}
-          fastdeploy_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
+          fd_wheel_url: ${{ inputs.FASTDEPLOY_WHEEL_URL }}
           CACHE_DIR: ${{ inputs.CACHE_DIR }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           MODEL_CACHE_DIR: ${{ inputs.MODEL_CACHE_DIR }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "Running on PR"
+          else
+            echo "Not a PR"
+          fi
           runner_name="${{ runner.name }}"
           CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
@@ -98,16 +108,20 @@ jobs:
           FD_API_PORT=$((8088 + DEVICE_PORT * 100))
           FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
           FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
-          FD_CACHE_QUEUE_PORT=$((8038 + DEVICE_PORT * 100))
-          FD_INFERENCE_MSG_QUEUE_ID=$(( 8048 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
+          FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
+          FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
           echo "FD_API_PORT=${FD_API_PORT}"
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
-          echo "FD_INFERENCE_MSG_QUEUE_ID=${FD_INFERENCE_MSG_QUEUE_ID}"
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
+          echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
+          echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
+          echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -116,12 +130,8 @@ jobs:
           if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
             touch "${CACHE_DIR}/gitconfig"
           fi
-          if [ ! -d "${MODEL_CACHE_DIR}" ]; then
-            echo "Error: MODEL_CACHE_DIR '${MODEL_CACHE_DIR}' does not exist."
-            exit 1
-          fi
 
-          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT)
+          PORTS=($FLASK_PORT $FD_API_PORT $FD_ENGINE_QUEUE_PORT $FD_METRICS_PORT $FD_CACHE_QUEUE_PORT)
           LOG_FILE="./port_cleanup_$(date +%Y%m%d_%H%M%S).log"
           echo "==== LOG_FILE is ${LOG_FILE} ===="
 
@@ -147,44 +157,41 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm --net=host \
+          docker run --rm --ipc=host --net=host \
           --name ${runner_name} \
-          -v $(pwd):/workspace \
-          -w /workspace \
-          -e fastdeploy_wheel_url=${fastdeploy_wheel_url} \
+          -v $(pwd):/workspace -w /workspace \
+          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
+          -v "${CACHE_DIR}/.cache:/root/.cache" \
+          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
+          -v "${MODEL_CACHE_DIR}:/ModelData:ro" \
+          -e "MODEL_PATH=/ModelData" \
           -e "FD_API_PORT=${FD_API_PORT}" \
           -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
-          -e "FD_INFERENCE_MSG_QUEUE_ID=${FD_INFERENCE_MSG_QUEUE_ID}" \
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
-          -v "${MODEL_CACHE_DIR}:/MODELDATA" \
-          -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
-          -v "${CACHE_DIR}/.cache:/root/.cache" \
-          -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
-          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
+          -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "BASE_REF=${BASE_REF}" \
+          -e "IS_PR=${IS_PR}" \
+          --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
+
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+
           # Avoid using pip cache to ensure the wheel is updated to the latest version
           wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
           python -m pip install paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
-          pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+          pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-          python -m pip install ${fastdeploy_wheel_url}
-          python -m pip install pytest
+          python -m pip install -r scripts/unittest_requirement.txt
+          python -m pip install ${fd_wheel_url}
+          rm -rf fastdeploy
+          python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
+          export PYTHONPATH=/workspace/FastDeploy/
 
-          git config --global --add safe.directory /workspace/FastDeploy
-          cd FastDeploy
-          TEST_EXIT_CODE=0
-          pushd tests/ce/stable_cases
-          bash launch_model.sh /MODELDATA
-          bash run.sh || TEST_EXIT_CODE=1
-          popd
-          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
+          export CUDA_VISIBLE_DEVICES=0,1,2,3
+          bash scripts/run_gpu_4cards.sh
           '
-          if [ -f ./FastDeploy/exit_code.env ]; then
-            source ./FastDeploy/exit_code.env
-            cat ./FastDeploy/exit_code.env >> $GITHUB_ENV
-          fi
-          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}"
-          exit ${TEST_EXIT_CODE}
