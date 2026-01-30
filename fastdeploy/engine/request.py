@@ -1210,6 +1210,33 @@ class PoolingOutput:
     def to_dict(self):
         return {"data": self.data}
 
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            delattr(self, key)
+        else:
+            raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
 
 _O = TypeVar("_O", default=PoolingOutput)
 
@@ -1265,6 +1292,33 @@ class PoolingRequestOutput(Generic[_O]):
             for field in fields(cls)
         }
         return cls(**init_args)
+
+    def get(self, key: str, default_value=None):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return default_value
+
+    def set(self, key: str, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError(key) from None
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            delattr(self, key)
+        else:
+            raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
 
 
 @dataclass
