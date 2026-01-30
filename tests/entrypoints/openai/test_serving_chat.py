@@ -226,7 +226,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.content[0].bytes, [])
 
         with patch.object(
-            self.chat_completion_handler.engine_client.data_processor, "process_logprob_response", side_effect=ValueError
+            self.chat_completion_handler.engine_client.data_processor,
+            "process_logprob_response",
+            side_effect=ValueError,
         ):
             self.assertIsNone(self.chat_completion_handler._build_logprobs_response(True, top_logprobs, 0, True))
 
@@ -360,13 +362,19 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(return_value=[1, 2])
         with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch.object(self.chat_completion_handler, "chat_completion_full_generator", AsyncMock(side_effect=RuntimeError("boom"))):
+            with patch.object(
+                self.chat_completion_handler,
+                "chat_completion_full_generator",
+                AsyncMock(side_effect=RuntimeError("boom")),
+            ):
                 resp = await self.chat_completion_handler.create_chat_completion(
                     ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
                 )
         self.assertIn("full generator error", resp.error.message)
 
-        with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start", side_effect=RuntimeError("boom")):
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start", side_effect=RuntimeError("boom")
+        ):
             resp = await self.chat_completion_handler.create_chat_completion(
                 ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], request_id="rid", stream=False)
             )
