@@ -789,6 +789,13 @@ class AsyncLLMEngine:
             llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
+        try:
+            think_truncate_prompt_ids = self.data_processor.tokenizer.encode(
+                self.data_processor.tokenizer.think_truncate_prompt
+            )["input_ids"]
+        except:
+            think_truncate_prompt_ids = [-1]
+        llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
         ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
         ips = None
@@ -818,6 +825,7 @@ class AsyncLLMEngine:
             f" --think_end_id {think_end_id}"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
+            f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
