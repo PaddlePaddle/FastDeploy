@@ -55,7 +55,10 @@ def test_marlin_process_and_apply_paths():
     method = marlin_backend.MarlinWeightOnlyMoEMethod()
     layer = _DummyLayer()
 
+    prev_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype("float16")
     method.create_weights(layer)
+    paddle.set_default_dtype(prev_dtype)
     up, down = _make_weights(layer)
     method.process_loaded_weights(layer, {"up": up, "down": down})
 
