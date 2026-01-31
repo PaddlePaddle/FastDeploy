@@ -9,6 +9,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     CompletionRequest,
     CompletionResponse,
+    DeltaMessage,
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
@@ -42,8 +43,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             self.multi_modal_processor._check_mm_limits = Mock()
             self.multi_modal_processor.append_completion_tokens = Mock()
             self.multi_modal_processor.pack_outputs = lambda x: x
-            self.multi_modal_processor.reasoning_parser = None
-            self.multi_modal_processor.model_status_dict = {}
 
         self.engine_client = Mock()
         self.engine_client.connection_initialized = False
@@ -96,7 +95,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         }
 
         if tool_call:
-            outputs["tool_calls"] = [
+            outputs["tool_call"] = [
                 {"index": 0, "type": "function", "function": {"name": tool_call["name"], "arguments": json.dumps({})}}
             ]
 
@@ -122,7 +121,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 metrics["inference_start_time"] = 0.1
             else:
                 metrics["arrival_time"] = 0.1 * (i + 1)
-                metrics["engine_recv_latest_token_time"] = 0.1 * (i + 1)
                 metrics["first_token_time"] = None
 
             if i == total_token_num - 1:
@@ -134,19 +132,23 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 "top_logprobs": None,
                 "draft_top_logprobs": None,
                 "reasoning_token_num": 0,
-                "skipped": False,
-                "reasoning_content": "",
-                "tool_calls": None,
             }
 
             if tool_call and isinstance(tool_call, dict) and i == total_token_num - 2:
-                outputs["tool_calls"] = [
-                    {
-                        "index": 0,
-                        "type": "function",
-                        "function": {"name": tool_call["name"], "arguments": json.dumps({})},
-                    }
-                ]
+                delta_msg = DeltaMessage(
+                    content="",
+                    reasoning_content="",
+                    tool_calls=[
+                        {
+                            "index": 0,
+                            "type": "function",
+                            "function": {"name": tool_call["name"], "arguments": json.dumps({})},
+                        }
+                    ],
+                    prompt_token_ids=None,
+                    completion_token_ids=None,
+                )
+                outputs["delta_message"] = delta_msg
 
             frame = [
                 {

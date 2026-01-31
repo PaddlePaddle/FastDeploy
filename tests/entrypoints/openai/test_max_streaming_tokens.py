@@ -95,105 +95,44 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [1],
-                    "text": "a",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "arrival_time": 0.2},
+                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [2],
-                    "text": "b",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None, "arrival_time": 0.2},
+                "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.2, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [3],
-                    "text": "c",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"engine_recv_latest_token_time": 0.3, "first_token_time": None, "arrival_time": 0.2},
+                "outputs": {"token_ids": [3], "text": "c", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.3, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [4],
-                    "text": "d",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"engine_recv_latest_token_time": 0.4, "first_token_time": None, "arrival_time": 0.2},
+                "outputs": {"token_ids": [4], "text": "d", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.4, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [5],
-                    "text": "e",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"engine_recv_latest_token_time": 0.5, "first_token_time": None, "arrival_time": 0.2},
+                "outputs": {"token_ids": [5], "text": "e", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.5, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [6],
-                    "text": "f",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {"engine_recv_latest_token_time": 0.6, "first_token_time": None, "arrival_time": 0.2},
+                "outputs": {"token_ids": [6], "text": "f", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.6, "first_token_time": None},
                 "finished": False,
             },
             {
                 "request_id": "test_request_id_0",
-                "outputs": {
-                    "token_ids": [7],
-                    "text": "g",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {
-                    "engine_recv_latest_token_time": 0.7,
-                    "first_token_time": None,
-                    "request_start_time": 0.1,
-                    "arrival_time": 0.2,
-                },
+                "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                 "finished": True,
             },
         ]
@@ -272,51 +211,22 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {
-                        "token_ids": [1],
-                        "text": "a",
-                        "top_logprobs": None,
-                        "draft_top_logprobs": None,
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
-                    },
-                    "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "arrival_time": 0.2},
+                    "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                     "finished": False,
                 },
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {
-                        "token_ids": [2],
-                        "text": "b",
-                        "top_logprobs": None,
-                        "draft_top_logprobs": None,
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
-                    },
-                    "metrics": {"engine_recv_latest_token_time": 0.2, "first_token_time": None, "arrival_time": 0.2},
+                    "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {"arrival_time": 0.2, "first_token_time": None},
                     "finished": False,
                 },
             ],
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {
-                        "token_ids": [7],
-                        "text": "g",
-                        "top_logprobs": None,
-                        "draft_top_logprobs": None,
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
-                    },
-                    "metrics": {
-                        "engine_recv_latest_token_time": 0.7,
-                        "first_token_time": None,
-                        "request_start_time": 0.1,
-                        "arrival_time": 0.2,
-                    },
+                    "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                     "finished": True,
                 }
             ],
@@ -367,6 +277,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 self.fail(f"{i + 1} chunk is unexcepted 'data: JSON\\n\\n': {repr(chunk_str)}")
         self.assertEqual(len(parsed_chunks), 1)
         for chunk_dict in parsed_chunks:
+            print(f"======>{chunk_dict}")
             choices_list = chunk_dict["choices"]
             self.assertEqual(len(choices_list), 3, f"Chunk {chunk_dict} should has three choices")
             self.assertEqual(
@@ -589,40 +500,14 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             {
                 "request_id": "test-request-id_0",
-                "outputs": {
-                    "token_ids": [1],
-                    "text": "a",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {
-                    "first_token_time": 0.1,
-                    "inference_start_time": 0.1,
-                    "request_start_time": 0.0,
-                    "arrival_time": 0.2,
-                },
+                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
                 "finished": False,
             },
             {
                 "request_id": "test-request-id_0",
-                "outputs": {
-                    "token_ids": [2, 3],
-                    "text": "bc",
-                    "top_logprobs": None,
-                    "draft_top_logprobs": None,
-                    "reasoning_content": "",
-                    "tool_calls": None,
-                    "skipped": False,
-                },
-                "metrics": {
-                    "engine_recv_latest_token_time": 0.3,
-                    "first_token_time": None,
-                    "request_start_time": 0.0,
-                    "arrival_time": 0.2,
-                },
+                "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
                 "finished": True,
             },
         ]
@@ -737,15 +622,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {
-                        "token_ids": [10],
-                        "text": "a",
-                        "top_logprobs": None,
-                        "draft_top_logprobs": None,
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
-                    },
+                    "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
                         "arrival_time": 0.3,
                         "first_token_time": 0.1,
@@ -758,15 +635,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {
-                        "token_ids": [2],
-                        "text": "bc",
-                        "top_logprobs": None,
-                        "draft_top_logprobs": None,
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
-                    },
+                    "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
                     "metrics": {
                         "arrival_time": 0.3,
                         "first_token_time": 0.1,
@@ -954,9 +823,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "a",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
                     },
                     "finished": False,
                     "metrics": {
@@ -977,9 +843,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "b",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
                     },
                     "finished": False,
                     "metrics": {
@@ -1000,9 +863,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "g",
                         "top_logprobs": {"a": 0.98, "b": 0.02},
                         "draft_top_logprobs": {"a": 0.98, "b": 0.02},
-                        "reasoning_content": "",
-                        "tool_calls": None,
-                        "skipped": False,
                     },
                     "finished": True,
                     "metrics": {
