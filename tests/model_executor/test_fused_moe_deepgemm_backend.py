@@ -155,6 +155,20 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
     )
 
     def _buffer_init(self, group, num_nvl_bytes=0, num_rdma_bytes=0, low_latency_mode=False, num_qps_per_rank=12):
+        if group.rank < 0 or group.world_size < 1:
+            class _DummyRuntime:
+                def __init__(self):
+                    self.status = 0
+
+            self.rank = group.rank
+            self.group_size = group.world_size
+            self.group = group
+            self.num_nvl_bytes = int(num_nvl_bytes)
+            self.num_rdma_bytes = int(num_rdma_bytes)
+            self.low_latency_mode = low_latency_mode
+            self.runtime = _DummyRuntime()
+            return None
+
         return orig_buffer_init(
             self,
             group,
