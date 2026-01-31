@@ -110,6 +110,9 @@ class PrefixCacheManager:
         self.request_release_lock = Lock()
         self.task_swapping_event = {}
 
+        # node_map: 节点ID到BlockNode对象的映射表，用于在swap操作时快速查找节点
+        # 作用：当进行GPU-CPU swap时，通过node_id快速定位到对应的BlockNode进行状态更新和block_id切换
+        # {node_id: BlockNode}
         self.node_map = {}
         self.req_leaf_map = {}  # {request_id: leaf node}
         self.leaf_req_map = defaultdict(set)
