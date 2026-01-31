@@ -22,7 +22,6 @@ import paddle
 from fastdeploy.model_executor.layers.moe import (
     fused_moe_deepgemm_backend as deepgemm_backend,
 )
-from fastdeploy.model_executor.layers.moe.ep import EPDecoderRunner, EPPrefillRunner
 
 paddle.set_device("gpu")
 
@@ -137,73 +136,65 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
     method.process_prequanted_weights(layer, state_dict=state_list, is_rearrange=False)
     assert layer.up_gate_proj_weight_scale_inv.shape[0] == layer.num_local_experts
 
-    from paddle.distributed.communication import deep_ep
-
-    orig_dispatch = deep_ep.Buffer.get_dispatch_config
-    orig_combine = deep_ep.Buffer.get_combine_config
-    orig_buffer_init = deep_ep.Buffer.__init__
-
-    monkeypatch.setattr(
-        deep_ep.Buffer,
-        "get_dispatch_config",
-        staticmethod(lambda num_ranks: orig_dispatch(2) if num_ranks in (-1, 1) else orig_dispatch(num_ranks)),
-    )
-    monkeypatch.setattr(
-        deep_ep.Buffer,
-        "get_combine_config",
-        staticmethod(lambda num_ranks: orig_combine(2) if num_ranks in (-1, 1) else orig_combine(num_ranks)),
-    )
-
-    def _buffer_init(self, group, num_nvl_bytes=0, num_rdma_bytes=0, low_latency_mode=False, num_qps_per_rank=12):
-        if group.rank < 0 or group.world_size < 1:
-            class _DummyRuntime:
-                def __init__(self):
-                    self.status = 0
-
-            self.rank = group.rank
-            self.group_size = group.world_size
-            self.group = group
-            self.num_nvl_bytes = int(num_nvl_bytes)
-            self.num_rdma_bytes = int(num_rdma_bytes)
-            self.low_latency_mode = low_latency_mode
-            self.runtime = _DummyRuntime()
+    class _DummyEvent:
+        def current_stream_wait(self):
             return None
 
-        return orig_buffer_init(
-            self,
-            group,
-            int(num_nvl_bytes),
-            int(num_rdma_bytes),
-            low_latency_mode,
-            num_qps_per_rank,
-        )
+    class _DummyPrefillRunner:
+        def __init__(self):
+            self.ep_engine = SimpleNamespace(async_finish=False)
 
-    monkeypatch.setattr(deep_ep.Buffer, "__init__", _buffer_init)
+        def moe_select(self, _layer, gate_out):
+            topk_idx = paddle.zeros([gate_out.shape[0], 1], dtype="int64")
+            topk_weights = paddle.ones([gate_out.shape[0], 1], dtype="float32")
+            return topk_idx, topk_weights
 
-    method.ep_prefill_runner = EPPrefillRunner(
-        top_k=layer.top_k,
-        hidden_size=layer.hidden_size,
-        num_experts=layer.num_experts,
-        splitwise_role=layer.fd_config.scheduler_config.splitwise_role,
-        num_max_dispatch_tokens_per_rank=layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-        ep_size=layer.ep_size,
-        ep_rank=layer.ep_rank,
-        redundant_experts_num=layer.fd_config.eplb_config.redundant_experts_num,
-        ep_group=layer.fd_config.parallel_config.ep_group,
-        use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+        def dispatch(self, x, topk_idx, topk_weights, **_kwargs):
+            recv_x = (
+                paddle.empty([0, x.shape[1]], dtype=x.dtype),
+                paddle.empty([0, x.shape[1]], dtype="float32"),
+            )
+            recv_num_tokens_per_expert_list = [0 for _ in range(layer.num_local_experts)]
+            return recv_x, topk_idx, topk_weights, recv_num_tokens_per_expert_list, None, _DummyEvent()
+
+        def combine(self, tmp_ffn_out, _handle, _topk_weights, event):
+            return tmp_ffn_out, event
+
+    class _DummyDecodeRunner(_DummyPrefillRunner):
+        def dispatch(self, x, _topk_idx, _topk_weights, **_kwargs):
+            permute_input = (
+                paddle.empty([0, x.shape[1]], dtype=x.dtype),
+                paddle.empty([0, x.shape[1]], dtype="float32"),
+            )
+            token_nums_per_expert = paddle.zeros([layer.num_local_experts], dtype="int32")
+            return permute_input, token_nums_per_expert, None
+
+        def combine(self, ffn_out, _topk_idx, _topk_weights, _handle):
+            return ffn_out
+
+    monkeypatch.setattr(
+        deepgemm_backend.deep_ep.Buffer,
+        "capture",
+        staticmethod(lambda: _DummyEvent()),
     )
-    method.ep_decoder_runner = EPDecoderRunner(
-        top_k=layer.top_k,
-        hidden_size=layer.hidden_size,
-        num_experts=layer.num_experts,
-        splitwise_role=layer.fd_config.scheduler_config.splitwise_role,
-        num_max_dispatch_tokens_per_rank=layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
-        ep_size=layer.ep_size,
-        ep_rank=layer.ep_rank,
-        redundant_experts_num=layer.fd_config.eplb_config.redundant_experts_num,
-        ep_group=layer.fd_config.parallel_config.ep_group,
-        use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+    monkeypatch.setattr(
+        deepgemm_backend.deep_gemm,
+        "m_grouped_gemm_fp8_fp8_bf16_nt_masked",
+        lambda *_args, **_kwargs: None,
     )
+    monkeypatch.setattr(
+        deepgemm_backend.fastdeploy.model_executor.ops.gpu,
+        "group_swiglu_with_masked",
+        lambda tensor, _tokens: paddle.zeros_like(tensor),
+    )
+    monkeypatch.setattr(
+        deepgemm_backend.fastdeploy.model_executor.ops.gpu,
+        "masked_per_token_quant",
+        lambda tensor, _tokens, _block: (paddle.zeros_like(tensor), paddle.zeros([1], dtype="float32")),
+    )
+
+    method.ep_prefill_runner = _DummyPrefillRunner()
+    method.ep_decoder_runner = _DummyDecodeRunner()
 
     gate = paddle.nn.Linear(layer.hidden_size, layer.num_experts, bias_attr=False)
     x = paddle.ones([2, layer.hidden_size], dtype="float16")
