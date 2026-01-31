@@ -26,10 +26,10 @@ paddle.set_device("gpu")
 
 
 class _DummyLayer(paddle.nn.Layer):
-    def __init__(self, hidden_size=128, moe_intermediate_size=128):
+    def __init__(self, hidden_size=128, moe_intermediate_size=128, num_local_experts=2):
         super().__init__()
-        self.num_local_experts = 1
-        self.num_experts = 1
+        self.num_local_experts = num_local_experts
+        self.num_experts = num_local_experts
         self.hidden_size = hidden_size
         self.moe_intermediate_size = moe_intermediate_size
         self.top_k = 1
@@ -60,20 +60,33 @@ class _DummyLayer(paddle.nn.Layer):
 
 def _make_state_dict(layer):
     super_dtype = layer.up_gate_proj_super_scales.dtype if hasattr(layer, "up_gate_proj_super_scales") else "float32"
-    up = [paddle.ones([layer.hidden_size // 4, layer.moe_intermediate_size * 2], dtype="uint8")]
-    down = [paddle.ones([layer.moe_intermediate_size // 4, layer.hidden_size], dtype="uint8")]
-    return {
-        "up": up,
-        "down": down,
-        "up_scale_0": paddle.ones([layer.hidden_size // 128, layer.moe_intermediate_size * 2], dtype="uint8"),
-        "down_scale_0": paddle.ones([layer.moe_intermediate_size // 128, layer.hidden_size], dtype="uint8"),
-        "up_super_0": paddle.ones([layer.moe_intermediate_size * 2], dtype=super_dtype),
-        "down_super_0": paddle.ones([layer.hidden_size], dtype=super_dtype),
-        "up_code_scale_0": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
-        "down_code_scale_0": paddle.ones([layer.hidden_size], dtype="float32"),
-        "up_code_zp_0": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
-        "down_code_zp_0": paddle.ones([layer.hidden_size], dtype="float32"),
-    }
+    up = [
+        paddle.ones([layer.hidden_size // 4, layer.moe_intermediate_size * 2], dtype="uint8")
+        for _ in range(layer.num_local_experts)
+    ]
+    down = [
+        paddle.ones([layer.moe_intermediate_size // 4, layer.hidden_size], dtype="uint8")
+        for _ in range(layer.num_local_experts)
+    ]
+    state = {"up": up, "down": down}
+    for idx in range(layer.num_local_experts):
+        state.update(
+            {
+                f"up_scale_{idx}": paddle.ones(
+                    [layer.hidden_size // 128, layer.moe_intermediate_size * 2], dtype="uint8"
+                ),
+                f"down_scale_{idx}": paddle.ones(
+                    [layer.moe_intermediate_size // 128, layer.hidden_size], dtype="uint8"
+                ),
+                f"up_super_{idx}": paddle.ones([layer.moe_intermediate_size * 2], dtype=super_dtype),
+                f"down_super_{idx}": paddle.ones([layer.hidden_size], dtype=super_dtype),
+                f"up_code_scale_{idx}": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
+                f"down_code_scale_{idx}": paddle.ones([layer.hidden_size], dtype="float32"),
+                f"up_code_zp_{idx}": paddle.ones([layer.moe_intermediate_size * 2], dtype="float32"),
+                f"down_code_zp_{idx}": paddle.ones([layer.hidden_size], dtype="float32"),
+            }
+        )
+    return state
 
 
 def test_wint2_paths(monkeypatch):
