@@ -141,6 +141,7 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
 
     orig_dispatch = deep_ep.Buffer.get_dispatch_config
     orig_combine = deep_ep.Buffer.get_combine_config
+    orig_buffer_init = deep_ep.Buffer.__init__
 
     monkeypatch.setattr(
         deep_ep.Buffer,
@@ -152,6 +153,18 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
         "get_combine_config",
         staticmethod(lambda num_ranks: orig_combine(2) if num_ranks in (-1, 1) else orig_combine(num_ranks)),
     )
+
+    def _buffer_init(self, group, num_nvl_bytes=0, num_rdma_bytes=0, low_latency_mode=False, num_qps_per_rank=12):
+        return orig_buffer_init(
+            self,
+            group,
+            int(num_nvl_bytes),
+            int(num_rdma_bytes),
+            low_latency_mode,
+            num_qps_per_rank,
+        )
+
+    monkeypatch.setattr(deep_ep.Buffer, "__init__", _buffer_init)
 
     method.ep_prefill_runner = EPPrefillRunner(
         top_k=layer.top_k,
