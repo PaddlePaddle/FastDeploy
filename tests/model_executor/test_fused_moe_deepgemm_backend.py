@@ -192,6 +192,14 @@ def test_deepgemm_weights_and_apply_paths(monkeypatch):
         "masked_per_token_quant",
         lambda tensor, _tokens, _block: (paddle.zeros_like(tensor), paddle.zeros([1], dtype="float32")),
     )
+    monkeypatch.setattr(
+        deepgemm_backend,
+        "m_grouped_gemm_fp8_fp8_bf16_nt_contiguous_custom_python_op",
+        lambda permute_input, *_args, **_kwargs: paddle.zeros(
+            [permute_input.shape[0], layer.hidden_size],
+            dtype=paddle.bfloat16,
+        ),
+    )
 
     method.ep_prefill_runner = _DummyPrefillRunner()
     method.ep_decoder_runner = _DummyDecodeRunner()
