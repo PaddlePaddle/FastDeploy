@@ -57,7 +57,7 @@ def _make_weights(layer):
     return up, down
 
 
-def test_marlin_process_and_apply_paths():
+def test_marlin_process_and_apply_paths(monkeypatch):
     method = marlin_backend.MarlinWeightOnlyMoEMethod()
     layer = _DummyLayer()
 
@@ -74,6 +74,13 @@ def test_marlin_process_and_apply_paths():
 
     gate = paddle.nn.Linear(layer.hidden_size, layer.num_experts, bias_attr=False)
     x = paddle.ones([2, layer.hidden_size], dtype="float16")
+    monkeypatch.setattr(
+        marlin_backend,
+        "MoeWna16MarlinGemmApi",
+        lambda *_args, **kwargs: (
+            paddle.zeros([kwargs["size_m"], kwargs["size_n"]], dtype=x.dtype),
+        ),
+    )
     out = method.apply(layer, x, gate, topk_ids_hookfunc=lambda **_k: None)
     assert out.shape == [2, layer.hidden_size]
 
