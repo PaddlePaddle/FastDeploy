@@ -26,10 +26,10 @@ paddle.set_device("gpu")
 
 
 class _DummyLayer(paddle.nn.Layer):
-    def __init__(self, hidden_size=64, moe_intermediate_size=32, topk_method="topk"):
+    def __init__(self, hidden_size=64, moe_intermediate_size=32, topk_method="topk", num_local_experts=2):
         super().__init__()
-        self.num_local_experts = 1
-        self.num_experts = 1
+        self.num_local_experts = num_local_experts
+        self.num_experts = num_local_experts
         self.hidden_size = hidden_size
         self.moe_intermediate_size = moe_intermediate_size
         self.top_k = 1
@@ -46,8 +46,14 @@ class _DummyLayer(paddle.nn.Layer):
 
 
 def _make_weights(layer):
-    up = [paddle.ones([layer.hidden_size, layer.moe_intermediate_size * 2], dtype="float16")]
-    down = [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], dtype="float16")]
+    up = [
+        paddle.ones([layer.hidden_size, layer.moe_intermediate_size * 2], dtype="float16")
+        for _ in range(layer.num_local_experts)
+    ]
+    down = [
+        paddle.ones([layer.moe_intermediate_size, layer.hidden_size], dtype="float16")
+        for _ in range(layer.num_local_experts)
+    ]
     return up, down
 
 
