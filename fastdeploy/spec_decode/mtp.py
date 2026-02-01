@@ -15,6 +15,7 @@
 """
 
 import os
+import queue
 import time
 from typing import List
 
@@ -37,6 +38,7 @@ from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models import ModelForCasualLM
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.output import DecodeMode
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
@@ -71,7 +73,7 @@ else:
         set_data_ipc,
         unset_data_ipc,
     )
-    from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+    from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding, async_generate_output
 
 from .base import Proposer
 
@@ -925,7 +927,9 @@ class MTPProposer(Proposer):
                 self.model_inputs["step_idx"],
             )
 
-    def _propose_cuda(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_cuda(
+        self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, async_output_queue: queue.Queue = None
+    ):
         """
         Main process for MTP inference.
         Args:
@@ -1065,20 +1069,32 @@ class MTPProposer(Proposer):
                     and sampler_output.logprobs_tensors is not None
                 ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        self.model_inputs["seq_lens_decoder"],
-                        self.model_inputs["prompt_lens"],
-                        4,  # mtype
-                        self.local_rank,
-                        self.parallel_config.use_ep,
-                    )
+
+                    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                        if self.parallel_config.use_ep or self.local_rank == 0:
+                            accept_token_nums = self.model_inputs["batch_token_num"][:real_bsz]
+                            async_generate_output(
+                                async_output_queue=async_output_queue,
+                                sampled_tokens=sampler_output.sampled_token_ids,
+                                accept_token_nums=accept_token_nums,
+                                logprobs_tensors=sampler_output.logprobs_tensors,
+                                decode_mode=DecodeMode.DRAFT,
+                            )
+                    else:
+                        speculate_save_output_topk(
+                            sampler_output.sampled_token_ids,
+                            sampler_output.logprobs_tensors.logprob_token_ids,
+                            sampler_output.logprobs_tensors.logprobs,
+                            sampler_output.logprobs_tensors.selected_token_ranks,
+                            self.model_inputs["batch_token_num"][:real_bsz],
+                            self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                            self.model_inputs["not_need_stop"],
+                            self.model_inputs["seq_lens_decoder"],
+                            self.model_inputs["prompt_lens"],
+                            4,  # mtype
+                            self.local_rank,
+                            self.parallel_config.use_ep,
+                        )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -1094,7 +1110,9 @@ class MTPProposer(Proposer):
                 if hasattr(self.model, "empty_input_forward"):
                     self.model.empty_input_forward(forward_meta=self.forward_meta)
 
-    def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
+    def _propose_xpu(
+        self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, async_output_queue: queue.Queue = None
+    ):
         """
         Main process for MTP inference.
         Args:
@@ -1159,17 +1177,28 @@ class MTPProposer(Proposer):
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        4,  # mtype
-                        self.local_rank,
-                    )
+                    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                        if self.parallel_config.use_ep or self.local_rank == 0:
+                            accept_token_nums = self.model_inputs["batch_token_num"][:real_bsz]
+                            async_generate_output(
+                                async_output_queue=async_output_queue,
+                                sampled_tokens=sampler_output.sampled_token_ids,
+                                accept_token_nums=accept_token_nums,
+                                logprobs_tensors=sampler_output.logprobs_tensors,
+                                decode_mode=DecodeMode.DRAFT,
+                            )
+                    else:
+                        speculate_save_output_topk(
+                            sampler_output.sampled_token_ids,
+                            sampler_output.logprobs_tensors.logprob_token_ids,
+                            sampler_output.logprobs_tensors.logprobs,
+                            sampler_output.logprobs_tensors.selected_token_ranks,
+                            self.model_inputs["batch_token_num"][:real_bsz],
+                            self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                            self.model_inputs["not_need_stop"],
+                            4,  # mtype
+                            self.local_rank,
+                        )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -1276,11 +1305,17 @@ class MTPProposer(Proposer):
         self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
     def _run_impl(
-        self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False, is_dummy_run: bool = False
+        self,
+        full_hidden_states: paddle.Tensor,
+        step_use_cudagraph: bool = False,
+        is_dummy_run: bool = False,
+        async_output_queue: queue.Queue = None,
     ):
         """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
-        self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
+        self._propose(
+            step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, async_output_queue=async_output_queue
+        )
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()

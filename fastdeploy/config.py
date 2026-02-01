@@ -760,7 +760,7 @@ class SpeculativeConfig:
 
         self.num_extra_cache_layer = 0
 
-        self.enable_draft_logprob: bool = False
+        self.enable_draft_logprob: bool = True
 
         for key, value in args.items():
             if hasattr(self, key):
