@@ -273,13 +273,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             return self.exist_prefill_flag
-        return (self.share_inputs["seq_lens_encoder"] > 0).any().cpu().numpy().item()
+        return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
 
     def exist_decode(self):
         """
         check whether decode stage exist
         """
-        return (self.share_inputs["seq_lens_decoder"] > 0).any().cpu().numpy().item()
+        return np.any(self.share_inputs["seq_lens_decoder"].numpy() > 0)
 
     def only_prefill(self):
         """
