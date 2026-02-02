@@ -711,6 +711,8 @@ class CacheTransferManager:
 
             k_cache_keys = k_cache_keys[:match_block_num]
             v_cache_keys = v_cache_keys[:match_block_num]
+            k_scale_keys = k_scale_keys[:match_block_num] if k_scale_keys else None
+            v_scale_keys = v_scale_keys[:match_block_num] if v_scale_keys else None
             gpu_block_ids = gpu_block_ids[:match_block_num]
             cpu_block_ids = cpu_block_ids[:match_block_num]
             valid_gpu_block_ids = []
@@ -901,6 +903,8 @@ class CacheTransferManager:
                 try:
                     k_cache_keys = k_cache_keys[match_block_num:]
                     v_cache_keys = v_cache_keys[match_block_num:]
+                    k_scale_keys = k_scale_keys[match_block_num:] if k_scale_keys else None
+                    v_scale_keys = v_scale_keys[match_block_num:] if v_scale_keys else None
                     gpu_block_ids = gpu_block_ids[match_block_num:]
                     cpu_block_ids = cpu_block_ids[match_block_num:]
                     # TODO: support timeout with actual block count
