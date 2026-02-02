@@ -1014,7 +1014,7 @@ def parse_args():
     parser.add_argument(
         "--enable_overlap_schedule",
         action="store_true",
-        help="disable overlap schedule",
+        help="Enable overlap schedule",
     )
 
     args = parser.parse_args()

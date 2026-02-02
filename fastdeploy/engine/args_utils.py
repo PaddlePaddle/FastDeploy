@@ -442,7 +442,7 @@ class EngineArgs:
     """
     enable_overlap_schedule: bool = False
     """
-    Flag to enable overlapping schedule. Default is True (enabled).
+    Flag to enable overlapping schedule. Default is False (disabled).
     """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
