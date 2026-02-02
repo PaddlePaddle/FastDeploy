@@ -28,8 +28,10 @@ from typing import Any, Optional, Union
 from pydantic import ValidationError
 from tqdm import tqdm
 
+import fastdeploy.envs as envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
@@ -739,7 +741,8 @@ class LLM:
                     "token_ids": new_token_ids,
                 },
             }
-
+            if envs.ENABLE_V1_DATA_PROCESSOR:
+                response_dict = RequestOutput.from_dict(response_dict)
             processed_response = self.llm_engine.data_processor.process_response_dict_streaming(
                 response_dict, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
             )

@@ -237,17 +237,15 @@ class DataProcessor(BaseDataProcessor):
             elif request.messages is not None:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
-                task = request.to_dict()
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task or task[k] is None:
-                                task[k] = v
+                            if not getattr(request, k, None):
+                                setattr(request, k, v)
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                task.setdefault("enable_thinking", True)
-                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
+                request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `input_ids`, `text` or `messages`: {request}.")
 
@@ -407,7 +405,7 @@ class DataProcessor(BaseDataProcessor):
 
         return response_dict
 
-    def process_response_obj_normal(self, response_obj, **kwargs):
+    def process_response_dict_normal(self, response_obj, **kwargs):
         """
         Preprocess the response
 
@@ -451,7 +449,7 @@ class DataProcessor(BaseDataProcessor):
                 del self.model_status_dict[req_id]
         return response_obj
 
-    def process_response_obj_streaming(self, response_obj, **kwargs):
+    def process_response_dict_streaming(self, response_obj, **kwargs):
         """
         Preprocess the response
 
@@ -533,9 +531,9 @@ class DataProcessor(BaseDataProcessor):
         """
         stream = kwargs.get("stream", True)
         if stream:
-            return self.process_response_obj_streaming(response_dict, **kwargs)
+            return self.process_response_dict_streaming(response_dict, **kwargs)
         else:
-            return self.process_response_obj_normal(
+            return self.process_response_dict_normal(
                 response_dict,
                 **kwargs,
             )
