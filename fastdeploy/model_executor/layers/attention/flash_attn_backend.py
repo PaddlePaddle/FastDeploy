@@ -60,6 +60,7 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
 
     try:
+        paddle.compat.enable_torch_proxy(scope={"flash_mask"})
         from flash_mask.cute.interface import (
             flashmask_attention as flashmask_attention_v4,
         )
