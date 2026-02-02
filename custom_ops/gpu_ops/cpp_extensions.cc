@@ -405,9 +405,12 @@ void GetBlockShapeAndSplitKVBlock(
     const int group_size,
     const int block_size);
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& seq_len,
-                                             const int64_t token_num_cpu);
+std::vector<paddle::Tensor> GetPaddingOffset(
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
+    const int64_t token_num_cpu);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                            const paddle::Tensor& input_ids,

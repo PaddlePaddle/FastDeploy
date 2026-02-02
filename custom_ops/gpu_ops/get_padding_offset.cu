@@ -24,11 +24,11 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
                                 int *cu_seqlens_q,
                                 int *cu_seqlens_k,
                                 const int64_t *input_data,
+                                const int *seq_lens,
+                                const int max_seq_len,
                                 const int64_t *draft_tokens,
                                 const int *seq_lens_encoder,
-                                const int max_draft_tokens_per_batch,
-                                const int *seq_lens,
-                                const int max_seq_len) {
+                                const int max_draft_tokens_per_batch) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
 #ifdef PADDLE_WITH_COREX
@@ -124,11 +124,11 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       cu_seqlens_q.data<int>(),
       cu_seqlens_k.data<int>(),
       input_ids.data<int64_t>(),
+      seq_len.data<int>(),
+      max_seq_len,
       draft_tokens ? draft_tokens.get().data<int64_t>() : nullptr,
       seq_lens_encoder ? seq_lens_encoder.get().data<int32_t>() : nullptr,
-      max_draft_tokens_per_batch,
-      seq_len.data<int>(),
-      max_seq_len);
+      max_draft_tokens_per_batch);
 
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
 }
