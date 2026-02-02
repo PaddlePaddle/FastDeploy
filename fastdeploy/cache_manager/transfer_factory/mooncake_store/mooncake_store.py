@@ -237,19 +237,38 @@ class MooncakeStore(KVCacheStorage):
         logger.debug(f"The exists fun processes {len(keys)} objects, cost_time: {cost_time:.3f}ms")
         return result
 
-    def query(self, k_keys: List[str], v_keys: List[str], timeout: float = 1.0):
+    def query(
+        self,
+        k_keys: List[str],
+        v_keys: List[str],
+        k_scale_keys: List[str] = None,
+        v_scale_keys: List[str] = None,
+        timeout: float = 1.0,
+    ):
         """
         Given the k_keys and v_keys, get the valid blocks number that
         can be prefetched from storage backend.
         """
         assert len(k_keys) == len(v_keys), "k_keys and v_keys must have the same length."
-        result = self.exists(k_keys + v_keys)
+
+        all_keys = k_keys + v_keys
+        has_scale = k_scale_keys is not None and v_scale_keys is not None
+        if has_scale:
+            all_keys.extend(k_scale_keys + v_scale_keys)
+
+        result = self.exists(all_keys)
 
         # only consider the case when both key and value exist
         num = 0
-        for k, v in zip(k_keys, v_keys):
-            if result[k] and result[v]:
-                num += 1
+        if has_scale:
+            for k, v, k_scale, v_scale in zip(k_keys, v_keys, k_scale_keys, v_scale_keys):
+                if result[k] and result[v] and result[k_scale] and result[v_scale]:
+                    num += 1
+        else:
+            for k, v in zip(k_keys, v_keys):
+                if result[k] and result[v]:
+                    num += 1
+
         return num
 
     def delete(self, key, timeout=5) -> bool:
