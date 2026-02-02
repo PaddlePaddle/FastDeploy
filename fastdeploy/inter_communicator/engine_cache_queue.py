@@ -340,3 +340,13 @@ class EngineCacheQueue:
         except Exception as e:
             logger.error(f"empty function meets error: {e}, {str(traceback.format_exc())}")
             raise e
+
+    def result_queue_empty(self):
+        """
+        check if result queue is empty
+        """
+        try:
+            return len(self.tansfer_done_queue) == 0
+        except Exception as e:
+            logger.error(f"result_queue_empty function meets error: {e}, {str(traceback.format_exc())}")
+            raise e
