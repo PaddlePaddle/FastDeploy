@@ -439,13 +439,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             token_nums_per_expert,
             expected_m,
         )
-        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
 
-        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
-            act_out,
-            token_nums_per_expert,
-            self.quant_config.weight_block_size[0],
-            use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
+        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
+            up_gate_proj_out, token_nums_per_expert, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
         )
 
         # disable_ue8m0_cast is False for SM100

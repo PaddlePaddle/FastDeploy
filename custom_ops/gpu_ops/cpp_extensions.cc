@@ -49,6 +49,10 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
+paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
+
+void SetStop(paddle::Tensor& not_need_stop, bool flag);
+
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -295,12 +299,9 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
-std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size,
-                                                 const bool use_ue8m0);
-std::vector<paddle::Tensor> MaskedPerTokenQuant(
+std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
-    paddle::Tensor& recv_expert_count,
+    paddle::Tensor& token_nums_per_expert,
     const int block_size,
     const bool use_ue8m0);
 
@@ -437,7 +438,7 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const bool beam_search);
 
 void UpdateInputs(const paddle::Tensor& stop_flags,
-                  const paddle::Tensor& not_need_stop,  // only on cpu
+                  const paddle::Tensor& not_need_stop,  // on device
                   const paddle::Tensor& seq_lens_this_time,
                   const paddle::Tensor& seq_lens_encoder,
                   const paddle::Tensor& seq_lens_decoder,
@@ -446,7 +447,7 @@ void UpdateInputs(const paddle::Tensor& stop_flags,
                   const paddle::Tensor& is_block_step);
 
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
-                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& not_need_stop,  // on device
                     const paddle::Tensor& seq_lens_this_time,
                     const paddle::Tensor& seq_lens_encoder,
                     const paddle::Tensor& seq_lens_decoder,
@@ -760,6 +761,7 @@ void SpecTokenPenaltyMultiScores(const paddle::Tensor& pre_ids,
                                  const paddle::Tensor& presence_scores,
                                  const paddle::Tensor& temperatures,
                                  const paddle::Tensor& bad_tokens,
+                                 const paddle::Tensor& bad_tokens_len,
                                  const paddle::Tensor& cur_len,
                                  const paddle::Tensor& min_len,
                                  const paddle::Tensor& eos_token_id,
@@ -1111,6 +1113,7 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    const paddle::Tensor& reasoning_status,
                                    const paddle::Tensor& output_padding_offset,
                                    const paddle::Tensor& output_cum_offsets,
+                                   const paddle::Tensor& enable_thinking,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
@@ -1261,13 +1264,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 
-  m.def("masked_per_token_quant",
-        &MaskedPerTokenQuant,
+  m.def("fused_mask_swiglu_fp8_quant",
+        &FusedMaskSwigluFP8Quant,
         py::arg("input"),
-        py::arg("recv_expert_count"),
+        py::arg("token_nums_per_expert"),
         py::arg("block_size"),
         py::arg("use_ue8m0") = false,
-        "per token per block quant");
+        "fused mask swiglu and fp8 quant");
 
 #ifdef ENABLE_MACHETE
   /*machete/machete_mm.cu
@@ -1712,4 +1715,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
+
+  m.def("get_stop", &GetStop, "get_stop function");
+
+  m.def("set_stop", &SetStop, "set_stop function");
 }

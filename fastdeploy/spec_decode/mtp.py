@@ -108,7 +108,7 @@ class MTPProposer(Proposer):
 
         if current_platform.is_xpu():
             self._propose = self._propose_xpu
-        elif current_platform.is_cuda():
+        elif current_platform.is_cuda() or current_platform.is_maca():
             self._propose = self._propose_cuda
         else:
             raise RuntimeError("Unsupported platform.")
@@ -350,7 +350,7 @@ class MTPProposer(Proposer):
         self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or current_platform.is_maca():
             self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
                 self.target_model_inputs["decoder_num_blocks_cpu"]
             ).cpu()
@@ -507,6 +507,7 @@ class MTPProposer(Proposer):
         self.model_inputs["min_dec_len"] = self.target_model_inputs["min_dec_len"]
 
         self.model_inputs["bad_tokens"] = self.target_model_inputs["bad_tokens"]
+        self.model_inputs["bad_tokens_len"] = self.target_model_inputs["bad_tokens_len"]
 
         # Integrate the updated results in model forward
         self.model_inputs["base_model_draft_tokens"] = self.target_model_inputs["draft_tokens"]
@@ -1000,6 +1001,7 @@ class MTPProposer(Proposer):
                     repetition_penalties=self.model_inputs["penalty_score"],
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
+                    bad_words_token_len=self.model_inputs["bad_tokens_len"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
                     max_num_logprobs=20 if self.enable_logprob else None,
                     temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
@@ -1306,7 +1308,7 @@ class MTPProposer(Proposer):
         elif current_platform.is_xpu():
             paddle.device.xpu.empty_cache()
         else:
-            raise NotImplementedError
+            paddle.device.empty_cache()
 
     def _get_cache_type(self):
         cache_type = None

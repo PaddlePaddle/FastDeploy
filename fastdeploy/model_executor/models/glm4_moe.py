@@ -35,6 +35,7 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     QKVParallelLinear,
     ReplicatedLinear,
     RowParallelLinear,
@@ -56,28 +57,49 @@ class Glm4MoeMLP(nn.Layer):
         self,
         fd_config: FDConfig,
         intermediate_size: int,
+        layer_id: int,
         prefix: str = "",
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
+        # shared experts not split when use_sequence_parallel_moe in ep + tp
+        if (
+            fd_config.parallel_config.use_sequence_parallel_moe
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+        ):
+            self.up_gate_proj = MergedReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=[intermediate_size, intermediate_size],
+                with_bias=False,
+            )
 
-        self.up_gate_proj = MergedColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.up_gate_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size * 2,
-            with_bias=False,
-            activation=fd_config.model_config.hidden_act,
-        )
+            self.down_proj = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+            )
+        else:
+            self.up_gate_proj = MergedColumnParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=intermediate_size * 2,
+                with_bias=False,
+                activation=fd_config.model_config.hidden_act,
+            )
 
-        self.down_proj = RowParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.down_proj",
-            input_size=intermediate_size,
-            output_size=fd_config.model_config.hidden_size,
-            with_bias=False,
-            reduce_results=reduce_results,
-        )
+            self.down_proj = RowParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+                reduce_results=reduce_results,
+            )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
@@ -97,7 +119,7 @@ class Glm4Moe(nn.Layer):
     def __init__(
         self,
         fd_config: FDConfig,
-        layer_id: int,
+        layer_id: int = -1,
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -157,6 +179,7 @@ class Glm4Moe(nn.Layer):
         self.shared_experts = Glm4MoeMLP(
             fd_config=fd_config,
             intermediate_size=shared_experts_intermediate_size,
+            layer_id=layer_id,
             prefix=f"{prefix}.shared_experts",
             reduce_results=False,
         )
@@ -258,6 +281,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             self.mlp = Glm4MoeMLP(
                 fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
+                layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
             )
 
