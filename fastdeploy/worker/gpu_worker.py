@@ -213,13 +213,28 @@ class GpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Perform the warm-up and the graph optimization
+        Perform the warm-up and the graph optimization.
+
+        Execution modes:
+        | Mode                              | Prefill + Mixed          | Decode                   |
+        |-----------------------------------|--------------------------|--------------------------|
+        | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
+        | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
+        | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
         if self.fd_config.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.vision_encoder_compile()
-        # Trigger cuda graph capture
+
+        # Static split graph mode: capture CUDAGraph for prefill/mixed phase
+        if (
+            self.fd_config.graph_opt_config.graph_opt_level >= 1
+            and not self.fd_config.graph_opt_config.full_cuda_graph
+        ):
+            self.model_runner.capture_model_prefill_and_mixed()
+
+        # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

@@ -189,6 +189,7 @@ class GPUModelRunner(ModelRunnerBase):
         # CUDA Graph
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.cudagraph_capture_sizes_prefill = list(reversed(self.graph_opt_config.cudagraph_capture_sizes_prefill))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
 
@@ -276,13 +277,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             return self.exist_prefill_flag
-        return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
+        return (self.share_inputs["seq_lens_encoder"] > 0).any().cpu().numpy().item()
 
     def exist_decode(self):
         """
         check whether decode stage exist
         """
-        return np.any(self.share_inputs["seq_lens_decoder"].numpy() > 0)
+        return (self.share_inputs["seq_lens_decoder"] > 0).any().cpu().numpy().item()
 
     def only_prefill(self):
         """
@@ -703,6 +704,8 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
                 if not self.is_pooling_model:
+                    if request.get("enable_thinking") is not None:
+                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = request.get("enable_thinking")
                     if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
                         self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
@@ -987,6 +990,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
                 if not self.is_pooling_model:
+                    if request.get("enable_thinking") is not None:
+                        self.share_inputs["enable_thinking"][idx : idx + 1, :] = request.get("enable_thinking")
                     if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
                         self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
@@ -1304,6 +1309,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
 
         # Initialize thinking related buffers
+        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
@@ -1657,6 +1663,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # for zero size
         self.forward_meta.is_zero_size = self.forward_meta.ids_remove_padding.shape[0] == 0
+        self.forward_meta.exist_prefill = self.exist_prefill()
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
@@ -2128,6 +2135,10 @@ class GPUModelRunner(ModelRunnerBase):
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
+            if capture_prefill and self.graph_opt_config.graph_opt_level > 0:
+                # only need to capture prefill
+                break
+
         if self.fd_config.routing_replay_config.enable_routing_replay:
             self.routing_replay_manager.clear_routing_table()
 
@@ -2270,6 +2281,30 @@ class GPUModelRunner(ModelRunnerBase):
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
+
+    @sot_warmup_guard(True)
+    def capture_model_prefill_and_mixed(self) -> None:
+        """
+        Trigger CUDA Graph capture for prefill/mixed phase in static split graph mode.
+        """
+        if not self.use_cudagraph:
+            logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
+            return
+        time_before_capture = time.perf_counter()
+        capture_sizes = self.cudagraph_capture_sizes_prefill.copy()
+        for capture_size in sorted(capture_sizes, reverse=True):
+            self._dummy_run(
+                num_tokens=capture_size,
+                batch_size=1,
+                in_capturing=True,
+                expected_decode_len=1,
+                capture_prefill=True,
+            )
+            logger.info(f"Warm up the model (prefill/mixed) with num_tokens:{capture_size}")
+        time_after_capture = time.perf_counter()
+        logger.info(
+            f"Cuda Graph capturing (Prefill and Mixed) took {time_after_capture - time_before_capture} seconds"
+        )
 
     def vision_encoder_compile(self):
         if self.graph_opt_config.graph_opt_level == 0:

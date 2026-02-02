@@ -922,6 +922,7 @@ class EngineService:
                                                 )
                                             ]
                                         )
+                                        need_check_req_ids.remove(task.request_id)
                                         delete_tasks_list.append(task)
                                     elif result is False:
                                         if task.request_id in finished_ids:

@@ -303,10 +303,12 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
                                           const int block_size);
 std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
                                                  const int block_size);
-std::vector<paddle::Tensor> MaskedPerTokenQuant(
+
+std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
-    paddle::Tensor& recv_expert_count,
-    const int block_size);
+    paddle::Tensor& token_nums_per_expert,
+    const int block_size,
+    const bool use_ue8m0);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
     const paddle::Tensor& ffn_out,
@@ -1116,6 +1118,7 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    const paddle::Tensor& reasoning_status,
                                    const paddle::Tensor& output_padding_offset,
                                    const paddle::Tensor& output_cum_offsets,
+                                   const paddle::Tensor& enable_thinking,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
@@ -1266,12 +1269,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 
-  m.def("masked_per_token_quant",
-        &MaskedPerTokenQuant,
+  m.def("fused_mask_swiglu_fp8_quant",
+        &FusedMaskSwigluFP8Quant,
         py::arg("input"),
-        py::arg("recv_expert_count"),
+        py::arg("token_nums_per_expert"),
         py::arg("block_size"),
-        "per token per block quant");
+        py::arg("use_ue8m0") = false,
+        "fused mask swiglu and fp8 quant");
 
 #ifdef ENABLE_MACHETE
   /*machete/machete_mm.cu
