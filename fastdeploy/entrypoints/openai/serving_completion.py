@@ -27,7 +27,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -178,8 +178,11 @@ class OpenAIServingCompletion:
             try:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
-                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                    current_req_dict["arrival_time"] = time.time()
+                    if not envs.ENABLE_V1_DATA_PROCESSOR:
+                        current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
+                    else:
+                        current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                    current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
@@ -230,7 +233,13 @@ class OpenAIServingCompletion:
                     )
                     api_server_logger.error(error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
-
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", num_choices)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
+            )
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
@@ -285,7 +294,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -396,7 +407,7 @@ class OpenAIServingCompletion:
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if tool_called or output.get("tool_call"):
+            if tool_called or output.get("tool_calls"):
                 return "tool_calls"
             else:
                 return "stop"
@@ -455,7 +466,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -541,9 +554,9 @@ class OpenAIServingCompletion:
                         text=output["text"],
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                        tool_calls=None,
+                        tool_calls=output["tool_calls"],
                         completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
-                        reasoning_content="",
+                        reasoning_content=output["reasoning_content"],
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
                         prompt_logprobs=(
@@ -552,15 +565,12 @@ class OpenAIServingCompletion:
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.text = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"]:
+                        continue
 
                     choices.append(delta_message)
 
@@ -634,6 +644,10 @@ class OpenAIServingCompletion:
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
 
+        except asyncio.CancelledError as e:
+            await self.engine_client.abort(f"{request_id}_0", num_choices)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
@@ -723,7 +737,7 @@ class OpenAIServingCompletion:
                     else None
                 ),
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_call"),
+                tool_calls=output.get("tool_calls"),
                 logprobs=aggregated_logprobs,
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),

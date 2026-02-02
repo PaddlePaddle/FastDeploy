@@ -301,6 +301,14 @@ struct MaxOp {
   }
 };
 
+template <>
+struct MaxOp<float> {
+  // This is slightly faster
+  __device__ __forceinline__ float operator()(float const &x, float const &y) {
+    return max(x, y);
+  }
+};
+
 inline int GetBlockSize(int vocab_size) {
   if (vocab_size > 512) {
     return 1024;

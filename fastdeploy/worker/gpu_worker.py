@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import paddle
 import pynvml
@@ -27,6 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.platforms import current_platform
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -78,6 +79,9 @@ class GpuWorker(WorkerBase):
                 use_custom_allreduce(self.fd_config.parallel_config.tp_group)
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
@@ -184,6 +188,10 @@ class GpuWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        """update weights in place"""
+        return self.model_runner.update_weights(version, rsync_config)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -205,13 +213,28 @@ class GpuWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Perform the warm-up and the graph optimization
+        Perform the warm-up and the graph optimization.
+
+        Execution modes:
+        | Mode                              | Prefill + Mixed          | Decode                   |
+        |-----------------------------------|--------------------------|--------------------------|
+        | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
+        | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
+        | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
         if self.fd_config.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.vision_encoder_compile()
-        # Trigger cuda graph capture
+
+        # Static split graph mode: capture CUDAGraph for prefill/mixed phase
+        if (
+            self.fd_config.graph_opt_config.graph_opt_level >= 1
+            and not self.fd_config.graph_opt_config.full_cuda_graph
+        ):
+            self.model_runner.capture_model_prefill_and_mixed()
+
+        # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

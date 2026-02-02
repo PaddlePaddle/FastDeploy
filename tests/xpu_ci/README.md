@@ -6,14 +6,23 @@
 
 ```
 tests/xpu_ci/
-├── conftest.py                  # pytest配置文件,包含通用函数和fixture
-├── test_v1_mode.py             # V1模式测试(wint4量化)
-├── test_w4a8.py                # W4A8量化测试
-├── test_vl_model.py            # VL视觉语言模型测试
-├── test_ep4tp4_online.py       # EP4TP4在线服务测试
-├── test_ep4tp1_online.py       # EP4TP1在线服务测试
-└── test_ep4tp4_all2all.py      # EP4TP4 all2all通信测试
-```
+├── 4cards_cases     # 使用4张卡的case
+│   ├── test_ep4tp1_online.py
+│   ├── test_ep4tp4_all2all.py
+│   ├── test_ep4tp4_online.py
+│   ├── test_logprobs_21b_tp4.py
+│   ├── test_mtp.py
+│   ├── test_pd_03b_tp1.py
+│   ├── test_pd_21b_tp2.py
+│   ├── test_v1_mode.py
+│   ├── test_vl_model.py
+│   └── test_w4a8.py
+├── 8cards_cases    # 使用8张卡的case
+│   ├── test_pd_21b_ep4tp1.py
+│   ├── test_pd_21b_ep4tp4.py
+│   └── test_pd_p_tp4ep4_d_tp1ep4.py
+├── conftest.py
+└── README.md
 
 ## 使用方法
 
@@ -23,7 +32,8 @@ tests/xpu_ci/
 # 设置环境变量
 export XPU_ID=0  # 或 1
 export MODEL_PATH=/path/to/models
-
+# 注意 需要设置PYTHONPATH环境变量,否则CI脚本导入模块会失败
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
 # 运行CI测试
 bash scripts/run_xpu_ci_pytest.sh
 ```
@@ -37,22 +47,26 @@ cd /path/to/FastDeploy
 # 设置环境变量
 export XPU_ID=0
 export MODEL_PATH=/path/to/models
-
+# 注意 需要设置PYTHONPATH环境变量,否则CI脚本导入模块会失败
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
 # 运行单个测试
-python -m pytest -v -s tests/xpu_ci/test_v1_mode.py
+python -m pytest -v -s tests/xpu_ci/4cards_cases/test_ep4tp1_online.py
 
-# 或者直接运行测试文件
-cd tests/xpu_ci
-python test_v1_mode.py
 ```
 
 ### 运行指定的测试
 
 ```bash
 # 运行多个测试
+# 设置环境变量
+export XPU_ID=0
+export MODEL_PATH=/path/to/models
+# 注意 需要设置PYTHONPATH环境变量,否则CI脚本导入模块会失败
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
+
 python -m pytest -v -s \
-    tests/xpu_ci/test_v1_mode.py \
-    tests/xpu_ci/test_w4a8.py
+    tests/xpu_ci/4cards_cases/test_v1_mode.py \
+    tests/xpu_ci/4cards_cases/test_w4a8.py
 
 # 使用pytest的过滤功能
 python -m pytest -v -s -k "v1_mode or w4a8" tests/xpu_ci/
@@ -62,7 +76,7 @@ python -m pytest -v -s -k "v1_mode or w4a8" tests/xpu_ci/
 
 ### 步骤1: 创建新的测试文件
 
-在 `tests/xpu_ci/` 目录下创建新的测试文件,文件名必须以 `test_` 开头,例如 `test_new_feature.py`
+在 `tests/xpu_ci/` 对应卡数（目前有8卡或者4卡）目录下创建新的测试文件,文件名必须以 `test_` 开头,例如 `test_new_feature.py`
 
 ### 步骤2: 编写测试代码
 
@@ -152,15 +166,17 @@ if __name__ == "__main__":
 
 ### 步骤3: 添加到CI流程
 
- `scripts/run_xpu_ci_pytest.sh`会自动扫描 tests/xpu_ci/ 目录下 test_ 开头的测试文件进行测试
+ `scripts/run_xpu_ci_pytest.sh`会自动扫描 tests/xpu_ci/ 对应卡数目录下 test_ 开头的测试文件进行测试
 
 ### 步骤4: 测试验证
 
 ```bash
 # 先单独运行新的测试case,确保能够正常工作
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
 python -m pytest -v -s tests/xpu_ci/test_new_feature.py
 
 # 然后运行完整的CI流程
+export PYTHONPATH=$(pwd)/tests/xpu_ci:$PYTHONPATH
 bash scripts/run_xpu_ci_pytest.sh
 ```
 
@@ -255,9 +271,6 @@ def test_example(xpu_env):
 def test_ep_example(xpu_env):
     """EP并行示例测试"""
     print("\n============================开始EP并行示例测试!============================")
-
-    if not download_and_build_xdeepep():
-        pytest.fail("xDeepEP下载或编译失败")
 
     original_env = setup_ep_env()
 

@@ -48,6 +48,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               const paddle::Tensor& not_need_stop,
                               const paddle::Tensor& seq_lens_decoder,
                               const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& preempted_idx,
                               int message_flag,  // Target: 3, Draft: 4
                               int64_t rank_id,
                               bool save_each_rank) {
@@ -79,6 +80,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   int* cu_batch_token_offset_data = cu_batch_token_offset_cpu.data<int>();
   int* seq_lens_decoder_data = seq_lens_decoder_cpu.data<int>();
   int64_t* prompt_lens_data = prompt_lens_cpu.data<int64_t>();
+  const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
 
   static struct msgdata msg_sed;
   int msg_queue_id = 1;
@@ -142,6 +144,10 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
       cur_token_num = token_num_per_batch_data[i];
     }
     msg_sed.meta[3 + i] = cur_token_num;
+    if (preempted_idx_data[i] == 1) {
+      msg_sed.meta[3 + i] = -9;
+    }
+
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];
     int token_offset = cu_batch_token_offset_data[i];
     for (int j = 0; j < cur_token_num; j++) {
@@ -196,16 +202,15 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
 }
 
 PD_BUILD_STATIC_OP(speculate_save_output_topk)
-    .Inputs({
-        "sampled_token_ids",
-        "logprob_token_ids",
-        "logprob_scores",
-        "logprob_ranks",
-        "token_num_per_batch",
-        "cu_batch_token_offset",
-        "not_need_stop",
-        "seq_lens_decoder",
-        "prompt_lens",
-    })
+    .Inputs({"sampled_token_ids",
+             "logprob_token_ids",
+             "logprob_scores",
+             "logprob_ranks",
+             "token_num_per_batch",
+             "cu_batch_token_offset",
+             "not_need_stop",
+             "seq_lens_decoder",
+             "prompt_lens",
+             "preempted_idx"})
     .Attrs({"message_flag: int", "rank_id: int64_t", "save_each_rank: bool"})
     .SetKernelFn(PD_KERNEL(SpeculateSaveOutMmsgTopK));

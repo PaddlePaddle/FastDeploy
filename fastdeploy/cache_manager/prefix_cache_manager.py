@@ -31,7 +31,9 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
+from fastdeploy.cache_manager.cache_tasks import ReadStorageTask, WriteStorageTask
 from fastdeploy.cache_manager.ops import get_all_visible_devices
+from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -47,7 +49,7 @@ class PrefixCacheManager:
 
     def __init__(
         self,
-        config,
+        config: FDConfig,
         tensor_parallel_size,
         splitwise_role="mixed",
         local_data_parallel_id=0,
@@ -207,7 +209,6 @@ class PrefixCacheManager:
         key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
         key_cache_shape = ",".join([str(i) for i in key_cache_shape])
         val_cache_shape = ",".join([str(i) for i in val_cache_shape])
-        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
         if self.enable_splitwise:
             cache_messager_processes = self.launch_cache_messager(
                 cache_config,
@@ -247,6 +248,14 @@ class PrefixCacheManager:
             suffix=engine_worker_queue_port,
             create=False,
         )
+        cache_transfer_inited_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=False,
+        )
 
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
@@ -261,9 +270,9 @@ class PrefixCacheManager:
                 val_shape_str = str(val_cache_shape)
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
-            kvcache_storage_backend_str = cache_config.kvcache_storage_backend
+            storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
         else:
-            kvcache_storage_backend_str = "none"
+            storage_arg_str = " "
 
         if self.cache_config.swap_space or self.cache_config.kvcache_storage_backend:
             for i in range(tensor_parallel_size):
@@ -292,14 +301,19 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if create_cache_tensor else "")
-                    + f" --kvcache_storage_backend {kvcache_storage_backend_str}"
+                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
+                    + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
+                    + f" --model_path {self.config.model_config.model}"
                     + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+
+            logger.info("PrefixCacheManager is waiting for cache transfer manager to be initialized.")
+            while np.sum(self.cache_transfer_inited_signal.value) != tensor_parallel_size:
+                time.sleep(1)
 
         logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
@@ -390,7 +404,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_tprank{i}.log 2>&1"
+                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -444,33 +458,35 @@ class PrefixCacheManager:
         else:
             return True
 
-    def allocate_gpu_blocks(self, num_blocks):
+    def allocate_gpu_blocks(self, num_blocks, req_id=None):
         """
         allocate gpu blocks.
         """
         assert num_blocks <= len(
             self.gpu_free_block_list
         ), f"gpu free block num: {len(self.gpu_free_block_list)} < needed number {num_blocks}"
+        logger.debug(f"{req_id} start allocate...")
         allocated_block_ids = [heapq.heappop(self.gpu_free_block_list) for i in range(num_blocks)]
         logger.info(
-            f"allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated_block_ids
 
-    def recycle_gpu_blocks(self, gpu_block_ids):
+    def recycle_gpu_blocks(self, gpu_block_ids, req_id=None):
         """
         recycle gpu blocks.
         """
         logger.info(
-            f"recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"req_id:{req_id} recycle_gpu_blocks: {gpu_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
         if isinstance(gpu_block_ids, list):
             for gpu_block_id in gpu_block_ids:
                 heapq.heappush(self.gpu_free_block_list, gpu_block_id)
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
+        logger.debug(f"req_id:{req_id} recycle blocks end")
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
@@ -787,9 +803,15 @@ class PrefixCacheManager:
                         f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
                     )
                     start_time = time.time()
-                    storage_matched_block_ids = self.issue_prefetch_storage_task(
-                        req_id, no_match_block_keys, gpu_recv_storage_block_ids
+                    read_storage_task = ReadStorageTask(
+                        task_id=req_id,
+                        keys=no_match_block_keys,
+                        token_ids=input_token_ids,
+                        gpu_block_ids=gpu_recv_storage_block_ids,
+                        start_read_block_idx=match_token_num // block_size,
                     )
+                    logger.debug(f"issue read storage task: {read_storage_task}")
+                    storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
                     storage_matched_block_num = len(storage_matched_block_ids)
                     storage_match_token_num = storage_matched_block_num * block_size
                     cost_time = time.time() - start_time
@@ -978,7 +1000,7 @@ class PrefixCacheManager:
                 logger.info(f"release_block_ids: req_id {req_id} leaf_node {leaf_node}")
 
                 if leaf_node == self.radix_tree_root:
-                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id])
+                    self.recycle_gpu_blocks(self.unfilled_req_block_map[req_id], req_id)
                     del self.unfilled_req_block_map[req_id]
                     return
 
@@ -1004,6 +1026,12 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
+        token_ids = request.prompt_token_ids
+        if isinstance(token_ids, np.ndarray):
+            token_ids = token_ids.tolist()
+        if self.config.cache_config.enable_output_caching:
+            token_ids += request.output_token_ids
+
         req_id = request.request_id
         keys = []
         node = self.req_leaf_map[req_id]
@@ -1016,24 +1044,33 @@ class PrefixCacheManager:
 
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
+        write_storage_task = WriteStorageTask(
+            task_id=req_id,
+            keys=keys,
+            token_ids=token_ids,
+            gpu_block_ids=gpu_block_ids,
+        )
+        logger.debug(f"issue write storage task: {write_storage_task}")
         tic = time.time()
-        self.issue_write_back_storage_task(req_id=req_id, hash_keys=keys, gpu_block_ids=gpu_block_ids, is_sync=True)
+        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
 
-    def issue_write_back_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
         if self.kvcache_storage_backend is None:
             return
 
-        if len(hash_keys) != len(gpu_block_ids):
-            err_msg = f"write_back_storage error: hash_keys({len(hash_keys)}) != gpu_block_ids({len(gpu_block_ids)})"
+        if len(task.keys) != len(task.gpu_block_ids):
+            err_msg = (
+                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[req_id] = Event()
-        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, req_id, hash_keys, gpu_block_ids, timeout))
+        self.task_write_back_event[task.task_id] = Event()
+        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
-            self.wait_write_storage_task(req_id)
+            self.wait_write_storage_task(task.task_id)
 
     def wait_write_storage_task(self, req_id):
         """
@@ -1043,16 +1080,19 @@ class PrefixCacheManager:
             self.task_write_back_event[req_id].wait()
             del self.task_write_back_event[req_id]
 
-    def issue_prefetch_storage_task(self, req_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.5):
+    def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
         Prefetch cache from storage task
         """
+        if self.kvcache_storage_backend is None:
+            return []
+
         storage_block_ids = []
-        self.task_prefetch_event[req_id] = Event()
+        self.task_prefetch_event[task.task_id] = Event()
         # issue task to cache_transfer_manager
-        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, req_id, hash_keys, gpu_block_ids, timeout))
+        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
         if is_sync:
-            storage_block_ids = self.wait_prefetch_storage_task(req_id)
+            storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
         return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):
@@ -1605,6 +1645,96 @@ class PrefixCacheManager:
             node.last_used_time = current_time
             node.req_id_set.add(req_id)
             node = node.parent
+
+    def cache_output_blocks(self, task, block_size):
+        """
+        Cache blocks already computed.
+        """
+        try:
+            with self.request_release_lock:
+                req_id = task.request_id
+                logger.info(f"Cache output tokens for task {req_id}")
+                last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
+                if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
+                    self.leaf_req_map[last_node].remove(req_id)
+                if isinstance(task.prompt_token_ids, np.ndarray):
+                    prompt_token_ids = task.prompt_token_ids.tolist()
+                else:
+                    prompt_token_ids = task.prompt_token_ids
+                input_ids = prompt_token_ids + task.output_token_ids
+                total_token_num = len(input_ids)
+                can_cache_computed_tokens = total_token_num - total_token_num % block_size
+                current_match_node = last_node
+                has_modified_gpu_lru_leaf_heap = False
+                has_modified_cpu_lru_leaf_heap = False
+                can_recycle_gpu_block_ids = []
+                can_recycle_cpu_block_ids = []
+                gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
+                current_time = time.time()
+                prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
+
+                with self.cache_status_lock:
+                    while num_cached_tokens < total_token_num:
+                        token_block = input_ids[num_cached_tokens : num_cached_tokens + block_size]
+                        token_num = len(token_block)
+                        if token_num != block_size:
+                            break
+                        hash_value = get_hash_str(token_block, prefix_block_key)
+                        prefix_block_key = [hash_value]
+                        if hash_value in current_match_node.children:
+                            child = current_match_node.children[hash_value]
+                            child.increment_shared_count()
+                            child.last_used_time = current_time
+                            child.req_id_set.add(req_id)
+                            if child in self.gpu_lru_leaf_set:
+                                self.gpu_lru_leaf_set.remove(child)
+                                self.gpu_lru_leaf_heap.remove(child)
+                                has_modified_gpu_lru_leaf_heap = True
+                            elif child in self.cpu_lru_leaf_set:
+                                self.cpu_lru_leaf_set.remove(child)
+                                self.cpu_lru_leaf_heap.remove(child)
+                                has_modified_cpu_lru_leaf_heap = True
+                            if child.has_in_gpu:
+                                can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                            else:
+                                if child.cache_status == CacheStatus.SWAP2CPU:
+                                    logger.info(
+                                        f"cache_output_blocks: req_id {task.request_id} matched node"
+                                        + f" {child.node_id} which is being SWAP2CPU"
+                                    )
+                                    child.cache_status = CacheStatus.GPU
+                                    can_recycle_gpu_block_ids.append(gpu_block_ids_to_cache.pop(0))
+                                elif child.cache_status == CacheStatus.CPU:
+                                    can_recycle_cpu_block_ids.append(child.block_id)
+                                    child.cache_status = CacheStatus.GPU
+                                    gpu_block_id = gpu_block_ids_to_cache.pop(0)
+                                    child.block_id = gpu_block_id
+                            num_cached_tokens = num_cached_tokens + block_size
+                            current_match_node = child
+                        else:
+                            break
+
+                if has_modified_gpu_lru_leaf_heap:
+                    heapq.heapify(self.gpu_lru_leaf_heap)
+                if has_modified_cpu_lru_leaf_heap:
+                    heapq.heapify(self.cpu_lru_leaf_heap)
+                self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
+                self.recycle_cpu_blocks(can_recycle_cpu_block_ids)
+
+                leaf_node = self.mm_build_path(
+                    request=task,
+                    num_computed_tokens=can_cache_computed_tokens,
+                    block_size=block_size,
+                    last_node=current_match_node,
+                    num_cached_tokens=num_cached_tokens,
+                )
+                self.req_leaf_map[req_id] = leaf_node
+                self.leaf_req_map[leaf_node].add(req_id)
+                self.req_to_radix_tree_info[req_id] = (leaf_node, can_cache_computed_tokens)
+                task.num_cached_blocks = can_cache_computed_tokens // block_size
+        except Exception as e:
+            logger.error(f"cache_output_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+            raise e
 
     def mm_build_path(self, request, num_computed_tokens, block_size, last_node, num_cached_tokens):
         """

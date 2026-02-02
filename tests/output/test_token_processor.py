@@ -74,6 +74,7 @@ class _DummyResourceManager:
         self.req_dict = {}
         self.requests = {}
         self.to_be_rescheduled_request_id_set = set()
+        self.abort_req_ids_set = set()
         self.recycled = []
         self.cached_tasks = []
         self.cleared = False
@@ -185,6 +186,7 @@ class _Metrics:
         self.available_gpu_block_num = _Metric()
         self.batch_size = _Metric()
         self.available_batch_size = _Metric()
+        self.request_token_ratio = _Metric()
 
     def _init_speculative_metrics(self, method, num_speculative_tokens):
         return None
@@ -627,16 +629,6 @@ def test_record_speculative_decoding_accept_num_per_request_updates_maps():
     assert processor.accept_token_num_per_head[2] == 1
 
 
-def test_reschedule_preempt_task_triggers_for_pending_requests():
-    processor, rm, _, _ = _make_processor()
-    rm.to_be_rescheduled_request_id_set = {"req-z"}
-    rm.requests = {"req-z": types.SimpleNamespace(idx=2)}
-    with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
-        processor._reschedule_preempt_task(batch_size=1)
-
-    assert "reschedule-req-z" in rm.recycled
-
-
 def test_process_batch_output_consumes_tokens_and_finishes_task():
     processor, rm, _, _ = _make_processor()
     metrics = RequestMetrics(
@@ -867,7 +859,7 @@ def test_process_batch_output_handles_multimodal_and_negative_token():
     rm.to_be_rescheduled_request_id_set = {task.request_id}
     rm.requests = {task.request_id: types.SimpleNamespace(idx=0)}
     processor.output_tokens[1, 0] = 1
-    processor.output_tokens[2, 0] = -1
+    processor.output_tokens[2, 0] = -9
 
     with (
         mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True),
@@ -1017,8 +1009,8 @@ def test_process_batch_output_speculative_negative_token_reschedules():
     rm.to_be_rescheduled_request_id_set = {task_id}
     rm.requests = {task_id: types.SimpleNamespace(idx=0)}
     processor.output_tokens[1] = 1
-    processor.output_tokens[2] = 1
-    processor.output_tokens[3] = 1
+    processor.output_tokens[2] = -9
+    processor.output_tokens[3] = -1
     processor.output_tokens[2 + SPECULATE_MAX_BSZ] = -1
 
     with (
@@ -1037,7 +1029,7 @@ def test_process_batch_output_use_zmq_reschedules_negative_token():
     rm.req_dict[task.request_id] = task
     rm.to_be_rescheduled_request_id_set = {task.request_id}
 
-    stream = types.SimpleNamespace(batch_id=0, tokens=np.array([-1], dtype=np.int64), pooler_output=None)
+    stream = types.SimpleNamespace(batch_id=0, tokens=np.array([-9], dtype=np.int64), pooler_output=None)
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
         results = processor._process_batch_output_use_zmq([stream])
 

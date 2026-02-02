@@ -15,7 +15,7 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -72,6 +72,10 @@ class ForwardMeta:
 
     # Use cuda graph in this step or not. Used to avoid run cuda graph when in dummy run or prefill stage.
     step_use_cudagraph: bool = False
+
+    # Flag indicating RoPE was already applied externally (e.g., by PaddleFormers)
+    # When True, FlashAttentionBackend uses identity RoPE (cos=1, sin=0) to avoid double application
+    rope_already_applied: bool = False
 
     # Attention backend object
     attn_backend: AttentionBackend = None
@@ -151,6 +155,8 @@ class ForwardMeta:
 
     # for zero size
     is_zero_size: bool = False
+    # for prefill
+    exist_prefill: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""
@@ -255,6 +261,39 @@ class XPUForwardMeta(ForwardMeta):
     total_enc_len: Optional[paddle.Tensor] = None
     # for pd_disaggregation
     kv_signal_sender: Optional[paddle.Tensor] = None
+
+    def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
+        """
+        Synchronize attributes from another XPUForwardMeta object
+        """
+        if skip_keys is None:
+            skip_keys = []
+
+        # Use fields(self) to ensure all fields of the current class are obtained
+        for field in fields(self):
+            name = field.name
+
+            if name in skip_keys:
+                continue
+
+            if not hasattr(other, name):
+                continue
+
+            src_val = getattr(other, name)
+            dst_val = getattr(self, name)
+
+            # Synchronization logic
+            if isinstance(src_val, paddle.Tensor):
+                if isinstance(dst_val, paddle.Tensor):
+                    # Only perform in-place copy_ when the destination is also a Tensor and already exists
+                    dst_val.copy_(src_val, False)
+                else:
+                    # Directly assign the reference if the destination is None (in-place copy to None is not feasible)
+                    setattr(self, name, src_val)
+            else:
+                # Handle non-Tensor attributes (str, int, bool, etc.)
+                setattr(self, name, src_val)
+        return self
 
 
 @dataclass

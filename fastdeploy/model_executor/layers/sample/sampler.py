@@ -36,6 +36,7 @@ from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
     min_p_sampling,
+    reasoning_phase_token_constraint,
     speculate_get_target_logits,
     speculate_insert_first_token,
     top_k_top_p_sampling,
@@ -511,6 +512,7 @@ class Sampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -604,7 +606,7 @@ class SpeculativeSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_maca():
             self.forward = self.forward_cuda
         elif current_platform.is_xpu():
             self.forward = self.forward_xpu
@@ -614,6 +616,9 @@ class SpeculativeSampler(nn.Layer):
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
         self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
+        self.think_end_id = fd_config.model_config.think_end_id
+        self.line_break_id = fd_config.model_config.line_break_id
+        self.enf_gen_phase_tag = fd_config.speculative_config.enf_gen_phase_tag
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
@@ -748,6 +753,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -756,6 +762,23 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["output_cum_offsets"],
             max_model_len,
         )
+
+        if self.enf_gen_phase_tag:
+            reasoning_phase_token_constraint(
+                logits,
+                sampling_metadata.pre_token_ids,
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["step_idx"],
+                share_inputs["reasoning_allowed_tokens"],
+                share_inputs["reasoning_status"],
+                share_inputs["output_padding_offset"],
+                share_inputs["output_cum_offsets"],
+                share_inputs["enable_thinking"],
+                self.think_end_id,
+                self.line_break_id,
+            )
 
         probs = F.softmax(logits)
 
@@ -797,6 +820,7 @@ class SpeculativeSampler(nn.Layer):
             actual_candidate_len,
             share_inputs["actual_draft_token_num"],
             sampling_metadata.top_p,
+            share_inputs["reasoning_status"],
             max_model_len,
             self.speculative_verify_window,
             True,  # enable_topp
@@ -875,6 +899,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -947,7 +972,7 @@ class MTPSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_maca():
             self.forward = self.forward_cuda
         elif current_platform.is_xpu():
             self.forward = self.forward_xpu
@@ -1105,6 +1130,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -1157,6 +1183,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
