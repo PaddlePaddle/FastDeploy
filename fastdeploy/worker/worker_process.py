@@ -446,11 +446,11 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
-            self.insert_step = False
+            if self.fd_config.load_config.dynamic_load_weight:
+                self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.ranks > 1:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
@@ -528,6 +528,7 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+
                 if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
@@ -583,14 +584,6 @@ class PaddleDisWorkerProc:
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
             # run eplb
             self._run_eplb(tp_rank)
-            if tp_rank == 0:
-                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
-                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
-                    )
-
             self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:

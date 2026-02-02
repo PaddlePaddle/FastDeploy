@@ -968,23 +968,17 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if not is_fetching:
+                if not is_fetching:
+                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                    try:
                         is_fetching = True
                         get_request_pool.submit(_fetch_request)
-
-                else:
-                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
-                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                        try:
-                            is_fetching = True
-                            get_request_pool.submit(_fetch_request)
-                        except RuntimeError as e:
-                            if "shutdown" in str(e):
-                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                                break
-                            else:
-                                raise
+                    except RuntimeError as e:
+                        if "shutdown" in str(e):
+                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                            break
+                        else:
+                            raise
                 if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
                     time.sleep(0.001)
                     continue
