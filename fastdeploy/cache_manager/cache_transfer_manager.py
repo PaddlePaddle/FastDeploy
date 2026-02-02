@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import gc
 import json
+import os
 import queue
 import threading
 import time
@@ -26,6 +27,7 @@ from typing import List
 
 import numpy as np
 import paddle
+import yaml
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
@@ -45,7 +47,7 @@ from fastdeploy.cache_manager.transfer_factory import AttentionStore, MooncakeSt
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import console_logger, get_logger
 
 
 def parse_args():
@@ -59,7 +61,6 @@ def parse_args():
         default="mixed",
         help="splitwise role, can be decode, prefill or mixed",
     )
-    parser.add_argument("--model_id", type=str, default="default", help="model id")
     parser.add_argument("--rank", type=int, default=0, help="local tp rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--max_model_len", type=int, default=32768, help="max model length")
@@ -111,7 +112,7 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         default=None,
-        choices=["mooncake", "attention_store", "none"],
+        choices=["mooncake", "attention_store"],
         help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
@@ -121,9 +122,20 @@ def parse_args():
         default="write_through",
         help="KVCache write policy",
     )
+    parser.add_argument("--model_path", type=str, help="The path of model")
 
     args = parser.parse_args()
     return args
+
+
+def get_key_prefix_from_version(version_file_path):
+    # the format of version string is RL-STEP{xx}-{timestamp}-{uuid4}
+    with open(version_file_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+        version = data["version"]
+        parts = version.split("-", 2)
+        key_prefix = "-".join(parts[:2])
+        return key_prefix
 
 
 class CacheTransferManager:
@@ -160,7 +172,7 @@ class CacheTransferManager:
         self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
 
         # extract other arg values
-        self.model_id = args.model_id
+        self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
         self.rank = args.rank
         self.device = args.device_id
@@ -210,6 +222,7 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
+        self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -231,34 +244,6 @@ class CacheTransferManager:
             create=False,
         )
 
-        if args.kvcache_storage_backend is None or args.kvcache_storage_backend == "none":
-            self.storage_backend = None
-        elif args.kvcache_storage_backend == "mooncake":
-            logger.info("Start initialize mooncake store...")
-            self.storage_backend = MooncakeStore(tp_rank=self.rank)
-            self._init_storage_buffer(args)
-            logger.info("Initialized mooncake store successfully")
-        elif args.kvcache_storage_backend == "attention_store":
-            logger.info("Start initialize attention store...")
-            self.storage_backend = AttentionStore(
-                namespace=self.model_id,
-                shard_id=self.rank,
-                shard_num=self.n_ranks,
-                layer_num=self.num_layers + self.num_extra_layers,
-                block_token_size=self.block_size,
-                bytes_per_shard_layer_per_block=self.head_num * self.block_size * self.head_dim * self.cache_bytes,
-                device_id=self.device,
-                dp_id=self.local_data_parallel_id,
-            )
-            logger.info("Initialized attention store successfully!")
-        else:
-            raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
-        self.storage_backend_type = args.kvcache_storage_backend
-
-        if args.write_policy not in ["write_through"]:
-            raise ValueError(f"Invalid write policy: {args.write_policy}")
-        self.write_policy = args.write_policy
-
         # Initialize update/clear signals for RL
         self.kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
@@ -268,6 +253,61 @@ class CacheTransferManager:
             create=False,
         )
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
+
+        cache_transfer_inited_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+        self.cache_transfer_inited_signal.value[self.rank] = 1
+
+    def _init_storage(self, args):
+        self.storage_backend_type = args.kvcache_storage_backend
+
+        try:
+            if self.storage_backend_type is None:
+                self.storage_backend = None
+            elif self.storage_backend_type == "mooncake":
+                logger.info("Start initialize mooncake store...")
+                self.storage_backend = MooncakeStore(tp_rank=self.rank)
+                self._init_storage_buffer(args)
+                logger.info("Initialized mooncake store successfully")
+            elif self.storage_backend_type == "attention_store":
+                logger.info("Start initialize attention store...")
+                # TODO: support different model version in rl
+                self.storage_backend = AttentionStore(
+                    namespace=self.model_id,
+                    shard_id=self.rank,
+                    shard_num=self.n_ranks,
+                    layer_num=self.num_layers + self.num_extra_layers,
+                    block_token_size=self.block_size,
+                    bytes_per_shard_layer_per_block=self.head_num * self.block_size * self.head_dim * self.cache_bytes,
+                    device_id=self.device,
+                    dp_id=self.local_data_parallel_id,
+                )
+                logger.info("Initialized attention store successfully!")
+            else:
+                raise NotImplementedError(f"Unsupported storage backend: {self.storage_backend_type}")
+        except Exception as e:
+            err_msg = f"Fail to initialize storage backend, {e}, traceback: {traceback.format_exc()}"
+            logger.error(err_msg)
+            console_logger.error(err_msg)  # print error message to console
+            raise
+
+        if args.write_policy not in ["write_through"]:
+            raise ValueError(f"Invalid write policy: {args.write_policy}")
+        self.write_policy = args.write_policy
+
+        self.key_prefix = ""
+        version_file_path = os.path.join(args.model_path, "version.yaml")
+        if os.path.exists(version_file_path):
+            self.key_prefix = get_key_prefix_from_version(version_file_path)
+        logger.info(f"The key_prefix of cache storage is {self.key_prefix}")
+
+        logger.info("Initialize cache storage successfully")
 
     def _init_storage_buffer(self, args):
         """
@@ -287,7 +327,7 @@ class CacheTransferManager:
         )
         total_bytes = block_num * self.storage_buffer_stride_bytes * 2  # key and value
 
-        logger.info(f"Creating cpu buffer cache for alllayers: {total_bytes / 1024 ** 3:.2f}GB")
+        logger.info(f"Creating cpu buffer cache for all layers: {total_bytes / 1024 ** 3:.2f}GB")
         read_buffer = cuda_host_alloc(total_bytes)
         self.storage_key_read_buffer = read_buffer
         self.storage_value_read_buffer = read_buffer + total_bytes // 2
@@ -300,16 +340,6 @@ class CacheTransferManager:
 
     def _init_gpu_cache(self, args):
 
-        try:
-            assert not args.create_cache_tensor
-        except:
-            logger.warn(
-                f"In current implementation, cache transfer manager do not create cache tensors at all, "
-                f"meaning create_cache_tensor should be False, while we got {args.create_cache_tensor}. "
-                f"Cache tensor creation will occur in: 1) model runner in case of mixed deployment; "
-                f"or 2) cache messager in case of disaggregation deployment. "
-                f"Please check the codes and make sure they work correctly."
-            )
         if not args.create_cache_tensor:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create kv cache.")
             while self.cache_ready_signal.value[self.rank] != 1:
@@ -567,8 +597,8 @@ class CacheTransferManager:
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
             match_block_num = 0
             if self.storage_backend_type == "mooncake":
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
@@ -602,6 +632,15 @@ class CacheTransferManager:
                 except Exception as e:
                     logger.error(f"Failed to read cache for task {task.task_id}, error: {e}")
                     valid_gpu_block_ids = []
+                finally:
+                    try:
+                        if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, True)
+                        logger.info(f"Report cache index in HBM to cache storage for task {task.task_id}")
+                    except Exception as e:
+                        logger.info(
+                            f"Failed to report cache index in HBM to cache storage for task {task.task_id}, error: {e}"
+                        )
 
             result = (CacheStatus.STORAGE2GPU, task.task_id, task.keys, valid_gpu_block_ids)
             self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
@@ -704,8 +743,8 @@ class CacheTransferManager:
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
 
             match_block_num = 0
             if self.storage_backend_type == "mooncake":
@@ -740,6 +779,15 @@ class CacheTransferManager:
                 except Exception as e:
                     logger.error(f"Error in write back storage task: {e}")
                     gpu_block_ids = []
+                finally:
+                    try:
+                        if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, False)
+                        logger.info(f"Report cache index out HBM to cache storage for task {task.task_id}")
+                    except Exception as e:
+                        logger.info(
+                            f"Failed to report cache index out HBM to cache storage for task {task.task_id}, error: {e}"
+                        )
 
             result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, gpu_block_ids)
             self.cache_task_queue.swap_to_storage_barrier.wait()
@@ -1039,14 +1087,15 @@ class CacheTransferManager:
         # TODO XPU support RL
         if unset_data_ipc is None:
             return
-        logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
+        logger.info("[RL] Launch a thread to clear/restore kv cache when model weights are cleared/updated.")
         while True:
             # handle cache clearing/restoring
             if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
-                    logger.info(f"Start clearing caches {self.cache_ready_signal.value}")
                     # clear cpu caches
+                    logger.info("[RL] start clearing caches")
+                    logger.debug("[RL] start clearing cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
                         for ptrs in self.k_dst_ptrs + self.v_dst_ptrs:
@@ -1054,61 +1103,108 @@ class CacheTransferManager:
                         self.cpu_cache_kvs.clear()
                         self.k_dst_ptrs.clear()
                         self.v_dst_ptrs.clear()
+                        if self.cache_dtype == "block_wise_fp8":
+                            self.k_scales_ptrs.clear()
+                            self.v_scales_ptrs.clear()
                         gc.collect()
+                        logger.debug("[RL] successfully cleared cpu caches")
                         # reset swap_space_ready_signal
                         self.swap_space_ready_signal.value[self.rank] = 0
                         while np.sum(self.swap_space_ready_signal.value) != 0:
                             time.sleep(0.1)
+                        logger.debug("[RL] all ranks cleared cpu caches")
+                    else:
+                        logger.debug("[RL] skip clearing cpu caches")
 
                     # clear gpu caches
-                    set_device(self.device)
-                    for name, tensor in self.gpu_cache_kvs.items():
-                        unset_data_ipc(tensor, name, True, False)
-                    self.gpu_cache_kvs.clear()
-                    self.gpu_cache_k_tensors.clear()
-                    self.gpu_cache_v_tensors.clear()
+                    logger.debug("[RL] start clearing gpu caches")
+                    if args.create_cache_tensor:
+                        logger.info("[RL] waiting for gpu runner to unlink cuda ipc")
+                        while self.cache_ready_signal.value[self.rank] != 0:
+                            time.sleep(0.1)
+                        logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
+                        paddle.set_device(f"gpu:{self.device}")
+                        self.gpu_cache_kvs.clear()
+                        self.gpu_cache_k_tensors.clear()
+                        self.gpu_cache_v_tensors.clear()
+                        if self.cache_dtype == "block_wise_fp8":
+                            self.gpu_cache_scales_k_tensors.clear()
+                            self.gpu_cache_scales_v_tensors.clear()
+                        paddle.device.cuda.empty_cache()
+                        logger.debug("[RL] successfully cleared gpu caches")
+                    else:
+                        for name, tensor in self.gpu_cache_kvs.items():
+                            unset_data_ipc(tensor, name, True, False)
+                        logger.debug("[RL] successfully unlinked gpu caches cuda ipc")
+                        self.cache_ready_signal.value[self.rank] = 0
 
-                    # reset cache_ready_signal
-                    self.cache_ready_signal.value[self.rank] = 0
-                    logger.info(f"Finish clearing caches {self.cache_ready_signal.value}")
-
-                    # wait for all ranks caches to be cleared
-                    if np.sum(self.cache_ready_signal.value) != 0:
+                    while np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
+                    logger.info("[RL] all ranks cleared caches!")
 
                     # reset kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
-                    logger.info(f"All ranks finish clearing caches {self.cache_ready_signal.value}")
+
+                    self._log_memory("after clearing caches")
 
                 except Exception as e:
-                    logger.error(f"Failed to clear caches: {e}")
+                    logger.error(f"[RL] failed to clear caches: {e}")
 
             elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
-                    logger.info(f"Start restoring caches {self.cache_ready_signal.value}")
                     # restore cpu cache
+                    logger.info("[RL] start restoring caches")
+                    logger.debug("[RL] start restoring cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
+                        logger.debug("[RL] successfully restored cpu caches")
                         while np.sum(self.swap_space_ready_signal.value) != args.mp_num:
                             time.sleep(0.1)
+                        logger.debug("[RL] all ranks restored cpu caches")
+                    else:
+                        logger.debug("[RL] skip restoring cpu caches")
 
                     # restore gpu cache and set cache_ready_signal
+                    logger.debug("[RL] start restoring gpu caches")
                     self._init_gpu_cache(args)
-                    logger.info(f"Finish restoring caches {self.cache_ready_signal.value}")
+                    logger.debug("[RL] successfully restored gpu caches")
+
+                    if self.storage_backend_type is not None:
+                        # use key_prefix to distinguish cache for different version of weight in rl
+                        version_file_path = os.path.join(args.model_path, "version.yaml")
+                        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
+                        self.key_prefix = get_key_prefix_from_version(version_file_path)
+                        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
                         time.sleep(0.1)
+                    logger.info("[RL] all ranks restored caches!")
 
                     # set kv_cache_status_signal
-                    logger.info(f"All ranks finish restoring caches {self.cache_ready_signal.value}")
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
+                    self._log_memory("after restoring caches")
                 except Exception as e:
-                    logger.error(f"Failed to restore caches: {e}")
+                    logger.error(f"[RL] failed to restore caches: {e}")
 
             time.sleep(0.1)
+
+    def _log_memory(self, context: str):
+        """Log current GPU memory usage."""
+        max_alloc = paddle.device.cuda.max_memory_allocated() / (1024**3)
+        max_reserved = paddle.device.cuda.max_memory_reserved() / (1024**3)
+        curr_alloc = paddle.device.cuda.memory_allocated() / (1024**3)
+        curr_reserved = paddle.device.cuda.memory_reserved() / (1024**3)
+
+        logger.warning(
+            f"GPU memory usage {context}:"
+            f"max_allocated: {max_alloc:.2f}GB "
+            f"max_reserved: {max_reserved:.2f}GB "
+            f"current_allocated: {curr_alloc:.2f}GB "
+            f"current_reserved: {curr_reserved:.2f}GB"
+        )
 
 
 def main():

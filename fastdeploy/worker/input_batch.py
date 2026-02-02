@@ -140,12 +140,14 @@ class InputBatch:
         self.step_seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
+        self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+        self.not_need_stop_device = paddle.full([1], False, dtype="bool")
+        self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.stop_flags = paddle.full([max_num_seqs, 1], True, dtype="bool")
         self.stop_nums = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.bad_tokens_len = [-1] * max_num_seqs
+        self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
@@ -187,8 +189,15 @@ class InputBatch:
         self.kv_num_blocks_x_cpu = None  # CPU
 
         # Initialize thinking related buffers
+        self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
         self.max_think_lens = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.limit_think_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
+        # It is a hard code to cover up model's performance
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
 
         # Initialize rotary position embedding
         if not self.enable_mm:
@@ -302,16 +311,10 @@ class InputBatch:
         # For logits processors
         self.logits_processors = build_logits_processors(self.fd_config)
         self.logits_processors_args = [{} for _ in range(max_num_seqs)]
-        self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
-
-        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
-        # It is a hard code to cover up model's performance
-        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
-        self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
         logger.info(f"Enabled logits processors: {self.logits_processors}")
 
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
@@ -344,6 +347,7 @@ class InputBatch:
         swap_data(self.step_seq_lens_decoder, i1, i2)
         swap_data(self.prompt_lens, i1, i2)
         swap_data(self.step_idx, i1, i2)
+        swap_data(self.sampled_token_ids, i1, i2)
         swap_data(self.stop_flags, i1, i2)
         # swap_data(self.recompute_token_num, i1, i2)
 
@@ -353,7 +357,7 @@ class InputBatch:
 
         # Swap 1D arrays
         swap_data(self.bad_tokens, i1, i2)
-        self.bad_tokens_len[i1], self.bad_tokens_len[i2] = self.bad_tokens_len[i2], self.bad_tokens_len[i1]
+        swap_data(self.bad_tokens_len, i1, i2)
         swap_data(self.next_tokens, i1, i2)
         swap_data(self.is_block_step, i1, i2)
         swap_data(self.is_chunk_step, i1, i2)
@@ -367,6 +371,7 @@ class InputBatch:
         swap_data(self.ori_seq_lens_encoder, i1, i2)
         swap_data(self.system_lens, i1, i2)
         swap_data(self.system_ids, i1, i2)
+        swap_data(self.enable_thinking, i1, i2)
         swap_data(self.max_think_lens, i1, i2)
         swap_data(self.limit_think_status, i1, i2)
 
@@ -538,6 +543,7 @@ class ProposerInputBatch(InputBatch):
         self.min_dec_len = self.target_model_input_batch["min_dec_len"]
 
         self.bad_tokens = self.target_model_input_batch["bad_tokens"]
+        self.bad_tokens_len = self.target_model_input_batch["bad_tokens_len"]
 
         # Integraad_tokens"]te the updated results in model forward
         self.base_model_draft_tokens = self.target_model_input_batch["draft_tokens"]
