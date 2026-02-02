@@ -42,12 +42,21 @@ from fastdeploy.model_executor.layers.attention.ops import (
 )
 from fastdeploy.platforms import current_platform
 
+# MLA attention requires SM80+
+decode_mla_write_cache = None
+multi_head_latent_attention = None
+prefill_mla_write_cache = None
+
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        decode_mla_write_cache,
-        multi_head_latent_attention,
-        prefill_mla_write_cache,
-    )
+    try:
+        from fastdeploy.model_executor.ops.gpu import (
+            decode_mla_write_cache,
+            multi_head_latent_attention,
+            prefill_mla_write_cache,
+        )
+    except ImportError:
+        # Not available on SM70 (V100)
+        pass
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta

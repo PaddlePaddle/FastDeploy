@@ -56,7 +56,13 @@ def gqa_rope_write_cache(
     rope_3d: bool = False,
 ):
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import gqa_rope_write_cache
+        try:
+            from fastdeploy.model_executor.ops.gpu import gqa_rope_write_cache
+        except ImportError:
+            raise NotImplementedError(
+                "gqa_rope_write_cache is not available on this GPU architecture (requires SM80+). "
+                "V100 (SM70) does not support this operation."
+            )
 
         q, k, v, qkv_ = gqa_rope_write_cache(
             qkv,

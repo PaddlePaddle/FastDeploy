@@ -211,6 +211,8 @@ def find_end_files(directory, end_str):
     """
     gen_files = []
     for root, dirs, files in os.walk(directory):
+        # Skip .ipynb_checkpoints and other hidden directories
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
         for file in files:
             if file.endswith(end_str):
                 gen_files.append(os.path.join(root, file))
@@ -318,7 +320,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
-        "gpu_ops/fused_mask_swiglu_fp8_quant_kernel.cu",
         "gpu_ops/per_token_quant_fp8.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
@@ -337,7 +338,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_neox_rope_embedding.cu",
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
-        "gpu_ops/get_attn_mask_q.cu",
     ]
     sm_versions = get_sm_version(archs)
     # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
@@ -417,6 +417,36 @@ elif paddle.is_compiled_with_cuda():
     if os.path.isdir(fp8_auto_gen_directory):
         shutil.rmtree(fp8_auto_gen_directory)
 
+    if cc >= 70:
+        nvcc_compile_args += [
+            "-Igpu_ops/moe",
+            "-DENABLE_BF16",
+        ]
+        # Generate marlin kernel instantiation files (needed for linking even on SM70)
+        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        sources += [
+            # MoE files for SM_70 support
+            "gpu_ops/moe/deepgemm_preprocess.cu",
+            "gpu_ops/moe/moe_wna16_marlin_gemm.cu",
+            "gpu_ops/moe/moe_deepgemm_permute.cu",
+            "gpu_ops/moe/moe_deepgemm_depermute.cu",
+            "gpu_ops/moe/tritonmoe_preprocess.cu",
+            "gpu_ops/moe/fused_moe.cu",
+            "gpu_ops/moe/moe_dispatch.cu",
+            "gpu_ops/moe/ep_moe_expert_dispatch.cu",
+            "gpu_ops/moe/moe_topk_select.cu",
+            "gpu_ops/moe/moe_redundant_topk_select.cu",
+            "gpu_ops/moe/moe_ffn.cu",
+            "gpu_ops/moe/moe_expert_ffn_wint2.cu",
+            "gpu_ops/moe/moe_reduce.cu",
+            "gpu_ops/moe/group_swiglu_with_masked.cu",
+        ]
+        # Add generated marlin kernel files
+        sources += find_end_files("gpu_ops/moe/moe_wna16_marlin_utils", ".cu")
+        # speculate_decoding (required by cpp_extensions.cc)
+        sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
+        sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
+
     if cc >= 75:
         cc_compile_args += ["-DENABLE_SM75_EXT_OPS"]
         nvcc_compile_args += [
@@ -434,9 +464,8 @@ elif paddle.is_compiled_with_cuda():
         ]
 
     if cc >= 80:
-        cc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
-        nvcc_compile_args += ["-DENABLE_SM80_EXT_OPS"]
-        # append_attention
+        # append_attention (requires SM80+ due to cp.async instructions)
+        cc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
         )
@@ -448,18 +477,22 @@ elif paddle.is_compiled_with_cuda():
         sources += ["gpu_ops/multi_head_latent_attention.cu"]
         # gemm_dequant
         sources += ["gpu_ops/int8_gemm_with_cutlass/gemm_dequant.cu"]
-        # speculate_decoding
-        sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
-        sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
+        # speculate_decoding already added in cc >= 70 block
         nvcc_compile_args += ["-DENABLE_BF16"]
-        # moe
-        os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        # moe (generate_kernels.py already called in cc >= 70 block)
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen"
         )
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
-        sources += find_end_files("gpu_ops/moe/", ".cu")
+        # Add remaining moe files not already added in cc >= 70 block
+        sources += find_end_files("gpu_ops/moe/template_instantiation", ".cu")
+        sources += [
+            "gpu_ops/moe/gptq_marlin_repack.cu",
+            "gpu_ops/moe/moe_fast_hardamard_kernel.cu",
+            "gpu_ops/moe/swigluoai.cu",
+            "gpu_ops/moe/winx_unzip.cu",
+        ]
         nvcc_compile_args += ["-Igpu_ops/moe"]
 
     if cc >= 89:
@@ -702,7 +735,6 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/swap_cache_batch.cu",
-        "gpu_ops/gelu_tanh.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",

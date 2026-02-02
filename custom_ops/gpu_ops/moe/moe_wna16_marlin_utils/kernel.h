@@ -1,10 +1,10 @@
-
 #ifndef MARLIN_NAMESPACE_NAME
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 #include "moe/moe_wna16_marlin_utils/marlin.cuh"
 #include "moe/moe_wna16_marlin_utils/marlin_dtypes.cuh"
 #include "moe/moe_wna16_marlin_utils/types.h"
+
 
 #define MARLIN_KERNEL_PARAMS                                          \
   const int4 *__restrict__ A, const int4 *__restrict__ B,             \
@@ -32,7 +32,7 @@ template <typename scalar_t,  // compute dtype, half or nv_float16
           const int thread_k_blocks,  // same for k dimension (reduction)
           const bool m_block_size_8,  // whether m_block_size == 8
                                       // only works when thread_m_blocks == 1
-          const int stages,  // number of stages for the async global->shared
+          const int stages,  // number of stages for async global->shared
                              // fetch pipeline
           const int group_blocks,  // number of consecutive 16x16 blocks
                                    // with a separate quantization scale

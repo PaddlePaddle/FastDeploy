@@ -20,13 +20,21 @@ import paddle
 
 from fastdeploy.platforms import current_platform
 
+# append_attention requires SM80+ (uses cp.async instructions)
+append_attention_gpu = None
+append_attention_with_output_gpu = None
+
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        append_attention as append_attention_gpu,
-    )
-    from fastdeploy.model_executor.ops.gpu import (
-        append_attention_with_output as append_attention_with_output_gpu,
-    )
+    try:
+        from fastdeploy.model_executor.ops.gpu import (
+            append_attention as append_attention_gpu,
+        )
+        from fastdeploy.model_executor.ops.gpu import (
+            append_attention_with_output as append_attention_with_output_gpu,
+        )
+    except ImportError:
+        # append_attention is not available on SM70 (V100)
+        pass
 
 
 def append_attention(
@@ -90,67 +98,11 @@ def append_attention(
     append_attention
     """
     if current_platform.is_cuda():
-
-        if sliding_window > 0 and head_wise_full_hidden > 0:
-            out_swa = append_attention_gpu(
-                qkv.clone(),
-                key_cache,
-                value_cache,
-                seq_lens_encoder,
-                seq_lens_decoder,
-                seq_lens_this_time,
-                batch_id_per_token,
-                cu_seqlens_q,
-                block_tables,
-                encoder_batch_ids,
-                encoder_tile_ids_per_batch,
-                encoder_num_blocks,
-                kv_batch_ids,
-                kv_tile_ids_per_batch,
-                kv_num_blocks,
-                decoder_batch_ids,
-                decoder_tile_ids_per_batch,
-                decoder_num_blocks,
-                set_max_lengths,
-                rotary_embs,
-                attn_mask,
-                qkv_bias,
-                qkv_scale,
-                k_quant_scale,
-                v_quant_scale,
-                k_dequant_scale,
-                v_dequant_scale,
-                cache_k_zp,
-                cache_v_zp,
-                linear_shift,
-                linear_smooth,
-                mask_offset,
-                kv_signal_data,
-                q_norm_weight,
-                k_norm_weight,
-                sinks,
-                rms_norm_eps,
-                compute_type,
-                cache_quant_type,
-                use_neox_rotary_style,
-                rope_3d,
-                max_input_length,
-                quant_max_bound,
-                quant_min_bound,
-                out_linear_in_scale,
-                encoder_block_shape_q,
-                decoder_block_shape_q,
-                max_partition_size,
-                encoder_max_partition_size,
-                speculate_max_draft_token_num,
-                causal,
-                speculate_decoder,
-                sliding_window,
-                sink_size,
+        if append_attention_gpu is None:
+            raise NotImplementedError(
+                "append_attention is not available on this GPU architecture (requires SM80+). "
+                "V100 (SM70) does not support this operation."
             )
-            sliding_window = 0
-            sink_size = 0
-
         out = append_attention_gpu(
             qkv,
             key_cache,
@@ -279,6 +231,11 @@ def append_attention_with_output(
     append_attention
     """
     if current_platform.is_cuda():
+        if append_attention_with_output_gpu is None:
+            raise NotImplementedError(
+                "append_attention_with_output is not available on this GPU architecture (requires SM80+). "
+                "V100 (SM70) does not support this operation."
+            )
         return append_attention_with_output_gpu(
             qkv,
             key_cache,

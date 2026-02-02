@@ -89,7 +89,8 @@ MARLIN_NAMESPACE_NAME::Tensor moe_wna16_marlin_gemm(
     bool is_zp_float) {
   // TORCH_CHECK_NOT_IMPLEMENTED(false,
   //                             "marlin_gemm(..) requires CUDA_ARCH >= 8.0");
-  return torch::empty({1, 1});
+  PD_THROW("moe_wna16_marlin_gemm requires CUDA_ARCH >= 8.0");
+  return MARLIN_NAMESPACE_NAME::Tensor();
 }
 
 #else

@@ -38,7 +38,22 @@ from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_MLP
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
-paddle.set_default_dtype("bfloat16")
+# Use float16 for V100 (SM70) compatibility, bfloat16 requires SM80+
+import paddle.device.cuda as cuda_device
+_sm_version = cuda_device.get_device_capability()[0]
+print(f"[DEBUG] Detected SM version: {_sm_version}")
+if _sm_version >= 8:
+    paddle.set_default_dtype("bfloat16")
+    _default_dtype = paddle.bfloat16
+    # BlockWiseFP8Config requires bfloat16, only available on SM80+
+    _quant_config = BlockWiseFP8Config(weight_block_size=[128, 128])
+    print(f"[DEBUG] Using BlockWiseFP8Config for SM{_sm_version}0")
+else:
+    paddle.set_default_dtype("float16")
+    _default_dtype = paddle.float16
+    # V100 (SM70) doesn't support FP8 quantization, use None
+    _quant_config = None
+    print(f"[DEBUG] Disabling quantization for V100 (SM{_sm_version}0), _quant_config = None")
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     # (ZKK): CI machine.
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
@@ -59,6 +74,7 @@ class FFNWrapper(paddle.nn.Layer):
         self.intermediate_size = self.model_config.intermediate_size
         self.hidden_size = self.model_config.hidden_size
         self.prefix = "hahahha"
+        print(f"[DEBUG] Creating FDConfig with quant_config={_quant_config}")
         self.fd_config = FDConfig(
             model_config=self.model_config,
             parallel_config=ParallelConfig(
@@ -69,7 +85,7 @@ class FFNWrapper(paddle.nn.Layer):
                     "data_parallel_size": 1,
                 }
             ),
-            quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
+            quant_config=_quant_config,
             # quant_config = WINT8Config({}),
             scheduler_config=SchedulerConfig({}),
             cache_config=CacheConfig({}),
@@ -90,8 +106,8 @@ class FFNWrapper(paddle.nn.Layer):
         up_gate_proj_weight_shape = [self.hidden_size, self.intermediate_size * 2]
         down_proj_weight_shape = [self.intermediate_size, self.hidden_size]
 
-        up_gate_proj_weight = paddle.randn(up_gate_proj_weight_shape, paddle.bfloat16)
-        down_proj_weight = paddle.randn(down_proj_weight_shape, paddle.bfloat16)
+        up_gate_proj_weight = paddle.randn(up_gate_proj_weight_shape, _default_dtype)
+        down_proj_weight = paddle.randn(down_proj_weight_shape, _default_dtype)
 
         state_dict = {
             f"{self.prefix}.up_gate_proj.weight": up_gate_proj_weight,
@@ -127,7 +143,7 @@ class TestFusedMoE(unittest.TestCase):
             "intermediate_size": self.intermediate_size,
             "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
-            "dtype": "bfloat16",
+            "dtype": "bfloat16" if _default_dtype == paddle.bfloat16 else "float16",
         }
 
         tmp_dir = f"./tmpefef{paddle.distributed.get_rank()}"
@@ -147,7 +163,7 @@ class TestFusedMoE(unittest.TestCase):
         test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256, 4096, 4096 * 4]
         for idx, num_tokens in enumerate(test_token_nums):
 
-            cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
+            cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=_default_dtype)
 
             moe_cuda_graphs[idx] = graphs.CUDAGraph()
             moe_cuda_graphs[idx].capture_begin()
