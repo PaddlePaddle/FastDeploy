@@ -534,7 +534,10 @@ class EngineClient:
 
     async def run_control_method(self, request: ControlRequest):
         api_server_logger.info(f"Start Run Control Method: {request}")
-        self.zmq_client.send_json(request.to_dict())
+        if not envs.ENABLE_V1_DATA_PROCESSOR:
+            self.zmq_client.send_json(request.to_dict())
+        else:
+            self.zmq_client.send_pyobj(request)
         request_id = request.request_id
         dealer, response_queue = await self.connection_manager.get_connection(request_id)
         dealer.write([b"", request_id.encode("utf-8")])

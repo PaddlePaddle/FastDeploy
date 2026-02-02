@@ -1101,9 +1101,12 @@ class EngineService:
                         self.recv_request_server = ZmqIpcServer(name=self.api_server_pid, mode=zmq.PULL)
                     continue
 
-                if ControlRequest.is_control_request(data):
+                if ControlRequest.is_control_request(data) or isinstance(data, ControlRequest):
                     try:  # todo: run control request async, do not block request generation
-                        control_req = ControlRequest.from_dict(data)
+                        if not envs.ENABLE_V1_DATA_PROCESSOR:
+                            control_req = ControlRequest.from_dict(data)
+                        else:
+                            control_req = data
                         self.run_control_method(control_req)
                     except Exception as e:
                         self.llm_logger.error(
@@ -1137,7 +1140,7 @@ class EngineService:
                     try:
                         if not envs.ENABLE_V1_DATA_PROCESSOR:
                             request = Request.from_dict(data)
-                        request.metrics.scheduler_recv_req_time = time.time()
+                        # request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
