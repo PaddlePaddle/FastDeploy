@@ -557,6 +557,8 @@ class CacheTransferManager:
         start_read_block_idx: int,
         k_cache_keys: List[str],
         v_cache_keys: List[str],
+        k_scale_keys: List[str],
+        v_scale_keys: List[str],
         gpu_block_ids: List[int],
         cpu_block_ids: List[int],
         timeout: float,
@@ -574,19 +576,39 @@ class CacheTransferManager:
                 v_cache_ptrs = [
                     self.storage_value_read_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
-                kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
-                kv_block_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
+                target_locations = k_cache_ptrs + v_cache_ptrs
+                target_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
+                if k_scale_keys and v_scale_keys:
+                    keys.extend(k_scale_keys + v_scale_keys)
+                    k_scale_ptrs = [
+                        self.storage_key_scale_read_buffer + i * self.scale_buffer_stride_bytes for i in cpu_block_ids
+                    ]
+                    v_scale_ptrs = [
+                        self.storage_value_scale_read_buffer + i * self.scale_buffer_stride_bytes
+                        for i in cpu_block_ids
+                    ]
+                    target_locations.extend(k_scale_ptrs + v_scale_ptrs)
+                    target_sizes.extend([self.scale_buffer_stride_bytes] * block_num * 2)
+
                 start_time = time.time()
                 result = self.storage_backend.batch_get(
-                    keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
+                    keys=keys, target_locations=target_locations, target_sizes=target_sizes
                 )
                 read_cost_time = time.time() - start_time
 
-                k_result, v_result = result[:block_num], result[block_num:]
-                success_block_num = 0
-                for k, v in zip(k_result, v_result):
-                    if k > 0 and v > 0:
-                        success_block_num += 1
+                if k_scale_keys and v_scale_keys:
+                    k_result, v_result = result[:block_num], result[block_num : 2 * block_num]
+                    k_scale_result, v_scale_result = result[2 * block_num : 3 * block_num], result[3 * block_num :]
+                    success_block_num = 0
+                    for k, v, k_scale, v_scale in zip(k_result, v_result, k_scale_result, v_scale_result):
+                        if k > 0 and v > 0 and k_scale > 0 and v_scale > 0:
+                            success_block_num += 1
+                else:
+                    k_result, v_result = result[:block_num], result[block_num : 2 * block_num]
+                    success_block_num = 0
+                    for k, v in zip(k_result, v_result):
+                        if k > 0 and v > 0:
+                            success_block_num += 1
                 logger.debug(f"_run_read_storage, success_block_num: {success_block_num}")
                 valid_gpu_block_ids = gpu_block_ids[:success_block_num]
                 valid_cpu_block_ids = cpu_block_ids[:success_block_num]
@@ -611,6 +633,25 @@ class CacheTransferManager:
                     self.device,
                     mode,
                 )
+                if k_scale_keys and v_scale_keys:
+                    swap_cache_layout(
+                        self.gpu_cache_scales_k_tensors,
+                        self.storage_key_scale_write_buffer,
+                        self.cache_scale_shape,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
+                    swap_cache_layout(
+                        self.gpu_cache_scales_v_tensors,
+                        self.storage_value_scale_write_buffer,
+                        self.cache_scale_shape,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
                 swap_cost_time = time.time() - start_time
                 logger.debug(
                     f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
@@ -650,9 +691,18 @@ class CacheTransferManager:
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
             k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
             v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
+            if not self.has_cache_scale:
+                k_scale_keys = None
+                v_scale_keys = None
+            else:
+                k_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key_scale" for key in task.keys]
+                v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
+
             match_block_num = 0
             if self.storage_backend_type in ("mooncake", "file"):
-                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
+                match_block_num = self.storage_backend.query(
+                    k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
+                )
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(
                     task.task_id, task.token_ids, task.start_read_block_idx, task.timeout
@@ -673,6 +723,8 @@ class CacheTransferManager:
                         task.start_read_block_idx,
                         k_cache_keys,
                         v_cache_keys,
+                        k_scale_keys,
+                        v_scale_keys,
                         gpu_block_ids,
                         cpu_block_ids,
                         task.timeout,
