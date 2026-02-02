@@ -519,9 +519,9 @@ class LLMEngine:
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
         try:
-            think_truncate_prompt_ids = self.data_processor.tokenizer.encode(
-                self.data_processor.tokenizer.think_truncate_prompt
-            )["input_ids"]
+            think_truncate_prompt_ids = self.data_processor.tokenizer.convert_tokens_to_ids(
+                self.data_processor.tokenizer.tokenize(self.data_processor.tokenizer.think_truncate_prompt)
+            )
         except:
             think_truncate_prompt_ids = [-1]
         llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
