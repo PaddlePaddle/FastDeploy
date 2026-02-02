@@ -43,7 +43,11 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_layout,
     unset_data_ipc,
 )
-from fastdeploy.cache_manager.transfer_factory import AttentionStore, MooncakeStore, FileStore
+from fastdeploy.cache_manager.transfer_factory import (
+    AttentionStore,
+    FileStore,
+    MooncakeStore,
+)
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
@@ -538,7 +542,7 @@ class CacheTransferManager:
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
                 kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
-                start_time = time.time()           
+                start_time = time.time()
                 result = self.storage_backend.batch_get(
                     keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
                 )
