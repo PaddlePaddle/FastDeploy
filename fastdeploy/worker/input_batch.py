@@ -144,7 +144,6 @@ class InputBatch:
         self.not_need_stop_device = paddle.full([1], False, dtype="bool")
         self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.stop_flags = paddle.full([max_num_seqs, 1], True, dtype="bool")
-        self.stop_nums = paddle.full([1], max_num_seqs, dtype="int64")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
         self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
@@ -498,7 +497,6 @@ class ProposerInputBatch(InputBatch):
         self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
         self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
-        self.stop_nums = paddle.clone(self.target_model_input_batch["stop_nums"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
         self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
@@ -646,7 +644,6 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.stop_flags, i1, i2)
-        swap_data(self.stop_nums, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
         swap_data(self.output_cum_offsets, i1, i2)

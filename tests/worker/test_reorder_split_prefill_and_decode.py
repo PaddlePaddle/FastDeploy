@@ -99,7 +99,7 @@ class TestInputBatch:
         # Setup initial state
         self.input_batch.index_to_batch_id = {0: 1, 1: 2, 2: 3, 3: 4}
         self.input_batch.running_requests_ids = [1, 3]  # Keep batch_ids 1 and 3
-        self.input_batch.num_running_requests = 4
+        self.input_batch.num_running_requests = 2
 
         # Set some test data to verify swapping
         self.input_batch.input_ids[0] = paddle.full([100], fill_value=1, dtype="int64")
@@ -145,17 +145,13 @@ class TestInputBatch:
     def test_condense_empty_requests(self):
         """Test condense with empty running requests"""
         self.input_batch.index_to_batch_id = {0: 1, 1: 2}
-        self.input_batch.running_requests_ids = []
-        self.input_batch.num_running_requests = 2
+        self.input_batch.num_running_requests = 0
+        self.input_batch.running_requests_ids = range(self.input_batch.num_running_requests)
 
         self.input_batch.condense()
 
-        # Update num_running_requests after condense
-        self.input_batch.num_running_requests = len(self.input_batch.running_requests_ids)
-
         # All non-running requests should be removed
         assert self.input_batch.index_to_batch_id == {}
-        assert self.input_batch.num_running_requests == 0
 
     def test_swap_states(self):
         """Test swap_states method functionality"""
