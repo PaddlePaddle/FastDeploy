@@ -19,7 +19,6 @@ import traceback
 import numpy as np
 from paddleformers.generation import GenerationConfig
 
-from fastdeploy.engine.request import Request
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.input.v1.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.utils import data_processor_logger
@@ -189,12 +188,8 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
-        task = request.to_dict()
-        task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
-        self.process_request_dict(task, max_model_len)
-        request = Request.from_dict(task)
-        request = self._apply_default_parameters(request)
-
+        request.chat_template_kwargs = kwargs.get("chat_template_kwargs")
+        self.process_request_dict(request, max_model_len)
         return request
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
