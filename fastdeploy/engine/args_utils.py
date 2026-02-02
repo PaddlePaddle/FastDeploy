@@ -440,7 +440,7 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    disable_overlap_schedule: bool = True
+    enable_overlap_schedule: bool = False
     """
     Flag to enable overlapping schedule. Default is True (enabled).
     """
@@ -1318,10 +1318,10 @@ class EngineArgs:
         )
 
         scheduler_group.add_argument(
-            "--disable-overlap-schedule",
+            "--enable-overlap-schedule",
             action="store_true",
-            default=EngineArgs.disable_overlap_schedule,
-            help="Disable overlapping schedule.",
+            default=EngineArgs.enable_overlap_schedule,
+            help="Enable overlapping schedule.",
         )
 
         return parser

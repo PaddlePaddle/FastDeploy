@@ -306,7 +306,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu() or not self.scheduler_config.disable_overlap_schedule:
+        if current_platform.is_xpu() or self.scheduler_config.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -551,7 +551,11 @@ class PaddleDisWorkerProc:
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.scheduler_config.enable_overlap_schedule)
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
 
                 time.sleep(0.001)
@@ -1008,7 +1012,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--disable_overlap_schedule",
+        "--enable_overlap_schedule",
         action="store_true",
         help="disable overlap schedule",
     )
