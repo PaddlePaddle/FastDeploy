@@ -36,6 +36,7 @@ from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
+    MergedReplicatedLinear,
     ReplicatedLinear,
     RowParallelLinear,
 )
@@ -58,26 +59,43 @@ class Glm4MoeMLP(nn.Layer):
         intermediate_size: int,
         prefix: str = "",
         reduce_results: bool = True,
+        enable_tensor_parallel: bool = True,
     ) -> None:
         super().__init__()
+        if enable_tensor_parallel:
+            self.up_gate_proj = MergedReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=[intermediate_size, intermediate_size],
+                with_bias=False,
+            )
 
-        self.up_gate_proj = MergedColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.up_gate_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size * 2,
-            with_bias=False,
-            activation=fd_config.model_config.hidden_act,
-        )
+            self.down_proj = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+            )
+        else:
+            self.up_gate_proj = MergedColumnParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=intermediate_size * 2,
+                with_bias=False,
+                activation=fd_config.model_config.hidden_act,
+            )
 
-        self.down_proj = RowParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.down_proj",
-            input_size=intermediate_size,
-            output_size=fd_config.model_config.hidden_size,
-            with_bias=False,
-            reduce_results=reduce_results,
-        )
+            self.down_proj = RowParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+                reduce_results=reduce_results,
+            )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
@@ -159,6 +177,7 @@ class Glm4Moe(nn.Layer):
             intermediate_size=shared_experts_intermediate_size,
             prefix=f"{prefix}.shared_experts",
             reduce_results=False,
+            enable_tensor_parallel=not self.use_ep,
         )
 
     def forward(self, x, forward_meta: ForwardMeta = None):
@@ -166,7 +185,7 @@ class Glm4Moe(nn.Layer):
         out = self.experts(x, self.gate, forward_meta)
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
-        if self.tensor_parallel_size > 1:
+        if self.tensor_parallel_size > 1 and not self.use_ep:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
