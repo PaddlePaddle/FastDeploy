@@ -21,6 +21,9 @@ import unittest
 
 import numpy as np
 import paddle
+
+# Use float16 for V100 (SM70) compatibility, bfloat16 requires SM80+
+import paddle.device.cuda as cuda_device
 import paddle.device.cuda.graphs as graphs
 
 from fastdeploy.config import (
@@ -38,8 +41,6 @@ from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_MLP
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
-# Use float16 for V100 (SM70) compatibility, bfloat16 requires SM80+
-import paddle.device.cuda as cuda_device
 _sm_version = cuda_device.get_device_capability()[0]
 print(f"[DEBUG] Detected SM version: {_sm_version}")
 if _sm_version >= 8:

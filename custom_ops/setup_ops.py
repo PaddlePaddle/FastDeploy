@@ -212,7 +212,7 @@ def find_end_files(directory, end_str):
     gen_files = []
     for root, dirs, files in os.walk(directory):
         # Skip .ipynb_checkpoints and other hidden directories
-        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
         for file in files:
             if file.endswith(end_str):
                 gen_files.append(os.path.join(root, file))

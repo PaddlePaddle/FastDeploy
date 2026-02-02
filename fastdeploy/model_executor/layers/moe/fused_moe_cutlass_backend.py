@@ -33,7 +33,10 @@ moe_expert_reduce = None
 
 if current_platform.is_cuda():
     try:
-        from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
+        from fastdeploy.model_executor.ops.gpu import (
+            moe_expert_dispatch,
+            moe_expert_reduce,
+        )
     except ImportError:
         pass
 

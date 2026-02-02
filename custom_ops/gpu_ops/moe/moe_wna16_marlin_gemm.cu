@@ -22,13 +22,13 @@
 #ifndef MARLIN_NAMESPACE_NAME
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
-#include "paddle/phi/core/enforce.h"
 #include "paddle/phi/api/include/api.h"
+#include "paddle/phi/core/enforce.h"
 
+#include "helper.h"
+#include "moe/moe_wna16_marlin_gemm.h"
 #include "moe/moe_wna16_marlin_utils/kernel.h"
 #include "moe/moe_wna16_marlin_utils/types.h"
-#include "moe/moe_wna16_marlin_gemm.h"
-#include "helper.h"
 
 #include <cuda.h>
 #include <cuda_fp16.h>
