@@ -99,6 +99,9 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         (permute_input.shape[0], layer_added_weight_attrs_0.shape[1]),
         dtype=paddle.bfloat16,
     )
+    if disable_ue8m0_cast:
+        permute_scale = permute_scale.transpose([1, 0]).contiguous()
+        permute_scale = permute_scale.transpose([1, 0])
     # disable_ue8m0_cast is False for SM100
     m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
@@ -262,10 +265,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
             x,
             using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-            output_scale_transpose=True,
+            output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
             using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
         )
-        x_scale_tensor = x_scale_tensor.T[: x.shape[0]]
+        x_scale_tensor = (
+            x_scale_tensor[: x.shape[0]]
+            if not self.quant_config.deepgemm_scale_ue8m0
+            else x_scale_tensor.T[: x.shape[0]]
+        )
 
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
@@ -502,10 +509,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         recv_x, recv_x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
             x,
             using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-            output_scale_transpose=True,
+            output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
             using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
         )
-        recv_x_scale = recv_x_scale.T[: recv_x.shape[0]]
+        recv_x_scale = (
+            recv_x_scale[: recv_x.shape[0]]
+            if not self.quant_config.deepgemm_scale_ue8m0
+            else recv_x_scale.T[: recv_x.shape[0]]
+        )
         (
             permute_input,
             permute_scale,
