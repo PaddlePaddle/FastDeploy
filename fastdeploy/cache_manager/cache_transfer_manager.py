@@ -638,8 +638,8 @@ class CacheTransferManager:
                         self.gpu_cache_scales_k_tensors,
                         self.storage_key_scale_write_buffer,
                         self.cache_scale_shape,
-                        gpu_block_ids,
-                        cpu_block_ids,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
                         self.device,
                         mode,
                     )
@@ -647,8 +647,8 @@ class CacheTransferManager:
                         self.gpu_cache_scales_v_tensors,
                         self.storage_value_scale_write_buffer,
                         self.cache_scale_shape,
-                        gpu_block_ids,
-                        cpu_block_ids,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
                         self.device,
                         mode,
                     )

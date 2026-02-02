@@ -246,7 +246,7 @@ class MooncakeStore(KVCacheStorage):
         timeout: float = 1.0,
     ):
         """
-        Given the k_keys and v_keys, get the valid blocks number that
+        Given the k_keys, v_keys, k_scale_keys and v_scale_keys, get the valid blocks number that
         can be prefetched from storage backend.
         """
         assert len(k_keys) == len(v_keys), "k_keys and v_keys must have the same length."
@@ -254,6 +254,9 @@ class MooncakeStore(KVCacheStorage):
         all_keys = k_keys + v_keys
         has_scale = k_scale_keys is not None and v_scale_keys is not None
         if has_scale:
+            assert (
+                len(k_scale_keys) == len(v_scale_keys) == len(k_keys) == len(v_keys)
+            ), "k_scale_keys and v_scale_keys must have the same length as k_keys and v_keys."
             all_keys.extend(k_scale_keys + v_scale_keys)
 
         result = self.exists(all_keys)

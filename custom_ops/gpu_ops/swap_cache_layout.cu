@@ -38,7 +38,7 @@ void SwapCacheImpLayout(
   typedef typename traits_::data_t data_t;
 
   const int64_t layer_number = cache_gpu_tensors.size();
-  const int64_t cache_block_stride = 1;
+  int64_t cache_block_stride = 1;
   for (int i = 1; i < cache_shape.size(); i++) {
     cache_block_stride *= cache_shape[i];
   }
