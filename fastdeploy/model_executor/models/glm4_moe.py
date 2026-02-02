@@ -35,8 +35,8 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
-    QKVParallelLinear,
     MergedReplicatedLinear,
+    QKVParallelLinear,
     ReplicatedLinear,
     RowParallelLinear,
 )
@@ -62,12 +62,12 @@ class Glm4MoeMLP(nn.Layer):
         enable_tensor_parallel: bool = True,
     ) -> None:
         super().__init__()
-        if enable_tensor_parallel:
+        if not enable_tensor_parallel:
             self.up_gate_proj = MergedReplicatedLinear(
                 fd_config=fd_config,
                 prefix=f"{prefix}.up_gate_proj",
                 input_size=fd_config.model_config.hidden_size,
-                output_size=[intermediate_size, intermediate_size],
+                output_sizes=[intermediate_size, intermediate_size],
                 with_bias=False,
             )
 
