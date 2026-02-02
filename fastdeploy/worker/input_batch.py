@@ -338,8 +338,6 @@ class InputBatch:
         swap_data(self.min_dec_len, i1, i2)
         swap_data(self.max_dec_len, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
-        if self.enable_expert_parallel:
-            swap_data(self.seq_lens_this_time, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_seq_lens_encoder, i1, i2)
@@ -418,7 +416,8 @@ class InputBatch:
 
         # Sort the indices to maintain order
         running_indices.sort()
-
+        if self.num_running_requests == len(self.index_to_batch_id):
+            return
         # Move data of running requests to the front
         for new_idx, old_idx in enumerate(running_indices):
             if new_idx != old_idx:
@@ -447,7 +446,19 @@ class InputBatch:
         for index, bid in self.index_to_batch_id.items():
             if bid == batch_id:
                 return index
-        self.index_to_batch_id[len(self.index_to_batch_id)] = batch_id
+        if batch_id in self.index_to_batch_id:
+            # In PD reordering, some req_idx that are no longer used will be removed and
+            # the remaining requests will be re-sorted by index.
+            #
+            # If req_idx = 2 was removed in the previous step and request 12 later occupied
+            # slot 2 (i.e. {2: 12}), inserting a new request with req_id = 2 may overwrite
+            # the existing request (req_idx = 12), leading to incorrect behavior.
+            #
+            # To avoid index collision, we always assign a new slot using the current length
+            # as the new index, instead of reusing a previously freed req_idx.
+            self.index_to_batch_id[len(self.index_to_batch_id)] = batch_id
+        else:
+            self.index_to_batch_id[batch_id] = batch_id
         return batch_id
 
 

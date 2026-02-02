@@ -2112,8 +2112,9 @@ class GPUModelRunner(ModelRunnerBase):
                 # in chunk prefill
                 if self.cache_config.enable_chunked_prefill:
                     if hasattr(task, "prefill_end_index") and hasattr(task, "prompt_token_ids"):
-                        if len(task.prompt_token_ids) > task.prefill_end_index and task.idx in prefill_done_idxs:
-                            prefill_done_idxs.remove(task.idx)
+                        task_idx = self.share_inputs.get_index_by_batch_id(task.idx)
+                        if len(task.prompt_token_ids) > task.prefill_end_index and task_idx in prefill_done_idxs:
+                            prefill_done_idxs.remove(task_idx)
 
             return prefill_done_idxs
 
@@ -2126,12 +2127,13 @@ class GPUModelRunner(ModelRunnerBase):
                             self.restore_chunked_prefill_request[task.request_id] = task
 
             for id, task in list(self.restore_chunked_prefill_request.items()):
+                task_idx = self.share_inputs.get_index_by_batch_id(task.idx)
                 # unfinished, remove
-                if task.chunk_idx < len(task.prefill_chunk_info) and task.idx in prefill_done_idxs:
-                    prefill_done_idxs.remove(task.idx)
+                if task.chunk_idx < len(task.prefill_chunk_info) and task_idx in prefill_done_idxs:
+                    prefill_done_idxs.remove(task_idx)
                 # finished, add
-                if task.chunk_idx == len(task.prefill_chunk_info) and task.idx not in prefill_done_idxs:
-                    prefill_done_idxs.append(task.idx)
+                if task.chunk_idx == len(task.prefill_chunk_info) and task_idx not in prefill_done_idxs:
+                    prefill_done_idxs.append(task_idx)
 
         return prefill_done_idxs
 
