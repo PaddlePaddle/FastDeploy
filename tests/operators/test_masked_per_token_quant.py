@@ -23,83 +23,7 @@ import paddle
 from fastdeploy.model_executor.ops.gpu import masked_per_token_quant
 
 
-def ceil_div(x: int, y: int) -> int:
-    return (x + y - 1) // y
-
-
-def align(x: int, y: int) -> int:
-    return ceil_div(x, y) * y
-
-
-def get_tma_aligned_size(x: int, element_size: int) -> int:
-    """
-    Align x to TMA-required size.
-
-    Args:
-        x: size in elements
-        element_size: size of each element in bytes
-
-    Returns:
-        Aligned size in elements
-    """
-    kNumTMAAlignmentBytes = 16
-    assert kNumTMAAlignmentBytes % element_size == 0
-    return align(x, kNumTMAAlignmentBytes // element_size)
-
-
-def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
-    x: paddle.Tensor,
-):
-    assert x.dtype == paddle.float and x.dim() in (2, 3)
-
-    ue8m0_tensor = (x.view(paddle.int) >> 23).to(paddle.uint8)
-
-    mn, k = x.shape[-2], x.shape[-1]
-    remove_dim = False
-
-    if x.dim() == 2:
-        x, remove_dim = x.unsqueeze(0), True
-    b = x.shape[0]
-
-    aligned_mn = get_tma_aligned_size(mn, 4)
-    aligned_k = align(k, 4)
-
-    padded = paddle.zeros((b, aligned_mn, aligned_k), device=x.device, dtype=paddle.uint8)
-    padded[:, :mn, :k] = ue8m0_tensor
-
-    padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
-
-    transposed = paddle.zeros((b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int).mT
-    transposed[:, :, :] = padded
-
-    aligned_x = transposed[:, :mn, :]
-
-    return aligned_x.squeeze(0) if remove_dim else aligned_x
-
-
-def transform_scale_ue8m0(sf, mn, weight_block_size=None):
-    get_mn_major_tma_aligned_packed_ue8m0_tensor = _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl
-    if weight_block_size:
-        assert weight_block_size == [128, 128]
-        sf = sf.index_select(-2, paddle.arange(mn, device=sf.device) // 128)
-    sf = get_mn_major_tma_aligned_packed_ue8m0_tensor(sf)
-    return sf
-
-
-def ceil_to_ue8m0_paddle(x: paddle.Tensor):
-    """
-    x > 0
-    return 2 ^ ceil(log2(x))
-    """
-    # log2(x)
-    log2_x = paddle.log(x) / paddle.log(paddle.to_tensor(2.0, dtype=x.dtype))
-    # ceil
-    ceil_log2_x = paddle.ceil(log2_x)
-    # 2^k
-    return paddle.pow(paddle.to_tensor(2.0, dtype=x.dtype), ceil_log2_x)
-
-
-def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size, use_ue8m0):
+def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size):
     """
     Paddle API implementation of masked_per_token_quant
 
@@ -160,9 +84,6 @@ def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size, use_
     # Calculate scale
     scale = max_abs_val / MAX_VALUE
 
-    if use_ue8m0:
-        scale = ceil_to_ue8m0_paddle(scale)
-
     # Quantize
     quanted_value = reshaped_input / scale
 
@@ -183,16 +104,13 @@ def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size, use_
     valid_mask_scale = valid_mask.unsqueeze(2)  # [num_local_expert, num_max_tokens_per_expert, 1]
     quanted_scale = paddle.where(valid_mask_scale, quanted_scale, paddle.zeros_like(quanted_scale))
 
-    if use_ue8m0:
-        quanted_scale = transform_scale_ue8m0(quanted_scale, mn=quanted_x.shape[-2])
-
     return quanted_x, quanted_scale
 
 
 class TestMaskedPerTokenQuant(unittest.TestCase):
     def setUp(self) -> None:
         paddle.seed(2024)
-        self.num_local_expert = 4
+        self.num_local_expert = 2
         self.num_max_tokens_per_expert = 4
         self.hidden_size = 256
         self.block_size = 128
@@ -201,15 +119,14 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         self.input_tensor = paddle.randn(
             [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
         )
-        self.recv_expert_count = paddle.to_tensor([4, 4, 3, 4], dtype="int32")
-        self.use_ue8m0 = True
+        self.recv_expert_count = paddle.to_tensor([3, 2], dtype="int32")
 
         # Get reference results from paddle implementation
         self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
+            self.input_tensor, self.recv_expert_count, self.block_size
         )
 
-    def _mask_invalid_tokens(self, quanted_x, quanted_scale, recv_expert_count, use_ue8m0):
+    def _mask_invalid_tokens(self, quanted_x, quanted_scale, recv_expert_count):
         """Apply mask to zero out invalid tokens"""
         token_indices = paddle.arange(self.num_max_tokens_per_expert, dtype="int32").unsqueeze(0)
         expert_counts = recv_expert_count.unsqueeze(1)
@@ -226,20 +143,17 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         # Apply mask to scale values
         valid_mask_scale = valid_mask.unsqueeze(2)
         quanted_scale_masked = paddle.where(valid_mask_scale, quanted_scale, paddle.zeros_like(quanted_scale))
-        if use_ue8m0:
-            quanted_scale *= valid_mask_scale.astype(quanted_scale.dtype)
-            quanted_scale_masked = quanted_scale
 
         return quanted_x_masked, quanted_scale_masked
 
     def test_masked_per_token_quant_basic(self):
         """Test basic functionality against CUDA kernel"""
         quanted_x_cuda, quanted_scale_cuda = masked_per_token_quant(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
+            self.input_tensor, self.recv_expert_count, self.block_size
         )
 
         quanted_x_cuda_masked, quanted_scale_cuda_masked = self._mask_invalid_tokens(
-            quanted_x_cuda, quanted_scale_cuda, self.recv_expert_count, self.use_ue8m0
+            quanted_x_cuda, quanted_scale_cuda, self.recv_expert_count
         )
 
         # Check output shapes
@@ -247,8 +161,8 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         self.assertEqual(quanted_scale_cuda.shape, self.quanted_scale_ref.shape)
 
         # Check dtypes
-        self.assertEqual(quanted_x_cuda.dtype, quanted_x_cuda_masked.dtype)
-        self.assertEqual(quanted_scale_cuda.dtype, quanted_scale_cuda_masked.dtype)
+        self.assertEqual(quanted_x_cuda.dtype, paddle.float8_e4m3fn)
+        self.assertEqual(quanted_scale_cuda.dtype, paddle.float32)
 
         # Compare scale values (using masked versions)
         np.testing.assert_allclose(
@@ -263,28 +177,6 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         self.assertLess(diff_val, 0.01, msg="Quantized values should be close")
 
 
-class TestMaskedPerTokenQuantWithUe8m0Case1(TestMaskedPerTokenQuant):
-    """Test with float16 input"""
-
-    def setUp(self) -> None:
-        paddle.seed(2024)
-        self.num_local_expert = 3
-        self.num_max_tokens_per_expert = 6
-        self.hidden_size = 512
-        self.block_size = 128
-        self.dtype = paddle.float16
-        self.use_ue8m0 = True
-
-        self.input_tensor = paddle.randn(
-            [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
-        )
-        self.recv_expert_count = paddle.to_tensor([4, 2, 5], dtype="int32")
-
-        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
-        )
-
-
 class TestMaskedPerTokenQuantCase1(TestMaskedPerTokenQuant):
     """Test with float16 input"""
 
@@ -295,7 +187,6 @@ class TestMaskedPerTokenQuantCase1(TestMaskedPerTokenQuant):
         self.hidden_size = 512
         self.block_size = 128
         self.dtype = paddle.float16
-        self.use_ue8m0 = False
 
         self.input_tensor = paddle.randn(
             [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
@@ -303,29 +194,7 @@ class TestMaskedPerTokenQuantCase1(TestMaskedPerTokenQuant):
         self.recv_expert_count = paddle.to_tensor([4, 2, 5], dtype="int32")
 
         self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
-        )
-
-
-class TestMaskedPerTokenQuantWithUe8m0Case2(TestMaskedPerTokenQuant):
-    """Test with different hidden size"""
-
-    def setUp(self) -> None:
-        paddle.seed(2024)
-        self.num_local_expert = 4
-        self.num_max_tokens_per_expert = 8
-        self.hidden_size = 128 * 8
-        self.block_size = 128
-        self.dtype = paddle.bfloat16
-        self.use_ue8m0 = True
-
-        self.input_tensor = paddle.randn(
-            [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
-        )
-        self.recv_expert_count = paddle.to_tensor([6, 3, 7, 1], dtype="int32")
-
-        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
+            self.input_tensor, self.recv_expert_count, self.block_size
         )
 
 
@@ -336,10 +205,9 @@ class TestMaskedPerTokenQuantCase2(TestMaskedPerTokenQuant):
         paddle.seed(2024)
         self.num_local_expert = 4
         self.num_max_tokens_per_expert = 8
-        self.hidden_size = 128 * 8
+        self.hidden_size = 384  # 3 * 128
         self.block_size = 128
         self.dtype = paddle.bfloat16
-        self.use_ue8m0 = False
 
         self.input_tensor = paddle.randn(
             [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
@@ -347,29 +215,7 @@ class TestMaskedPerTokenQuantCase2(TestMaskedPerTokenQuant):
         self.recv_expert_count = paddle.to_tensor([6, 3, 7, 1], dtype="int32")
 
         self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
-        )
-
-
-class TestMaskedPerTokenQuantWithUe8m0Case3(TestMaskedPerTokenQuant):
-    """Test with all experts having max tokens"""
-
-    def setUp(self) -> None:
-        paddle.seed(2024)
-        self.num_local_expert = 2
-        self.num_max_tokens_per_expert = 4
-        self.hidden_size = 256 * 8
-        self.block_size = 128
-        self.dtype = paddle.bfloat16
-        self.use_ue8m0 = True
-        self.input_tensor = paddle.randn(
-            [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
-        )
-        # All experts use all tokens
-        self.recv_expert_count = paddle.to_tensor([4, 4], dtype="int32")
-
-        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
+            self.input_tensor, self.recv_expert_count, self.block_size
         )
 
 
@@ -380,10 +226,10 @@ class TestMaskedPerTokenQuantCase3(TestMaskedPerTokenQuant):
         paddle.seed(2024)
         self.num_local_expert = 2
         self.num_max_tokens_per_expert = 4
-        self.hidden_size = 256 * 4
+        self.hidden_size = 256
         self.block_size = 128
         self.dtype = paddle.bfloat16
-        self.use_ue8m0 = True
+
         self.input_tensor = paddle.randn(
             [self.num_local_expert, self.num_max_tokens_per_expert, self.hidden_size], dtype=self.dtype
         )
@@ -391,7 +237,7 @@ class TestMaskedPerTokenQuantCase3(TestMaskedPerTokenQuant):
         self.recv_expert_count = paddle.to_tensor([4, 4], dtype="int32")
 
         self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
-            self.input_tensor, self.recv_expert_count, self.block_size, self.use_ue8m0
+            self.input_tensor, self.recv_expert_count, self.block_size
         )
 
 
@@ -401,10 +247,10 @@ class TestMaskedPerTokenQuantEdgeCases(unittest.TestCase):
     def test_zero_tokens_expert(self):
         """Test expert with zero tokens"""
         paddle.seed(2024)
-        input_tensor = paddle.randn([2, 4, 128 * 8], dtype="bfloat16")
+        input_tensor = paddle.randn([2, 4, 256], dtype="bfloat16")
         recv_expert_count = paddle.to_tensor([0, 2], dtype="int32")  # First expert has no tokens
 
-        quanted_x_ref, quanted_scale_ref = masked_per_token_quant_ref(input_tensor, recv_expert_count, 128, False)
+        quanted_x_ref, quanted_scale_ref = masked_per_token_quant_ref(input_tensor, recv_expert_count, 128)
 
         # First expert should be all zeros - convert to float32 for comparison
         expert_0_quanted = quanted_x_ref[0].astype("float32")
