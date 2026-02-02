@@ -257,7 +257,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.last_sampler_output = None
         self.last_post_process_done = None
         self.last_token_num = -1
-        self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule
+        self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""

@@ -546,7 +546,6 @@ def post_process_specualate(
         model_output.seq_lens_decoder,
         model_output.step_idx,
     )
-    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process(
@@ -599,7 +598,7 @@ def post_process(
                 line_break_id,
                 enable_entropy,
             )
-    share_inputs["last_preempted_idx"].copy_(share_inputs["preempted_idx"])
+            share_inputs["last_preempted_idx"].copy_(share_inputs["preempted_idx"])
     share_inputs["preempted_idx"][:] = 0
 
 
@@ -941,5 +940,3 @@ def post_process_pooling(
         if save_each_rank or model_output.mp_rank == 0:
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)
-
-    share_inputs["preempted_idx"][:] = 0
