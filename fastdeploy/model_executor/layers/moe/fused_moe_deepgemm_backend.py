@@ -34,6 +34,7 @@ from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
     if get_sm_version() == 100:
+        logger.info("Detected sm100, use PFCC DeepGEMM")
         paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
         from deep_gemm import (
             m_grouped_fp8_gemm_nt_contiguous,
@@ -441,7 +442,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
-            up_gate_proj_out, token_nums_per_expert, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+            up_gate_proj_out,
+            token_nums_per_expert,
+            self.quant_config.weight_block_size[0],
+            use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
         )
 
         # disable_ue8m0_cast is False for SM100
