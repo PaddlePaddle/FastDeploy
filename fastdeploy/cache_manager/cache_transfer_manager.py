@@ -173,7 +173,7 @@ class CacheTransferManager:
 
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
-        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
+        self.cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
 
         # extract other arg values
         self.model_id = os.path.basename(args.model_path.rstrip("/"))
@@ -288,7 +288,10 @@ class CacheTransferManager:
                     shard_num=self.n_ranks,
                     layer_num=self.num_layers + self.num_extra_layers,
                     block_token_size=self.block_size,
-                    bytes_per_shard_layer_per_block=self.head_num * self.block_size * self.head_dim * self.cache_bytes,
+                    bytes_per_shard_layer_per_block=self.head_num
+                    * self.block_size
+                    * self.head_dim
+                    * self.cache_item_bytes,
                     device_id=self.device,
                     dp_id=self.local_data_parallel_id,
                 )
@@ -326,7 +329,9 @@ class CacheTransferManager:
         """
         Initialize pinned memory buffer that can hold the cache for a longest request
         cache layout: layer_num * [block_num, head_num, block_size, head_dim]
-        buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+        scale layout: layer_num * [block_num, head_num, block_size]
+        cache buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+        scale buffer layout: [block_num, layer_num, head_num, block_size]
         """
         layer_num = self.num_layers + self.num_extra_layers
         block_num = (args.max_model_len + self.block_size - 1) // self.block_size
@@ -335,21 +340,26 @@ class CacheTransferManager:
             f"[{block_num}, {layer_num}, {self.head_num}, {self.block_size}, {self.head_dim}]"
         )
 
-        self.storage_buffer_stride_bytes = (
-            layer_num * self.head_num * self.block_size * self.head_dim * self.cache_bytes
+        self.cache_buffer_stride_bytes = (
+            layer_num * self.head_num * self.block_size * self.head_dim * self.cache_item_bytes
         )
-        total_bytes = block_num * self.storage_buffer_stride_bytes * 2  # key and value
+        cache_buffer_total_bytes = block_num * self.cache_buffer_stride_bytes * 2  # key and value
 
-        logger.info(f"Creating cpu buffer cache for all layers: {total_bytes / 1024 ** 3:.2f}GB")
-        read_buffer = cuda_host_alloc(total_bytes)
+        logger.info(f"Creating cache cpu buffer for all layers: {cache_buffer_total_bytes / 1024 ** 3:.2f}GB")
+        read_buffer = cuda_host_alloc(cache_buffer_total_bytes)
         self.storage_key_read_buffer = read_buffer
-        self.storage_value_read_buffer = read_buffer + total_bytes // 2
-        self.storage_backend.register_buffer(read_buffer, total_bytes)
+        self.storage_value_read_buffer = read_buffer + cache_buffer_total_bytes // 2
+        self.storage_backend.register_buffer(read_buffer, cache_buffer_total_bytes)
 
-        write_buffer = cuda_host_alloc(total_bytes)
+        write_buffer = cuda_host_alloc(cache_buffer_total_bytes)
         self.storage_key_write_buffer = write_buffer
-        self.storage_value_write_buffer = write_buffer + total_bytes // 2
-        self.storage_backend.register_buffer(write_buffer, total_bytes)
+        self.storage_value_write_buffer = write_buffer + cache_buffer_total_bytes // 2
+        self.storage_backend.register_buffer(write_buffer, cache_buffer_total_bytes)
+
+        # if self.cache_dtype == "block_wise_fp8":
+        #     self.scale_buffer_stride_bytes = layer_num * self.head_num * self.block_size * self.cache_item_bytes
+        #     scale_buffer_total_bytes = block_num * self.scale_buffer_stride_bytes * 2
+        #     logger.info(f"Creating scale cpu buffer cache for all layers: {cache_buffer_total_bytes / 1024 ** 3:.2f}GB")
 
     def _init_gpu_cache(self, args):
 
@@ -464,9 +474,9 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        cache_bytes = self._get_cache_bytes(self.cache_dtype)
-        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
-        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
+        cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
+        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * key_cache_size
+        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
             cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
             cache_scales_size = self.key_cache_shape[1] * self.key_cache_shape[2]
@@ -507,14 +517,14 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 
-    def _get_cache_bytes(self, cache_dtype):
+    def _get_cache_item_bytes(self, cache_dtype):
         if cache_dtype == "bfloat16":
-            cache_bytes = 2
+            cache_item_bytes = 2
         elif cache_dtype in ["uint8", "block_wise_fp8"]:
-            cache_bytes = 1
+            cache_item_bytes = 1
         else:
             raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
-        return cache_bytes
+        return cache_item_bytes
 
     def _run_read_storage(
         self,
@@ -535,13 +545,13 @@ class CacheTransferManager:
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
-                    self.storage_key_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_key_read_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 v_cache_ptrs = [
-                    self.storage_value_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_value_read_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
-                kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+                kv_block_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
                 start_time = time.time()
                 result = self.storage_backend.batch_get(
                     keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
@@ -607,6 +617,10 @@ class CacheTransferManager:
 
     def read_storage_task(self, task: ReadStorageTask):
         """Read cache from the storage backend to the GPU memory."""
+        assert (
+            self.storage_backend
+        ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
@@ -711,13 +725,13 @@ class CacheTransferManager:
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
-                    self.storage_key_write_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_key_write_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 v_cache_ptrs = [
-                    self.storage_value_write_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_value_write_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
-                kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+                kv_block_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
 
                 start_time = time.time()
                 self.storage_backend.batch_set(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
@@ -753,6 +767,10 @@ class CacheTransferManager:
         """
         Write cache to the storage backend from the GPU memory.
         """
+        assert (
+            self.storage_backend
+        ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
