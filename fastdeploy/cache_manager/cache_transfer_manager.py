@@ -813,7 +813,7 @@ class CacheTransferManager:
         logger.info("[RL] 🟠 wait for inflight transfer tasks to finish")
         self.is_paused = True
         while np.sum(self.cache_task_inflight_signal.value) != 0:
-            time.sleep(1)
+            time.sleep(0.1)
         logger.info("[RL] 🔴 pause transfer manager and stop do transfer tasks")
 
     def resume(self):
@@ -823,7 +823,7 @@ class CacheTransferManager:
                 self.cache_task_queue.resume_barrier.reset()
         self.is_paused = False
         while np.sum(self.cache_task_inflight_signal.value) != self.n_ranks:
-            time.sleep(1)
+            time.sleep(0.1)
         logger.info("[RL] 🟢 resume transfer manager and start to do transfer tasks")
 
     def _log_memory(self, context: str):

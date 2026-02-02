@@ -1736,13 +1736,36 @@ class PrefixCacheManager:
         """
         Reset the RadixTree.
         """
+        logger.info(f"wait for cache_task_inflight_signal to reset {self.cache_task_inflight_signal.value}")
+        while np.sum(self.cache_task_inflight_signal.value) != 0:
+            time.sleep(0.1)
 
-        if len(self.node_map) == 0:
-            return
+        logger.info("wait for recv_data_transfer_result done")
+        while not self.cache_task_queue.result_queue_empty():
+            time.sleep(0.1)
 
-        logger.info("Resetting the RadixTree!")
+        # if len(self.node_map) == 0:
+        #     logger.info("node map is empty!")
+        #     return
+
+        logger.info(f"Resetting the RadixTree! node_map len {len(self.node_map)}")
 
         # clear task swapping event
+        self.executor_pool.shutdown(wait=True)
+        logger.info("shutdown executor_pool")
+        self.executor_pool = ThreadPoolExecutor(max_workers=1)
+        logger.info("recreate executor_pool")
+
+        self.free_gpu_executor_pool.shutdown(wait=True)
+        logger.info("shutdown free_gpu_executor_pool")
+        self.free_gpu_executor_pool = ThreadPoolExecutor(max_workers=1)
+        logger.info("recreate free_gpu_executor_pool")
+
+        self.free_cpu_executor_pool.shutdown(wait=True)
+        logger.info("shutdown free_cpu_executor_pool")
+        self.free_cpu_executor_pool = ThreadPoolExecutor(max_workers=1)
+        logger.info("recreate free_cpu_executor_pool")
+
         self.gpu_free_task_future = None
         self.task_swapping_event.clear()
 
