@@ -182,7 +182,7 @@ def apply_speculative_penalty_multi_scores(
     """
     apply_speculative_penalty_multi_scores
     """
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_maca():
         from fastdeploy.model_executor.ops.gpu import (
             speculate_get_token_penalty_multi_scores,
         )
