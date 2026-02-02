@@ -413,8 +413,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             expected_m,
         )
 
-        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
-            up_gate_proj_out, token_nums_per_expert, use_ue8m0=False
+        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
+
+        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
+            act_out,
+            token_nums_per_expert,
+            self.quant_config.weight_block_size[0],
         )
 
         deep_gemm.m_grouped_gemm_fp8_fp8_bf16_nt_masked(
