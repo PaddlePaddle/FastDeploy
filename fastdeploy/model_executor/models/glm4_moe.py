@@ -60,18 +60,18 @@ class Glm4MoeMLP(nn.Layer):
         layer_id: int,
         prefix: str = "",
         reduce_results: bool = True,
+        enable_tensor_parallel: bool = True,
     ) -> None:
         super().__init__()
         # shared experts not split when use_sequence_parallel_moe in ep + tp
         if (
-            fd_config.parallel_config.use_sequence_parallel_moe
-            and layer_id >= fd_config.model_config.moe_layer_start_index
-        ):
+            fd_config.parallel_config.use_sequence_parallel_moe or not enable_tensor_parallel
+        ) and layer_id >= fd_config.model_config.moe_layer_start_index:
             self.up_gate_proj = MergedReplicatedLinear(
                 fd_config=fd_config,
                 prefix=f"{prefix}.up_gate_proj",
                 input_size=fd_config.model_config.hidden_size,
-                output_size=[intermediate_size, intermediate_size],
+                output_sizes=[intermediate_size, intermediate_size],
                 with_bias=False,
             )
 
@@ -182,6 +182,7 @@ class Glm4Moe(nn.Layer):
             layer_id=layer_id,
             prefix=f"{prefix}.shared_experts",
             reduce_results=False,
+            enable_tensor_parallel=not self.use_ep,
         )
 
     def forward(self, x, forward_meta: ForwardMeta = None):
@@ -189,7 +190,7 @@ class Glm4Moe(nn.Layer):
         out = self.experts(x, self.gate, forward_meta)
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
-        if self.tensor_parallel_size > 1:
+        if self.tensor_parallel_size > 1 and not self.use_ep:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
