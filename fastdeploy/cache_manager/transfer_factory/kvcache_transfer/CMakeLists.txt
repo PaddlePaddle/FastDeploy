@@ -20,6 +20,9 @@ add_compile_options("-std=c++11")
 find_library(IBVERBS_LIBRARY ibverbs)
 find_library(RDMACM_LIBRARY rdmacm)
 
+execute_process(COMMAND python -c "import pybind11; print(pybind11.get_cmake_dir())" OUTPUT_VARIABLE pybind11_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+list(APPEND CMAKE_PREFIX_PATH ${pybind11_DIR})
+
 find_package(pybind11 CONFIG REQUIRED)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")

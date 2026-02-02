@@ -13,6 +13,9 @@ FILE_HEAD = """
 
 #include "kernel.h"
 #include "marlin_template.h"
+#include "moe/moe_wna16_marlin_utils/kernel.h"
+#include "moe/moe_wna16_marlin_utils/marlin_template.h"
+
 
 namespace MARLIN_NAMESPACE_NAME {
 """.strip()
