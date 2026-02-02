@@ -131,6 +131,7 @@ class DPLocalScheduler(LocalScheduler):
         Returns:
             List of Request objects ready for processing
         """
+        # DP scheduler is used in V1, there is no need to manage request fetching in the scheduler, resource_manager_v1 will do that.
         requests: List[Request] = []
 
         with self.requests_not_empty:

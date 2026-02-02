@@ -979,6 +979,9 @@ class EngineService:
                             break
                         else:
                             raise
+                # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
+                # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
+                # more efficient batches.
                 if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
                     time.sleep(0.001)
                     continue
@@ -1032,6 +1035,8 @@ class EngineService:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
+                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
+                    # This helps EP workers barrier for syncing tasks not hang.
                     if self.cfg.parallel_config.enable_expert_parallel:
                         self.engine_worker_queue.put_tasks(
                             ([], self.resource_manager.real_bsz)

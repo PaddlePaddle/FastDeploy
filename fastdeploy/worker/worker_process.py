@@ -528,11 +528,14 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-
+                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
+                # Only EP + DP prefill should barrier for data arrival.
+                # In mixed mode and decoder in D, we should not barrier to influence decoding.
                 if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
+                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
                 if tasks[0][0]:
                     for req_dict, bsz in tasks:
                         if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
