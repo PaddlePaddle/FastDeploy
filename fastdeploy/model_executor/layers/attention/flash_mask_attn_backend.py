@@ -184,15 +184,9 @@ class FlashMaskAttentionBackend(AttentionBackend):
     ):
         metadata = forward_meta.attention_metadata
         
-        norm_after_rope_in_kernel = getattr(layer, "use_qk_norm", False) and \
-                                   not getattr(layer, "qk_norm_before_rope", False)
-
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
         k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
-
-        print("===RyanDebug, in Attn, the norm_after_rope_in_kernel is:", norm_after_rope_in_kernel)
-        print("===RyanDebug, in Attn, the q_norm_weight is:", q_norm_weight)
-        print("===RyanDebug, in Attn, the k_norm_weight is:", k_norm_weight)
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(

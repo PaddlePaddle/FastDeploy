@@ -127,7 +127,6 @@ class Attention(nn.Layer):
             logger.info(f"Attention is running in cache kv {self.quant_method.cache_quant_config.quant_type} mode")
         self.use_qk_norm = use_qk_norm
         self.qk_norm_before_rope = qk_norm_before_rope
-        print("===RyanDebug, the self.qk_norm_before_rope is:", self.qk_norm_before_rope)
         self.rms_norm_eps = rms_norm_eps
         if self.use_qk_norm:
             self.q_norm_key = f"{self.prefix}.q_norm"
