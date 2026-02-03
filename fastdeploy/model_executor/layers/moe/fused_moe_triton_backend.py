@@ -1674,7 +1674,12 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
 
-        gate_out = gate(x.cast("float32"))
+        if gate.weight.dtype != paddle.float32:
+            gate_out = gate(x)
+            if gate_out.dtype != paddle.float32:
+                gate_out = gate_out.cast("float32")
+        else:
+            gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
