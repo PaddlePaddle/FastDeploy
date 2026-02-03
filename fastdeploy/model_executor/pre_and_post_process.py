@@ -23,6 +23,11 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.input_batch import (
+    InputBatch,
+    recover_batch_index_for_output,
+    recover_batch_index_for_sampler_output,
+)
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -321,7 +326,7 @@ def _build_stream_transfer_data(
 def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata,
     block_size: int = 64,
     think_end_id: int = -1,
@@ -430,6 +435,9 @@ def save_output_normal(
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
             output = _build_stream_transfer_data(
                 sampler_output.sampled_token_ids,
                 logprobs=sampler_output.logprobs_tensors,
@@ -437,22 +445,31 @@ def save_output_normal(
             )
             async_output_queue.put(output)
     else:
+        recover_share_inputs_map = recover_batch_index_for_output(
+            share_inputs,
+            model_output.index_to_batch_id,
+            model_output.enable_pd_reorder,
+            ["preempted_idx"],
+        )
         if sampler_output.logprobs_tensors is None:
             save_output(
                 share_inputs["sampled_token_ids"],
                 model_output.not_need_stop,
-                share_inputs["preempted_idx"],
+                recover_share_inputs_map["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
             )
         else:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
             save_output_topk(
                 sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
                 sampler_output.logprobs_tensors.logprobs,
                 sampler_output.logprobs_tensors.selected_token_ranks,
                 model_output.not_need_stop,
-                share_inputs["preempted_idx"],
+                recover_share_inputs_map["preempted_idx"],
                 model_output.mp_rank,
             )
     share_inputs["preempted_idx"][:] = 0
@@ -461,7 +478,7 @@ def save_output_normal(
 def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
@@ -514,18 +531,39 @@ def post_process_specualate(
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output(
-                model_output.accept_tokens,
-                model_output.accept_num,
+                recover_model_output_map["accept_tokens"],
+                recover_model_output_map["accept_num"],
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
                 bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
             )
         else:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output_topk(
                 sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
@@ -534,9 +572,9 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
@@ -560,7 +598,7 @@ def post_process_specualate(
 def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata = None,
     block_size: int = 64,
     save_each_rank: bool = False,
@@ -610,7 +648,7 @@ def post_process(
 
 
 def step_cuda(
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int,
     enc_dec_block_num: int,
     speculative_config: SpeculativeConfig,
@@ -897,7 +935,7 @@ def rebuild_padding(
 def post_process_pooling(
     pooler_output: PoolerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
