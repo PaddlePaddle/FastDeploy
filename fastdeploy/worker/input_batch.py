@@ -134,6 +134,7 @@ class InputBatch:
         self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         if self.enable_expert_parallel:
             self.seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
         self.seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -149,6 +150,7 @@ class InputBatch:
         self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
+        self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.encoder_block_lens = paddle.full([max_num_seqs], 0, dtype="int32")
         self.step_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
