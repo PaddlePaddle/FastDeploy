@@ -41,6 +41,7 @@ if [ ! -x "${FD_ROUTER_BIN}" ]; then
 
     wget -q --no-proxy "${FD_ROUTER_URL}" -O "${TMP_BIN}" || {
         echo "❌ Download fd-router failed"
+        rm -f "${TMP_BIN}"
         exit 1
     }
 
