@@ -1204,6 +1204,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     DEFAULT_V1 = "default_v1"
+    DUMMY = "dummy"
 
 
 class LoadConfig:
@@ -1627,6 +1628,9 @@ class RoutingReplayConfig:
         # Only save last turn
         self.only_last_turn: bool = False
 
+        # Fused routing of all layers
+        self.use_fused_put: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1979,7 +1983,7 @@ class FDConfig:
             self.scheduler_config.max_num_batched_tokens
             <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
-            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be less "
             f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (

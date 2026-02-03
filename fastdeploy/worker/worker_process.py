@@ -904,7 +904,7 @@ def parse_args():
         "--load_choices",
         type=str,
         default="default_v1",
-        help="The format of the model weights to load. default/default_v1.",
+        help="The format of the model weights to load. default/default_v1/dummy.",
     )
 
     parser.add_argument(
@@ -1000,6 +1000,11 @@ def parse_args():
         type=int,
         default=0,
         help="Number of cpu blocks.",
+    )
+    parser.add_argument(
+        "--kvcache_storage_backend",
+        type=str,
+        help="KVCache storage backend.",
     )
 
     args = parser.parse_args()
