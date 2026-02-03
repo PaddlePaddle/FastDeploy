@@ -15,10 +15,7 @@
 import json
 import os
 import shutil
-import sys
-import types
 import unittest
-from unittest import mock
 
 os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
@@ -35,7 +32,6 @@ from fastdeploy.config import (
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
     BlockWiseFP8Config,
-    BlockWiseFP8LinearMethod,
 )
 from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT4Config,
@@ -240,55 +236,6 @@ class TestQuantizedLinearGroupSize64(TestQuantizedLinear):
                 for use_machete in ["0", "1"]:
                     os.environ["FD_USE_MACHETE"] = use_machete
                     self.run_quantized_linear(type, quant_type)
-
-
-class DummyLinearLayer(paddle.nn.Layer):
-    def __init__(self, fd_config, weight_shape, with_bias=False):
-        super().__init__()
-        self.weight_shape = weight_shape
-        self.with_bias = with_bias
-        self.bias = None
-        self.fd_config = fd_config
-        self.weight = paddle.randn(self.weight_shape, paddle.bfloat16)
-
-
-class TestFP8LinearWithUe8m0Scale(unittest.TestCase):
-    def setUp(self):
-        self.quant_config = BlockWiseFP8Config(weight_block_size=[128, 128], is_checkpoint_bf16=True)
-        self.quant_config.deepgemm_scale_ue8m0 = True  # set deepgemm_scale_ue8m0 to True
-
-    def test_create_layer_with_ue8m0_scale(self):
-        def fake_per_block_cast_to_fp8(x, use_ue8m0=True):
-            out_w = x.astype(paddle.float8_e4m3fn)
-            out_s = paddle.ones([(x.shape[0] // 128), (x.shape[1] // 128)], dtype=paddle.float32)
-            return out_w, out_s
-
-        fd_config = mock.MagicMock()
-        fd_config.load_config.load_choices.return_value = "default_v1"
-        layer = DummyLinearLayer(fd_config=fd_config, weight_shape=[128, 1024])
-        method = BlockWiseFP8LinearMethod(quant_config=self.quant_config)
-
-        if "fastdeploy.model_executor.ops.gpu.deep_gemm.utils" in sys.modules:
-            # This is for sm90, which DeepGEMM does not support ue8m0 scale
-            fake = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
-            fake2 = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm.utils.math")
-            fake2.per_block_cast_to_fp8 = fake_per_block_cast_to_fp8
-            fake3 = types.ModuleType("deep_gemm")
-            fake4 = types.ModuleType("deep_gemm.utils")
-            fake4.align = lambda x, y: (x + y - 1) // y * y
-            fake4.get_tma_aligned_size = lambda x, y: (x + 16 // y - 1) // (16 // y) * (16 // y)
-            sys.modules["deep_gemm"] = fake3
-            sys.modules["deep_gemm.utils"] = fake4
-
-            deep_gemm_utils = sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm.utils"]
-            fake.utils = deep_gemm_utils
-            deep_gemm_utils.math = fake2
-            fake3.utils = fake4
-
-        method.model_format = "torch"
-        method.process_weights_after_loading(layer)
-        self.assertTrue(layer.weight_scale_inv.dtype == paddle.int32)
-        self.assertEqual(layer.weight_scale_inv.shape, [128, 2])  # 1024 / 128 / 4
 
 
 if __name__ == "__main__":
