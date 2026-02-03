@@ -168,7 +168,7 @@ class TestRebuildPadding(unittest.TestCase):
     # test with offset
     def test_rebuild_padding_with_offset(self):
         paddle.seed(42)
-        token_num = 100
+        token_num = 84
         dim_embed = 256
         # bsz = 4
         max_input_length = 512
@@ -184,7 +184,7 @@ class TestRebuildPadding(unittest.TestCase):
         seq_lens_encoder = np.array([0, 20, 0, 20, 0, 20, 0, 20], dtype=np.int32)
         seq_lens_decoder = np.array([21, 0, 21, 0, 21, 0, 21, 0], dtype=np.int32)
 
-        num_output_tokens = 80
+        num_output_tokens = 8
         output_padding_offset = np.random.randint(0, 10, [num_output_tokens], dtype=np.int32)
         out_with_offset_ref = rebuild_padding_ref(
             tmp_out=tmp_out,
