@@ -57,7 +57,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
             request_obj = None
             if hasattr(request, "to_pooling_params"):
                 pooling_params: PoolingParams = request.to_pooling_params()
-                pooling_params.verify("embed", self.cfg.model_config)
+                pooling_params.verify("reward", self.cfg.model_config)
                 request_obj = Request.from_generic_request(
                     req=request, request_id=ctx.request_id, pooling_params=pooling_params
                 )
