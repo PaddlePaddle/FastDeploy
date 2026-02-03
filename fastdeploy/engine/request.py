@@ -251,21 +251,39 @@ class Request:
         else:
             sampling_params = SamplingParams()
 
-        if prompt is None:
-            prompt = getattr(req, "prompt", None)
+        prompt_token_ids = None
+        if prompt is not None:
+            if isinstance(prompt, list) and isinstance(prompt[0], int):
+                # List[int]
+                prompt_token_ids = prompt
+                prompt = None
+            elif isinstance(prompt, list) and isinstance(prompt[0], list):
+                # List[List[int]]
+                prompt_token_ids = prompt
+                prompt = None
 
         guided_json_object = cls._process_guided_json(req)
 
         metrics = RequestMetrics()
         request = cls(
             request_id=getattr(req, "request_id", None),
-            prompt_token_ids=getattr(req, "prompt_token_ids", None),
+            messages=getattr(req, "messages", None),
+            tools=([tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None),
             prompt=prompt,
+            prompt_token_ids=prompt_token_ids,
             sampling_params=sampling_params,
             pooling_params=pooling_params,
             metrics=metrics,
             guided_json_object=guided_json_object,
-            disaggregate_info=getattr(req, "disaggregate_info", None),
+            reasoning_max_tokens=getattr(req, "reasoning_max_tokens", None),
+            disable_chat_template=getattr(req, "disable_chat_template", None),
+            top_logprobs=getattr(req, "top_logprobs", None),
+            structural_tag=getattr(req, "structural_tag", None),
+            chat_template=getattr(req, "chat_template", None),
+            ic_req_data=getattr(req, "ic_req_data", None),
+            metadata=getattr(req, "metadata", None),
+            completion_token_ids=getattr(req, "completion_token_ids", None),
+            chat_template_kwargs=getattr(req, "chat_template_kwargs", None),
             guided_json=getattr(req, "guided_json", None),
             guided_regex=getattr(req, "guided_regex", None),
             guided_choice=getattr(req, "guided_choice", None),
@@ -280,26 +298,12 @@ class Request:
             add_special_tokens=getattr(req, "add_special_tokens", False),
         )
 
-        if hasattr(req, "messages"):
-            if hasattr(req, "prompt_token_ids") and not req.prompt_token_ids:
-                # If disable_chat_template is set, then the first message in messages will be used as the prompt.
-                assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
-                if req.disable_chat_template:
-                    request.prompt = req.messages[0]["content"]
-                    request.messages = []
-            request.messages = getattr(req, "messages", None)
-            request.tools = (
-                [tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None
-            )
-            request.reasoning_max_tokens = getattr(req, "reasoning_max_tokens", None)
-            request.disable_chat_template = getattr(req, "disable_chat_template", None)
-            request.top_logprobs = getattr(req, "top_logprobs", None)
-            request.structural_tag = getattr(req, "structural_tag", None)
-            request.chat_template = getattr(req, "chat_template", None)
-            request.ic_req_data = getattr(req, "ic_req_data", None)
-            request.metadata = getattr(req, "metadata", None)
-            request.completion_token_ids = getattr(req, "completion_token_ids", None)
-            request.chat_template_kwargs = getattr(req, "chat_template_kwargs", None)
+        if not hasattr(req, "prompt_token_ids") or not req.prompt_token_ids:
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert len(req.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+            if req.disable_chat_template:
+                request.prompt = req.messages[0]["content"]
+                request.messages = []
 
         if getattr(req, "suffix", None):
             request.suffix = getattr(req, "suffix", None)
