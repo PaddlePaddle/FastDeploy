@@ -18,9 +18,68 @@ from typing import Optional
 
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
+from fastdeploy.platforms import current_platform
 
 from . import get_quantization_config
 from .quant_base import QuantConfigBase, QuantMethodBase
+
+# FP8 quantization types that require SM89+
+_FP8_QUANT_TYPES = ["block_wise_fp8", "w4afp8", "wfp8afp8", "tensor_wise_fp8"]
+
+
+def _check_fp8_support_and_fallback(quant_type: str) -> str:
+    """
+    Check if FP8 quantization type is supported on current hardware.
+    Returns the fallback type if not supported.
+
+    V100 (SM70) and A100 (SM80) do NOT support FP8 quantization.
+    """
+    if quant_type not in _FP8_QUANT_TYPES:
+        return quant_type
+
+    if not current_platform.is_cuda():
+        return quant_type
+
+    from paddleformers.utils.log import logger
+
+    from fastdeploy.platforms.cuda import CUDAPlatform
+
+    if CUDAPlatform.supports_fp8():
+        return quant_type
+
+    sm_version = CUDAPlatform.get_sm_version()
+
+    # Provide fallback for FP8 quantization types
+    if quant_type == "block_wise_fp8":
+        logger.warning(
+            f"FP8 quantization (block_wise_fp8) is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to wint8 for dense layers."
+        )
+        return "wint8"
+    elif quant_type == "w4afp8":
+        logger.warning(
+            f"W4AFP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to wint4 for MoE layers."
+        )
+        return "wint4"
+    elif quant_type == "wfp8afp8":
+        logger.warning(
+            f"WFP8AFP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to wint8."
+        )
+        return "wint8"
+    elif quant_type == "tensor_wise_fp8":
+        logger.warning(
+            f"Tensor-wise FP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to wint8."
+        )
+        return "wint8"
+
+    return quant_type
 
 
 class MixQuantConfig(QuantConfigBase):
@@ -85,8 +144,10 @@ class MixQuantConfig(QuantConfigBase):
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
                 if self.image_moe_quant_type is not None:
+                    # Check and fallback FP8 quant types for SM70 compatibility
+                    actual_quant_type = _check_fp8_support_and_fallback(self.image_moe_quant_type)
                     return (
-                        get_quantization_config(self.image_moe_quant_type)
+                        get_quantization_config(actual_quant_type)
                         .from_config(
                             {
                                 "is_permuted": self.is_permuted,
@@ -100,8 +161,10 @@ class MixQuantConfig(QuantConfigBase):
                     return None
             else:
                 if self.moe_quant_type is not None:
+                    # Check and fallback FP8 quant types for SM70 compatibility
+                    actual_quant_type = _check_fp8_support_and_fallback(self.moe_quant_type)
                     return (
-                        get_quantization_config(self.moe_quant_type)
+                        get_quantization_config(actual_quant_type)
                         .from_config(
                             {
                                 "is_permuted": self.is_permuted,
@@ -124,8 +187,10 @@ class MixQuantConfig(QuantConfigBase):
                 return None
         else:
             if self.dense_quant_type is not None:
+                # Check and fallback FP8 quant types for SM70 compatibility
+                actual_quant_type = _check_fp8_support_and_fallback(self.dense_quant_type)
                 return (
-                    get_quantization_config(self.dense_quant_type)
+                    get_quantization_config(actual_quant_type)
                     .from_config({"is_quantized": not self.is_checkpoint_bf16})
                     .get_quant_method(layer)
                 )

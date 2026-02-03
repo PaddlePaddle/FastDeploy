@@ -44,6 +44,17 @@ from fastdeploy.worker.worker_process import init_distributed_environment
 
 paddle.set_default_dtype("bfloat16")
 
+
+def _check_fp8_support():
+    """Check if current GPU supports FP8 (SM89+)."""
+    try:
+        prop = paddle.device.cuda.get_device_properties()
+        sm_version = prop.major * 10 + prop.minor
+        return sm_version >= 89
+    except Exception:
+        return False
+
+
 gate_correction_bias_real_data = paddle.to_tensor(
     [
         32.8339,
@@ -554,6 +565,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         moe_layer.load_state_dict(state_dict)
 
 
+@unittest.skipIf(not _check_fp8_support(), "FP8 quantization (block_wise_fp8) requires SM89+ (Ada Lovelace or newer)")
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]

@@ -56,6 +56,17 @@ if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
+def _check_fp8_support():
+    """Check if current GPU supports FP8 (SM89+)."""
+    try:
+        prop = paddle.device.cuda.get_device_properties()
+        sm_version = prop.major * 10 + prop.minor
+        return sm_version >= 89
+    except Exception:
+        return False
+
+
+@unittest.skipIf(not _check_fp8_support(), "FP8 quantization requires SM89+ (Ada Lovelace or newer)")
 class TestAttentionPerformance(unittest.TestCase):
     def setUp(self):
         """

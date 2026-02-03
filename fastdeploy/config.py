@@ -344,6 +344,24 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
+        self._adjust_dtype_for_hardware()
+
+    def _adjust_dtype_for_hardware(self):
+        """
+        Automatically adjust dtype based on hardware capabilities.
+        On V100 (SM70), BF16 is not supported, so we fall back to FP16.
+        """
+        if current_platform.is_cuda():
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            original_dtype = self.dtype
+            self.dtype = CUDAPlatform.get_recommended_dtype(self.dtype)
+
+            if original_dtype != self.dtype:
+                logger.info(
+                    f"Dtype adjusted from '{original_dtype}' to '{self.dtype}' "
+                    f"based on hardware capabilities (SM{CUDAPlatform.get_sm_version()})."
+                )
 
     @property
     def registry(self):
