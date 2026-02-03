@@ -1686,10 +1686,10 @@ class EngineService:
                             f"Send server info to router failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
-                        time.sleep(sleep_seconds)
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
-                    time.sleep(sleep_seconds)
+
+                time.sleep(sleep_seconds)
 
         if self.cfg.router_config.router is None:
             self.llm_logger.info("Router is not enabled, skip registering to router")

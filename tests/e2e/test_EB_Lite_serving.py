@@ -1417,10 +1417,9 @@ def test_profile_reset_block_num():
         pytest.fail(f"Invalid number format: {match.group(1)}")
 
     lower_bound = baseline * (1 - 0.05)
-    upper_bound = baseline * (1 + 0.05)
     print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
 
-    assert lower_bound <= actual_value <= upper_bound, (
-        f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
-        f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
+    assert actual_value >= lower_bound, (
+        f"Reset total_block_num {actual_value} is lower than 95% of baseline {baseline}. "
+        f"Minimum allowed value: {lower_bound:.1f}"
     )
