@@ -114,7 +114,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
     # down_proj
-    if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+    if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             ffn_out, quant_config_weight_block_size_0
         )
@@ -270,7 +270,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         # 2. Dynamic compute blockwise quantization scales
-        if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                 x, self.quant_config.weight_block_size[0]
             )
@@ -361,7 +361,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
 
             # down_proj
-            if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+            if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
                 ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
                     ffn_out, self.quant_config.weight_block_size[0]
                 )
@@ -524,7 +524,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
-        if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
         else:
 

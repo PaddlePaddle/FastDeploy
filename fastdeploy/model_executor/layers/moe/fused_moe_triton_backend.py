@@ -1232,7 +1232,7 @@ def python_op_fused_moe_kernel_paddle(
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
-    if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+    if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0])
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
@@ -1288,7 +1288,7 @@ def python_op_fused_moe_kernel_paddle(
     intermediate_cache3 = cache13[: token_num * top_k * N2].view([token_num * top_k, N2])
 
     grid = (ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),)
-    if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
+    if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
             intermediate_cache2, quant_config.weight_block_size[0]
         )
