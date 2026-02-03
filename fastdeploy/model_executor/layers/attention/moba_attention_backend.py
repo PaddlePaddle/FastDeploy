@@ -118,6 +118,10 @@ class PlasAttentionBackend(AttentionBackend):
         self.attention_metadata = metadata
         assert self.max_seq_len <= self.plas_max_seq_length
 
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
+        return self.attention_metadata
+
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,

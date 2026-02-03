@@ -124,7 +124,10 @@ void SpeculateLimitThinkingContentLengthV1(
   const int tokens_per_step = next_tokens.shape()[1];
   const int eos_token_id_len = eos_token_ids.shape()[0];
 
-  speculate_limit_thinking_content_length_kernel_v1<<<1, 1024>>>(
+  speculate_limit_thinking_content_length_kernel_v1<<<1,
+                                                      1024,
+                                                      0,
+                                                      next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int64_t*>(step_idx.data<int64_t>()),

@@ -1046,7 +1046,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group
@@ -1086,7 +1086,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake", "attention_store"],
+            choices=["mooncake", "attention_store", "file"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )

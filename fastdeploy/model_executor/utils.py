@@ -277,6 +277,27 @@ def free_tensor(tensor):
     del tensor
 
 
+def create_parameter_and_copy(layer: paddle.nn.Layer, name: str, weight: paddle.Tensor) -> None:
+    """
+    Create a parameter in the layer and copy data from weight.
+
+    Args:
+        layer (paddle.nn.Layer): The layer where the parameter will be created.
+        name (str): The name of the parameter.
+        weight (paddle.Tensor): The source weight tensor.
+    """
+    setattr(
+        layer,
+        name,
+        layer.create_parameter(
+            shape=weight.shape,
+            dtype=weight.dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        ),
+    )
+    getattr(layer, name).copy_(weight, False)
+
+
 def fd_cast(weight, param):
     if weight.dtype != param.dtype:
         if weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
@@ -517,6 +538,8 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
             fd_suffix_map = tensor_wise_fp8_suffix_map
+        else:
+            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
