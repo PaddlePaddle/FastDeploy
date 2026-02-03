@@ -1281,8 +1281,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("block_size"),
         "per token per block quant and padding transpose scale");
 
-  m.def("masked_per_token_quant",
-        &MaskedPerTokenQuant,
+  m.def("fused_mask_swiglu_fp8_quant",
+        &FusedMaskSwigluFP8Quant,
         py::arg("input"),
         py::arg("token_nums_per_expert"),
         py::arg("block_size"),
