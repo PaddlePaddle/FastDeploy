@@ -530,6 +530,6 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
 @cache
 def get_sm_version():
     if paddle.cuda.is_available():
-        major, minor = paddle.device.cuda.get_device_properties()
-        return major * 10 + minor
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor
     return 0
