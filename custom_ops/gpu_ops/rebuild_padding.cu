@@ -121,7 +121,7 @@ std::vector<paddle::Tensor> rebuild_padding(
     auto seq_lens_encoder_cpu =
         seq_lens_encoder.copy_to(paddle::CPUPlace(), true);
     for (int i = 0; i < bsz; ++i) {
-      if (seq_lens_encoder_cpu.data<int>()[i] > 0) {
+      if (seq_lens_encoder_cpu.data<int>()[i] > 1) {
         need_delete_token_num += seq_lens_encoder_cpu.data<int>()[i] - 1;
       }
     }
