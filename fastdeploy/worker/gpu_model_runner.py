@@ -54,6 +54,7 @@ from fastdeploy.model_executor.layers.sample.sampler import Sampler, Speculative
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.ops.gpu import get_stop, set_stop
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import fill_paddle_tensor
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -1451,79 +1452,79 @@ class GPUModelRunner(ModelRunnerBase):
         max_num_seqs = self.scheduler_config.max_num_seqs
 
         # Reset basic tensors to their default values
-        self.share_inputs["pre_ids"].fill_(-1)
-        self.share_inputs["input_ids"].fill_(self.model_config.pad_token_id)
-        self.share_inputs["prompt_ids"].fill_(self.model_config.pad_token_id)
-        self.share_inputs["eos_token_id"].fill_(0)
-        self.share_inputs["top_p"].fill_(self.model_config.top_p)
-        self.share_inputs["top_k"].fill_(0)
+        fill_paddle_tensor(self.share_inputs, "pre_ids", -1)
+        fill_paddle_tensor(self.share_inputs, "input_ids", self.model_config.pad_token_id)
+        fill_paddle_tensor(self.share_inputs, "prompt_ids", self.model_config.pad_token_id)
+        fill_paddle_tensor(self.share_inputs, "eos_token_id", 0)
+        fill_paddle_tensor(self.share_inputs, "top_p", self.model_config.top_p)
+        fill_paddle_tensor(self.share_inputs, "top_k", 0)
         self.share_inputs["top_k_list"] = [0] * max_num_seqs
-        self.share_inputs["min_p"].fill_(0.0)
+        fill_paddle_tensor(self.share_inputs, "min_p", 0.0)
         self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
-        self.share_inputs["temperature"].fill_(self.model_config.temperature)
-        self.share_inputs["penalty_score"].fill_(self.model_config.penalty_score)
-        self.share_inputs["frequency_score"].fill_(self.model_config.frequency_score)
-        self.share_inputs["presence_score"].fill_(self.model_config.presence_score)
-        self.share_inputs["temp_scaled_logprobs"].fill_(False)
-        self.share_inputs["top_p_normalized_logprobs"].fill_(False)
-        self.share_inputs["min_dec_len"].fill_(self.model_config.min_length)
-        self.share_inputs["max_dec_len"].fill_(self.model_config.max_model_len)
+        fill_paddle_tensor(self.share_inputs, "temperature", self.model_config.temperature)
+        fill_paddle_tensor(self.share_inputs, "penalty_score", self.model_config.penalty_score)
+        fill_paddle_tensor(self.share_inputs, "frequency_score", self.model_config.frequency_score)
+        fill_paddle_tensor(self.share_inputs, "presence_score", self.model_config.presence_score)
+        fill_paddle_tensor(self.share_inputs, "temp_scaled_logprobs", False)
+        fill_paddle_tensor(self.share_inputs, "top_p_normalized_logprobs", False)
+        fill_paddle_tensor(self.share_inputs, "min_dec_len", self.model_config.min_length)
+        fill_paddle_tensor(self.share_inputs, "max_dec_len", self.model_config.max_model_len)
 
         # Reset sequence length related buffers
-        self.seq_lens_this_time_buffer.fill_(0)
+        fill_paddle_tensor(self.share_inputs, "seq_lens_this_time", 0)
         if self.fd_config.parallel_config.enable_expert_parallel:
-            self.share_inputs["seq_lens_this_time"].fill_(0)
-        self.share_inputs["seq_lens_encoder"].fill_(0)
-        self.share_inputs["seq_lens_decoder"].fill_(0)
-        self.share_inputs["step_seq_lens_encoder"].fill_(0)
-        self.share_inputs["step_seq_lens_decoder"].fill_(0)
-        self.share_inputs["prompt_lens"].fill_(0)
-        self.share_inputs["step_idx"].fill_(0)
-        self.share_inputs["not_need_stop"].fill_(False)
-        self.share_inputs["not_need_stop_device"].fill_(False)
-        self.share_inputs["sampled_token_ids"].fill_(-1)
-        self.share_inputs["stop_flags"].fill_(True)
+            fill_paddle_tensor(self.share_inputs, "seq_lens_this_time", 0)
+        fill_paddle_tensor(self.share_inputs, "seq_lens_encoder", 0)
+        fill_paddle_tensor(self.share_inputs, "seq_lens_decoder", 0)
+        fill_paddle_tensor(self.share_inputs, "step_seq_lens_encoder", 0)
+        fill_paddle_tensor(self.share_inputs, "step_seq_lens_decoder", 0)
+        fill_paddle_tensor(self.share_inputs, "prompt_lens", 0)
+        fill_paddle_tensor(self.share_inputs, "step_idx", 0)
+        fill_paddle_tensor(self.share_inputs, "not_need_stop", False)
+        fill_paddle_tensor(self.share_inputs, "not_need_stop_device", False)
+        fill_paddle_tensor(self.share_inputs, "sampled_token_ids", -1)
+        fill_paddle_tensor(self.share_inputs, "stop_flags", True)
 
-        self.share_inputs["bad_tokens"].fill_(-1)
-        self.share_inputs["bad_tokens_len"].fill_(1)
-        self.share_inputs["next_tokens"].fill_(-1)
-        self.share_inputs["is_block_step"].fill_(False)
-        self.share_inputs["is_chunk_step"].fill_(False)
-        self.share_inputs["encoder_block_lens"].fill_(0)
-        self.share_inputs["step_block_list"].fill_(-1)
-        self.share_inputs["step_lens"].fill_(0)
-        self.share_inputs["recover_block_list"].fill_(-1)
-        self.share_inputs["recover_lens"].fill_(0)
-        self.share_inputs["need_block_list"].fill_(-1)
-        self.share_inputs["need_block_len"].fill_(0)
-        self.share_inputs["used_list_len"].fill_(0)
-        self.share_inputs["infer_seed"].fill_(0)
-        self.share_inputs["first_token_ids"].fill_(-1)
-        self.share_inputs["system_lens"].fill_(0)
-        self.share_inputs["system_ids"].fill_(-1)
+        fill_paddle_tensor(self.share_inputs, "bad_tokens", -1)
+        fill_paddle_tensor(self.share_inputs, "bad_tokens_len", 1)
+        fill_paddle_tensor(self.share_inputs, "next_tokens", -1)
+        fill_paddle_tensor(self.share_inputs, "is_block_step", False)
+        fill_paddle_tensor(self.share_inputs, "is_chunk_step", False)
+        fill_paddle_tensor(self.share_inputs, "encoder_block_lens", 0)
+        fill_paddle_tensor(self.share_inputs, "step_block_list", -1)
+        fill_paddle_tensor(self.share_inputs, "step_lens", 0)
+        fill_paddle_tensor(self.share_inputs, "recover_block_list", -1)
+        fill_paddle_tensor(self.share_inputs, "recover_lens", 0)
+        fill_paddle_tensor(self.share_inputs, "need_block_list", -1)
+        fill_paddle_tensor(self.share_inputs, "need_block_len", 0)
+        fill_paddle_tensor(self.share_inputs, "used_list_len", 0)
+        fill_paddle_tensor(self.share_inputs, "infer_seed", 0)
+        fill_paddle_tensor(self.share_inputs, "first_token_ids", -1)
+        fill_paddle_tensor(self.share_inputs, "system_lens", 0)
+        fill_paddle_tensor(self.share_inputs, "system_ids", -1)
 
-        self.share_inputs["ids_remove_padding"].fill_(0)
-        self.share_inputs["batch_id_per_token"].fill_(0)
-        self.share_inputs["cu_seqlens_q"].fill_(0)
-        self.share_inputs["cu_seqlens_k"].fill_(0)
+        fill_paddle_tensor(self.share_inputs, "ids_remove_padding", 0)
+        fill_paddle_tensor(self.share_inputs, "batch_id_per_token", 0)
+        fill_paddle_tensor(self.share_inputs, "cu_seqlens_q", 0)
+        fill_paddle_tensor(self.share_inputs, "cu_seqlens_k", 0)
 
         # Reset thinking related buffers
-        self.share_inputs["enable_thinking"].fill_(True)
-        self.share_inputs["max_think_lens"].fill_(-1)
-        self.share_inputs["limit_think_status"].fill_(0)
+        fill_paddle_tensor(self.share_inputs, "enable_thinking", True)
+        fill_paddle_tensor(self.share_inputs, "max_think_lens", -1)
+        fill_paddle_tensor(self.share_inputs, "limit_think_status", 0)
 
         # Reset reasoning buffers
-        self.share_inputs["reasoning_status"].fill_(0)
+        fill_paddle_tensor(self.share_inputs, "reasoning_status", 0)
 
         # Reset block tables
-        self.share_inputs["block_tables"].fill_(-1)
+        fill_paddle_tensor(self.share_inputs, "block_tables", -1)
 
         # Reset free list
-        self.share_inputs["free_list_len"].fill_(self.free_list_len)
+        fill_paddle_tensor(self.share_inputs, "free_list_len", self.free_list_len)
 
         # Reset stop sequences
-        self.share_inputs["stop_seqs_len"].fill_(0)
-        self.share_inputs["stop_seqs"].fill_(-1)
+        fill_paddle_tensor(self.share_inputs, "stop_seqs_len", 0)
+        fill_paddle_tensor(self.share_inputs, "stop_seqs", -1)
 
         # Reset lists
         self.share_inputs["req_ids"] = [""] * max_num_seqs
@@ -1531,34 +1532,37 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reset speculative decoding tensors if enabled
         if self.speculative_decoding:
-            self.share_inputs["input_ids_cpu"].fill_(1)
-            self.share_inputs["accept_tokens"].fill_(0)
-            self.share_inputs["accept_num"].fill_(0)
-            self.share_inputs["draft_tokens"].fill_(0)
-            self.share_inputs["actual_draft_token_num"].fill_(self.speculative_config.num_speculative_tokens)
-            self.share_inputs["output_cum_offsets"].fill_(0)
-            self.share_inputs["output_padding_offset"].fill_(0)
-            if "step_draft_tokens" in self.share_inputs:
-                self.share_inputs["step_draft_tokens"].fill_(0)
-            if "step_seq_lens_this_time" in self.share_inputs:
-                self.share_inputs["step_seq_lens_this_time"].fill_(0)
-            self.share_inputs["draft_logits"].fill_(-1)
-            self.share_inputs["cu_batch_token_offset"].fill_(0)
+            fill_paddle_tensor(self.share_inputs, "input_ids_cpu", 1)
+            fill_paddle_tensor(self.share_inputs, "accept_tokens", 0)
+            fill_paddle_tensor(self.share_inputs, "accept_num", 0)
+            fill_paddle_tensor(self.share_inputs, "draft_tokens", 0)
+            fill_paddle_tensor(
+                self.share_inputs, "actual_draft_token_num", self.speculative_config.num_speculative_tokens
+            )
+            fill_paddle_tensor(self.share_inputs, "output_cum_offsets", 0)
+            fill_paddle_tensor(self.share_inputs, "output_padding_offset", 0)
+            fill_paddle_tensor(self.share_inputs, "step_draft_tokens", 0)
+            fill_paddle_tensor(self.share_inputs, "step_seq_lens_this_time", 0)
+            fill_paddle_tensor(self.share_inputs, "draft_logits", -1)
+            fill_paddle_tensor(self.share_inputs, "cu_batch_token_offset", 0)
 
         # Reset multimodal related tensors
         if self.enable_mm:
-            self.share_inputs["rope_emb"].fill_(0)
+            fill_paddle_tensor(self.share_inputs, "rope_emb", 0)
             self.share_inputs["image_features"] = None
 
         # Reset logits processors args
         self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
 
         # Reset other miscellaneous tensors
-        self.share_inputs["mask_rollback"].fill_(0)
-        self.share_inputs["preempted_idx"].fill_(0)
+        fill_paddle_tensor(self.share_inputs, "mask_rollback", 0)
+        fill_paddle_tensor(self.share_inputs, "preempted_idx", 0)
 
         # Reset existing prefill flag
         self.exist_prefill_flag = False
+
+        if self.fd_config.speculative_config.method == "mtp":
+            self.proposer.reset_model_inputs()
 
         logger.info("share_inputs reset completed")
 

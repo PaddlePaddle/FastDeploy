@@ -1280,6 +1280,17 @@ def do_nothing(*args, **kwargs):
     return decorator
 
 
+def fill_paddle_tensor(shared_inputs, key, value):
+    try:
+        if key not in shared_inputs:
+            return
+
+        if isinstance(shared_inputs[key], paddle.Tensor):
+            shared_inputs[key].fill_(value)
+    except Exception as e:
+        llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")
+
+
 if hasattr(paddle.static, "register_op"):
     from paddle.static import register_op
 else:
