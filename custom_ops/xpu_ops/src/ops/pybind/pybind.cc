@@ -321,6 +321,17 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const bool splitwise_prefill,
                           const bool kvcache_scheduler_v1);
 
+void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& accept_num,
+                               const paddle::Tensor& pre_ids,
+                               const paddle::Tensor& step_idx,
+                               const paddle::Tensor& stop_flags,
+                               const paddle::Tensor& seq_lens,
+                               const paddle::Tensor& stop_seqs,
+                               const paddle::Tensor& stop_seqs_len,
+                               const paddle::Tensor& end_ids,
+                               const paddle::Tensor& min_tokens);
+
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_this_time,
                            const paddle::Tensor& base_model_seq_lens_encoder,
@@ -398,14 +409,19 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& next_tokens,
                        const bool beam_search);
 
-void RecoverDecodeTask(const paddle::Tensor& stop_flags,
-                       const paddle::Tensor& seq_lens_this_time,
-                       const paddle::Tensor& seq_lens_encoder,
-                       const paddle::Tensor& seq_lens_decoder,
-                       const paddle::Tensor& step_seq_lens_decoder,
-                       const paddle::Tensor& block_tables,
-                       const paddle::Tensor& is_block_step,
-                       const int block_size);
+void RecoverDecodeTask(
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& step_seq_lens_decoder,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& is_block_step,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_seq_lens_this_time,
+    const int block_size,
+    const int max_draft_tokens);
 
 std::vector<paddle::Tensor> ShareExternalData(const paddle::Tensor& input,
                                               const std::string shm_name,
@@ -503,6 +519,22 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
                         const paddle::Tensor& first_token_logits,
                         const paddle::Tensor& seq_lens_this_time,
                         const paddle::Tensor& seq_lens_encoder);
+
+void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
+                              const paddle::Tensor& logits,
+                              const paddle::Tensor& cu_batch_token_offset,
+                              const paddle::Tensor& ori_cu_batch_token_offset,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& accept_num);
+
+void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
+                               const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& next_tokens,
+                               const paddle::Tensor& cu_next_token_offset,
+                               const paddle::Tensor& cu_batch_token_offset,
+                               const paddle::Tensor& seq_lens_this_time,
+                               const paddle::Tensor& seq_lens_encoder);
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
@@ -721,6 +753,20 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("splitwise_prefill"),
         py::arg("kvcache_scheduler_v1"),
         "Preprocess data for draft model in speculative decoding");
+
+  m.def("speculate_set_stop_value_multi_seqs",
+        &SpecGetStopFlagsMultiSeqs,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("pre_ids"),
+        py::arg("step_idx"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens"),
+        py::arg("stop_seqs"),
+        py::arg("stop_seqs_len"),
+        py::arg("end_ids"),
+        py::arg("min_tokens"),
+        "Speculate set stop value multi seqs");
 
   m.def("draft_model_postprocess",
         &DraftModelPostprocess,
@@ -987,7 +1033,11 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("step_seq_lens_decoder"),
         py::arg("block_tables"),
         py::arg("is_block_step"),
+        py::arg("draft_tokens"),
+        py::arg("step_draft_tokens"),
+        py::arg("step_seq_lens_this_time"),
         py::arg("block_size"),
+        py::arg("max_draft_tokens"),
         "Recover decode task function");
 
   m.def("save_output",
@@ -1238,6 +1288,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_this_time"),
         py::arg("seq_lens_encoder"),
         "speculate get logits function");
+
+  m.def("speculate_get_target_logits",
+        &SpeculateGetTargetLogits,
+        py::arg("target_logits"),
+        py::arg("logits"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("ori_cu_batch_token_offset"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("accept_num"),
+        "speculate get target logits function");
+
+  m.def("speculate_insert_first_token",
+        &SpeculateInsertFirstToken,
+        py::arg("token_ids"),
+        py::arg("accept_tokens"),
+        py::arg("next_tokens"),
+        py::arg("cu_next_token_offset"),
+        py::arg("cu_batch_token_offset"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        "speculate insert first token function");
 
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,

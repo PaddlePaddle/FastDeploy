@@ -408,7 +408,6 @@ def xpu_post_process_specualate(
 ):
     """"""
 
-    # TODO(chenhuan09): support model_output.next_tokens,
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
         model_output.accept_num,
@@ -419,6 +418,7 @@ def xpu_post_process_specualate(
         model_output.stop_token_ids,
         model_output.stop_seqs_len,
         model_output.eos_token_id,
+        model_output.min_tokens,
     )
 
     speculate_update_v3(
