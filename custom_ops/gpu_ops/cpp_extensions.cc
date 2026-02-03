@@ -407,9 +407,12 @@ void GetBlockShapeAndSplitKVBlock(
     const int group_size,
     const int block_size);
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& seq_len,
-                                             const int64_t token_num_cpu);
+std::vector<paddle::Tensor> GetPaddingOffset(
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
+    const int64_t token_num_cpu);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                            const paddle::Tensor& input_ids,
@@ -738,15 +741,6 @@ int64_t open_mem_handle(paddle::Tensor& mem_handle);
 void free_shared_buffer(int64_t buffer);
 
 void clear_ipc_handles(int64_t _fa);
-
-// speculative decoding Kernel
-std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
-    const paddle::Tensor& input_ids,
-    const paddle::Tensor& draft_tokens,
-    const paddle::Tensor& cum_offsets,
-    const paddle::Tensor& seq_len,
-    const paddle::Tensor& seq_lens_encoder,
-    const int64_t token_num_cpu);
 
 std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_this_time,
@@ -1595,11 +1589,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_graph_buffer_ipc_meta",
         &get_graph_buffer_ipc_meta,
         "get_graph_buffer_ipc_meta");
-
-  // speculative decoding Kernel
-  m.def("speculate_get_padding_offset",
-        &SpeculateGetPaddingOffset,
-        "speculate_get_padding_offset function");
 
   m.def("speculate_get_seq_lens_output",
         &SpeculateGetSeqLensOutput,
