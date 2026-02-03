@@ -79,6 +79,7 @@ class FlashAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: FlashAttentionMetadata
+    enable_ids_reorder = True
 
     def __init__(
         self,
