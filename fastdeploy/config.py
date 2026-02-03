@@ -1979,7 +1979,7 @@ class FDConfig:
             self.scheduler_config.max_num_batched_tokens
             <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
-            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be less "
             f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
