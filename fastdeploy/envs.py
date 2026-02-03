@@ -165,7 +165,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # Whether to use fd FP8 quantization,if 0,use paddle default.
-    "USE_FD_FP8_QUANT": lambda: int(os.getenv("USE_FD_FP8_QUANT", "0")),
+    "FD_USE_PHI_FP8_QUANT": lambda: int(os.getenv("FD_USE_PHI_FP8_QUANT", "1")),
     # Whether to use PFCCLab/DeepEP.
     "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
 }
