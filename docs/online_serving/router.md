@@ -4,6 +4,8 @@
 
 FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router) for request scheduling. The Router supports both centralized deployment and Prefill/Decode (PD) disaggregated deployment.。
 
+![go-router](images/go-router-workflow.png)
+
 ## Installation
 
 ### 1. Prebuilt Binaries

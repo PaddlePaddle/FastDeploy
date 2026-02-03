@@ -4,6 +4,8 @@
 
 FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)，用于实现请求的调度。Router支持集中式部署和PD分离式部署。
 
+![go-router](images/go-router-workflow.png)
+
 ## 安装
 
 ### 1. 预编译库下载
