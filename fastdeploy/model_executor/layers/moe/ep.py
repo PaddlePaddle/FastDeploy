@@ -314,6 +314,7 @@ class DeepEPEngine:
         expertwise_scale,
         use_fp8: bool = False,
         quant_group_size: int = 128,
+        use_ue8m0: bool = False,
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
@@ -333,6 +334,8 @@ class DeepEPEngine:
                 use_fp8=use_fp8,
                 async_finish=False,
                 return_recv_hook=True,
+                round_scale=use_ue8m0,
+                use_ue8m0=use_ue8m0,
             )
         else:
             (
@@ -715,10 +718,10 @@ class EPDecoderRunner(EPRunner):
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = kwargs.get("use_fp8", False)
         quant_group_size = kwargs.get("quant_group_size", 128)
-
+        use_ue8m0 = kwargs.get("use_ue8m0", False)
         if not self.use_internode_ll_two_stage:
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = self.ep_engine.low_latency_dispatch(
-                x, topk_idx, expertwise_scale, use_fp8, quant_group_size
+                x, topk_idx, expertwise_scale, use_fp8, quant_group_size, use_ue8m0
             )
         else:
             # just supports dispatch_use_fp8 = True now!
