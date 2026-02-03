@@ -50,25 +50,20 @@ from fastdeploy.model_executor.layers.attention.ops import (
     pre_cache_len_concat,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.utils import get_sm_version
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.platforms import current_platform
 
+paddle.compat.enable_torch_proxy(scope={"flash_mask"})
+flashmask_attention_v4 = None
+
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
-
-    try:
-        paddle.compat.enable_torch_proxy(scope={"flash_mask"})
-        from flash_mask.cute.interface import (
-            flashmask_attention as flashmask_attention_v4,
-        )
-    except ImportError:
-        flashmask_attention_v4 = None
 else:
     merge_prefill_decode_output = None
-    flashmask_attention_v4 = None
 
 import os
 
@@ -85,12 +80,19 @@ def init_flash_attn_version(fa_version: int = None):
             FLASH_ATTN_VERSION = fa_version
             logger.info(f"Force use Flash Attention V{fa_version}.")
             return
-        prop = paddle.device.cuda.get_device_properties()
-        sm_version = prop.major * 10 + prop.minor
-        if flashmask_attention_v4 is not None and sm_version >= 100:
-            FLASH_ATTN_VERSION = 4
-            logger.info("The current platform supports Flash Attention V4.")
-        elif FLASH_ATTN_VERSION == 2:
+        sm_version = get_sm_version()
+        if sm_version >= 100:
+            try:
+                from flash_mask.cute.interface import flashmask_attention as fa4
+
+                global flashmask_attention_v4
+                flashmask_attention_v4 = fa4
+                FLASH_ATTN_VERSION = 4
+                logger.info("The current platform supports Flash Attention V4.")
+            except ImportError:
+                pass
+
+        if FLASH_ATTN_VERSION is None:
             if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
                 FLASH_ATTN_VERSION = 3
                 logger.info("The current platform supports Flash Attention V3.")
@@ -253,8 +255,6 @@ class FlashAttentionBackend(AttentionBackend):
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
-
-        init_flash_attn_version()
 
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
