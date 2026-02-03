@@ -34,6 +34,7 @@ from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
     if get_sm_version() == 100:
+        logger.info("Detected sm100, use PFCC DeepGEMM")
         paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
         from deep_gemm import (
             m_grouped_fp8_gemm_nt_contiguous,
@@ -98,6 +99,9 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         (permute_input.shape[0], layer_added_weight_attrs_0.shape[1]),
         dtype=paddle.bfloat16,
     )
+    if disable_ue8m0_cast:
+        permute_scale = permute_scale.transpose([1, 0]).contiguous()
+        permute_scale = permute_scale.transpose([1, 0])
     # disable_ue8m0_cast is False for SM100
     m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
@@ -322,7 +326,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_all_num,
             )
             assert permute_input.shape[0] == token_all_num
-            del recv_x
 
             if not self.quant_config.deepgemm_scale_ue8m0:
                 permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
@@ -443,10 +446,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             token_nums_per_expert,
             expected_m,
         )
-        act_out = fastdeploy.model_executor.ops.gpu.group_swiglu_with_masked(up_gate_proj_out, token_nums_per_expert)
 
-        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.masked_per_token_quant(
-            act_out,
+        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
+            up_gate_proj_out,
             token_nums_per_expert,
             self.quant_config.weight_block_size[0],
             use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,

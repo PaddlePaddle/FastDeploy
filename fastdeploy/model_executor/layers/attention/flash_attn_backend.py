@@ -149,6 +149,10 @@ class FlashAttentionBackend(AttentionBackend):
             shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
         )
 
+    def get_attention_meta(self):
+        """get_attention_meta"""
+        return self.attention_metadata
+
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,

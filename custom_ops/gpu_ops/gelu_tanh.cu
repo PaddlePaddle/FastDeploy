@@ -12,19 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <math.h>
 #include "helper.h"
 #include "paddle/extension.h"
 
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
 __forceinline__ __device__ float tanh_ptx(float x) {
   float y;
   asm volatile("tanh.approx.f32 %0, %1;" : "=f"(y) : "f"(x));
   return y;
 }
+#endif
 
 __device__ __forceinline__ float gelu_tanh_func(const float& val) {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  const float cdf =
+      0.5f * (1.0f + tanhf((0.7978845608028654f *
+                            (val + 0.044715f * val * val * val))));
+#else
   const float cdf =
       0.5f * (1.0f + tanh_ptx((0.7978845608028654f *
                                (val + 0.044715f * val * val * val))));
+#endif
   return val * cdf;
 }
 
@@ -79,9 +88,16 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input) {
 
   DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), scalar_t, {
     uint32_t vec_size = 16 / sizeof(scalar_t);
+    dim3 grid(num_tokens);
+    dim3 block(std::max(d / vec_size, 1024U));
+
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+    gelu_tanh_kernel<scalar_t><<<grid, block, 0, stream>>>(
+        output.data<scalar_t>(), input.data<scalar_t>(), d);
+#else
     cudaLaunchConfig_t config;
-    config.gridDim = num_tokens;
-    config.blockDim = std::min(d / vec_size, 1024U);
+    config.gridDim = grid;
+    config.blockDim = block;
     config.dynamicSmemBytes = 0;
     config.stream = stream;
     cudaLaunchAttribute attrs[1];
@@ -95,6 +111,7 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input) {
                        output.data<scalar_t>(),
                        input.data<scalar_t>(),
                        d);
+#endif
   });
 
   return {output};

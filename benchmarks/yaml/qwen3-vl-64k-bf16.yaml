@@ -1,0 +1,4 @@
+max_model_len: 65536
+max_num_seqs: 128
+tensor_parallel_size: 2
+limit_mm_per_prompt: '{"image": 100, "video": 100}'
