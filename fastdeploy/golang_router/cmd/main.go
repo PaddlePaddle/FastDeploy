@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"runtime/debug"
 
 	"github.com/PaddlePaddle/FastDeploy/router/internal/config"
 	"github.com/PaddlePaddle/FastDeploy/router/internal/manager"
@@ -14,12 +16,23 @@ import (
 
 func main() {
 	// Parse command line arguments
-	var configPath, port string
-	var splitwise bool
+	var (
+		configPath  string
+		port        string
+		splitwise   bool
+		showVersion bool
+	)
 	flag.StringVar(&configPath, "config_path", "", "path to config file")
 	flag.StringVar(&port, "port", "", "listen port of router")
 	flag.BoolVar(&splitwise, "splitwise", false, "enable splitwise mode")
+	flag.BoolVar(&showVersion, "version", false, "print version info")
+	flag.BoolVar(&showVersion, "V", false, "print version info (shorthand)")
 	flag.Parse()
+
+	if showVersion {
+		printVersion()
+		return
+	}
 
 	// Load configuration
 	cfg, err := config.Load(configPath, port, splitwise)
@@ -51,4 +64,39 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func printVersion() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		var (
+			commit  = "unknown"
+			vcsTime = "unknown"
+			dirty   = "unknown"
+		)
+
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				if len(s.Value) >= 7 {
+					commit = s.Value[:7]
+				} else {
+					commit = s.Value
+				}
+			case "vcs.time":
+				vcsTime = s.Value
+			case "vcs.modified":
+				dirty = s.Value
+			}
+		}
+
+		fmt.Printf("golang-router\n")
+		fmt.Printf("  version:   %s\n", info.Main.Version)
+		fmt.Printf("  commit:    %s\n", commit)
+		fmt.Printf("  dirty:     %s\n", dirty)
+		fmt.Printf("  vcsTime:   %s\n", vcsTime)
+		fmt.Printf("  module:    %s\n", info.Main.Path)
+		return
+	}
+
+	fmt.Println("version info not available")
 }
