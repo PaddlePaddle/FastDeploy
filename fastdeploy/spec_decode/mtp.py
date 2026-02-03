@@ -393,6 +393,8 @@ class MTPProposer(Proposer):
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
         )
+        if envs.FD_ATTENTION_BACKEND == "DECODE_APPEND_ATTN":
+            attn_backend.init_buffer(self.scheduler_config.max_num_seqs)
         if attn_backend is None:
             raise NotImplementedError(
                 "Attention backend which you specified is not supported, please set FD_ATTENTION_BACKEND correctly."
