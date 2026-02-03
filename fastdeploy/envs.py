@@ -187,7 +187,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
     # Whether to use fd FP8 quantization,if 0,use paddle default.
-    "USE_FD_FP8_QUANT": lambda: int(os.getenv("USE_FD_FP8_QUANT", "0")),
+    "FD_USE_PHI_FP8_QUANT": lambda: int(os.getenv("FD_USE_PHI_FP8_QUANT", "1")),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")

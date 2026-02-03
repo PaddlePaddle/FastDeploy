@@ -264,7 +264,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
-        if fastdeploy.envs.USE_FD_FP8_QUANT:
+        if fastdeploy.envs.FD_USE_PHI_FP8_QUANT == 0:
             x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant_padding(
                 x, self.quant_config.weight_block_size[0]
             )
