@@ -569,7 +569,17 @@ class CompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
         if prompt is not None:
-            req_dict["prompt"] = prompt
+            if isinstance(prompt, list) and isinstance(prompt[0], int):
+                # List[int]
+                req_dict["prompt_token_ids"] = prompt
+                req_dict["prompt"] = None
+            elif isinstance(prompt, list) and isinstance(prompt[0], list):
+                # List[List[int]]
+                req_dict["prompt_token_ids"] = prompt
+                req_dict["prompt"] = None
+            else:
+                # str 或 List[str]
+                req_dict["prompt"] = prompt
 
         # if "prompt_token_ids" in req_dict:
         #     if "prompt" in req_dict:
