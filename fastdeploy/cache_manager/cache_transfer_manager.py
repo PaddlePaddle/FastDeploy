@@ -174,6 +174,7 @@ class CacheTransferManager:
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
         self.cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
+        self.scale_item_bytes = self._get_cache_item_bytes(paddle.get_default_dtype())
         self.has_cache_scale = self.cache_dtype == "block_wise_fp8"
         if self.has_cache_scale:
             self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
@@ -368,7 +369,7 @@ class CacheTransferManager:
         self.storage_backend.register_buffer(write_buffer, cache_buffer_total_bytes)
 
         if self.has_cache_scale:
-            self.scale_buffer_stride_bytes = layer_num * self.head_num * self.block_size * self.cache_item_bytes
+            self.scale_buffer_stride_bytes = layer_num * self.head_num * self.block_size * self.scale_item_bytes
             scale_buffer_total_bytes = block_num * self.scale_buffer_stride_bytes * 2
             logger.info(
                 f"Creating scale cpu buffer cache for all layers: {scale_buffer_total_bytes / 1024 ** 3:.2f}GB"
@@ -542,13 +543,15 @@ class CacheTransferManager:
         self.swap_space_ready_signal.value[self.rank] = 1
 
     def _get_cache_item_bytes(self, cache_dtype):
-        if cache_dtype == "bfloat16":
-            cache_item_bytes = 2
+        if cache_dtype == "float32":
+            bytes = 4
+        elif cache_dtype in ("bfloat16", "float16"):
+            bytes = 2
         elif cache_dtype in ["uint8", "block_wise_fp8"]:
-            cache_item_bytes = 1
+            bytes = 1
         else:
             raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
-        return cache_item_bytes
+        return bytes
 
     def _run_read_storage(
         self,
@@ -601,14 +604,16 @@ class CacheTransferManager:
                     k_scale_result, v_scale_result = result[2 * block_num : 3 * block_num], result[3 * block_num :]
                     success_block_num = 0
                     for k, v, k_scale, v_scale in zip(k_result, v_result, k_scale_result, v_scale_result):
-                        if k > 0 and v > 0 and k_scale > 0 and v_scale > 0:
-                            success_block_num += 1
+                        if not (k > 0 and v > 0 and k_scale > 0 and v_scale > 0):
+                            break
+                        success_block_num += 1
                 else:
                     k_result, v_result = result[:block_num], result[block_num : 2 * block_num]
                     success_block_num = 0
                     for k, v in zip(k_result, v_result):
-                        if k > 0 and v > 0:
-                            success_block_num += 1
+                        if not (k > 0 and v > 0):
+                            break
+                        success_block_num += 1
                 logger.debug(f"_run_read_storage, success_block_num: {success_block_num}")
                 valid_gpu_block_ids = gpu_block_ids[:success_block_num]
                 valid_cpu_block_ids = cpu_block_ids[:success_block_num]
@@ -636,7 +641,7 @@ class CacheTransferManager:
                 if k_scale_keys and v_scale_keys:
                     swap_cache_layout(
                         self.gpu_cache_scales_k_tensors,
-                        self.storage_key_scale_write_buffer,
+                        self.storage_key_scale_read_buffer,
                         self.cache_scale_shape,
                         valid_gpu_block_ids,
                         valid_cpu_block_ids,
@@ -645,7 +650,7 @@ class CacheTransferManager:
                     )
                     swap_cache_layout(
                         self.gpu_cache_scales_v_tensors,
-                        self.storage_value_scale_write_buffer,
+                        self.storage_value_scale_read_buffer,
                         self.cache_scale_shape,
                         valid_gpu_block_ids,
                         valid_cpu_block_ids,
@@ -735,7 +740,9 @@ class CacheTransferManager:
                         f"Successfully read {len(valid_gpu_block_ids)} blocks from cache storage for task {task.task_id}"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to read cache for task {task.task_id}, error: {e}")
+                    logger.error(
+                        f"Failed to read cache for task {task.task_id}, error: {e}, traceback: {traceback.format_exc()}"
+                    )
                     valid_gpu_block_ids = []
                 finally:
                     try:
@@ -924,7 +931,7 @@ class CacheTransferManager:
                         f"Successfully wrote {write_block_num} blocks to cache storage for task {task.task_id}"
                     )
                 except Exception as e:
-                    logger.error(f"Error in write back storage task: {e}")
+                    logger.error(f"Error in write back storage task: {e}, traceback:{traceback.format_exc()}")
                     gpu_block_ids = []
                 finally:
                     try:

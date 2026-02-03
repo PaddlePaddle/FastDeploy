@@ -265,12 +265,14 @@ class MooncakeStore(KVCacheStorage):
         num = 0
         if has_scale:
             for k, v, k_scale, v_scale in zip(k_keys, v_keys, k_scale_keys, v_scale_keys):
-                if result[k] and result[v] and result[k_scale] and result[v_scale]:
-                    num += 1
+                if not (result[k] and result[v] and result[k_scale] and result[v_scale]):
+                    break
+                num += 1
         else:
             for k, v in zip(k_keys, v_keys):
-                if result[k] and result[v]:
-                    num += 1
+                if not (result[k] and result[v]):
+                    break
+                num += 1
 
         return num
 
@@ -309,12 +311,12 @@ class MooncakeStore(KVCacheStorage):
             success_num = result.count(0)
             if success_num == total_num:
                 logger.debug(
-                    f"Put all data into Mooncake Store successfully."
+                    f"Put all data into Mooncake Store successfully. "
                     f"success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             else:
                 logger.error(
-                    f"Some of the data was not put into Mooncake Store."
+                    f"Some of the data was not put into Mooncake Store. "
                     f"total_num: {total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
@@ -344,7 +346,7 @@ class MooncakeStore(KVCacheStorage):
                 )
             else:
                 logger.error(
-                    f"Some of the data was not get from Mooncake Store."
+                    f"Some of the data was not get from Mooncake Store. "
                     f"total_num:{total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
