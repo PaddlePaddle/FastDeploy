@@ -429,7 +429,7 @@ class DataProcessorTestCase(unittest.TestCase):
             request_id="resp", outputs=SimpleNamespace(token_ids=[1, processor.tokenizer.eos_token_id]), finished=True
         )
 
-        processed = processor.process_response_obj_normal(response)
+        processed = processor.process_response_dict_normal(response)
         self.assertEqual(processed.outputs.text, "tool-only")
         self.assertEqual(processed.outputs.reasoning_content, "think")
         self.assertEqual(processed.outputs.tool_calls, ["tool"])
@@ -441,11 +441,11 @@ class DataProcessorTestCase(unittest.TestCase):
         response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
         response = RequestOutput.from_dict(response)
 
-        result = processor.process_response_obj_streaming(response, enable_thinking=False)
+        result = processor.process_response_dict_streaming(response, enable_thinking=False)
         self.assertEqual(result.outputs.text, "7")
         self.assertNotIn(req_id, processor.decode_status)
 
-    def test_process_response_obj_normal_with_reasoning(self):
+    def test_process_response_dict_normal_with_reasoning(self):
         processor = self.processor
         processor.model_status_dict = {"normal": "normal"}
         processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
@@ -458,7 +458,7 @@ class DataProcessorTestCase(unittest.TestCase):
         }
         response = RequestOutput.from_dict(response)
 
-        result = processor.process_response_obj_normal(response, enable_thinking=True)
+        result = processor.process_response_dict_normal(response, enable_thinking=True)
         self.assertEqual(result.outputs.completion_tokens, "7")
         self.assertEqual(result.outputs.text, "tool-text")
         self.assertEqual(result.outputs.reasoning_content, "because")
@@ -476,12 +476,12 @@ class DataProcessorTestCase(unittest.TestCase):
             calls["normal"] = kwargs
             return "normal"
 
-        original_stream = processor.process_response_obj_streaming
-        original_normal = processor.process_response_obj_normal
-        processor.process_response_obj_streaming = fake_stream
-        processor.process_response_obj_normal = fake_normal
-        self.addCleanup(lambda: setattr(processor, "process_response_obj_streaming", original_stream))
-        self.addCleanup(lambda: setattr(processor, "process_response_obj_normal", original_normal))
+        original_stream = processor.process_response_dict_streaming
+        original_normal = processor.process_response_dict_normal
+        processor.process_response_dict_streaming = fake_stream
+        processor.process_response_dict_normal = fake_normal
+        self.addCleanup(lambda: setattr(processor, "process_response_dict_streaming", original_stream))
+        self.addCleanup(lambda: setattr(processor, "process_response_dict_normal", original_normal))
 
         response = {"outputs": {}, "finished": False, "request_id": "req"}
         self.assertEqual(processor.process_response_dict(response, stream=True, enable_thinking=True), "stream")
