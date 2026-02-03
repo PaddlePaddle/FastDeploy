@@ -12,6 +12,11 @@ FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/
 
 在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像将内置 Golang Router 编译所需的 Go 语言环境，并提供已编译完成的 Router 二进制文件。该二进制文件默认位于 `/usr/local/bin` 目录下，可直接使用。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)
 
+若需单独下载 Golang router 二进制文件，可通过以下地址获取：
+```
+https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+```
+
 ### 2. 编译安装
 
 在以下场景中，需要从源码编译 Router：

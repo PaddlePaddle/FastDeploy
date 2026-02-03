@@ -12,6 +12,11 @@ FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/Fast
 
 Starting from FastDeploy v2.5.0, the official Docker images include the Go language environment required to build the Golang Router and also provide a precompiled Router binary. The Router binary is located by default in the `/usr/local/bin` directory and can be used directly without additional compilation. For installation details, please refer to the [FastDeploy Installation Guide](../get_started/installation/nvidia_gpu.md)
 
+If you need to download the Golang-based router binary separately, it can be obtained from the following URL:
+```
+https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+```
+
 ### 2. Build from Source
 
 You need to build the Router from source in the following scenarios:
