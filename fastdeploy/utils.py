@@ -1273,6 +1273,33 @@ def to_tensor(tasks: List[Any]):
         llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
 
+def fill_paddle_tensor(shared_inputs_object, key, value):
+    """
+    Fill a paddle tensor with the given value.
+
+    Args:
+        shared_inputs_object: Either an object with attributes or a dictionary
+        key: The key/attribute name to access
+        value: The value to fill the tensor with
+    """
+    try:
+        # Handle both dictionary-style and object-style access
+        if hasattr(shared_inputs_object, key):
+            # Object-style access (e.g., InputBatch instance)
+            attr = getattr(shared_inputs_object, key)
+        elif hasattr(shared_inputs_object, "__getitem__") and key in shared_inputs_object:
+            # Dictionary-style access (e.g., self.share_inputs dict)
+            attr = shared_inputs_object[key]
+        else:
+            # Key/attribute doesn't exist
+            return
+
+        if isinstance(attr, paddle.Tensor):
+            attr.fill_(value)
+    except Exception as e:
+        llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")
+
+
 def do_nothing(*args, **kwargs):
     def decorator(func):
         return func
