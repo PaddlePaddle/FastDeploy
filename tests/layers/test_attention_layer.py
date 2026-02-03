@@ -274,7 +274,7 @@ class TestAttentionPerformance(unittest.TestCase):
         input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
         token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, token_num
+            input_ids, seq_lens_this_time, None, None, token_num
         )
 
         forward_meta = ForwardMeta(
