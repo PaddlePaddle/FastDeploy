@@ -21,6 +21,7 @@ import paddle
 
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.input_batch import InputBatch
 
 
 @dataclass
@@ -46,6 +47,7 @@ class TestFeaturePositions(unittest.TestCase):
         self.runner = GPUModelRunner.__new__(GPUModelRunner)
         self.runner.fd_config = self.mock_fd_config
         self.runner.model_config = self.mock_model_config
+        self.runner.scheduler_config = self.mock_fd_config.scheduler_config
 
     def test_completely_within_range(self):
         """Test positions that are completely within the prefill range"""
@@ -217,13 +219,14 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.runner = GPUModelRunner.__new__(GPUModelRunner)
         self.runner.fd_config = self.mock_fd_config
         self.runner.model_config = self.mock_model_config
+        self.runner.scheduler_config = self.mock_fd_config.scheduler_config
         self.runner.enable_mm = True
         self.runner.is_pooling_model = False
         self.runner.encoder_cache = {}
-        self.runner.share_inputs = {
-            "image_features": None,
-            "rope_emb": paddle.full(shape=[2, 1], fill_value=0, dtype="float32"),
-        }
+        self.runner.share_inputs = InputBatch(self.mock_fd_config)
+        self.runner.share_inputs.image_features = None
+        self.runner.share_inputs.image_features_list = None
+        self.runner.share_inputs.rope_emb = paddle.full(shape=[2, 1], fill_value=0, dtype="float32")
         self.runner.extract_vision_features = Mock()
         self.runner.prepare_rope3d = Mock()
 
@@ -272,7 +275,8 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.runner._process_mm_features(request_list)
 
         # Should return early without processing
-        self.assertIsNone(self.runner.share_inputs["image_features"])
+
+        self.assertIsNone(self.runner.share_inputs["image_features_list"])
 
     def test_process_mm_features_no_prefill_requests(self):
         """Test when there are no prefill requests"""
@@ -286,7 +290,9 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.runner._process_mm_features(request_list)
 
         # Should not process any requests
-        self.assertIsNone(self.runner.share_inputs["image_features"])
+        self.assertFalse(
+            any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
+        )
 
     def test_process_mm_features_evict_cache(self):
         """Test eviction of multimodal cache"""
@@ -339,7 +345,9 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.assertIn("new_hash", self.runner.encoder_cache)
 
         # Verify image features were set
-        self.assertIsNotNone(self.runner.share_inputs["image_features"])
+        self.assertTrue(
+            any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
+        )
 
     def test_process_mm_features_with_cache_hit(self):
         """Test processing images with cache hit"""
@@ -380,7 +388,9 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.runner.extract_vision_features.assert_not_called()
 
         # Verify image features were set using cached feature
-        self.assertIsNotNone(self.runner.share_inputs["image_features"])
+        self.assertTrue(
+            any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
+        )
 
     def test_process_mm_features_mixed_cache(self):
         """Test processing with mixed cache hit and miss"""
@@ -422,7 +432,9 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.assertIn("hash2", self.runner.encoder_cache)
 
         # Verify image features were set
-        self.assertIsNotNone(self.runner.share_inputs["image_features"])
+        self.assertTrue(
+            any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
+        )
 
     def test_process_mm_features_no_encoder_cache(self):
         """Test processing without encoder cache"""
@@ -459,7 +471,9 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.runner.extract_vision_features.assert_called_once()
 
         # Verify image features were set
-        self.assertIsNotNone(self.runner.share_inputs["image_features"])
+        self.assertTrue(
+            any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
+        )
 
     def test_process_mm_features_rope_3d_position_ids(self):
         """Test 3D position IDs processing"""
