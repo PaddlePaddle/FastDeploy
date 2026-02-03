@@ -299,11 +299,6 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size);
-std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size);
-
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
     paddle::Tensor& token_nums_per_expert,
