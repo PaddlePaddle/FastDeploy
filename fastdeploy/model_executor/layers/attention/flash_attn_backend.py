@@ -249,6 +249,53 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
+        norm_after_rope_in_kernel = getattr(layer, "use_qk_norm", False) and \
+                                   not getattr(layer, "qk_norm_before_rope", False)
+
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+        print("===RyanDebug, in Attn, the norm_after_rope_in_kernel is:", norm_after_rope_in_kernel)
+        print("===RyanDebug, in Attn, the q_norm_weight is:", q_norm_weight)
+        print("===RyanDebug, in Attn, the k_norm_weight is:", k_norm_weight)
+
+        if layer.layer_id == 0:
+            get_block_shape_and_split_kv_block(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.decoder_num_blocks_device,
+                forward_meta.decoder_chunk_size_device,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
+                self.encoder_block_shape_q,
+                self.decoder_block_shape_q,
+                self.group_size,
+                self.block_size,
+            )
+
+            if forward_meta.max_len_tensor_cpu[1].item() > 0:
+                (
+                    metadata.cu_seqlens_k,
+                    metadata.pre_cache_batch_ids,
+                    metadata.pre_cache_tile_ids_per_batch,
+                    metadata.pre_cache_num_blocks_cpu,
+                    metadata.kv_token_num_cpu,
+                ) = pre_cache_len_concat(
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.max_len_tensor_cpu[2],
+                    self.block_size,
+                )
+
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
         if use_fa_do_prefill:
@@ -270,8 +317,8 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.pre_cache_batch_ids,
                 metadata.pre_cache_tile_ids_per_batch,
                 metadata.pre_cache_num_blocks_cpu,
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -333,8 +380,8 @@ class FlashAttentionBackend(AttentionBackend):
             layer.linear_smooth,
             forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
-            getattr(layer, "q_norm_weight", None),
-            getattr(layer, "k_norm_weight", None),
+            q_norm_weight,
+            k_norm_weight,
             getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
