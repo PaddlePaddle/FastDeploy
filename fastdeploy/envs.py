@@ -198,6 +198,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # File path for file storage backend
+    "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
 }
 
 
