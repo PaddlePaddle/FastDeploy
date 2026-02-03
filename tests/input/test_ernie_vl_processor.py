@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 from unittest.mock import MagicMock, patch
 
 from fastdeploy.input.ernie4_5_vl_processor import Ernie4_5_VLProcessor
