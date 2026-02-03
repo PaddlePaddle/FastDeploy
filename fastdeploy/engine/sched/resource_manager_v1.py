@@ -1013,9 +1013,7 @@ class ResourceManagerV1(ResourceManager):
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
                     start_download_time = time.time()
-                    if isinstance(feature, paddle.Tensor):
-                        feature_info = f"type=paddle.Tensor, shape={feature.shape}, dtype={feature.dtype}"
-                    elif isinstance(feature, np.ndarray):
+                    if isinstance(feature, np.ndarray):
                         feature_info = f"type=np.ndarray, shape={feature.shape}, dtype={feature.dtype}"
                     elif isinstance(feature, list):
                         feature_info = f"type=list, len={len(feature)}"
