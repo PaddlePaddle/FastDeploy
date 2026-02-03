@@ -59,7 +59,6 @@ elif current_platform.is_maca():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
@@ -86,7 +85,6 @@ else:
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
         speculate_save_output_topk,
@@ -226,7 +224,7 @@ def pre_process(
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, token_num_cpu
+            input_ids, seq_lens_this_time, None, None, token_num_cpu
         )
         return (
             ids_remove_padding,
@@ -247,9 +245,7 @@ def pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids, draft_tokens, cum_offsets_now, seq_lens_this_time, seq_lens_encoder, token_num_cpu
-        )
+        ) = get_padding_offset(input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, token_num_cpu)
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
             seq_lens_encoder,
