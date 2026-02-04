@@ -15,6 +15,7 @@
 """
 
 import traceback
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -335,3 +336,16 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
         else:
             return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Get maximum number of tokens per multimodal item.
+        Args:
+            seq_len: Maximum model length
+            Returns:
+                A mapping from modalities to their respective maximum token counts.
+        """
+        return self.ernie4_5_processor.get_mm_max_tokens_per_item(seq_len)

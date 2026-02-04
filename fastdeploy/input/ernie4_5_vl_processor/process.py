@@ -20,6 +20,7 @@ import copy
 import os
 import pickle
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -30,7 +31,7 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
-from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
@@ -719,3 +720,45 @@ class DataProcessor:
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
+
+    def get_image_size_with_most_features(self):
+        resized_height, resized_width = self.image_preprocessor.get_smarted_resize(
+            height=MAX_IMAGE_DIMENSION,
+            width=MAX_IMAGE_DIMENSION,
+            min_pixels=self.image_min_pixels,
+            max_pixels=self.image_max_pixels,
+        )[0]
+        return (resized_height, resized_width)
+
+    def get_max_image_tokens(
+        self,
+        seq_len: int,
+    ) -> int:
+        target_height, target_width = self.get_image_size_with_most_features()
+        patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
+            height=target_height,
+            width=target_width,
+            min_pixels=self.image_min_pixels,
+            max_pixels=self.image_max_pixels,
+        )[1]
+        num_image_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
+        return min(num_image_tokens, seq_len)
+
+    def get_max_video_tokens(self, seq_len: int) -> int:
+        target_height, target_width = self.get_image_size_with_most_features()
+        patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
+            height=target_height,
+            width=target_width,
+            min_pixels=self.video_min_pixels,
+            max_pixels=self.video_max_pixels,
+        )[1]
+        num_video_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
+        return min(num_video_tokens, seq_len)
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        max_image_tokens = self.get_max_image_tokens(seq_len)
+        max_video_tokens = self.get_max_video_tokens(seq_len)
+        return {"image": max_image_tokens, "video": max_video_tokens}
