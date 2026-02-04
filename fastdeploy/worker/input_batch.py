@@ -751,8 +751,9 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
     sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+    if not is_not_swapped:
+        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
