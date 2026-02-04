@@ -45,7 +45,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
-from fastdeploy.worker.output import LogprobsLists, ModelRunnerOutput, DecodeMode
+from fastdeploy.worker.output import DecodeMode, LogprobsLists, ModelRunnerOutput
 
 RECOVERY_STOP_SIGNAL = -3
 MAX_DRAFT_TOKENS = 6
@@ -183,32 +183,33 @@ class TokenProcessor:
         batch_result = []
         batch_draft_result = []
 
-        sampled_token_ids = model_output.sampled_token_ids
-        logprobs_tensor = model_output.logprobs
-        prompt_logprobs = model_output.prompt_logprobs
-        pooler_output = model_output.pooler_output
         decode_mode = model_output.decode_mode
+        sampled_token_ids = model_output.sampled_token_ids
+        batch_offsets = model_output.cu_num_generated_tokens.tolist()
+        prompt_logprobs_list: LogprobsLists = None
+        logprobs_list: LogprobsLists = None
 
-        for i, token_ids in enumerate(sampled_token_ids):
+        pooler_output = model_output.pooler_output
+
+        for i in range(len(batch_offsets) - 1):
             if self.resource_manager.stop_flags[i]:
-                llm_logger.warn(f"Task is stopped, skip batch_index: {i}")
+                llm_logger.info(f"Task is stopped, skip batch_index: {i}")
                 continue
 
-            llm_logger.error(f"{decode_mode}:{i}: {token_ids}")
+            start_idx = batch_offsets[i]
+            end_idx = batch_offsets[i + 1]
+
+            token_ids = sampled_token_ids[start_idx:end_idx]
 
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
 
-            if not token_ids:
-                llm_logger.warn(f"Task {task_id} receive empty tokens.")
-                continue
-
-            accepted_num = len(token_ids)
-
             # 1. draft token
             if decode_mode == DecodeMode.DRAFT:
-                if self.use_logprobs and logprobs_tensor is not None:
-                    logprobs_list: LogprobsLists = logprobs_tensor.tolists().slice_rows(i, i + accepted_num)
+                if self.use_logprobs:
+                    if logprobs_list is None:
+                        logprobs_list = model_output.logprobs.tolists()
+                    accepted_logprobs: LogprobsLists = logprobs_list.slice_rows(start_idx, end_idx)
                     draft_result = RequestOutput(
                         request_id=task_id,
                         output_type=decode_mode,
@@ -217,7 +218,7 @@ class TokenProcessor:
                             send_idx=None,
                             token_ids=[],
                             draft_token_ids=[],
-                            draft_top_logprobs=logprobs_list
+                            draft_top_logprobs=accepted_logprobs,
                         ),
                         finished=False,
                         metrics=None,
@@ -256,7 +257,7 @@ class TokenProcessor:
             # 2. metrics
             current_time = time.time()
             self.total_step += 1
-            if self.tokens_counter[task_id] == 0: # first token
+            if self.tokens_counter[task_id] == 0:  # first token
                 task.metrics.record_recv_first_token()
                 task.metrics.cal_cost_time()
                 self._record_first_token_metrics(task, current_time)
@@ -301,21 +302,22 @@ class TokenProcessor:
                 ic_req_data=task.ic_req_data,
             )
 
-            # 5. logprobs
+            # 5. logprobs & prompt_logprobs
             if self.use_logprobs:
-                if logprobs_tensor is not None:
-                    try:
-                        logprobs_list: LogprobsLists = logprobs_tensor.tolists().slice_rows(i, i + accepted_num)
-                        result.outputs.logprob = float(logprobs_list.logprobs[i][0])
-                        result.outputs.top_logprobs = logprobs_list
-                    except Exception as e:
-                        llm_logger.warning(f"Failed to parse logprobs from ModelRunnerOutput: {e}")
+                # logprobs
+                if logprobs_list is None:
+                    logprobs_list = model_output.logprobs.tolists()
 
-            if prompt_logprobs is not None:
-                try:
-                    result.prompt_logprobs = prompt_logprobs[i]
-                except Exception as e:
-                    llm_logger.warning(f"Failed to parse prompt_logprobs from ModelRunnerOutput: {e}")
+                accepted_logprobs: LogprobsLists = logprobs_list.slice_rows(start_idx, end_idx)
+                result.outputs.logprob = float(accepted_logprobs.logprobs[0][0])
+                result.outputs.top_logprobs = accepted_logprobs
+
+                # prompt_logprobs
+                if prompt_logprobs_list is None and model_output.prompt_logprobs is not None:
+                    prompt_logprobs_list = model_output.prompt_logprobs[start_idx:end_idx]
+
+                if prompt_logprobs_list:
+                    result.prompt_logprobs = prompt_logprobs_list
 
             # 6. first token
             if self.tokens_counter[task_id] == 0:
@@ -324,27 +326,18 @@ class TokenProcessor:
                 result.num_cached_tokens = task.num_cached_tokens
 
                 if task.get("multimodal_inputs", None):
-                    result.num_input_image_tokens = task.multimodal_inputs.get(
-                        "num_input_image_tokens", 0
-                    )
-                    result.num_input_video_tokens = task.multimodal_inputs.get(
-                        "num_input_video_tokens", 0
-                    )
+                    result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                    result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
             # 7. token processing
-            is_prefill = (
-                task.disaggregate_info is not None
-                and task.disaggregate_info["role"] == "prefill"
-            )
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 
             result = self._process_per_token(task, i, token_ids, result, is_prefill)
-            # llm_logger.error(f"{decode_mode}:{i}: {result}")
 
             if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
                 batch_result.append(result)
 
         return batch_result, batch_draft_result
-
 
     def _process_per_token(self, task, batch_id: int, token_ids, result: RequestOutput, is_prefill: bool):
         """
@@ -397,10 +390,14 @@ class TokenProcessor:
                     self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
                 ) or (rank_id == 0):
                     model_runner_output = self.zmq_server.recv_pyobj()
-                    llm_logger.debug("received model_runner_output:%s", model_runner_output)
-                    
+                    llm_logger.debug(
+                        "received bsz:%s, model_runner_output:%s",
+                        len(model_runner_output.sampled_token_ids),
+                        model_runner_output,
+                    )
+
                     if model_runner_output is None:
-                        llm_logger.warning(f"model_runner_output is None")
+                        llm_logger.warning("model_runner_output is None")
                         continue
 
                     batch_result, batch_draft_result = self._process_model_runner_output(model_runner_output)
@@ -415,7 +412,9 @@ class TokenProcessor:
                     if batch_draft_result:
                         self.postprocess(batch_draft_result, DecodeMode.DRAFT)
             except Exception as e:
-                llm_logger.error(f"recieved model_runner_output:{model_runner_output} error:{e} {traceback.format_exc()!s}")
+                llm_logger.error(
+                    f"recieved model_runner_output:{model_runner_output} error:{e} {traceback.format_exc()!s}"
+                )
                 continue
 
     def process_sampling_results(self):

@@ -15,9 +15,10 @@
 """
 
 from dataclasses import dataclass, field
-from typing import NamedTuple, Optional
 from enum import IntEnum
+from typing import NamedTuple, Optional
 
+import numpy as np
 import paddle
 
 
@@ -124,18 +125,13 @@ class LogprobsTensors(NamedTuple):
                 paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
                 paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
             )
-    
+
     def clone(self):
         with paddle.no_grad():
             return LogprobsTensors(
-                self.logprob_token_ids.clone().cpu()
-                if self.logprob_token_ids is not None else None,
-
-                self.logprobs.clone().cpu()
-                if self.logprobs is not None else None,
-
-                self.selected_token_ranks.clone().cpu()
-                if self.selected_token_ranks is not None else None,
+                self.logprob_token_ids.clone().cpu() if self.logprob_token_ids is not None else None,
+                self.logprobs.clone().cpu() if self.logprobs is not None else None,
+                self.selected_token_ranks.clone().cpu() if self.selected_token_ranks is not None else None,
             )
 
 
@@ -346,6 +342,7 @@ class DecodeMode(IntEnum):
     """
     The mode of decoding.
     """
+
     TARGET = 3
     DRAFT = 4
 
@@ -356,28 +353,25 @@ class ModelRunnerOutput:
     [WIP] ModelRunnerOutput is serialized and sent to the scheduler process.
     """
 
-    """
-    The mode of decoding.
-    """
+    # The mode of decoding.
     decode_mode: DecodeMode | None = DecodeMode.TARGET
 
-    """
-    [num_reqs, num_generated_tokens]
-    """
-    sampled_token_ids: list[list[int]] = field(default_factory=list)
+    # [num_reqs]
+    # Used for slicing the logprobs in cases like speculative
+    # decoding where the number of generated tokens may be
+    # different for each request.
+    cu_num_generated_tokens: list[int] = field(default_factory=list)
 
-    """
-    [num_reqs, num_generated_tokens]
-    """
+    # [num_reqs, num_generated_tokens]
+    sampled_token_ids: np.ndarray | None = None
+
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs, max_num_logprobs + 1]
+    # [num_reqs]
     logprobs: LogprobsTensors | None = None
 
-    """
-    [num_reqs, num_prompt_tokens]
-    """
+    # [num_reqs, num_prompt_tokens]
     prompt_logprobs: LogprobsTensors | None = None
 
-    """
-    [num_reqs, hidden_size]
-    """
+    # [num_reqs, hidden_size]
     pooler_output: list[paddle.Tensor | None] | None = None
-
