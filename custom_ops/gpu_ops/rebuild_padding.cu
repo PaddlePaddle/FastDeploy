@@ -116,13 +116,15 @@ std::vector<paddle::Tensor> rebuild_padding(
   const int bsz = cu_seqlens_q.shape()[0] - 1;
 
   paddle::Tensor out;
+  int output_token_num;
   if (output_padding_offset) {
-    const int output_token_num = output_padding_offset.get().shape()[0];
-    out = paddle::full({output_token_num, dim_embed}, 0, D, tmp_out.place());
-
+    output_token_num = output_padding_offset.get().shape()[0];
   } else {
-    out = paddle::full({bsz, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
+    output_token_num = bsz;
   }
+
+  out = paddle::full(
+      {output_token_num, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
 
   constexpr int PackSize = VEC_16B / sizeof(DataType_);
   int elem_nums = out.numel();
