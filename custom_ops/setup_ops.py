@@ -736,6 +736,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/swap_cache_batch.cu",
+        "gpu_ops/gelu_tanh.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
