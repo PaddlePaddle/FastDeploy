@@ -30,7 +30,7 @@ on:
 
 jobs:
   stable_tests:
-    runs-on: [self-hosted, GPU-h1z1-2Cards]
+    runs-on: [self-hosted, GPU-h20-2Cards]
     timeout-minutes: 60
     steps:
       - name: Code Prepare
@@ -147,7 +147,7 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm --ipc=host --pid=host --net=host \
+          docker run --rm --net=host \
           --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \

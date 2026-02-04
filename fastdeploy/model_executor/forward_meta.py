@@ -155,6 +155,8 @@ class ForwardMeta:
 
     # for zero size
     is_zero_size: bool = False
+    # for prefill
+    exist_prefill: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""

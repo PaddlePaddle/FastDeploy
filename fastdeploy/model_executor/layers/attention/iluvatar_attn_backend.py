@@ -201,8 +201,8 @@ class IluvatarAttnBackend(AttentionBackend):
                 self.id_group.append((decode_start, decode_end))
                 self.reverse_id_group.append((start, end))
 
-    def get_attntion_meta(self):
-        """get_attntion_meta"""
+    def get_attention_meta(self):
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(
