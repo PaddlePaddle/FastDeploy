@@ -25,7 +25,6 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -35,7 +34,6 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
-    MergedReplicatedLinear,
     QKVParallelLinear,
     ReplicatedLinear,
     RowParallelLinear,
@@ -59,43 +57,25 @@ class Glm4MoeMLP(nn.Layer):
         intermediate_size: int,
         prefix: str = "",
         reduce_results: bool = True,
-        enable_tensor_parallel: bool = True,
     ) -> None:
         super().__init__()
-        if not enable_tensor_parallel:
-            self.up_gate_proj = MergedReplicatedLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.up_gate_proj",
-                input_size=fd_config.model_config.hidden_size,
-                output_sizes=[intermediate_size, intermediate_size],
-                with_bias=False,
-            )
+        self.up_gate_proj = MergedColumnParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.up_gate_proj",
+            input_size=fd_config.model_config.hidden_size,
+            output_size=intermediate_size * 2,
+            with_bias=False,
+            activation=fd_config.model_config.hidden_act,
+        )
 
-            self.down_proj = ReplicatedLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.down_proj",
-                input_size=intermediate_size,
-                output_size=fd_config.model_config.hidden_size,
-                with_bias=False,
-            )
-        else:
-            self.up_gate_proj = MergedColumnParallelLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.up_gate_proj",
-                input_size=fd_config.model_config.hidden_size,
-                output_size=intermediate_size * 2,
-                with_bias=False,
-                activation=fd_config.model_config.hidden_act,
-            )
-
-            self.down_proj = RowParallelLinear(
-                fd_config=fd_config,
-                prefix=f"{prefix}.down_proj",
-                input_size=intermediate_size,
-                output_size=fd_config.model_config.hidden_size,
-                with_bias=False,
-                reduce_results=reduce_results,
-            )
+        self.down_proj = RowParallelLinear(
+            fd_config=fd_config,
+            prefix=f"{prefix}.down_proj",
+            input_size=intermediate_size,
+            output_size=fd_config.model_config.hidden_size,
+            with_bias=False,
+            reduce_results=reduce_results,
+        )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
@@ -156,7 +136,6 @@ class Glm4Moe(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config,
-            reduce_results=False,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
@@ -170,23 +149,20 @@ class Glm4Moe(nn.Layer):
             weight_key_map=weight_key_map,
         )
 
-        shared_experts_intermediate_size = self.n_shared_experts * fd_config.model_config.moe_intermediate_size
-
-        self.shared_experts = Glm4MoeMLP(
-            fd_config=fd_config,
-            intermediate_size=shared_experts_intermediate_size,
-            prefix=f"{prefix}.shared_experts",
-            reduce_results=False,
-            enable_tensor_parallel=not self.use_ep,
-        )
+        if self.n_shared_experts > 0:
+            shared_experts_intermediate_size = self.n_shared_experts * fd_config.model_config.moe_intermediate_size
+            self.shared_experts = Glm4MoeMLP(
+                fd_config=fd_config,
+                intermediate_size=shared_experts_intermediate_size,
+                prefix=f"{prefix}.shared_experts",
+            )
 
     def forward(self, x, forward_meta: ForwardMeta = None):
-        shared_experts_out = self.shared_experts(x)
         out = self.experts(x, self.gate, forward_meta)
-        out = out + shared_experts_out
-        # We do to TP all reduce after the sum of experts.
-        if self.tensor_parallel_size > 1 and not self.use_ep:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
+        if self.n_shared_experts > 0:
+            shared_experts_out = self.shared_experts(x)
+            out = out + shared_experts_out
+
         return out
 
 
