@@ -117,7 +117,7 @@ std::vector<paddle::Tensor> rebuild_padding(
 
   paddle::Tensor out;
   if (output_padding_offset) {
-    const int output_token_num = out.shape()[0];
+    const int output_token_num = output_padding_offset.get().shape()[0];
     out = paddle::full({output_token_num, dim_embed}, 0, D, tmp_out.place());
 
   } else {
