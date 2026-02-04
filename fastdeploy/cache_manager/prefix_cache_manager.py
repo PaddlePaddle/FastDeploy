@@ -1653,6 +1653,7 @@ class PrefixCacheManager:
         try:
             with self.request_release_lock:
                 req_id = task.request_id
+                logger.info(f"Cache output tokens for task {req_id}")
                 last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
                 if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                     self.leaf_req_map[last_node].remove(req_id)
@@ -1670,6 +1671,7 @@ class PrefixCacheManager:
                 can_recycle_cpu_block_ids = []
                 gpu_block_ids_to_cache = task.block_tables[num_cached_tokens // block_size :].copy()
                 current_time = time.time()
+                prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
 
                 with self.cache_status_lock:
                     while num_cached_tokens < total_token_num:
@@ -1677,7 +1679,8 @@ class PrefixCacheManager:
                         token_num = len(token_block)
                         if token_num != block_size:
                             break
-                        hash_value = get_hash_str(token_block)
+                        hash_value = get_hash_str(token_block, prefix_block_key)
+                        prefix_block_key = [hash_value]
                         if hash_value in current_match_node.children:
                             child = current_match_node.children[hash_value]
                             child.increment_shared_count()
