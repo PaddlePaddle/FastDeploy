@@ -182,6 +182,7 @@ class SplitwiseConnector:
 
             self.current_request_ids[task.request_id] = "init"
             task.disaggregate_info["role"] = "decode"
+            task.disaggregate_info["prefill_connector_port"] = self.cfg.cache_config.local_pd_comm_port
             addr = f"{task.disaggregate_info['decode_ip']}:{task.disaggregate_info['decode_connector_port']}"
             self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task.request_id}")
             self._send_message(addr, "prefill", [task])
@@ -214,7 +215,7 @@ class SplitwiseConnector:
             time.sleep(0.001)
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
-                return False, "timeout"
+                return False, "prefill waits for decode resource timeout"
 
         msg = self.current_request_ids[task.request_id]
         del self.current_request_ids[task.request_id]

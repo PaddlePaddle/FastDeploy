@@ -61,7 +61,7 @@ void SpeculateStepSchedule(
   const int block_num_per_seq = block_tables.shape()[1];
   const int length = input_ids.shape()[1];
   const int pre_id_length = pre_ids.shape()[1];
-  constexpr int BlockSize = 256;  // bsz <= 256
+  constexpr int BlockSize = MAX_BSZ;  // bsz <= MAX_BSZ
   const int max_decoder_block_num =
       length / block_size -
       encoder_decoder_block_num;  // 最大输出长度对应的block -

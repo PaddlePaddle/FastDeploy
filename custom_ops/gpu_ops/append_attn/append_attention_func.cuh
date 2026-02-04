@@ -2037,6 +2037,7 @@ __global__ void merge_multi_chunks_kernel(
   const int vid = threadIdx.x, hid = threadIdx.y;
   const int qid = blockIdx.x;
   const uint32_t bid = batch_id_per_token[qid];
+  if (bid == -1) return;
   if (seq_lens_q[bid] <= 0 || seq_lens_kv[bid] <= 0) {
     return;
   }
@@ -2414,7 +2415,8 @@ template <typename T,
           uint32_t bdy,
           uint32_t HEAD_DIM,
           typename OutT = T,
-          bool ENABLE_PREFILL = true>
+          bool ENABLE_PREFILL = true,
+          bool DECODE_ONLY = true>
 __global__ void merge_multi_chunks_v2_kernel(
     const T* __restrict__ multi_out,    // [token_num, num_chunks, num_heads,
                                         // head_dim]
@@ -2458,14 +2460,15 @@ __global__ void merge_multi_chunks_v2_kernel(
     if (ENABLE_PREFILL) {
       seq_len_kv += seq_len_q;
       if (seq_len_kv == 0) continue;
-
-      const int seq_len_enc = seq_lens_encoder[bid];
-      if (seq_len_enc <= 0) {
-        continue;
-      }
     } else {
       if (seq_len_kv == 0) continue;
       seq_len_kv += seq_len_q;
+    }
+    if constexpr (DECODE_ONLY) {
+      const int seq_len_enc = seq_lens_encoder[bid];
+      if (seq_len_enc > 0) {
+        continue;
+      }
     }
     const int num_chunks_this_seq = div_up(seq_len_kv, chunk_size);
     if (num_chunks_this_seq <= 1) {

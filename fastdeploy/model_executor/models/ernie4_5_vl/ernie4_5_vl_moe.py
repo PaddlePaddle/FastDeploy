@@ -247,6 +247,7 @@ class Ernie4_5_VLMoE(nn.Layer):
             self.image_fused_moe = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
+                layer_id=layer_id,
                 prefix=f"{prefix}",
                 reduce_results=False,
             )
@@ -256,6 +257,7 @@ class Ernie4_5_VLMoE(nn.Layer):
             self.shared_experts = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=self.num_shared_experts * fd_config.model_config.moe_intermediate_size[0],
+                layer_id=layer_id,
                 prefix=f"{prefix}.shared_experts",
                 reduce_results=False,
             )
@@ -346,6 +348,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             self.mlp = Ernie4_5_VLMLP(
                 fd_config=fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
+                layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -555,6 +558,9 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)

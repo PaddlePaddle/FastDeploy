@@ -270,6 +270,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
         "gpu_ops/set_flags.cu",
+        "gpu_ops/set_stop.cu",
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/step.cu",
@@ -292,7 +293,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
-        "gpu_ops/per_token_quant_fp8.cu",
+        "gpu_ops/fused_mask_swiglu_fp8_quant_kernel.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/text_image_gather_scatter.cu",
@@ -312,6 +313,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/sgemm_1.cu",
         "gpu_ops/sgemm_2.cu",
+        "gpu_ops/reasoning_phase_token_constraint.cu",
     ]
 
     # pd_disaggregation
@@ -643,32 +645,63 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/swap_cache_batch.cu",
+        "gpu_ops/gelu_tanh.cu",
+        "gpu_ops/set_stop.cu",
         "metax_ops/moe_dispatch.cu",
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
-        "metax_ops/apply_rope_qkv.cu",
         "metax_ops/cache_kv_with_rope.cu",
         "metax_ops/cpp_extensions.cc",
+        "metax_ops/split_merge_qkv.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
     sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
 
+    metax_extra_compile_args = {
+        "cxx": ["-O3"],
+        "nvcc": [
+            "-O3",
+            "-Ithird_party/nlohmann_json/include",
+            "-Igpu_ops",
+            "-DPADDLE_DEV",
+            "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
+        ],
+    }
+
+    def get_maca_version(version_file: str = "/opt/maca/Version.txt") -> list[int]:
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                version_str = f.readline().strip()
+                target_version = [int(part) for part in version_str.split(":")[1].split(".")]
+        except Exception as e:
+            print(f"Trigger exception: {type(e).__name__} - {e}")
+            raise
+        return target_version
+
+    maca_version = get_maca_version(f"{maca_path}/Version.txt")
+    if len(maca_version) == 4:
+        major_version = maca_version[0]
+        minor_version = maca_version[1]
+        patch_version = maca_version[2]
+        build_version = maca_version[3]
+
+        cur_maca_version = (
+            ((major_version & 0xFF) << 24)
+            | ((minor_version & 0xFF) << 16)
+            | ((patch_version & 0xFF) << 8)
+            | ((build_version & 0xFF) << 0)
+        )
+        metax_extra_compile_args["nvcc"].append(f"-DMACA_VERSION={cur_maca_version}")
+    else:
+        raise ValueError(f"MACA version invalid - {maca_version}")
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
-            extra_compile_args={
-                "cxx": ["-O3"],
-                "nvcc": [
-                    "-O3",
-                    "-Ithird_party/nlohmann_json/include",
-                    "-Igpu_ops",
-                    "-DPADDLE_DEV",
-                    "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
-                ],
-            },
+            extra_compile_args=metax_extra_compile_args,
             library_dirs=[os.path.join(maca_path, "lib")],
             extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[

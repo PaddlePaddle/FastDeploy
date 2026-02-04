@@ -15,6 +15,7 @@
 """
 
 import os
+import time
 from typing import List
 
 import numpy as np
@@ -24,12 +25,12 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
@@ -45,6 +46,7 @@ if current_platform.is_xpu():
         eagle_get_self_hidden_states,
         mtp_save_first_token,
         mtp_step_paddle,
+        set_data_ipc,
         share_external_data,
     )
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -65,8 +67,17 @@ else:
         speculate_get_logits,
         speculate_save_output_topk,
         update_attn_mask_offsets,
+        set_data_ipc,
+        unset_data_ipc,
     )
     from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+
+from fastdeploy.worker.input_batch import (
+    ProposerInputBatch,
+    recover_batch_index_for_output,
+    recover_batch_index_for_sampler_output,
+    reorder_split_prefill_and_decode_form_index_to_batch_id,
+)
 
 from .base import Proposer
 
@@ -95,21 +106,22 @@ class MTPProposer(Proposer):
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
         self.enable_draft_logprob = self.speculative_config.enable_draft_logprob
+        self.cache_kvs_map = {}
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
-        if current_platform.is_xpu():
-            self.role = "mixed"
+        self.pd_disaggregation_mode = fd_config.parallel_config.pd_disaggregation_mode
 
         if current_platform.is_xpu():
             self._propose = self._propose_xpu
-        elif current_platform.is_cuda():
+        elif current_platform.is_cuda() or current_platform.is_maca():
             self._propose = self._propose_cuda
         else:
             raise RuntimeError("Unsupported platform.")
 
         self.sampler = MTPSampler(fd_config)
-        self._init_model_inputs()
+        self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
+        self.model_inputs.init_share_inputs()
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
@@ -129,10 +141,12 @@ class MTPProposer(Proposer):
         self.forward_meta: ForwardMeta = None
         self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
+        # TODO (wangyanpeng): The number of MTP layers should be read from model config
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
-        self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
-        self.model_config.prefix_layer_name = "mtp_block"
+        if "Ernie" in self.model_config.architectures[0]:
+            self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+            self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
@@ -166,7 +180,7 @@ class MTPProposer(Proposer):
             idx = i
             self.model_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.model_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
-            self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
+            self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
             self.model_inputs["step_idx"][idx : idx + 1] = 0
@@ -177,7 +191,7 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
     def initialize_kv_cache(self, main_model_num_blocks, profile: bool = False):
         """
@@ -204,60 +218,120 @@ class MTPProposer(Proposer):
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        if not profile and self.scheduler_config.splitwise_role != "mixed":
+
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
+        # Check if gpu runner needs to create kv cache
+        # 1. During profiling, it creates its own kv cache.
+        # 2. If no need to profile, create kv cache if cache managers do not exist.
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
+
+        if not create_cache_tensor:
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
+            while cache_ready_signal.value[local_rank] != 1:
+                time.sleep(1)
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
+
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
+
+        if not create_cache_tensor:
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
+                logger.info(
+                    f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
+                )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                key_cache = self._share_external_data(key_cache, key_cache_name, key_cache_shape)
+                self.cache_kvs_map[key_cache_name] = key_cache
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
+                value_cache = self._share_external_data(value_cache, val_cache_name, value_cache_shape)
+                self.cache_kvs_map[val_cache_name] = value_cache
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
                     scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-                    key_scale_cache = share_external_data(key_scale_cache, scale_key_cache_name, kv_cache_scale_shape)
+                    key_scale_cache = self._share_external_data(
+                        key_scale_cache, scale_key_cache_name, kv_cache_scale_shape
+                    )
+                    self.cache_kvs_map[scale_key_cache_name] = key_scale_cache
                     cache_kvs_list.append(key_scale_cache)
                     value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-                    value_scale_cache = share_external_data(
+                    value_scale_cache = self._share_external_data(
                         value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
                     )
+                    self.cache_kvs_map[scale_val_cache_name] = value_scale_cache
                     cache_kvs_list.append(value_scale_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
-            for i in range(self.model_config.num_hidden_layers):
-                self.cache_kvs[f"key_caches_{i}"] = paddle.full(
+            cache_kvs_list = []
+            for i in range(
+                self.num_main_model_layers,
+                self.num_main_model_layers + self.model_config.num_hidden_layers,
+            ):
+                logger.info(f"..creating kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+                key_cache = paddle.full(
                     shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
-                self.cache_kvs[f"value_caches_{i}"] = paddle.full(
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                set_data_ipc(key_cache, key_cache_name)
+                self.cache_kvs_map[key_cache_name] = key_cache
+                cache_kvs_list.append(key_cache)
+
+                val_cache = paddle.full(
                     shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                set_data_ipc(val_cache, val_cache_name)
+                self.cache_kvs_map[val_cache_name] = val_cache
+                cache_kvs_list.append(val_cache)
+
                 if kv_cache_quant_type == "block_wise_fp8":
-                    self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
+                    key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-                    self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
+                    key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    set_data_ipc(key_cache_scales, key_cache_scales_name)
+                    self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
+                    cache_kvs_list.append(key_cache_scales)
+
+                    val_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-            self.model_inputs["caches"] = list(self.cache_kvs.values())
-            for value in self.cache_kvs.values():
-                del value
+                    val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    set_data_ipc(val_cache_scales, val_cache_scales_name)
+                    self.cache_kvs_map[val_cache_scales_name] = val_cache_scales
+                    cache_kvs_list.append(val_cache_scales)
+
+            self.model_inputs["caches"] = cache_kvs_list
+
         self._empty_cache()
 
     def _initialize_attn_backend(
@@ -283,7 +357,7 @@ class MTPProposer(Proposer):
         self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or current_platform.is_maca():
             self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
                 self.target_model_inputs["decoder_num_blocks_cpu"]
             ).cpu()
@@ -332,10 +406,19 @@ class MTPProposer(Proposer):
             )
         self.attn_backends.append(attn_backend)
 
-    def clear_mtp_cache(self):
+    def clear_mtp_cache(self, profile=False):
         """
         Clear allocated cacheKV
         """
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
+        if not create_cache_tensor:
+            for name, tensor in self.cache_kvs_map.items():
+                unset_data_ipc(tensor, name, True, False)
+        self.cache_kvs_map.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
@@ -364,167 +447,17 @@ class MTPProposer(Proposer):
             }
         )
 
-    def _init_model_inputs(self):
-        """
-        Init model inputs
-        """
-        self.model_inputs = {}
-        # Same shape/dytpe with base model
-        self.model_inputs["block_tables"] = paddle.clone(self.target_model_inputs["block_tables"])
-        self.model_inputs["input_ids"] = paddle.clone(self.target_model_inputs["input_ids"])
-        self.model_inputs["input_ids_cpu"] = paddle.full(
-            shape=[self.max_num_seqs, self.model_config.max_model_len],
-            fill_value=-1,
-            dtype="int64",
-        ).cpu()
-        self.seq_lens_this_time_buffer = paddle.clone(self.target_model_inputs["seq_lens_this_time"])
-
-        self.model_inputs["seq_lens_encoder"] = paddle.clone(self.target_model_inputs["seq_lens_encoder"])
-        self.model_inputs["seq_lens_decoder"] = paddle.clone(self.target_model_inputs["seq_lens_decoder"])
-        self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
-        self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
-        self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
-        self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
-        self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
-        self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
-        self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
-        self.model_inputs["output_padding_offset"] = paddle.clone(self.target_model_inputs["output_padding_offset"])
-        self.model_inputs["ids_remove_padding"] = paddle.clone(self.target_model_inputs["ids_remove_padding"])
-        self.model_inputs["batch_id_per_token"] = paddle.clone(self.target_model_inputs["batch_id_per_token"])
-        self.model_inputs["cu_seqlens_q"] = paddle.clone(self.target_model_inputs["cu_seqlens_q"])
-        self.model_inputs["cu_seqlens_k"] = paddle.clone(self.target_model_inputs["cu_seqlens_k"])
-        self.model_inputs["decoder_batch_ids"] = paddle.clone(self.target_model_inputs["decoder_batch_ids"])
-
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
-            self.target_model_inputs["decoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["target_hidden_states"] = paddle.full(
-            [
-                self.fd_config.scheduler_config.max_num_batched_tokens
-                + self.fd_config.scheduler_config.max_extra_num_batched_tokens,
-                self.model_config.hidden_size,
-            ],
-            0,
-            dtype="bfloat16",
-        )
-
-        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-        self.model_inputs["rope_emb"] = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config,
-        )
-        # self.model_inputs["caches"] = self.cache_kvs
-        # Inherit generation hyperparameters from the main model for consistency
-        self.model_inputs["prompt_lens"] = self.target_model_inputs["prompt_lens"]
-        self.model_inputs["top_p"] = self.target_model_inputs["top_p"]
-        self.model_inputs["top_k"] = self.target_model_inputs["top_k"]
-        self.model_inputs["temperature"] = self.target_model_inputs["temperature"]
-        self.model_inputs["eos_token_id"] = self.target_model_inputs["eos_token_id"]
-        self.model_inputs["penalty_score"] = self.target_model_inputs["penalty_score"]
-        self.model_inputs["frequency_score"] = self.target_model_inputs["frequency_score"]
-        self.model_inputs["presence_score"] = self.target_model_inputs["presence_score"]
-        self.model_inputs["infer_seed"] = self.target_model_inputs["infer_seed"]
-
-        self.model_inputs["max_dec_len"] = self.target_model_inputs["max_dec_len"]
-        self.model_inputs["min_dec_len"] = self.target_model_inputs["min_dec_len"]
-
-        self.model_inputs["bad_tokens"] = self.target_model_inputs["bad_tokens"]
-
-        # Integrate the updated results in model forward
-        self.model_inputs["base_model_draft_tokens"] = self.target_model_inputs["draft_tokens"]
-        self.model_inputs["substep"] = 0
-
-        # Declare AttentionBackend buffers
-        self.model_inputs["decoder_batch_ids"] = None
-        self.model_inputs["decoder_tile_ids_per_batch"] = None
-        self.model_inputs["decoder_num_blocks_cpu"] = None  # Pinning Memory
-        self.model_inputs["decoder_num_blocks_device"] = None
-        self.model_inputs["decoder_chunk_size_device"] = None
-        self.model_inputs["max_len_tensor_cpu"] = None  # CPU
-        self.model_inputs["encoder_batch_ids"] = None
-        self.model_inputs["encoder_tile_ids_per_batch"] = None
-        self.model_inputs["encoder_num_blocks_x_cpu"] = None  # CPU
-        self.model_inputs["kv_batch_ids"] = None
-        self.model_inputs["kv_tile_ids_per_batch"] = None
-        self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-
-        # Input tokens
-        self.model_inputs["draft_tokens"] = paddle.full(
-            shape=[self.max_num_seqs, self.max_draft_token_num + 1], fill_value=-1, dtype="int64"
-        )
-
-        self.model_inputs["encoder_block_lens"] = paddle.clone(self.target_model_inputs["encoder_block_lens"])
-
-        self.free_list = list(
-            range(
-                self.cache_config.total_block_num - 1,
-                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
-                -1,
-            )
-        )
-        self.free_list_len = len(self.free_list)
-
-        self.model_inputs["free_list"] = paddle.to_tensor(self.free_list, dtype="int32")
-        self.model_inputs["free_list_len"] = paddle.full(shape=[1], fill_value=self.free_list_len, dtype="int32")
-
-        self.model_inputs["is_block_step"] = paddle.full(shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.model_inputs["batch_drop"] = paddle.full(shape=[self.max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.model_inputs["used_list_len"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        if self.num_model_steps > 1:
-            self.last_seq_lens_this_time = paddle.full_like(
-                self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
-            )
-        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
-        self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
-        self.model_inputs["top_p_normalized_logprobs"] = self.target_model_inputs["top_p_normalized_logprobs"]
-        self.model_inputs["accept_num"] = self.target_model_inputs["accept_num"]
-        self.model_inputs["accept_tokens"] = self.target_model_inputs["accept_tokens"]
-        self.model_inputs["draft_logits"] = self.target_model_inputs["draft_logits"]
-        self.model_inputs["first_token_hidden_states"] = paddle.full(
-            [self.max_num_seqs, self.model_config.hidden_size], -1
-        )
-        self.model_inputs["batch_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        self.model_inputs["next_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        self.model_inputs["cu_batch_token_offset"] = paddle.full_like(
-            self.target_model_inputs["cu_batch_token_offset"], fill_value=0, dtype="int32"
-        )
-        self.model_inputs["cu_next_token_offset"] = paddle.full(
-            shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
-        )
-        self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
-        # NOTE(liuzichang): In speculative decoding, accepted tokens' KV cache is recomputed
-        # using the target model's hidden states.
-        self.model_inputs["recompute_token_num"] = paddle.full(
-            [self.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
-        )
-
-        # attn_mask
-        if self.enable_mm:
-            self.model_inputs["attn_mask_offsets"] = paddle.full(
-                shape=[self.max_num_seqs * self.max_model_len], fill_value=-1, dtype="int32"
-            )
-            self.model_inputs["attn_mask_offsets_full"] = paddle.full(
-                [self.max_num_seqs, self.max_model_len], -1, dtype="int32"
-            )
-            self.model_inputs["attn_mask_offsets_decoder"] = paddle.full([self.max_num_seqs, 1], -1, dtype="int32")
-            self.model_inputs["decode_states"] = paddle.full(
-                [self.max_num_seqs, self.max_draft_token_num + 1],
-                -1,
-                dtype="int32",
-            )
-
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
         if "caches" not in self.model_inputs:
             self.initialize_kv_cache()
         req_len = len(req_dicts)
-
+        self.model_inputs["num_running_requests"] = num_running_requests
+        self.model_inputs["running_requests_ids"] = range(num_running_requests)
         for i in range(req_len):
             request = req_dicts[i]
             logger.debug(f"{i}th request-{request.request_id}: {request}")
-            idx = request.idx
+            idx = self.model_inputs.get_index_by_batch_id(request.idx)
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
@@ -532,7 +465,7 @@ class MTPProposer(Proposer):
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
-                self.input_ids_len[idx] = length - 1
+                self.model_inputs["input_ids_len"][idx] = length - 1
                 self.model_inputs["pre_ids"][idx : idx + 1] = -1
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
@@ -551,7 +484,7 @@ class MTPProposer(Proposer):
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.seq_lens_this_time_buffer[idx : idx + 1] = length
+                self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
                 self.model_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -588,15 +521,15 @@ class MTPProposer(Proposer):
             else:
                 self.model_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.model_inputs["stop_flags"][idx : idx + 1] = True
-                self.seq_lens_this_time_buffer[idx : idx + 1] = 0
+                self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["is_block_step"][idx : idx + 1] = False
                 continue
 
         # TODO(liuzichang): Solve splitewise-p bug to restore
-        # self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+        # self.model_inputs["seq_lens_this_time"] = self.model_inputs["seq_lens_this_time_buffer"][:num_running_requests]
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
@@ -617,7 +550,7 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            self.input_ids_len[idx] = length - 1
+            self.model_inputs.input_ids_len[idx] = length - 1
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -636,7 +569,7 @@ class MTPProposer(Proposer):
 
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.seq_lens_this_time_buffer[idx : idx + 1] = prefill_token_num
+                self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = prefill_token_num
 
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
                 self.model_inputs["batch_drop"][idx : idx + 1] = False
@@ -664,10 +597,10 @@ class MTPProposer(Proposer):
                 if self.cache_config.enable_chunked_prefill:
                     token_chunk_size = request.prefill_chunk_info[0]
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
-                    self.seq_lens_this_time_buffer[idx : idx + 1] = token_chunk_size
+                    self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = token_chunk_size
                 else:
                     self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                    self.seq_lens_this_time_buffer[idx : idx + 1] = length
+                    self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
 
                 self.model_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                 self.model_inputs["stop_flags"][idx : idx + 1] = False
@@ -680,9 +613,9 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
+        self.model_inputs.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
 
-    def _initialize_forward_meta(self, step_use_cudagraph: bool = False):
+    def _initialize_forward_meta(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, substep: int = 0):
         """
         Initialize forward meta and attention meta data
         """
@@ -718,7 +651,12 @@ class MTPProposer(Proposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.draft_model_use_cudagraph
+        # Notes(liuzichang):
+        # 1. CUDA Graph capture sizes must be recorded in descending order (large → small).
+        # 2. In multi-step execution, only the first step should be captured.
+        self.forward_meta.step_use_cudagraph = (
+            step_use_cudagraph and self.draft_model_use_cudagraph and not (substep > 0 and is_dummy_run)
+        )
 
     def _initialize_forward_meta_xpu(self):
 
@@ -736,6 +674,8 @@ class MTPProposer(Proposer):
         self.forward_meta.kv_tile_ids_per_batch = (self.model_inputs["kv_tile_ids_per_batch"],)
         self.forward_meta.kv_num_blocks_x_cpu = (self.model_inputs["kv_num_blocks_x_cpu"],)
         self.forward_meta.attn_backend = self.attn_backends[0]
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.forward_meta.kv_signal_sender = self.target_model_inputs["kv_signal_sender"]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -819,14 +759,21 @@ class MTPProposer(Proposer):
             self.max_model_len,
             self.model_inputs["substep"],
         )
+
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
             skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+            recover_model_output_map = recover_batch_index_for_output(
+                self.model_inputs,
+                self.model_inputs.index_to_batch_id,
+                self.model_inputs.enable_pd_reorder,
+                ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
+            )
             mtp_save_first_token(
-                self.model_inputs["base_model_draft_tokens"],
+                recover_model_output_map["base_model_draft_tokens"],
                 self.model_inputs["not_need_stop"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["prompt_lens"],
-                self.model_inputs["step_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_model_output_map["step_idx"],
                 self.local_rank,
                 self.parallel_config.use_ep,
                 skip_save,
@@ -852,6 +799,7 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
+                token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
                 (
                     ids_remove_padding,
                     batch_id_per_token,
@@ -860,6 +808,7 @@ class MTPProposer(Proposer):
                     output_cum_offsets,
                     output_padding_offset,
                 ) = pre_process(
+                    token_num_cpu,
                     self.model_inputs["input_ids"],
                     self.model_inputs["seq_lens_this_time"],
                     True,
@@ -871,7 +820,9 @@ class MTPProposer(Proposer):
                 if self.enable_mm:
                     attn_mask_offsets = update_attn_mask_offsets(
                         ids_remove_padding,
-                        getattr(self.model_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+                        getattr(
+                            self.model_inputs, "seq_lens_this_time", self.model_inputs["seq_lens_this_time_buffer"]
+                        ),
                         self.model_inputs["seq_lens_encoder"],
                         self.model_inputs["seq_lens_decoder"],
                         cu_seqlens_q,
@@ -894,7 +845,9 @@ class MTPProposer(Proposer):
                 self.model_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
                 # Initialize forward meta data
-                self._initialize_forward_meta(step_use_cudagraph=step_use_cudagraph)
+                self._initialize_forward_meta(
+                    step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
+                )
                 self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
                 # Padding inputs for cuda graph
@@ -913,15 +866,17 @@ class MTPProposer(Proposer):
                     repetition_penalties=self.model_inputs["penalty_score"],
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
+                    bad_words_token_len=self.model_inputs["bad_tokens_len"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
                     max_num_logprobs=20 if self.enable_logprob else None,
                     temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
                     top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
                     share_inputs=self.model_inputs,
                 )
-
+                # Note(liuzichang):
+                # paddle.clone would raise error 700 in cudaGraph mode
                 if self.num_model_steps > 1:
-                    self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+                    self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -943,9 +898,11 @@ class MTPProposer(Proposer):
                 )
 
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hidden_states)
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 if self.enable_logprob and self.enable_draft_logprob and substep == 0:
-                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
+                    first_token_logits = self.model.compute_logits(
+                        self.model_inputs["first_token_hidden_states"], forward_meta=self.forward_meta
+                    )
 
                     speculate_get_logits(
                         self.model_inputs["draft_logits"],
@@ -973,16 +930,24 @@ class MTPProposer(Proposer):
                     and sampler_output.logprobs_tensors is not None
                 ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_model_output_map = recover_batch_index_for_output(
+                        self.model_inputs,
+                        self.model_inputs.index_to_batch_id,
+                        self.model_inputs.enable_pd_reorder[
+                            "batch_token_num", "cu_batch_token_offset", "seq_lens_decoder", "prompt_lens"
+                        ],
+                    )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
-                        self.model_inputs["seq_lens_decoder"],
-                        self.model_inputs["prompt_lens"],
+                        recover_model_output_map["seq_lens_decoder"],
+                        recover_model_output_map["prompt_lens"],
                         4,  # mtype
                         self.local_rank,
                         self.parallel_config.use_ep,
@@ -1009,6 +974,7 @@ class MTPProposer(Proposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        # TODO(chenhuan09)：check multi step
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
@@ -1045,7 +1011,7 @@ class MTPProposer(Proposer):
                 )
 
                 if self.num_model_steps > 1:
-                    self.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+                    self.model_inputs.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
@@ -1056,7 +1022,7 @@ class MTPProposer(Proposer):
                     model_output, self.model_inputs["cum_offsets"], self.forward_meta, self.model_inputs
                 )
                 # 4. Compute logits, Sample
-                logits = self.model.compute_logits(hidden_states)
+                logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
                 sampled_token_ids, sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
@@ -1066,13 +1032,19 @@ class MTPProposer(Proposer):
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_model_output_map = recover_batch_index_for_output(
+                        self.model_inputs,
+                        self.model_inputs.index_to_batch_id,
+                        self.model_inputs.enable_pd_reorder["batch_token_num", "cu_batch_token_offset"],
+                    )
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"][:real_bsz],
-                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
                         4,  # mtype
                         self.local_rank,
@@ -1095,7 +1067,7 @@ class MTPProposer(Proposer):
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
             hidden_states,
-            self.last_seq_lens_this_time,
+            self.model_inputs.last_seq_lens_this_time,
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
         )
@@ -1105,7 +1077,7 @@ class MTPProposer(Proposer):
         """
         Update single task's chunk_prefill info
         """
-        idx = task.idx
+        idx = self.model_inputs.get_index_by_batch_id(task.idx)
         start_idx = sum(task.prefill_chunk_info[: task.chunk_idx])
 
         if task.chunk_idx == len(task.prefill_chunk_info):
@@ -1167,7 +1139,7 @@ class MTPProposer(Proposer):
         seq_lens_decoder = self.model_inputs["seq_lens_decoder"].cpu()
         hybrid_mtp_ngram(
             self.model_inputs["input_ids_cpu"],
-            self.input_ids_len,
+            self.model_inputs["input_ids_len"],
             self.model_inputs["pre_ids"]._copy_to(device, True),
             self.model_inputs["step_idx"].cpu(),
             self.target_model_inputs["actual_draft_token_num"].cpu(),
@@ -1205,7 +1177,7 @@ class MTPProposer(Proposer):
 
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.forward_meta.step_use_cudagraph:
-            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.forward_meta.seq_lens_this_time = self.model_inputs["seq_lens_this_time_buffer"]
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
@@ -1215,7 +1187,7 @@ class MTPProposer(Proposer):
         elif current_platform.is_xpu():
             paddle.device.xpu.empty_cache()
         else:
-            raise NotImplementedError
+            paddle.device.empty_cache()
 
     def _get_cache_type(self):
         cache_type = None
@@ -1226,3 +1198,15 @@ class MTPProposer(Proposer):
         else:
             raise NotImplementedError
         return cache_type
+
+    def reorder_inputs(self):
+        """
+        Reorder inputs to split prefill and decode.
+        """
+        reorder_split_prefill_and_decode_form_index_to_batch_id(self.model_inputs)
+
+    def _share_external_data(self, cache, cache_name, cache_shape):
+        if current_platform.is_xpu():
+            return share_external_data(cache, cache_name, cache_shape, False)
+        else:
+            return share_external_data(cache, cache_name, cache_shape)

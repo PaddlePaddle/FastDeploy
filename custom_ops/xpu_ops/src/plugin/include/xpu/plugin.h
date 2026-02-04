@@ -289,6 +289,17 @@ DLL_EXPORT int eb_mtp_gather_next_token(
     VectorParam<int32_t>& decoder_batch_map,  // NOLINT
     int64_t hidden_dim);
 
+template <typename TX, typename TY>
+DLL_EXPORT int eb_recover_batch_sequence(
+    Context* ctx,
+    const TX* x,
+    TY* y,
+    VectorParam<int32_t>& encoder_seqs_lods,  // NOLINT
+    VectorParam<int32_t>& decoder_seqs_lods,  // NOLINT
+    VectorParam<int32_t>& encoder_batch_map,  // NOLINT
+    VectorParam<int32_t>& decoder_batch_map,  // NOLINT
+    int64_t hidden_dim);
+
 template <typename TX, typename TSCALE = float, typename TY = int8_t>
 DLL_EXPORT int quant2d_per_channel(api::Context* ctx,
                                    const TX* x,
@@ -573,6 +584,31 @@ DLL_EXPORT int speculate_free_and_reschedule(Context* ctx,
                                              const int block_num_per_seq,
                                              const int max_decoder_block_num,
                                              const int max_draft_tokens);
+
+DLL_EXPORT int speculate_schedule_cache(Context* ctx,
+                                        const int64_t* draft_tokens,
+                                        int* block_tables,
+                                        bool* stop_flags,
+                                        const int64_t* prompt_lens,
+                                        int* seq_lens_this_time,
+                                        int* seq_lens_encoder,
+                                        int* seq_lens_decoder,
+                                        int* step_seq_lens_decoder,
+                                        int64_t* step_draft_tokens,
+                                        int* step_seq_lens_this_time,
+                                        int* accept_num,
+                                        int64_t* accept_tokens,
+                                        bool* is_block_step,
+                                        bool* not_need_stop,
+                                        const int64_t* stop_nums,
+                                        const int real_bsz,
+                                        const int max_bsz,
+                                        const int max_next_step_tokens,
+                                        const int draft_tokens_len,
+                                        const int accept_tokens_len,
+                                        const int block_size,
+                                        const int block_num_per_seq,
+                                        const bool prefill_one_step_stop);
 
 DLL_EXPORT int speculate_update_v3(Context* ctx,
                                    int* seq_lens_encoder,

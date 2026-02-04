@@ -56,10 +56,15 @@ ConvertType = Literal["none", "embed"]
 
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
+# Model implementation backend options
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
     "pooling": ["embed"],
 }
+
+PREEMPTED_TOKEN_ID = -9
 
 # Some model suffixes are based on auto classes from Transformers:
 # https://huggingface.co/docs/transformers/en/model_doc/auto
@@ -218,6 +223,7 @@ class ModelConfig:
         self.prefix_layer_name = "layers"
         self.kv_cache_quant_scale_path = ""
         self.enable_entropy = False
+        self.model_impl: ModelImpl = "auto"
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -294,6 +300,9 @@ class ModelConfig:
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass
+            elif self.model_impl in ("auto", "paddleformers"):
+                # Skip check for auto/paddleformers - may fallback to paddleformers which supports any model
+                pass
             else:
                 generate_converts = _RUNNER_CONVERTS["generate"]
                 if self.convert_type not in generate_converts:
@@ -312,6 +321,7 @@ class ModelConfig:
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
         self._model_info = model_info
         self._architecture = arch
+        self.architectures = [arch]
 
         self.pooler_config = self._init_pooler_config()
         self.override_name_from_config()
@@ -401,6 +411,13 @@ class ModelConfig:
                 else:
                     self.model_format = "paddle"
                     logger.info("The model format is Paddle")
+            elif (
+                "quantization_config" in self.model_config
+                and "quant_method" in self.model_config["quantization_config"]
+                and "mxfp4" == self.model_config["quantization_config"]["quant_method"]
+            ):
+                self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
             else:
                 raise ValueError(
                     "Unknown model format. Please ensure your config.json contains "
@@ -737,6 +754,9 @@ class SpeculativeConfig:
         # This means no tokens from MTP are accepted.
         # This ensures that the specified simulation acceptance rate is not affected.
         self.benchmark_mode: bool = False
+        # Enable token constraint enforcement in generation phase
+        # When enabled, enforces specific tokens after the reasoning phase boundary pattern
+        self.enf_gen_phase_tag: bool = False
 
         self.num_extra_cache_layer = 0
 
@@ -880,11 +900,12 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = True
+        self.use_cudagraph: bool = False if paddle.is_compiled_with_xpu() else True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
         self.cudagraph_capture_sizes: Optional[list[int]] = None
+        self.cudagraph_capture_sizes_prefill: list[int] = [1, 2, 4, 8]
         """ Number of warmup runs for cudagraph. """
         self.cudagraph_num_of_warmups: int = 2
         """Whether to copy input tensors for cudagraph.
@@ -919,6 +940,10 @@ class GraphOptimizationConfig:
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
         self.draft_model_use_cudagraph: bool = False
+        """ Maximum CUDA Graph capture size for static graph mode.
+        Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
+        """
+        self.max_capture_shape_prefill: int = 512
 
         # CINN Config ...
         if args is not None:
@@ -928,13 +953,16 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
+    def init_with_cudagrpah_size(self, max_capture_size: int = 0, max_capture_shape_prefill: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
         self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
+        self.cudagraph_capture_sizes_prefill = [
+            size for size in self.cudagraph_capture_sizes_prefill if size <= max_capture_shape_prefill
+        ]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(
@@ -946,7 +974,11 @@ class GraphOptimizationConfig:
 
         # Sort to make sure cudagraph capture sizes are in descending order
         self.cudagraph_capture_sizes.sort(reverse=True)
+        self.cudagraph_capture_sizes_prefill.sort(reverse=True)
         self.max_capture_size = self.cudagraph_capture_sizes[0] if self.cudagraph_capture_sizes else 0
+        self.max_capture_size_prefill = (
+            self.cudagraph_capture_sizes_prefill[0] if self.cudagraph_capture_sizes_prefill else 0
+        )
 
         # Pre-compute the mapping from shape to padded graph size
         self.real_shape_to_captured_size = {}
@@ -958,7 +990,21 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size[bs] = end
         self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self, max_capture_size: int = 0, dec_token_per_query_per_step: int = 1):
+        self.real_shape_to_captured_size_prefill = {}
+        for end, start in zip(self.cudagraph_capture_sizes_prefill, self.cudagraph_capture_sizes_prefill[1:] + [0]):
+            for bs in range(start, end):
+                if bs == start:
+                    self.real_shape_to_captured_size_prefill[bs] = start
+                else:
+                    self.real_shape_to_captured_size_prefill[bs] = end
+        self.real_shape_to_captured_size_prefill[self.max_capture_size_prefill] = self.max_capture_size_prefill
+
+    def _set_cudagraph_sizes(
+        self,
+        max_capture_size: int = 0,
+        max_capture_shape_prefill: int = 0,
+        dec_token_per_query_per_step: int = 1,
+    ):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -972,13 +1018,20 @@ class GraphOptimizationConfig:
         # Shape [256, 288, ... 992, 1024] * dec_token_per_query_per_step
         draft_capture_sizes += [32 * i * dec_token_per_query_per_step for i in range(9, 33)]
 
+        draft_capture_sizes_prefill = draft_capture_sizes.copy()
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
+
+        draft_capture_sizes_prefill.append(max_capture_shape_prefill)
+        self.cudagraph_capture_sizes_prefill = sorted(draft_capture_sizes_prefill)
 
     def filter_capture_size(self, tp_size: int = 1):
         """When TSP is used, capture size must be divisible by tp size."""
         self.cudagraph_capture_sizes = [
             draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
+        self.cudagraph_capture_sizes_prefill = [
+            draft_size for draft_size in self.cudagraph_capture_sizes_prefill if (draft_size % tp_size == 0)
         ]
 
     def to_json_string(self):
@@ -1151,6 +1204,7 @@ class LoadChoices(str, Enum):
 
     DEFAULT = "default"
     DEFAULT_V1 = "default_v1"
+    DUMMY = "dummy"
 
 
 class LoadConfig:
@@ -1172,7 +1226,8 @@ class LoadConfig:
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
         self.dynamic_load_weight: bool = False
-        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
+        self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal", "rsync"]] = "normal"
+        self.rsync_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1335,6 +1390,7 @@ class CacheConfig:
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
         self.write_policy = None
+        self.num_cpu_blocks = None
 
         for key, value in args.items():
             if hasattr(self, key):
@@ -1380,10 +1436,12 @@ class CacheConfig:
                 * byte_size
             )
 
-        if self.swap_space is None:
-            self.num_cpu_blocks = 0
-        else:
-            self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+        if self.num_cpu_blocks is None:
+            if self.swap_space is None:
+                self.num_cpu_blocks = 0
+            else:
+                self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+
         self._verify_args()
 
     def metrics_info(self):
@@ -1465,6 +1523,10 @@ class RouterConfig:
 
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
+        if args["metrics_port"] is not None:
+            self.metrics_port = args["metrics_port"]
+        else:
+            self.metrics_port = self.api_server_port
 
 
 class CommitConfig:
@@ -1562,6 +1624,12 @@ class RoutingReplayConfig:
         # RDMA routing store
         self.rdma_store_server: str = ""
 
+        # Only save last turn
+        self.only_last_turn: bool = False
+
+        # Fused routing of all layers
+        self.use_fused_put: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1638,6 +1706,8 @@ class FDConfig:
         else:
             max_capture_shape = min(512, max_capture_shape)
 
+        max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
+
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             dec_token_per_query_per_step = (
                 self.speculative_config.num_speculative_tokens + 1
@@ -1645,9 +1715,14 @@ class FDConfig:
                 else 1
             )
             self.graph_opt_config._set_cudagraph_sizes(
-                max_capture_size=max_capture_shape, dec_token_per_query_per_step=dec_token_per_query_per_step
+                max_capture_size=max_capture_shape,
+                max_capture_shape_prefill=max_capture_shape_prefill,
+                dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
+        self.graph_opt_config.init_with_cudagrpah_size(
+            max_capture_size=max_capture_shape,
+            max_capture_shape_prefill=max_capture_shape_prefill,
+        )
 
         self.tokenizer = tokenizer
         self.ips = ips
@@ -1683,8 +1758,6 @@ class FDConfig:
         # TODO
         if not envs.FD_ENABLE_MAX_PREFILL:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-            if current_platform.is_xpu():
-                self.max_prefill_batch = 1
             if (
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None
@@ -1730,6 +1803,10 @@ class FDConfig:
         """
         calculate some parameters
         """
+        #  Unified field model config
+        if self.model_config.architectures[0] == "Glm4MoeForCausalLM":
+            # The first moe layer id of GLM4.5 model
+            self.model_config.moe_layer_start_index = self.model_config.first_k_dense_replace
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -1811,9 +1888,11 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
-        if not current_platform.is_cuda() and not current_platform.is_maca():
+        if not current_platform.is_cuda() and not current_platform.is_maca() and not current_platform.is_xpu():
             self.graph_opt_config.use_cudagraph = False
-            logger.info("CUDAGraph currently only support on GPU!")
+            logger.info(
+                "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"
+            )
 
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
@@ -1827,7 +1906,6 @@ class FDConfig:
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
-            self._disable_sequence_parallel_moe_if_needed("PD's decode node")
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
@@ -1904,7 +1982,7 @@ class FDConfig:
             self.scheduler_config.max_num_batched_tokens
             <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
-            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
+            f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be less "
             f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
@@ -2031,6 +2109,7 @@ class FDConfig:
 
         # the information for registering this server to router or splitwise_scheduler
         port = self.router_config.api_server_port if self.router_config else None
+        metrics_port = self.router_config.metrics_port if self.router_config else None
         transfer_protocol = (
             self.cache_config.cache_transfer_protocol.split(",") if self.cache_config.cache_transfer_protocol else []
         )
@@ -2038,6 +2117,7 @@ class FDConfig:
             "role": self.scheduler_config.splitwise_role,
             "host_ip": self.host_ip,
             "port": port,
+            "metrics_port": metrics_port,
             "connector_port": self.cache_config.local_pd_comm_port,
             "rdma_ports": self.cache_config.local_rdma_comm_ports,
             "engine_worker_queue_port": self.parallel_config.local_engine_worker_queue_port,

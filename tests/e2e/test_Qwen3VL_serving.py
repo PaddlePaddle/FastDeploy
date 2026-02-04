@@ -24,8 +24,8 @@ import pytest
 import requests
 from utils.serving_utils import (
     FD_API_PORT,
+    FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    PORTS_TO_CLEAN,
     clean_ports,
     is_port_open,
 )
@@ -41,8 +41,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    FD_ENGINE_QUEUE_PORT = 8033
-    clean_ports(PORTS_TO_CLEAN.append(FD_ENGINE_QUEUE_PORT))
+    clean_ports()
 
     model_path = "/ModelData/Qwen3-VL-4B-Instruct"
 
@@ -172,10 +171,6 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert resp1.status_code == 200
     result1 = resp1.json()
     content1 = result1["choices"][0]["message"]["content"]
-    file_res_temp = "Qwen3-VL-4B-Instruct-temp"
-    f_o = open(file_res_temp, "a")
-    f_o.writelines(content1)
-    f_o.close()
 
     # base result
     content2 = "视频中手机支架的颜色是黑色。"

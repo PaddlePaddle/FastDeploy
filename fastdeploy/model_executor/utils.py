@@ -209,7 +209,10 @@ class WeightsMapper:
         return self._map_name(weight_name)
 
 
-def remap_weight_keys(weights_iterator, mapper: dict):
+def remap_weight_keys(weights_iterator, mapper: dict, include_keys: Optional[List[str]] = None):
+    if include_keys is not None:
+        weights_iterator = filter(lambda item: any(key in item[0] for key in include_keys), weights_iterator)
+
     return (
         (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
         for key, value in weights_iterator
@@ -272,6 +275,27 @@ def free_tensor(tensor):
         tensor.tensor_track = None
     tensor.value().get_tensor()._clear()
     del tensor
+
+
+def create_parameter_and_copy(layer: paddle.nn.Layer, name: str, weight: paddle.Tensor) -> None:
+    """
+    Create a parameter in the layer and copy data from weight.
+
+    Args:
+        layer (paddle.nn.Layer): The layer where the parameter will be created.
+        name (str): The name of the parameter.
+        weight (paddle.Tensor): The source weight tensor.
+    """
+    setattr(
+        layer,
+        name,
+        layer.create_parameter(
+            shape=weight.shape,
+            dtype=weight.dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        ),
+    )
+    getattr(layer, name).copy_(weight, False)
 
 
 def fd_cast(weight, param):
@@ -403,8 +427,9 @@ def v1_loader_support(fd_config):
         or current_platform.is_xpu()
         or current_platform.is_iluvatar()
         or current_platform.is_maca()
+        or current_platform.is_intel_hpu()
     ):
-        _err_msg("v1loader currently only support backends gpu, xpu, iluvatar and maca")
+        _err_msg("v1loader currently only support backends gpu, xpu, intel_hpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
@@ -467,7 +492,10 @@ def multi_switch_config_context(*changes):
 
 
 def rename_offline_ckpt_suffix_to_fd_suffix(
-    fd_config, ckpt_weight_suffix: str = "quant_weight", ckpt_scale_suffix="weight_scale"
+    fd_config,
+    ckpt_weight_suffix: str = "quant_weight",
+    ckpt_scale_suffix="weight_scale",
+    ckpt_act_suffix="activation_scale",
 ):
     """
     Create a function to rename checkpoint key suffixes for FastDeploy.
@@ -488,6 +516,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         ckpt_weight_suffix: "weight",
         ckpt_scale_suffix: "weight_scale_inv",
     }
+    tensor_wise_fp8_suffix_map = {
+        ckpt_weight_suffix: "weight",
+        ckpt_act_suffix: "in_scale",
+    }
     moe_quant_type = ""
     dense_quant_type = ""
     if fd_config.quant_config is not None:
@@ -504,6 +536,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         # Can be extended to other offline quantization suffixes if needed.
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
+        if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
+            fd_suffix_map = tensor_wise_fp8_suffix_map
+        else:
+            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)

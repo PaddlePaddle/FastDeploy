@@ -181,13 +181,20 @@ class LLMEngine:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-        # Launch components: scheduler, cache_manager, expert_service et.al.
-        if self.cfg.scheduler_config.splitwise_role != "mixed":
-            self.launched_cache_manager_signal.value[0] = 1
-
-        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
-            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
-            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            assert (
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None or envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_RECV_REQUEST_SERVER_PORTS or FD_ZMQ_RECV_REQUEST_SERVER_PORT when enabling internal adapter."
+            assert (
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None or envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_SEND_RESPONSE_SERVER_PORTS or FD_ZMQ_SEND_RESPONSE_SERVER_PORT when enabling internal adapter."
+            if envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None:
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            if envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None:
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        llm_logger.info(
+            f"envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT:{envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT},envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT:{envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT}"
+        )
 
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
@@ -500,6 +507,7 @@ class LLMEngine:
         start gpu worker service
 
         """
+        console_logger.debug("Start worker process...")
         log_dir = os.getenv("FD_LOG_DIR", default="log")
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
@@ -559,6 +567,7 @@ class LLMEngine:
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
+            f" --rsync_config '{json.dumps(self.cfg.load_config.rsync_config)}'"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
@@ -573,6 +582,8 @@ class LLMEngine:
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
             f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
+            f" --model-impl {self.cfg.model_config.model_impl}"
+            f" --num_cpu_blocks {self.cfg.cache_config.num_cpu_blocks}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -596,6 +607,7 @@ class LLMEngine:
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -603,6 +615,7 @@ class LLMEngine:
 
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+            "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:

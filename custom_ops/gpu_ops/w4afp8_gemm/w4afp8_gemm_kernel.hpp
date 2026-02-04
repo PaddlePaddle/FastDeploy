@@ -35,12 +35,16 @@ void __global__ __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
   using Element = typename Ktraits::Element;
   static_assert(cutlass::sizeof_bits_v<Element> == 8);
 
-  using TileShape_MNK = typename Ktraits::TileShape_MNK;
+  using TileShape_MNK1 = typename Ktraits::TileShape_MNK1;
+  using TileShape_MNK2 = typename Ktraits::TileShape_MNK2;
+  using TileShape_MNK3 = typename Ktraits::TileShape_MNK3;
   using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
-  static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma{});
+  static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma1{});
   static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;
-  static constexpr int kBlockN = Ktraits::kBlockN;
+  static constexpr int kBlockN1 = Ktraits::kBlockN1;
+  static constexpr int kBlockN2 = Ktraits::kBlockN2;
+  static constexpr int kBlockN3 = Ktraits::kBlockN3;
   static constexpr int kBlockM = Ktraits::kBlockM;
   static constexpr int M = Ktraits::M;
   static constexpr int K = Ktraits::K;
@@ -109,7 +113,9 @@ void __global__ __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
                          ? mainloop_params.tokens[bidb] - pre_fix_tokens
                          : mainloop_params.tokens[bidb];
 
-  if (bidn * kBlockN >= tokens) {
+  const int block_compute_tokens = tokens - bidn * kBlockN1;
+
+  if (block_compute_tokens <= 0) {
     return;
   }
 
@@ -139,21 +145,23 @@ void __global__ __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
     cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 12 ? 232 : 160>();
     PipelineState smem_pipe_read;
 
-    typename Ktraits::TiledMma tiled_mma;
+    typename Ktraits::TiledMma1 tiled_mma1;
+    typename Ktraits::TiledMma2 tiled_mma2;
+    typename Ktraits::TiledMma3 tiled_mma3;
 
     const int mma_tidx = tidx - NumCopyThreads;
 
     if (is_need_input_scale) {
       if constexpr (TokenPackSize == 0) {
-        const int input_scale_idx = pre_fix_tokens + bidn * kBlockN;
+        const int input_scale_idx = pre_fix_tokens + bidn * kBlockN1;
         if (mma_tidx < tokens) {
           reinterpret_cast<float *>(input_scale)[mma_tidx] =
               reinterpret_cast<const float *>(mainloop_params.input_scale +
                                               input_scale_idx)[mma_tidx];
         }
       } else {
-        const int input_scale_idx = bidb * TokenPackSize + bidn * kBlockN;
-        if (mma_tidx < kBlockN / 4) {
+        const int input_scale_idx = bidb * TokenPackSize + bidn * kBlockN1;
+        if (mma_tidx < kBlockN1 / 4) {
           reinterpret_cast<float4 *>(input_scale)[mma_tidx] =
               reinterpret_cast<const float4 *>(mainloop_params.input_scale +
                                                input_scale_idx)[mma_tidx];
@@ -168,39 +176,109 @@ void __global__ __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
           mainloop_params.weight_scale + bidb * M +
           bidm * kBlockM)[mma_tidx / 4];
     }
-    Tensor tSrS =
-        partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{}));
 
-    if constexpr (WeightScaleGroup == K) {
-      collective_mainloop.mma(mainloop_params,
-                              tiled_mma,
-                              pipeline,
-                              smem_pipe_read,
-                              shared_storage,
-                              tSrS,
-                              mma_tidx);
+    if (block_compute_tokens > kBlockN2) {
+      Tensor tSrS =
+          partition_fragment_C(tiled_mma1, select<0, 1>(TileShape_MNK1{}));
+      if constexpr (WeightScaleGroup == K) {
+        collective_mainloop.mma<kBlockN1>(mainloop_params,
+                                          tiled_mma1,
+                                          pipeline,
+                                          smem_pipe_read,
+                                          shared_storage,
+                                          tSrS,
+                                          mma_tidx);
+      } else {
+        collective_mainloop.mma_pipeline<kBlockN1>(mainloop_params,
+                                                   tiled_mma1,
+                                                   pipeline,
+                                                   smem_pipe_read,
+                                                   shared_storage,
+                                                   tSrS,
+                                                   mma_tidx);
+      }
+      collective_mainloop.store<kBlockN1>(
+          mainloop_params,
+          tSrS,
+          shared_storage,
+          tiled_mma1,
+          reinterpret_cast<const float *>(&weight_scale),
+          input_scale,
+          tokens,
+          pre_fix_tokens,
+          bidm,
+          bidn,
+          bidb,
+          mma_tidx);
+    } else if (block_compute_tokens > kBlockN3) {
+      Tensor tSrS =
+          partition_fragment_C(tiled_mma2, select<0, 1>(TileShape_MNK2{}));
+
+      if constexpr (WeightScaleGroup == K) {
+        collective_mainloop.mma<kBlockN2>(mainloop_params,
+                                          tiled_mma2,
+                                          pipeline,
+                                          smem_pipe_read,
+                                          shared_storage,
+                                          tSrS,
+                                          mma_tidx);
+      } else {
+        collective_mainloop.mma_pipeline<kBlockN2>(mainloop_params,
+                                                   tiled_mma2,
+                                                   pipeline,
+                                                   smem_pipe_read,
+                                                   shared_storage,
+                                                   tSrS,
+                                                   mma_tidx);
+      }
+      collective_mainloop.store<kBlockN2>(
+          mainloop_params,
+          tSrS,
+          shared_storage,
+          tiled_mma2,
+          reinterpret_cast<const float *>(&weight_scale),
+          input_scale,
+          tokens,
+          pre_fix_tokens,
+          bidm,
+          bidn,
+          bidb,
+          mma_tidx);
     } else {
-      collective_mainloop.mma_pipeline(mainloop_params,
-                                       tiled_mma,
-                                       pipeline,
-                                       smem_pipe_read,
-                                       shared_storage,
-                                       tSrS,
-                                       mma_tidx);
-    }
+      Tensor tSrS =
+          partition_fragment_C(tiled_mma3, select<0, 1>(TileShape_MNK3{}));
 
-    collective_mainloop.store(mainloop_params,
-                              tSrS,
-                              shared_storage,
-                              tiled_mma,
-                              reinterpret_cast<const float *>(&weight_scale),
-                              input_scale,
-                              tokens,
-                              pre_fix_tokens,
-                              bidm,
-                              bidn,
-                              bidb,
-                              mma_tidx);
+      if constexpr (WeightScaleGroup == K) {
+        collective_mainloop.mma<kBlockN3>(mainloop_params,
+                                          tiled_mma3,
+                                          pipeline,
+                                          smem_pipe_read,
+                                          shared_storage,
+                                          tSrS,
+                                          mma_tidx);
+      } else {
+        collective_mainloop.mma_pipeline<kBlockN3>(mainloop_params,
+                                                   tiled_mma3,
+                                                   pipeline,
+                                                   smem_pipe_read,
+                                                   shared_storage,
+                                                   tSrS,
+                                                   mma_tidx);
+      }
+      collective_mainloop.store<kBlockN3>(
+          mainloop_params,
+          tSrS,
+          shared_storage,
+          tiled_mma3,
+          reinterpret_cast<const float *>(&weight_scale),
+          input_scale,
+          tokens,
+          pre_fix_tokens,
+          bidm,
+          bidn,
+          bidb,
+          mma_tidx);
+    }
   }
 }
 
@@ -241,7 +319,8 @@ void run_gemm(const InputType *A,
               const float *input_dequant_scale,
               const int64_t *tokens,
               const int max_tokens,
-              cudaStream_t stream) {
+              cudaStream_t stream,
+              const int64_t *max_tokens_per_expert = nullptr) {
   using ElementOutput = typename Kernel_traits::ElementOutput;
   using Element = typename Kernel_traits::Element;
   using CollectiveMainloop = CollectiveMainloopFwd<Kernel_traits>;
@@ -249,8 +328,53 @@ void run_gemm(const InputType *A,
 
   constexpr int M_nums =
       (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
-  const int N_nums =
-      (max_tokens + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
+
+  int effective_max_tokens = max_tokens;
+
+  if (max_tokens_per_expert != nullptr && TokenPackSize == 0) {
+    static thread_local int64_t *pinned_max = nullptr;
+    static thread_local bool pinned_allocated = false;
+    static thread_local int cached_effective = -1;
+    static thread_local cudaEvent_t d2h_done;
+
+    if (!pinned_allocated) {
+      cudaHostAlloc(&pinned_max, sizeof(int64_t), cudaHostAllocDefault);
+      *pinned_max = 0;
+      cudaEventCreateWithFlags(&d2h_done, cudaEventDisableTiming);
+      pinned_allocated = true;
+    }
+
+    cudaStreamCaptureStatus cap_status;
+    cudaStreamIsCapturing(stream, &cap_status);
+
+    if (cap_status == cudaStreamCaptureStatusActive) {
+      if (cached_effective > 0 && cached_effective <= max_tokens) {
+        effective_max_tokens = cached_effective;
+      } else {
+        effective_max_tokens = max_tokens;
+      }
+    } else {
+      cudaMemcpyAsync(pinned_max,
+                      max_tokens_per_expert,
+                      sizeof(int64_t),
+                      cudaMemcpyDeviceToHost,
+                      stream);
+      cudaEventRecord(d2h_done, stream);
+      cudaEventSynchronize(d2h_done);
+
+      int64_t v = *pinned_max;
+      if (v > 0 && v <= max_tokens) {
+        effective_max_tokens = static_cast<int>(v);
+        cached_effective = effective_max_tokens;
+      } else if (cached_effective > 0 && cached_effective <= max_tokens) {
+        effective_max_tokens = cached_effective;
+      }
+    }
+  }
+
+  const int N_nums = (effective_max_tokens + Kernel_traits::kBlockN1 - 1) /
+                     Kernel_traits::kBlockN1;
+
   constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
   static_assert(K % WeightScaleGroup == 0);
   static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
@@ -275,7 +399,7 @@ void run_gemm(const InputType *A,
   kernel = (void *)w4afp8_gemm_kernel<Kernel_traits>;
 
   int smem_size = sizeof(typename Kernel_traits::SharedStorage) +
-                  Kernel_traits::kBlockN * sizeof(float);
+                  Kernel_traits::kBlockN1 * sizeof(float);
 
   if (smem_size >= 48 * 1024) {
     cudaFuncSetAttribute(

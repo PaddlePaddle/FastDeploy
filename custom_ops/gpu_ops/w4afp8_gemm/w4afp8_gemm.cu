@@ -57,7 +57,8 @@ void DisPatchW4AFp8Gemm(const cutlass::float_e4m3_t* input,
                         const int64_t M,
                         const int64_t K,
                         const int WeightScaleGroup,
-                        cudaStream_t stream) {
+                        cudaStream_t stream,
+                        const int64_t* max_tokens_per_expert = nullptr) {
   int kBlockN = 256;
   if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
     GEMM_SWITCH_BF16(M,
@@ -73,7 +74,8 @@ void DisPatchW4AFp8Gemm(const cutlass::float_e4m3_t* input,
                      input_dequant_scale,
                      tokens,
                      max_tokens,
-                     stream)
+                     stream,
+                     max_tokens_per_expert)
   } else {
     PD_THROW("Only supported dtype in ['BFLOAT16'].");
   }
@@ -88,6 +90,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                  // each group
     const paddle::Tensor& weight_scale,
     const paddle::optional<paddle::Tensor>& input_dequant_scale,
+    const paddle::optional<paddle::Tensor>& max_tokens_per_expert,
     const int64_t token_padding_size,
     const int64_t max_tokens,
     const bool is_bfloat16) {
@@ -99,6 +102,10 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
 
   if (input.dtype() != paddle::DataType::FLOAT8_E4M3FN) {
     PD_THROW("Only supported dtype in ['FLOAT8_E4M3FN'].");
+  }
+  const int64_t* max_tokens_ptr = nullptr;
+  if (max_tokens_per_expert && token_padding_size == 0) {
+    max_tokens_ptr = max_tokens_per_expert.get().data<int64_t>();
   }
 
   if (token_padding_size == 0) {
@@ -124,7 +131,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
           M,
           K,
           WeightScaleGroup,
-          input.stream());
+          input.stream(),
+          max_tokens_ptr);
       return {out};
     } else {
       PD_THROW("Only supported dtype in ['BFLOAT16'].");
@@ -152,7 +160,8 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
           M,
           K,
           WeightScaleGroup,
-          input.stream());
+          input.stream(),
+          nullptr);
       return {out};
     } else {
       PD_THROW("Only supported dtype in ['BFLOAT16'].");
@@ -173,7 +182,8 @@ void DisPatchW4AFp8GemmWrapper(const InputType* input,
                                const int64_t M,
                                const int64_t K,
                                const int WeightScaleGroup,
-                               cudaStream_t stream) {
+                               cudaStream_t stream,
+                               const int64_t* max_tokens_per_expert = nullptr) {
   using InType = typename NVTraits<InputType>::data_t;
   using OutType = typename NVTraits<OutputType>::data_t;
   DisPatchW4AFp8Gemm(reinterpret_cast<const InType*>(input),
@@ -188,7 +198,8 @@ void DisPatchW4AFp8GemmWrapper(const InputType* input,
                      M,
                      K,
                      WeightScaleGroup,
-                     stream);
+                     stream,
+                     max_tokens_per_expert);
 }
 
 PD_BUILD_STATIC_OP(w4afp8_gemm_scale_permute)
@@ -202,7 +213,8 @@ PD_BUILD_STATIC_OP(w4afp8_gemm)
              "weight",
              "tokens",
              "weight_scale",
-             paddle::Optional("input_dequant_scale")})
+             paddle::Optional("input_dequant_scale"),
+             paddle::Optional("max_tokens_per_expert")})
     .Outputs({"out"})
     .Attrs({"token_padding_size: int64_t",
             "max_tokens: int64_t",
@@ -227,7 +239,8 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, __nv_bfloat16>(
     const int64_t M,
     const int64_t K,
     const int WeightScaleGroup,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int64_t* max_tokens_per_expert);
 
 template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, half>(
     const __nv_fp8_e4m3* input,
@@ -242,4 +255,5 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, half>(
     const int64_t M,
     const int64_t K,
     const int WeightScaleGroup,
-    cudaStream_t stream);
+    cudaStream_t stream,
+    const int64_t* max_tokens_per_expert);
