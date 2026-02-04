@@ -267,13 +267,23 @@ class Request:
         metrics = RequestMetrics()
         request = cls(
             request_id=getattr(req, "request_id", None),
-            prompt_token_ids=getattr(req, "prompt_token_ids", None) or prompt_token_ids,
+            messages=getattr(req, "messages", None),
+            tools=([tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None),
             prompt=prompt,
+            prompt_token_ids=prompt_token_ids or getattr(req, "prompt_token_ids", None),
             sampling_params=sampling_params,
             pooling_params=pooling_params,
             metrics=metrics,
             guided_json_object=guided_json_object,
-            disaggregate_info=getattr(req, "disaggregate_info", None),
+            reasoning_max_tokens=getattr(req, "reasoning_max_tokens", None),
+            disable_chat_template=getattr(req, "disable_chat_template", None),
+            top_logprobs=getattr(req, "top_logprobs", None),
+            structural_tag=getattr(req, "structural_tag", None),
+            chat_template=getattr(req, "chat_template", None),
+            ic_req_data=getattr(req, "ic_req_data", None),
+            metadata=getattr(req, "metadata", None),
+            completion_token_ids=getattr(req, "completion_token_ids", None),
+            chat_template_kwargs=getattr(req, "chat_template_kwargs", None),
             guided_json=getattr(req, "guided_json", None),
             guided_regex=getattr(req, "guided_regex", None),
             guided_choice=getattr(req, "guided_choice", None),
@@ -285,7 +295,7 @@ class Request:
                 else None
             ),
             mm_hashes=getattr(req, "mm_hashes", None),
-            add_special_tokens=getattr(req, "add_special_tokens", None),
+            add_special_tokens=getattr(req, "add_special_tokens", False),
         )
 
         if hasattr(req, "messages"):
@@ -295,20 +305,6 @@ class Request:
                 if req.disable_chat_template:
                     request.prompt = req.messages[0]["content"]
                     request.messages = []
-            else:
-                request.messages = getattr(req, "messages", None)
-            request.tools = (
-                [tool.model_dump() for tool in getattr(req, "tools", [])] if getattr(req, "tools", None) else None
-            )
-            request.reasoning_max_tokens = getattr(req, "reasoning_max_tokens", None)
-            request.disable_chat_template = getattr(req, "disable_chat_template", None)
-            request.top_logprobs = getattr(req, "top_logprobs", None)
-            request.structural_tag = getattr(req, "structural_tag", None)
-            request.chat_template = getattr(req, "chat_template", None)
-            request.ic_req_data = getattr(req, "ic_req_data", None)
-            request.metadata = getattr(req, "metadata", None)
-            request.completion_token_ids = getattr(req, "completion_token_ids", None)
-            request.chat_template_kwargs = getattr(req, "chat_template_kwargs", None)
 
         if getattr(req, "suffix", None):
             request.suffix = getattr(req, "suffix", None)
