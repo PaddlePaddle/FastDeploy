@@ -196,18 +196,12 @@ class Ernie4_5Processor(BaseDataProcessor):
         if not request.prompt_token_ids:
             if request.prompt:
                 prompt = request.prompt
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request.prompt_token_ids = prompt
-                else:
-                    request.prompt_tokens = prompt
-                    tokens = self.tokenizer.tokenize(prompt)
-                    token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-                    request.prompt_token_ids = token_ids
-                    req_id = request.request_id
-                    data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
+                request.prompt_tokens = prompt
+                tokens = self.tokenizer.tokenize(prompt)
+                token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+                request.prompt_token_ids = token_ids
+                req_id = request.request_id
+                data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             elif request.messages:
                 chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if not chat_template_kwargs:
