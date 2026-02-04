@@ -83,6 +83,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [投机解码](./docs/zh/features/speculative_decoding.md)
 - [前缀缓存](./docs/zh/features/prefix_caching.md)
 - [分块预填充](./docs/zh/features/chunked_prefill.md)
+- [负载均衡调度Router](./docs/zh/online_serving/router.md)
 
 ## 致谢
 

@@ -512,6 +512,7 @@ class Sampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -605,7 +606,7 @@ class SpeculativeSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_maca():
             self.forward = self.forward_cuda
         elif current_platform.is_xpu():
             self.forward = self.forward_xpu
@@ -752,6 +753,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -773,6 +775,7 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["reasoning_status"],
                 share_inputs["output_padding_offset"],
                 share_inputs["output_cum_offsets"],
+                share_inputs["enable_thinking"],
                 self.think_end_id,
                 self.line_break_id,
             )
@@ -896,6 +899,7 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -968,7 +972,7 @@ class MTPSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_maca():
             self.forward = self.forward_cuda
         elif current_platform.is_xpu():
             self.forward = self.forward_xpu
@@ -1126,6 +1130,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
@@ -1178,6 +1183,7 @@ class MTPSampler(nn.Layer):
             sampling_metadata.presence_penalties,
             sampling_metadata.temperature,
             sampling_metadata.bad_words_token_ids,
+            sampling_metadata.bad_words_token_len,
             sampling_metadata.step_idx,
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
