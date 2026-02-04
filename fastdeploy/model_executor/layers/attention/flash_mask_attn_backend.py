@@ -183,7 +183,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ):
         metadata = forward_meta.attention_metadata
-        
+
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
         k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
