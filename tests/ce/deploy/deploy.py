@@ -18,7 +18,7 @@ tests_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
 
 sys.path.insert(0, tests_dir)
 
-from e2e.utils.serving_utils import (
+from tests.e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,

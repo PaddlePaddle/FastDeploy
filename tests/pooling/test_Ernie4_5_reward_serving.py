@@ -21,7 +21,8 @@ import time
 
 import pytest
 import requests
-from e2e.utils.serving_utils import (
+
+from tests.e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
