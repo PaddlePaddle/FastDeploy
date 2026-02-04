@@ -166,9 +166,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
-        metadata.max_len_tensor_cpu_decoder[1] = 0
-
         forward_meta.attention_metadata = metadata
 
     def forward_mixed(
@@ -215,6 +212,10 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
             # here we add five members，this is ugly, just for now.
             if forward_meta.max_len_tensor_cpu[1].item() > 0:
+
+                metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
+                metadata.max_len_tensor_cpu_decoder[1] = 0
+
                 (
                     forward_meta.attn_cu_seqlens_k,
                     forward_meta.pre_cache_batch_ids,
