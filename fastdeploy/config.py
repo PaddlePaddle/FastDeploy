@@ -1627,6 +1627,9 @@ class RoutingReplayConfig:
         # Only save last turn
         self.only_last_turn: bool = False
 
+        # Fused routing of all layers
+        self.use_fused_put: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
