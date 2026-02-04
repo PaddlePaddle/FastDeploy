@@ -153,7 +153,7 @@ class BaseDataProcessor(ABC):
         seq_len: int,
     ) -> Mapping[str, int]:
         """
-        Return the maximum number of tokens per item of for each modality.
+        Return the maximum number of tokens per item for each modality.
         """
         return None
 

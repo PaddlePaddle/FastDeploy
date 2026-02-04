@@ -33,7 +33,7 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
-from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
@@ -748,8 +748,8 @@ class DataProcessor(MMBaseDataProcessor):
 
     def get_image_size_with_most_features(self):
         resized_height, resized_width = self.image_preprocessor.get_smarted_resize(
-            height=9999999,
-            width=9999999,
+            height=MAX_IMAGE_DIMENSION,
+            width=MAX_IMAGE_DIMENSION,
             min_pixels=self.image_min_pixels,
             max_pixels=self.image_max_pixels,
         )[0]
@@ -766,8 +766,8 @@ class DataProcessor(MMBaseDataProcessor):
             min_pixels=self.image_min_pixels,
             max_pixels=self.image_max_pixels,
         )[1]
-        num_video_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
-        return min(num_video_tokens, seq_len)
+        num_image_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
+        return min(num_image_tokens, seq_len)
 
     def get_max_video_tokens(self, seq_len: int) -> int:
         target_height, target_width = self.get_image_size_with_most_features()
