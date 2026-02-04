@@ -598,8 +598,6 @@ class DeepSeekV3Model(nn.Layer):
         return out
 
 
-# 2. 全推理流程，prefill + decode + 返回token id形式的output
-# 2.1 使用完这个类之后还需要一个tokenizer把得到的输出转化成文本
 @ModelRegistry.register_model_class(
     architecture="DeepseekV3ForCausalLM",
     module_name="deepseek_v3",
@@ -780,7 +778,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
-# 1. 加载权重
 class DeepSeekV3PretrainedModel(PretrainedModel):
     """
     DeepSeekV3PretrainedModel
