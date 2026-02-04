@@ -148,7 +148,8 @@ class EngineService:
         self.token_processor.set_resource_manager(self.resource_manager)
 
         self.scheduler_metrics_logger = SchedulerMetricsLogger(
-            enabled=self.cfg.parallel_config.local_data_parallel_id == 0
+            enabled=True,
+            dp_rank=self.cfg.parallel_config.local_data_parallel_id,
         )
         self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
         self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)

@@ -25,8 +25,9 @@ class SchedulerMetricsLogger:
     Lightweight console logger for scheduler-level prefill/decode metrics.
     """
 
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, dp_rank: int = 0) -> None:
         self.enabled = enabled
+        self.dp_rank = dp_rank
         self._lock = threading.Lock()
         self._last_decode_tic = time.perf_counter()
         self._decode_tokens_since_last = 0
@@ -80,6 +81,7 @@ class SchedulerMetricsLogger:
 
         msg = (
             "Prefill batch, "
+            f"dp_rank: {self.dp_rank}, "
             f"#new-seq: {len(prefill_reqs)}, "
             f"#new-token: {new_tokens}, "
             f"#cached-token: {cached_tokens}, "
@@ -111,6 +113,7 @@ class SchedulerMetricsLogger:
 
         msg = (
             "Decode batch, "
+            f"dp_rank: {self.dp_rank}, "
             f"#running-req: {running_cnt}, "
             f"#token: {tokens_used}, "
             f"token usage: {token_usage:.2f}, "
