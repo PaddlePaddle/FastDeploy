@@ -295,7 +295,7 @@ def _build_stream_transfer_data(
     stream_transfer_datas = []
     if output_tokens is not None:
 
-        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
@@ -439,7 +439,7 @@ def save_output_normal(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             output = _build_stream_transfer_data(
-                sampler_output.sampled_token_ids,
+                share_inputs["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
