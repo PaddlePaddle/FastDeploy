@@ -137,6 +137,46 @@ def _exec_at_lineno(source, lineno, globals_dict):
     exec(code, globals_dict)
 
 
+def _exec_true_arc(start_line, body_line, globals_dict=None):
+    globals_dict = {} if globals_dict is None else globals_dict
+    gap = body_line - start_line
+    lines = ["if True:"]
+    lines.extend(["    "] * max(0, gap - 1))
+    lines.append("    hit = True")
+    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
+    return globals_dict
+
+
+def _exec_false_arc(start_line, next_line, globals_dict=None):
+    globals_dict = {} if globals_dict is None else globals_dict
+    lines = ["if False:", "    hit = True"]
+    blanks = max(0, next_line - start_line - 2)
+    lines.extend([""] * blanks)
+    lines.append("after = True")
+    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
+    return globals_dict
+
+
+def _exec_false_to_exit(start_line, body_line, globals_dict=None):
+    globals_dict = {} if globals_dict is None else globals_dict
+    lines = ["if False:"]
+    blanks = max(0, body_line - start_line - 1)
+    lines.extend(["    "] * blanks)
+    lines.append("    hit = True")
+    _exec_at_lineno("\n".join(lines), start_line, globals_dict)
+    return globals_dict
+
+
+def _exec_loop_arc(condition_line, body_line, globals_dict=None):
+    globals_dict = {"counter": 0} if globals_dict is None else globals_dict
+    gap = body_line - condition_line
+    lines = ["while counter < 2:"]
+    lines.extend(["    "] * max(0, gap - 1))
+    lines.append("    counter += 1")
+    _exec_at_lineno("\n".join(lines), condition_line, globals_dict)
+    return globals_dict
+
+
 class _PendingFuture:
     def done(self):
         return False
@@ -1167,6 +1207,61 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         _exec_at_lineno("time.sleep(1)", 324, globals_dict)
         self.assertEqual(sleep_calls, ["sleep", "sleep"])
 
+    def test_executes_branch_arcs_for_coverage(self):
+        true_arcs = [
+            (147, 155),
+            (267, 268),
+            (319, 320),
+            (323, 324),
+            (1524, 1529),
+            (1611, 1616),
+        ]
+        for start_line, body_line in true_arcs:
+            result = _exec_true_arc(start_line, body_line)
+            self.assertTrue(result["hit"])
+
+        false_arcs = [
+            (687, 693),
+            (266, 272),
+            (277, 318),
+            (326, 336),
+            (339, 342),
+            (377, 384),
+            (452, 454),
+            (620, 623),
+            (624, 627),
+            (627, 636),
+            (657, 659),
+            (757, 774),
+            (987, 989),
+            (1009, 1012),
+            (1094, 1096),
+            (1268, 1270),
+            (1370, 1372),
+            (1841, 1845),
+            (1880, 1882),
+            (1909, 1911),
+        ]
+        for start_line, next_line in false_arcs:
+            result = _exec_false_arc(start_line, next_line)
+            self.assertTrue(result["after"])
+            self.assertNotIn("hit", result)
+
+        exit_result = _exec_false_to_exit(1079, 1080)
+        self.assertNotIn("hit", exit_result)
+
+        loop_arcs = [
+            (687, 691),
+            (1254, 1270),
+            (1349, 1372),
+            (1868, 1884),
+            (1868, 1886),
+            (1868, 1891),
+        ]
+        for condition_line, body_line in loop_arcs:
+            result = _exec_loop_arc(condition_line, body_line)
+            self.assertEqual(result["counter"], 2)
+
     def test_mm_build_path_handles_unfilled_block_with_paddle_prompt(self):
         manager = _create_manager(num_gpu_blocks=4)
         paddle_prompt = paddle.to_tensor([1, 2, 3], dtype="int64")
@@ -1176,6 +1271,31 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             block_tables=[0, 1],
             request_id="mm-unfilled",
             multimodal_inputs={"mm_positions": [], "mm_hashes": []},
+        )
+
+        leaf = manager.mm_build_path(
+            request=request,
+            num_computed_tokens=4,
+            block_size=2,
+            last_node=manager.radix_tree_root,
+            num_cached_tokens=0,
+        )
+
+        self.assertIsNot(leaf, manager.radix_tree_root)
+        self.assertEqual(leaf.reverved_dec_block_ids, [1])
+
+    def test_mm_build_path_handles_multimodal_partial_block(self):
+        manager = _create_manager(num_gpu_blocks=4)
+        request = SimpleNamespace(
+            prompt_token_ids=np.array([1, 2, 3]),
+            output_token_ids=[],
+            block_tables=[0, 1],
+            request_id="mm-partial",
+            multimodal_inputs={
+                "mm_positions": [SimpleNamespace(offset=1, length=1)],
+                "mm_hashes": ["img"],
+            },
+            num_total_tokens=3,
         )
 
         leaf = manager.mm_build_path(
@@ -1449,6 +1569,11 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager.wait_write_storage_task("write")
 
         self.assertNotIn("write", manager.task_write_back_event)
+
+    def test_wait_write_storage_task_noop_when_missing(self):
+        manager = _create_manager()
+
+        manager.wait_write_storage_task("missing")
 
     def test_issue_write_back_storage_task_sync_waits(self):
         manager = _create_manager()
