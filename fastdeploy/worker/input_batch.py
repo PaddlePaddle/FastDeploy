@@ -134,6 +134,7 @@ class InputBatch:
         self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         if self.enable_expert_parallel:
             self.seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
         self.seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -149,6 +150,7 @@ class InputBatch:
         self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
+        self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.encoder_block_lens = paddle.full([max_num_seqs], 0, dtype="int32")
         self.step_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
@@ -314,6 +316,7 @@ class InputBatch:
 
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+        self.last_preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
@@ -340,6 +343,7 @@ class InputBatch:
         swap_data(self.min_dec_len, i1, i2)
         swap_data(self.max_dec_len, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
+        swap_data(self.seq_lens_this_time_cpu, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_seq_lens_encoder, i1, i2)
@@ -359,6 +363,7 @@ class InputBatch:
         swap_data(self.bad_tokens_len, i1, i2)
         swap_data(self.next_tokens, i1, i2)
         swap_data(self.is_block_step, i1, i2)
+        swap_data(self.is_block_step_cpu, i1, i2)
         swap_data(self.is_chunk_step, i1, i2)
         swap_data(self.encoder_block_lens, i1, i2)
         swap_data(self.step_block_list, i1, i2)
@@ -382,6 +387,7 @@ class InputBatch:
         swap_data(self.stop_seqs, i1, i2)
 
         swap_data(self.preempted_idx, i1, i2)
+        swap_data(self.last_preempted_idx, i1, i2)
         swap_data(self.reasoning_status, i1, i2)
 
         # Swap speculative decoding buffers if enabled
