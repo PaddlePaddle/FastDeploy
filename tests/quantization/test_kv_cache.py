@@ -26,7 +26,7 @@ from fastdeploy.model_executor.layers.quantization.kv_cache import (
 )
 
 sys.path.append("../")
-from tests.utils import get_default_test_fd_config
+from utils import get_default_test_fd_config
 
 
 class MockLayer(nn.Layer):

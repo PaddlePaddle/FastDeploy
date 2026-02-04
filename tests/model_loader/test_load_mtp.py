@@ -28,7 +28,7 @@ from fastdeploy.model_executor.models.ernie4_5_mtp import Ernie4_5_MTPForCausalL
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tests.utils import get_default_test_fd_config
+from utils import get_default_test_fd_config
 
 strategy = fleet.DistributedStrategy()
 fleet.init(strategy=strategy)
