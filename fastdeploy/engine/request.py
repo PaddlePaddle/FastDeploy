@@ -281,7 +281,7 @@ class Request:
                 else None
             ),
             mm_hashes=getattr(req, "mm_hashes", None),
-            add_special_tokens=getattr(req, "add_special_tokens", None),
+            add_special_tokens=getattr(req, "add_special_tokens", False),
         )
 
         if hasattr(req, "messages"):
