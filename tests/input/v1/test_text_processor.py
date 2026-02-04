@@ -358,7 +358,7 @@ class DataProcessorTestCase(unittest.TestCase):
 
     def test_process_request_dictect_handles_sequences(self):
         request = DummyRequest(
-            prompt=[1, 2, 3, 4, 5, 6],
+            prompt_token_ids=[1, 2, 3, 4, 5, 6],
             stop=["stop"],
             bad_words=["zz"],
             temperature=0,
