@@ -699,6 +699,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/token_penalty_only_once.cu",
         "gpu_ops/stop_generation.cu",
         "gpu_ops/stop_generation_multi_ends.cu",
+        "gpu_ops/set_stop.cu",
         "gpu_ops/set_flags.cu",
         "gpu_ops/fused_get_rotary_embedding.cu",
         "gpu_ops/get_padding_offset.cu",
