@@ -34,6 +34,7 @@ class InstanceInfo:
     role: Union[InstanceRole, str]
     host_ip: str
     port: Union[int, str]
+    metrics_port: Union[int, str] = 0
     connector_port: Union[int, str] = 0
     engine_worker_queue_port: Union[int, str] = 0
     transfer_protocol: List[str] = field(default_factory=list)
@@ -72,6 +73,7 @@ class InstanceInfo:
             assert t in ["ipc", "rdma"], f"Invalid transfer_protocol: {self.transfer_protocol}"
 
         self.port = str(self.port)
+        self.metrics_port = str(self.metrics_port)
         self.connector_port = str(self.connector_port)
         self.engine_worker_queue_port = str(self.engine_worker_queue_port)
         if self.rdma_ports:

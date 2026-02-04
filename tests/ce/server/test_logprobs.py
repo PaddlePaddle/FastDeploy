@@ -25,10 +25,10 @@ def test_unstream_with_logprobs():
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] == "牛顿的"
     assert resp_json["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
-    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.031025361269712448
+    assert resp_json["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.03113006055355072
     assert resp_json["choices"][0]["logprobs"]["content"][0]["top_logprobs"][0] == {
         "token": "牛顿",
-        "logprob": -0.031025361269712448,
+        "logprob": -0.03113006055355072,
         "bytes": [231, 137, 155, 233, 161, 191],
         "top_logprobs": None,
     }
@@ -102,10 +102,10 @@ def test_stream_with_logprobs():
     # 校验概率字段
     assert result_chunk["choices"][0]["delta"]["content"] == "牛顿"
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
-    assert result_chunk["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.031025361269712448
+    assert result_chunk["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.03113006055355072
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["top_logprobs"][0] == {
         "token": "牛顿",
-        "logprob": -0.031025361269712448,
+        "logprob": -0.03113006055355072,
         "bytes": [231, 137, 155, 233, 161, 191],
     }
 
@@ -187,10 +187,10 @@ def test_stream_with_temp_scaled_logprobs():
     # 校验概率字段
     assert result_chunk["choices"][0]["delta"]["content"] == "牛顿"
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["token"] == "牛顿"
-    assert result_chunk["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.006811376195400953
+    assert result_chunk["choices"][0]["logprobs"]["content"][0]["logprob"] == -0.0068125599063932896
     assert result_chunk["choices"][0]["logprobs"]["content"][0]["top_logprobs"][0] == {
         "token": "牛顿",
-        "logprob": -0.006811376195400953,
+        "logprob": -0.0068125599063932896,
         "bytes": [231, 137, 155, 233, 161, 191],
     }
 

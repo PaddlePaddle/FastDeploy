@@ -570,3 +570,10 @@ DeltaFunctionCall:
     name: Optional[str] = None
     arguments: Optional[str] = None
 ```
+
+# Other Endpoints
+
+**Operational control endpoints**
+- `/v1/pause` - Pause generation (causes denial of service). Inflight requests are aborted and cache is reset.
+- `/v1/resume` - Resume generation.
+- `/v1/is_paused` - Check if generation is paused.

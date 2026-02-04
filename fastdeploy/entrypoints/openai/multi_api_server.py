@@ -136,7 +136,7 @@ def check_param(ports, num_servers):
     for port in ports:
         logger.info(f"check port {port}")
         if not is_port_available("0.0.0.0", int(port)):
-            return False
+            raise RuntimeError(f"Port {port} is not available.")
     return True
 
 
@@ -149,13 +149,17 @@ def main():
     parser.add_argument("--args", nargs=argparse.REMAINDER, help="remaining arguments are passed to api_server.py")
     args = parser.parse_args()
 
-    logger.info(f"Starting {args.num_servers} servers on ports: {args.ports} with args: {args.args}")
+    logger.info(f"Launching MultiAPIServer with command: {' '.join(sys.argv)}")
 
     device_count = 0
     if current_platform.is_cuda():
-        device_count = len(os.getenv("CUDA_VISIBLE_DEVICES", "0,1,2,3,4,5,6,7").split(","))
+        if os.getenv("CUDA_VISIBLE_DEVICES") is None:
+            raise ValueError("Please manually set CUDA_VISIBLE_DEVICES when launching multi-api-server.")
+        device_count = len(os.getenv("CUDA_VISIBLE_DEVICES").split(","))
     elif current_platform.is_xpu():
-        device_count = len(os.getenv("XPU_VISIBLE_DEVICES", "0,1,2,3,4,5,6,7").split(","))
+        if os.getenv("XPU_VISIBLE_DEVICES") is None:
+            raise ValueError("Please manually set XPU_VISIBLE_DEVICES when launching multi-api-server.")
+        device_count = len(os.getenv("XPU_VISIBLE_DEVICES").split(","))
 
     processes = start_servers(
         server_count=args.num_servers,

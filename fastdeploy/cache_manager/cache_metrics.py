@@ -39,6 +39,7 @@ class CacheMetrics:
         # token level
         self.total_gpu_matched_token_num = 0
         self.total_cpu_matched_token_num = 0
+        self.total_storage_matched_token_num = 0
 
         self.matched_token_num = 0
         self.total_token_num = 0
@@ -54,6 +55,7 @@ class CacheMetrics:
         self.hit_token_ratio = self.matched_token_num / self.total_token_num
         self.cpu_hit_token_ratio = self.total_cpu_matched_token_num / self.total_token_num
         self.gpu_hit_token_ratio = self.total_gpu_matched_token_num / self.total_token_num
+        self.storage_hit_token_ratio = self.total_storage_matched_token_num / self.total_token_num
 
         main_process_metrics.hit_req_rate.set(self.hit_req_ratio)
         main_process_metrics.hit_token_rate.set(self.hit_token_ratio)
@@ -67,6 +69,7 @@ class CacheMetrics:
             + f" cpu_hit_token_ratio {self.cpu_hit_token_ratio:.2f}"
             + f" total_gpu_matched_token_num {self.total_gpu_matched_token_num}"
             + f" total_cpu_matched_token_num {self.total_cpu_matched_token_num}"
+            + f" total_storage_matched_token_num {self.total_storage_matched_token_num}"
             + f" total_matched_token_num {self.matched_token_num}"
             + f" total_token_num {self.total_token_num}"
         )
@@ -76,6 +79,7 @@ class CacheMetrics:
         req_id,
         current_query_cpu_match_token_num,
         current_query_gpu_match_token_num,
+        current_storage_match_token_num,
         current_query_token_num,
     ):
         """
@@ -84,18 +88,23 @@ class CacheMetrics:
 
         cpu_cache_match_ratio = current_query_cpu_match_token_num / current_query_token_num
         gpu_cache_match_ratio = current_query_gpu_match_token_num / current_query_token_num
+        storage_cache_match_ratio = current_storage_match_token_num / current_query_token_num
 
-        total_match_ratio = cpu_cache_match_ratio + gpu_cache_match_ratio
+        total_match_ratio = cpu_cache_match_ratio + gpu_cache_match_ratio + storage_cache_match_ratio
 
         self.total_cpu_matched_token_num += current_query_cpu_match_token_num
         self.total_gpu_matched_token_num += current_query_gpu_match_token_num
+        self.total_storage_matched_token_num += current_storage_match_token_num
 
-        self.matched_token_num += current_query_cpu_match_token_num + current_query_gpu_match_token_num
+        self.matched_token_num += (
+            current_query_cpu_match_token_num + current_query_gpu_match_token_num + current_storage_match_token_num
+        )
         self.total_token_num += current_query_token_num
         logger.info(
             f"Metrics for req_id {req_id}: token_num {current_query_token_num}"
             + f" cpu_cache_match_ratio {cpu_cache_match_ratio}"
             + f" gpu_cache_match_ratio {gpu_cache_match_ratio}"
+            + f" storage_cache_match_ratio {storage_cache_match_ratio}"
             + f" total_match_ratio {total_match_ratio}"
         )
 
@@ -114,6 +123,7 @@ class CacheMetrics:
 
         self.total_gpu_matched_token_num = 0
         self.total_cpu_matched_token_num = 0
+        self.total_storage_matched_token_num = 0
 
         self.matched_token_num = 0
         self.total_token_num = 0

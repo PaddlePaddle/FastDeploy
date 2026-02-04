@@ -23,6 +23,11 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.input_batch import (
+    InputBatch,
+    recover_batch_index_for_output,
+    recover_batch_index_for_sampler_output,
+)
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -33,6 +38,7 @@ if current_platform.is_iluvatar():
         set_stop_value_multi_ends,
         step_paddle,
         update_inputs,
+        update_inputs_v1,
     )
 elif current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import (
@@ -55,10 +61,23 @@ elif current_platform.is_maca():
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
         save_output,
+        save_output_topk,
         set_stop_value_multi_ends,
+        speculate_get_output_padding_offset,
+        speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
+        speculate_save_output,
+        speculate_save_output_topk,
+        speculate_set_stop_value_multi_seqs,
+        speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle,
+        speculate_step_reschedule,
+        speculate_step_system_cache,
+        speculate_update,
         step_paddle,
+        step_reschedule,
+        step_system_cache,
         update_inputs,
         update_inputs_v1,
     )
@@ -71,7 +90,6 @@ else:
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
         speculate_save_output_topk,
@@ -92,6 +110,11 @@ else:
         speculate_limit_thinking_content_length_v2,
     )
 
+from fastdeploy.model_executor.entropy_utils import (
+    calculate_logits_entropy,
+    speculate_calculate_logits_entropy,
+)
+from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
@@ -179,6 +202,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -201,12 +225,11 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, token_num_cpu
+            input_ids, seq_lens_this_time, None, None, token_num_cpu
         )
         return (
             ids_remove_padding,
@@ -227,9 +250,7 @@ def pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids, draft_tokens, cum_offsets_now, seq_lens_this_time, seq_lens_encoder, token_num_cpu
-        )
+        ) = get_padding_offset(input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, token_num_cpu)
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
             seq_lens_encoder,
@@ -305,13 +326,12 @@ def _build_stream_transfer_data(
 def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
+    sampling_metadata: SamplingMetadata,
     block_size: int = 64,
-    save_each_rank: bool = False,
-    skip_save_output: bool = False,
-    async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -370,12 +390,15 @@ def post_process_normal(
             False,
         )
 
+    if enable_entropy:
+        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
@@ -384,7 +407,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -392,53 +414,77 @@ def post_process_normal(
         else:
             update_inputs(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-    # 3. Transmit the model's output and stop generation signal via message queue.
-    #    In the future, we will abandon this approach.
-    if not skip_save_output:
-        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(
-                    sampler_output.sampled_token_ids,
-                    logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs_list=model_output.prompt_logprobs_list,
-                )
-                async_output_queue.put(output)
+
+
+def save_output_normal(
+    model_output: ModelOutputData,
+    sampler_output: SamplerOutput,
+    share_inputs: Dict[str, paddle.Tensor],
+    async_output_queue: queue.Queue = None,
+    save_each_rank: bool = False,
+):
+    # Transmit the model's output and stop generation signal via message queue.
+    # In the future, we will abandon this approach.
+    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+        if save_each_rank or model_output.mp_rank == 0:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            output = _build_stream_transfer_data(
+                sampler_output.sampled_token_ids,
+                logprobs=sampler_output.logprobs_tensors,
+                prompt_logprobs_list=model_output.prompt_logprobs_list,
+            )
+            async_output_queue.put(output)
+    else:
+        recover_share_inputs_map = recover_batch_index_for_output(
+            share_inputs,
+            model_output.index_to_batch_id,
+            model_output.enable_pd_reorder,
+            ["preempted_idx"],
+        )
+        if sampler_output.logprobs_tensors is None:
+            save_output(
+                share_inputs["sampled_token_ids"],
+                model_output.not_need_stop,
+                recover_share_inputs_map["preempted_idx"],
+                model_output.mp_rank,
+                save_each_rank,
+            )
         else:
-            if sampler_output.logprobs_tensors is None:
-                save_output(
-                    sampler_output.sampled_token_ids,
-                    model_output.not_need_stop,
-                    model_output.mp_rank,
-                    save_each_rank,
-                )
-            else:
-                save_output_topk(
-                    sampler_output.sampled_token_ids,
-                    sampler_output.logprobs_tensors.logprob_token_ids,
-                    sampler_output.logprobs_tensors.logprobs,
-                    sampler_output.logprobs_tensors.selected_token_ranks,
-                    model_output.not_need_stop,
-                    model_output.mp_rank,
-                )
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                model_output.not_need_stop,
+                recover_share_inputs_map["preempted_idx"],
+                model_output.mp_rank,
+            )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
+    sampling_metadata: SamplingMetadata,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -448,6 +494,8 @@ def post_process_specualate(
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
             accept_num=share_inputs["accept_num"],
+            stop_flags=share_inputs["stop_flags"],
+            eos_token_ids=share_inputs["eos_token_id"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
@@ -463,6 +511,10 @@ def post_process_specualate(
         model_output.eos_token_id,
         model_output.min_tokens,
     )
+
+    if enable_entropy:
+        speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+
     speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
@@ -474,23 +526,44 @@ def post_process_specualate(
         model_output.stop_flags,
         model_output.seq_lens_this_time,
         model_output.is_block_step,
-        model_output.stop_nums,
         model_output.mask_rollback,
     )
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output(
-                model_output.accept_tokens,
-                model_output.accept_num,
+                recover_model_output_map["accept_tokens"],
+                recover_model_output_map["accept_num"],
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
-                envs.ENABLE_V1_KVCACHE_SCHEDULER,
+                bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
             )
         else:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output_topk(
                 sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
@@ -499,8 +572,9 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
@@ -518,12 +592,14 @@ def post_process_specualate(
         model_output.seq_lens_decoder,
         model_output.step_idx,
     )
+    share_inputs["preempted_idx"][:] = 0
 
 
 def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
+    sampling_metadata: SamplingMetadata = None,
     block_size: int = 64,
     save_each_rank: bool = False,
     speculative_decoding: bool = False,
@@ -531,6 +607,7 @@ def post_process(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    enable_entropy: bool = False,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -550,27 +627,28 @@ def post_process(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 save_each_rank,
                 skip_save_output,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
         else:
             post_process_normal(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,
+                sampling_metadata,
                 block_size,
-                save_each_rank,
-                skip_save_output,
-                async_output_queue,
                 think_end_id,
                 line_break_id,
+                enable_entropy,
             )
 
 
 def step_cuda(
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int,
     enc_dec_block_num: int,
     speculative_config: SpeculativeConfig,
@@ -857,7 +935,7 @@ def rebuild_padding(
 def post_process_pooling(
     pooler_output: PoolerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
@@ -898,7 +976,6 @@ def post_process_pooling(
                 dummy_sampled_tokens,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -908,3 +985,5 @@ def post_process_pooling(
         if save_each_rank or model_output.mp_rank == 0:
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)
+
+    share_inputs["preempted_idx"][:] = 0

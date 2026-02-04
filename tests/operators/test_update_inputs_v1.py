@@ -30,7 +30,6 @@ def update_inputs_kernel_v1(
     topk_ids,
     input_ids,
     block_tables,
-    stop_nums,
     stop_flags,
     is_block_step,
     next_tokens,
@@ -84,8 +83,8 @@ def update_inputs_kernel_v1(
                 seq_lens_encoder[thread_idx] = 0
                 topk_ids[thread_idx] = -1
                 stop_flag_now_int[thread_idx] = 1
-    stop_sum = np.sum(stop_flag_now_int)
-    not_need_stop[0] = stop_sum < stop_nums[0]
+    stop_sum = np.sum(stop_flag_now_int).item()
+    not_need_stop[0] = stop_sum < max_bsz
 
 
 def update_inputs_v1_ref(
@@ -99,7 +98,6 @@ def update_inputs_v1_ref(
     topk_ids,
     input_ids,
     block_tables,
-    stop_nums,
     next_tokens,
     is_block_step,
     block_size,
@@ -118,7 +116,6 @@ def update_inputs_v1_ref(
         topk_ids,
         input_ids,
         block_tables,
-        stop_nums,
         stop_flags,
         is_block_step,
         next_tokens,
@@ -155,12 +152,11 @@ class TestUpdateInputsV1(unittest.TestCase):
         topk_ids = np.zeros([bs], "int64")
         input_ids = np.random.randint(1, 10, [max_bs, max_input_length], "int64")
         block_tables = np.zeros([max_bs, 1], "int32")
-        stop_nums = np.array([max_bs], "int64")
         next_tokens = np.random.randint(1, 10, [max_bs], "int64")
         is_block_step = np.random.randint(0, 2, [max_bs]).astype("bool")
 
         stop_flags = paddle.to_tensor(stop_flags)
-        not_need_stop = paddle.to_tensor(not_need_stop, place=paddle.CPUPlace())
+        not_need_stop = paddle.to_tensor(not_need_stop)
         seq_lens_this_time = paddle.to_tensor(seq_lens_this_time)
         seq_lens_encoder = paddle.to_tensor(seq_lens_encoder)
         seq_lens_decoder = paddle.to_tensor(seq_lens_decoder)
@@ -169,7 +165,6 @@ class TestUpdateInputsV1(unittest.TestCase):
         topk_ids = paddle.to_tensor(topk_ids)
         input_ids = paddle.to_tensor(input_ids)
         block_tables = paddle.to_tensor(block_tables)
-        stop_nums = paddle.to_tensor(stop_nums)
         next_tokens = paddle.to_tensor(next_tokens)
         is_block_step = paddle.to_tensor(is_block_step)
         block_size = 1024
@@ -185,7 +180,6 @@ class TestUpdateInputsV1(unittest.TestCase):
             topk_ids,
             input_ids,
             block_tables,
-            stop_nums,
             next_tokens,
             is_block_step,
             block_size,
