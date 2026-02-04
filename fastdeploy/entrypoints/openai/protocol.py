@@ -573,12 +573,8 @@ class CompletionRequest(BaseModel):
                 # List[int]
                 req_dict["prompt_token_ids"] = prompt
                 req_dict["prompt"] = None
-            elif isinstance(prompt, list) and isinstance(prompt[0], list):
-                # List[List[int]]
-                req_dict["prompt_token_ids"] = prompt
-                req_dict["prompt"] = None
             else:
-                # str 或 List[str]
+                # str
                 req_dict["prompt"] = prompt
 
         # if "prompt_token_ids" in req_dict:
