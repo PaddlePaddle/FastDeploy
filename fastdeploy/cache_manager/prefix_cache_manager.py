@@ -667,8 +667,13 @@ class PrefixCacheManager:
                 self.cache_info[req_id] = (leaf_node, can_cache_computed_tokens)
                 task.cached_block_num = can_cache_computed_tokens // block_size
         except Exception as e:
-            logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
-            raise e
+            if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                logger.warning(
+                    f"update_cache_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                )
+            else:
+                logger.error(f"update_cache_blocks, error: {type(e)} {e}, {str(traceback.format_exc())}")
+                raise e
 
     def is_chunked_mm_input(self, mm_inputs, matched_token_num):
         """
@@ -785,8 +790,13 @@ class PrefixCacheManager:
                 task.cached_block_num = len(common_block_ids)
                 return common_block_ids, matched_token_num, hit_info
             except Exception as e:
-                logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"request_match_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
         """
@@ -890,8 +900,13 @@ class PrefixCacheManager:
                 )
                 return common_block_ids, unique_block_ids, hit_info
             except Exception as e:
-                logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"request_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"request_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def release_block_ids_async(self, task):
         """
@@ -944,8 +959,13 @@ class PrefixCacheManager:
                 )
                 return
             except Exception as e:
-                logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"release_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"release_block_ids: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def free_nodes_directly(self, node):
         with self.request_release_lock:
@@ -979,8 +999,13 @@ class PrefixCacheManager:
                     else:
                         break
             except Exception as e:
-                logger.error(f"free_nodes_directly: error: {type(e)} {e}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"free_nodes_directly: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
         """
@@ -1171,8 +1196,13 @@ class PrefixCacheManager:
                 else:
                     self.gpu_free_task_future = None
             except Exception as e:
-                logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"free_block_ids_async: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"free_block_ids_async: error: {type(e)} {e}, {str(traceback.format_exc())}")
+                    raise e
 
     def free_cpu_block_ids(self, need_block_num):
         """
@@ -1737,8 +1767,13 @@ class PrefixCacheManager:
                     + f"task_cpu_block_id {task_cpu_block_id} event_type {event_type} done"
                 )
             except Exception as e:
-                logger.warning(f"recv_data_transfer_result: error: {e}, {str(traceback.format_exc())}")
-                raise e
+                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                    logger.warning(
+                        f"recv_data_transfer_result: an error occured while prefix tree status is not normal, ignore it. {e}"
+                    )
+                else:
+                    logger.error(f"recv_data_transfer_result: {str(traceback.format_exc())}")
+                    raise e
 
     def reset(self):
         """
