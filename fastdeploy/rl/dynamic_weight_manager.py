@@ -267,7 +267,9 @@ class DynamicWeightManager:
             value[self.rank] = status
 
     @staticmethod
-    def check_model_weights_status(model_weights_status, kv_cache_status, model_runner, pid, block):
+    def check_model_weights_status(
+        model_weights_status, prefix_tree_status, kv_cache_status, model_runner, pid, block
+    ):
         """
         A function to handle the state of model weights, check the model weights state,
         and perform corresponding operations as needed.
@@ -284,6 +286,14 @@ class DynamicWeightManager:
         ):
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+
+                if prefix_tree_status:
+                    logger.info("waiting for prefix tree to be updated")
+                    prefix_tree_status.value[0] = ModelWeightsStatus.UPDATING
+                    while prefix_tree_status.value[0] != ModelWeightsStatus.NORMAL:
+                        time.sleep(0.01)
+                    logger.info("prefix tree is updated")
+
                 if kv_cache_status:
                     kv_cache_status.value[0] = KVCacheStatus.UPDATING
                 model_runner.clear_requests()
@@ -293,6 +303,14 @@ class DynamicWeightManager:
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+
+                if prefix_tree_status:
+                    logger.info("waiting for prefix tree to be cleared")
+                    prefix_tree_status.value[0] = ModelWeightsStatus.CLEARING
+                    while prefix_tree_status.value[0] != ModelWeightsStatus.CLEARED:
+                        time.sleep(0.01)
+                    logger.info("prefix tree is cleared")
+
                 if kv_cache_status:
                     kv_cache_status.value[0] = KVCacheStatus.CLEARING
                 model_runner.clear_requests()

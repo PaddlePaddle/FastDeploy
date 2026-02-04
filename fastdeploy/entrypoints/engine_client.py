@@ -35,7 +35,6 @@ from fastdeploy.inter_communicator import (
     IPCSignal,
     KVCacheStatus,
     ModelWeightsStatus,
-    PrefixTreeStatus,
     RearrangeExpertStatus,
     ZmqIpcClient,
 )
@@ -557,22 +556,6 @@ class EngineClient:
         2 : worker update finish and notify client
         """
         with self.clear_update_lock:
-            if self.enable_prefix_caching:
-                # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
-                if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
-                    self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
-                    api_server_logger.info(
-                        f">>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
-                    while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
-                        time.sleep(1)
-                        timeout -= 1
-                    if timeout < 0:
-                        return 404, {**self.data_parallel_info, "msg": "update prefix tree timeout"}
-                    api_server_logger.info(
-                        f"<<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
 
             # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
@@ -617,23 +600,6 @@ class EngineClient:
         """
 
         with self.clear_update_lock:
-            if self.enable_prefix_caching:
-                # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
-                if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
-                    self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
-                    api_server_logger.info(
-                        f">>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
-                    while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
-                        time.sleep(1)
-                        timeout -= 1
-                    if timeout < 0:
-                        return 404, {**self.data_parallel_info, "msg": "clear prefix tree timeout"}
-                    api_server_logger.info(
-                        f"<<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
-                    )
-
             # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
                 return 200, {**self.data_parallel_info, "msg": "model weight is cleared"}

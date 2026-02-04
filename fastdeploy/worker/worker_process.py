@@ -245,6 +245,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init prefix_cache_status
+        prefix_tree_status_data = np.zeros(shape=[1], dtype=np.int32)
+        self.prefix_tree_status = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -471,9 +481,9 @@ class PaddleDisWorkerProc:
                     )
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
-                    self.kv_cache_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
+                        self.prefix_tree_status if self.fd_config.cache_config.enable_prefix_caching else None,
                         self.kv_cache_status if self.fd_config.cache_config.num_cpu_blocks > 0 else None,
                         # model_weights_signal
                         self.worker.model_runner,
