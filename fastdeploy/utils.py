@@ -1285,13 +1285,10 @@ def fill_paddle_tensor(shared_inputs_object, key, value):
     try:
         # Handle both dictionary-style and object-style access
         if hasattr(shared_inputs_object, key):
-            # Object-style access (e.g., InputBatch instance)
             attr = getattr(shared_inputs_object, key)
         elif hasattr(shared_inputs_object, "__getitem__") and key in shared_inputs_object:
-            # Dictionary-style access (e.g., self.share_inputs dict)
             attr = shared_inputs_object[key]
         else:
-            # Key/attribute doesn't exist
             return
 
         if isinstance(attr, paddle.Tensor):
