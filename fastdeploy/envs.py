@@ -164,6 +164,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "GLOBAL_LOGGING_INSTRUMENT": lambda: int(os.getenv("GLOBAL_LOGGING_INSTRUMENT", "0")),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # Whether to use phi FP8 quantization,if 1,use paddle default.
+    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Whether to use PFCCLab/DeepEP.
     "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
 }
