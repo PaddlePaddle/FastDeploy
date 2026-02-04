@@ -120,6 +120,7 @@ class PrefixCacheManager:
         self.free_gpu_executor_pool = ThreadPoolExecutor(max_workers=1)
         self.free_cpu_executor_pool = ThreadPoolExecutor(max_workers=1)
         self.gpu_free_task_future = None
+        self.cpu_free_future = None
         self.cache_status_lock = Lock()
 
         logger.info(
@@ -563,7 +564,12 @@ class PrefixCacheManager:
         """
         sync swap task
         """
-        self.task_swapping_event[transfer_task_id].wait()
+        while True:
+            flag = self.task_swapping_event[transfer_task_id].wait(timeout=0.1)
+            if flag or self.prefix_tree_status_signal.value != PrefixTreeStatus.NORMAL:
+                if not flag:
+                    logger.info(f"swap task timeout because prefix tree status is not normal: {transfer_task_id}")
+                break
         del self.task_swapping_event[transfer_task_id]
 
     def _check_validity(self, req_id, match_gpu_blocks_num, expected_block_num):
@@ -1328,15 +1334,17 @@ class PrefixCacheManager:
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:
-                    cpu_free_future = None
+                    self.cpu_free_future = None
                     if total_gpu_free_count > len(self.cpu_free_block_list):
                         cpu_free_count = total_gpu_free_count
                         if cpu_free_count < need_block_num:
                             cpu_free_count = need_block_num
-                        cpu_free_future = self.free_cpu_executor_pool.submit(self.free_cpu_block_ids, cpu_free_count)
+                        self.cpu_free_future = self.free_cpu_executor_pool.submit(
+                            self.free_cpu_block_ids, cpu_free_count
+                        )
                     self.gpu_free_task_future = self.free_gpu_executor_pool.submit(
                         self._evict_cache_async,
-                        cpu_free_future,
+                        self.cpu_free_future,
                         total_gpu_free_count,
                         hash_value_gpu_block_ids_map,
                         hash_value_block_ids_map,
@@ -1951,23 +1959,18 @@ class PrefixCacheManager:
 
         logger.info(f"Resetting the RadixTree! node_map len {len(self.node_map)}")
 
-        # clear task swapping event
-        self.executor_pool.shutdown(wait=True)
-        logger.info("shutdown executor_pool")
-        self.executor_pool = ThreadPoolExecutor(max_workers=1)
-        logger.info("recreate executor_pool")
+        logger.info("waiting for cpu_free_future to finish")
+        if self.cpu_free_future is not None:
+            self.cpu_free_future.result()
+        self.cpu_free_future = None
+        logger.info("reset cpu_free_future")
 
-        self.free_gpu_executor_pool.shutdown(wait=True)
-        logger.info("shutdown free_gpu_executor_pool")
-        self.free_gpu_executor_pool = ThreadPoolExecutor(max_workers=1)
-        logger.info("recreate free_gpu_executor_pool")
-
-        self.free_cpu_executor_pool.shutdown(wait=True)
-        logger.info("shutdown free_cpu_executor_pool")
-        self.free_cpu_executor_pool = ThreadPoolExecutor(max_workers=1)
-        logger.info("recreate free_cpu_executor_pool")
-
+        logger.info("waiting for gpu_free_task_future to finish")
+        if self.gpu_free_task_future is not None:
+            self.gpu_free_task_future.result()
         self.gpu_free_task_future = None
+        logger.info("reset gpu_free_task_future")
+
         self.task_swapping_event.clear()
 
         # clear node map
