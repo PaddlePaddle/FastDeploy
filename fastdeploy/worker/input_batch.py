@@ -575,7 +575,7 @@ class InputBatch:
             # Reset speculative decoding tensors if enabled
             if self.speculative_decoding:
                 max_draft_token_num = self.speculative_config.num_speculative_tokens
-                fill_paddle_tensor(self, "input_ids_cpu", -1)  # Changed from 1 to -1 to match init
+                fill_paddle_tensor(self, "input_ids_cpu", -1)
                 fill_paddle_tensor(self, "accept_tokens", 0)
                 fill_paddle_tensor(self, "accept_num", 0)
                 fill_paddle_tensor(self, "draft_tokens", -1)
