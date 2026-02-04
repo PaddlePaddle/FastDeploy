@@ -375,8 +375,9 @@ def test_max_tokens_negative():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    # assert resp.get("detail").get("object") == "error", "max_tokens < 0 未触发校验异常"
-    assert "max_tokens must be at least 1" in resp.get("error").get("message"), "未返回预期的 max_tokens 错误信息"
+    error_msg = resp.get("error", {}).get("message", "")
+    valid_messages = ["max_tokens can be defined [1,", "max_tokens must be at least 1"]
+    assert any(msg in error_msg for msg in valid_messages), "未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_min():
@@ -393,10 +394,9 @@ def test_max_tokens_min():
     }
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
-    # assert resp.get("detail").get("object") == "error", "max_tokens未0时API未拦截住"
-    assert "max_tokens must be at least 1" in resp.get("error").get(
-        "message"
-    ), "max_tokens未0时API未拦截住,未返回预期的 max_tokens 错误信息"
+    error_msg = resp.get("error", {}).get("message", "")
+    valid_messages = ["max_tokens can be defined [1,", "max_tokens must be at least 1"]
+    assert any(msg in error_msg for msg in valid_messages), "未返回预期的 max_tokens 错误信息"
 
 
 def test_max_tokens_non_integer():
