@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+import site
+import sys
 import time
 from typing import Any, Union
 
@@ -22,6 +25,25 @@ from tests.e2e.utils.serving_utils import (
     FD_ENGINE_QUEUE_PORT,
     clean_ports,
 )
+
+
+def pytest_configure(config):
+    """
+    Adjust sys.path to prioritize pip-installed fastdeploy during pytest startup.
+    """
+    project_root = os.path.dirname(os.path.abspath(__file__))
+
+    site_pkg = site.getsitepackages()[0]
+    new_sys_path = []
+    if site_pkg not in new_sys_path:
+        new_sys_path.append(site_pkg)
+    for path in sys.path:
+        if path != project_root and path not in new_sys_path:
+            new_sys_path.append(path)
+
+    new_sys_path.append(project_root)
+
+    sys.path = new_sys_path
 
 
 class FDRunner:
