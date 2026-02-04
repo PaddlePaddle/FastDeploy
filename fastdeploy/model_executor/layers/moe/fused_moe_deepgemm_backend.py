@@ -36,11 +36,12 @@ if current_platform.is_cuda():
     if get_sm_version() == 100:
         logger.info("Detected sm100, use PFCC DeepGEMM")
         paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        from deep_gemm import (
+        from paddlefleet.ops.deep_gemm import (
             m_grouped_fp8_gemm_nt_contiguous,
             m_grouped_fp8_gemm_nt_masked,
         )
     else:
+        logger.info("use FastDeploy DeepGEMM")
         from fastdeploy.model_executor.ops.gpu.deep_gemm import (
             m_grouped_gemm_fp8_fp8_bf16_nt_contiguous as m_grouped_fp8_gemm_nt_contiguous,
         )

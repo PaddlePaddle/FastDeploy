@@ -26,8 +26,9 @@ if current_platform.is_cuda():
         # SM100 should use PFCC DeepGemm
         logger.info("Detected sm100, use PFCC DeepGEMM")
         paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        import deep_gemm
+        from paddlefleet.ops import deep_gemm
     else:
+        logger.info("use FastDeploy DeepGEMM")
         from fastdeploy.model_executor.ops.gpu import deep_gemm
 else:
     deep_gemm = None
