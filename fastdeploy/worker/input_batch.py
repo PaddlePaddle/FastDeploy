@@ -590,11 +590,9 @@ class InputBatch:
             # Reset multimodal related tensors
             if self.enable_mm:
                 head_dim = self.model_config.head_dim
-                if (
-                    "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type
-                ):  # neox style = True
+                if "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type:
                     rope_head_dim = head_dim
-                else:  # neox style = False
+                else:
                     rope_head_dim = head_dim // 2
 
                 self.rope_emb = paddle.full(
@@ -613,14 +611,13 @@ class InputBatch:
                 self.image_features_list = None
             else:
                 # Reset non-multimodal rope_emb
-                if not self.enable_mm:
-                    self.rope_emb = get_rope(
-                        rotary_dim=self.model_config.head_dim,
-                        position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
-                        base=self.model_config.rope_theta,
-                        model_config=self.model_config,
-                        partial_rotary_factor=self.model_config.partial_rotary_factor,
-                    )
+                self.rope_emb = get_rope(
+                    rotary_dim=self.model_config.head_dim,
+                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                    base=self.model_config.rope_theta,
+                    model_config=self.model_config,
+                    partial_rotary_factor=self.model_config.partial_rotary_factor,
+                )
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
