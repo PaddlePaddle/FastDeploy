@@ -101,7 +101,7 @@ METAX_CI_CASELIST=(
     "tests/layers/test_min_sampling.py"
 )
 for path in "${METAX_CI_CASELIST[@]}"; do
-    local TEST_FILE_PATH=$run_path/$path
+    TEST_FILE_PATH=$run_path/$path
 
     if [ -e "$TEST_FILE_PATH" ]; then
         FILTERED_PATHS+=("$TEST_FILE_PATH")
