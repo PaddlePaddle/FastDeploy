@@ -440,6 +440,10 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
+    enable_overlap_schedule: bool = False
+    """
+    Flag to enable overlapping schedule. Default is False (disabled).
+    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -1311,6 +1315,13 @@ class EngineArgs:
             default=EngineArgs.scheduler_writer_batch_size,
             help=f"SplitWise Use, Results Writer Batch Size, "
             f"Default is {EngineArgs.scheduler_writer_batch_size}. (global)",
+        )
+
+        scheduler_group.add_argument(
+            "--enable-overlap-schedule",
+            action="store_true",
+            default=EngineArgs.enable_overlap_schedule,
+            help="Enable overlapping schedule.",
         )
 
         return parser

@@ -257,7 +257,11 @@ class GPUModelRunner(ModelRunnerBase):
         # for overlap
         self.last_model_output_data = None
         self.last_sampler_output = None
-        self.last_post_process_done = None
+        self.last_post_process_event = None
+        self.last_token_num = -1
+        self.enable_overlap_schedule = fd_config.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -1233,7 +1237,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
-    def _prepare_inputs(self, is_dummy_or_profile_run: bool = False) -> None:
+    def _prepare_inputs(self, last_token_num=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             if self.enable_mm and self.share_inputs["image_features_list"] is not None:
@@ -1278,7 +1282,20 @@ class GPUModelRunner(ModelRunnerBase):
                 self.max_logprobs = None if not self.speculative_decoding else 0
 
         # Remove padding
-        token_num_cpu = self.share_inputs["seq_lens_this_time"].numpy().sum().item()
+        self.share_inputs["seq_lens_this_time_cpu"].copy_(self.share_inputs["seq_lens_this_time"], False)
+        self.share_inputs["is_block_step_cpu"].copy_(self.share_inputs["is_block_step"], False)
+        token_num_event = paddle.device.cuda.create_event()
+        token_num_event.record()
+        if (
+            is_dummy_or_profile_run
+            or (not self.enable_overlap_schedule)
+            or self.exist_prefill()
+            or last_token_num <= 0
+        ):
+            token_num_event.synchronize()
+            token_num = self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
+        else:
+            token_num = last_token_num
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -1287,7 +1304,7 @@ class GPUModelRunner(ModelRunnerBase):
             output_cum_offsets,
             output_padding_offset,
         ) = pre_process(
-            token_num_cpu,
+            token_num,
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.speculative_decoding,
@@ -1340,6 +1357,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
+        return token_num_event
 
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
@@ -2209,47 +2227,55 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
-        model_output, p_done_idxs = self._preprocess_and_execute_model(model_forward_batch, num_running_requests)
-        if model_output is not None:
-            model_output_data, sampler_output, post_process_done = self._postprocess(
-                model_output, p_done_idxs, model_forward_batch, num_running_requests
-            )
-            if model_output_data is not None and not self.speculative_decoding:
-                self._save_model_output(model_output_data, sampler_output, post_process_done)
+        if not self.enable_overlap_schedule:
+            self.execute_model_normal(model_forward_batch, num_running_requests)
+        else:
+            self.execute_model_overlap(model_forward_batch, num_running_requests)
+
+    def execute_model_normal(
+        self,
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
+        model_output, p_done_idxs, token_num_event = self._preprocess_and_execute_model(
+            model_forward_batch, num_running_requests
+        )
+        model_output_data, sampler_output, post_process_event, _ = self._postprocess(
+            model_output, p_done_idxs, token_num_event, model_forward_batch, num_running_requests
+        )
+        if model_output_data is not None and not self.speculative_decoding:
+            self._save_model_output(model_output_data, sampler_output, post_process_event)
 
     def execute_model_overlap(
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
     ) -> None:
-        """
-        The Entrance of model execute overlap mode.
-        Args:
-            model_forward_batch: 'Request' contains information related to prompt and is an abstract
-            class at the server level, which is too granular for ModelRunner.
-            We plan to replace it with 'ModelForwardBatch'.
-            intermediate_tensors:
-            num_running_requests: batch_size
-        """
-        model_output, p_done_idxs = self._preprocess_and_execute_model(model_forward_batch, num_running_requests)
+        # preprocess and execute model (current batch)
+        model_output, p_done_idxs, token_num_event = self._preprocess_and_execute_model(
+            model_forward_batch, num_running_requests, self.last_token_num
+        )
+
+        # save output (last batch)
         if self.last_model_output_data is not None and not self.speculative_decoding:
-            self._save_model_output(self.last_model_output_data, self.last_sampler_output, self.last_post_process_done)
-        if model_output is not None:
-            model_output_data, sampler_output, post_process_done = self._postprocess(
-                model_output, p_done_idxs, model_forward_batch, num_running_requests
+            self._save_model_output(
+                self.last_model_output_data, self.last_sampler_output, self.last_post_process_event
             )
-            self.last_model_output_data = model_output_data
-            self.last_sampler_output = sampler_output
-            self.last_post_process_done = post_process_done
-        else:
-            self.last_model_output_data = None
-            self.last_sampler_output = None
-            self.last_post_process_done = None
+
+        # postprocess (current batch)
+        model_output_data, sampler_output, post_process_event, token_num = self._postprocess(
+            model_output, p_done_idxs, token_num_event, model_forward_batch, num_running_requests
+        )
+        self.last_model_output_data = model_output_data
+        self.last_sampler_output = sampler_output
+        self.last_post_process_event = post_process_event
+        self.last_token_num = token_num
 
     def _preprocess_and_execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
+        last_token_num: int = -1,
     ) -> None:
         # 1. Prepare inputs of model and sampler.
         p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
@@ -2257,7 +2283,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Reorder inputs to split prefill and decode tokens
         self._process_reorder()
 
-        self._prepare_inputs()
+        token_num_event = self._prepare_inputs(last_token_num)
         self.sampler.pre_process(p_done_idxs)
 
         # 1.1 Update state of logits processor
@@ -2279,25 +2305,38 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.forward_meta.ids_remove_padding,
                 forward_meta=self.forward_meta,
             )
+        return model_output, p_done_idxs, token_num_event
+
+    def _postprocess(
+        self,
+        model_output: paddle.Tensor,
+        p_done_idxs: List[int],
+        token_num_event,
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # Then there is data on other runner, the current runner is required to execute part of the model.
         # But not need to run the below code.
         if not self.not_need_stop():
-            return None, None
+            return None, None, None, -1
 
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
-        return model_output, p_done_idxs
 
-    def _postprocess(
-        self,
-        model_output: paddle.Tensor,
-        p_done_idxs: List[int],
-        model_forward_batch: Optional[List[Request]] = None,
-        num_running_requests: int = None,
-    ) -> None:
+        # NOTE(sunxin):
+        # token_num_event synchronizes the async DtoH copies of seq_lens_this_time_cpu and is_block_step_cpu,
+        # ensuring that the token count for the current batch is ready to be computed and reused in the subsequent batch.
+        token_num_event.synchronize()
+        if (not self.enable_overlap_schedule) or self.exist_prefill():
+            token_num = -1
+        else:
+            token_num = (
+                self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
+                + self.share_inputs["is_block_step_cpu"].numpy().sum().item()
+            )
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
         if self.is_pooling_model:
@@ -2349,7 +2388,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], True)
 
-            return None, None, None
+            return None, None, None, -1
         else:
             hidden_states = rebuild_padding(
                 model_output,
@@ -2363,7 +2402,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-            post_process_done = paddle.device.cuda.create_event()
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -2528,10 +2566,11 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
             # 8. Async cpy
+            post_process_event = paddle.device.cuda.create_event()
             if not self.speculative_decoding:
                 self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
                 self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], False)
-                post_process_done.record()
+                post_process_event.record()
 
         self.exist_prefill_flag = False
         # Routing replay
@@ -2543,15 +2582,17 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.share_inputs["is_chunk_step"].sum() == 0
             ):
                 self.routing_replay_manager.put_table_to_store()
-        return model_output_data, sampler_output, post_process_done
+        return model_output_data, sampler_output, post_process_event, token_num
 
     def _save_model_output(
         self,
         model_output_data,
         sampler_output,
-        post_process_done,
+        post_process_event,
     ):
-        post_process_done.synchronize()
+        # NOTE(sunxin):
+        # post_process_event synchronizes the async DtoH copies of not_need_stop and sampled_token_ids.
+        post_process_event.synchronize()
         save_output_normal(
             model_output=model_output_data,
             sampler_output=sampler_output,
@@ -2720,6 +2761,7 @@ class GPUModelRunner(ModelRunnerBase):
             required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
+    # TODO(sunxin): Remove not_need_stop!!!
     def not_need_stop(self) -> bool:
         """Stop decoding if the tensor meets the termination condition"""
         return get_stop(self.share_inputs["not_need_stop"]).item()
