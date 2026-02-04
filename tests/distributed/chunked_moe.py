@@ -22,6 +22,7 @@ from paddle.distributed import fleet
 from fastdeploy.config import MoEPhase
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+from fastdeploy.worker.input_batch import InputBatch
 
 
 class MockStructuredOutputsConfig:
@@ -53,6 +54,10 @@ class MockModelConfig:
     model_type = ["mock"]
     moe_phase = MoEPhase(phase="prefill")
     hidden_size = 1536
+    enable_mm = False
+    rope_theta = 1000
+    partial_rotary_factor = 0.5
+    architectures = ["mock"]
 
 
 class MockCacheConfig:
@@ -60,6 +65,10 @@ class MockCacheConfig:
     total_block_num = 256
     kv_cache_ratio = 0.9
     enc_dec_block_num = 2
+
+
+class MockSpecaulativeConfig:
+    method = None
 
 
 class MockFDConfig:
@@ -79,6 +88,8 @@ class MockFDConfig:
     scheduler_config = SchedulerConfig()
     structured_outputs_config = MockStructuredOutputsConfig()
     model_config = MockModelConfig()
+    cache_config = MockCacheConfig()
+    speculative_config = MockSpecaulativeConfig()
 
 
 class MockAttentionBackend:
@@ -127,7 +138,8 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.cudagraph_only_prefill = False
         model_runner.use_cudagraph = False
         model_runner.speculative_decoding = False
-        model_runner._init_share_inputs(mock_fd_config.scheduler_config.max_num_seqs)
+        model_runner.share_inputs = InputBatch(mock_fd_config)
+        model_runner.share_inputs.init_share_inputs()
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
         model_runner.exist_prefill_flag = False
@@ -158,7 +170,7 @@ class TestChunkedMoE(unittest.TestCase):
 
         assert self.model_runner.forward_meta.max_moe_num_chunk == 5, (
             f"chunk size is 2, max token_num is 10, max_moe_num_chunk should be 5, "
-            f"but got {self.model_runner.forward_meta.max_moe_num_chunk }"
+            f"but got {self.model_runner.forward_meta.max_moe_num_chunk}"
         )
         if dist.get_rank() == 0:
             assert self.model_runner.forward_meta.moe_num_chunk == 5, (

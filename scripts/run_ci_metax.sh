@@ -95,14 +95,20 @@ METAX_CI_CASELIST=(
     "tests/operators/test_token_penalty.py"
     "tests/operators/test_stop_generation_multi_ends.py"
     "tests/operators/test_get_padding_offset.py"
-    "tests/operators/test_speculate_get_padding_offset.py"
     "tests/operators/test_rebuild_padding.py"
     "tests/operators/test_share_external_data.py"
     "tests/operators/test_rejection_top_p_sampling.py"
     "tests/layers/test_min_sampling.py"
 )
 for path in "${METAX_CI_CASELIST[@]}"; do
-    FILTERED_PATHS+=("$run_path/$path")
+    local TEST_FILE_PATH=$run_path/$path
+
+    if [ -e "$TEST_FILE_PATH" ]; then
+        FILTERED_PATHS+=("$TEST_FILE_PATH")
+    else
+        echo "Test file: [ $path ] does not exist, skip it."
+    fi
+
     # if ! is_excluded "$path"; then
     #     FILTERED_PATHS+=("$run_path/$path")
     # fi

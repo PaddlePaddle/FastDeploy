@@ -166,6 +166,10 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -306,7 +310,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or self.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -551,7 +555,11 @@ class PaddleDisWorkerProc:
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.enable_overlap_schedule)
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
 
                 time.sleep(0.001)
@@ -1005,6 +1013,12 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--enable_overlap_schedule",
+        action="store_true",
+        help="Enable overlap schedule",
     )
 
     args = parser.parse_args()
