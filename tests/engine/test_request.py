@@ -22,8 +22,12 @@ import numpy as np
 
 from fastdeploy.engine.request import (
     CompletionOutput,
+    ControlRequest,
+    ControlResponse,
     ImagePosition,
+    PoolingOutput,
     PoolingParams,
+    PoolingRequestOutput,
     Request,
     RequestMetrics,
     RequestOutput,
@@ -689,6 +693,310 @@ class TestRequestOutputDictAccess(unittest.TestCase):
         self.assertTrue("model_forward_time" in self.request_output)
 
         # Test non-existent attribute
+        self.assertFalse("non_existent" in self.request_output)
+
+
+class TestRequestFromGenericRequestEdgeCases(unittest.TestCase):
+    """Test edge cases for Request.from_generic_request"""
+
+    def test_from_generic_request_with_list_int_prompt(self):
+        """Test from_generic_request with prompt as list of ints (lines 258-259)"""
+        from unittest.mock import MagicMock
+
+        # Use MagicMock to have better control over attributes
+        mock_generic_request = MagicMock()
+        mock_generic_request.request_id = "test_list_int"
+        mock_generic_request.__delattr__("messages")  # Remove messages attribute so hasattr returns False
+        mock_generic_request.__delattr__("prompt_token_ids")  # Remove prompt_token_ids so hasattr returns False
+
+        # Ensure other attributes return None (not Mock objects)
+        for attr in [
+            "prompt_token_ids",
+            "tools",
+            "response_format",
+            "suffix",
+            "metadata",
+            "disable_chat_template",
+            "reasoning_max_tokens",
+            "top_logprobs",
+            "structural_tag",
+            "chat_template",
+            "ic_req_data",
+            "completion_token_ids",
+            "chat_template_kwargs",
+            "disaggregate_info",
+            "guided_json",
+            "guided_regex",
+            "guided_choice",
+            "guided_grammar",
+            "user",
+            "mm_hashes",
+            "add_special_tokens",
+        ]:
+            mock_generic_request.configure_mock(**{attr: None})
+
+        # Mock sampling params creation
+        original_from_generic = SamplingParams.from_generic_request
+        SamplingParams.from_generic_request = Mock(return_value=SamplingParams())
+
+        try:
+            # Test with prompt as list of ints
+            request = Request.from_generic_request(req=mock_generic_request, prompt=[1, 2, 3])
+            self.assertEqual(request.prompt_token_ids, [1, 2, 3])
+            self.assertIsNone(request.prompt)
+
+            # Test with prompt as string
+            request2 = Request.from_generic_request(req=mock_generic_request, prompt="test string")
+            self.assertEqual(request2.prompt, "test string")
+
+        finally:
+            SamplingParams.from_generic_request = original_from_generic
+
+
+class TestControlRequestDictAccess(unittest.TestCase):
+    """Test cases for ControlRequest dictionary-style access methods (lines 612-637)"""
+
+    def setUp(self):
+
+        self.control_request = ControlRequest(request_id="control_test", method="test_method", args={"key": "value"})
+
+    def test_get_method_existing_key(self):
+        """Test get() with existing key (lines 612-616)"""
+        self.assertEqual(self.control_request.get("request_id"), "control_test")
+        self.assertEqual(self.control_request.get("method"), "test_method")
+        self.assertEqual(self.control_request.get("args"), {"key": "value"})
+
+    def test_get_method_non_existing_key(self):
+        """Test get() with non-existing key with default (line 616)"""
+        self.assertIsNone(self.control_request.get("non_existent"))
+        self.assertEqual(self.control_request.get("non_existent", "default_value"), "default_value")
+
+    def test_set_method(self):
+        """Test set() method (lines 618-619)"""
+        self.control_request.set("new_attr", "new_value")
+        self.assertEqual(self.control_request.new_attr, "new_value")
+
+        self.control_request.set("method", "updated_method")
+        self.assertEqual(self.control_request.method, "updated_method")
+
+    def test_getitem_existing_key(self):
+        """Test __getitem__ with existing key (lines 621-623)"""
+        self.assertEqual(self.control_request["request_id"], "control_test")
+        self.assertEqual(self.control_request["method"], "test_method")
+
+    def test_getitem_non_existing_key_raises(self):
+        """Test __getitem__ with non-existing key raises KeyError (lines 624-625)"""
+        with self.assertRaises(KeyError):
+            _ = self.control_request["non_existent"]
+
+    def test_setitem(self):
+        """Test __setitem__ method (lines 627-628)"""
+        self.control_request["new_attr"] = "new_value"
+        self.assertEqual(self.control_request.new_attr, "new_value")
+
+    def test_delitem_existing_key(self):
+        """Test __delitem__ with existing key (lines 630-632)"""
+        self.control_request.temp_attr = "temp"
+        del self.control_request["temp_attr"]
+        self.assertFalse(hasattr(self.control_request, "temp_attr"))
+
+    def test_delitem_non_existing_key_raises(self):
+        """Test __delitem__ with non-existing key raises KeyError (lines 633-634)"""
+        with self.assertRaises(KeyError):
+            del self.control_request["non_existent"]
+
+    def test_contains_existing_key(self):
+        """Test __contains__ with existing key (line 637)"""
+        self.assertTrue("request_id" in self.control_request)
+        self.assertTrue("method" in self.control_request)
+
+    def test_contains_non_existing_key(self):
+        """Test __contains__ with non-existing key (line 637)"""
+        self.assertFalse("non_existent" in self.control_request)
+
+
+class TestControlResponseDictAccess(unittest.TestCase):
+    """Test cases for ControlResponse dictionary-style access methods (lines 732-757)"""
+
+    def setUp(self):
+
+        self.control_response = ControlResponse(
+            request_id="response_test",
+            error_code=200,
+            error_message="No error",
+            result={"status": "success"},
+            finished=True,
+        )
+
+    def test_get_method_existing_key(self):
+        """Test get() with existing key (lines 732-734)"""
+        self.assertEqual(self.control_response.get("request_id"), "response_test")
+        self.assertEqual(self.control_response.get("error_code"), 200)
+        self.assertEqual(self.control_response.get("error_message"), "No error")
+        self.assertEqual(self.control_response.get("result"), {"status": "success"})
+
+    def test_get_method_non_existing_key(self):
+        """Test get() with non-existing key with default (lines 735-736)"""
+        self.assertIsNone(self.control_response.get("non_existent"))
+        self.assertEqual(self.control_response.get("non_existent", "default"), "default")
+
+    def test_set_method(self):
+        """Test set() method (lines 738-739)"""
+        self.control_response.set("new_attr", "new_value")
+        self.assertEqual(self.control_response.new_attr, "new_value")
+
+    def test_getitem_existing_key(self):
+        """Test __getitem__ with existing key (lines 741-743)"""
+        self.assertEqual(self.control_response["request_id"], "response_test")
+        self.assertEqual(self.control_response["error_code"], 200)
+
+    def test_getitem_non_existing_key_raises(self):
+        """Test __getitem__ with non-existing key raises KeyError (lines 744-745)"""
+        with self.assertRaises(KeyError):
+            _ = self.control_response["non_existent"]
+
+    def test_setitem(self):
+        """Test __setitem__ method (lines 747-748)"""
+        self.control_response["new_attr"] = "new_value"
+        self.assertEqual(self.control_response.new_attr, "new_value")
+
+    def test_delitem_existing_key(self):
+        """Test __delitem__ with existing key (lines 750-752)"""
+        self.control_response.temp_attr = "temp"
+        del self.control_response["temp_attr"]
+        self.assertFalse(hasattr(self.control_response, "temp_attr"))
+
+    def test_delitem_non_existing_key_raises(self):
+        """Test __delitem__ with non-existing key raises KeyError (lines 753-754)"""
+        with self.assertRaises(KeyError):
+            del self.control_response["non_existent"]
+
+    def test_contains_existing_key(self):
+        """Test __contains__ with existing key (line 757)"""
+        self.assertTrue("request_id" in self.control_response)
+        self.assertTrue("error_code" in self.control_response)
+
+    def test_contains_non_existing_key(self):
+        """Test __contains__ with non-existing key (line 757)"""
+        self.assertFalse("non_existent" in self.control_response)
+
+
+class TestPoolingOutputDictAccess(unittest.TestCase):
+    """Test cases for PoolingOutput dictionary-style access methods (lines 1271-1296)"""
+
+    def setUp(self):
+
+        self.pooling_output = PoolingOutput(data=[1.0, 2.0, 3.0])
+
+    def test_get_method_existing_key(self):
+        """Test get() with existing key (lines 1271-1273)"""
+        self.assertEqual(self.pooling_output.get("data"), [1.0, 2.0, 3.0])
+
+    def test_get_method_non_existing_key(self):
+        """Test get() with non-existing key with default (lines 1274-1275)"""
+        self.assertIsNone(self.pooling_output.get("non_existent"))
+        self.assertEqual(self.pooling_output.get("non_existent", "default"), "default")
+
+    def test_set_method(self):
+        """Test set() method (lines 1277-1278)"""
+        self.pooling_output.set("new_attr", "new_value")
+        self.assertEqual(self.pooling_output.new_attr, "new_value")
+
+    def test_getitem_existing_key(self):
+        """Test __getitem__ with existing key (lines 1280-1282)"""
+        self.assertEqual(self.pooling_output["data"], [1.0, 2.0, 3.0])
+
+    def test_getitem_non_existing_key_raises(self):
+        """Test __getitem__ with non-existing key raises KeyError (lines 1283-1284)"""
+        with self.assertRaises(KeyError):
+            _ = self.pooling_output["non_existent"]
+
+    def test_setitem(self):
+        """Test __setitem__ method (lines 1286-1287)"""
+        self.pooling_output["new_attr"] = "new_value"
+        self.assertEqual(self.pooling_output.new_attr, "new_value")
+
+    def test_delitem_existing_key(self):
+        """Test __delitem__ with existing key (lines 1289-1291)"""
+        self.pooling_output.temp_attr = "temp"
+        del self.pooling_output["temp_attr"]
+        self.assertFalse(hasattr(self.pooling_output, "temp_attr"))
+
+    def test_delitem_non_existing_key_raises(self):
+        """Test __delitem__ with non-existing key raises KeyError (lines 1292-1293)"""
+        with self.assertRaises(KeyError):
+            del self.pooling_output["non_existent"]
+
+    def test_contains_existing_key(self):
+        """Test __contains__ with existing key (line 1296)"""
+        self.assertTrue("data" in self.pooling_output)
+
+    def test_contains_non_existing_key(self):
+        """Test __contains__ with non-existing key (line 1296)"""
+        self.assertFalse("non_existent" in self.pooling_output)
+
+
+class TestPoolingRequestOutputDictAccess(unittest.TestCase):
+    """Test cases for PoolingRequestOutput dictionary-style access methods (lines 1354-1379)"""
+
+    def setUp(self):
+
+        pooling_output = PoolingOutput(data=[1.0, 2.0, 3.0])
+        self.request_output = PoolingRequestOutput(
+            request_id="pooling_test", outputs=pooling_output, prompt_token_ids=[1, 2, 3], finished=True
+        )
+
+    def test_get_method_existing_key(self):
+        """Test get() with existing key (lines 1354-1356)"""
+        self.assertEqual(self.request_output.get("request_id"), "pooling_test")
+        self.assertEqual(self.request_output.get("prompt_token_ids"), [1, 2, 3])
+        self.assertTrue(self.request_output.get("finished"))
+
+    def test_get_method_non_existing_key(self):
+        """Test get() with non-existing key with default (lines 1357-1358)"""
+        self.assertIsNone(self.request_output.get("non_existent"))
+        self.assertEqual(self.request_output.get("non_existent", "default"), "default")
+
+    def test_set_method(self):
+        """Test set() method (lines 1360-1361)"""
+        self.request_output.set("new_attr", "new_value")
+        self.assertEqual(self.request_output.new_attr, "new_value")
+
+    def test_getitem_existing_key(self):
+        """Test __getitem__ with existing key (lines 1363-1365)"""
+        self.assertEqual(self.request_output["request_id"], "pooling_test")
+        self.assertEqual(self.request_output["prompt_token_ids"], [1, 2, 3])
+        self.assertTrue(self.request_output["finished"])
+
+    def test_getitem_non_existing_key_raises(self):
+        """Test __getitem__ with non-existing key raises KeyError (lines 1366-1367)"""
+        with self.assertRaises(KeyError):
+            _ = self.request_output["non_existent"]
+
+    def test_setitem(self):
+        """Test __setitem__ method (lines 1369-1370)"""
+        self.request_output["new_attr"] = "new_value"
+        self.assertEqual(self.request_output.new_attr, "new_value")
+
+    def test_delitem_existing_key(self):
+        """Test __delitem__ with existing key (lines 1372-1374)"""
+        self.request_output.temp_attr = "temp"
+        del self.request_output["temp_attr"]
+        self.assertFalse(hasattr(self.request_output, "temp_attr"))
+
+    def test_delitem_non_existing_key_raises(self):
+        """Test __delitem__ with non-existing key raises KeyError (lines 1375-1376)"""
+        with self.assertRaises(KeyError):
+            del self.request_output["non_existent"]
+
+    def test_contains_existing_key(self):
+        """Test __contains__ with existing key (line 1379)"""
+        self.assertTrue("request_id" in self.request_output)
+        self.assertTrue("prompt_token_ids" in self.request_output)
+        self.assertTrue("finished" in self.request_output)
+
+    def test_contains_non_existing_key(self):
+        """Test __contains__ with non-existing key (line 1379)"""
         self.assertFalse("non_existent" in self.request_output)
 
 
