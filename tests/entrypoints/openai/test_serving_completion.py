@@ -1338,6 +1338,16 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(len(results) > 0)
         self.assertTrue(any("[DONE]" in result for result in results))
 
+    def test_completion_to_dict_to_infer(self):
+        """Test _to_dict_for_infer method of CompletionRequest class"""
+        # Arrange
+        request = CompletionRequest(model="test_model", prompt="hello", max_tokens=50)
+        # Act
+        result = request.to_dict_for_infer(0, [[1, 2, 3], [4, 5, 6]])
+        # Assert
+        self.assertEqual(result["prompt"], None)
+        self.assertEqual(result["prompt_token_ids"], [[1, 2, 3], [4, 5, 6]])
+
 
 if __name__ == "__main__":
     unittest.main()
