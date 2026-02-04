@@ -135,7 +135,7 @@ def test_ep4tp1_online(xpu_env):
             f"{','.join([str(i) for i in metrics_ports])}",
             "--args",
             "--model",
-            f"{model_path}/ERNIE-4.5-21B-A3B-Paddle",
+            f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
             "--engine-worker-queue-port",
             f"{','.join([str(i) for i in engine_worker_queue_ports])}",
             "--max-model-len",
