@@ -16,6 +16,10 @@ from __future__ import annotations
 
 import json
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "MLA_ATTN"
+os.environ["FLAGS_flash_attn_version"] = "3"
+
 import shutil
 import tempfile
 import unittest
@@ -46,9 +50,11 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
     allocate_launch_related_buffer,
 )
 from fastdeploy.model_executor.layers.quantization.mix_quant import MixQuantConfig
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope
-from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
-from fastdeploy.model_executor.ops.gpu import get_padding_offset
+from fastdeploy.model_executor.models.deepseek_v3 import DeepseekV3MLAAttention
+from fastdeploy.model_executor.ops.gpu import (
+    get_padding_offset,
+    get_position_ids_and_mask_encoder_batch,
+)
 from fastdeploy.worker.worker_process import init_distributed_environment
 
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
@@ -78,31 +84,37 @@ class TestAttentionPerformance(unittest.TestCase):
         attn_cls = get_attention_backend()
         self.attn_backend = attn_cls(
             self.fd_config,
-            kv_num_heads=self.fd_config.model_config.num_key_value_heads // tp_size,
+            kv_num_heads=-1,
             num_heads=self.fd_config.model_config.num_attention_heads // tp_size,
             head_dim=self.fd_config.model_config.head_dim,
-            encoder_block_shape_q=64,
-            decoder_block_shape_q=16,
+            encoder_block_shape_q=-1,
+            decoder_block_shape_q=-1,
         )
 
         num_layers = self.fd_config.model_config.num_hidden_layers
+        real_weight_layers = num_layers // 10 + 1
 
-        real_weight_layers = num_layers // 2 + 1
         self.attention_layer = [None] * num_layers
         for i in range(real_weight_layers):
-            self.attention_layer[i] = Ernie4_5_Attention(self.fd_config, layer_id=i, prefix="test_layer")
+            self.attention_layer[i] = DeepseekV3MLAAttention(self.fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
             self.attention_layer[i].load_state_dict(state_dict)
 
         def attn_forward(forward_meta, hidden_states):
             for i in range(num_layers):
-                hidden_states = self.attention_layer[i % real_weight_layers](forward_meta, hidden_states)
-
-            return hidden_states
+                haha = self.attention_layer[i % real_weight_layers](
+                    forward_meta, hidden_states, forward_meta.position_ids, forward_meta.mask_encoder_batch
+                )
+            return haha
 
         self.attn_forward = attn_forward
 
-        self.cache_quant_type_str = getattr(self.attention_layer[0].attn, "cache_quant_type_str", "none")
+        self.cache_quant_type_str = getattr(self.attention_layer[0].mla_attn, "cache_quant_type_str", "none")
+
+        self.position_ids_buffer = paddle.empty([self.fd_config.model_config.max_model_len], dtype=paddle.int32)
+        self.mask_encoder_batch_buffer = paddle.empty(
+            [self.fd_config.model_config.max_model_len, 1], dtype=paddle.int32
+        )
 
         print("===== Initialization Complete =====")
 
@@ -121,15 +133,29 @@ class TestAttentionPerformance(unittest.TestCase):
         Creates a temporary directory and writes the model configuration to a 'config.json' file.
         """
         config_dict = {
-            "architectures": ["Ernie4_5_MoeForCausalLM"],
+            "architectures": ["DeepseekV3ForCausalLM"],
             "dtype": "bfloat16",
-            "max_position_embeddings": 201 * 1024,
-            "max_model_len": 201 * 1024,
+            "max_position_embeddings": 128 * 1024,
+            "max_model_len": 128 * 1024,
             "head_dim": 128,
-            "hidden_size": 6144,
-            "num_attention_heads": 56,
-            "num_key_value_heads": 4,
+            "hidden_size": 7168,
+            "num_attention_heads": 64,
+            "num_key_value_heads": 64,
             "num_hidden_layers": 61,
+            "q_lora_rank": 1536,
+            "kv_lora_rank": 512,
+            "qk_nope_head_dim": 128,
+            "qk_rope_head_dim": 64,
+            "v_head_dim": 128,
+            "rope_scaling": {
+                "beta_fast": 32,
+                "beta_slow": 1,
+                "factor": 40,
+                "mscale": 1.0,
+                "mscale_all_dim": 1.0,
+                "original_max_position_embeddings": 4096,
+                "type": "yarn",
+            },
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -160,8 +186,7 @@ class TestAttentionPerformance(unittest.TestCase):
             quant_config=MixQuantConfig(
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
-                kv_cache_quant_type="float8_e4m3fn",
-                # kv_cache_quant_type=None,
+                kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -175,29 +200,43 @@ class TestAttentionPerformance(unittest.TestCase):
         Creates a state_dict with random weights for the Ernie4_5_Attention layer.
         """
         hidden_size = fd_config.model_config.hidden_size
-        tp_size = fd_config.parallel_config.tensor_parallel_size
         tensor_dtype = getattr(paddle, fd_config.model_config.dtype)
 
-        q_dims = fd_config.model_config.num_attention_heads // tp_size * fd_config.model_config.head_dim
-        kv_dims = fd_config.model_config.num_key_value_heads // tp_size * fd_config.model_config.head_dim
-        qkv_proj_output_dim_tp = q_dims + 2 * kv_dims
-        qkv_weight_shape = [hidden_size, qkv_proj_output_dim_tp]
+        tp_size = fd_config.parallel_config.tensor_parallel_size
 
-        o_proj_input_dim = fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim
-        o_proj_input_dim_tp = o_proj_input_dim // tp_size
-        o_proj_weight_shape = [o_proj_input_dim_tp, hidden_size]
+        q_lora_rank = fd_config.model_config.q_lora_rank
+        kv_lora_rank = fd_config.model_config.kv_lora_rank
+        qk_rope_head_dim = fd_config.model_config.qk_rope_head_dim
+        qk_nope_head_dim = fd_config.model_config.qk_nope_head_dim
+        v_head_dim = fd_config.model_config.v_head_dim
+        qk_head_dim = self.attention_layer[0].qk_head_dim
 
-        qkv_weight = paddle.randn(qkv_weight_shape, dtype=tensor_dtype)
+        o_proj_input_dim = fd_config.model_config.num_attention_heads // tp_size * v_head_dim
+        o_proj_weight_shape = [o_proj_input_dim, hidden_size]
+
         o_proj_weight = paddle.randn(o_proj_weight_shape, dtype=tensor_dtype)
 
-        activation_scale_shape = [fd_config.model_config.num_key_value_heads]
-        activation_scale_tensor = paddle.full(shape=activation_scale_shape, fill_value=1.0, dtype=tensor_dtype)
+        # 这个权重是做1536的rmsnorm！
+        q_a_layernorm = paddle.randn([q_lora_rank])
+
+        q_a_proj = paddle.randn([hidden_size, q_lora_rank])
+        kv_a_proj_with_mqa = paddle.randn([hidden_size, kv_lora_rank + qk_rope_head_dim])
+
+        kv_a_layernorm = paddle.randn([kv_lora_rank])
+
+        q_b_proj = paddle.randn([q_lora_rank, fd_config.model_config.num_attention_heads // tp_size * qk_head_dim])
+        kv_b_proj = paddle.randn(
+            [kv_lora_rank, fd_config.model_config.num_key_value_heads // tp_size * (qk_nope_head_dim + v_head_dim)]
+        )
 
         state_dict = {
-            f"{prefix}.qkv_proj.weight": qkv_weight,
+            f"{prefix}.q_a_layernorm.weight": q_a_layernorm,
+            f"{prefix}.q_a_proj.weight": q_a_proj,
+            f"{prefix}.kv_a_proj_with_mqa.weight": kv_a_proj_with_mqa,
+            f"{prefix}.kv_a_layernorm.weight": kv_a_layernorm,
+            f"{prefix}.q_b_proj.weight": q_b_proj,
+            f"{prefix}.kv_b_proj.weight": kv_b_proj,
             f"{prefix}.o_proj.weight": o_proj_weight,
-            f"{prefix}.cachek_matmul.activation_scale": activation_scale_tensor,
-            f"{prefix}.cachev_matmul.activation_scale": activation_scale_tensor,
         }
         return state_dict
 
@@ -224,15 +263,14 @@ class TestAttentionPerformance(unittest.TestCase):
         else:
             raise ValueError(f"Unsupported ForwardMode: {mode}")
 
-        tp_size = fd_config.parallel_config.tensor_parallel_size
         attn_backend_buffers = allocate_launch_related_buffer(
             max_batch_size=batch_size,
             max_model_len=fd_config.model_config.max_model_len,
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
             decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
-            num_heads=fd_config.model_config.num_attention_heads // tp_size,
-            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads,
+            kv_num_heads=1,
             block_size=fd_config.cache_config.block_size,
         )
 
@@ -241,45 +279,26 @@ class TestAttentionPerformance(unittest.TestCase):
         max_blocks_per_seq = (max_model_len + block_size - 1) // block_size
         allocated_blocks_per_seq = seq_len // block_size + 1
         allocated_num_blocks = allocated_blocks_per_seq * batch_size
-        head_dim = fd_config.model_config.head_dim
-        kv_num_heads_tp = fd_config.model_config.num_key_value_heads // tp_size
         num_layers = fd_config.model_config.num_hidden_layers
         cache_type = fd_config.model_config.dtype
-        if cache_quant_type_str != "none":
-            cache_type = "uint8"
-        cache_shape = (allocated_num_blocks, kv_num_heads_tp, block_size, head_dim)
-        scale_shape = (allocated_num_blocks, kv_num_heads_tp, block_size)
-        caches = []
 
+        cache_shape = self.attn_backend.get_kv_cache_shape(allocated_num_blocks)
+        caches = []
         for layer_id in range(num_layers):
             # 这里只用了少量层，其他层复用最开始的几层，以此来增大batch测试
-            if layer_id // 2 == 0:
-                key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
-                value_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
-            caches.extend([key_cache, value_cache])
-            if cache_quant_type_str == "block_wise_fp8":
-                key_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
-                value_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
-                caches.extend([key_cache_scale, value_cache_scale])
+            if layer_id // 1 == 0:
+                key_cache = paddle.randint(0, 255, shape=cache_shape[0], dtype="int32").cast(cache_type)
+            caches.extend([key_cache])
 
         block_tables = paddle.zeros(shape=(batch_size, max_blocks_per_seq), dtype="int32")
         for i in range(batch_size):
             for j in range(allocated_blocks_per_seq):
                 block_tables[i, j] = i * allocated_blocks_per_seq + j
 
-        tmp_position_ids = paddle.arange(max_model_len).reshape((1, -1))
-        rope_emb = get_rope(
-            rotary_dim=fd_config.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=fd_config.model_config.rope_theta,
-            model_config=fd_config.model_config,
-            partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
-        )
-
         input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
         token_num = np.sum(seq_lens_this_time)
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, None, None, token_num
+            input_ids, seq_lens_this_time, token_num
         )
 
         forward_meta = ForwardMeta(
@@ -292,16 +311,28 @@ class TestAttentionPerformance(unittest.TestCase):
             batch_id_per_token=batch_id_per_token,
             block_tables=block_tables,
             caches=caches,
-            rotary_embs=rope_emb,
             step_use_cudagraph=False,
             attn_backend=attn_backend,
             forward_mode=ForwardMode.MIXED,
-            attn_mask=None,
-            attn_mask_offsets=None,
             **attn_backend_buffers,
         )
 
         hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
+
+        position_ids = self.position_ids_buffer[:token_num]
+        mask_encoder_batch = self.mask_encoder_batch_buffer[:token_num]
+
+        get_position_ids_and_mask_encoder_batch(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            position_ids,
+            mask_encoder_batch,
+        )
+
+        forward_meta.position_ids = position_ids
+        forward_meta.mask_encoder_batch = mask_encoder_batch
+
         return forward_meta, hidden_states
 
     def test_decode_performance_with_prefill(self):
@@ -349,15 +380,17 @@ class TestAttentionPerformance(unittest.TestCase):
 
         # return
 
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
+        import paddle.profiler as profiler
 
-        # p.start()
-        # p.step()
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
 
-        for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
+        p.start()
+        p.step()
+
+        for decode_batch_size in [10]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
                 seq_len=16 * 1024,
@@ -397,7 +430,8 @@ class TestAttentionPerformance(unittest.TestCase):
 
             del forward_meta
 
-        # p.stop()
+        p.stop()
+        # p.summary(sorted_by=paddle.profiler.SortedKeys.GPUTotal)
 
 
 if __name__ == "__main__":
