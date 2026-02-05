@@ -36,31 +36,19 @@ class MMBaseDataProcessor(ABC):
         """
         raise NotImplementedError
 
-<<<<<<< HEAD
     def get_max_image_tokens(self, *args, **kwargs) -> int:
-=======
-    def get_max_image_tokens(self) -> int:
->>>>>>> dca92c0a3 (add mm do profile)
         """
         Get the maximum number of image tokens.
         """
         return 0
 
-<<<<<<< HEAD
     def get_max_video_tokens(self, *args, **kwargs) -> int:
-=======
-    def get_max_video_tokens(self) -> int:
->>>>>>> dca92c0a3 (add mm do profile)
         """
         Get the maximum number of video tokens.
         """
         return 0
 
-<<<<<<< HEAD
     def get_max_audio_tokens(self, *args, **kwargs) -> int:
-=======
-    def get_max_audio_tokens(self) -> int:
->>>>>>> dca92c0a3 (add mm do profile)
         """
         Get the maximum number of audio tokens.
         """
