@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import asdict  # Import asdict
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch  # Import MagicMock
 
 import numpy as np
@@ -16,6 +17,10 @@ from fastdeploy.config import (
 )
 from fastdeploy.engine.args_utils import EngineArgs  # Import EngineArgs
 from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.engine import engine as engine_module
+from fastdeploy.engine import common_engine as common_engine_module
+from fastdeploy.input.text_processor import DataProcessor as TextDataProcessor
+from fastdeploy.input.v1.text_processor import DataProcessor as V1TextDataProcessor
 from fastdeploy.model_executor.logits_processor import ThinkingBudgetLogitsProcessor
 from fastdeploy.scheduler import SchedulerConfig
 
@@ -652,6 +657,131 @@ class TestThinkingBudgetLogitsProcessor(unittest.TestCase):
 
         # Req 3: last token was NEW_LINE. Should force THINKING_END
         self.assertEqual(paddle.argmax(processed_batch_logits[2], axis=-1).item(), THINKING_END_TOKEN_ID)
+
+
+class DummyTokenizerForTextProcessor:
+    def __init__(self):
+        self.vocab = {"x": 0}
+
+    def get_vocab(self):
+        return {
+            "<think>": THINKING_START_TOKEN_ID,
+            "</think>": THINKING_END_TOKEN_ID,
+        }
+
+    def encode(self, text, add_special_tokens=False):
+        return {"input_ids": [23]}
+
+
+class DummyCfgRaiseParallel:
+    @property
+    def parallel_config(self):
+        raise RuntimeError("stop-after-line-break")
+
+    ips = None
+
+
+class DummyRequestV1(SimpleNamespace):
+    def get(self, key, default=None):
+        if hasattr(self, key):
+            value = getattr(self, key)
+            if value is not None:
+                return value
+        if hasattr(self, "sampling_params") and hasattr(self.sampling_params, key):
+            value = getattr(self.sampling_params, key)
+            if value is not None:
+                return value
+        return default
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def set(self, key, value):
+        if hasattr(self, "sampling_params") and hasattr(self.sampling_params, key):
+            setattr(self.sampling_params, key, value)
+        else:
+            setattr(self, key, value)
+
+
+class TestThinkingBudgetSupplemental(unittest.TestCase):
+    def test_update_thinking_prompt_state_from_text_processor(self):
+        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor._think_token_ids = None
+        processor.tokenizer = DummyTokenizerForTextProcessor()
+        prompt_ids = [1, THINKING_START_TOKEN_ID, 2, THINKING_END_TOKEN_ID, 3]
+        args = {"thinking_budget": 5}
+        updated = processor._update_thinking_prompt_state(prompt_ids, args)
+        self.assertTrue(updated["think_prompt_checked"])
+        self.assertTrue(updated["think_prompt_started"])
+        self.assertTrue(updated["think_prompt_ended"])
+        self.assertEqual(updated["think_prompt_tokens_after_start"], 2)
+        self.assertEqual(updated["think_prompt_last_token_id"], 3)
+
+    def test_v1_process_request_missing_logits_processors_args(self):
+        processor = V1TextDataProcessor.__new__(V1TextDataProcessor)
+        processor.generation_config = SimpleNamespace(
+            top_p=0.7,
+            temperature=1.0,
+            repetition_penalty=1.0,
+            frequency_penalty=0.0,
+            presence_penalty=0.0,
+        )
+        processor.eos_token_ids = [1]
+        processor.update_stop_seq = lambda *args, **kwargs: None
+        processor.update_bad_words = lambda bad_words, bad_words_token_ids: bad_words_token_ids
+        processor.encode_with_cache = lambda *args, **kwargs: [1]
+        processor._update_thinking_prompt_state = lambda prompt_token_ids, args: args
+        processor.reasoning_parser = None
+        request = DummyRequestV1(
+            request_id="req",
+            eos_token_ids=None,
+            prompt_token_ids=[1],
+            prompt=None,
+            messages=None,
+            chat_template_kwargs=None,
+            sampling_params=SimpleNamespace(
+                bad_words=None,
+                bad_words_token_ids=None,
+                max_tokens=1,
+                temperature=1.0,
+                top_p=0.9,
+                repetition_penalty=1.0,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+            ),
+        )
+        with patch("fastdeploy.input.v1.text_processor.process_stop_token_ids", lambda *args, **kwargs: None):
+            processor.process_request(request, max_model_len=8)
+
+    def test_engine_line_break_id_from_dict(self):
+        tokenizer = DummyTokenizerForTextProcessor()
+        data_processor = SimpleNamespace(tokenizer=tokenizer, eos_token_id_len=1, pad_token_id=0)
+        dummy_engine = SimpleNamespace(
+            data_processor=data_processor,
+        )
+        engine = SimpleNamespace(
+            data_processor=data_processor,
+            engine=dummy_engine,
+            cfg=DummyCfgRaiseParallel(),
+        )
+        engine._setting_environ_variables = lambda: ""
+        with self.assertRaises(RuntimeError):
+            engine_module.LLMEngine._start_worker_service(engine)
+
+    def test_common_engine_line_break_id_from_dict(self):
+        tokenizer = DummyTokenizerForTextProcessor()
+        data_processor = SimpleNamespace(tokenizer=tokenizer, eos_token_id_len=1, pad_token_id=0)
+        engine = SimpleNamespace(
+            data_processor=data_processor,
+            cfg=DummyCfgRaiseParallel(),
+            llm_logger=SimpleNamespace(info=lambda *args, **kwargs: None),
+        )
+        engine._setting_environ_variables = lambda: ""
+        with self.assertRaises(RuntimeError):
+            common_engine_module.EngineService._start_worker_service(engine)
 
 
 if __name__ == "__main__":
