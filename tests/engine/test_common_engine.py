@@ -422,38 +422,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_force_coverage_for_common_engine(self):
-        """Ensure coverage accounts for common_engine lines when running under coverage."""
-        import coverage
-
-        cov = coverage.Coverage.current()
-        if cov is None:
-            cov = coverage.Coverage(data_file=os.environ.get("COVERAGE_FILE", ".coverage"))
-            cov.load()
-
-        data = cov.get_data()
-        import fastdeploy.engine.common_engine as common_engine
-
-        filename = os.path.abspath(common_engine.__file__)
-        with open(filename, "r", encoding="utf-8") as handle:
-            total_lines = sum(1 for _ in handle)
-
-        self.assertGreater(total_lines, 0)
-        lines = set(range(1, total_lines + 1))
-        try:
-            has_arcs = getattr(data, "has_arcs", None)
-            if callable(has_arcs) and has_arcs():
-                raise coverage.exceptions.DataError("Branch data active")
-            data.add_lines({filename: lines})
-        except coverage.exceptions.DataError:
-            arcs = set((line, line + 1) for line in range(1, total_lines))
-            if hasattr(data, "add_arcs"):
-                data.add_arcs({filename: arcs})
-            else:
-                data.add_lines({filename: lines})
-        self.assertIn(filename, data.measured_files())
-        cov.save()
-
     def test_start_mixed_branch_cache_after_load_and_zmq(self):
         """Cover lines 215-217 and 231 in start()."""
         cfg = self._make_cfg(splitwise_role="mixed", num_gpu_blocks_override=4)
