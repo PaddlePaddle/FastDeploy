@@ -129,7 +129,7 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
+            api_server_logger.debug(f"current {self.engine_client.semaphore.status()}")
 
             if request.request_id is not None:
                 request_id = request.request_id
@@ -370,7 +370,9 @@ class OpenAIServingChat:
                                     completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
-                            api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
+                            api_server_logger.info(
+                                f"Chat Streaming response send_idx 0: id={request_id} model={model_name} choice_index={i}"
+                            )
                         first_iteration = False
 
                     output = res["outputs"]
@@ -489,7 +491,9 @@ class OpenAIServingChat:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         if res["finished"]:
-                            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
+                            api_server_logger.info(
+                                f"Chat Streaming response last send: id={request_id} model={model_name} choices={len(chunk.choices)}"
+                            )
                         choices = []
 
             if include_usage:
@@ -528,7 +532,7 @@ class OpenAIServingChat:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
-            api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
+            api_server_logger.debug(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -694,7 +698,7 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
+            api_server_logger.debug(f"release {self.engine_client.semaphore.status()}")
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
@@ -722,7 +726,9 @@ class OpenAIServingChat:
             usage=usage,
         )
         trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
-        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        api_server_logger.info(
+            f"Chat response: id={request_id} model={model_name} choices={len(res.choices)}"
+        )
         return res
 
     async def _create_chat_completion_choice(

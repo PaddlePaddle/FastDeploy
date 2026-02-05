@@ -370,7 +370,9 @@ class OpenAIServingCompletion:
                 prompt_tokens_list=prompt_tokens_list,
                 max_tokens_list=max_tokens_list,
             )
-            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            api_server_logger.info(
+                f"Completion response: id={request_id} model={model_name} choices={len(res.choices)}"
+            )
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
@@ -514,7 +516,7 @@ class OpenAIServingCompletion:
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                             api_server_logger.info(
-                                f"Completion Streaming response send_idx 0: {chunk.model_dump_json()}"
+                                f"Completion Streaming response send_idx 0: id={request_id} model={model_name} choice_index={idx}"
                             )
                         first_iteration[idx] = False
 
@@ -589,7 +591,7 @@ class OpenAIServingCompletion:
                         chunk_temp = chunk
                         chunk_temp.choices = choices
                         api_server_logger.info(
-                            f"Completion Streaming response send_idx 0: {chunk_temp.model_dump_json()}"
+                            f"Completion Streaming response send_idx 0: id={request_id} model={model_name} choice_index={idx}"
                         )
                         del chunk_temp
 
@@ -642,7 +644,9 @@ class OpenAIServingCompletion:
                                 metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
+                        api_server_logger.info(
+                            f"Completion Streaming response last send: id={request_id} model={model_name} choices={len(chunk.choices)}"
+                        )
 
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", num_choices)

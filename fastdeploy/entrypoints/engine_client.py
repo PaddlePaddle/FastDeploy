@@ -311,7 +311,6 @@ class EngineClient:
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 task["messages"] = None
-            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
             main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
             main_process_metrics.prompt_tokens_total.inc(input_ids_len)
             main_process_metrics.request_prompt_tokens.observe(input_ids_len)
