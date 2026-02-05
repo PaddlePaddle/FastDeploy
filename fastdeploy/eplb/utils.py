@@ -86,7 +86,7 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
     )
 
     # Create shared memory for storing DP rank IP addresses during expert rearrangement
-    # Size field stores the count of IPs, list field stores the actual IP addresses
+    # First signal stores the count of IPs, second signal stores the actual IP address list
     rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
     _ = IPCSignal(
         name="rearrange_experts_ips_size",
