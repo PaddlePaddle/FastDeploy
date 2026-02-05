@@ -27,7 +27,7 @@ from utils.serving_utils import (
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    clean_ports,
+    clean,
     is_port_open,
 )
 
@@ -42,7 +42,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports()
+    clean()
 
     print("log dir clean ")
     if os.path.exists("log") and os.path.isdir("log"):
@@ -107,7 +107,7 @@ def setup_and_run_server():
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
-            clean_ports()
+            clean()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -117,7 +117,7 @@ def setup_and_run_server():
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        clean_ports()
+        clean()
         print(f"server (pid={process.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
@@ -147,7 +147,7 @@ def headers():
     return {"Content-Type": "application/json"}
 
 
-def send_request(url, payload, timeout=600):
+def send_request(url, payload, timeout=60):
     """
     发送请求到指定的URL，并返回响应结果。
     """
@@ -297,3 +297,72 @@ def test_non_chat_usage_non_stream(api_url):
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
     assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+
+def test_mtp_accept_ratio(api_url):
+    """测试mtp接受率"""
+    payload = {
+        "model": "default",
+        "messages": [
+            {
+                "role": "user",
+                "content": "国外项目风险管理研究起步较早，理论体系成熟。早期研究集中于保险与金融领域，后逐步扩展至工程项目、"
+                "公共管理等多领域。在理论层面，COSO《企业风险管理——整合框架》和ISO31000标准为风险管理提供了系统性"
+                "指导，强调风险识别、评估、应对与监控的全流程管理。风险识别方法包括故障树分析、事件树分析等；风险评估"
+                "则广泛应用VaR模型、蒙特卡洛模拟等量化工具。应对策略涵盖规避、转移、减轻和接受等，并衍生出风险共享、"
+                "升级等复杂策略。此外，组织文化、管理层支持等因素对风险管理有效性影响显著。近年来，随着科技发展，"
+                "人工智能、大数据等技术被引入风险管理，推动其向智能化、自动化方向发展。请介绍一下国外关于项目风险管理"
+                "的文献研究综述，300字以内",
+            },
+        ],
+        "stream": True,
+        "stream_options": {"include_usage": True, "continuous_usage_stats": True},
+        "temperature": 0,
+        "seed": 23,
+        "top_p": 0,
+    }
+
+    print("fastdeploy answer is :")
+
+    try:
+        # TODO: 第一次和第二次存在diff，后面正常，暂时多请求一次
+        response = send_request(url=api_url, payload=payload)
+        chunks = get_stream_chunks(response)
+        response = send_request(url=api_url, payload=payload)
+        chunks = get_stream_chunks(response)
+        for idx, chunk in enumerate(chunks):
+            print(f"\nchunk[{idx}]:\n{json.dumps(chunk, ensure_ascii=False)}")
+        result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
+        speculate_metrics = chunks[-2]["choices"][0]["speculate_metrics"]
+    except Exception as e:
+        print(f"解析失败: {e}")
+    print("\nresult:\n", result)
+
+    base_path = os.getenv("MODEL_PATH")
+    baseline_path = os.path.join(base_path, "21b_mtp_accept_ratio_baseline_dev.txt")
+    with open(baseline_path, "r", encoding="utf-8") as f:
+        baseline = f.read()
+    baseline_ratio = {
+        "accepted_tokens": 139,
+        "rejected_tokens": 23,
+        "accept_ratio": 0.41726618705035967,
+        "average_accept_length": 1.7160493827160495,
+        "accepted_tokens_per_head": [81, 58],
+        "accept_ratio_per_head": [0.7160493827160493],
+    }
+
+    response = send_request(url=api_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    result_2 = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
+    speculate_metrics_2 = chunks[-2]["choices"][0]["speculate_metrics"]
+    print("chunks:", chunks[-2])
+    print("baseline", speculate_metrics)
+    print("speculate_metrics_2", speculate_metrics_2)
+    assert result_2 == baseline, f"与baseline存在diff，result_2: {result}\n baseline: {baseline}"
+    assert speculate_metrics_2 == baseline_ratio, (
+        f"speculate_metrics存在diff，" f"speculate_metrics_2: {speculate_metrics_2}\n " f"baseline: {baseline_ratio}"
+    )
+    assert speculate_metrics_2["accept_ratio"] > 0, "accept_ratio异常"
+    prompt_tokens = chunks[-1]["usage"]["prompt_tokens"]
+    cached_tokens = chunks[-1]["usage"]["prompt_tokens_details"]["cached_tokens"]
+    assert cached_tokens == prompt_tokens // 64 * 64, "cached_tokens数量有问题"

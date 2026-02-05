@@ -15,7 +15,6 @@
 
 from fastdeploy.import_ops import import_custom_ops
 
-# PACKAGE = "fastdeploy.model_executor.ops.intel_hpu"
-PACKAGE = "paddlenlp_ops"
+PACKAGE = "paddle_custom_device"
 
-import_custom_ops(PACKAGE, "paddlenlp_ops", globals())
+import_custom_ops(PACKAGE, ".intel_hpu", globals())

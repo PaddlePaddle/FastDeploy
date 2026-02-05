@@ -14,7 +14,24 @@
 # limitations under the License.
 """
 
-from .ipc_cache_transfer import IPCCommManager
+from fastdeploy.platforms import current_platform
+
+from .file_store import FileStore
+from .kvcache_storage import KVCacheStorage
+from .mooncake_store import AttentionStore, MooncakeStore
 from .rdma_cache_transfer import RDMACommManager
 
-__all__ = ["IPCCommManager", "RDMACommManager"]
+if current_platform.is_cuda():
+    from .ipc_cache_transfer import IPCCommManager
+else:
+    IPCCommManager = None
+
+
+__all__ = [
+    "IPCCommManager",
+    "RDMACommManager",
+    "KVCacheStorage",
+    "MooncakeStore",
+    "AttentionStore",
+    "FileStore",
+]

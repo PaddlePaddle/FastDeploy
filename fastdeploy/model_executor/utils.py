@@ -19,6 +19,7 @@ import re
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any, List, Optional, Union
 
 import paddle
@@ -128,21 +129,62 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
     return weight_or_paramter
 
 
-def process_weights_after_loading(sublayers_dict: dict):
+def process_weight_transpose(layer, weight_name):
+    weight = getattr(layer, weight_name)
+    if len(weight.shape) == 2:
+        weight_shape = weight.shape[::-1]
+    elif len(weight.shape) == 3:
+        weight_shape = [weight.shape[0]] + list(weight.shape[1:][::-1])
+    weight_tmp = layer.create_parameter(
+        shape=weight_shape,
+        dtype=weight.dtype,
+        default_initializer=paddle.nn.initializer.Constant(0),
+        is_bias=False,
+    )
+    if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
+        free_tensor(weight)
+        setattr(layer, weight_name, weight_tmp)
+        return
+
+    if len(weight.shape) == 2:
+        weight_transpose = weight.transpose([1, 0])
+    elif len(weight.shape) == 3:
+        weight_transpose = weight.transpose([0, 2, 1])
+    weight_tmp.copy_(weight_transpose, False)
+    free_tensor(weight)
+    setattr(layer, weight_name, weight_tmp)
+
+
+def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
     """
-    process_weights_after_loading: e.g., handle extracted weights (quantization, reshaping, etc.)
+    process_weights_after_loading:
     """
 
     def fn(model_sublayer_name: str, param=None):
-        from fastdeploy.model_executor.layers.linear import KVBatchLinear
+        from fastdeploy.model_executor.layers.linear import (
+            KVBatchLinear,
+            UnquantizedLinearMethod,
+        )
+        from fastdeploy.model_executor.layers.moe.moe import get_moe_method
 
         if model_sublayer_name not in sublayers_dict:
             return
         model_sublayer = sublayers_dict[model_sublayer_name]
         if isinstance(model_sublayer, KVBatchLinear):
             model_sublayer.process_weights_after_loading()
+        if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
+            # skip for offline quantization
+            return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
+            if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
+                # skip unquantized linear
+                return
             if not hasattr(quant_method, "process_weights_after_loading"):
                 return
             if param is not None and hasattr(param, "tensor_track") and param.tensor_track is None:
@@ -168,6 +210,16 @@ class WeightsMapper:
         return self._map_name(weight_name)
 
 
+def remap_weight_keys(weights_iterator, mapper: dict, include_keys: Optional[List[str]] = None):
+    if include_keys is not None:
+        weights_iterator = filter(lambda item: any(key in item[0] for key in include_keys), weights_iterator)
+
+    return (
+        (next((key.replace(k, v) for k, v in mapper.items() if k in key), key), value)
+        for key, value in weights_iterator
+    )
+
+
 def process_weights_before_loading(
     *, skip_prefixes: Optional[List[str]] = None, mapper: Optional[WeightsMapper] = None
 ):
@@ -184,6 +236,41 @@ def process_weights_before_loading(
     return fn
 
 
+def weight_fully_copied(weight):
+    return (
+        hasattr(weight, "tensor_track") and weight.tensor_track is not None and weight.tensor_track.is_fully_copied()
+    )
+
+
+def process_final_after_loading(model, fd_config: FDConfig):
+    # process_final_after_loading handles the post-loading process for cases other than dynamic quantization.
+    from fastdeploy.model_executor.layers.linear import (
+        KVBatchLinear,
+        UnquantizedLinearMethod,
+    )
+    from fastdeploy.model_executor.layers.moe.moe import get_moe_method
+
+    for name, sublayer in model.named_sublayers():
+        if isinstance(sublayer, KVBatchLinear):
+            continue
+        quant_method = getattr(sublayer, "quant_method", None)
+        if quant_method is not None:
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
+            is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
+            is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
+            if is_unquant_cls or is_offline_quantized_ckpt:
+                if hasattr(quant_method, "process_weights_after_loading"):
+                    quant_method.process_weights_after_loading(sublayer)
+                continue
+        if not hasattr(sublayer, "process_weights_after_loading"):
+            continue
+        sublayer.process_weights_after_loading()
+
+
 def free_tensor(tensor):
     if hasattr(tensor, "tensor_track"):
         tensor.tensor_track = None
@@ -191,16 +278,44 @@ def free_tensor(tensor):
     del tensor
 
 
+def create_parameter_and_copy(layer: paddle.nn.Layer, name: str, weight: paddle.Tensor) -> None:
+    """
+    Create a parameter in the layer and copy data from weight.
+
+    Args:
+        layer (paddle.nn.Layer): The layer where the parameter will be created.
+        name (str): The name of the parameter.
+        weight (paddle.Tensor): The source weight tensor.
+    """
+    setattr(
+        layer,
+        name,
+        layer.create_parameter(
+            shape=weight.shape,
+            dtype=weight.dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        ),
+    )
+    getattr(layer, name).copy_(weight, False)
+
+
+def fd_cast(weight, param):
+    if weight.dtype != param.dtype:
+        if weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+            weight = weight.view(param.dtype)
+        else:
+            weight = weight.cast(param.dtype)
+    return weight
+
+
 def default_weight_loader(fd_config: FDConfig = None) -> None:
     """Default weight loader"""
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
-            loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
         if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
@@ -214,19 +329,19 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
-        loaded_weight = get_tensor(loaded_weight)
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if tp_row_bias:
+            loaded_weight = loaded_weight / fd_config.parallel_config.tensor_parallel_size
+
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
-        if param.dtype != loaded_weight.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:
             # for e_score_correction_bias
             loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
+        loaded_weight = get_tensor(loaded_weight)
         param.copy_(loaded_weight, False)
 
     return fn
@@ -255,16 +370,67 @@ def is_paddle_support_v1_loader():
     return is_same
 
 
+_support_new_h2d = None
+
+
+def is_paddle_support_new_h2d():
+    import subprocess
+    import sys
+
+    global _support_new_h2d
+    if _support_new_h2d is not None:
+        return _support_new_h2d
+
+    code = """
+import paddle
+import resource
+
+resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+try:
+    dst = paddle.zeros([2, 4], dtype='bfloat16')
+    src = paddle.ones([2, 2], dtype='bfloat16', device='cpu')
+    dst = dst[..., :2]
+    dst.copy_(src)
+    print(1)
+except:
+    print(0)
+"""
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True)
+    _support_new_h2d = result.stdout.strip() == b"1"
+    return _support_new_h2d
+
+
+def h2d_copy(dst, src, blocking=True):
+    if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
+        # For non-GPU devices, data is transferred to device (H2D) in advance.
+        src = get_tensor(src)
+    if len(src.shape) == 1:
+        # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+        src = get_tensor(src)
+    dst.copy_(src, blocking)
+
+
 def v1_loader_support(fd_config):
-    _v1_no_support_archs = [
-        "Qwen2VLForConditionalGeneration",
-    ]
+    _v1_no_support_archs = ["Qwen2VLForConditionalGeneration"]
+
+    def _get_unsupported_quant():
+        if current_platform.is_cuda():
+            return {"w4a8", "wint2"}
+        elif current_platform.is_xpu():
+            return {"w4a8", "w8a8"}
+        return set()
 
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
-    if not (current_platform.is_cuda() or current_platform.is_xpu()):
-        _err_msg("v1loader currently only support backends gpu and xpu")
+    if not (
+        current_platform.is_cuda()
+        or current_platform.is_xpu()
+        or current_platform.is_iluvatar()
+        or current_platform.is_maca()
+        or current_platform.is_intel_hpu()
+    ):
+        _err_msg("v1loader currently only support backends gpu, xpu, intel_hpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
@@ -282,7 +448,7 @@ def v1_loader_support(fd_config):
         else:
             moe_quant_type = fd_config.quant_config.name()
             dense_quant_type = fd_config.quant_config.name()
-        unsupported_quant = {"w4a8", "w4afp8", "wint2"}
+        unsupported_quant = _get_unsupported_quant()
 
         if unsupported_quant & {moe_quant_type, dense_quant_type}:
             _err_msg("v1 loader currently does not support w4a8/w4afp8/win2 quantization")
@@ -310,18 +476,27 @@ def temporary_dtype(dtype: str):
 
 
 @contextmanager
-def switch_config_context(config_obj, config_attr_name, value):
-    """switch_config_context"""
-    origin_value = getattr(config_obj, config_attr_name)
-    setattr(config_obj, config_attr_name, value)
+def multi_switch_config_context(*changes):
+    """
+    changes: (obj, attr, new_value)
+    """
+    originals = []
     try:
+        for obj, attr, new_value in changes:
+            old_value = getattr(obj, attr)
+            originals.append((obj, attr, old_value))
+            setattr(obj, attr, new_value)
         yield
     finally:
-        setattr(config_obj, config_attr_name, origin_value)
+        for obj, attr, old_value in originals:
+            setattr(obj, attr, old_value)
 
 
 def rename_offline_ckpt_suffix_to_fd_suffix(
-    fd_config, ckpt_weight_suffix: str = "quant_weight", ckpt_scale_suffix="weight_scale"
+    fd_config,
+    ckpt_weight_suffix: str = "quant_weight",
+    ckpt_scale_suffix="weight_scale",
+    ckpt_act_suffix="activation_scale",
 ):
     """
     Create a function to rename checkpoint key suffixes for FastDeploy.
@@ -342,6 +517,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         ckpt_weight_suffix: "weight",
         ckpt_scale_suffix: "weight_scale_inv",
     }
+    tensor_wise_fp8_suffix_map = {
+        ckpt_weight_suffix: "weight",
+        ckpt_act_suffix: "in_scale",
+    }
     moe_quant_type = ""
     dense_quant_type = ""
     if fd_config.quant_config is not None:
@@ -358,6 +537,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         # Can be extended to other offline quantization suffixes if needed.
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
+        if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
+            fd_suffix_map = tensor_wise_fp8_suffix_map
+        else:
+            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
@@ -365,3 +548,11 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+@cache
+def get_sm_version():
+    if paddle.cuda.is_available():
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor
+    return 0

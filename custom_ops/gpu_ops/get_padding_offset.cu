@@ -25,25 +25,33 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
                                 int *cu_seqlens_k,
                                 const int64_t *input_data,
                                 const int *seq_lens,
-                                const int max_seq_len) {
+                                const int max_seq_len,
+                                const int64_t *draft_tokens,
+                                const int *seq_lens_encoder,
+                                const int max_draft_tokens_per_batch) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
+#ifdef PADDLE_WITH_COREX
+  const int warp_id = threadIdx.x / 64;
+  const int lane_id = threadIdx.x % 64;
+#else
   const int warp_id = threadIdx.x / 32;
   const int lane_id = threadIdx.x % 32;
+#endif
 
   int cum_seq_len = 0;
 
   // compute sum of seq_lens[0,1,2,...,bi]
-  for (int i = lane_id; i < bi + 1; i += warpSize) {
+  for (int i = lane_id; i < bi + 1; i += WARP_SIZE) {
     cum_seq_len += seq_lens[i];
   }
 
-  for (int offset = 1; offset < warpSize; offset <<= 1) {
+  for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
     const int tmp = __shfl_up_sync(0xffffffff, cum_seq_len, offset);
     if (lane_id >= offset) cum_seq_len += tmp;
   }
 
-  cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, warpSize - 1);
+  cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, WARP_SIZE - 1);
 
   if (tid == 0) {
     cu_seqlens_q[bi + 1] = cum_seq_len;
@@ -57,15 +65,26 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
 
   for (int i = tid; i < seq_lens[bi]; i += blockDim.x) {
     const int tgt_seq_id = cum_seq_len - seq_lens[bi] + i;
-    const int src_seq_id = bi * max_seq_len + i;
-    ids_remove_padding[tgt_seq_id] = input_data[src_seq_id];
+    if (max_draft_tokens_per_batch > 0 && seq_lens_encoder[bi] <= 0) {
+      // speculative decoding
+      const int src_seq_id = bi * max_draft_tokens_per_batch + i;
+      ids_remove_padding[tgt_seq_id] = draft_tokens[src_seq_id];
+    } else {
+      // Non-speculative decoding
+      const int src_seq_id = bi * max_seq_len + i;
+      ids_remove_padding[tgt_seq_id] = input_data[src_seq_id];
+    }
+
     batch_id_per_token[tgt_seq_id] = bi;
   }
 }
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
-                                             const paddle::Tensor &token_num,
-                                             const paddle::Tensor &seq_len) {
+std::vector<paddle::Tensor> GetPaddingOffset(
+    const paddle::Tensor &input_ids,
+    const paddle::Tensor &seq_len,
+    const paddle::optional<paddle::Tensor> &draft_tokens,
+    const paddle::optional<paddle::Tensor> &seq_lens_encoder,
+    const int64_t cpu_token_num) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext *>(
       paddle::experimental::DeviceContextPool::Instance().Get(
@@ -77,13 +96,11 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   std::vector<int64_t> input_ids_shape = input_ids.shape();
   const int bsz = seq_len.shape()[0];
   const int max_seq_len = input_ids_shape[1];
-  auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
-
-  const int token_num_data = cpu_token_num.data<int64_t>()[0];
-  auto x_remove_padding = paddle::empty(
-      {token_num_data}, paddle::DataType::INT64, input_ids.place());
-  auto batch_id_per_token = paddle::empty(
-      {token_num_data}, paddle::DataType::INT32, input_ids.place());
+  const int token_num_data = cpu_token_num;
+  auto x_remove_padding = paddle::full(
+      {token_num_data}, 2, paddle::DataType::INT64, input_ids.place());
+  auto batch_id_per_token = paddle::full(
+      {token_num_data}, -1, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_q =
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_k =
@@ -95,6 +112,12 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
   int blockSize =
       min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
 #endif
+
+  int max_draft_tokens_per_batch = -1;
+  if (draft_tokens) {
+    max_draft_tokens_per_batch = draft_tokens.get().shape()[1];
+  }
+
   PrefixSumKernel<<<bsz, blockSize, 0, cu_stream>>>(
       x_remove_padding.data<int64_t>(),
       batch_id_per_token.data<int>(),
@@ -102,7 +125,10 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
       cu_seqlens_k.data<int>(),
       input_ids.data<int64_t>(),
       seq_len.data<int>(),
-      max_seq_len);
+      max_seq_len,
+      draft_tokens ? draft_tokens.get().data<int64_t>() : nullptr,
+      seq_lens_encoder ? seq_lens_encoder.get().data<int32_t>() : nullptr,
+      max_draft_tokens_per_batch);
 
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
 }
@@ -124,11 +150,15 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
 }
 
 PD_BUILD_STATIC_OP(get_padding_offset)
-    .Inputs({"input_ids", "token_num", "seq_len"})
+    .Inputs({"input_ids",
+             "seq_len",
+             paddle::Optional("draft_tokens"),
+             paddle::Optional("seq_lens_encoder")})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})
+    .Attrs({"cpu_token_num: int64_t"})
     .SetKernelFn(PD_KERNEL(GetPaddingOffset))
     .SetInferShapeFn(PD_INFER_SHAPE(GetPaddingOffsetInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GetPaddingOffsetInferDtype));

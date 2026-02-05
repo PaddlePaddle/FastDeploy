@@ -15,14 +15,19 @@
 """
 
 import asyncio
+import functools
 import heapq
 import random
+import time
+from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
-import msgpack
 import zmq
+from fastapi import Request
 
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
 
 UVICORN_CONFIG = {
@@ -121,7 +126,14 @@ class DealerConnectionManager:
         while self.running:
             try:
                 raw_data = await dealer.read()
-                response = msgpack.unpackb(raw_data[-1])
+                response = ForkingPickler.loads(raw_data[-1])
+                _zmq_metrics_stats = ZMQMetricsStats()
+                _zmq_metrics_stats.msg_recv_total += 1
+                if "zmq_send_time" in response:
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
+                address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
@@ -212,7 +224,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
     parser.add_argument("--workers", default=1, type=int, help="number of workers")
-    parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
+    parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
         "--max-waiting-time",
@@ -239,5 +251,59 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
 
+    parser.add_argument("--api-key", type=str, action="append", help="API_KEY required for service authentication")
+
     parser = EngineArgs.add_cli_args(parser)
     return parser
+
+
+async def listen_for_disconnect(request: Request) -> None:
+    """Returns if a disconnect message is received"""
+    while True:
+        message = await request.receive()
+        if message["type"] == "http.disconnect":
+            break
+
+
+def with_cancellation(handler_func):
+    """Decorator that allows a route handler to be cancelled by client
+    disconnections.
+
+    This does _not_ use request.is_disconnected, which does not work with
+    middleware. Instead this follows the pattern from
+    starlette.StreamingResponse, which simultaneously awaits on two tasks- one
+    to wait for an http disconnect message, and the other to do the work that we
+    want done. When the first task finishes, the other is cancelled.
+
+    A core assumption of this method is that the body of the request has already
+    been read. This is a safe assumption to make for fastapi handlers that have
+    already parsed the body of the request into a pydantic model for us.
+    This decorator is unsafe to use elsewhere, as it will consume and throw away
+    all incoming messages for the request while it looks for a disconnect
+    message.
+
+    In the case where a `StreamingResponse` is returned by the handler, this
+    wrapper will stop listening for disconnects and instead the response object
+    will start listening for disconnects.The response object will only correctly
+    listen when the ASGI protocol version used by Uvicorn is less than 2.4(Excluding 2.4).
+    """
+
+    # Functools.wraps is required for this wrapper to appear to fastapi as a
+    # normal route handler, with the correct request type hinting.
+    @functools.wraps(handler_func)
+    async def wrapper(*args, **kwargs):
+        # The request is either the second positional arg or `raw_request`
+        request = args[1] if len(args) > 1 else kwargs["req"]
+
+        handler_task = asyncio.create_task(handler_func(*args, **kwargs))
+        cancellation_task = asyncio.create_task(listen_for_disconnect(request))
+
+        done, pending = await asyncio.wait([handler_task, cancellation_task], return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+
+        if handler_task in done:
+            return handler_task.result()
+        return None
+
+    return wrapper

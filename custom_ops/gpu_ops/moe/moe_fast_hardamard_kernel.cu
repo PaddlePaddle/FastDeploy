@@ -39,10 +39,18 @@ void MoeFastHardamardWrapper(const T *x_data,
   bool FLAGS_hardamard_use_diagonal_block_matrix = true;
 
   constexpr int kThreads = 128;
+
   if (FLAGS_hardamard_use_diagonal_block_matrix) {
-    const int VecSize = hadamard_block_size / kThreads;
+    // Force effective_block_size to be at least 128 to prevent VecSize from
+    // being 0 when hadamard_block_size < 128 (since VecSize =
+    // hadamard_block_size / kThreads)
+    const int effective_block_size =
+        (hadamard_block_size < 128) ? 128 : hadamard_block_size;
+
+    const int VecSize = effective_block_size / kThreads;
     const int logN = int(ceil(std::log2(kThreads * VecSize)));
     constexpr int kNChunks = 1;
+
     DISPATCH_SP_VS(VecSize, VEC_SIZE, {DISPATCH_SP_logN(logN, kLogN, {
                      MoeFastHardamardImplWrapper<T,
                                                  OutT,
@@ -227,4 +235,23 @@ template void MoeFastHardamardWrapper<phi::dtype::bfloat16, int8_t>(
     bool used_in_ep_low_latency,
     const int hadamard_block_size,
     int8_t *out,
+    cudaStream_t &stream);
+
+template void
+MoeFastHardamardWrapper<phi::dtype::bfloat16, phi::dtype::float8_e4m3fn>(
+    const phi::dtype::bfloat16 *x_data,
+    const int64_t *expert_idx_per_token,
+    const int64_t *recv_expert_count,
+    const phi::dtype::bfloat16 *shift,
+    const phi::dtype::bfloat16 *smooth,
+    const float *quant_scales,
+    const int quant_round_type,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const int64_t token_num,
+    const int64_t dim,
+    const int num_max_tokens_per_expert,
+    bool used_in_ep_low_latency,
+    const int hadamard_block_size,
+    phi::dtype::float8_e4m3fn *out,
     cudaStream_t &stream);

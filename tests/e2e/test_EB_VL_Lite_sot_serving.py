@@ -91,7 +91,7 @@ def setup_and_run_server():
         "--reasoning-parser",
         "ernie-45-vl",
         "--graph-optimization-config",
-        '{"graph_opt_level": 1, "use_cudagraph": true, "full_cuda_graph": false}',
+        '{"graph_opt_level": 2, "use_cudagraph": true, "full_cuda_graph": true}',  # TODO(DrRyanHuang): we will support full_cuda_graph=false for VL model in next PR
     ]
 
     # Start subprocess in new process group
@@ -312,7 +312,7 @@ def test_chat_with_thinking(openai_client, capsys):
         max_tokens=10,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
-    assert response.choices[0].message.reasoning_content is None
+    assert response.choices[0].message.reasoning_content == ""
     assert "</think>" not in response.choices[0].message.content
 
     # test logic
@@ -404,4 +404,4 @@ def test_thinking_logic_flag(openai_client, capsys):
             "chat_template_kwargs": {"enable_thinking": False},
         },
     )
-    assert response_case_3.choices[0].message.reasoning_content is None
+    assert response_case_3.choices[0].message.reasoning_content == ""

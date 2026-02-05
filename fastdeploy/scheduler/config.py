@@ -268,9 +268,11 @@ class SchedulerConfig:
             Exception: If invalid scheduler type is specified
         """
         self.name = "local"  # "local" for LocalScheduler or "global" for GlobalScheduler
-        self.max_num_batched_tokens = 2048
+        self.max_num_batched_tokens = 2048  # base token_num for text inputs
+        self.max_extra_num_batched_tokens = 16384  # extra token_num for multimodal inputs
         self.max_num_seqs = 34
         self.splitwise_role = "mixed"
+        self.enable_overlap_schedule = False
         self.config = None
 
         for key, value in args.items():

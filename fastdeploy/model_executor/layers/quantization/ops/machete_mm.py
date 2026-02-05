@@ -17,14 +17,8 @@ from typing import Optional
 import numpy as np
 import paddle
 
+from fastdeploy.model_executor.layers.utils import get_sm_version
 from fastdeploy.platforms import current_platform
-
-
-def get_sm_version():
-    prop = paddle.device.cuda.get_device_properties()
-    cc = prop.major * 10 + prop.minor
-    return cc
-
 
 _ENABLE_MACHETE = False
 if current_platform.is_cuda() and get_sm_version() == 90:
@@ -34,6 +28,24 @@ if current_platform.is_cuda() and get_sm_version() == 90:
         _ENABLE_MACHETE = True
     except Exception:
         pass
+
+MACHETE_PREPACKED_BLOCK_SHAPE = [64, 128]
+
+
+def check_machete_supports_shape(in_features, out_featrues):
+    if in_features and in_features % MACHETE_PREPACKED_BLOCK_SHAPE[0] != 0:
+        return False
+    if out_featrues and out_featrues % MACHETE_PREPACKED_BLOCK_SHAPE[1] != 0:
+        return False
+    return True
+
+
+def query_machete_supported_group_size(in_features):
+    if in_features % 128 == 0:
+        return 128
+    elif in_features % 64 == 0:
+        return 64
+    return -1
 
 
 def get_pack_factor(num_bits):

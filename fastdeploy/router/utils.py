@@ -15,9 +15,9 @@
 """
 
 import asyncio
-from dataclasses import asdict, dataclass, field
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from enum import Enum
-from typing import List, Union
+from typing import Any, List, Union
 
 import aiohttp
 import requests
@@ -34,11 +34,30 @@ class InstanceInfo:
     role: Union[InstanceRole, str]
     host_ip: str
     port: Union[int, str]
+    metrics_port: Union[int, str] = 0
     connector_port: Union[int, str] = 0
     engine_worker_queue_port: Union[int, str] = 0
     transfer_protocol: List[str] = field(default_factory=list)
     rdma_ports: Union[List[str], List[int]] = field(default_factory=list)
     device_ids: Union[List[str], List[int]] = field(default_factory=list)
+    tp_size: int = 1
+
+    @classmethod
+    def from_dict(cls, info_dict: dict[str, Any]) -> "InstanceInfo":
+        """Create instance from dict arguments"""
+        kwargs = {}
+        for field_def in fields(cls):
+            name = field_def.name
+            if name in info_dict:
+                value = info_dict[name]
+            else:
+                # handle default and default_factory
+                if field_def.default is not MISSING:
+                    value = field_def.default
+                else:
+                    value = field_def.default_factory()
+            kwargs[name] = value
+        return cls(**kwargs)
 
     def __post_init__(self):
         """check and unify fields"""
@@ -54,6 +73,7 @@ class InstanceInfo:
             assert t in ["ipc", "rdma"], f"Invalid transfer_protocol: {self.transfer_protocol}"
 
         self.port = str(self.port)
+        self.metrics_port = str(self.metrics_port)
         self.connector_port = str(self.connector_port)
         self.engine_worker_queue_port = str(self.engine_worker_queue_port)
         if self.rdma_ports:

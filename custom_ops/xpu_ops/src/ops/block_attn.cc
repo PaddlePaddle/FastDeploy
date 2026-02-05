@@ -79,6 +79,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod,
+    const paddle::Tensor& decoder_seq_lod,
+    const paddle::Tensor& encoder_kv_lod,
+    const paddle::Tensor& encoder_batch_map,
+    const paddle::Tensor& decoder_context_len,
+    const paddle::Tensor& decoder_context_len_cache,
+    const paddle::Tensor& decoder_batch_map,
+    const paddle::Tensor& prefix_len,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -87,10 +95,12 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string& pos_emb_type,
-    bool rope_3d) {
+    const bool use_neox_rotary_style,
+    const bool rope_3d) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
@@ -134,12 +144,25 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   int prefix_block_num_per_seq = len_info_cpu.data<int32_t>()[5];
 
   int rope_max_seqlen = 0;
-  int rope_3d_num_seqs = 1;
+  int rope_head_dim = 0;
   if (rope_3d) {
+    PD_CHECK(rotary_embs.dims().size() == 6,
+             "rotary_embs dim size should be 6 in multi-modal model");
     rope_max_seqlen = rotary_embs.dims()[3];
-    rope_3d_num_seqs = rotary_embs.dims()[0];
+    rope_head_dim = rotary_embs.dims()[5];
   } else {
+    PD_CHECK(rotary_embs.dims().size() == 5,
+             "rotary_embs dim size should be 5 in language model");
     rope_max_seqlen = rotary_embs.dims()[2];
+    rope_head_dim = rotary_embs.dims()[4];
+  }
+  std::string pos_emb_type;
+  if (use_neox_rotary_style == true) {
+    pos_emb_type = "NEOX";
+  } else if (rope_head_dim == head_dim / 2) {
+    pos_emb_type = "HALF_HEAD_DIM";
+  } else {
+    pos_emb_type = "NORMAL";
   }
 
   auto block_attn_out =
@@ -184,6 +207,16 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           const_cast<float*>(v_scales_inv.get().data<float>()));
     }
   }
+  const float *q_norm_weight_data{nullptr}, *k_norm_weight_data{nullptr};
+  if (q_norm_weight) {
+    q_norm_weight_data = q_norm_weight.get().data<float>();
+  }
+  if (k_norm_weight) {
+    k_norm_weight_data = k_norm_weight.get().data<float>();
+  }
+  PD_CHECK(!(pos_emb_type == "NEOX" && q_norm_weight_data != nullptr),
+           "split_neox_cache_kv_encoder not support q/k norm weight");
+
   int ret = 0;
   if (enc_batch > 0) {
     xftblock::TransformerParam param;
@@ -200,14 +233,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     vsl.usual_lod_vp = {
         const_cast<int32_t*>(encoder_seq_lod_cpu.data<int32_t>()),
         enc_batch + 1,
-        nullptr};
+        const_cast<int32_t*>(encoder_seq_lod.data<int32_t>())};
     vsl.kv_lod_vp = {const_cast<int32_t*>(encoder_kv_lod_cpu.data<int32_t>()),
                      enc_batch + 1,
-                     nullptr};
+                     const_cast<int32_t*>(encoder_kv_lod.data<int32_t>())};
     vsl.slot_mapping_vp = {
         const_cast<int32_t*>(encoder_batch_map_cpu.data<int32_t>()),
         enc_batch,
-        nullptr};  // real batch
+        const_cast<int32_t*>(encoder_batch_map.data<int32_t>())};  // real batch
     param.max_valid_seqlen = max_enc_len;
     param.max_kv_valid_seqlen = max_kv_len;
     // setting for prefix cache
@@ -227,7 +260,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     baidu::xpu::api::VectorParam<int32_t> prefix_lens_vp{
         const_cast<int32_t*>(prefix_len_cpu.data<int32_t>()),
         enc_batch,
-        nullptr};
+        const_cast<int32_t*>(prefix_len.data<int32_t>())};
 
     float* fake_perhead_scale = nullptr;
     if (is_cache_int8 && has_zp && is_prefix_cache) {
@@ -370,6 +403,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
           quant_v_scale,  // intx_v_pc_scale
           quant_k_zp,     // intx_k_pc_zero
           quant_v_zp,     // intx_v_pc_zero
+          q_norm_weight_data,
+          k_norm_weight_data,
           rope_3d);
       PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_encoder failed.");
     }
@@ -523,20 +558,28 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       api::VectorParam<int32_t> decoder_context_len_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // use for speculative_attention_decoder seq_len in
-                     // MTP
+          const_cast<int32_t*>(
+              decoder_context_len
+                  .data<int32_t>())};  // use for speculative_attention_decoder
+                                       // seq_len in MTP
       api::VectorParam<int32_t> decoder_context_len_cache_vp = {
           const_cast<int32_t*>(decoder_context_len_cache_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // use for split rope enc as prefix cache len in MTP
+          const_cast<int32_t*>(
+              decoder_context_len_cache
+                  .data<int32_t>())};  // use for split rope enc as prefix cache
+                                       // len in MTP
       api::VectorParam<int32_t> decoder_batch_map_vp = {
           const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // real batch
+          const_cast<int32_t*>(
+              decoder_batch_map.data<int32_t>())};  // real batch
       api::VectorParam<int32_t> decoder_seq_lod_vp = {
           const_cast<int32_t*>(decoder_seq_lod_cpu.data<int32_t>()),
           dec_batch + 1,
-          nullptr};  // use for split rope enc as lod in MTP
+          const_cast<int32_t*>(
+              decoder_seq_lod
+                  .data<int32_t>())};  // use for split rope enc as lod in MTP
 
       // rope + cache
       int ret = 0;
@@ -585,7 +628,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                                                      int,
                                                      E_Scale>(
             xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()),  // qkv
+            reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()) +
+                total_enc_len * qkv_shape[qkv_shape.size() - 1],  // qkv
             reinterpret_cast<const float*>(
                 rotary_embs.data<float>()),  // rotary_pos_emb
             reinterpret_cast<const int*>(
@@ -618,6 +662,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             quant_v_scale,  // intx_v_pc_scale
             quant_k_zp,     // intx_k_pc_zero
             quant_v_zp,     // intx_v_pc_zero
+            q_norm_weight_data,
+            k_norm_weight_data,
             rope_3d);
         PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_encoder failed.");
       }
@@ -722,7 +768,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
               : quant_v_scale_inv,
           nullptr,          // o_maxptr
           param.head_dim);  // vo_head_dim
-      PD_CHECK(0, "speculative_attention unimplemented");
       PD_CHECK(ret == api::SUCCESS,
                "xfa::speculative_attention_decoder failed.");
       if (!Eq_len) {
@@ -742,11 +787,12 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       vsl.usual_lod_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};
+          const_cast<int32_t*>(decoder_context_len.data<int32_t>())};
       vsl.slot_mapping_vp = {
           const_cast<int32_t*>(decoder_batch_map_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // real batch
+          const_cast<int32_t*>(
+              decoder_batch_map.data<int32_t>())};  // real batch
 
       xftblock::Tensor q_buf(
           rt_guard, KV_BUF_TYPE, {total_dec_len, hidden_dim}, false, false);
@@ -845,7 +891,9 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             reinterpret_cast<D_Scale*>(quant_v_scale),  // v_cache_scale_inv
             reinterpret_cast<D_Scale*>(quant_k_zp),     // k_cache_zp
             reinterpret_cast<D_Scale*>(quant_v_zp),     // v_cache_zp
-            is_cache_int8,                              // bool b_c8_pc
+            q_norm_weight_data,
+            k_norm_weight_data,
+            is_cache_int8,  // bool b_c8_pc
             rope_3d);
         PD_CHECK(ret == api::SUCCESS, "split_rope_cache_kv_decoder failed.");
       }
@@ -982,6 +1030,14 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod,
+    const paddle::Tensor& decoder_seq_lod,
+    const paddle::Tensor& encoder_kv_lod,
+    const paddle::Tensor& encoder_batch_map,
+    const paddle::Tensor& decoder_context_len,
+    const paddle::Tensor& decoder_context_len_cache,
+    const paddle::Tensor& decoder_batch_map,
+    const paddle::Tensor& prefix_len,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -990,10 +1046,12 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string& pos_emb_type = "NORMAL",
-    bool rope_3d = false) {
+    const bool use_neox_rotary_style,
+    const bool rope_3d = false) {
 #define APPLY_KERNEL(TX, TC, TS)                                    \
   return BlockAttnKernel<TX, TC, TS>(qkv,                           \
                                      key_cache,                     \
@@ -1011,6 +1069,14 @@ std::vector<paddle::Tensor> BlockAttn(
                                      decoder_context_len_cache_cpu, \
                                      decoder_batch_map_cpu,         \
                                      prefix_len_cpu,                \
+                                     encoder_seq_lod,               \
+                                     decoder_seq_lod,               \
+                                     encoder_kv_lod,                \
+                                     encoder_batch_map,             \
+                                     decoder_context_len,           \
+                                     decoder_context_len_cache,     \
+                                     decoder_batch_map,             \
+                                     prefix_len,                    \
                                      k_scales,                      \
                                      v_scales,                      \
                                      k_scales_inv,                  \
@@ -1019,9 +1085,11 @@ std::vector<paddle::Tensor> BlockAttn(
                                      v_zeros,                       \
                                      shift,                         \
                                      smooth,                        \
+                                     q_norm_weight,                 \
+                                     k_norm_weight,                 \
                                      kv_signal_data_cpu,            \
                                      cachekv_signal_thread_cpu,     \
-                                     pos_emb_type,                  \
+                                     use_neox_rotary_style,         \
                                      rope_3d);
 
   const auto cache_dtype = key_cache.dtype();
@@ -1077,6 +1145,14 @@ PD_BUILD_STATIC_OP(block_attn)
              "decoder_context_len_cache_cpu",
              "decoder_batch_map_cpu",
              "prefix_len_cpu",
+             "encoder_seq_lod",
+             "decoder_seq_lod",
+             "encoder_kv_lod",
+             "encoder_batch_map",
+             "decoder_context_len",
+             "decoder_context_len_cache",
+             "decoder_batch_map",
+             "prefix_len",
              paddle::Optional("k_scales"),
              paddle::Optional("v_scales"),
              paddle::Optional("k_scales_inv"),
@@ -1085,9 +1161,11 @@ PD_BUILD_STATIC_OP(block_attn)
              paddle::Optional("v_zeros"),
              paddle::Optional("shift"),
              paddle::Optional("smooth"),
+             paddle::Optional("q_norm_weight"),
+             paddle::Optional("k_norm_weight"),
              paddle::Optional("kv_signal_data_cpu"),
              paddle::Optional("cachekv_signal_thread_cpu")})
-    .Attrs({"pos_emb_type:std::string", "rope_3d:bool"})
+    .Attrs({"use_neox_rotary_style:bool", "rope_3d:bool"})
     .Outputs({"block_attn_out"})
     .SetKernelFn(PD_KERNEL(BlockAttn))
     .SetInferShapeFn(PD_INFER_SHAPE(BlockAttnInferShape))

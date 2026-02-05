@@ -43,6 +43,8 @@ class SamplingMetadata:
     step_idx: paddle.Tensor
 
     top_p: paddle.Tensor
+    # only GPU used
+    bad_words_token_len: Optional[paddle.Tensor] = None
     top_k: Optional[paddle.Tensor] = None
     top_k_list: Optional[list] = None
     min_p: Optional[paddle.Tensor] = None
@@ -53,6 +55,8 @@ class SamplingMetadata:
     stop_flags: Optional[paddle.Tensor] = None
     prompt_ids: Optional[paddle.Tensor] = None
     prompt_lens: Optional[paddle.Tensor] = None
+    temp_scaled_logprobs_flag: Optional[bool] = None
+    top_p_normalized_logprobs_flag: Optional[bool] = None
     temp_scaled_logprobs: Optional[paddle.Tensor] = None
     top_p_normalized_logprobs: Optional[paddle.Tensor] = None
     share_inputs: Optional[Dict[str, paddle.Tensor]] = None

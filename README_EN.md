@@ -27,7 +27,9 @@ English | [简体中文](README_CN.md)
 
 ## News
 
-**[2025-09] FastDeploy v2.2 is newly released!** It now offers compatibility with models in the HuggingFace ecosystem, has further optimized performance, and newly adds support for [baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)!
+**[2025-11] FastDeploy v2.3 is newly released!** It adds deployment support for two major models, [ERNIE-4.5-VL-28B-A3B-Thinking](docs/get_started/ernie-4.5-vl-thinking.md) and [PaddleOCR-VL-0.9B](docs/best_practices/PaddleOCR-VL-0.9B.md), across multiple hardware platforms. It further optimizes comprehensive inference performance and brings more deployment features and usability enhancements. For all the upgrade details, refer to the [v2.3 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0).
+
+**[2025-09] FastDeploy v2.2**: It now offers compatibility with models in the HuggingFace ecosystem, has further optimized performance, and newly adds support for [baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)!
 
 ## About
 
@@ -38,7 +40,7 @@ English | [简体中文](README_CN.md)
 - 🤝 **OpenAI API Server and vLLM Compatible**: One-command deployment with [vLLM](https://github.com/vllm-project/vllm/) interface compatibility.
 - 🧮 **Comprehensive Quantization Format Support**: W8A16, W8A8, W4A16, W4A8, W2A16, FP8, and more.
 - ⏩ **Advanced Acceleration Techniques**: Speculative decoding, Multi-Token Prediction (MTP) and Chunked Prefill.
-- 🖥️ **Multi-Hardware Support**: NVIDIA GPU, Kunlunxin XPU, Hygon DCU, Ascend NPU, Iluvatar GPU, Enflame GCU, MetaX GPU, Intel Gaudi etc.
+- 🖥️ **Multi-Hardware Support**: NVIDIA GPU, Kunlunxin XPU, Hygon DCU, Iluvatar GPU, Enflame GCU, MetaX GPU, Intel Gaudi etc.
 
 ## Requirements
 
@@ -56,8 +58,6 @@ FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**,
 - [Hygon DCU](./docs/get_started/installation/hygon_dcu.md)
 - [MetaX GPU](./docs/get_started/installation/metax_gpu.md)
 - [Intel Gaudi](./docs/get_started/installation/intel_gaudi.md)
-
-**Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU are currently under development and testing. Stay tuned for updates!
 
 ## Get Started
 
@@ -81,6 +81,7 @@ Learn how to download models, enable using the torch format, and more:
 - [Speculative Decoding](./docs/features/speculative_decoding.md)
 - [Prefix Caching](./docs/features/prefix_caching.md)
 - [Chunked Prefill](./docs/features/chunked_prefill.md)
+- [Load-Balancing Scheduling Router](./docs/online_serving/router.md)
 
 ## Acknowledgement
 

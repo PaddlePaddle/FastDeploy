@@ -28,6 +28,7 @@ class _Backend(enum.Enum):
     BLOCK_ATTN = enum.auto()
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()
+    FLASH_MASK_ATTN = enum.auto()
 
 
 class Platform:
@@ -42,6 +43,12 @@ class Platform:
         whether platform is cuda
         """
         return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
+
+    def is_cuda_alike(self) -> bool:
+        """
+        whether platform is cuda alike
+        """
+        return paddle.is_compiled_with_cuda() or paddle.is_compiled_with_rocm()
 
     def is_npu(self) -> bool:
         """

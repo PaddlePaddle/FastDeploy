@@ -35,16 +35,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Model download cache directory.
     "FD_MODEL_CACHE": lambda: os.getenv("FD_MODEL_CACHE", None),
     # Maximum number of stop sequences.
-    "FD_MAX_STOP_SEQS_NUM": lambda: os.getenv("FD_MAX_STOP_SEQS_NUM", "5"),
+    "FD_MAX_STOP_SEQS_NUM": lambda: int(os.getenv("FD_MAX_STOP_SEQS_NUM", "5")),
     # Maximum length of stop sequences.
-    "FD_STOP_SEQS_MAX_LEN": lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
+    "FD_STOP_SEQS_MAX_LEN": lambda: int(os.getenv("FD_STOP_SEQS_MAX_LEN", "8")),
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
     # Whether to use HuggingFace tokenizer.
     "FD_USE_HF_TOKENIZER": lambda: bool(int(os.getenv("FD_USE_HF_TOKENIZER", "0"))),
     # Set the high watermark (HWM) for receiving data during ZMQ initialization
-    "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 64000),
+    "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 0),
     # cache kv quant params directory
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
@@ -52,8 +52,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
-    # Set moe backend."cutlass","marlin" and "triton" can be set currently.
+    # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
+    # Set mxfp4 backend."flashinfer" can be set currently.
+    "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
     # Whether to use Machete for wint4 dense gemm.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
     # Set whether to disable recompute the request when the KV cache is full.
@@ -62,10 +64,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_TRITON_KERNEL_CACHE_DIR": lambda: os.getenv("FD_TRITON_KERNEL_CACHE_DIR", None),
     # Whether transition from standalone PD decoupling to centralized inference
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
-    # Whether to use fastsafetensor load weight (0 or 1)
-    "FD_USE_FASTSAFETENSOR": lambda: bool(int(os.getenv("FD_USE_FASTSAFETENSOR", "0"))),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
+    # Whether to use PFCCLab/DeepEP.
+    "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
     # Whether to use aggregate send.
     "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
     # Whether to open Trace.
@@ -82,6 +84,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "EXPORTER_OTLP_HEADERS": lambda: os.getenv("EXPORTER_OTLP_HEADERS"),
     # enable kv cache block scheduler v1 (no need for kv_cache_ratio)
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
+    # enable data processor v2
+    "ENABLE_V1_DATA_PROCESSOR": lambda: int(os.getenv("ENABLE_V1_DATA_PROCESSOR", "0")),
     # set prealloc block num for decoder
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
     # enbale max prefill of one execute step
@@ -105,16 +109,18 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_MODEL_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_CACHE", "0"))),
     # enable internal module to access LLMEngine.
     "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
-    # LLMEngine recieve requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
+    # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", None),
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
-    # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", None),
+    # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORTS", None),
+    # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", None),
+    # LLMEngine receive control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
-    # Whether to enable cache task in decode node
-    "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "1"),
-    # Batched token timeout in EP
-    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
+    # Whether to enable the decode caches requests for preallocating resource
+    "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
     # Enable or disable model caching.
@@ -128,37 +134,72 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
     # Timeout for cache_transfer_manager process exit
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+    # FP4 dense GEMM backend, could be flashinfer-cutlass, flashinfer-trtllm, flashinfer-cudnn or None (default is None)
+    "FD_NVFP4_GEMM_BACKEND": lambda: os.getenv("FD_NVFP4_MOE_BACKEND", None),
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
-    # EPLB related
-    "FD_ENABLE_REDUNDANT_EXPERTS": lambda: int(os.getenv("FD_ENABLE_REDUNDANT_EXPERTS", "0")) == 1,
-    "FD_REDUNDANT_EXPERTS_NUM": lambda: int(os.getenv("FD_REDUNDANT_EXPERTS_NUM", "0")),
-    "FD_REDUNDANT_EXPERT_IP_SHM_SIZE": lambda: int(os.getenv("FD_REDUNDANT_EXPERT_IP_SHM_SIZE", "1024")),
-    "FD_REDUNDANT_EXPERT_META_DIR": lambda: os.getenv("FD_REDUNDANT_EXPERT_META_DIR", "/tmp/redundant_expert_meta"),
-    "FD_REDUNDANT_EXPERT_API_USER": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_USER", ""),
-    "FD_REDUNDANT_EXPERT_API_PASSWORD": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_PASSWORD", ""),
-    "FD_REDUNDANT_EXPERT_EPLB_STRATEGY": lambda: os.getenv("FD_REDUNDANT_EXPERT_EPLB_STRATEGY", ""),
-    "FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL", "10")
-    ),
-    "FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB", "0")
-    ),
-    "FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON", "1")
-    )
-    == 1,
-    "FD_MODEL_USE_SAFETENSORS": lambda: int(os.getenv("FD_MODEL_USE_SAFETENSORS", "1")) == 1,
-    "FD_MODEL_USE_OFFLINE_QUANT": lambda: int(os.getenv("FD_MODEL_USE_OFFLINE_QUANT", "1")) == 1,
-    "FD_MOE_QUANT_TYPE": lambda: os.getenv("FD_MOE_QUANT_TYPE", "w4a8"),
+    # API_KEY required for service authentication
+    "FD_API_KEY": lambda: [] if "FD_API_KEY" not in os.environ else os.environ["FD_API_KEY"].split(","),
+    # The AK of bos storing the features while multi_modal infer
     "ENCODE_FEATURE_BOS_AK": lambda: os.getenv("ENCODE_FEATURE_BOS_AK"),
+    # The SK of bos storing the features while multi_modal infer
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
-    # Enable offline perf test mode for PD disaggregation
-    "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
-    # ep+tp strategy: "all_reduce" or "all_to_all"
-    # all_reduce: qkv_linear + attn + out_linear + allreduce
-    # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
-    "FD_EP_TP_STRATEGY": lambda: os.getenv("FD_EP_TP_STRATEGY", "all_reduce"),
+    # The ENDPOINT of bos storing the features while multi_modal infer
+    "ENCODE_FEATURE_ENDPOINT": lambda: os.getenv("ENCODE_FEATURE_ENDPOINT"),
+    # Whether the Prefill instance continuously requests Decode resources in PD disaggregation
+    "PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES": lambda: int(
+        os.getenv("PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", "1")
+    ),
+    "FD_ENABLE_E2W_TENSOR_CONVERT": lambda: int(os.getenv("FD_ENABLE_E2W_TENSOR_CONVERT", "0")),
+    "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
+    "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
+    "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
+    "FD_ENABLE_ASYNC_LLM": lambda: int(os.getenv("FD_ENABLE_ASYNC_LLM", "0")),
+    "FD_GUIDANCE_DISABLE_ADDITIONAL": lambda: bool(int(os.getenv("FD_GUIDANCE_DISABLE_ADDITIONAL", "1"))),
+    "FD_LLGUIDANCE_LOG_LEVEL": lambda: int(os.getenv("FD_LLGUIDANCE_LOG_LEVEL", "0")),
+    # "Number of tokens in the group for Mixture of Experts (MoE) computation processing on HPU"
+    "FD_HPU_CHUNK_SIZE": lambda: int(os.getenv("FD_HPU_CHUNK_SIZE", "64")),
+    # "Enable FP8 calibration on HPU"
+    "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
+    "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
+        os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
+    ),
+    # Whether to collect user information
+    "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+    # Usage stats server url
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
+    # Usage stats source
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+    # Usage stats config root
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
+    "FMQ_CONFIG_JSON": lambda: os.getenv("FMQ_CONFIG_JSON", None),
+    "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
+    "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
+    "FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT": lambda: int(os.getenv("FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT", "120")),
+    "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
+    # Whether to enable low latency in mixed scenario
+    "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
+    # Whether to use phi FP8 quantization,if 1,use paddle default.
+    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Reserve output blocks for decoding requests when schedule new prefill requests
+    "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
+    ),
+    "FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: float(
+        os.getenv("FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0.025")
+    ),
+    "FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
+        os.getenv("FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0")
+    ),
+    # Timeout for worker process health check in seconds
+    "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+    # File path for file storage backend
+    "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
 }
 
 

@@ -1,0 +1,8 @@
+max_model_len: 32768
+tensor_parallel_size: 1
+quantization: wint8
+max_num_seqs: 32
+reasoning_parser: ernie-45-vl-thinking
+tool_call_parser: ernie-45-vl-thinking
+load_choices: "default_v1"
+mm-processor-kwargs: '{"image_max_pixels": 12845056 }'

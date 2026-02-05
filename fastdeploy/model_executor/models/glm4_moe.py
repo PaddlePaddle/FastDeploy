@@ -25,7 +25,6 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -35,13 +34,14 @@ from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     QKVParallelLinear,
     ReplicatedLinear,
     RowParallelLinear,
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.normalization import QKRMSNorm, RMSNorm
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
@@ -56,28 +56,49 @@ class Glm4MoeMLP(nn.Layer):
         self,
         fd_config: FDConfig,
         intermediate_size: int,
+        layer_id: int,
         prefix: str = "",
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
+        # shared experts not split when use_sequence_parallel_moe in ep + tp
+        if (
+            fd_config.parallel_config.use_sequence_parallel_moe
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+        ):
+            self.up_gate_proj = MergedReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=[intermediate_size, intermediate_size],
+                with_bias=False,
+            )
 
-        self.up_gate_proj = MergedColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.up_gate_proj",
-            input_size=fd_config.model_config.hidden_size,
-            output_size=intermediate_size * 2,
-            with_bias=False,
-            activation=fd_config.model_config.hidden_act,
-        )
+            self.down_proj = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+            )
+        else:
+            self.up_gate_proj = MergedColumnParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.up_gate_proj",
+                input_size=fd_config.model_config.hidden_size,
+                output_size=intermediate_size * 2,
+                with_bias=False,
+                activation=fd_config.model_config.hidden_act,
+            )
 
-        self.down_proj = RowParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.down_proj",
-            input_size=intermediate_size,
-            output_size=fd_config.model_config.hidden_size,
-            with_bias=False,
-            reduce_results=reduce_results,
-        )
+            self.down_proj = RowParallelLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.down_proj",
+                input_size=intermediate_size,
+                output_size=fd_config.model_config.hidden_size,
+                with_bias=False,
+                reduce_results=reduce_results,
+            )
 
         self.act_fn = SiluAndMul(
             fd_config=fd_config,
@@ -85,7 +106,7 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -97,7 +118,7 @@ class Glm4Moe(nn.Layer):
     def __init__(
         self,
         fd_config: FDConfig,
-        layer_id: int,
+        layer_id: int = -1,
         prefix: str = "",
     ) -> None:
         super().__init__()
@@ -138,7 +159,6 @@ class Glm4Moe(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config,
-            reduce_results=False,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
@@ -152,22 +172,21 @@ class Glm4Moe(nn.Layer):
             weight_key_map=weight_key_map,
         )
 
-        shared_experts_intermediate_size = self.n_shared_experts * fd_config.model_config.moe_intermediate_size
+        if self.n_shared_experts > 0:
+            shared_experts_intermediate_size = self.n_shared_experts * fd_config.model_config.moe_intermediate_size
+            self.shared_experts = Glm4MoeMLP(
+                fd_config=fd_config,
+                intermediate_size=shared_experts_intermediate_size,
+                layer_id=layer_id,
+                prefix=f"{prefix}.shared_experts",
+            )
 
-        self.shared_experts = Glm4MoeMLP(
-            fd_config=fd_config,
-            intermediate_size=shared_experts_intermediate_size,
-            prefix=f"{prefix}.shared_experts",
-            reduce_results=False,
-        )
+    def forward(self, x, forward_meta: ForwardMeta = None):
+        out = self.experts(x, self.gate, forward_meta)
+        if self.n_shared_experts > 0:
+            shared_experts_out = self.shared_experts(x)
+            out = out + shared_experts_out
 
-    def forward(self, x):
-        shared_experts_out = self.shared_experts(x)
-        out = self.experts(x, self.gate)
-        out = out + shared_experts_out
-        # We do to TP all reduce after the sum of experts.
-        if self.tensor_parallel_size > 1:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
 
@@ -194,6 +213,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
 
         self.attn = Attention(
@@ -204,18 +224,13 @@ class Glm4MoeAttention(nn.Layer):
             rms_norm_eps=fd_config.model_config.rms_norm_eps,
         )
         if self.use_qk_norm:
-            self.q_norm = RMSNorm(
+            self.qk_norm = QKRMSNorm(
                 fd_config,
-                hidden_size=self.head_dim,
+                head_dim=self.head_dim,
+                q_size=self.q_size,
+                kv_size=self.kv_size,
                 eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.q_norm",
-                begin_norm_axis=2,
-            )
-            self.k_norm = RMSNorm(
-                fd_config,
-                hidden_size=self.head_dim,
-                eps=fd_config.model_config.rms_norm_eps,
-                prefix=f"{prefix}.k_norm",
+                prefix=prefix,
                 begin_norm_axis=2,
             )
 
@@ -226,13 +241,8 @@ class Glm4MoeAttention(nn.Layer):
     ):
         """ """
         qkv_out = self.qkv_proj(hidden_states)
-
         if self.use_qk_norm:
-            q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim])).reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim])).reshape(k.shape)
-            qkv_out = paddle.concat([q, k, v], axis=-1)
-
+            qkv_out = self.qk_norm(qkv_out)
         atten_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
@@ -248,6 +258,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         self,
         fd_config: FDConfig,
         prefix: str = "",
+        is_mtp: bool = False,
     ) -> None:
         super().__init__()
 
@@ -258,15 +269,15 @@ class Glm4MoeDecoderLayer(nn.Layer):
             prefix=f"{prefix}.self_attn",
         )
 
-        if (
-            fd_config.model_config.n_routed_experts is not None
-            and layer_id >= fd_config.model_config.first_k_dense_replace
+        if fd_config.model_config.n_routed_experts is not None and (
+            layer_id >= fd_config.model_config.first_k_dense_replace or is_mtp
         ):
             self.mlp = Glm4Moe(fd_config, layer_id, prefix=f"{prefix}.mlp")
         else:
             self.mlp = Glm4MoeMLP(
                 fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
+                layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
             )
 
@@ -275,6 +286,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -282,6 +294,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def forward(
@@ -291,11 +304,9 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -305,7 +316,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -360,15 +371,17 @@ class Glm4MoeModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         """ """
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out
 
@@ -432,6 +445,11 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
         ]
+
+        if self.fd_config.model_config.use_qk_norm:
+            stacked_params_mapping.append(("qk_norm.q_norm", "q_norm", None))
+            stacked_params_mapping.append(("qk_norm.k_norm", "k_norm", None))
+
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
             num_experts=self.fd_config.model_config.n_routed_experts,
@@ -442,7 +460,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             param_down_proj_name="experts.down_proj_",
         )
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -494,6 +512,20 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
+    def empty_input_forward(self, forward_meta):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.first_k_dense_replace,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -535,7 +567,7 @@ class Glm4MoePretrainedModel(PretrainedModel):
 
         fn = split_or_merge_func_v1(
             is_split=is_split,
-            tensor_parallel_degree=config.tensor_parallel_degree,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=config.num_key_value_heads,

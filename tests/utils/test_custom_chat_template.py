@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import os
 import unittest
 from pathlib import Path
@@ -62,13 +78,13 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, prompt_tokens
+            request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens_list
         ):
             return prompt_token_ids
 
-        async def mock_format_and_add_data(current_req_dict):
-            current_req_dict["text_after_process"] = "你好"
-            return current_req_dict
+        async def mock_format_and_add_data(current_req_obj):
+            current_req_obj["prompt_tokens"] = "你好"
+            return current_req_obj
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data
@@ -76,6 +92,8 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=None)
         self.chat_completion_handler.engine_client.semaphore.status = MagicMock(return_value="mock_status")
         chat_completiom = await self.chat_completion_handler.create_chat_completion(request)
+        print("1" * 50)
+        print(chat_completiom)
         self.assertEqual(self.input_chat_template, chat_completiom["chat_template"])
 
     async def test_serving_chat_cus(self):
@@ -90,13 +108,13 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, prompt_tokens
+            request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens_list
         ):
             return prompt_token_ids
 
-        async def mock_format_and_add_data(current_req_dict):
-            current_req_dict["text_after_process"] = "你好"
-            return current_req_dict
+        async def mock_format_and_add_data(current_req_obj):
+            current_req_obj["prompt_tokens"] = "你好"
+            return current_req_obj
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data

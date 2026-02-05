@@ -1,0 +1,7 @@
+max_model_len: 32768
+max_num_seqs: 128
+tensor_parallel_size: 4
+graph_optimization_config:
+  use_cudagraph: True
+  draft_model_use_cudagraph: True
+load_choices: "default_v1"

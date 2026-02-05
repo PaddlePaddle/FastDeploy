@@ -20,6 +20,8 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 
+from fastdeploy.utils import register_custom_python_op
+
 _TP_AR = None
 
 
@@ -33,13 +35,16 @@ def capture_custom_allreduce():
         yield
 
 
-def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
-    hcg = fleet.get_hybrid_communicate_group()
-    model_parallel_group = hcg.get_model_parallel_group()
+def use_custom_allreduce(
+    tp_group: paddle.distributed.communication.group.Group = None, custom_all_reduce_max_bytes: int = 8192 * 1024
+):
+    if tp_group is None:
+        hcg = fleet.get_hybrid_communicate_group()
+        tp_group = hcg.get_model_parallel_group()
     global _TP_AR
     from fastdeploy.distributed.custom_all_reduce import CustomAllreduce
 
-    _TP_AR = CustomAllreduce(model_parallel_group, custom_all_reduce_max_bytes)
+    _TP_AR = CustomAllreduce(tp_group, custom_all_reduce_max_bytes)
 
 
 def custom_ar_clear_ipc_handles():
@@ -50,12 +55,25 @@ def custom_ar_clear_ipc_handles():
 
 try:
 
-    @paddle.jit.marker.unified
+    def tensor_model_parallel_all_reduce_infer_meta(x: "paddle.static.MetaTensor", group_) -> paddle.static.MetaTensor:
+        return paddle.static.MetaTensor(shape=x.shape, dtype=x.dtype)
+
+    @register_custom_python_op(
+        name="tensor_model_parallel_all_reduce",
+        infer_meta=tensor_model_parallel_all_reduce_infer_meta,
+        input_names=[
+            "input_",
+        ],
+        output_names=["out"],
+        inplace_map={},
+    )
     def tensor_model_parallel_all_reduce(
         input_: paddle.Tensor,
         group_: paddle.distributed.communication.group.Group = None,
     ) -> paddle.Tensor:
         """All-reduce the input tensor across model parallel group."""
+        if input_.shape[0] == 0:
+            return input_
         global _TP_AR
         if _TP_AR is not None and _TP_AR.should_custom_ar(input_):
             # TODO: supports different_group custom allreduce
@@ -69,6 +87,18 @@ try:
                 dist.all_reduce(input_, group=mp_group)
         else:
             dist.all_reduce(input_)
+        return input_
+
+    @paddle.jit.marker.unified
+    def decode_alltoall_transpose(
+        input_: paddle.Tensor,
+        out: paddle.Tensor = None,
+    ) -> paddle.Tensor:
+        """alltoall and transpose in decode."""
+        if input_.shape[0] == 0:
+            return input_
+        global _TP_AR
+        input_ = _TP_AR.decode_alltoall_transpose(input_, out)
         return input_
 
 except:
@@ -90,6 +120,8 @@ try:
     @paddle.jit.marker.unified
     def tensor_model_parallel_all_reduce_custom(input_: paddle.Tensor) -> paddle.Tensor:
         """All-reduce the input tensor across model parallel group on calc stream."""
+        if input_.shape[0] == 0:
+            return input_
         if paddle.in_dynamic_mode():
             hcg = dist.fleet.get_hybrid_communicate_group()
             mp_group = hcg.get_model_parallel_group()

@@ -67,7 +67,6 @@ class GptOssAttention(nn.Layer):
             input_size=self.num_attention_heads * self.head_dim,
             output_size=self.hidden_size,
             with_bias=True,
-            add_bias=True,
         )
 
         self.attn = Attention(
@@ -121,10 +120,11 @@ class GptOssMoe(nn.Layer):
             weight_key_map=weight_key_map,
             with_bias=True,
             activation="swigluoai",
+            model_format="",
         )
 
-    def forward(self, hidden_states: paddle.Tensor):
-        expert_output = self.experts(hidden_states, self.router)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        expert_output = self.experts(hidden_states, self.router, forward_meta)
         return expert_output
 
 
@@ -150,6 +150,7 @@ class GptOssDecoderLayer(nn.Layer):
             hidden_size=hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
         self.mlp = GptOssMoe(fd_config, layer_id, prefix=f"{prefix}.mlp")
 
@@ -159,11 +160,9 @@ class GptOssDecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -173,7 +172,7 @@ class GptOssDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
@@ -208,15 +207,18 @@ class GptOssModel(nn.Layer):
         )
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        hidden_states = self.norm(hidden_states)
-        return hidden_states
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+
+        if self.norm.is_last_norm and self.norm.fd_config.parallel_config.use_sequence_parallel_moe:
+            out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
+        return out
 
 
 @ModelRegistry.register_model_class(
@@ -227,6 +229,13 @@ class GptOssModel(nn.Layer):
 )
 class GptOssForCausalLM(ModelForCasualLM):
     def __init__(self, fd_config: FDConfig):
+        if (
+            hasattr(fd_config, "quant_config")
+            and fd_config.model_config.quantization_config is not None
+            and "modules_to_not_convert" in fd_config.model_config.quantization_config
+        ):
+            fd_config.model_config.quantization_config["modules_to_not_convert"].append("*norm")
+
         super(GptOssForCausalLM, self).__init__(fd_config)
         self.fd_config = fd_config
         self.model = GptOssModel(fd_config=fd_config)
@@ -266,14 +275,19 @@ class GptOssForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = [
             # (param_name, weight_name, expert_id, shard_id)
-            ("up_gate_proj_weight", "gate_up_proj", None, None),
             ("up_gate_proj_bias", "gate_up_proj_bias", None, None),
-            ("down_proj_weight", "down_proj", None, None),
             ("down_proj_bias", "down_proj_bias", None, None),
+            ("up_gate_proj_weight", "gate_up_proj", None, None),
+            ("down_proj_weight", "down_proj", None, None),
+            ("up_gate_proj_weight", "gate_up_proj_blocks", None, None),
+            ("up_gate_proj_scale", "gate_up_proj_scales", None, None),
+            ("down_proj_weight", "down_proj_blocks", None, None),
+            ("down_proj_scale", "down_proj_scales", None, None),
         ]
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+            matched = False
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -285,26 +299,37 @@ class GptOssForCausalLM(ModelForCasualLM):
                 param = params_dict[model_param_name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                 weight_loader(param, loaded_weight, shard_id)
+                matched = True
                 break
-            else:
-                for mapping in expert_params_mapping:
-                    param_name, weight_name, expert_id, shard_id = mapping
+            if not matched:
+                for param_name, weight_name, expert_id, shard_id in expert_params_mapping:
                     if weight_name not in loaded_weight_name:
                         continue
+
                     model_param_name = loaded_weight_name.replace(weight_name, param_name)
                     if model_param_name not in params_dict:
                         continue
+
                     param = params_dict[model_param_name]
                     weight_loader = param.weight_loader
-                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
+                    weight_loader(
+                        param,
+                        loaded_weight,
+                        shard_id=shard_id,
+                        expert_id=expert_id,
+                    )
+
+                    matched = True
                     break
-                else:
-                    model_param_name = loaded_weight_name
-                    if model_param_name not in params_dict:
-                        continue
-                    param = params_dict[model_param_name]
-                    weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
-                    weight_loader(param, loaded_weight)
+            if not matched:
+
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
 
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)

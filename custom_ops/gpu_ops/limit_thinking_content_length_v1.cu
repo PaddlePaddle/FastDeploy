@@ -32,8 +32,8 @@ __global__ void limit_thinking_content_length_kernel_v1(
   const int max_think_len = max_think_lens[bid];
   if (max_think_len < 0) return;
   int current_limit_think_status = limit_think_status[bid];
-  // 如果在回复阶段, 且已经触发停止标志, 则直接返回, 无需多余执行
-  if (current_limit_think_status == 2 && stop_flags[bid]) {
+  // 如果在回复阶段, 或者已经触发停止标志, 则直接返回, 无需多余执行
+  if (current_limit_think_status == 2 || stop_flags[bid]) {
     return;
   }
 
@@ -91,7 +91,7 @@ void LimitThinkingContentLengthV1(const paddle::Tensor &next_tokens,
                                   const int64_t think_end_id) {
   const int batch_size = next_tokens.shape()[0];
   const int eos_token_id_len = eos_token_ids.shape()[0];
-  limit_thinking_content_length_kernel_v1<<<1, 1024>>>(
+  limit_thinking_content_length_kernel_v1<<<1, 1024, 0, next_tokens.stream()>>>(
       const_cast<int64_t *>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       step_idx.data<int64_t>(),

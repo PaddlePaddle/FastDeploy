@@ -118,6 +118,10 @@ class PlasAttentionBackend(AttentionBackend):
         self.attention_metadata = metadata
         assert self.max_seq_len <= self.plas_max_seq_length
 
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
+        return self.attention_metadata
+
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
@@ -126,20 +130,22 @@ class PlasAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            return (
+            key_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
                 self.head_dim // 2,
-            )
-        else:
-            return (
+            ]
+            value_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
-                self.head_dim,
-            )
+                self.head_dim // 2,
+            ]
+        return key_cache_shape, value_cache_shape
 
     def forward_mixed(
         self,

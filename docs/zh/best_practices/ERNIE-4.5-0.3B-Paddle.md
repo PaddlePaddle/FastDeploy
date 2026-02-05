@@ -32,13 +32,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --tensor-parallel-size 1 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --max-num-seqs 128 \
-       --load-choices "default_v1"
+       --max-num-seqs 128
 ```
 其中：
 - `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。可选值包括：`wint8` / `wint4` / `block_wise_fp8`(需要Hopper架构)。
 - `--max-model-len`：表示当前部署的服务所支持的最长Token数量。设置得越大，模型可支持的上下文长度也越大，但相应占用的显存也越多，可能影响并发数。
-- `--load-choices`: 表示loader的版本，"default_v1"表示启用v1版本的loader，具有更快的加载速度和更少的内存使用。
 
 更多的参数含义与默认设置，请参见[FastDeploy参数说明](../parameters.md)。
 

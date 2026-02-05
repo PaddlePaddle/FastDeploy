@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 
 import numpy as np
@@ -152,7 +168,7 @@ class TestRebuildPadding(unittest.TestCase):
     # test with offset
     def test_rebuild_padding_with_offset(self):
         paddle.seed(42)
-        token_num = 100
+        token_num = 84
         dim_embed = 256
         # bsz = 4
         max_input_length = 512
@@ -168,7 +184,7 @@ class TestRebuildPadding(unittest.TestCase):
         seq_lens_encoder = np.array([0, 20, 0, 20, 0, 20, 0, 20], dtype=np.int32)
         seq_lens_decoder = np.array([21, 0, 21, 0, 21, 0, 21, 0], dtype=np.int32)
 
-        num_output_tokens = 80
+        num_output_tokens = 8
         output_padding_offset = np.random.randint(0, 10, [num_output_tokens], dtype=np.int32)
         out_with_offset_ref = rebuild_padding_ref(
             tmp_out=tmp_out,

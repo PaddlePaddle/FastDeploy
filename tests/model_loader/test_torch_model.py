@@ -24,15 +24,12 @@ if project_root not in sys.path:
 
 os.environ["FD_USE_MACHETE"] = "0"
 
-from tests.model_loader.utils import (
+from model_loader.utils import (
     calculate_diff_rate,
     form_model_get_output_topp0,
     get_torch_model_path,
     run_with_timeout,
 )
-
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 prompts = ["北京天安门在哪里?"]
 
@@ -134,9 +131,7 @@ def test_model_against_baseline(
             max_tokens,
             quantization,
             "default_v1",
-            FD_ENGINE_QUEUE_PORT,
             prompts,
-            FD_CACHE_QUEUE_PORT,
         ),
     )
 
@@ -145,7 +140,7 @@ def test_model_against_baseline(
 
     # Get baseline suffix from config
     model_config = hugging_face_model_param_map.get(model_name_or_path, {})
-    baseline_suffix = model_config.get("baseline_suffix", "tp2")
+    baseline_suffix = model_config.get("baseline_suffix", "tp2-dev")
     baseline_filename = f"{model_name_or_path}-{baseline_suffix}"
 
     if base_path:

@@ -22,7 +22,6 @@ __global__ void speculate_limit_thinking_content_length_kernel_v1(
     const int64_t* eos_token_ids,
     int* limit_think_status,
     int* accept_num,
-    int* seq_lens_decoder,
     bool* stop_flags,
     const int64_t think_end_id,
     const int tokens_per_step,
@@ -38,8 +37,8 @@ __global__ void speculate_limit_thinking_content_length_kernel_v1(
   const int max_think_len = max_think_lens[bid];
   if (max_think_len < 0) return;
   int current_limit_think_status = limit_think_status[bid];
-  // 如果在回复阶段, 且已经触发停止标志, 则直接返回, 无需多余执行
-  if (current_limit_think_status == 2 && stop_flags[bid]) {
+  // 如果在回复阶段, 或者已经触发停止标志, 则直接返回, 无需多余执行
+  if (current_limit_think_status == 2 || stop_flags[bid]) {
     return;
   }
 
@@ -106,7 +105,6 @@ __global__ void speculate_limit_thinking_content_length_kernel_v1(
   int discarded_tokens = original_accept_num - new_accept_num;
   if (discarded_tokens > 0) {
     step_idx[bid] -= discarded_tokens;
-    seq_lens_decoder[bid] -= discarded_tokens;
   }
 
   accept_num[bid] = new_accept_num;
@@ -119,7 +117,6 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
-    const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& stop_flags,
     const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id) {
@@ -127,14 +124,16 @@ void SpeculateLimitThinkingContentLengthV1(
   const int tokens_per_step = next_tokens.shape()[1];
   const int eos_token_id_len = eos_token_ids.shape()[0];
 
-  speculate_limit_thinking_content_length_kernel_v1<<<1, 1024>>>(
+  speculate_limit_thinking_content_length_kernel_v1<<<1,
+                                                      1024,
+                                                      0,
+                                                      next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
       eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_think_status.data<int>()),
       const_cast<int*>(accept_num.data<int>()),
-      const_cast<int*>(seq_lens_decoder.data<int>()),
       const_cast<bool*>(stop_flags.data<bool>()),
       think_end_id,
       tokens_per_step,
@@ -148,7 +147,6 @@ PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v1)
              "step_idx",
              "limit_think_status",
              "accept_num",
-             "seq_lens_decoder",
              "stop_flags",
              "eos_token_ids"})
     .Attrs({"think_end_id: int64_t"})

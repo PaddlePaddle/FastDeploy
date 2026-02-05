@@ -17,7 +17,7 @@
 import gc
 import os
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import paddle
 from paddle import nn
@@ -25,6 +25,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.metax_model_runner import MetaxModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -61,6 +62,9 @@ class MetaxWorker(WorkerBase):
         gc.collect()
         paddle.device.empty_cache()
 
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
+
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: MetaxModelRunner = MetaxModelRunner(
@@ -91,7 +95,6 @@ class MetaxWorker(WorkerBase):
             by adjusting the `gpu_memory_utilization` parameter.
         """
 
-        # temporary fix kvcache size to test
         fd_kvache_mem = os.getenv("FD_METAX_KVCACHE_MEM")
         if fd_kvache_mem is not None:
             return int(float(fd_kvache_mem) * 1024**3)
@@ -103,12 +106,12 @@ class MetaxWorker(WorkerBase):
             Gb = 1024**3
 
             local_rank = self.local_rank % self.max_chips_per_node
-            paddle.device.cuda.reset_max_memory_reserved(local_rank)
-            paddle.device.cuda.reset_max_memory_allocated(local_rank)
+            paddle.device.reset_max_memory_reserved(local_rank)
+            paddle.device.reset_max_memory_allocated(local_rank)
             # max memory for Allocator
-            paddle_reserved_mem_before_run = paddle.device.cuda.max_memory_reserved(local_rank)
+            paddle_reserved_mem_before_run = paddle.device.max_memory_reserved(local_rank)
             # max memory for Tensor
-            paddle_allocated_mem_before_run = paddle.device.cuda.max_memory_allocated(local_rank)  # not reserved
+            paddle_allocated_mem_before_run = paddle.device.max_memory_allocated(local_rank)  # not reserved
 
             device_id = int(self.device_ids[local_rank])
             if os.getenv("MACA_VISIBLE_DEVICES") is not None:
@@ -120,25 +123,30 @@ class MetaxWorker(WorkerBase):
             before_run_meminfo_used = info.vramUse * 1024
             before_run_meminfo_free = before_run_meminfo_total - before_run_meminfo_used
 
-            logger.info("Before running the profile, the memory usage info of Metax GPU is as follows:")
-            logger.info(f"Device Index: {device_id}")
-            logger.info(f"Device Total memory: {before_run_meminfo_total / Gb}")
-            logger.info(f"Device used memory: {before_run_meminfo_used / Gb}")
-            logger.info(f"Device free memory: {before_run_meminfo_free / Gb}")
-            logger.info(f"Paddle reserved memory: {paddle_reserved_mem_before_run / Gb}")
-            logger.info(f"Paddle allocated memory: {paddle_allocated_mem_before_run / Gb}")
+            logger.info(
+                (
+                    "Before running the profile, the memory usage info is as follows:",
+                    f"\nDevice Index: {device_id}",
+                    f"\nDevice Total memory: {before_run_meminfo_total / Gb}",
+                    f"\nDevice used memory: {before_run_meminfo_used / Gb}",
+                    f"\nDevice free memory: {before_run_meminfo_free / Gb}",
+                    f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
+                    f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
+                )
+            )
 
             # 2. Profile run
             self.model_runner.profile_run()
+            set_random_seed(self.fd_config.model_config.seed)
 
             # 3. Statistical memory information
-            paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)
-            paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(local_rank)
+            paddle_reserved_mem_after_run = paddle.device.max_memory_reserved(local_rank)
+            paddle_allocated_mem_after_run = paddle.device.max_memory_allocated(local_rank)
 
             model_block_memory_used = self.cal_theortical_kvcache()
-            paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
+            paddle_peak_increase = paddle_allocated_mem_after_run - paddle_allocated_mem_before_run
 
-            paddle.device.cuda.empty_cache()
+            paddle.device.empty_cache()
 
             info = pymxsml.mxSmlGetMemoryInfo(device_id)
             after_run_meminfo_total = info.vramTotal * 1024
@@ -146,21 +154,27 @@ class MetaxWorker(WorkerBase):
             after_run_meminfo_free = after_run_meminfo_total - after_run_meminfo_used
 
             available_kv_cache_memory = (
-                after_run_meminfo_free - paddle_peak_increase
-            ) * self.cache_config.gpu_memory_utilization
+                after_run_meminfo_total * self.cache_config.gpu_memory_utilization
+                - after_run_meminfo_used
+                - paddle_peak_increase
+            )
             available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
 
             end_time = time.perf_counter()
 
-            logger.info("After running the profile, the memory usage info of Metax GPU is as follows:")
-            logger.info(f"Device Index: {device_id}")
-            logger.info(f"Device Total memory: {after_run_meminfo_total / Gb}")
-            logger.info(f"Device used memory: {after_run_meminfo_used / Gb}")
-            logger.info(f"Device free memory: {after_run_meminfo_free / Gb}")
-            logger.info(f"Paddle reserved memory: {paddle_reserved_mem_after_run / Gb}")
-            logger.info(f"Paddle allocated memory: {paddle_allocated_mem_after_run / Gb}")
-            logger.info(f"Paddle available_kv_cache_memory: {available_kv_cache_memory / Gb}")
-            logger.info(f"Profile time: {end_time - start_time}")
+            logger.info(
+                (
+                    "After running the profile, the memory usage info is as follows:",
+                    f"\nDevice Index: {device_id}",
+                    f"\nDevice Total memory: {after_run_meminfo_total / Gb}",
+                    f"\nDevice used memory: {after_run_meminfo_used / Gb}",
+                    f"\nDevice free memory: {after_run_meminfo_free / Gb}",
+                    f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
+                    f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
+                    f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
+                    f"\nProfile time: {end_time - start_time}",
+                )
+            )
 
             return available_kv_cache_memory
 
@@ -177,6 +191,10 @@ class MetaxWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
+    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+        """update weights in place"""
+        return self.model_runner.update_weights(version, rsync_config)
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -188,6 +206,7 @@ class MetaxWorker(WorkerBase):
 
     def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
+        TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -197,11 +216,28 @@ class MetaxWorker(WorkerBase):
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
-        Perform the warm-up and the graph optimization
+        Perform the warm-up and the graph optimization.
+
+        Execution modes:
+        | Mode                              | Prefill + Mixed          | Decode                   |
+        |-----------------------------------|--------------------------|--------------------------|
+        | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
+        | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
+        | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
         """
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
-        # Trigger cuda graph capture
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1:
+            self.model_runner.vision_encoder_compile()
+
+        # Static split graph mode: capture CUDAGraph for prefill/mixed phase
+        if (
+            self.fd_config.graph_opt_config.graph_opt_level >= 1
+            and not self.fd_config.graph_opt_config.full_cuda_graph
+        ):
+            self.model_runner.capture_model_prefill_and_mixed()
+
+        # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

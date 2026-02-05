@@ -15,10 +15,11 @@
 """
 
 import argparse
+import asyncio
 import json
 import os
 import time
-from multiprocessing import shared_memory
+import traceback
 from typing import Tuple
 
 import numpy as np
@@ -39,9 +40,11 @@ from fastdeploy.config import (
     ModelConfig,
     ParallelConfig,
     PlasAttentionConfig,
+    RoutingReplayConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.engine.request import ControlRequest, ControlResponse, RequestType
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -49,9 +52,14 @@ from fastdeploy.eplb.async_expert_loader import (
     load_tensor_from_shm_mem,
 )
 from fastdeploy.eplb.experts_manager import RedundantExpertManager
-from fastdeploy.eplb.utils import RearrangeExpertState
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    RearrangeExpertStatus,
+)
+from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -66,8 +74,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
-    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
-        raise NotImplementedError("Only CUDA platform supports logprob.")
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda() and not current_platform.is_xpu():
+        raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
@@ -125,7 +133,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
-        fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
+        fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
@@ -158,6 +166,16 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
+
+    def init_control(self):
+        engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
+        queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
+        logger.info(f"Init Control Output Queue: {queue_name}(producer)")
+        self._ctrl_output = FMQ().queue(queue_name, "producer")
 
     def init_health_status(self) -> None:
         """
@@ -169,7 +187,6 @@ class PaddleDisWorkerProc:
             exist_swapped_task_signal:
             model_weights_status:
         """
-        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
@@ -210,7 +227,7 @@ class PaddleDisWorkerProc:
             name="worker_healthy_live_signal",
             array=workers_alive,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
@@ -222,7 +239,17 @@ class PaddleDisWorkerProc:
             name="model_weights_status",
             array=workers_model_weights,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
+        # init kv_cache_status
+        kv_cache_status_data = np.zeros(shape=[1], dtype=np.int32)
+        self.kv_cache_status = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -232,7 +259,7 @@ class PaddleDisWorkerProc:
             name="exist_task_signal",
             array=workers_exist_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -242,7 +269,7 @@ class PaddleDisWorkerProc:
             name="exist_swapped_task_signal",
             array=workers_swapped_task,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -252,7 +279,17 @@ class PaddleDisWorkerProc:
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
+        # init engine forward signal
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
 
@@ -260,6 +297,13 @@ class PaddleDisWorkerProc:
         """
         update_weights_from_tensor
         """
+        import time
+
+        while True:
+            if self.experts_manager.tensor_infos is None:
+                time.sleep(0.1)
+            else:
+                break
         state_dicts = load_tensor_from_shm_mem(self.experts_manager.tensor_infos, mmap_infos[MODEL_MAIN_NAME], logger)
         rank_expert_list, logical_to_physical_map, expert_count = self.experts_manager.get_ep_rank_to_expert_id_list()
         self.worker.get_model().redundant_table_manger.update_expert_rank_table(
@@ -267,161 +311,170 @@ class PaddleDisWorkerProc:
         )
         # TO BE FIXED
         self.worker.get_model().update_state_dict(state_dicts)
+        self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
-        return model_weights_signal_tensor.item()
+        value = model_weights_signal_tensor.numpy()[0]
+        return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or self.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
+
+    def _init_eplb_signal(self):
+        if not self.eplb_config.enable_eplb:
+            return
+
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        self.last_dump_expert_workload_ts = 0
+        self.experts_manager = RedundantExpertManager(
+            rank=self.local_rank,
+            ep_size=self.ranks,
+            fd_config=self.fd_config,
+            ipc_signal_suffix=self.parallel_config.local_engine_worker_queue_port,
+        )
+
+        dp_ipc_signal_suffix = (
+            f"{self.parallel_config.local_engine_worker_queue_port}_dp{self.parallel_config.local_data_parallel_id}"
+        )
+        if local_rank == 0:  # master rank0
+            signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_tensor_array = IPCSignal(
+                name="signal_update_weight_from_tensor",
+                array=signal_update_weight_from_tensor,
+                dtype=np.int32,
+                suffix=dp_ipc_signal_suffix,
+                create=False,
+            )
+
+            rearrange_experts_status = np.zeros([1], dtype=np.int32)
+            self.rearrange_experts_signal = IPCSignal(
+                name="rearrange_experts_status",
+                array=rearrange_experts_status,
+                dtype=np.int32,
+                suffix=dp_ipc_signal_suffix,
+                create=False,
+            )
+
+        tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{local_rank}"
+        experts_token_stats = np.zeros(
+            (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
+            dtype=np.int32,
+        )
+        self.local_experts_token_stats_array = IPCSignal(
+            name="local_experts_token_stats",
+            array=experts_token_stats,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
+        clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+        self.signal_clear_experts_token_stats = IPCSignal(
+            name="signal_clear_experts_token_stats",
+            array=clear_experts_token_stats,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
+        self.mmap_infos = create_mmap(
+            [MODEL_MAIN_NAME],
+            self.local_rank,
+            self.ranks,
+            shm_uuid=self.parallel_config.local_engine_worker_queue_port,
+            eplb_config=self.eplb_config,
+            logger=logger,
+        )
+
+    def _run_eplb(self, tp_rank):
+        """internal call to run eplb"""
+        if not self.eplb_config.enable_eplb:
+            return
+
+        rearrange_time = time.time()
+        # Get expert load
+        if self.local_experts_token_stats_array.value is not None and (
+            int(rearrange_time) - self.last_dump_expert_workload_ts
+            > self.eplb_config.redundant_expert_dump_workload_interval
+        ):
+            self.last_dump_expert_workload_ts = int(rearrange_time)
+            clear_stat = False
+            if self.signal_clear_experts_token_stats.value[0] == 1:
+                clear_stat = True
+                self.signal_clear_experts_token_stats.value[0] = 0
+            (
+                new_stats_array,
+                _,
+                _,
+                _,
+            ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
+            self.local_experts_token_stats_array.value[:] = new_stats_array[:]
+        elif self.local_experts_token_stats_array.value is None:
+            logger.warning("redundant_expert: local_experts_token_stats not init")
+
+        # All DP synchronously update weights
+        broadcast_value = 0
+        if tp_rank == 0 and self.signal_update_weight_from_tensor_array.value[0] == 1:
+            logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
+            self.signal_update_weight_from_tensor_array.value[0] = 0
+            broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
+        data = paddle.to_tensor([broadcast_value])
+        paddle.distributed.broadcast(data, 0)
+        if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
+            self.update_weights_from_tensor(self.mmap_infos)
+            logger.info(
+                f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
+            )
+            paddle.distributed.barrier()
+            if tp_rank == 0:
+                self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
+            logger.info("redundant_expert: done")
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
-        if self.eplb_config.enable_redundant_experts:
-            self.last_dump_expert_workload_ts = 0
-            self.experts_manager = RedundantExpertManager(
-                rank=self.local_rank, ep_size=self.ranks, fd_config=self.fd_config
-            )
-            num_layers = self.fd_config.model_config.num_hidden_layers
-            num_experts = self.fd_config.model_config.moe_num_experts
-            expert_token_stats = np.zeros((num_layers, num_experts), dtype=np.int32)
-            shm_local_experts_token_stats = shared_memory.SharedMemory(
-                create=False,
-                size=expert_token_stats.nbytes,
-                name=f"{envs.get_unique_name('local_experts_token_stats_dprank' + self.local_rank)}",
-            )
-            expert_tokens_stats_array = np.ndarray(
-                expert_token_stats.shape, dtype=expert_token_stats.dtype, buffer=shm_local_experts_token_stats.buf
-            )
-            signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-            shm_signal_clear_experts_token_stats = shared_memory.SharedMemory(
-                create=False,
-                size=signal_clear_experts_token_stats.nbytes,
-                name=f"{envs.get_unique_name('signal_clear_experts_token_stats_dprank' + self.local_rank)}",
-            )
-            signal_clear_experts_token_stats_array = np.ndarray(
-                signal_clear_experts_token_stats.shape,
-                dtype=signal_clear_experts_token_stats.dtype,
-                buffer=shm_signal_clear_experts_token_stats.buf,
-            )
-            if self.local_rank == 0:
-                signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-                shm_signal_update_weight_from_tensor = shared_memory.SharedMemory(
-                    create=False,
-                    size=signal_update_weight_from_tensor.nbytes,
-                    name=f"{envs.get_unique_name('signal_update_weight_from_tensor_dprank' + self.local_rank)}",
-                )
-                signal_update_weight_from_tensor_array = np.ndarray(
-                    signal_update_weight_from_tensor.shape,
-                    dtype=signal_update_weight_from_tensor.dtype,
-                    buffer=shm_signal_update_weight_from_tensor.buf,
-                )
-
-                rearrange_experts_status = np.zeros([1], dtype=np.int32)
-                shm_rearrange_experts_status = shared_memory.SharedMemory(
-                    create=False,
-                    size=rearrange_experts_status.nbytes,
-                    name=f"{envs.get_unique_name('rearrange_experts_status_dprank' + self.local_rank)}",
-                )
-
-                rearrange_experts_status_array = np.ndarray(
-                    rearrange_experts_status.shape,
-                    dtype=rearrange_experts_status.dtype,
-                    buffer=shm_rearrange_experts_status.buf,
-                )
-
-                expert_workload_dump_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-                mmap_infos = create_mmap(
-                    [MODEL_MAIN_NAME], self.local_rank, self.ranks, shm_uuid=os.getenv("SHM_UUID", ""), logger=logger
-                )
+        # init eplb signal
+        self._init_eplb_signal()
+        tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
-        req_ids = []
-        num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
+        max_occupied_batch_index = 0
+        tp_rank = self.local_rank % tp_size
+
+        # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.eplb_config.enable_redundant_experts:
-                rearrange_time = time.time()
-                # 获取专家负载
-                if expert_tokens_stats_array is not None and (
-                    int(rearrange_time) - self.last_dump_expert_workload_ts > expert_workload_dump_interval
-                ):
-                    self.last_dump_expert_workload_ts = int(rearrange_time)
-                    clear_stat = False
-                    if signal_clear_experts_token_stats_array[0] == 1:
-                        clear_stat = True
-                        signal_clear_experts_token_stats_array[0] = 0
-                    (
-                        new_stats_array,
-                        _,
-                        _,
-                        _,
-                    ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
-                    expert_tokens_stats_array[:] = new_stats_array[:]
-                elif expert_tokens_stats_array is None:
-                    logger.warning("redundant_expert: expert_tokens_stats_array not init")
+            if self.fd_config.load_config.dynamic_load_weight:
+                self.model_weights_signal[0] = int(self.model_weights_status.value[0])
+                if self.ranks > 1:
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
 
-                # 所有DP同步更新权重
-                broadcast_value = 0
-                if self.local_rank == 0 and signal_update_weight_from_tensor_array[0] == 1:
-                    logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
-                    signal_update_weight_from_tensor_array[0] = 0
-                    broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
-                data = paddle.to_tensor([broadcast_value])
-                paddle.distributed.broadcast(data, 0)
-                if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
-                    self.update_weights_from_tensor(mmap_infos)
-                    logger.info(
-                        f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
-                    )
-                    paddle.distributed.barrier()
-                    if self.local_rank == 0:
-                        rearrange_experts_status_array[0] = RearrangeExpertState.done.value
-                    logger.info("redundant_expert: done")
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
-                if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
-                    self.model_weights_signal[0] = int(self.model_weights_status.value[0])
-                if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
-                    )
-            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
-                self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
-                )
-
-            self.insert_step = False
             req_dicts = None
-            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
+            self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if local_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+            if tp_rank == 0:
+                if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
+                        if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if self.parallel_config.tensor_parallel_size > 1:
-                # Synchronize the signal for other workers
-                self._tp_barrier_wait()
+            # Synchronize the signal set by tp_rank0 visiable to other workers
+            self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight:
-                if self.parallel_config.enable_expert_parallel:
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
-                else:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                if self.ranks > 1:
+                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
@@ -431,54 +484,118 @@ class PaddleDisWorkerProc:
                     )
 
                     self.model_weights_status.value[0] = self.model_weights_signal[0]
+                    self.kv_cache_status.value[0] = self.model_weights_signal[0]
                     DynamicWeightManager.check_model_weights_status(
                         self.model_weights_status,
+                        self.kv_cache_status if self.fd_config.cache_config.num_cpu_blocks > 0 else None,
                         # model_weights_signal
                         self.worker.model_runner,
-                        self.parallel_config.engine_worker_queue_port,
+                        self.parallel_config.local_engine_worker_queue_port,
+                        self.parallel_config.shutdown_comm_group_if_worker_idle,
                     )
                     logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
                     self.task_queue.clear_data()
-                    self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
-                    logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
+
+                    if self.model_weights_signal[0] == ModelWeightsStatus.UPDATING:
+                        logger.info(
+                            f"Rank: {self.local_rank} has updated parameters. {self.model_weights_status.value[0]}"
+                        )
+                        self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
+                    elif self.model_weights_signal[0] == ModelWeightsStatus.CLEARING:
+                        logger.info(
+                            f"Rank: {self.local_rank} has cleared parameters. {self.model_weights_status.value[0]}"
+                        )
+                        # 如果清理权重后不关闭通信组，那么将推理进程统一阻塞在下面的循环中，否则信号量可能同步混乱；直到下次权重更新时唤醒
+                        if not self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                            if self.ranks > 1:  # 所有 Rank 同时入睡，监听下次的更新信号
+                                paddle.distributed.barrier()
+                            while self.model_weights_signal[0] != ModelWeightsStatus.UPDATING:
+                                self.model_weights_signal[0] = self.model_weights_status.value[0]
+                                if self.ranks > 1:
+                                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(
+                                        src=0, group=None
+                                    )
+                                time.sleep(1)
+                            self.model_weights_status.value[0] = (
+                                ModelWeightsStatus.UPDATING
+                            )  # 所有 Rank 已同步唤醒，启动权重更新流程
+                            continue
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
-                self.insert_step = True
-
+                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
+                # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
-                    # Ensure that every worker get the task
-                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                    self.task_queue.read_finish_flag.set(0)
+                    # Reset the two signal.
+                    if self.nnode > 1:
+                        self.task_queue.read_finish_flag.set(0)
+                    else:
+                        self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
+                # Only EP + DP prefill should barrier for data arrival.
+                # In mixed mode and decoder in D, we should not barrier to influence decoding.
+                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
 
-                req_dicts = []
-                for req_dict, bsz in tasks:
-                    num_running_requests = int(bsz)
-                    req_dicts.extend(req_dict)
+                req_dicts, control_reqs = [], []
+                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
+                if tasks[0][0]:
+                    for req_dict, bsz in tasks:
+                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                            control_reqs.append(req_dict[0])
+                        else:
+                            max_occupied_batch_index = int(bsz)
+                            req_dicts.extend(req_dict)
 
-                req_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
-                )
+                    # todo: run control request async
+                    if len(control_reqs) > 0:
+                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                        for control_req in control_reqs:
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                    # Count prefill requests in current batch
+                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(req_dicts)
+                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    logger.info(
+                        f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                        f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                        f"num_scheduled_requests: {num_scheduled_requests}, "
+                        f"scheduled_request_ids: {scheduled_request_ids}"
+                    )
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
-                if self.ranks > 1:
-                    self._tp_barrier_wait()
+                    # Process prefill inputs
+                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+            else:
+                if self.scheduler_config.splitwise_role == "prefill":
+                    if tp_size > 1:
+                        # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
 
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.enable_overlap_schedule)
+            ):
+                self._tp_barrier_wait() if tp_size > 1 else None
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, num_running_requests)
-            self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            # Only v0 use this signal
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            # run eplb
+            self._run_eplb(tp_rank)
+            self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -556,10 +673,13 @@ class PaddleDisWorkerProc:
 
     def start_task_queue_service(self):
         # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            task_address = (
+                self.parallel_config.pod_ip,
+                self.parallel_config.local_engine_worker_queue_port,
+            )
+        else:
+            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.local_engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
@@ -584,6 +704,32 @@ class PaddleDisWorkerProc:
         if self.ranks > 1:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
+
+    def run_control_method(self, control_request: ControlRequest) -> None:
+        logger.info(f"Start run control request: {control_request}")
+        request_id = control_request.request_id
+        method = control_request.method
+        kwargs = control_request.args
+
+        handler = getattr(self.worker, method, None)
+        if handler is None or not callable(handler):
+            error_msg = f"Rank-{self.local_rank}: Unknown control method {method}"
+            error_result = ControlResponse(request_id, 400, error_msg)
+            asyncio.run(self._ctrl_output.put(error_result))
+            return
+
+        try:
+            result = handler(**kwargs)
+            succ_result = ControlResponse(request_id, 200, "Success", result)
+            logger.info(
+                f"Rank-{self.local_rank} Success run control request: {control_request}, response: {succ_result}"
+            )
+            asyncio.run(self._ctrl_output.put(succ_result, shm_threshold=100 * 1024 * 1024))
+        except Exception as e:
+            error_msg = f"Rank-{self.local_rank} Failed run control method {method}: {str(e)}"
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            error_result = ControlResponse(request_id, 500, error_msg)
+            asyncio.run(self._ctrl_output.put(error_result))
 
 
 def parse_args():
@@ -657,6 +803,11 @@ def parse_args():
         action="store_true",
         help="enable custom all-reduce",
     )
+    parser.add_argument(
+        "--disable_sequence_parallel_moe",
+        action="store_true",
+        help="disable sequence parallel moe",
+    )
     parser.add_argument("--splitwise_role", type=str, default="mixed", help="splitwise role")
     parser.add_argument(
         "--tensor_parallel_size",
@@ -680,6 +831,17 @@ def parse_args():
         "--enable_expert_parallel",
         action="store_true",
         help="enable expert parallel",
+    )
+    parser.add_argument(
+        "--enable_chunked_moe",
+        action="store_true",
+        help="enable chunked moe",
+    )
+    parser.add_argument(
+        "--chunked_moe_size",
+        type=int,
+        default=256,
+        help="chunk size of moe input",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
@@ -716,7 +878,7 @@ def parse_args():
     )
     parser.add_argument(
         "--disable_any_whitespace",
-        action="store_false",
+        action="store_true",
         help="Disable any whitespace for guided decoding.",
     )
     parser.add_argument(
@@ -727,11 +889,17 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=["ipc", "ipc_snapshot", "meta", "normal"],
+        choices=["ipc", "ipc_snapshot", "meta", "normal", "rsync"],
         default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
+    )
+    parser.add_argument(
+        "--rsync_config",
+        type=json.loads,
+        default=None,
+        help="Rsync weights config",
     )
     parser.add_argument(
         "--enable_logprob",
@@ -766,8 +934,8 @@ def parse_args():
     parser.add_argument(
         "--load_choices",
         type=str,
-        default="default",
-        help="The format of the model weights to load. default/new_loader.",
+        default="default_v1",
+        help="The format of the model weights to load. default/default_v1/dummy.",
     )
 
     parser.add_argument(
@@ -787,6 +955,14 @@ def parse_args():
         "--max_encoder_cache",
         type=int,
         help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
+    parser.add_argument(
+        "--model-impl",
+        type=str,
+        choices=["auto", "fastdeploy", "paddleformers"],
+        default="auto",
+        help="Model implementation backend (auto, fastdeploy, paddleformers)",
     )
 
     parser.add_argument(
@@ -824,6 +1000,50 @@ def parse_args():
         help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
     )
 
+    parser.add_argument(
+        "--eplb_config",
+        type=json.loads,
+        default=None,
+        help="EPLB Configuration.",
+    )
+
+    parser.add_argument(
+        "--routing_replay_config",
+        type=json.loads,
+        default=None,
+        help="Configation of Rollout Routing Replay.",
+    )
+
+    parser.add_argument(
+        "--shutdown_comm_group_if_worker_idle",
+        action="store_true",
+        help="Shutdown comm group if worker idle.",
+    )
+
+    parser.add_argument(
+        "--enable_entropy",
+        action="store_true",
+        help="Enable output of token-level entropy.",
+    )
+
+    parser.add_argument(
+        "--num_cpu_blocks",
+        type=int,
+        default=0,
+        help="Number of cpu blocks.",
+    )
+    parser.add_argument(
+        "--kvcache_storage_backend",
+        type=str,
+        help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--enable_overlap_schedule",
+        action="store_true",
+        help="Enable overlap schedule",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -845,31 +1065,31 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     scheduler_config = SchedulerConfig(vars(args))
+    eplb_config = EPLBConfig(args.eplb_config)
 
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
-    # config for EP
-    if parallel_config.expert_parallel_size > 1:
-        expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
-        if isinstance(model_config.moe_num_experts, list):
-            num_experts = model_config.moe_num_experts[0]
-        else:
-            num_experts = model_config.moe_num_experts
-        num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
-        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+    # config for DP
+    if parallel_config.data_parallel_size > 1:
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
             max_chips_per_node // parallel_config.tensor_parallel_size
         )
-
+    # config for EP
+    if parallel_config.expert_parallel_size > 1:
+        expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
+        if isinstance(model_config.moe_num_experts, list):
+            num_experts = model_config.moe_num_experts[0] + eplb_config.redundant_experts_num
+        elif hasattr(model_config, "num_local_experts") and model_config.num_local_experts is not None:
+            num_experts = model_config.num_local_experts + eplb_config.redundant_experts_num
+        else:
+            num_experts = model_config.moe_num_experts + eplb_config.redundant_experts_num
+        num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
+        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
-    if args.load_strategy != "meta":
-        parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
-            parallel_config.local_data_parallel_id
-        ]
     parallel_config.set_communicate_group()
 
     load_config = LoadConfig(vars(args))
@@ -879,13 +1099,13 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
-    eplb_config = EPLBConfig()
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
+    routing_replay_config = RoutingReplayConfig(args.routing_replay_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
-    model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
+    model_config.pretrained_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
     model_config.pretrained_config.is_mtp = False
     model_config.pretrained_config.head_dim = model_config.head_dim
 
@@ -918,18 +1138,22 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+    logger.info(f"- Rsync config: {load_config.rsync_config}, {type(load_config.rsync_config)}")
 
-    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if not current_platform.is_cuda() and not current_platform.is_xpu():
+    if not (
+        current_platform.is_cuda()
+        or current_platform.is_xpu()
+        or current_platform.is_maca()
+        or current_platform.is_iluvatar()
+        or current_platform.is_intel_hpu()
+    ):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if structured_outputs_config.guided_decoding_backend != "off":
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
         os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "1"
+    elif envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "decode":
+        os.environ["PREFILL_NODE_ONE_STEP_STOP_V1"] = "0"
 
     fd_config = FDConfig(
         model_config=model_config,
@@ -946,7 +1170,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
+        routing_replay_config=routing_replay_config,
     )
+    logger.info(f"parallel_config.local_engine_worker_queue_port {parallel_config.local_engine_worker_queue_port}")
+
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
@@ -956,6 +1183,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         envs.FD_ENABLE_MAX_PREFILL = 1
         fd_config.cache_config.enable_prefix_caching = False
         fd_config.cache_config.max_encoder_cache = 0
+
     return fd_config
 
 
@@ -978,6 +1206,7 @@ def run_worker_proc() -> None:
         worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+        worker_proc.init_control()
 
     # Initialize device and create model runner
     worker_proc.init_device()

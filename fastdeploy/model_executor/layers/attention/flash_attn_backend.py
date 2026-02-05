@@ -21,11 +21,17 @@ from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
+from paddleformers.utils.log import logger
 
 try:
     from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
 except:
     flash_attention_v3_varlen = None
+
+try:
+    from paddle.nn.functional.flash_attention import flashmask_attention
+except:
+    flashmask_attention = None
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
@@ -35,6 +41,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
+    get_attn_mask_q,
     get_block_shape_and_split_kv_block,
     gqa_rope_write_cache,
     init_kv_signal_per_query,
@@ -43,11 +50,15 @@ from fastdeploy.model_executor.layers.attention.ops import (
     pre_cache_len_concat,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.utils import get_sm_version
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from fastdeploy.platforms import current_platform
+
+paddle.compat.enable_torch_proxy(scope={"flash_mask"})
+flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
@@ -56,6 +67,123 @@ else:
 
 import os
 
+FLASH_ATTN_VERSION = None
+
+
+def init_flash_attn_version(fa_version: int = None):
+    """
+    init_flash_attn_version
+    """
+    if current_platform.is_cuda():
+        global FLASH_ATTN_VERSION
+        if fa_version is not None:
+            FLASH_ATTN_VERSION = fa_version
+            logger.info(f"Force use Flash Attention V{fa_version}.")
+            return
+        sm_version = get_sm_version()
+        if sm_version >= 100:
+            try:
+                from flash_mask.cute.interface import flashmask_attention as fa4
+
+                global flashmask_attention_v4
+                flashmask_attention_v4 = fa4
+                FLASH_ATTN_VERSION = 4
+                logger.info("The current platform supports Flash Attention V4.")
+            except ImportError:
+                pass
+
+        if FLASH_ATTN_VERSION is None:
+            if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
+                FLASH_ATTN_VERSION = 3
+                logger.info("The current platform supports Flash Attention V3.")
+            else:
+                FLASH_ATTN_VERSION = 2
+                logger.info("The current platform only support Flash Attention V2.")
+    else:
+        logger.info("Only support CUDA version flash attention.")
+
+
+def flash_attn_func(
+    q: paddle.Tensor,
+    k: paddle.Tensor,
+    v: paddle.Tensor,
+    cu_seqlens_q: Optional[paddle.Tensor] = None,
+    cu_seqlens_k: Optional[paddle.Tensor] = None,
+    max_seqlen_q: Optional[paddle.Tensor] = None,
+    max_seqlen_k: Optional[paddle.Tensor] = None,
+    attn_mask_q: Optional[paddle.Tensor] = None,
+    causal: bool = True,
+    num_heads: int = None,
+    kv_num_heads: int = None,
+    head_dim: int = 128,
+    version: Optional[int] = None,
+):
+    if version is None:
+        if FLASH_ATTN_VERSION is None:
+            init_flash_attn_version()
+        version = FLASH_ATTN_VERSION
+    if version == 4:
+        assert (
+            flashmask_attention_v4 is not None
+        ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
+        assert attn_mask_q is not None, "FA4 requires attn_mask_q"
+        assert num_heads is not None
+        assert kv_num_heads is not None
+        original_flash_attn_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])[
+            "FLAGS_flash_attn_version"
+        ]
+        with paddle.no_grad():
+            try:
+                paddle.set_flags({"FLAGS_flash_attn_version": 4})
+                out = flashmask_attention_v4(
+                    q.reshape([1, -1, num_heads, head_dim]),
+                    k.reshape([1, -1, kv_num_heads, head_dim]),
+                    v.reshape([1, -1, kv_num_heads, head_dim]),
+                    startend_row_indices=attn_mask_q,
+                    causal=False,
+                    return_softmax_lse=True,
+                    training=True,
+                )
+            finally:
+                paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
+        return out
+
+    if attn_mask_q is not None:
+        assert flashmask_attention is not None
+        out = flashmask_attention(
+            q.reshape([1, -1, num_heads, head_dim]),
+            k.reshape([1, -1, kv_num_heads, head_dim]),
+            v.reshape([1, -1, kv_num_heads, head_dim]),
+            startend_row_indices=attn_mask_q,
+            causal=False,
+        )
+    else:
+        if version == 3:
+            out = flash_attention_v3_varlen(
+                q,
+                k,
+                v,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                causal=causal,
+            )
+        else:
+            out = flash_attn_unpadded(
+                q,
+                k,
+                v,
+                cu_seqlens_q=cu_seqlens_q,
+                cu_seqlens_k=cu_seqlens_k,
+                max_seqlen_q=max_seqlen_q,
+                max_seqlen_k=max_seqlen_k,
+                causal=causal,
+                scale=head_dim**-0.5,
+                training=False,
+            )
+    return out
+
 
 @dataclass
 class FlashAttentionMetadata(AttentionMetadata):
@@ -63,13 +191,7 @@ class FlashAttentionMetadata(AttentionMetadata):
     FlashAttentionMetadata
     """
 
-    rotary_embs: Optional[paddle.Tensor] = None
-    block_tables: Optional[paddle.Tensor] = None
-
-    cu_seqlens_q: paddle.Tensor = None
     cu_seqlens_k: paddle.Tensor = None
-    max_seqlen_q: int = 0
-    max_seqlen_k: int = 0
 
     pre_cache_batch_ids = None
     pre_cache_tile_ids_per_batch = None
@@ -83,8 +205,9 @@ class FlashAttentionMetadata(AttentionMetadata):
     _fuse_kernel_compute_dtype: str = "bf16"
     _dtype: paddle.dtype = paddle.bfloat16
 
-    max_len_tensor_cpu: paddle.Tensor = None
     max_len_tensor_cpu_decoder: paddle.Tensor = None
+
+    attn_mask_q: paddle.Tensor = None
 
 
 class FlashAttentionBackend(AttentionBackend):
@@ -94,7 +217,6 @@ class FlashAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: FlashAttentionMetadata
-    flash_attn_func: callable = None
 
     def __init__(
         self,
@@ -109,7 +231,6 @@ class FlashAttentionBackend(AttentionBackend):
         FlashAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: FlashAttentionMetadata = None
         self.max_seq_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
 
@@ -133,34 +254,19 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
-        if fd_config.parallel_config.expert_parallel_rank is None:
-            fd_config.parallel_config.expert_parallel_rank = 0
-
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
-        if self.flash_attn_func is None:
-            prop = paddle.device.cuda.get_device_properties()
-            cc = prop.major * 10 + prop.minor
-            is_current_sm_supported = cc >= 90
-            is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
-            if is_current_sm_supported and is_paddle_supported:
-                self.flash_attn_func = flash_attention_v3_varlen
-                print("The current platform supports Flash Attention V3.")
-                self.flash_attn_kwargs = {}
-            else:
-                self.flash_attn_func = flash_attn_unpadded
-                self.flash_attn_kwargs = {"scale": self.head_dim**-0.5, "training": False}
-                print(
-                    "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
-                )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
-        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
+            fd_config.model_config, "use_3d_rope", False
+        )
+        # Note(ZKK): here must be consistent with append_attn_backend.py
+        self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.zero_seq_enc_lens_for_decode = paddle.zeros(
             shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
         )
 
-    def get_attntion_meta(self):
-        """get_attntion_meta"""
+    def get_attention_meta(self):
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(
@@ -171,66 +277,19 @@ class FlashAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            return (
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            )
-        else:
-            return (
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim,
-            )
+            key_cache_shape[-1] = self.head_dim // 2
+        value_cache_shape = key_cache_shape
+        return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
-        metadata.cu_seqlens_q = forward_meta.cu_seqlens_q
-        metadata.rotary_embs = forward_meta.rotary_embs
-        metadata.block_tables = forward_meta.block_tables
-        get_block_shape_and_split_kv_block(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.decoder_batch_ids,
-            forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks_cpu,
-            forward_meta.decoder_num_blocks_device,
-            forward_meta.decoder_chunk_size_device,
-            forward_meta.max_len_tensor_cpu,
-            forward_meta.encoder_batch_ids,
-            forward_meta.encoder_tile_ids_per_batch,
-            forward_meta.encoder_num_blocks_x_cpu,
-            forward_meta.kv_batch_ids,
-            forward_meta.kv_tile_ids_per_batch,
-            forward_meta.kv_num_blocks_x_cpu,
-            self.encoder_block_shape_q,
-            self.decoder_block_shape_q,
-            self.group_size,
-            self.block_size,
-            self.speculate_max_draft_token_num + 1,
-        )
-
-        (
-            metadata.cu_seqlens_k,
-            metadata.pre_cache_batch_ids,
-            metadata.pre_cache_tile_ids_per_batch,
-            metadata.pre_cache_num_blocks_cpu,
-            metadata.kv_token_num_cpu,
-        ) = pre_cache_len_concat(
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.max_len_tensor_cpu[2],
-            self.block_size,
-        )
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
-            if not self.keep_pd_step_flag:
+            if not self.keep_pd_step_flag and not forward_meta.is_dummy_or_profile_run:
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_this_time,
@@ -250,11 +309,7 @@ class FlashAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        metadata.max_len_tensor_cpu = forward_meta.max_len_tensor_cpu
-        metadata.max_len_tensor_cpu_decoder = paddle.clone(metadata.max_len_tensor_cpu)
-        metadata.max_len_tensor_cpu_decoder[1] = 0
-
-        self.attention_metadata = metadata
+        forward_meta.attention_metadata = metadata
 
     def forward_mixed(
         self,
@@ -267,7 +322,7 @@ class FlashAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        metadata = self.attention_metadata
+        metadata = forward_meta.attention_metadata
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -275,25 +330,82 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.layer_id + self.start_layer_index,
             )
 
-        if metadata.max_len_tensor_cpu[1] > 0:
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
+        if layer.layer_id == 0:
+            get_block_shape_and_split_kv_block(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.decoder_num_blocks_device,
+                forward_meta.decoder_chunk_size_device,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
+                self.encoder_block_shape_q,
+                self.decoder_block_shape_q,
+                self.group_size,
+                self.block_size,
+            )
+
+            if forward_meta.max_len_tensor_cpu[1].item() > 0:
+
+                metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
+                metadata.max_len_tensor_cpu_decoder[1] = 0
+
+                (
+                    metadata.cu_seqlens_k,
+                    metadata.pre_cache_batch_ids,
+                    metadata.pre_cache_tile_ids_per_batch,
+                    metadata.pre_cache_num_blocks_cpu,
+                    metadata.kv_token_num_cpu,
+                ) = pre_cache_len_concat(
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.max_len_tensor_cpu[2],
+                    self.block_size,
+                )
+                if forward_meta.attn_mask_offsets is not None:
+                    metadata.attn_mask_q = get_attn_mask_q(
+                        cu_seqlens_q=forward_meta.cu_seqlens_q,
+                        cu_seqlens_k=metadata.cu_seqlens_k,
+                        attn_mask_kv=forward_meta.attn_mask_offsets,
+                        kv_token_num=metadata.kv_token_num_cpu[0].item(),
+                    )
+
+        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
+
+        if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
-                metadata.rotary_embs,
+                forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.batch_id_per_token,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.kv_batch_ids,
                 forward_meta.kv_tile_ids_per_batch,
                 forward_meta.kv_num_blocks_x_cpu,
                 metadata.pre_cache_batch_ids,
                 metadata.pre_cache_tile_ids_per_batch,
                 metadata.pre_cache_num_blocks_cpu,
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -303,43 +415,48 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_signal_data_list[layer.layer_id],
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
+                getattr(layer, "rms_norm_eps", 1e-6),
+                layer.use_neox_rotary_style,
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )
 
-            res_encoder = self.flash_attn_func(
+            res_encoder = flash_attn_func(
                 q,
                 k,
                 v,
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q[: metadata.cu_seqlens_k.shape[0]],
                 metadata.cu_seqlens_k,
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
+                attn_mask_q=metadata.attn_mask_q,
                 causal=self.causal,
-                **self.flash_attn_kwargs,
+                num_heads=self.num_heads,
+                kv_num_heads=self.kv_num_heads,
+                head_dim=self.head_dim,
             )[0].reshape([-1, self.attn_outputsize_tp])
 
         res_decoder = append_attention(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            self.zero_seq_enc_lens_for_decode,
+            forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,
             forward_meta.cu_seqlens_q,
-            metadata.block_tables,
+            forward_meta.block_tables,
             forward_meta.encoder_batch_ids,
             forward_meta.encoder_tile_ids_per_batch,
             forward_meta.encoder_num_blocks_x_cpu,
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.decoder_batch_ids,  # from buffer
-            forward_meta.decoder_tile_ids_per_batch,  # from buffer
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
-            metadata.max_len_tensor_cpu_decoder,
-            metadata.rotary_embs,
+            metadata.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
+            forward_meta.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,
             layer.qkv_scale,
@@ -353,8 +470,8 @@ class FlashAttentionBackend(AttentionBackend):
             layer.linear_smooth,
             forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
-            getattr(layer, "q_norm_weight", None),
-            getattr(layer, "k_norm_weight", None),
+            q_norm_weight,
+            k_norm_weight,
             getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
@@ -374,7 +491,7 @@ class FlashAttentionBackend(AttentionBackend):
             self.speculative_method is not None,
         )
 
-        if metadata.max_len_tensor_cpu[1] > 0:
+        if use_fa_do_prefill:
             merge_prefill_decode_output(
                 res_encoder,
                 res_decoder,

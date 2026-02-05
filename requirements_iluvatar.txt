@@ -8,9 +8,9 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn==0.29.0
+uvicorn>=0.38.0
 fastapi
-paddleformers==0.3.1
+paddleformers @ https://paddle-qa.bj.bcebos.com/ernie/paddleformers-0.4.0.post20251222-py3-none-any.whl
 redis
 etcd3
 httpx
@@ -27,7 +27,6 @@ moviepy
 wheel
 use-triton-in-paddle
 crcmod
-fastsafetensors==0.1.14
 msgpack
 gunicorn
 opentelemetry-api>=1.24.0
@@ -37,5 +36,8 @@ opentelemetry-instrumentation-mysql
 opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser
 msgspec
+safetensors>=0.7.0
+py-cpuinfo

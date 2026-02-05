@@ -245,6 +245,7 @@ int server_exchange_qp_info(int connfd, QpInfo *local_dest, QpInfo *rem_dest) {
     ERR("Null pointer passed to server_exchange_qp_info");
     return -1;
   }
+  LOGD("server_exchange_qp_info...");
 
   char buffer[QpInfo::size];
   memset(buffer, 0, sizeof(buffer));
@@ -293,6 +294,7 @@ QpStatus modify_qp_to_rts(struct RdmaContext *ctx,
     ERR("Invalid input parameters: ctx or dest is NULL");
     return QpStatus::kInvalidParameters;
   }
+  LOGD("modify_qp_to_rts...");
 
   struct ibv_device_attr dev_attr;
   if (ibv_query_device(ctx->context, &dev_attr)) {
@@ -515,6 +517,7 @@ bool clear_qp_info(struct RdmaContext *ctx) {
 
 struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
                               struct ibv_pd **g_pd) {
+  LOGD("Start create_qp...");
   struct RdmaContext *ctx = new RdmaContext();
   memset(ctx, 0, sizeof(struct RdmaContext));
   struct ibv_qp_init_attr qpInitAttr = {};
@@ -713,7 +716,7 @@ bool exchange_mr_vector(struct RdmaContext *ctx,
  * @return true on success, false on failure
  */
 bool client_exchange_mr(struct RdmaContext *ctx) {
-  LOGD("verb client exchange mr: start");
+  LOGD("verb client exchange mr: start.");
 
   if (ctx->conn.layer_number <= 0) {
     ERR("Invalid layer number: %d", ctx->conn.layer_number);
@@ -723,20 +726,81 @@ bool client_exchange_mr(struct RdmaContext *ctx) {
   auto layer_num = ctx->conn.layer_number;
   std::vector<void *> key_ptrs(layer_num);
   std::vector<uint32_t> key_rkeys(layer_num);
-  std::vector<void *> val_ptrs(layer_num);
-  std::vector<uint32_t> val_rkeys(layer_num);
+  std::vector<void *> val_ptrs;
+  std::vector<uint32_t> val_rkeys;
+  std::vector<void *> key_scale_ptrs;
+  std::vector<uint32_t> key_scale_rkeys;
+  std::vector<void *> val_scale_ptrs;
+  std::vector<uint32_t> val_scale_rkeys;
 
+  bool has_value_cache = ctx->conn.has_value_cache;
+  bool has_key_scale = ctx->conn.has_key_scale;
+  bool has_value_scale = ctx->conn.has_value_scale;
+
+  if (has_value_cache) {
+    val_ptrs.resize(layer_num);
+    val_rkeys.resize(layer_num);
+  }
+  if (has_key_scale) {
+    key_scale_ptrs.resize(layer_num);
+    key_scale_rkeys.resize(layer_num);
+  }
+  if (has_value_scale) {
+    val_scale_ptrs.resize(layer_num);
+    val_scale_rkeys.resize(layer_num);
+  }
+
+  // Exchange key memory regions
+  LOGD("Exchange key memory regions...");
   if (!exchange_mr_vector(ctx, key_ptrs, true)) return false;
   if (!exchange_mr_vector(ctx, key_rkeys, true)) return false;
-  if (!exchange_mr_vector(ctx, val_ptrs, true)) return false;
-  if (!exchange_mr_vector(ctx, val_rkeys, true)) return false;
 
+  // Exchange value memory regions if exists
+  if (has_value_cache) {
+    LOGD("Exchange value memory regions...");
+    if (!exchange_mr_vector(ctx, val_ptrs, true)) return false;
+    if (!exchange_mr_vector(ctx, val_rkeys, true)) return false;
+  }
+
+  // Exchange key scale memory regions if exists
+  if (has_key_scale) {
+    INFO("Exchange key scale memory regions...");
+    if (!exchange_mr_vector(ctx, key_scale_ptrs, true)) return false;
+    if (!exchange_mr_vector(ctx, key_scale_rkeys, true)) return false;
+  }
+
+  // Exchange value scale memory regions if exists
+  if (has_value_scale) {
+    INFO("Exchange value scale memory regions...");
+    if (!exchange_mr_vector(ctx, val_scale_ptrs, true)) return false;
+    if (!exchange_mr_vector(ctx, val_scale_rkeys, true)) return false;
+  }
+
+  // Update connection context with received memory region information
   for (int i = 0; i < layer_num; ++i) {
     ctx->conn.write_cache_key_remote_ptr_list.push_back(key_ptrs[i]);
     ctx->conn.write_cache_key_remote_rkey_list.push_back(key_rkeys[i]);
-    ctx->conn.write_cache_value_remote_ptr_list.push_back(val_ptrs[i]);
-    ctx->conn.write_cache_value_remote_rkey_list.push_back(val_rkeys[i]);
+
+    if (has_value_cache) {
+      ctx->conn.write_cache_value_remote_ptr_list.push_back(val_ptrs[i]);
+      ctx->conn.write_cache_value_remote_rkey_list.push_back(val_rkeys[i]);
+    }
+
+    if (has_key_scale) {
+      ctx->conn.write_cache_key_scale_remote_ptr_list.push_back(
+          key_scale_ptrs[i]);
+      ctx->conn.write_cache_key_scale_remote_rkey_list.push_back(
+          key_scale_rkeys[i]);
+    }
+
+    if (has_value_scale) {
+      ctx->conn.write_cache_value_scale_remote_ptr_list.push_back(
+          val_scale_ptrs[i]);
+      ctx->conn.write_cache_value_scale_remote_rkey_list.push_back(
+          val_scale_rkeys[i]);
+    }
   }
+
   return true;
 }
 
@@ -747,7 +811,7 @@ bool client_exchange_mr(struct RdmaContext *ctx) {
  * @return true on success, false on failure
  */
 bool server_exchange_mr(struct RdmaContext *ctx) {
-  LOGD("verbs server exchange mr: start");
+  LOGD("verbs server exchange mr: start.");
 
   if (ctx->conn.layer_number <= 0) {
     ERR("Invalid layer number: %d", ctx->conn.layer_number);
@@ -757,10 +821,32 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
   auto layer_num = ctx->conn.layer_number;
   auto &key_mrs = ctx->conn.write_cache_key_server_mr_list;
   auto &val_mrs = ctx->conn.write_cache_value_server_mr_list;
+  auto &key_scale_mrs = ctx->conn.write_cache_key_scale_server_mr_list;
+  auto &val_scale_mrs = ctx->conn.write_cache_value_scale_server_mr_list;
 
   // Verify that server memory regions are properly initialized
-  if (key_mrs.size() != layer_num || val_mrs.size() != layer_num) {
-    ERR("server write cache memory region size error");
+  if (key_mrs.size() != layer_num) {
+    ERR("server write cache KEY memory region size error: %zu vs %d",
+        key_mrs.size(),
+        layer_num);
+    return false;
+  }
+  if (!val_mrs.empty() && val_mrs.size() != layer_num) {
+    ERR("server write cache VALUE memory region size error: %zu vs %d",
+        val_mrs.size(),
+        layer_num);
+    return false;
+  }
+  if (!key_scale_mrs.empty() && key_scale_mrs.size() != layer_num) {
+    ERR("server write cache KEY SCALE memory region size error: %zu vs %d",
+        key_scale_mrs.size(),
+        layer_num);
+    return false;
+  }
+  if (!val_scale_mrs.empty() && val_scale_mrs.size() != layer_num) {
+    ERR("server write cache VALUE SCALE memory region size error: %zu vs %d",
+        val_scale_mrs.size(),
+        layer_num);
     return false;
   }
 
@@ -769,25 +855,71 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
   std::vector<uint32_t> send_key_rkeys;
   std::vector<uint64_t> send_val_ptrs;
   std::vector<uint32_t> send_val_rkeys;
+  std::vector<uint64_t> send_key_scale_ptrs;
+  std::vector<uint32_t> send_key_scale_rkeys;
+  std::vector<uint64_t> send_val_scale_ptrs;
+  std::vector<uint32_t> send_val_scale_rkeys;
 
   send_key_ptrs.reserve(layer_num);
   send_key_rkeys.reserve(layer_num);
-  send_val_ptrs.reserve(layer_num);
-  send_val_rkeys.reserve(layer_num);
+  if (!val_mrs.empty()) {
+    send_val_ptrs.reserve(layer_num);
+    send_val_rkeys.reserve(layer_num);
+  }
+  if (!key_scale_mrs.empty()) {
+    send_key_scale_ptrs.reserve(layer_num);
+    send_key_scale_rkeys.reserve(layer_num);
+  }
+  if (!val_scale_mrs.empty()) {
+    send_val_scale_ptrs.reserve(layer_num);
+    send_val_scale_rkeys.reserve(layer_num);
+  }
 
   // Collect memory region information from local MRs
   for (int i = 0; i < layer_num; ++i) {
     send_key_ptrs.push_back(reinterpret_cast<uint64_t>(key_mrs[i]->addr));
     send_key_rkeys.push_back(key_mrs[i]->rkey);
-    send_val_ptrs.push_back(reinterpret_cast<uint64_t>(val_mrs[i]->addr));
-    send_val_rkeys.push_back(val_mrs[i]->rkey);
+
+    if (!val_mrs.empty()) {
+      send_val_ptrs.push_back(reinterpret_cast<uint64_t>(val_mrs[i]->addr));
+      send_val_rkeys.push_back(val_mrs[i]->rkey);
+    }
+
+    if (!key_scale_mrs.empty()) {
+      send_key_scale_ptrs.push_back(
+          reinterpret_cast<uint64_t>(key_scale_mrs[i]->addr));
+      send_key_scale_rkeys.push_back(key_scale_mrs[i]->rkey);
+    }
+
+    if (!val_scale_mrs.empty()) {
+      send_val_scale_ptrs.push_back(
+          reinterpret_cast<uint64_t>(val_scale_mrs[i]->addr));
+      send_val_scale_rkeys.push_back(val_scale_mrs[i]->rkey);
+    }
   }
 
-  // Send all vectors to client
+  // Exchange memory region information with client
+  LOGD("Exchange mr information for key...");
   if (!exchange_mr_vector(ctx, send_key_ptrs, false)) return false;
   if (!exchange_mr_vector(ctx, send_key_rkeys, false)) return false;
-  if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
-  if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
+
+  if (!val_mrs.empty()) {
+    LOGD("Exchange mr information for value...");
+    if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
+    if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
+  }
+
+  if (!send_key_scale_ptrs.empty()) {
+    LOGD("Exchange mr information for key_scale...");
+    if (!exchange_mr_vector(ctx, send_key_scale_ptrs, false)) return false;
+    if (!exchange_mr_vector(ctx, send_key_scale_rkeys, false)) return false;
+  }
+
+  if (!send_val_scale_ptrs.empty()) {
+    LOGD("Exchange mr information for value_scale...");
+    if (!exchange_mr_vector(ctx, send_val_scale_ptrs, false)) return false;
+    if (!exchange_mr_vector(ctx, send_val_scale_rkeys, false)) return false;
+  }
 
   return true;
 }

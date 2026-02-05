@@ -23,8 +23,10 @@ import paddle
 import paddle.nn as nn
 from paddle.base import core
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.hpu_model_runner import HPUModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
@@ -82,6 +84,9 @@ class HpuWorker(WorkerBase):
             paddle.device.cuda.empty_cache()
         else:
             raise RuntimeError(f"Not support device type: {self.device_config.device}")
+
+        if self.local_rank == 0:
+            report_usage_stats(self.fd_config)
 
         set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
@@ -182,7 +187,10 @@ class HpuWorker(WorkerBase):
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.
         """
-        self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
+        else:
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """

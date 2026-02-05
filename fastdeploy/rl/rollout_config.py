@@ -46,7 +46,7 @@ class RolloutModelConfig:
         enable_chunked_prefill: bool = False,
         speculative_method: str = None,
         speculative_max_draft_token_num: int = 1,
-        speculative_model_name_or_path: str = "",
+        speculative_model_name_or_path: str = None,
         speculative_model_quantization: str = "WINT8",
         max_num_batched_tokens: int = 2048,
         enable_prefix_caching: bool = False,
@@ -64,6 +64,10 @@ class RolloutModelConfig:
         plas_attention_config: str = None,
         data_parallel_size: int = 1,
         num_nextn_predict_layers: int = 0,
+        eplb_config: str = {},
+        routing_replay_config: str = None,
+        load_choices: str = "default_v1",
+        lm_head_fp32: bool = False,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -92,7 +96,9 @@ class RolloutModelConfig:
         self.speculative_config = {}
         self.speculative_config["method"] = speculative_method
         self.speculative_config["max_draft_token_num"] = speculative_max_draft_token_num
-        self.speculative_config["model"] = speculative_model_name_or_path
+        self.speculative_config["model"] = (
+            speculative_model_name_or_path if speculative_model_name_or_path is not None else model_name_or_path
+        )
         self.speculative_config["quantization"] = speculative_model_quantization
         self.max_num_batched_tokens = max_num_batched_tokens
         self.enable_prefix_caching = enable_prefix_caching
@@ -111,6 +117,10 @@ class RolloutModelConfig:
         self.ips = None
         self.plas_attention_config = plas_attention_config
         self.num_nextn_predict_layers = num_nextn_predict_layers
+        self.eplb_config = eplb_config
+        self.routing_replay_config = routing_replay_config
+        self.load_choices = load_choices
+        self.lm_head_fp32 = lm_head_fp32
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

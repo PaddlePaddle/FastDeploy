@@ -27,9 +27,11 @@
 
 ## 最新活动
 
-**[2025-09] FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
+**[2025-11] FastDeploy v2.3 全新发布!** 新增[ERNIE-4.5-VL-28B-A3B-Thinking](docs/zh/get_started/ernie-4.5-vl-thinking.md)与[PaddleOCR-VL-0.9B](docs/zh/best_practices/PaddleOCR-VL-0.9B.md)两大重磅模型在多硬件平台上的部署支持，进一步优化全方位推理性能，以及带来更多部署功能和易用性的提升，升级全部内容参阅[v2.3 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0)。
 
-**[2025-08] FastDeploy v2.1 发布**:全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
+**[2025-09] FastDeploy v2.2**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
+
+**[2025-08] FastDeploy v2.1**:全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
 
 ## 关于
 
@@ -40,7 +42,7 @@
 - 🤝 **OpenAI API服务与vLLM兼容**：单命令部署，兼容[vLLM](https://github.com/vllm-project/vllm/)接口
 - 🧮 **全量化格式支持**：W8A16、W8A8、W4A16、W4A8、W2A16、FP8等
 - ⏩ **高级加速技术**：推测解码、多令牌预测（MTP）及分块预填充
-- 🖥️ **多硬件支持**：NVIDIA GPU、昆仑芯XPU、海光DCU、昇腾NPU、天数智芯GPU、燧原GCU、沐曦GPU、英特尔Gaudi等
+- 🖥️ **多硬件支持**：NVIDIA GPU、昆仑芯XPU、海光DCU、天数智芯GPU、燧原GCU、沐曦GPU、英特尔Gaudi等
 
 ## 要求
 
@@ -58,8 +60,6 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 - [沐曦 GPU](./docs/zh/get_started/installation/metax_gpu.md)
 - [英特尔 Gaudi](./docs/zh/get_started/installation/intel_gaudi.md)
-
-**注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 等其他硬件平台正在开发测试中。敬请关注更新！
 
 ## 入门指南
 
@@ -83,6 +83,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [投机解码](./docs/zh/features/speculative_decoding.md)
 - [前缀缓存](./docs/zh/features/prefix_caching.md)
 - [分块预填充](./docs/zh/features/chunked_prefill.md)
+- [负载均衡调度Router](./docs/zh/online_serving/router.md)
 
 ## 致谢
 

@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from unittest import mock
 
@@ -16,6 +32,7 @@ class TestW4AFP8(unittest.TestCase):
             act_scale_dict={"layer.activation_scale": 1.0},
             is_permuted=False,
             hadamard_block_size=128,
+            is_quantized=True,
         )
         self.method = W4AFP8LinearMethod(self.config)
 
@@ -24,7 +41,7 @@ class TestW4AFP8(unittest.TestCase):
         self.layer.weight_shape = [8, 4]
         self.layer.create_parameter.return_value = "created_weight"
         self.layer.bias = "bias"
-        self.layer.add_bias = True
+        self.layer.with_bias = True
         self.layer._dtype = "float16"
         self.layer.prefix = "layer"
 
@@ -121,7 +138,7 @@ class TestW4AFP8(unittest.TestCase):
 
     @mock.patch("fastdeploy.model_executor.ops.gpu.scaled_gemm_f8_i4_f16")
     def test_apply_without_bias(self, mock_gemm):
-        self.layer.add_bias = False
+        self.layer.with_bias = False
         mock_gemm.return_value = "out"
         x = "x"
 

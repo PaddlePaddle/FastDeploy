@@ -22,7 +22,7 @@ import traceback
 import zmq
 
 from fastdeploy.inter_communicator import ZmqTcpServer
-from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
+from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("internal_adapter_utils", "internal_adapter_utils.log")
@@ -53,6 +53,9 @@ class InternalAdapter:
         available_batch_size = min(self.cfg.max_prefill_batch, self.engine.resource_manager.available_batch())
 
         available_block_num = self.engine.resource_manager.available_block_num()
+        unhandled_request_num = self.engine.scheduler.get_unhandled_request_num()
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            unhandled_request_num = max(unhandled_request_num, len(self.engine.resource_manager.waiting))
         server_info = {
             "splitwise_role": self.cfg.scheduler_config.splitwise_role,
             "block_size": int(self.cfg.cache_config.block_size),
@@ -62,7 +65,7 @@ class InternalAdapter:
             "available_resource": float(1.0 * available_block_num / self.cfg.cache_config.total_block_num),
             "max_batch_size": int(available_batch_size),
             "max_input_token_num": self.cfg.model_config.max_model_len,
-            "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
+            "unhandled_request_num": unhandled_request_num,
             "available_batch": int(self.engine.resource_manager.available_batch()),
         }
         return server_info
@@ -88,16 +91,19 @@ class InternalAdapter:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
                 elif task["cmd"] == "get_metrics":
-                    metrics_text = get_filtered_metrics(
-                        [],
-                        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
-                    )
+                    metrics_text = get_filtered_metrics()
                     result = {"task_id": task_id_str, "result": metrics_text}
                     logger.debug(f"Response for task: {task_id_str}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
                     self.engine.engine_worker_queue.put_connect_rdma_task(task)
+                elif task["cmd"] == "check_health":
+                    is_health = self.engine.token_processor.healthy()
+                    result = {"task_id": task_id_str, "result": is_health}
+                    logger.debug(f"Response for task: {task_id_str}: is_health {is_health}")
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
             except Exception as e:
                 logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")

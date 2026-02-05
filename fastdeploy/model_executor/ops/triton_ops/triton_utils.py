@@ -30,6 +30,17 @@ link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
 
+def enable_compat_on_triton_kernel(triton_kernel):
+    class WrappedTritonKernel:
+        def __init__(self, kernel):
+            self.kernel = kernel
+
+        def __getitem__(self, index):
+            return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
+
+    return WrappedTritonKernel(triton_kernel)
+
+
 def SubstituteTemplate(template, values):
     """
     Substitute all variables in the given template string using the provided values dictionary.
@@ -710,7 +721,7 @@ class KernelInterface:
                     + f""" -s"{address_hint} {value_hint} {const_args}" """
                     + f"""  -g "{lanuch_grid}" """
                 )
-                all_tune_config = list(self.tune_config)
+                all_tune_config = [{key: value} for key, value in self.tune_config.items()]
                 if len(all_tune_config) == 0:
                     # when user do not specify config, we use const_hint_dict as config.
                     all_tune_config = [const_hint_dict]

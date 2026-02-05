@@ -34,6 +34,8 @@ from fastdeploy.model_executor.layers.attention.ops import (
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import numpy as np
+
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -41,6 +43,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.platforms import current_platform
 
 
 @dataclass
@@ -52,14 +55,57 @@ class AppendAttentionMetadata(AttentionMetadata):
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
-    block_tables: Optional[paddle.Tensor] = None
-    rotary_embs: Optional[paddle.Tensor] = None
-    attn_mask: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
     kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
+
+
+def allocate_launch_related_buffer(
+    max_batch_size,
+    max_model_len,
+    encoder_block_shape_q,
+    decoder_block_shape_q,
+    decoder_step_token_num,
+    num_heads,
+    kv_num_heads,
+    block_size,
+):
+    # Initialize AttentionBackend buffers
+    assert num_heads % kv_num_heads == 0
+    assert max_model_len % block_size == 0
+    assert max_model_len % encoder_block_shape_q == 0
+    group_size = num_heads // kv_num_heads
+
+    # NOTE: (changwenbin) When using auto_chunk,
+    # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
+    decode_max_tile_size = (
+        1024 * max_batch_size * (int)(np.ceil(decoder_step_token_num * group_size / decoder_block_shape_q))
+    )
+    encode_max_tile_size = max_batch_size * (max_model_len * group_size // encoder_block_shape_q)
+    kv_max_tile_size = max_batch_size * (max_model_len // block_size)
+    res = {}
+    res["decoder_batch_ids"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
+    res["decoder_tile_ids_per_batch"] = paddle.full([decode_max_tile_size], 0, dtype="int32")
+    if current_platform.is_maca():
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+    else:
+        res["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
+    # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
+    # adapted to cudagraph.
+    res["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
+    res["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
+    res["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
+
+    res["encoder_batch_ids"] = paddle.full([encode_max_tile_size], 0, dtype="int32")
+    res["encoder_tile_ids_per_batch"] = paddle.full([encode_max_tile_size], 0, dtype="int32")
+    res["encoder_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+
+    res["kv_batch_ids"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
+    res["kv_tile_ids_per_batch"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
+    res["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+    return res
 
 
 class AppendAttentionBackend(AttentionBackend):
@@ -118,6 +164,23 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        if self.use_output:
+            flag = "FLAGS_cuda_graph_blacklist"
+            paddle.set_flags(
+                {
+                    flag: ",".join(
+                        list(
+                            set(
+                                paddle.get_flags(flag)[flag].split(",")
+                                + [
+                                    "custom_op.static_op_append_attention_with_output_",
+                                    "custom_op.static_op_get_block_shape_and_split_kv_block",
+                                ]
+                            )
+                        )
+                    )
+                }
+            )
         self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
@@ -132,15 +195,11 @@ class AppendAttentionBackend(AttentionBackend):
             metadata._fuse_kernel_compute_dtype = "fp16"
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
-        metadata.block_tables = forward_meta.block_tables
-        metadata.rotary_embs = forward_meta.rotary_embs
-        metadata.attn_mask = forward_meta.attn_mask
-        metadata.pre_caches_length = forward_meta.pre_caches_length
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
-            if not self.keep_pd_step_flag:
+            if not self.keep_pd_step_flag and not forward_meta.is_dummy_or_profile_run:
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_this_time,
@@ -155,9 +214,34 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.attention_metadata: AttentionMetadata = metadata
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
+
+    def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
+        """
+        Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
+
+        This is used when RoPE has already been applied externally (e.g., by PaddleFormers).
+        The identity transformation ensures: x * cos(0) + y * sin(0) = x, preserving the input.
+
+        NOTE: Shape can change between prefill/decode, so we check if cached shape matches.
+        """
+        # Check if we need to recreate (shape mismatch or not cached)
+        need_recreate = (
+            not hasattr(self, "_identity_rotary_embs")
+            or self._identity_rotary_embs is None
+            or self._identity_rotary_embs.shape != original_rotary_embs.shape
+        )
+
+        if need_recreate:
+            # Create identity RoPE: cos=1, sin=0
+            identity = paddle.zeros_like(original_rotary_embs)
+            identity[0] = 1.0  # cos = 1
+            identity[1] = 0.0  # sin = 0
+            self._identity_rotary_embs = identity
+
+        return self._identity_rotary_embs
 
     def get_kv_cache_shape(
         self,
@@ -167,20 +251,11 @@ class AppendAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            return (
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim // 2,
-            )
-        else:
-            return (
-                max_num_blocks,
-                self.kv_num_heads,
-                self.block_size,
-                self.head_dim,
-            )
+            key_cache_shape[-1] = self.head_dim // 2
+        value_cache_shape = key_cache_shape
+        return key_cache_shape, value_cache_shape
 
     def forward_mixed(
         self,
@@ -198,7 +273,27 @@ class AppendAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
+        # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
+        rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
+        if rope_already_applied and forward_meta.rotary_embs is not None:
+            forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
+
         sliding_window = layer.sliding_window
+
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
+        if self.rope_3d:
+            assert len(forward_meta.rotary_embs.shape) == 6
+        else:
+            assert len(forward_meta.rotary_embs.shape) == 5
+            if layer.use_neox_rotary_style:
+                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
+                # 128 is qwen3
+                # 32 is glm
+                # 64 is gpt-oss
+                assert forward_meta.rotary_embs.shape[4] in [128, 32, 64]
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -218,6 +313,7 @@ class AppendAttentionBackend(AttentionBackend):
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if layer.layer_id == 0:
+            # print(forward_meta.seq_lens_this_time)
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -238,7 +334,6 @@ class AppendAttentionBackend(AttentionBackend):
                 self.decoder_block_shape_q,
                 self.group_size,
                 self.block_size,
-                self.speculate_max_draft_token_num + 1,
             )
 
         if self.use_output:
@@ -274,7 +369,7 @@ class AppendAttentionBackend(AttentionBackend):
                 else:
                     raise NotImplementedError("Only supported attr of quant_max_bound in ['127', '448'].")
             else:
-                res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type)
+                res = paddle.zeros([token_nums, q_num_heads * head_dims], dtype=D_type)
 
             res = append_attention_with_output(
                 qkv,
@@ -285,7 +380,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -297,8 +392,8 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
                 res,
-                metadata.rotary_embs,
-                metadata.attn_mask,
+                forward_meta.rotary_embs,
+                forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
                 cache_k_scales,
@@ -311,8 +406,8 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
@@ -342,7 +437,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -353,8 +448,8 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                metadata.rotary_embs,
-                metadata.attn_mask,
+                forward_meta.rotary_embs,
+                forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
                 cache_k_scales,
@@ -367,8 +462,8 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,

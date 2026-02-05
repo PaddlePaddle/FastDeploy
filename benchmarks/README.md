@@ -45,6 +45,9 @@ python -m pip install -r requirements.txt
 --debug：开启debug模式，逐条打印payload和output内容，默认False
 --shuffle：是否打乱数据集，默认False不打乱
 --seed：打乱数据集时的随机种子，默认0
+--pd-metrics：开启PD分离metrics指标收集，会添加请求参数collect_metrics=True，默认False
+--ip-list：支持多个ip:port，将总请求数以及总并发数均分到每个IP，按整除取余分配。例：0.0.0.0:1211,0.0.0.0:1222，默认为空
+--multi-turn：开启多轮对话，将数据集messages中的多轮对话逐轮请求，默认False不区分多轮
 ```
 
 ##### /v1/chat/completions接口压测单条数据调试
@@ -58,7 +61,7 @@ python benchmark_serving.py \
   --port 9812 \
   --dataset-name EBChat \
   --dataset-path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json \
-  --hyperparameter-path yaml/request_yaml/eb45t-32k.yaml \
+  --hyperparameter-path yaml/request_yaml/eb45-32k.yaml \
   --percentile-metrics ttft,tpot,itl,e2el,s_ttft,s_itl,s_e2el,s_decode,input_len,s_input_len,output_len \
   --metric-percentiles 80,95,99,99.9,99.95,99.99 \
   --num-prompts 1 \
@@ -78,7 +81,7 @@ python benchmark_serving.py \
   --port 9812 \
   --dataset-name EBChat \
   --dataset-path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json \
-  --hyperparameter-path yaml/request_yaml/eb45t-32k.yaml \
+  --hyperparameter-path yaml/request_yaml/eb45-32k.yaml \
   --percentile-metrics ttft,tpot,itl,e2el,s_ttft,s_itl,s_e2el,s_decode,input_len,s_input_len,output_len \
   --metric-percentiles 80,95,99,99.9,99.95,99.99 \
   --num-prompts 2000 \
@@ -100,7 +103,7 @@ python benchmark_serving.py \
   --port 9812 \
   --dataset-name EBChat \
   --dataset-path ./filtered_sharedgpt_2000_input_1136_output_200_fd.json \
-  --hyperparameter-path yaml/request_yaml/eb45t-32k.yaml \
+  --hyperparameter-path yaml/request_yaml/eb45-32k.yaml \
   --percentile-metrics ttft,tpot,itl,e2el,s_ttft,s_itl,s_e2el,s_decode,input_len,s_input_len,output_len \
   --metric-percentiles 80,95,99,99.9,99.95,99.99 \
   --num-prompts 2000 \
@@ -134,4 +137,31 @@ python benchmarks/benchmark_mtp.py \
 --s_itl-base-model：主模型的解码延迟，可由上述的性能压测工具获得，与batch-size一一对应
 --dataset-name：指定数据集类，指定为"EBChat"可读取转存的FD格式数据集
 --dataset-path：测试数据集路径
+```
+
+### 指定输入输出长度，构造随机纯文输入测试
+
+相关参数：
+- --dataset-name：指定数据集类，指定为"random"可构造随机纯文输入
+- --random-input-len：随机输入长度，对应英文单词数，默认200
+- --random-output-len：随机输出长度，默认1024
+- --random-range-ratio：输入输出长度变化范围比，[length *(1 - range_ratio), length* (1 + range_ratio)]，默认0.1
+
+#### 使用方式：
+```bash
+python benchmark_serving.py \
+  --backend openai-chat \
+  --model EB45T \
+  --endpoint /v1/chat/completions \
+  --host 0.0.0.0 \
+  --port 9812 \
+  --dataset-name random \
+  --random-input-len 200 \
+  --random-output-len 1024 \
+  --random-range-ratio 0.1 \
+  --percentile-metrics ttft,tpot,itl,e2el,s_ttft,s_itl,s_e2el,s_decode,input_len,s_input_len,output_len \
+  --metric-percentiles 80,95,99,99.9,99.95,99.99 \
+  --num-prompts 2000 \
+  --max-concurrency 100 \
+  --save-result > infer_log.txt 2>&1 &
 ```

@@ -106,32 +106,39 @@ struct Connection {
   struct ibv_mr* recv_mr;
   struct ibv_mr* send_mr;
 
-  // Cache pointers
+  // Cache pointers in server(decode) and client(prefill)
   std::vector<std::vector<void*>> local_cache_key_ptr_per_layer;
   std::vector<std::vector<void*>> local_cache_value_ptr_per_layer;
 
-  // Memory region lists
+  std::vector<std::vector<void*>> local_cache_key_scale_ptr_per_layer;
+  std::vector<std::vector<void*>> local_cache_value_scale_ptr_per_layer;
+
+  // Memory region lists of each layer in server(decode)
   std::vector<ibv_mr*> write_cache_key_server_mr_list;
   std::vector<ibv_mr*> write_cache_value_server_mr_list;
+
+  std::vector<ibv_mr*> write_cache_key_scale_server_mr_list;
+  std::vector<ibv_mr*> write_cache_value_scale_server_mr_list;
+
+  // Memory region lists
   std::vector<std::vector<ibv_mr*>> write_mr_key_list;
   std::vector<std::vector<ibv_mr*>> write_mr_value_list;
 
-  // Remote access information
+  std::vector<std::vector<ibv_mr*>> write_mr_key_scale_list;
+  std::vector<std::vector<ibv_mr*>> write_mr_value_scale_list;
+
+  // Remote access information of each layer in client(prefill)
   std::vector<void*> write_cache_key_remote_ptr_list;
   std::vector<uint32_t> write_cache_key_remote_rkey_list;
+
+  std::vector<void*> write_cache_key_scale_remote_ptr_list;
+  std::vector<uint32_t> write_cache_key_scale_remote_rkey_list;
+
   std::vector<void*> write_cache_value_remote_ptr_list;
   std::vector<uint32_t> write_cache_value_remote_rkey_list;
 
-  // Received remote memory information
-  std::vector<void*> receive_write_cache_key_remote_ptr_list;
-  std::vector<uint32_t> receive_write_cache_key_remote_rkey_list;
-  std::vector<void*> receive_write_cache_value_remote_ptr_list;
-  std::vector<uint32_t> receive_write_cache_value_remote_rkey_list;
-
-  std::vector<void*> send_write_cache_key_remote_ptr_list;
-  std::vector<uint32_t> send_write_cache_key_remote_rkey_list;
-  std::vector<void*> send_write_cache_value_remote_ptr_list;
-  std::vector<uint32_t> send_write_cache_value_remote_rkey_list;
+  std::vector<void*> write_cache_value_scale_remote_ptr_list;
+  std::vector<uint32_t> write_cache_value_scale_remote_rkey_list;
 
   // For rdma read operations
   std::vector<void*> read_bufs;
@@ -142,10 +149,16 @@ struct Connection {
   int wc_target_count;
 
   // Configuration
+  int decode_tp_size;
   int layer_number;
   int block_number;
-  int block_byte_size;
+  int block_size_byte;
+  int scale_block_size_byte;
   std::string url;
+
+  bool has_value_cache;
+  bool has_key_scale;
+  bool has_value_scale;
 
   Connection() = default;
   ~Connection();
