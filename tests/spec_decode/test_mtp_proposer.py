@@ -18,11 +18,11 @@ import unittest
 from unittest.mock import Mock, patch
 
 import paddle
+from utils import FakeModelConfig, get_default_test_fd_config
 
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.spec_decode.mtp import MTPProposer
-from tests.utils import FakeModelConfig, get_default_test_fd_config
 
 
 class TestMTPProposer(unittest.TestCase):

@@ -4,11 +4,19 @@
 
 FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)，用于实现请求的调度。Router支持集中式部署和PD分离式部署。
 
+![go-router](images/go-router-workflow.png)
+
 ## 安装
 
 ### 1. 预编译库下载
 
-在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像将内置 Golang Router 编译所需的 Go 语言环境，并提供已编译完成的 Router 二进制文件。该二进制文件默认位于 `/usr/local/bin` 目录下，可直接使用。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)
+在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像将内置 Golang Router 编译所需的 Go 语言环境，并提供已编译完成的 Router 二进制文件。该二进制文件默认位于 `/usr/local/bin` 目录下，可直接使用。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)。
+
+若需单独下载 Golang router 二进制文件，可通过以下方式：
+```
+wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+mv fd-router /usr/local/bin/fd-router
+```
 
 ### 2. 编译安装
 
@@ -27,13 +35,14 @@ FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/fastdeploy/golang_router
 bash build.sh
+cp
 ```
 
 ## 集中式部署
 
 启动Router服务，其中`--port`参数指定集中式部署的调度端口.
 ```
-./fd-router \
+/usr/local/bin/fd-router \
   --port 30000
 ```
 
@@ -51,7 +60,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式.
 ```
-./fd-router \
+/usr/local/bin/fd-router \
   --port 30000 \
   --splitwise
 ```
@@ -106,7 +115,7 @@ popd
 
 在Router启动Router服务，其中`--config_path`参数指定配置路径.
 ```
-./fd-router \
+/usr/local/bin/fd-router \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml

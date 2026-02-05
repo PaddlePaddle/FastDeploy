@@ -20,6 +20,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
+from fastdeploy.platforms import current_platform
 
 
 class InputBatch:
@@ -140,9 +141,17 @@ class InputBatch:
         self.step_seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+        if current_platform.is_maca():
+            self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").cpu()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").cpu()
+        else:
+            self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
         self.not_need_stop_device = paddle.full([1], False, dtype="bool")
-        self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.stop_flags = paddle.full([max_num_seqs, 1], True, dtype="bool")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
@@ -314,6 +323,7 @@ class InputBatch:
 
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+        self.last_preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
@@ -340,6 +350,7 @@ class InputBatch:
         swap_data(self.min_dec_len, i1, i2)
         swap_data(self.max_dec_len, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
+        swap_data(self.seq_lens_this_time_cpu, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_seq_lens_encoder, i1, i2)
@@ -359,6 +370,7 @@ class InputBatch:
         swap_data(self.bad_tokens_len, i1, i2)
         swap_data(self.next_tokens, i1, i2)
         swap_data(self.is_block_step, i1, i2)
+        swap_data(self.is_block_step_cpu, i1, i2)
         swap_data(self.is_chunk_step, i1, i2)
         swap_data(self.encoder_block_lens, i1, i2)
         swap_data(self.step_block_list, i1, i2)
@@ -382,6 +394,7 @@ class InputBatch:
         swap_data(self.stop_seqs, i1, i2)
 
         swap_data(self.preempted_idx, i1, i2)
+        swap_data(self.last_preempted_idx, i1, i2)
         swap_data(self.reasoning_status, i1, i2)
 
         # Swap speculative decoding buffers if enabled
@@ -738,8 +751,9 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
     sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+    if not is_not_swapped:
+        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
