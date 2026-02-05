@@ -351,7 +351,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
             print("num_experts:", layer.num_local_experts)
             dump_tensor(recv_x, recv_x_scale, recv_topk_weights, token_nums_this_rank[1])
-            if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))):
+            if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
                 recv_topk_idx = recv_topk_idx.astype(paddle.int32)
                 (
                     permute_input,
@@ -442,7 +442,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 m_indices,
             )
             del ffn_in_x
-            if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))):
+            if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
                 print("use_phi_moe_permute", 60 * "*")
                 tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
                     hidden_states_unzipped=ffn_out,
@@ -611,7 +611,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         dump_tensor(recv_x, recv_x_scale, topk_ids, topk_weights, tmp[1])
         print()
-        if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))):
+        if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             topk_ids = topk_ids.astype(paddle.int32)
             print("tp_phi_moe_permute")
 
@@ -673,7 +673,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # prmt back per rank
         print("tp_phi_moe_unpermute")
         dump_tensor(ffn_out, permute_indices_per_token, topk_ids, dst_weights)
-        if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))):
+        if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             print("total_zipped_tokens:", ffn_out.shape[0])
             print("num_experts:", layer.num_experts)
 
