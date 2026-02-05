@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import logging
 import threading
 import time
 import traceback
@@ -29,6 +30,7 @@ from typing import Any, List, Tuple
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_queue_manager", "cache_queue_manager.log")
+logger.setLevel(logging.DEBUG)
 
 
 class EngineCacheQueue:

@@ -306,7 +306,7 @@ class PrefixCacheManager:
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" --model_path {self.config.model_config.model}"
-                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                    + f" >>{log_dir}/cache_manager.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -327,10 +327,10 @@ class PrefixCacheManager:
             exit_code = cache_manager_processes[-1].poll()
             if exit_code is None:
                 logger.info("Launch cache transfer manager successful")
-            else:
-                logger.info(
-                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-                )
+        else:
+            logger.info(
+                "Launch cache transfer manager failed, see cache_manager.log for more information"
+            )
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:

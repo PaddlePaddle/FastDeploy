@@ -619,7 +619,7 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(
                     task.task_id, task.token_ids, task.start_read_block_idx, task.timeout
                 )
-            logger.info(f"Matched {match_block_num} blocks in cache storage for read task {task.task_id}")
+            logger.debug(f"Matched {match_block_num} blocks in cache storage for read task {task.task_id}")
 
             k_cache_keys = k_cache_keys[:match_block_num]
             v_cache_keys = v_cache_keys[:match_block_num]
@@ -639,7 +639,7 @@ class CacheTransferManager:
                         cpu_block_ids,
                         task.timeout,
                     )
-                    logger.info(
+                    logger.debug(
                         f"Successfully read {len(valid_gpu_block_ids)} blocks from cache storage for task {task.task_id}"
                     )
                 except Exception as e:
@@ -649,9 +649,9 @@ class CacheTransferManager:
                     try:
                         if (self.rank == 0) and self.storage_backend_type == "attention_store":
                             self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, True)
-                        logger.info(f"Report cache index in HBM to cache storage for task {task.task_id}")
+                        logger.debug(f"Report cache index in HBM to cache storage for task {task.task_id}")
                     except Exception as e:
-                        logger.info(
+                        logger.debug(
                             f"Failed to report cache index in HBM to cache storage for task {task.task_id}, error: {e}"
                         )
 
@@ -764,10 +764,10 @@ class CacheTransferManager:
                 match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
-            logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
+            logger.debug(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
 
             if match_block_num >= len(k_cache_keys):
-                logger.info(f"No uncached keys found for task {task.task_id}")
+                logger.debug(f"No uncached keys found for task {task.task_id}")
                 gpu_block_ids = []
             else:
                 try:
@@ -786,7 +786,7 @@ class CacheTransferManager:
                         cpu_block_ids,
                         task.timeout,
                     )
-                    logger.info(
+                    logger.debug(
                         f"Successfully wrote {write_block_num} blocks to cache storage for task {task.task_id}"
                     )
                 except Exception as e:
@@ -796,9 +796,9 @@ class CacheTransferManager:
                     try:
                         if (self.rank == 0) and self.storage_backend_type == "attention_store":
                             self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, False)
-                        logger.info(f"Report cache index out HBM to cache storage for task {task.task_id}")
+                        logger.debug(f"Report cache index out HBM to cache storage for task {task.task_id}")
                     except Exception as e:
-                        logger.info(
+                        logger.debug(
                             f"Failed to report cache index out HBM to cache storage for task {task.task_id}, error: {e}"
                         )
 
@@ -839,7 +839,7 @@ class CacheTransferManager:
             self.cache_task_queue.swap_to_cpu_barrier2.reset()
             self.cache_task_queue.put_transfer_done_signal(result)
             logger.debug(f"_do_swap_to_cpu_task: put_transfer_done_signal {result}")
-            logger.info(f"_do_swap_to_cpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
+            logger.debug(f"_do_swap_to_cpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
 
     def _do_swap_to_gpu_task(
         self,
@@ -867,7 +867,7 @@ class CacheTransferManager:
             self.cache_task_queue.swap_to_gpu_barrier2.reset()
             self.cache_task_queue.put_transfer_done_signal(result)
             logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal {result}")
-            logger.info(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
+            logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
 
     def check_work_status(self, time_interval_threashold=envs.FD_CACHE_PROC_EXIT_TIMEOUT):
         """
@@ -972,7 +972,7 @@ class CacheTransferManager:
                 continue
 
             except Exception as e:
-                logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
+                logger.debug(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
 
     def _transfer_data(
         self,
@@ -1076,7 +1076,7 @@ class CacheTransferManager:
                         1,
                     )
             else:
-                logger.warning(
+                logger.debug(
                     f"transfer data: Get unexpected event type {event_type}, only SWAP2CPU and SWAP2GPU supported"
                 )
         except Exception as e:
@@ -1084,7 +1084,7 @@ class CacheTransferManager:
             raise e
         end_time = time.time()
         elasped_time = end_time - start_time
-        logger.info(
+        logger.debug(
             f"transfer data: transfer_task_id {transfer_task_id} event_type {event_type}: "
             + f"transfer {len(gpu_block_ids)} blocks done  elapsed_time {elasped_time:.4f}"
         )
@@ -1100,14 +1100,14 @@ class CacheTransferManager:
         # TODO XPU support RL
         if unset_data_ipc is None:
             return
-        logger.info("[RL] Launch a thread to clear/restore kv cache when model weights are cleared/updated.")
+        logger.debug("[RL] Launch a thread to clear/restore kv cache when model weights are cleared/updated.")
         while True:
             # handle cache clearing/restoring
             if self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
                     # clear cpu caches
-                    logger.info("[RL] start clearing caches")
+                    logger.debug("[RL] start clearing caches")
                     logger.debug("[RL] start clearing cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         paddle.set_device("cpu")
@@ -1132,10 +1132,10 @@ class CacheTransferManager:
                     # clear gpu caches
                     logger.debug("[RL] start clearing gpu caches")
                     if args.create_cache_tensor:
-                        logger.info("[RL] waiting for gpu runner to unlink cuda ipc")
+                        logger.debug("[RL] waiting for gpu runner to unlink cuda ipc")
                         while self.cache_ready_signal.value[self.rank] != 0:
                             time.sleep(0.1)
-                        logger.info("[RL] stop waiting! gpu runner has unlinked cuda ipc")
+                        logger.debug("[RL] stop waiting! gpu runner has unlinked cuda ipc")
                         paddle.set_device(f"gpu:{self.device}")
                         self.gpu_cache_kvs.clear()
                         self.gpu_cache_k_tensors.clear()
@@ -1153,7 +1153,7 @@ class CacheTransferManager:
 
                     while np.sum(self.cache_ready_signal.value) != 0:
                         time.sleep(0.1)
-                    logger.info("[RL] all ranks cleared caches!")
+                    logger.debug("[RL] all ranks cleared caches!")
 
                     # reset kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
@@ -1167,7 +1167,7 @@ class CacheTransferManager:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
                     # restore cpu cache
-                    logger.info("[RL] start restoring caches")
+                    logger.debug("[RL] start restoring caches")
                     logger.debug("[RL] start restoring cpu caches")
                     if self.num_cpu_blocks > 0 and envs.FD_ENABLE_SWAP_SPACE_CLEARING:
                         self._init_cpu_cache(args)
@@ -1188,12 +1188,12 @@ class CacheTransferManager:
                         version_file_path = os.path.join(args.model_path, "version.yaml")
                         assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
                         self.key_prefix = get_key_prefix_from_version(version_file_path)
-                        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
+                        logger.debug(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:
                         time.sleep(0.1)
-                    logger.info("[RL] all ranks restored caches!")
+                    logger.debug("[RL] all ranks restored caches!")
 
                     # set kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
@@ -1211,7 +1211,7 @@ class CacheTransferManager:
         curr_alloc = paddle.device.cuda.memory_allocated() / (1024**3)
         curr_reserved = paddle.device.cuda.memory_reserved() / (1024**3)
 
-        logger.warning(
+        logger.debug(
             f"GPU memory usage {context}:"
             f"max_allocated: {max_alloc:.2f}GB "
             f"max_reserved: {max_reserved:.2f}GB "
