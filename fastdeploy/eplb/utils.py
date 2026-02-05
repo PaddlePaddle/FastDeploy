@@ -74,7 +74,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
         return
 
     dp_ipc_signal_suffix = f"{ipc_signal_suffix}_dp{config.parallel_config.local_data_parallel_id}"
-    # rearrange_experts_status Record the expert's rearrangement status
+    # Create shared memory for tracking expert rearrangement status
+    # Used to coordinate expert redistribution across DP ranks during load balancing
     rearrange_experts_array = np.zeros([1], dtype=np.int32)
     _ = IPCSignal(
         name="rearrange_experts_status",
@@ -84,7 +85,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
         create=True,
     )
 
-    # Record all DP rank IPs when receiving expert rearrangement requests
+    # Create shared memory for storing DP rank IP addresses during expert rearrangement
+    # Size field stores the count of IPs, list field stores the actual IP addresses
     rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
     _ = IPCSignal(
         name="rearrange_experts_ips_size",
@@ -100,7 +102,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
         create=True,
     )
 
-    # Receive signals for updating weights
+    # Create shared memory signal for triggering weight updates from tensor
+    # Used to notify workers when expert weights should be updated from tensor data
     signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
     _ = IPCSignal(
         name="signal_update_weight_from_tensor",
@@ -112,7 +115,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
 
     for rank_id in range(config.parallel_config.tensor_parallel_size):
         tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{rank_id}"
-        # Record expert workload
+        # Create shared memory for tracking expert workload statistics
+        # Stores token counts per expert per layer for load balancing decisions
         experts_token_stats = np.zeros(
             (config.model_config.num_hidden_layers, config.model_config.moe_num_experts),
             dtype=np.int32,
@@ -132,7 +136,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
             create=True,
         )
 
-        # Receive signals for loading weights
+        # Create shared memory signal for triggering weight updates from disk
+        # Used to notify workers when expert weights should be loaded from disk files
         signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
         _ = IPCSignal(
             name="signal_update_weight_from_disk",
@@ -142,7 +147,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
             create=True,
         )
 
-        # Receive signals for clearing expert loads
+        # Create shared memory signal for clearing expert load statistics
+        # Used to reset token count statistics for experts when needed
         clear_experts_token_stats = np.zeros([1], dtype=np.int32)
         _ = IPCSignal(
             name="signal_clear_experts_token_stats",
@@ -152,6 +158,8 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
             create=True,
         )
 
+        # Create shared memory for storing weight update result from disk
+        # Workers write the result status after loading weights from disk
         result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
         _ = IPCSignal(
             name="result_update_weight_from_disk",

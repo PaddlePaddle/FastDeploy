@@ -281,6 +281,8 @@ class CacheMessager:
         send cache to other instance
         """
         try:
+            # Create shared memory for tracking splitwise prefill completion status
+            # These signals coordinate layer-wise and step-wise prefill progress between instances
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_name = f"splitwise_complete_prefilled_layer_{self.rank_id}.{self.gpu_id}"

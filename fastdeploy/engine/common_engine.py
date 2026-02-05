@@ -266,9 +266,12 @@ class EngineService:
         )
         self.data_processor = self.input_processor.create_processor()
 
-    def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
+    def _init_worker_monitor_signals(self):
+        """Initialize shared memory signals for monitoring worker states and task presence"""
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
         self.llm_logger.info(f"current_suffix: {current_suffix}")
+        # Create shared memory signal for task existence notification
+        # Workers check this signal to detect if there are new tasks to process
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
@@ -278,7 +281,8 @@ class EngineService:
             create=True,
         )
 
-        # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
+        # Create shared memory signal for swapped task presence detection
+        # Engine uses this to detect if there are tasks that have been swapped out by workers
         exist_swapped_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
             name="exist_swapped_task_signal",
@@ -288,7 +292,8 @@ class EngineService:
             create=True,
         )
 
-        # exist_prefill_task_signal 用于各worker进程感知是否进行prefill
+        # Create shared memory signal for prefill task detection
+        # Workers check this signal to determine if they should perform prefill operations
         exist_prefill_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_prefill_task_signal = IPCSignal(
             name="exist_prefill_task_signal",
@@ -298,6 +303,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for engine forward operation synchronization
+        # Used to coordinate forward pass execution across processes
         engine_forward_signal_data = np.zeros([1], dtype=np.int32)
         self.engine_forward_signal = IPCSignal(
             name="engine_forward_signal",
@@ -307,7 +314,8 @@ class EngineService:
             create=True,
         )
 
-        # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
+        # Create shared memory signal for worker process health monitoring
+        # Engine uses this to detect if worker processes are alive by tracking heartbeat timestamps
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
         )
@@ -319,6 +327,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for cache readiness status
+        # Tracks whether KV cache is ready for each tensor parallel rank
         cache_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
         self.cache_ready_signal = IPCSignal(
             name="cache_ready_signal",
@@ -328,6 +338,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for swap space readiness status
+        # Tracks whether swap space is ready for each tensor parallel rank
         swap_space_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
         self.swap_space_ready_signal = IPCSignal(
             name="swap_space_ready_signal",
@@ -337,6 +349,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for cache transfer initialization status
+        # Tracks whether cache transfer has been initialized for each tensor parallel rank
         cache_transfer_inited_signal_data = np.zeros(
             shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32
         )
@@ -348,6 +362,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for model weights status
+        # Used for RL (Reinforcement Learning) to track model weight update state
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
@@ -357,6 +373,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for prefix tree status
+        # Used for RL (Reinforcement Learning) to track prefix tree state
         prefix_tree_status = np.zeros([1], dtype=np.int32)
         self.prefix_tree_status_signal = IPCSignal(
             name="prefix_tree_status",
@@ -366,6 +384,8 @@ class EngineService:
             create=True,
         )
 
+        # Create shared memory signal for KV cache status
+        # Used for RL (Reinforcement Learning) to track key-value cache state
         kv_cache_status = np.zeros([1], dtype=np.int32)
         self.kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",

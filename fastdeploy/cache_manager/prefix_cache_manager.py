@@ -182,6 +182,8 @@ class PrefixCacheManager:
         """
         launch_cache_manager function used to initialize the cache manager.
         """
+        # Create shared memory signal for broadcasting cache task status
+        # Used to notify all tensor parallel ranks about new cache tasks
         broadcast_cache_task_flag_array = np.zeros([1], dtype=np.int32)
 
         self.shm_cache_task_flag_broadcast = IPCSignal(

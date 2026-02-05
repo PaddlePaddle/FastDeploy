@@ -355,7 +355,8 @@ class LLMEngine:
         """
         Initialize shared memory to indicate engine status
         """
-        # worker_ready_signal 用于worker进程感知engine是否启动完成
+        # Create shared memory for tracking worker process readiness
+        # Workers write to this signal to indicate they are initialized and ready
         worker_ready_signal_data = np.zeros(shape=[self.cfg.worker_num_per_node], dtype=np.int32)
         self.worker_ready_signal = IPCSignal(
             name="worker_ready_signal",
@@ -365,7 +366,8 @@ class LLMEngine:
             create=True,
         )
 
-        # launched_cache_manager_signal 用于感知engine是否启动了cache_manager
+        # Create shared memory signal for cache manager launch detection
+        # Used by workers to detect whether the engine has started the cache manager
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             launched_cache_manager_signal_data = np.zeros([1], dtype=np.int32)
             self.launched_cache_manager_signal = IPCSignal(
@@ -376,7 +378,8 @@ class LLMEngine:
                 create=True,
             )
 
-        # launched_expert_service_signal: Used to sense whether each expet_servic is started successfully
+        # Create shared memory signal for expert service launch detection
+        # Used to sense whether each expert_service has started successfully
         if self.cfg.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
@@ -389,7 +392,8 @@ class LLMEngine:
                 create=True,
             )
 
-        # loaded_model_signal: Used to detect whether each worker has completed model loading
+        # Create shared memory signal for model loading completion detection
+        # Used to detect whether each worker has completed model loading
         loaded_model_signal_data = np.zeros([1], dtype=np.int32)
         self.loaded_model_signal = IPCSignal(
             name="loaded_model_signal",
@@ -400,6 +404,8 @@ class LLMEngine:
         )
 
         if self.do_profile:
+            # Create shared memory for retrieving profile block number
+            # Used during profiling to get the number of KV cache blocks allocated
             if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 get_profile_block_num = np.zeros([self.cfg.worker_num_per_node], dtype=np.int32)
             else:
