@@ -6,12 +6,12 @@ FastDeploy generates the following log files during deployment. Below is an expl
 By default, logs are stored in the `log` directory under the execution path. To specify a custom directory, set the environment variable `FD_LOG_DIR`.
 
 ## Inference Service Logs
-* `backup_env.*.json` : Records environment variables set during instance startup. The number of files matches the number of GPU cards.
-* `envlog.*` : Logs environment variables set during instance startup. The number of files matches the number of GPU cards.
+* `log/paddle/backup_env.*.json` : Records environment variables set during instance startup. The number of files matches the number of GPU cards.
+* `log/paddle/envlog.*` : Logs environment variables set during instance startup. The number of files matches the number of GPU cards.
 * `console.log` : Records model startup time and other information. This log is also printed to the console.
 * `data_processor.log` : Logs input/output data encoding and decoding details.
 * `fastdeploy.log` : Records configuration information during instance startup, as well as request and response details during runtime.
-* `workerlog.*` : Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file.
+* `log/paddle/workerlog.*` : Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file. `log/workerlog.0` is a convenient alias to `log/paddle/workerlog.0`.
 * `worker_process.log` : Logs engine inference data for each iteration.
 * `cache_manager.log` : Records KV Cache logical index allocation for each request and cache hit status.
 * `launch_worker.log` : Logs model startup information and error messages.

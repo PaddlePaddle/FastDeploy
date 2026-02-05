@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import copy
+import glob
 import json
 import multiprocessing
 import os
@@ -502,6 +503,36 @@ class LLMEngine:
             command_prefix += f"{k}={v} "
         return command_prefix
 
+    def _ensure_workerlog_alias(self, log_dir: str, paddle_log_dir: str) -> None:
+        try:
+            def ensure_alias_for_target(target_path: str) -> None:
+                if not target_path:
+                    return
+                link_path = os.path.join(log_dir, os.path.basename(target_path))
+                abs_target_path = os.path.abspath(target_path)
+                if os.path.islink(link_path):
+                    current_target = os.readlink(link_path)
+                    abs_current_target = os.path.abspath(os.path.join(os.path.dirname(link_path), current_target))
+                    if abs_current_target == abs_target_path:
+                        return
+                    os.remove(link_path)
+                elif os.path.isfile(link_path):
+                    os.remove(link_path)
+                elif os.path.exists(link_path):
+                    return
+                os.symlink(abs_target_path, link_path)
+
+            # Always alias workerlog.0 even if it does not exist yet.
+            ensure_alias_for_target(os.path.join(paddle_log_dir, "workerlog.0"))
+
+            # Alias any existing workerlog.* files.
+            for target_path in glob.glob(os.path.join(paddle_log_dir, "workerlog.*")):
+                if os.path.isfile(target_path):
+                    ensure_alias_for_target(target_path)
+        except OSError:
+            # Best effort: if symlink creation fails, keep paddle logs intact.
+            pass
+
     def _start_worker_service(self):
         """
         start gpu worker service
@@ -509,13 +540,16 @@ class LLMEngine:
         """
         console_logger.debug("Start worker process...")
         log_dir = os.getenv("FD_LOG_DIR", default="log")
+        paddle_log_dir = os.path.join(log_dir, "paddle")
+        os.makedirs(paddle_log_dir, exist_ok=True)
+        self._ensure_workerlog_alias(log_dir, paddle_log_dir)
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == 1 else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
-        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+        pd_cmd = pd_cmd + f" --log_dir {paddle_log_dir}"
 
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
