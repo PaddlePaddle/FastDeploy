@@ -281,7 +281,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -378,7 +380,7 @@ class OpenAIServingCompletion:
 
     def calc_finish_reason(self, max_tokens, token_num, output, tool_called):
         if max_tokens is None or token_num != max_tokens:
-            if tool_called or output.get("tool_call"):
+            if tool_called or output.get("tool_calls"):
                 return "tool_calls"
             else:
                 return "stop"
@@ -437,7 +439,9 @@ class OpenAIServingCompletion:
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
-                        status, msg = self.engine_client.check_health(time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT)
+                        status, msg = self.engine_client.check_health(
+                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                        )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")
                         else:
@@ -523,24 +527,21 @@ class OpenAIServingCompletion:
                         text=output["text"],
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
-                        tool_calls=None,
+                        tool_calls=output["tool_calls"],
                         completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
-                        reasoning_content="",
+                        reasoning_content=output["reasoning_content"],
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
                         prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),
                         draft_logprobs=draft_logprobs_res,
                         speculate_metrics=output_speculate_metrics,
                     )
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.text = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"]:
+                        continue
 
                     choices.append(delta_message)
 
@@ -685,7 +686,7 @@ class OpenAIServingCompletion:
                     else None
                 ),
                 reasoning_content=output.get("reasoning_content"),
-                tool_calls=output.get("tool_call"),
+                tool_calls=output.get("tool_calls"),
                 logprobs=aggregated_logprobs,
                 draft_logprobs=aggregated_draft_logprobs,
                 prompt_logprobs=clamp_prompt_logprobs(prompt_logprobs_res),

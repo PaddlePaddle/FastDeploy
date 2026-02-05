@@ -181,7 +181,7 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     f_o.close()
 
     # base result
-    content2 = "这张图片展示了一群"
+    content2 = "这张图片中有三个人"
 
     # Verify that result is same as the base result
     assert content1 == content2

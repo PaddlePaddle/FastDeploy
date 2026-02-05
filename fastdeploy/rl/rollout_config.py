@@ -46,7 +46,7 @@ class RolloutModelConfig:
         enable_chunked_prefill: bool = False,
         speculative_method: str = None,
         speculative_max_draft_token_num: int = 1,
-        speculative_model_name_or_path: str = "",
+        speculative_model_name_or_path: str = None,
         speculative_model_quantization: str = "WINT8",
         max_num_batched_tokens: int = 2048,
         enable_prefix_caching: bool = False,
@@ -96,7 +96,9 @@ class RolloutModelConfig:
         self.speculative_config = {}
         self.speculative_config["method"] = speculative_method
         self.speculative_config["max_draft_token_num"] = speculative_max_draft_token_num
-        self.speculative_config["model"] = speculative_model_name_or_path
+        self.speculative_config["model"] = (
+            speculative_model_name_or_path if speculative_model_name_or_path is not None else model_name_or_path
+        )
         self.speculative_config["quantization"] = speculative_model_quantization
         self.max_num_batched_tokens = max_num_batched_tokens
         self.enable_prefix_caching = enable_prefix_caching

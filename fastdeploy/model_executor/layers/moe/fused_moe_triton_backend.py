@@ -1525,10 +1525,13 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
 
         from .triton_moe_kernels import fused_moe_kernel_paddle
 
-        x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
-        )
-        x_scale = x_scale[: x.shape[0]]
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+            x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, self.quant_config.weight_block_size[0])
+        else:
+            x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                x, using_pow2_scale=False, output_scale_transpose=False
+            )
+            x_scale = x_scale[: x.shape[0]]
 
         fused_moe_kernel_paddle[grid](
             x_q,
@@ -1580,11 +1583,15 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         grid = (
             ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"]) * ceil_div(hidden_size, config["BLOCK_SIZE_N"]),
         )
-
-        x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
-        )
-        x_scale = x_scale[: x_q.shape[0]]
+        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+            x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(
+                intermediate_cache2, self.quant_config.weight_block_size[0]
+            )
+        else:
+            x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
+                intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
+            )
+            x_scale = x_scale[: x_q.shape[0]]
 
         fused_moe_kernel_paddle[grid](
             x_q,
