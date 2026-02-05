@@ -37,7 +37,7 @@ class TestErnie28BVL(unittest.TestCase):
             quantization="wint8",
             disable_custom_all_reduce=True,
             # enable_prefix_caching=False,
-            # graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
+            graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
             limit_mm_per_prompt={"image": 100},
             reasoning_parser="ernie-45-vl",
             load_choices="default_v1",
