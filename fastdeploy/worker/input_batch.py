@@ -272,8 +272,8 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.output_padding_offset = paddle.full(
+            self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+            self.batch_id_per_token_output = paddle.full(
                 shape=[max_num_seqs * (max_draft_token_num + 1)],
                 fill_value=0,
                 dtype="int32",
@@ -404,7 +404,7 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            swap_data(self.output_cum_offsets, i1, i2)
+            swap_data(self.cu_seqlens_q_output, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
@@ -512,8 +512,8 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-        self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-        self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+        self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
+        self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -659,8 +659,8 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        swap_data(self.output_cum_offsets, i1, i2)
-        swap_data(self.output_padding_offset, i1, i2)
+        swap_data(self.cu_seqlens_q_output, i1, i2)
+        swap_data(self.batch_id_per_token_output, i1, i2)
         swap_data(self.ids_remove_padding, i1, i2)
         swap_data(self.batch_id_per_token, i1, i2)
         swap_data(self.cu_seqlens_q, i1, i2)
