@@ -957,6 +957,36 @@ class ResourceManagerV1(ResourceManager):
                 if self.current_reserve_output_block_num == 0:
                     self.can_relax_prefill_strategy = True
 
+            if hasattr(self, "scheduler_metrics_logger") and self.scheduler_metrics_logger is not None:
+                total_blocks = self.total_block_number()
+                free_blocks = self.available_block_num()
+                used_blocks = max(total_blocks - free_blocks, 0)
+                tokens_used = used_blocks * self.config.cache_config.block_size
+                token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
+                running_cnt = len(self.running)
+                queue_cnt = len(self.waiting)
+
+                prefill_reqs = [
+                    r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL
+                ]
+                has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
+
+                self.scheduler_metrics_logger.log_prefill_batch(
+                    prefill_reqs=prefill_reqs,
+                    running_cnt=running_cnt,
+                    queue_cnt=queue_cnt,
+                    tokens_used=tokens_used,
+                    token_usage=token_usage,
+                )
+                if has_decode:
+                    self.scheduler_metrics_logger.log_decode_batch(
+                        running_cnt=running_cnt,
+                        queue_cnt=queue_cnt,
+                        tokens_used=tokens_used,
+                        token_usage=token_usage,
+                        use_cudagraph=self.config.graph_opt_config.use_cudagraph,
+                    )
+
             self.update_metrics()
 
             return scheduled_reqs, error_reqs
