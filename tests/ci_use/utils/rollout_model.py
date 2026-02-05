@@ -14,10 +14,7 @@
 
 import argparse
 
-try:
-    from paddleformers.trl.llm_utils import init_dist_env
-except ImportError:
-    from paddleformers.cli.utils.llm_utils import init_dist_env
+from paddleformers.trl.llm_utils import init_dist_env
 
 from fastdeploy.rl.rollout_config import RolloutModelConfig
 from fastdeploy.rl.rollout_model import RolloutModel
