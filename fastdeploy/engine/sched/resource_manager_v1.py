@@ -1318,7 +1318,7 @@ class ResourceManagerV1(ResourceManager):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
-        llm_logger.info(f"recycle resources for requests: {request_ids}")
+        llm_logger.debug(f"recycle resources for requests: {request_ids}")
         try:
             if isinstance(request_ids, str):
                 request_ids = (request_ids,)
