@@ -32,7 +32,7 @@ class NgramProposer(Proposer):
     def __init__(self, fd_config: FDConfig):
         super().__init__(fd_config)
         self.max_ngram_size = self.speculative_config.max_ngram_size
-        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
+        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64")
 
     def update(self, bid: int, seq_len: int):
         """
@@ -44,25 +44,17 @@ class NgramProposer(Proposer):
         """
         run
         """
-        draft_tokens = share_inputs["draft_tokens"].cpu()
-        seq_lens_this_time = share_inputs["seq_lens_this_time"].cpu()
-        seq_lens_encoder = share_inputs["seq_lens_encoder"].cpu()
-        seq_lens_decoder = share_inputs["seq_lens_decoder"].cpu()
-
         ngram_match(
-            share_inputs["input_ids_cpu"],
-            self.input_ids_len.cpu(),
-            share_inputs["pre_ids"].cpu(),
-            share_inputs["step_idx"].cpu(),
-            share_inputs["actual_draft_token_num"].cpu(),
-            draft_tokens,
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
-            share_inputs["max_dec_len"].cpu(),
+            share_inputs["input_ids"],
+            self.input_ids_len,
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["actual_draft_token_num"],
+            share_inputs["draft_tokens"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["max_dec_len"],
             self.max_ngram_size,
             self.max_draft_token_num,
         )
-        share_inputs["draft_tokens"][:] = draft_tokens.cuda()
-        share_inputs["seq_lens_encoder"][:] = seq_lens_encoder.cuda()
-        share_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()

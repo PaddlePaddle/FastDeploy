@@ -24,6 +24,10 @@ from fastdeploy.model_executor.ops.gpu import hybrid_mtp_ngram
 
 class TestNgramMatchMixed(unittest.TestCase):
     def setUp(self):
+        if not paddle.is_compiled_with_cuda():
+            raise unittest.SkipTest("Paddle is not compiled with CUDA; skipping GPU op test.")
+        paddle.set_device("gpu")
+
         self.max_bsz = 2
         self.max_draft_tokens = 5
         self.max_len = 32
@@ -31,26 +35,26 @@ class TestNgramMatchMixed(unittest.TestCase):
         self.max_ngram_size = 5
         self.min_ngram_size = 2
 
-        # 初始化输入 tensor
-        self.input_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64").cpu()
-        self.input_ids_len = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64").cpu()
-        self.pre_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64").cpu()
-        self.step_idx = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64").cpu()
-        self.draft_token_num = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32").cpu()
+        # Initialize input tensors on GPU
+        self.input_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64")
+        self.input_ids_len = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64")
+        self.pre_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64")
+        self.step_idx = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64")
+        self.draft_token_num = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32")
         self.draft_tokens = paddle.full(
             shape=[self.max_bsz, self.max_draft_tokens + 1],
             fill_value=-1,
             dtype="int64",
-        ).cpu()
-        self.seq_lens_this_time = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32").cpu()
-        self.seq_lens_decoder = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32").cpu()
+        )
+        self.seq_lens_this_time = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32")
+        self.seq_lens_decoder = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32")
         self.max_dec_len = paddle.full(
             shape=[self.max_bsz, 1],
             fill_value=self.max_dec_len,
             dtype="int64",
-        ).cpu()
+        )
 
-        # 设置具体数据
+        # Set specific data
         self.input_ids[:, :10] = np.arange(0, 10)
         self.input_ids_len[:] = 10
         pre_ids_np = np.array([10, 9, 8, 7, 6, 10, 9, 8, 7], dtype="int32")
@@ -63,7 +67,7 @@ class TestNgramMatchMixed(unittest.TestCase):
         self.seq_lens_decoder[:] = 12
         self.max_dec_len[:] = 512
 
-        # 期望结果
+        # Expected results
         self.ref_seq_lens_this_time = np.array([[6], [6]], dtype="int32")
         self.ref_draft_tokens = np.array([[8, 7, 6, 10, 9, 8], [8, 7, 6, 10, 9, 8]], dtype="int64")
 

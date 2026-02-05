@@ -22,7 +22,9 @@ from fastdeploy.model_executor.ops.gpu import ngram_match
 class TestNgramMatchOp(unittest.TestCase):
 
     def setUp(self):
-        paddle.set_device("cpu")
+        if not paddle.is_compiled_with_cuda():
+            raise unittest.SkipTest("Paddle is not compiled with CUDA; skipping GPU op test.")
+        paddle.set_device("gpu")
 
     def test_basic_match(self):
         """
