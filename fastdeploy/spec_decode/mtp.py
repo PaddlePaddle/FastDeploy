@@ -750,7 +750,11 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_encoder"],
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
-            self.model_inputs["cu_seqlens_q_output"],
+            (
+                self.model_inputs["cu_seqlens_q_output"]
+                if current_platform.is_cuda()
+                else self.model_inputs["output_cum_offsets"]
+            ),
             self.model_inputs["stop_flags"],
             self.model_inputs["not_need_stop"],
             self.model_inputs["max_dec_len"],
