@@ -29,9 +29,9 @@ class TestErnie21B(unittest.TestCase):
             max_model_len=256,
             quantization="wint8",
             load_choices="default_v1",
-            enable_prefix_caching=False,
+            # enable_prefix_caching=False,
             disable_custom_all_reduce=True,
-            graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
+            # graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
         )
 
         cls.sampling_params = fastdeploy.SamplingParams(top_p=0.95, max_tokens=256, temperature=0.6)
