@@ -17,15 +17,46 @@
 import argparse
 import asyncio
 import json
+
+# Set up logger interceptor before importing paddle
+import logging
 import os
 import time
 import traceback
 from typing import Tuple
 
 import numpy as np
+
+_original_getLogger = logging.getLogger
+
+
+def _patched_getLogger(name=None):
+    """Intercept paddle-related logger creation and configure format immediately"""
+    logger = _original_getLogger(name)
+    if name and str(name).startswith("paddle"):
+        # Configure paddle logger immediately
+        formatter = logging.Formatter(
+            "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        logger.setLevel(logging.INFO)
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
+        logger.propagate = False
+    return logger
+
+
+logging.getLogger = _patched_getLogger
+
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
+
+# Restore original getLogger
+logging.getLogger = _original_getLogger
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -70,6 +101,42 @@ from fastdeploy.worker.worker_base import WorkerBase
 logger = get_logger("worker_process", "worker_process.log")
 
 
+def _configure_third_party_loggers():
+    """Unify third-party library (paddleformers, paddle) logger formats.
+    Should be called after these libraries are imported."""
+    import logging
+
+    # Create standard format (without color)
+    formatter = logging.Formatter(
+        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Handle paddleformers-specific loggers
+    for name in ["paddleformers", "paddleformers.utils", "paddleformers.utils.log"]:
+        pf_logger = logging.getLogger(name)
+        pf_logger.setLevel(logging.INFO)
+        for handler in pf_logger.handlers[:]:
+            pf_logger.removeHandler(handler)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        pf_logger.addHandler(stream_handler)
+        pf_logger.propagate = False
+
+    # Handle all related paddle loggers (including submodules)
+    # Iterate through all existing loggers, reconfigure if paddle-related
+    for name in list(logging.Logger.manager.loggerDict.keys()):
+        if name.startswith("paddle"):
+            pd_logger = logging.getLogger(name)
+            pd_logger.setLevel(logging.INFO)
+            for handler in pd_logger.handlers[:]:
+                pd_logger.removeHandler(handler)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            pd_logger.addHandler(stream_handler)
+            pd_logger.propagate = False
+
+
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
@@ -79,30 +146,37 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
+        _configure_third_party_loggers()
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_cuda():
         from fastdeploy.worker.gpu_worker import GpuWorker
 
+        _configure_third_party_loggers()
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
 
+        _configure_third_party_loggers()
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_iluvatar():
         from fastdeploy.worker.iluvatar_worker import IluvatarWorker
 
+        _configure_third_party_loggers()
         return IluvatarWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_gcu():
         from fastdeploy.worker.gcu_worker import GcuWorker
 
+        _configure_third_party_loggers()
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_maca():
         from fastdeploy.worker.metax_worker import MetaxWorker
 
+        _configure_third_party_loggers()
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_intel_hpu():
         from fastdeploy.worker.hpu_worker import HpuWorker
 
+        _configure_third_party_loggers()
         return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 

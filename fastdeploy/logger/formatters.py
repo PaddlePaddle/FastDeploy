@@ -100,8 +100,6 @@ class CustomFormatter(logging.Formatter):
 
         try:
             log_fields = {
-                "thread": record.thread,
-                "thread_name": record.threadName,
                 "timestamp": int(time.time() * 1000),
             }
 
