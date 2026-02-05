@@ -203,7 +203,7 @@ func TestPostToPD(t *testing.T) {
 		}))
 		defer decodeServer.Close()
 
-		resp, err := PostToPD(c, decodeServer.URL, prefillServer.URL, reqBody, false, "chat/completions")
+		resp, err := PostToPD(c, decodeServer.URL, prefillServer.URL, reqBody, false, "test message", "chat/completions")
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.NotNil(t, resp)
@@ -217,7 +217,7 @@ func TestPostToPD(t *testing.T) {
 		defer prefillServer.Close()
 
 		// Use invalid URL to simulate connection error
-		resp, err := PostToPD(c, "http://invalid-server:9999", prefillServer.URL, reqBody, false, "chat/completions")
+		resp, err := PostToPD(c, "http://invalid-server:9999", prefillServer.URL, reqBody, false, "test message", "chat/completions")
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
@@ -229,7 +229,7 @@ func TestPostToPD(t *testing.T) {
 		defer decodeServer.Close()
 
 		// Use invalid URL to simulate connection error
-		resp, err := PostToPD(c, decodeServer.URL, "http://invalid-server:9999", reqBody, false, "chat/completions")
+		resp, err := PostToPD(c, decodeServer.URL, "http://invalid-server:9999", reqBody, false, "test message", "chat/completions")
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
@@ -336,7 +336,7 @@ func TestReadPrefillRecv(t *testing.T) {
 	t.Run("nil response handling", func(t *testing.T) {
 		ctx := context.Background()
 		// Should handle nil response gracefully without panic
-		readPrefillRecv(ctx, "test-url", false, nil)
+		readPrefillRecv(ctx, "test-url", false, "test message", nil)
 	})
 
 	t.Run("nil response body handling", func(t *testing.T) {
@@ -347,7 +347,7 @@ func TestReadPrefillRecv(t *testing.T) {
 			Body:       nil,
 		}
 		// Should handle nil body gracefully without panic
-		readPrefillRecv(ctx, "test-url", false, resp)
+		readPrefillRecv(ctx, "test-url", false, "test message", resp)
 	})
 
 	t.Run("mock response without scheduler dependency", func(t *testing.T) {
@@ -361,7 +361,7 @@ func TestReadPrefillRecv(t *testing.T) {
 
 		// This test verifies basic error handling and response body consumption
 		// without triggering scheduler initialization requirements
-		readPrefillRecv(ctx, "test-url", false, resp)
+		readPrefillRecv(ctx, "test-url", false, "test message", resp)
 	})
 }
 

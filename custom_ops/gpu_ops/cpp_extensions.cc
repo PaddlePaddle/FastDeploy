@@ -299,6 +299,11 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
+std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
+                                          const int block_size);
+std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
+                                                 const int block_size);
+
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
     paddle::Tensor& token_nums_per_expert,
@@ -1111,6 +1116,12 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
+std::vector<paddle::Tensor> get_attn_mask_q(
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& cu_seqlens_k,
+    const paddle::optional<paddle::Tensor>& attn_mask_kv,
+    const int kv_token_num);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1257,6 +1268,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("norm_topk_prob"),
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
+
+  m.def("per_token_quant",
+        &PerTokenQuant,
+        py::arg("input"),
+        py::arg("block_size"),
+        "per token per block quant");
+
+  m.def("per_token_quant_padding",
+        &PerTokenQuantPadding,
+        py::arg("input"),
+        py::arg("block_size"),
+        "per token per block quant and padding transpose scale");
 
   m.def("fused_mask_swiglu_fp8_quant",
         &FusedMaskSwigluFP8Quant,
@@ -1704,6 +1727,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
+
+  m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
   m.def("get_stop", &GetStop, "get_stop function");
 

@@ -70,11 +70,11 @@ The usage and request scheduling workflow is as follows:
 
 ### Launching the Router
 
-Start the Router service. Logs are written to `log_router/router.log`.
+Start the Router service. Logs are written to `log_router/router.log`. `fd-router` installation instructions can be found in the [Router documentation](../online_serving/router.md).
 
 ```shell
 export FD_LOG_DIR="log_router"
-python -m fastdeploy.router.launch \
+/usr/local/bin/fd-router \
     --host 0.0.0.0 \
     --port 30000
 ```
