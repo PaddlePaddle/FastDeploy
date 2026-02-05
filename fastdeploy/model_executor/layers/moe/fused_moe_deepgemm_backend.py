@@ -125,8 +125,9 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         dtype=paddle.bfloat16,
     )
     # if disable_ue8m0_cast:
-    permute_scale = permute_scale.transpose([1, 0]).contiguous()
-    permute_scale = permute_scale.transpose([1, 0])
+    if permute_scale.strides[0] != 1:
+        permute_scale = permute_scale.transpose([1, 0]).contiguous()
+        permute_scale = permute_scale.transpose([1, 0])
     dump_tensor(permute_input, permute_scale, m_indices)
     # disable_ue8m0_cast is False for SM100
     m_grouped_fp8_gemm_nt_contiguous(
@@ -338,6 +339,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             print("num_experts:", layer.num_local_experts)
             dump_tensor(recv_x, recv_x_scale, recv_topk_weights, token_nums_this_rank[1])
             if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))):
+                recv_topk_idx = recv_topk_idx.astype(paddle.int32)
                 (
                     permute_input,
                     permute_indices_per_token,  # == zipped_expertwise_rowmap
@@ -380,7 +382,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             assert permute_input.shape[0] == token_all_num
 
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if permute_scale.strides[0] != 1:
                 permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
 
             # up_gate_proj
@@ -428,7 +430,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     zipped_expertwise_rowmap=permute_indices_per_token,
                     expert_routemap_topk=recv_topk_idx,
                     token_prob_unzipped=dst_weights,
-                    total_zipped_tokens=token_all_num,
+                    total_zipped_tokens=recv_x.shape[0],
                     num_experts=layer.num_local_experts,
                     # use_mix_precision =False,
                     using_weighted_combine=True,
@@ -448,7 +450,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             del ffn_out
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
-
+        dump_tensor(tmp_ffn_out)
         # 5. EP combine
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
