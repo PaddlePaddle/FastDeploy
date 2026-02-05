@@ -116,24 +116,15 @@ std::vector<paddle::Tensor> rebuild_padding(
   const int bsz = cu_seqlens_q.shape()[0] - 1;
 
   paddle::Tensor out;
+  int output_token_num;
   if (output_padding_offset) {
-    int need_delete_token_num = 0;
-    auto seq_lens_encoder_cpu =
-        seq_lens_encoder.copy_to(paddle::CPUPlace(), true);
-    for (int i = 0; i < bsz; ++i) {
-      if (seq_lens_encoder_cpu.data<int>()[i] > 0) {
-        need_delete_token_num += seq_lens_encoder_cpu.data<int>()[i] - 1;
-      }
-    }
-    out = paddle::full(
-        {token_num - need_delete_token_num, dim_embed}, 0, D, tmp_out.place());
-
-    PADDLE_ENFORCE(out.shape()[0] == output_padding_offset.get().shape()[0],
-                   "Unmatched shape");
-
+    output_token_num = output_padding_offset.get().shape()[0];
   } else {
-    out = paddle::full({bsz, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
+    output_token_num = bsz;
   }
+
+  out = paddle::full(
+      {output_token_num, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
 
   constexpr int PackSize = VEC_16B / sizeof(DataType_);
   int elem_nums = out.numel();

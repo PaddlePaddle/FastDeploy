@@ -49,6 +49,7 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.scheduler_metrics_logger import SchedulerMetricsLogger
 from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
@@ -145,6 +146,13 @@ class EngineService:
             split_connector=self.split_connector,
         )
         self.token_processor.set_resource_manager(self.resource_manager)
+
+        self.scheduler_metrics_logger = SchedulerMetricsLogger(
+            enabled=True,
+            dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+        )
+        self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
+        self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
 
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):

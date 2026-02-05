@@ -66,6 +66,7 @@ class TokenProcessor:
         self.cfg = cfg
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
+        self.scheduler_metrics_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -159,6 +160,16 @@ class TokenProcessor:
         """
         assert self.resource_manager is None, "The resource manager is not None, cannot set again."
         self.resource_manager = resource_manager
+
+    def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
+        self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def _is_decode_stage(self, task):
+        if task is None:
+            return False
+        if task.need_prefill_tokens is None:
+            return False
+        return task.num_computed_tokens >= task.need_prefill_tokens
 
     def run(self):
         """
@@ -789,6 +800,9 @@ class TokenProcessor:
                             llm_logger.info(f"sync preemption for request_id {task_id} done.")
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
+
+            if self.scheduler_metrics_logger and self._is_decode_stage(task):
+                self.scheduler_metrics_logger.on_decode_tokens(len(token_ids))
 
             if task.get("prefill_chunk_info", None) is not None:
                 prefill_chunk_num = task.get("prefill_chunk_num", 0)
