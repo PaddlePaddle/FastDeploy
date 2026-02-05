@@ -27,6 +27,7 @@ cudaError_t DispatchTopK(
     const int32_t* seq_len_decoder,
     const int32_t* batch_id_per_token,
     uint32_t top_k,
+    uint32_t q_num_heads,
     uint32_t max_len,
     flashinfer::sampling::RadixRowState* row_states_ptr,
     cudaStream_t stream) {
@@ -44,7 +45,8 @@ cudaError_t DispatchTopK(
          num_rows, 
          seq_len_decoder,
          batch_id_per_token,
-         static_cast<uint32_t>(top_k), 
+         static_cast<uint32_t>(top_k),
+         static_cast<uint32_t>(q_num_heads),
          max_len, 
          row_states_ptr, 
          stream);
@@ -59,7 +61,8 @@ void RadixTopkRaggedTransform(
     paddle::optional<paddle::Tensor>& seq_len_decoder,
     paddle::optional<paddle::Tensor>& batch_id_per_token,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int top_k) {
+    int top_k,
+    int q_num_heads = 0) {
 
 //   CHECK_INPUT(input);
 //   CHECK_INPUT(output_indices);
@@ -102,11 +105,11 @@ void RadixTopkRaggedTransform(
    if (input_dtype == paddle::DataType::BFLOAT16) {
       status = DispatchTopK<paddle::DataType::BFLOAT16>(
          input, output_indices, offsets, lengths,
-         num_rows,seq_len_ptr, batch_id_per_token_ptr, top_k, max_len, row_states_ptr, stream);
+         num_rows,seq_len_ptr, batch_id_per_token_ptr, top_k, q_num_heads, max_len, row_states_ptr, stream);
    } else if (input_dtype == paddle::DataType::FLOAT32) {
       status = DispatchTopK<paddle::DataType::FLOAT32>(
          input, output_indices, offsets, lengths,
-         num_rows, seq_len_ptr, batch_id_per_token_ptr, top_k, max_len, row_states_ptr, stream);
+         num_rows, seq_len_ptr, batch_id_per_token_ptr, top_k, q_num_heads, max_len, row_states_ptr, stream);
    }
 }
 
@@ -119,5 +122,6 @@ PD_BUILD_STATIC_OP(radix_topk_ragged_transform)
              paddle::Optional("seq_len_decoder"),
              paddle::Optional("batch_id_per_token"),
              paddle::Optional("maybe_row_states_buffer")})
-    .Attrs({"top_k : int"})
+    .Attrs({"top_k : int",
+            "q_num_heads : int"})
     .SetKernelFn(PD_KERNEL(RadixTopkRaggedTransform));

@@ -91,7 +91,12 @@ class TestAttentionPerformance(unittest.TestCase):
             self.attention_layer[i] = Ernie4_5_Attention(self.fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
             self.attention_layer[i].load_state_dict(state_dict)
+        
+            from ernie5_serving.models.indexer_v2 import TSAIndexerV2
+            self.tsa_indexer = TSAIndexerV2(self.fd_config, i, prefix="test_layer")
+            self.tsa_indexer.load_state_dict(state_dict)
 
+        # self.tsa_indexer = TSAIndexerV2(self.fd_config, layer_id, prefix=prefix)
         def attn_forward(forward_meta, hidden_states):
             for i in range(num_layers):
                 hidden_states = self.attention_layer[i](forward_meta, hidden_states)
@@ -124,10 +129,24 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_position_embeddings": 201 * 1024,
             "max_model_len": 201 * 1024,
             "head_dim": 128,
-            "hidden_size": 7168,
-            "num_attention_heads": 56,
+            "hidden_size": 1536,
+            "num_attention_heads": 32,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 2,
+            "num_hidden_layers": 1,
+            "use_tsa": True,
+            "use_qk_norm": True,
+            "use_rmsnorm": True,
+            "tsa_index_query_heads": 4,
+            "tsa_index_key_heads": 4,
+            "tsa_index_n_heads": 4,
+            "tsa_index_head_dim": 64,
+            "tsa_index_topk": 2048,
+            "tsa_index_gemm_dtype": "bfloat16",
+            "tsa_mrope_section": [
+                8,
+                1,
+                1
+            ]
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -158,8 +177,8 @@ class TestAttentionPerformance(unittest.TestCase):
             quant_config=MixQuantConfig(
                 dense_quant_type="block_wise_fp8",
                 moe_quant_type="block_wise_fp8",
-                kv_cache_quant_type="float8_e4m3fn",
-                # kv_cache_quant_type=None,
+                # kv_cache_quant_type="float8_e4m3fn",
+                kv_cache_quant_type=None,
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -191,11 +210,58 @@ class TestAttentionPerformance(unittest.TestCase):
         activation_scale_shape = [fd_config.model_config.num_key_value_heads]
         activation_scale_tensor = paddle.full(shape=activation_scale_shape, fill_value=1.0, dtype=tensor_dtype)
 
+        wq_down_input_dim = fd_config.model_config.hidden_size
+        wk_down_input_dim = fd_config.model_config.hidden_size
+        wq_down_output_dim = fd_config.model_config.tsa_index_query_heads * fd_config.model_config.tsa_index_head_dim
+        wk_down_output_dim = fd_config.model_config.tsa_index_key_heads * fd_config.model_config.tsa_index_head_dim
+
+        wq_down_weight_shape = [wq_down_input_dim, wq_down_output_dim]
+        wk_down_weight_shape = [wk_down_input_dim, wk_down_output_dim]
+        weight_proj_shape = [wq_down_input_dim, fd_config.model_config.tsa_index_query_heads]
+
+
+        wq_down_weight = paddle.randn(wq_down_weight_shape, dtype=tensor_dtype)
+        wq_down_bias = paddle.randn(wq_down_output_dim, dtype=tensor_dtype)
+        wk_down_weight = paddle.randn(wk_down_weight_shape, dtype=tensor_dtype)
+        wk_down_bias = paddle.randn(wk_down_output_dim, dtype=tensor_dtype)
+        weight_proj_weight = paddle.randn(weight_proj_shape, dtype=tensor_dtype)
+        weight_proj_bias = paddle.randn([fd_config.model_config.tsa_index_query_heads], dtype=tensor_dtype)
+
+
+        if fd_config.model_config.use_qk_norm:
+            q_norm_weight = paddle.randn([ fd_config.model_config.tsa_index_head_dim], dtype=tensor_dtype)
+            q_norm_bias = paddle.randn([fd_config.model_config.tsa_index_query_heads], dtype=tensor_dtype)
+            k_norm_weight = paddle.randn([fd_config.model_config.tsa_index_head_dim], dtype=tensor_dtype)
+            k_norm_bias = paddle.randn([fd_config.model_config.tsa_index_query_heads], dtype=tensor_dtype)
+            state_dict = {
+                f"{prefix}.qkv_proj.weight": qkv_weight,
+                f"{prefix}.o_proj.weight": o_proj_weight,
+                f"{prefix}.cachek_matmul.activation_scale": activation_scale_tensor,
+                f"{prefix}.cachev_matmul.activation_scale": activation_scale_tensor,
+                f"{prefix}.tsa_indexer.wq_down.weight": wq_down_weight,
+                f"{prefix}.tsa_indexer.wq_down.bias": wq_down_bias,
+                f"{prefix}.tsa_indexer.wk_down.weight": wk_down_weight,
+                f"{prefix}.tsa_indexer.wk_down.bias": wk_down_bias,
+                f"{prefix}.tsa_indexer.weight_proj.weight": weight_proj_weight,
+                f"{prefix}.tsa_indexer.weight_proj.bias": weight_proj_bias,
+                f"{prefix}.tsa_indexer.q_norm.weight": q_norm_weight,
+                f"{prefix}.tsa_indexer.q_norm.bias": q_norm_bias,
+                f"{prefix}.tsa_indexer.k_norm.weight": k_norm_weight,
+                f"{prefix}.tsa_indexer.k_norm.bias": k_norm_bias,
+            }
+            return state_dict
+
         state_dict = {
             f"{prefix}.qkv_proj.weight": qkv_weight,
             f"{prefix}.o_proj.weight": o_proj_weight,
             f"{prefix}.cachek_matmul.activation_scale": activation_scale_tensor,
             f"{prefix}.cachev_matmul.activation_scale": activation_scale_tensor,
+            f"{prefix}.tsa_indexer.wq_down.weight": wq_down_weight,
+            f"{prefix}.tsa_indexer.wq_down.bias": wq_down_bias,
+            f"{prefix}.tsa_indexer.wk_down.weight": wk_down_weight,
+            f"{prefix}.tsa_indexer.wk_down.bias": wk_down_bias,
+            f"{prefix}.tsa_indexer.weight_proj.weight": weight_proj_weight,
+            f"{prefix}.tsa_indexer.weight_proj.bias": weight_proj_bias,
         }
         return state_dict
 
@@ -251,7 +317,8 @@ class TestAttentionPerformance(unittest.TestCase):
         for _ in range(num_layers):
             key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
             value_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
-            caches.extend([key_cache, value_cache])
+            indexer_cache = paddle.randint(0,256,shape=cache_shape, dtype="int32").cast(cache_type)
+            caches.extend([key_cache, value_cache, indexer_cache])
             if cache_quant_type_str == "block_wise_fp8":
                 key_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
                 value_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
@@ -271,8 +338,51 @@ class TestAttentionPerformance(unittest.TestCase):
             partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
         )
 
+        # from ernie5_serving.worker.ernie5_model_runner import Ernie5ModelRunner
+        # eb5server = Ernie5ModelRunner(fd_config=None, device="cpu", device_id=0, rank=0, local_rank=0)
+       
+        from ernie5_serving.layers.rotary_embedding import MMRotaryEmbedding3D
+        
+        self.indexer_rotary_emb = MMRotaryEmbedding3D(
+            rotary_dim=fd_config.model_config.tsa_index_head_dim,
+            base=fd_config.model_config.rope_theta,
+            max_position=fd_config.model_config.max_model_len,
+            mrope_section=fd_config.model_config.tsa_mrope_section,
+        )
+
+
+        @paddle.no_grad()
+        def prepare_rope3d(position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+            """prepare_rope3d"""
+            prefix_max_position_ids = paddle.max(position_ids[..., 0]) + 1
+            dec_pos_ids = paddle.tile(
+                paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
+                [1, 1, 3],
+            )
+            dec_pos_ids = dec_pos_ids + prefix_max_position_ids
+            position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
+
+            # rope_emb = self.rotary_emb.get_rope_emb(position_ids_3d_real)
+            
+            indexer_rope_emb = self.indexer_rotary_emb.get_rope_emb(position_ids_3d_real)
+            return indexer_rope_emb, position_ids_3d_real
+
         input_ids = paddle.zeros([batch_size, max_model_len], dtype="int64")
         token_num = np.sum(seq_lens_this_time)
+        position_ids = np.tile(np.arange(len(input_ids), dtype=np.int64)[:, None], [1, 3]).tolist()
+        
+        indexer_rope_emb,_ = prepare_rope3d(
+            position_ids = paddle.to_tensor(position_ids, dtype="float32").unsqueeze([0]), max_len = max_model_len-1
+        )
+        # indexer_rope_emb = get_rope(
+        #     rotary_dim=fd_config.model_config.tsa_index_head_dim,
+        #     position_ids=tmp_position_ids,
+        #     base=fd_config.model_config.rope_theta,
+        #     model_config=fd_config.model_config,
+        #     partial_rotary_factor=fd_config.model_config.partial_rotary_factor,
+        # )
+
+
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, seq_lens_this_time, token_num
         )
@@ -295,6 +405,7 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_mask_offsets=None,
             **attn_backend_buffers,
         )
+        forward_meta.indexer_rotary_emb = indexer_rope_emb
 
         hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
         return forward_meta, hidden_states
@@ -353,6 +464,7 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.step()
 
         for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
+
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
                 seq_len=10 * 1024,
@@ -372,7 +484,20 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_cuda_graphs = graphs.CUDAGraph()
             attn_cuda_graphs.capture_begin()
 
-            self.attn_forward(forward_meta, hidden_states)
+            
+            # from paged_logits import indexer_mha_page_logits
+
+            # weight = paddle.randn(hidden_states.shape, dtype="bfloat16")
+            # weight = weight[:,:64].contiguous()
+
+            # from ernie5_serving.models.indexer_v2 import TSAIndexerV2
+            # self.tsa_indexer = TSAIndexerV2(self.fd_config, 0, prefix=prefix)
+
+            self.tsa_indexer(hidden_states, forward_meta=forward_meta)
+
+            # indexer_mha_page_logits(hidden_states, forward_meta.caches[0], weight, forward_meta.block_tables, forward_meta.cu_seqlens_q, forward_meta.seq_lens_decoder)
+
+            # self.attn_forward(forward_meta, hidden_states)
 
             attn_cuda_graphs.capture_end()
 

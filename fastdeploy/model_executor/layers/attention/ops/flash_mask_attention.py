@@ -52,9 +52,6 @@ def flash_mask_attention(
             num_heads,
             kv_num_heads,
             head_dim,
-            max_seq_len,
-            q_token_num,
-            kv_token_num,
         )
     else:
         raise NotImplementedError

@@ -566,6 +566,7 @@ std::vector<paddle::Tensor> IndexerEncoderRopeNormWriteCache(
       {token_num, num_heads, head_dim}, qkv.dtype(), qkv.place());
   paddle::Tensor k = GetEmptyTensor(
       {kv_token_num, kv_num_heads, head_dim}, qkv.dtype(), qkv.place());
+if(q_norm_weight && k_norm_weight){
 
   if(meta_data.head_dims ==128)
   {
@@ -658,19 +659,37 @@ std::vector<paddle::Tensor> IndexerEncoderRopeNormWriteCache(
     }
 
   }
+}else{
+PADDLE_THROW("q_norm_weight or k_norm_weight is null, pack_k mode");
+}
   // write cache
+  const bool pack_mode = true;
   if (cache_quant_type == "none") {
-    CascadeAppendWriteCacheKVQKV<data_t>(
-        meta_data,
-        qkv_out,
-        block_tables,
-        batch_id_per_token,
-        cu_seqlens_q,
-        seq_lens_encoder,
-        seq_lens_decoder,
-        max_seq_len,
-        stream,
-        const_cast<paddle::Tensor *>(&key_cache));
+    if (pack_mode){
+      CascadeAppendWriteCacheKVQKV<data_t>(
+          meta_data,
+          k,
+          block_tables,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          max_seq_len,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache));
+    }else{
+      CascadeAppendWriteCacheKVQKV<data_t>(
+          meta_data,
+          qkv_out,
+          block_tables,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens_encoder,
+          seq_lens_decoder,
+          max_seq_len,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache));
+    }
   } else {
     PD_THROW(
         "cache_quant_type_str should be one of [none, cache_int8, cache_fp8, "

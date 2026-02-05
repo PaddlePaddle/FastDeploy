@@ -339,7 +339,8 @@ void RadixTopkRaggedTransform(
     paddle::optional<paddle::Tensor>& seq_len_decoder,
     paddle::optional<paddle::Tensor>& batch_id_per_token,
     paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int top_k);
+    int top_k,
+    int q_num_heads = 0);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_encoder,
