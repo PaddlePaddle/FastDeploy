@@ -923,7 +923,7 @@ class SpeculativeSampler(nn.Layer):
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
             sampling_metadata.top_p,
-            share_inputs["batch_id_per_token_output"],
+            share_inputs["output_padding_offset"],
             self.speculative_max_candidate_len,
             max_model_len,
         )
