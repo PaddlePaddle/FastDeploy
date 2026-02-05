@@ -22,10 +22,12 @@ import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
+import numpy as np
 import paddle
 import paddle.distributed as dist
 import triton
 import triton.language as tl
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 
@@ -110,6 +112,8 @@ def save_routing_to_buffer(
 ):
     if tp_size > 1 and ep_size > 1:
         token_num_per_rank = topk_ids.shape[0]
+        if token_num_per_rank == 0:
+            return
         topk_ids_all = paddle.zeros([token_num_per_rank * tp_size, topk_ids.shape[1]], dtype=topk_ids.dtype)
         paddle.distributed.all_gather(topk_ids_all, topk_ids, tp_group)
         topk_ids = topk_ids_all[: batch_id_per_token.shape[0], :]
@@ -152,6 +156,8 @@ class RoutingReplayManager:
         self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
         self.max_model_len = fd_config.model_config.max_model_len
         self.num_moe_layers = fd_config.model_config.num_hidden_layers - fd_config.model_config.moe_layer_start_index
+        self.only_last_turn = fd_config.routing_replay_config.only_last_turn
+        self.use_fused_put = fd_config.routing_replay_config.use_fused_put
 
         if fd_config.model_config.architectures[0] == "Glm4MoeForCausalLM":
             self.moe_top_k = fd_config.model_config.num_experts_per_tok
@@ -161,11 +167,33 @@ class RoutingReplayManager:
 
         self.routing_store = get_routing_store(fd_config=fd_config)
         self.routing_batch_to_request: Dict[int, str] = {}
+
+        num_experts = fd_config.model_config.moe_num_experts + fd_config.model_config.moe_num_shared_experts
+        dtype = self.get_routing_dtype(num_experts=num_experts)
         self.routing_replay_table = paddle.full(
             shape=[self.max_num_seqs, self.num_moe_layers, self.max_model_len, self.moe_top_k],
             fill_value=-1,
-            dtype="int32",
+            dtype=dtype,
         )
+
+    def get_routing_dtype(self, num_experts: int, reserved_fill_value: int = 1) -> str:
+        """Calculate the minimum number of bits required for storage routing."""
+        if num_experts <= 0:
+            raise ValueError(f"num_experts must be greater than 0 but got {num_experts}, please check model config.")
+        dtype = "uint8"
+        total_number = num_experts + reserved_fill_value
+        if total_number <= 255:  # uint8: 0~255
+            dtype = "uint8"
+        elif total_number <= 65535:  # uint16: 0~65,535
+            dtype = "uint16"
+        elif total_number <= 4294967295:  # uint32: 0~4,294,967,295
+            dtype = "uint32"
+        else:
+            raise ValueError(
+                f"The number of experts {num_experts} exceeds the representation range of uint32, please check model config."
+            )
+        logger.info(f"[R3] Routing replay table dtype: {dtype}")
+        return dtype
 
     def register_request(self, batch_id: int, request_id: str):
         """
@@ -177,9 +205,10 @@ class RoutingReplayManager:
         # Save requests that have been finished for the current slot
         if batch_id in self.routing_batch_to_request:
             pre_request_id = self._deregister_request(batch_id)
-            self._put_request_to_store(batch_id, pre_request_id)
+            asyncio.run(self._put_request_to_store(batch_id, pre_request_id))
         # Register the new request
         self.routing_batch_to_request[batch_id] = request_id
+        logger.info(f"[R3] Register request {request_id} with batch id {batch_id}")
 
     def _deregister_request(self, batch_id: int) -> str:
         """
@@ -188,26 +217,40 @@ class RoutingReplayManager:
         assert batch_id in self.routing_batch_to_request
         return self.routing_batch_to_request.pop(batch_id)
 
-    def _put_request_to_store(
+    async def _put_request_to_store(
         self,
         batch_id: int,
         request_id: str,
     ):
+        before_put_request_time = time.perf_counter()
         if self.tp_rank == 0:
             batch_buffer = self.routing_replay_table[batch_id]
-            for layer_id in range(self.num_moe_layers):
-                layer_buffer = batch_buffer[layer_id]
-                rollout_id = self.split_request_id(request_id)
-                self.routing_store.put(routing_indices=layer_buffer, rollout_id=rollout_id, layer_idx=layer_id)
+            rollout_id = self.split_request_id(request_id)
 
+            tasks = []
+            if self.use_fused_put:
+                tasks.append(self.routing_store.fused_put(routing_indices=batch_buffer, rollout_id=rollout_id))
+            else:
+                for layer_id in range(self.num_moe_layers):
+                    layer_buffer = batch_buffer[layer_id]
+                    tasks.append(
+                        self.routing_store.put(routing_indices=layer_buffer, rollout_id=rollout_id, layer_idx=layer_id)
+                    )
+            if self.only_last_turn:
+                prefix_batch = self.get_needed_clear_ids(rollout_id)
+                if prefix_batch is not None:
+                    tasks.append(self.routing_store.clear_prefix_batch(roullout_id_prefixes=prefix_batch))
+            await asyncio.gather(*tasks)
+        logger.info(f"[R3] Async put {request_id} time cost: {time.perf_counter() - before_put_request_time}")
         self._clear_table_slot(batch_id)
 
     def put_table_to_store(self):
         """Put the routing table"""
+        logger.info("[R3] Put routing table to store.")
         batch_ids = copy.deepcopy(list(self.routing_batch_to_request.keys()))
         for batch_id in batch_ids:
             request_id = self._deregister_request(batch_id)
-            self._put_request_to_store(batch_id, request_id)
+            asyncio.run(self._put_request_to_store(batch_id, request_id))
 
     def _clear_table_slot(self, batch_id: int):
         assert 0 <= batch_id < self.max_num_seqs
@@ -241,13 +284,38 @@ class RoutingReplayManager:
         return self.routing_replay_table
 
     def split_request_id(self, request_id: str):
-        """Split the request id to get rollout id"""
+        """
+        Split the request id to get rollout id.
+
+        request_id: "chatcmpl-request.user-uuid"
+        rollout_id: "request.user"
+            example: "chatcmpl-xxx_xxx_epoch_15:2:2:1-d9f16c5c-65f6-4815-b44d-14e2c581907c_0" -> "xxx_xxx_epoch_15:2:2:1"
+        """
         chat_type, tmp_str = request_id.split("-", 1)
         # NOTE(gongshaotian): only support chatcmpl now
-        # assert chat_type == "chatcmpl"
+        assert (
+            chat_type == "chatcmpl"
+        ), "Rollout Routing Replay only supports chatcmpl. Please check whether the request type and userid settings are correct."
         reversed_tmp_str = tmp_str[::-1].split("-", 5)
         rollout_id = reversed_tmp_str[-1][::-1]
         return rollout_id
+
+    def get_needed_clear_ids(self, roullout_id: str) -> Optional[List[str]]:
+        """
+        Generate the prefix IDs for all closed multi-round tasks.
+        rollout_id: "xxx_xxx_epoch_15:2:2:1"
+            example: xxx_xxx_data_id:gen_id:turn_id:segment_id
+        """
+        reversed_segment_id, reversed_turn_id, reversed_prefix_gen_id = roullout_id[::-1].split(":", 2)
+        prefix_gen_id = reversed_prefix_gen_id[::-1]
+        turn_id = eval(reversed_turn_id[::-1])
+        segment_id = eval(reversed_segment_id[::-1])
+
+        assert turn_id >= 0 and segment_id >= 0
+        prefix_batch = None
+        if turn_id > 0:
+            prefix_batch = [f"{prefix_gen_id}:{(turn_id-1)}:{segment_id}"]
+        return prefix_batch
 
     def clear_request(self, batch_id: int):
         """Clear the routing indices of the request"""
@@ -262,8 +330,13 @@ class RoutingStoreBase(ABC):
         self.fd_config = fd_config
 
     @abstractmethod
-    def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: Optional[int] = None) -> None:
+    async def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: Optional[int] = None) -> None:
         """Put the routing indices into store"""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def fused_put(self, routing_indices: paddle.Tensor, rollout_id: str) -> None:
+        """Fused routing of all layers and put the fused routing into store"""
         raise NotImplementedError
 
     @abstractmethod
@@ -283,6 +356,11 @@ class RoutingStoreBase(ABC):
         """Clear the routing indices store"""
         raise NotImplementedError
 
+    @abstractmethod
+    async def clear_prefix_batch(self, roullout_id_prefixes: List[str]):
+        """Clear the routing indices"""
+        raise NotImplementedError
+
 
 class RoutingStoreLocal(RoutingStoreBase):
     """Routing Store using local memory"""
@@ -292,12 +370,27 @@ class RoutingStoreLocal(RoutingStoreBase):
         self.local_store_dir = fd_config.routing_replay_config.local_store_dir
         self.clear_store()
 
-    def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: int) -> None:
+    async def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: int) -> None:
         """Put the routing indices into store"""
+        routing_key = f"{rollout_id}_{layer_idx}"
+
+        # async put
+        time_before_put = time.perf_counter()
         dir_path = os.path.join(self.local_store_dir, f"{rollout_id}")
         os.makedirs(dir_path, exist_ok=True)
         file_path = os.path.join(dir_path, f"layer_{layer_idx}.pdtensor")
         paddle.save(routing_indices, file_path)
+        logger.info(f"[R3] The routing key {routing_key} put cost is {time.perf_counter()-time_before_put}s")
+
+    async def fused_put(self, routing_indices: paddle.Tensor, rollout_id: str) -> None:
+        """Fused routing of all layers and put the fused routing into store"""
+        routing_key = f"{rollout_id}"
+
+        # async put
+        time_before_put = time.perf_counter()
+        file_path = os.path.join(self.local_store_dir, f"{routing_key}.pdtensor")
+        paddle.save(routing_indices, file_path)
+        logger.info(f"[R3] The routing key {routing_key} put cost is {time.perf_counter()-time_before_put}s")
 
     def get(
         self,
@@ -330,9 +423,11 @@ class RoutingStoreLocal(RoutingStoreBase):
     def clear_store(self):
         """Clear the routing indices store"""
         if os.path.isdir(self.local_store_dir):
-            for file_name in os.listdir(self.local_store_dir):
-                file_path = os.path.join(self.local_store_dir, file_name)
-                shutil.rmtree(file_path)
+            shutil.rmtree(self.local_store_dir)
+
+    async def clear_prefix_batch(self, roullout_id_prefixes: List[str]):
+        # async delete
+        logger.info(f"[R3] clear_prefix_batch {roullout_id_prefixes}")
 
 
 class RoutingStoreRDMA(RoutingStoreBase):
@@ -351,16 +446,33 @@ class RoutingStoreRDMA(RoutingStoreBase):
         self.p2p_client = P2PClient(p2pConfig)
         self.clear_store()
 
-    def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: int) -> None:
+    async def put(self, routing_indices: paddle.Tensor, rollout_id: str, layer_idx: int) -> None:
         """Put the routing indices into store"""
         rdma_rollout_key = f"{rollout_id}_{layer_idx}"
 
         # async put
         time_before_put = time.perf_counter()
-        routing_indices_pin = routing_indices.pin_memory()
-        routing_indices_np = routing_indices_pin.numpy()
-        asyncio.run(self.p2p_client.put(rdma_rollout_key, routing_indices_np))
-        print(f"Success put with key {rdma_rollout_key}, time cost is {time.perf_counter()-time_before_put} s")
+        routing_indices_cpu = routing_indices.cpu()
+        routing_indices_np = np.array(routing_indices_cpu.numpy(), copy=True)
+        copy_time = time.perf_counter()
+        await self.p2p_client.put(rdma_rollout_key, routing_indices_np)
+        logger.info(
+            f"[R3] The routing key {rdma_rollout_key} copy cost is {copy_time-time_before_put}s, put cost is {time.perf_counter()-time_before_put}s"
+        )
+
+    async def fused_put(self, routing_indices: paddle.Tensor, rollout_id: str) -> None:
+        """Fused routing of all layers and put the fused routing into store"""
+        rdma_rollout_key = f"{rollout_id}"
+
+        # async put
+        time_before_put = time.perf_counter()
+        routing_indices_cpu = routing_indices.cpu()
+        routing_indices_np = routing_indices_cpu.numpy()
+        copy_time = time.perf_counter()
+        await self.p2p_client.put(rdma_rollout_key, routing_indices_np)
+        logger.info(
+            f"[R3] The routing key {rdma_rollout_key} copy cost is {copy_time-time_before_put}s, fused put cost is {time.perf_counter()-time_before_put}s"
+        )
 
     def get(
         self,
@@ -382,6 +494,11 @@ class RoutingStoreRDMA(RoutingStoreBase):
         rdma_rollout_key = f"{rollout_id}_{layer_idx}"
         # sync delete
         asyncio.run(self.p2p_client.delete(rdma_rollout_key))
+
+    async def clear_prefix_batch(self, roullout_id_prefixes: List[str]):
+        # async delete
+        await self.p2p_client.delete_prefix_batch(roullout_id_prefixes)
+        logger.info(f"[R3] clear_prefix_batch {roullout_id_prefixes}")
 
     def clear_store(self):
         """Clear the routing indices store"""

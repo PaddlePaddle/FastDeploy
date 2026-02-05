@@ -3,7 +3,7 @@ set -e
 
 # Test splitwise deployment
 # There are two methods for splitwise deployment:
-# v0: using splitwise_scheduler or dp_scheduler
+# v0: using splitwise_scheduler or dp_scheduler  (deprecated)
 # v1: using local_scheduler + router
 
 # prepare environment

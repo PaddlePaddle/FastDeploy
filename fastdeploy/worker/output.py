@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple, Optional
 
 import paddle
@@ -155,6 +155,11 @@ class SpeculateMetrics:
     average_accept_length: float
 
     """
+    The number of accepted tokens of each head in the current request
+    """
+    accepted_tokens_per_head: list[int]
+
+    """
     Average acceptance rate of each head in the current request
     """
     accept_ratio_per_head: list[float]
@@ -172,6 +177,7 @@ class SamplerOutput:
     logprobs_tensors: Optional[LogprobsTensors]
     token_num_per_batch: Optional[paddle.Tensor] = None
     cu_batch_token_offset: Optional[paddle.Tensor] = None
+    logits: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -256,11 +262,6 @@ class ModelOutputData:
     input_ids: paddle.Tensor
 
     """
-        stop nums for every sequence
-    """
-    stop_nums: paddle.Tensor
-
-    """
         for speculative decoding
         full hidden states before lm_head
     """
@@ -312,9 +313,29 @@ class ModelOutputData:
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
     """
+        index -> request_id
+    """
+    index_to_batch_id: dict[int, int] = field(default_factory=dict)
+
+    """
         the minimum tokens that will be generated
     """
     min_tokens: paddle.Tensor = None
+
+    """
+        enable_pd_reorder
+    """
+    enable_pd_reorder: bool = False
+
+    """
+        stop nums for every sequence
+    """
+    stop_nums: paddle.Tensor = None
+
+    """
+        Device version of not_need_stop flag for async operations
+    """
+    not_need_stop_device: paddle.Tensor = None
 
 
 @dataclass

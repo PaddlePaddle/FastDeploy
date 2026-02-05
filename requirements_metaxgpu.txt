@@ -8,9 +8,9 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn==0.29.0
+uvicorn>=0.38.0
 fastapi
-paddleformers==0.3.2
+paddleformers==0.4.1
 redis
 etcd3
 httpx
@@ -45,3 +45,4 @@ msgspec
 einops
 setproctitle
 aistudio_sdk
+py-cpuinfo

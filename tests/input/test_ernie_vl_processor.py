@@ -15,6 +15,7 @@
 """
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -341,8 +342,8 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
             processor = Ernie4_5_VLProcessor("model_path")
             processor.image_patch_id = 1001
+            processor.ernie4_5_processor = SimpleNamespace(mm_num_tokens=lambda **kwargs: 123)
             processor.pack_outputs = Ernie4_5_VLProcessor.pack_outputs.__get__(processor, Ernie4_5_VLProcessor)
-
             # Test with images
             outs_with_images = {
                 "input_ids": [1, 2, 3],
@@ -440,8 +441,6 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.mock_tokenizer.convert_tokens_to_ids.side_effect = self._mock_convert_tokens_to_ids
         self.mock_tokenizer.chat_template = "mock_template"
         self.mock_tokenizer.apply_chat_template.return_value = "User: Hello<|image@placeholder|>"
-        # Mock encode method for _add_text
-        self.mock_tokenizer.encode = MagicMock(return_value={"input_ids": [1, 2, 3]})
 
         def mock_load_tokenizer(dp_instance):
             dp_instance.tokenizer = self.mock_tokenizer
@@ -1003,8 +1002,8 @@ class TestDataProcessor(unittest.TestCase):
         """Test adding text and special tokens"""
         outputs = self._create_outputs()
         self.processor._add_text("hello", outputs)
-        self.assertEqual(len(outputs["input_ids"]), 3)
-        self.assertEqual(outputs["cur_position"], 3)
+        self.assertEqual(len(outputs["input_ids"]), 2)
+        self.assertEqual(outputs["cur_position"], 2)
 
         outputs2 = self._create_outputs()
         self.processor._add_text([1, 2, 3, 4, 5], outputs2)

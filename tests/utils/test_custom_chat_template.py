@@ -82,9 +82,9 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ):
             return prompt_token_ids
 
-        async def mock_format_and_add_data(current_req_dict):
-            current_req_dict["text_after_process"] = "你好"
-            return current_req_dict
+        async def mock_format_and_add_data(current_req_obj):
+            current_req_obj["prompt_tokens"] = "你好"
+            return current_req_obj
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data
@@ -92,6 +92,8 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=None)
         self.chat_completion_handler.engine_client.semaphore.status = MagicMock(return_value="mock_status")
         chat_completiom = await self.chat_completion_handler.create_chat_completion(request)
+        print("1" * 50)
+        print(chat_completiom)
         self.assertEqual(self.input_chat_template, chat_completiom["chat_template"])
 
     async def test_serving_chat_cus(self):
@@ -110,9 +112,9 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         ):
             return prompt_token_ids
 
-        async def mock_format_and_add_data(current_req_dict):
-            current_req_dict["text_after_process"] = "你好"
-            return current_req_dict
+        async def mock_format_and_add_data(current_req_obj):
+            current_req_obj["prompt_tokens"] = "你好"
+            return current_req_obj
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
         self.chat_completion_handler.engine_client.format_and_add_data = mock_format_and_add_data

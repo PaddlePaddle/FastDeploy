@@ -26,6 +26,7 @@ input_seq = None  # 1000
 max_out_tokens = 128
 server_max_bs = 128
 TP = 1
+EP = True
 
 # num_gpu_blocks_override = ceil((input_seq + max_out_tokens) / 128) * server_max_bs
 num_gpu_blocks_override = 2000
@@ -34,12 +35,14 @@ graph_optimization_config = {"use_cudagraph": False}
 llm = LLM(
     model=model_name_or_path,
     tensor_parallel_size=TP,
+    enable_expert_parallel=EP,
     engine_worker_queue_port=8602,
     num_gpu_blocks_override=num_gpu_blocks_override,
     block_size=128,
     max_model_len=32768,
     max_num_seqs=server_max_bs,
     graph_optimization_config=graph_optimization_config,
+    disable_sequence_parallel_moe=True,
 )
 
 if input_seq is None:

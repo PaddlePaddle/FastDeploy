@@ -24,7 +24,7 @@ if project_root not in sys.path:
 
 os.environ["FD_USE_MACHETE"] = "0"
 
-from tests.model_loader.utils import (
+from model_loader.utils import (
     calculate_diff_rate,
     form_model_get_output_topp0,
     get_torch_model_path,
@@ -140,7 +140,7 @@ def test_model_against_baseline(
 
     # Get baseline suffix from config
     model_config = hugging_face_model_param_map.get(model_name_or_path, {})
-    baseline_suffix = model_config.get("baseline_suffix", "tp2")
+    baseline_suffix = model_config.get("baseline_suffix", "tp2-dev")
     baseline_filename = f"{model_name_or_path}-{baseline_suffix}"
 
     if base_path:

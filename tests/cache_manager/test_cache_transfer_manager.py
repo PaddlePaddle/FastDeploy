@@ -29,6 +29,7 @@ class Args:
     mp_num = 1
     device_id = 0
     speculative_config = {}
+    model_id = "test_model"
     ipc_suffix = "test_ipc_suffix"
     cache_queue_port = 9999
     pod_ip = "127.0.0.1"
@@ -41,6 +42,9 @@ class Args:
     create_cache_tensor = False
     cache_dtype = "bfloat16"
     default_dtype = "bfloat16"
+    kvcache_storage_backend = None
+    write_policy = "write_through"
+    model_path = "test_model"
 
 
 # ==========================

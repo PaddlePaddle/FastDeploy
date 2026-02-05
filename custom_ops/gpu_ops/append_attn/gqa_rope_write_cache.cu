@@ -65,6 +65,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int token_idx =
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
+    if (ori_bi == -1) continue;
 
     int cache_kv_len = seq_lens_decoder[ori_bi];
     // 这里其实是不需要处理的，但是由于FA3的bug，所以必须！
@@ -1377,23 +1378,25 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
 
   if (use_neox_rotary_style) {
     if (rotary_dim == head_dim) {
-      gqa_rotary_qk_split_variable_qwen3<data_t>(qkv_out.data<data_t>(),
-                                                 q.data<data_t>(),
-                                                 k.data<data_t>(),
-                                                 v.data<data_t>(),
-                                                 qkv.data<data_t>(),
-                                                 rotary_embs.data<float>(),
-                                                 batch_id_per_token.data<int>(),
-                                                 seq_lens_encoder.data<int>(),
-                                                 seq_lens_decoder.data<int>(),
-                                                 cu_seqlens_q.data<int>(),
-                                                 cu_seqlens_k.data<int>(),
-                                                 token_num,
-                                                 num_heads,
-                                                 kv_num_heads,
-                                                 max_seq_len,
-                                                 head_dim,
-                                                 stream);
+      gqa_rotary_qk_split_variable_qwen3<data_t>(
+          qkv_out.data<data_t>(),
+          q.data<data_t>(),
+          k.data<data_t>(),
+          v.data<data_t>(),
+          qkv.data<data_t>(),
+          rotary_embs.data<float>(),
+          batch_id_per_token.data<int>(),
+          seq_lens_encoder.data<int>(),
+          seq_lens_decoder.data<int>(),
+          cu_seqlens_q.data<int>(),
+          cu_seqlens_k.data<int>(),
+          token_num,
+          num_heads,
+          kv_num_heads,
+          rope_3d ? rotary_embs.dims()[3] : rotary_embs.dims()[2],
+          head_dim,
+          rope_3d,
+          stream);
     } else {
       gqa_neox_partial_rotary_qk_split_variable<data_t>(
           qkv_out.data<data_t>(),

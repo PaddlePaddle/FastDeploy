@@ -1,0 +1,10 @@
+tensor_parallel_size: 8
+max_num_seqs: 32
+gpu_memory_utilization: 0.8
+load_choices: default_v1
+enable_prefix_caching: True
+graph_optimization_config: '{"use_cudagraph":true}'
+max_model_len: 66560
+enable_logprob: True
+enable_custom_all_reduce: False
+worker: 2

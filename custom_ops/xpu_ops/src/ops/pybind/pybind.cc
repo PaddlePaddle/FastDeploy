@@ -75,6 +75,14 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -83,6 +91,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
     const bool use_neox_rotary_style,
@@ -185,6 +195,14 @@ std::vector<paddle::Tensor> MoeTopkSelect(
     const int moe_topk,
     const bool apply_norm_weight);
 
+std::vector<paddle::Tensor> FusedNoAuxTc(const paddle::Tensor& gating_logits,
+                                         const paddle::Tensor& bias,
+                                         const int n_group,
+                                         const int topk_group,
+                                         const int top_k,
+                                         const bool apply_norm_weight,
+                                         const float routed_scaling_factor);
+
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& draft_tokens,
                       const paddle::Tensor& pre_ids,
@@ -248,7 +266,8 @@ std::vector<paddle::Tensor> TopPCandidates(
     int candidates_len,
     int max_seq_len);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
@@ -294,6 +313,8 @@ void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& is_block_step,
                           const paddle::Tensor& batch_drop,
                           const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& mask_rollback,
+                          const paddle::Tensor& recompute_token_num,
                           const paddle::Tensor& accept_tokens,
                           const paddle::Tensor& accept_num,
                           const paddle::Tensor& base_model_seq_lens_this_time,
@@ -363,6 +384,15 @@ void GetOutputDynamic(const paddle::Tensor& x,
                       int64_t rank_id,
                       bool wait_flag,
                       int msg_queue_id);
+
+void GetOutputEPStatic(const paddle::Tensor& x,
+                       int64_t rank_id,
+                       bool wait_flag);
+
+void GetOutputEPDynamic(const paddle::Tensor& x,
+                        int64_t rank_id,
+                        bool wait_flag,
+                        int msg_queue_id);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& cum_offsets,
@@ -484,11 +514,13 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
 
 void SaveOutMmsgStatic(const paddle::Tensor& x,
                        const paddle::Tensor& not_need_stop,
+                       const paddle::Tensor& preempted_idx,
                        int64_t rank_id,
                        bool save_each_rank);
 
 void SaveOutMmsgDynamic(const paddle::Tensor& x,
                         const paddle::Tensor& not_need_stop,
+                        const paddle::Tensor& preempted_idx,
                         int64_t rank_id,
                         int msg_queue_id,
                         bool save_each_rank);
@@ -618,6 +650,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("decoder_context_len_cache_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("prefix_len_cpu"),
+        py::arg("encoder_seq_lod_xpu"),
+        py::arg("decoder_seq_lod_xpu"),
+        py::arg("encoder_kv_lod_xpu"),
+        py::arg("encoder_batch_map_xpu"),
+        py::arg("decoder_context_len_xpu"),
+        py::arg("decoder_context_len_cache_xpu"),
+        py::arg("decoder_batch_map_xpu"),
+        py::arg("prefix_len_xpu"),
         py::arg("k_scales"),
         py::arg("v_scales"),
         py::arg("k_scales_inv"),
@@ -626,6 +666,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("v_zeros"),
         py::arg("shift"),
         py::arg("smooth"),
+        py::arg("q_norm_weight"),
+        py::arg("k_norm_weight"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
         py::arg("use_neox_rotary_style"),
@@ -671,6 +713,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("batch_drop"),
         py::arg("pre_ids"),
+        py::arg("mask_rollback"),
+        py::arg("recompute_token_num"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("base_model_seq_lens_this_time"),
@@ -833,13 +877,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output function");
 
-  m.def("get_output_ep",
-        &GetOutputStatic,
-        py::arg("x"),
-        py::arg("rank_id"),
-        py::arg("wait_flag"),
-        "get_output_ep function");
-
   m.def("get_output_dynamic",
         &GetOutputDynamic,
         py::arg("x"),
@@ -848,8 +885,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("msg_queue_id"),
         "get_output_dynamic function");
 
+  m.def("get_output_ep",
+        &GetOutputEPStatic,
+        py::arg("x"),
+        py::arg("rank_id"),
+        py::arg("wait_flag"),
+        "get_output_ep function");
+
   m.def("get_output_ep_dynamic",
-        &GetOutputDynamic,
+        &GetOutputEPDynamic,
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -858,6 +902,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_output_kv_signal",
         &GetOutputKVSignal,
+        py::call_guard<py::gil_scoped_release>(),
         py::arg("x"),
         py::arg("rank_id"),
         py::arg("wait_flag"),
@@ -937,6 +982,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("moe_topk"),
         py::arg("apply_norm_weight"));
 
+  m.def("fused_noaux_tc",
+        &FusedNoAuxTc,
+        "noaux_tc for Deepseekv3 MoE compute with sigmoid and bias",
+        py::arg("gating_logits"),
+        py::arg("bias"),
+        py::arg("n_group"),
+        py::arg("topk_group"),
+        py::arg("top_k"),
+        py::arg("apply_norm_weight"),
+        py::arg("routed_scaling_factor"));
+
   m.def("prof_start", &prof_start, "prof_start");
 
   m.def("prof_stop", &prof_stop, "prof_stop");
@@ -957,6 +1013,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgStatic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("save_each_rank"),
         "Save output function");
@@ -965,6 +1022,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SaveOutMmsgDynamic,
         py::arg("x"),
         py::arg("not_need_stop"),
+        py::arg("preempted_idx"),
         py::arg("rank_id"),
         py::arg("msg_queue_id"),
         py::arg("save_each_rank"),
@@ -1013,6 +1071,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("speculate_verify",
         &SpeculateVerify,
+        py::arg("sampled_token_ids"),
         py::arg("accept_tokens"),
         py::arg("accept_num"),
         py::arg("step_idx"),

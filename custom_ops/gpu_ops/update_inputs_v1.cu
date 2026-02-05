@@ -24,7 +24,6 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
                                         int64_t* topk_ids,
                                         int64_t* input_ids,
                                         int* block_tables,
-                                        const int64_t* stop_nums,
                                         bool* stop_flags,
                                         bool* is_block_step,
                                         const int64_t* next_tokens,
@@ -50,6 +49,11 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
   }
   if (thread_idx < bsz) {
     if (stop_flag_now) {
+      // chuned when max_tokens=1
+      if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] <
+          prompt_lens[thread_idx]) {
+        topk_ids[thread_idx] = -1;
+      }
       seq_lens_this_time[thread_idx] = 0;  // stop at next step
       seq_lens_decoder[thread_idx] = 0;
       seq_lens_encoder[thread_idx] = 0;
@@ -98,12 +102,12 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
   __syncthreads();
   int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_now_int);
   if (thread_idx == 0) {
-    not_need_stop[0] = stop_sum < stop_nums[0];
+    not_need_stop[0] = stop_sum < max_bsz;
   }
 }
 
 void UpdateInputsV1(const paddle::Tensor& stop_flags,
-                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& not_need_stop,  // on gpu
                     const paddle::Tensor& seq_lens_this_time,
                     const paddle::Tensor& seq_lens_encoder,
                     const paddle::Tensor& seq_lens_decoder,
@@ -112,7 +116,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& topk_ids,
                     const paddle::Tensor& input_ids,
                     const paddle::Tensor& block_tables,
-                    const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size) {
@@ -134,9 +137,8 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
   const int now_bsz = seq_lens_this_time.shape()[0];
   const int input_ids_stride = input_ids.shape()[1];
   const int block_num_per_seq = block_tables.shape()[1];
-  auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
   update_inputs_kernel_v1<1024><<<1, 1024, 0, cu_stream>>>(
-      const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+      const_cast<bool*>(not_need_stop.data<bool>()),
       const_cast<int*>(seq_lens_this_time.data<int>()),
       const_cast<int*>(seq_lens_encoder.data<int>()),
       const_cast<int*>(seq_lens_decoder.data<int>()),
@@ -145,7 +147,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       const_cast<int64_t*>(topk_ids.data<int64_t>()),
       const_cast<int64_t*>(input_ids.data<int64_t>()),
       const_cast<int*>(block_tables.data<int>()),
-      stop_nums.data<int64_t>(),
       const_cast<bool*>(stop_flags.data<bool>()),
       const_cast<bool*>(is_block_step.data<bool>()),
       next_tokens.data<int64_t>(),
@@ -155,10 +156,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       block_num_per_seq,
       block_size,
       prefill_one_step_stop);
-  auto not_need_stop_cpu =
-      not_need_stop_gpu.copy_to(not_need_stop.place(), false);
-  bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
-  not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(update_inputs_v1)
@@ -172,7 +169,6 @@ PD_BUILD_STATIC_OP(update_inputs_v1)
              "topk_ids",
              "input_ids",
              "block_tables",
-             "stop_nums",
              "next_tokens",
              "is_block_step"})
     .Attrs({"block_size: int"})
