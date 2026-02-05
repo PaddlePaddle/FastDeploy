@@ -904,8 +904,8 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["batch_id_per_token_output"],
-            share_inputs["cu_seqlens_q_output"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
             max_model_len,
         )
 
@@ -1188,8 +1188,8 @@ class MTPSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["batch_id_per_token_output"],
-            share_inputs["cu_seqlens_q_output"],
+            share_inputs["output_padding_offset"],
+            share_inputs["output_cum_offsets"],
             max_model_len,
         )
         probs = F.softmax(logits)
