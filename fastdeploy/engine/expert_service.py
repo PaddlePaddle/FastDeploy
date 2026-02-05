@@ -221,3 +221,8 @@ def start_data_parallel_service(
         t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")
+    finally:
+        try:
+            expert_service._exit_sub_services()
+        except Exception:
+            pass
