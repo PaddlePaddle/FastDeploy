@@ -1050,6 +1050,37 @@ def parse_quantization(value: str):
         return {"quantization": value}
 
 
+# Print configuration dicts to console in a single JSON payload.
+def print_config_dict(title: str, config: dict, mask_keys=None) -> None:
+    if mask_keys is None:
+        mask_keys = set()
+    else:
+        mask_keys = set(mask_keys)
+
+    data = {}
+    for key, value in config.items():
+        if key in mask_keys:
+            data[key] = "******"
+        else:
+            data[key] = value
+
+    payload = {"title": title, "config": data}
+    print(payload)
+
+
+# Console-only logger that does not write to files.
+def get_console_only_logger(name: str):
+    logger = logging.getLogger(f"fd.console.{name}")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter("%(levelname)-8s %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    return logger
+
+
 # 日志使用全局访问点（兼容原有使用方式）
 def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
     """全局函数包装器，保持向后兼容"""

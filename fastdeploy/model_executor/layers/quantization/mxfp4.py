@@ -30,14 +30,14 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_console_only_logger
 
 from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
-logger = get_logger("config", "config.log")
+logger = get_console_only_logger("mxfp4")
 
 
 class Mxfp4Backend(Enum):
