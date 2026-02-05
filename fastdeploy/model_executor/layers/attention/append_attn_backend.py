@@ -280,6 +280,10 @@ class AppendAttentionBackend(AttentionBackend):
 
         sliding_window = layer.sliding_window
 
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
         if self.rope_3d:
             assert len(forward_meta.rotary_embs.shape) == 6
         else:
@@ -402,8 +406,8 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
@@ -458,8 +462,8 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
