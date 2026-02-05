@@ -560,7 +560,7 @@ class EngineClient:
 
             skip_action = False
             return_code = None
-            return_body = None
+            return_body = {}
 
             # model_weights_status_signal: CLEARED -> UPDATING -> NORMAL
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
@@ -579,15 +579,15 @@ class EngineClient:
             if not skip_action:
                 self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
                 api_server_logger.info(
-                    f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                    f"[RL] >>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
                     if not self.enable_cache_transfer
-                    else f">>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                    else f"[RL] >>> start updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
                 )
                 while timeout >= 0:
                     api_server_logger.info(
-                        f"... weight status: {self.model_weights_status_signal.value[0]}"
+                        f"[RL] ... weight status: {self.model_weights_status_signal.value[0]}"
                         if not self.enable_cache_transfer
-                        else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                        else f"[RL] ... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
                     )
                     weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
                     cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
@@ -600,20 +600,26 @@ class EngineClient:
                     return_body = {**self.data_parallel_info, "msg": "update model weight timeout"}
                 else:
                     api_server_logger.info(
-                        f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                        f"[RL] <<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]})"
                         if not self.enable_cache_transfer
-                        else f"<<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                        else f"[RL] <<< finish updating model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
                     )
+            else:
+                api_server_logger.info(
+                    f"[RL] !!! skip updating model weight for the following reason: {return_body.get('msg')}"
+                )
 
-            if self.enable_prefix_caching:
+            if timeout >= 0 and self.enable_prefix_caching:
                 # prefix_tree_status_signal: CLEARED -> UPDATING -> NORMAL
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
                     api_server_logger.info(
-                        f">>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        f"[RL] >>> start updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
                     while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
+                        api_server_logger.info(
+                            f"[RL] ... prefix tree status: {self.prefix_tree_status_signal.value[0]}"
+                        )
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
@@ -621,10 +627,12 @@ class EngineClient:
                         return_body = {**self.data_parallel_info, "msg": "update prefix tree timeout"}
                     else:
                         api_server_logger.info(
-                            f"<<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                            f"[RL] <<< finish updating prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                         )
 
             if return_code:
+                if return_code == 404:
+                    api_server_logger.error("[RL] ??? updating model weight time out")
                 return return_code, return_body
             else:
                 return 200, {**self.data_parallel_info, "msg": "update model weight successfully"}
@@ -640,7 +648,7 @@ class EngineClient:
 
             skip_action = False
             return_code = None
-            return_body = None
+            return_body = {}
 
             # model_weights_status_signal: NORMAL -> CLEARING -> CLEARED
             if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
@@ -659,15 +667,15 @@ class EngineClient:
             if not skip_action:
                 self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
                 api_server_logger.info(
-                    f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
+                    f"[RL] >>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]}"
                     if not self.enable_cache_transfer
-                    else f">>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                    else f"[RL] >>> start clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
                 )
                 while timeout >= 0:
                     api_server_logger.info(
-                        f"... weight status: {self.model_weights_status_signal.value[0]}"
+                        f"[RL] ... weight status: {self.model_weights_status_signal.value[0]}"
                         if not self.enable_cache_transfer
-                        else f"... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
+                        else f"[RL] ... weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]}"
                     )
                     weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
                     cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
@@ -680,20 +688,26 @@ class EngineClient:
                     return_body = {**self.data_parallel_info, "msg": "clear model weight timeout"}
                 else:
                     api_server_logger.info(
-                        f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]})"
+                        f"[RL] <<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]})"
                         if not self.enable_cache_transfer
-                        else f"<<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
+                        else f"[RL] <<< finish clearing model weight (weight status: {self.model_weights_status_signal.value[0]} cache status: {self.kv_cache_status_signal.value[0]})"
                     )
+            else:
+                api_server_logger.info(
+                    f"[RL] !!! skip clearing model weight for the following reason: {return_body.get('msg')}"
+                )
 
-            if self.enable_prefix_caching:
+            if timeout >= 0 and self.enable_prefix_caching:
                 # prefix_tree_status_signal: NORMAL -> CLEARING -> CLEARED
                 if self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL:
                     self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
                     api_server_logger.info(
-                        f">>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                        f"[RL] >>> start clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                     )
                     while timeout >= 0 and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.CLEARED:
-                        api_server_logger.info(f"... prefix tree status: {self.prefix_tree_status_signal.value[0]}")
+                        api_server_logger.info(
+                            f"[RL] ... prefix tree status: {self.prefix_tree_status_signal.value[0]}"
+                        )
                         time.sleep(1)
                         timeout -= 1
                     if timeout < 0:
@@ -701,9 +715,11 @@ class EngineClient:
                         return_body = {**self.data_parallel_info, "msg": "clear prefix tree timeout"}
                     else:
                         api_server_logger.info(
-                            f"<<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
+                            f"[RL] <<< finish clearing prefix tree (status: {self.prefix_tree_status_signal.value[0]})"
                         )
             if return_code:
+                if return_code == 404:
+                    api_server_logger.error("[RL] ??? clearing model weight time out")
                 return return_code, return_body
             else:
                 return 200, {**self.data_parallel_info, "msg": "clear model weight successfully"}
