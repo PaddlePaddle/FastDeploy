@@ -581,6 +581,216 @@ class DataProcessorTestCase(unittest.TestCase):
 
         self.assertEqual(processor.update_bad_words(["combo", "oversize"], []), [])
 
+    def test_process_request_dict_chat_template_kwargs_sets_attributes(self):
+        # Test for lines 244-245: setting attributes from chat_template_kwargs when not already set
+        processor = self.processor
+        request = {
+            "request_id": "test",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "custom system", "enable_thinking": True},
+        }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = {"system": "custom system", "enable_thinking": True}
+
+        processed = processor.process_request_dict(request, max_model_len=100)
+
+        self.assertEqual(processed.system, "custom system")
+        self.assertTrue(processed.enable_thinking)
+
+    def test_process_request_dict_chat_template_kwargs_preserves_existing_attributes(self):
+        # Test for lines 244-245: not setting attributes when they already have values
+        processor = self.processor
+        request = {
+            "request_id": "test",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "custom system"},
+        }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = {"system": "custom system"}
+        request.system = "existing system"  # Pre-set attribute
+
+        processed = processor.process_request_dict(request, max_model_len=100)
+
+        # Existing system should be preserved
+        self.assertEqual(processed.system, "existing system")
+
+    def test_process_request_dict_chat_template_kwargs_multiple_attributes(self):
+        # Test for lines 244-245: setting multiple attributes from chat_template_kwargs
+        processor = self.processor
+        request = {
+            "request_id": "test",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "sys", "enable_thinking": False},
+        }
+        request = Request.from_dict(request)
+        request.chat_template_kwargs = {"system": "sys", "enable_thinking": False}
+
+        processed = processor.process_request_dict(request, max_model_len=100)
+
+        self.assertEqual(processed.system, "sys")
+        self.assertFalse(processed.enable_thinking)
+
+    def test_process_response_streaming_with_reasoning_delta_message(self):
+        # Test for lines 475-480: reasoning_delta_message handling
+        processor = self.processor
+        processor.model_status_dict = {"test": "think_start"}
+
+        class DummyReasoningParser:
+            def extract_reasoning_content_streaming(self, *args, **kwargs):
+                return SimpleNamespace(
+                    reasoning_content="thinking process",
+                    content="actual response",
+                )
+
+        processor.reasoning_parser = DummyReasoningParser()
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5, 6]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        # Lines 476-480 set reasoning_content and reasoning_token_num
+        self.assertEqual(result.outputs.reasoning_content, "thinking process")
+        self.assertEqual(result.outputs.reasoning_token_num, len(processor.tokenizer.tokenize("thinking process")))
+        # Line 480 sets text to reasoning_delta_message.content, but line 505 overwrites it with delta_text
+        # So the final text is the delta_text "56", not the reasoning content
+        self.assertEqual(result.outputs.text, "56")
+
+    def test_process_response_streaming_with_empty_reasoning_content(self):
+        # Test for lines 475-480: empty reasoning_content handling
+        processor = self.processor
+        processor.model_status_dict = {"test": "think_start"}
+
+        class DummyReasoningParser:
+            def extract_reasoning_content_streaming(self, *args, **kwargs):
+                return SimpleNamespace(reasoning_content="", content="response")
+
+        processor.reasoning_parser = DummyReasoningParser()
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        self.assertEqual(result.outputs.reasoning_content, "")
+        self.assertEqual(result.outputs.reasoning_token_num, 0)
+        # Text is set to delta_text at line 505
+        self.assertEqual(result.outputs.text, "5")
+
+    def test_process_response_streaming_without_reasoning_delta_message(self):
+        # Test for lines 482-483: setting skipped when no reasoning_delta_message and not ended
+        processor = self.processor
+        processor.model_status_dict = {"test": "normal"}
+
+        class DummyReasoningParser:
+            def extract_reasoning_content_streaming(self, *args, **kwargs):
+                return None
+
+        processor.reasoning_parser = DummyReasoningParser()
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        self.assertTrue(result.outputs.skipped)
+
+    def test_process_response_streaming_with_tool_call_delta_message(self):
+        # Test for lines 497-500: tool_call_delta_message handling
+        processor = self.processor
+
+        class DummyToolParser:
+            def __init__(self, tokenizer):
+                self.tokenizer = tokenizer
+
+            def extract_tool_calls_streaming(self, *args, **kwargs):
+                return SimpleNamespace(
+                    tool_calls=["tool1", "tool2"],
+                    content="tool content",
+                )
+
+        processor.tool_parser_obj = DummyToolParser
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        self.assertEqual(result.outputs.tool_calls, ["tool1", "tool2"])
+        # Lines 499-501 set text to tool_call_delta_message.content
+        # But line 505 overwrites it with delta_text
+        self.assertEqual(result.outputs.text, "5")
+        self.assertFalse(result.outputs.skipped)
+
+    def test_process_response_streaming_with_tool_call_delta_message_no_calls(self):
+        # Test for lines 497-500: tool_call_delta_message with empty tool_calls
+        processor = self.processor
+
+        class DummyToolParser:
+            def __init__(self, tokenizer):
+                self.tokenizer = tokenizer
+
+            def extract_tool_calls_streaming(self, *args, **kwargs):
+                return SimpleNamespace(tool_calls=[], content="no tools")
+
+        processor.tool_parser_obj = DummyToolParser
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        # When tool_calls is empty list [], the condition `if tool_call_delta_message.tool_calls:` is False
+        # So tool_calls is not set, it remains None
+        self.assertIsNone(result.outputs.tool_calls)
+        # skipped remains False because we never set it to True or False in this code path
+        # and the default value is False
+        self.assertFalse(result.outputs.skipped)
+
+    def test_process_response_streaming_without_tool_call_delta_message(self):
+        # Test for lines 503-504: setting skipped when no tool_call_delta_message and not ended
+        processor = self.processor
+
+        class DummyToolParser:
+            def __init__(self, tokenizer):
+                self.tokenizer = tokenizer
+
+            def extract_tool_calls_streaming(self, *args, **kwargs):
+                return None
+
+        processor.tool_parser_obj = DummyToolParser
+
+        response = {
+            "request_id": "test",
+            "outputs": {"token_ids": [5]},
+            "finished": False,
+        }
+        response = RequestOutput.from_dict(response)
+
+        result = processor.process_response_dict_streaming(response)
+
+        self.assertTrue(result.outputs.skipped)
+
 
 if __name__ == "__main__":
     unittest.main()
