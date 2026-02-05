@@ -65,10 +65,10 @@ bash build.sh
 
 **快速上手**
 
-启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式，日志信息输出在`log_router/router.log`。
+启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式，日志信息输出在`log_router/router.log`。`fd-router`的安装方法参考[Router说明文档](../online_serving/router.md)。
 ```
 export FD_LOG_DIR="log_router"
-python -m fastdeploy.router.launch \
+/usr/local/bin/fd-router \
     --host 0.0.0.0 \
     --port 30000 \
     --splitwise

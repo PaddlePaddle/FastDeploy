@@ -323,9 +323,19 @@ class ModelOutputData:
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
     """
+        index -> request_id
+    """
+    index_to_batch_id: dict[int, int] = field(default_factory=dict)
+
+    """
         the minimum tokens that will be generated
     """
     min_tokens: paddle.Tensor = None
+
+    """
+        enable_pd_reorder
+    """
+    enable_pd_reorder: bool = False
 
     """
         stop nums for every sequence

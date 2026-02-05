@@ -942,9 +942,14 @@ __global__ void permute_x_fp8_kernel(
           }
 
         } else {
-          for (int s = tid; s < hidden_size_scale; s += blockDim.x) {
-            permute_scale[s * permute_scale_stride0 + dst_token_idx] =
-                scale[s * padded_num_rows + s_token_idx];
+          for (int v_id = tid; v_id < hidden_size_scale_int4;
+               v_id += blockDim.x) {
+            *(reinterpret_cast<int4*>(permute_scale +
+                                      dst_token_idx * hidden_size_scale) +
+              v_id) =
+                *(reinterpret_cast<const int4*>(scale + s_token_idx *
+                                                            hidden_size_scale) +
+                  v_id);
           }
         }
       }
@@ -1106,7 +1111,6 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
             m_indices};
   } else {
     permute_scale = GetEmptyTensor({token_nums_feed_to_ffn, hidden_size / 128},
-                                   {1, permute_scale_stride0},
                                    paddle::DataType::FLOAT32,
                                    place);
     EPMoeDispatchFP8Kernel<float>(input,

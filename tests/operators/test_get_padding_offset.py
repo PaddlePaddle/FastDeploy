@@ -32,7 +32,7 @@ class TestGetPaddingOffset(unittest.TestCase):
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(paddle.to_tensor(input_ids), paddle.to_tensor(seq_lens), token_num_cpu)
+        ) = get_padding_offset(paddle.to_tensor(input_ids), paddle.to_tensor(seq_lens), None, None, token_num_cpu)
 
         ref_x_remove_padding = np.array([8, 7, 8, 2, 4, 5, 5, 7, 6, 1, 7, 2, 6], "int64")
         ref_batch_id_per_token = np.array([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2], "int32")
