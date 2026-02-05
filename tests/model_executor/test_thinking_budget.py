@@ -15,10 +15,10 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.engine import common_engine as common_engine_module
+from fastdeploy.engine import engine as engine_module
 from fastdeploy.engine.args_utils import EngineArgs  # Import EngineArgs
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.engine import engine as engine_module
-from fastdeploy.engine import common_engine as common_engine_module
 from fastdeploy.input.text_processor import DataProcessor as TextDataProcessor
 from fastdeploy.input.v1.text_processor import DataProcessor as V1TextDataProcessor
 from fastdeploy.model_executor.logits_processor import ThinkingBudgetLogitsProcessor
