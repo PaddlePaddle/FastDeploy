@@ -302,9 +302,10 @@ def _flatten_sampled_tokens(
     sampled = sampled_tokens.cpu().numpy()
     if decode_mode == DecodeMode.DRAFT:
         return sampled
-    return np.concatenate(
-        [sampled[i, : accept_token_nums[i]] for i in range(len(accept_token_nums)) if accept_token_nums[i] > 0]
-    )
+    sampled = [sampled[i, : accept_token_nums[i]] for i in range(len(accept_token_nums)) if accept_token_nums[i] > 0]
+    if not sampled:
+        return np.empty(0, dtype="int64")
+    return np.concatenate(sampled)
 
 
 def async_generate_output(

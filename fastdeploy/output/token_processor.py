@@ -176,15 +176,16 @@ class TokenProcessor:
         self.worker.daemon = True
         self.worker.start()
 
-    def _process_model_runner_output(self, model_output: ModelRunnerOutput):
+    def process_model_runner_output(self, model_output: ModelRunnerOutput):
         """
         process output sample by sample
         """
         batch_result = []
+        batch_result = []
         batch_draft_result = []
 
         decode_mode = model_output.decode_mode
-        sampled_token_ids = model_output.sampled_token_ids
+        sampled_token_ids = model_output.sampled_token_ids.tolist()
         batch_offsets = model_output.cu_num_generated_tokens.tolist()
         prompt_logprobs_list: LogprobsLists = None
         logprobs_list: LogprobsLists = None
@@ -200,6 +201,8 @@ class TokenProcessor:
             end_idx = batch_offsets[i + 1]
 
             token_ids = sampled_token_ids[start_idx:end_idx]
+            if not token_ids:
+                continue
 
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
@@ -400,7 +403,7 @@ class TokenProcessor:
                         llm_logger.warning("model_runner_output is None")
                         continue
 
-                    batch_result, batch_draft_result = self._process_model_runner_output(model_runner_output)
+                    batch_result, batch_draft_result = self.process_model_runner_output(model_runner_output)
 
                     llm_logger.debug(
                         "process result | batch_result=%s | batch_draft_result=%s",
