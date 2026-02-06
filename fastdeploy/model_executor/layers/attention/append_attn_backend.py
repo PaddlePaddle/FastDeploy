@@ -96,7 +96,7 @@ def allocate_launch_related_buffer(
     # adapted to cudagraph.
     res["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
     res["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-    res["max_len_tensor_cpu"] = paddle.full([7], 0, dtype="int32").cpu()
+    res["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
 
     res["encoder_batch_ids"] = paddle.full([encode_max_tile_size], 0, dtype="int32")
     res["encoder_tile_ids_per_batch"] = paddle.full([encode_max_tile_size], 0, dtype="int32")
