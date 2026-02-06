@@ -18,6 +18,8 @@ Environment variables used by FastDeploy.
 import os
 from typing import Any, Callable
 
+from fastdeploy.platforms import current_platform
+
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
     "FD_CPU_USE_BF16": lambda: os.getenv("FD_CPU_USE_BF16", "False"),
@@ -49,7 +51,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
     # and "MLA_ATTN" can be set currently.
-    "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "FLASH_ATTN"),
+    "FD_ATTENTION_BACKEND": lambda: (
+        os.getenv("FD_ATTENTION_BACKEND", "FLASH_ATTN")
+        if current_platform.is_cuda()
+        else os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN")
+    ),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass" and "flashinfer-trtllm" can be set currently.
