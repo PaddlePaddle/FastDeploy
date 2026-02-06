@@ -37,9 +37,9 @@ class MasterCheckMixin:
     
     This mixin provides a common implementation of the _check_master method
     that verifies if the current node is the master node. It requires the
-    including class to have `engine_client` and `is_master_ip` attributes.
+    inheriting class to have `engine_client` and `is_master_ip` attributes.
     
-    Attributes required in the including class:
+    Attributes required in the inheriting class:
         engine_client: Engine client with is_master attribute
         is_master_ip: Boolean indicating if current IP is the master IP
     """

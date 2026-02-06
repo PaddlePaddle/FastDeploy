@@ -43,8 +43,11 @@ def check_mm_limits(
             - "eq": Check if type equals "image" exactly
 
     Raises:
-        ValueError: If input exceeds configured limits
+        ValueError: If input exceeds configured limits or if type_check_mode is invalid
     """
+    if type_check_mode not in ("in", "eq"):
+        raise ValueError(f"Invalid type_check_mode: {type_check_mode}. Must be 'in' or 'eq'")
+    
     if isinstance(item, dict):
         # Request contains prompt and multi_modal_data
         mm_data = item
