@@ -37,25 +37,18 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
   int max_len_this_thread = 0;
   int max_just_dec_len_this_thread = 0;
   int max_len_kv_this_thread = 0;
-  int max_len_kv_per_encoder = 0;
   for (int i = tid; i < batch_size; i += blockDim.x) {
     const int seq_len_this_time = seq_lens_this_time[i];
     const int seq_len_decoder = seq_lens_decoder[i];
-    const int seq_len_encoder = seq_lens_encoder[i];
     max_len_this_time_this_thread =
         max(seq_len_this_time, max_len_this_time_this_thread);
     max_len_encoder_this_thread =
-        max(seq_len_encoder, max_len_encoder_this_thread);
+        max(seq_lens_encoder[i], max_len_encoder_this_thread);
     max_len_decoder_this_thread =
         max(seq_len_decoder, max_len_decoder_this_thread);
-
-    if (seq_len_encoder > 0) {
-      // 这个场景是chunked prefill
-      max_len_kv_per_encoder = max(seq_len_decoder, max_len_kv_per_encoder);
-    }
-
     if (seq_len_this_time <= 0) continue;
-    const int max_just_dec_len_now = seq_len_encoder > 0 ? 0 : seq_len_decoder;
+    const int max_just_dec_len_now =
+        seq_lens_encoder[i] > 0 ? 0 : seq_len_decoder;
     max_len_this_thread =
         max(seq_len_decoder + seq_len_this_time, max_len_this_thread);
     max_just_dec_len_this_thread =
@@ -80,8 +73,6 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
                            .Reduce(max_just_dec_len_this_thread, MaxOp<int>());
   int total_max_len_kv =
       BlockReduce(temp_storage).Reduce(max_len_kv_this_thread, MaxOp<int>());
-  int total_max_len_kv_per_encoder =
-      BlockReduce(temp_storage).Reduce(max_len_kv_per_encoder, MaxOp<int>());
   if (tid == 0) {
     max_lens[0] = total_max_len_this_time;
     max_lens[1] = total_max_len_encoder;
@@ -89,7 +80,6 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
     max_lens[3] = total;
     max_lens[4] = total_just_dec;
     max_lens[5] = total_max_len_kv;
-    max_lens[6] = total_max_len_kv_per_encoder;
   }
 }
 
