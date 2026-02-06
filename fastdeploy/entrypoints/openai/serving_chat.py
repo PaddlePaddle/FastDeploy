@@ -44,6 +44,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
+from fastdeploy.entrypoints.openai.utils import MasterCheckMixin
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
@@ -66,7 +67,7 @@ from fastdeploy.worker.output import (
 NONES = itertools.repeat(None)
 
 
-class OpenAIServingChat:
+class OpenAIServingChat(MasterCheckMixin):
     """
     OpenAI-style chat completions serving
     """
@@ -99,9 +100,6 @@ class OpenAIServingChat:
             self.master_ip = "0.0.0.0"
             self.is_master_ip = True
         api_server_logger.info(f"master ip: {self.master_ip}")
-
-    def _check_master(self):
-        return self.engine_client.is_master or self.is_master_ip
 
     async def create_chat_completion(self, request: ChatCompletionRequest):
         """

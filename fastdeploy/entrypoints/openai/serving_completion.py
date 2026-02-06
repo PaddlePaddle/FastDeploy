@@ -41,6 +41,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     PromptTokenUsageInfo,
     UsageInfo,
 )
+from fastdeploy.entrypoints.openai.utils import MasterCheckMixin
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -61,7 +62,7 @@ from fastdeploy.worker.output import (
 NONES = itertools.repeat(None)
 
 
-class OpenAIServingCompletion:
+class OpenAIServingCompletion(MasterCheckMixin):
     def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.models = models
@@ -78,9 +79,6 @@ class OpenAIServingCompletion:
             self.is_master_ip = True
         self._is_process_response_dict_async = None
         api_server_logger.info(f"master ip: {self.master_ip}")
-
-    def _check_master(self):
-        return self.engine_client.is_master or self.is_master_ip
 
     async def create_completion(self, request: CompletionRequest):
         """

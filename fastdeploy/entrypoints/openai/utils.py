@@ -30,6 +30,30 @@ from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
 
+
+class MasterCheckMixin:
+    """
+    Mixin class providing master node checking functionality for serving classes.
+    
+    This mixin provides a common implementation of the _check_master method
+    that verifies if the current node is the master node. It requires the
+    including class to have `engine_client` and `is_master_ip` attributes.
+    
+    Attributes required in the including class:
+        engine_client: Engine client with is_master attribute
+        is_master_ip: Boolean indicating if current IP is the master IP
+    """
+
+    def _check_master(self) -> bool:
+        """
+        Check if current node is the master node.
+        
+        Returns:
+            bool: True if current node is master, False otherwise
+        """
+        return self.engine_client.is_master or self.is_master_ip
+
+
 UVICORN_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
