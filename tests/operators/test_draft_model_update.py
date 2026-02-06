@@ -64,7 +64,7 @@ def draft_model_update_kernel(
         draft_token_now = draft_tokens[tid]
         pre_ids_now = pre_ids[tid]
         base_model_draft_tokens_now = base_model_draft_tokens[tid]
-        next_tokens_start_id = tid * max_seq_len - output_cum_offsets[tid]
+        next_tokens_start_id = output_cum_offsets[tid]
         # next_tokens_start =
         seq_len_this_time = seq_lens_this_time[tid]
         seq_len_encoder = seq_lens_encoder[tid]
