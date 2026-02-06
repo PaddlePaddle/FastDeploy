@@ -24,7 +24,7 @@
 #include <cub/block/block_adjacent_difference.cuh>
 #include <cub/block/block_reduce.cuh>
 #include <cub/block/block_scan.cuh>
-#include <cuda/std/limits>
+#include <limits>
 #include <numeric>
 
 #include "sample_kernels/utils.cuh"
