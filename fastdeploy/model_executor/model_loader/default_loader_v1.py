@@ -51,45 +51,30 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @save_model()
     @measure_time()
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
-            import paddle
-            import numpy as np
-            
-            weights_iterator = get_weight_iterator(fd_config.model_config.model)
-            
-            # --- 1. 适配器逻辑 (修复版：去掉倒数计算) ---
-            def weight_adapter(iterator):
-                print("[FastDeploy] 🛠️ Enabling Weight Adapter (Renaming Only, NO Reciprocal)...")
-                for name, tensor in iterator:
-                    yield name, tensor
-                    # 1. 修复权重名
-                    if name.endswith(".quant_weight"):
-                        new_name = name.replace(".quant_weight", ".weight")
-                        yield new_name, tensor
-                    # 2. 修复缩放因子名 (❌ 不要计算倒数了，直接传原值)
-                    elif name.endswith(".weight_scale"):
-                        inv_name = name.replace(".weight_scale", ".weight_scale_inv")
-                        # print(f"   [Map] {name} -> {inv_name} (Copy)") 
-                        # 直接 yield 原始 tensor，不做 paddle.reciprocal
-                        yield inv_name, tensor
-            adapted_iterator = weight_adapter(weights_iterator)
-            if enable_cache:
-                load_weights_from_cache(model, adapted_iterator)
-            else:
-                model.load_weights(adapted_iterator)
-            process_final_after_loading(model, fd_config)
+        weights_iterator = get_weight_iterator(fd_config.model_config.model)
 
-            self.clean_memory_fragments()
-    # def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
-    #     weights_iterator = get_weight_iterator(fd_config.model_config.model)
-    #     if enable_cache:
-    #         load_weights_from_cache(model, weights_iterator)
-    #     else:
-    #         model.load_weights(weights_iterator)
+        def weight_adapter(iterator):
+            for name, tensor in iterator:
+                yield name, tensor
+                # Fix quantized weight name: replace .quant_weight with .weight
+                if name.endswith(".quant_weight"):
+                    new_name = name.replace(".quant_weight", ".weight")
+                    yield new_name, tensor
+                elif name.endswith(".weight_scale"):
+                    inv_name = name.replace(".weight_scale", ".weight_scale_inv")
+                    yield inv_name, tensor
 
-    #     process_final_after_loading(model, fd_config)
+        # Apply weight adaptation to get processed weight iterator
+        adapted_iterator = weight_adapter(weights_iterator)
+        # Choose different weight loading methods based on cache enablement
+        if enable_cache:
+            load_weights_from_cache(model, adapted_iterator)
+        else:
+            model.load_weights(adapted_iterator)
+        # Execute post-processing after weight loading
+        process_final_after_loading(model, fd_config)
 
-    #     self.clean_memory_fragments()
-
+        self.clean_memory_fragments()
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
