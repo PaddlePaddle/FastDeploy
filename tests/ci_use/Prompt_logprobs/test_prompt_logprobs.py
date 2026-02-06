@@ -55,16 +55,13 @@ def setup_and_run_server():
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
-    # env["CUDA_VISIBLE_DEVICES"] = "0,1"
-    env["TEMPLATE"] = "TOKEN_LOGPROB"
-    env["FD_USE_GET_SAVE_OUTPUT_V2"] = "1"
+    env["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        # model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
-        model_path = "/root/paddlejob/workspace/env_run/xujing43/0.3B"
+        model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
 
     log_path = "server.log"
     cmd = [
@@ -380,8 +377,12 @@ def test_unstream_with_prompt_logprobs_chunk():
     """
     测试chunk切分的能力是否正常
     """
-    data = {"stream": False, "prompt": [10] * (32 * 1024), "max_tokens": 1, "return_token_ids": True}
-
+    data = {
+        "stream": False,
+        "prompt": [10] * (32 * 1024),
+        "max_tokens": 1,
+        "prompt_logprobs": 1,
+    }
     response = send_request(COMPLETIONS_URL, data)
     resp_json = response.json()
 
@@ -389,7 +390,16 @@ def test_unstream_with_prompt_logprobs_chunk():
     assert resp_json["choices"][0]["text"] is not None
     # assert resp_json["usage"]["prompt_tokens"] == 7
     assert resp_json["usage"]["completion_tokens"] == 1
-    assert resp_json["choices"][0]["prompt_logprobs"] is None
+    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
+        if i == 0:
+            assert prompt_logprobs is None
+        else:
+            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
+            assert top[0]["rank"] == 1
+            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
+            for i in range(len(top)):
+                assert top[i]["logprob"] < 0
+                assert top[i]["decoded_token"].encode("utf-8")
 
 
 def test_unstream_with_prompt_logprobs_none_completions():
