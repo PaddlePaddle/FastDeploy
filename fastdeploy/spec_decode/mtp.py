@@ -751,8 +751,8 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
             # Note(ZKK):
-            # I hope the xpu student delete the fuck `output_cum_offsets` name in XPU backend
-            # like my pr
+            # I strongly advise xpu student delete the fuck `output_cum_offsets` name in XPU backend
+            # like my pr https://github.com/PaddlePaddle/FastDeploy/pull/6358
             (
                 self.model_inputs["cu_seqlens_q_output"]
                 if current_platform.is_cuda()
