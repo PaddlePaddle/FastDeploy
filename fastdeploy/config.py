@@ -1530,6 +1530,9 @@ class RoutingReplayConfig:
         # Only save last turn
         self.only_last_turn: bool = False
 
+        # Fused routing of all layers
+        self.use_fused_put: bool = False
+
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key) and value != "None":
@@ -1732,9 +1735,6 @@ class FDConfig:
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.cache_config.enable_prefix_caching = False
-        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
-            # TODO(gongshaotian): R3 support prefix caching
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None

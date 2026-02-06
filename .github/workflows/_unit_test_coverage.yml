@@ -203,7 +203,9 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+          # Avoid using pip cache to ensure the wheel is updated to the latest version
+          wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+          python -m pip install paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt

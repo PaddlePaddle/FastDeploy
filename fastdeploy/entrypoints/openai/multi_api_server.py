@@ -52,6 +52,7 @@ def start_servers(server_count, server_args, ports, metrics_ports, controller_po
 
         env = os.environ.copy()
         env["FD_LOG_DIR"] = env.get("FD_LOG_DIR", "log") + f"/log_{i}"
+        env["FD_ENABLE_MULTI_API_SERVER"] = "1"
         cmd = [
             sys.executable,
             "-m",

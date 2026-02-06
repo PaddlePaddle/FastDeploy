@@ -220,8 +220,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Rollout routing replay config
         self.routing_replay_manager = None
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager = RoutingReplayManager(fd_config=self.fd_config)
 
         self.zmq_client = None
         self.async_output_queue = None
@@ -589,10 +587,6 @@ class GPUModelRunner(ModelRunnerBase):
         req_dict: A list of Request dict
         num_running_requests: batch_size
         """
-        # NOTE(luotingdan): Lazy initialize kv cache
-        if "caches" not in self.share_inputs:
-            self.initialize_kv_cache()
-
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
@@ -695,8 +689,8 @@ class GPUModelRunner(ModelRunnerBase):
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
-                    if prefill_start_index == 0:
-                        self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
+                    # 1.prefix task(need regist) 2. chunkend task(not need regist)
+                    self.routing_replay_manager.register_request(batch_id=idx, request_id=request.request_id)
 
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
@@ -712,6 +706,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
                     has_decode_task = True
+
                 continue
             else:  # preempted task
                 logger.info(f"Handle preempted request {request} at idx {idx}")
@@ -1184,6 +1179,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.seq_lens_routing_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
@@ -1360,6 +1356,140 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+    def reset_share_inputs(self) -> None:
+        """
+        Reset all paddle tensors in self.share_inputs to their initial state.
+        This method clears the content of the shared input buffers while preserving
+        their shapes and data types.
+        """
+        if not hasattr(self, "share_inputs") or not self.share_inputs:
+            logger.warning("share_inputs is not initialized, skipping reset")
+            return
+
+        try:
+            logger.info("Resetting share_inputs to initial state...")
+            from fastdeploy.utils import fill_paddle_tensor
+
+            # Reset all paddle tensors to their initial fill values
+            max_num_seqs = self.scheduler_config.max_num_seqs
+
+            # Reset basic tensors to their default values
+            fill_paddle_tensor(self.share_inputs, "pre_ids", -1)
+            fill_paddle_tensor(self.share_inputs, "input_ids", self.model_config.pad_token_id)
+            fill_paddle_tensor(self.share_inputs, "prompt_ids", self.model_config.pad_token_id)
+            fill_paddle_tensor(self.share_inputs, "eos_token_id", 0)
+            fill_paddle_tensor(self.share_inputs, "top_p", self.model_config.top_p)
+            fill_paddle_tensor(self.share_inputs, "top_k", 0)
+            self.share_inputs["top_k_list"] = [0] * max_num_seqs
+            fill_paddle_tensor(self.share_inputs, "min_p", 0.0)
+            self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
+            fill_paddle_tensor(self.share_inputs, "temperature", self.model_config.temperature)
+            fill_paddle_tensor(self.share_inputs, "penalty_score", self.model_config.penalty_score)
+            fill_paddle_tensor(self.share_inputs, "frequency_score", self.model_config.frequency_score)
+            fill_paddle_tensor(self.share_inputs, "presence_score", self.model_config.presence_score)
+            fill_paddle_tensor(self.share_inputs, "temp_scaled_logprobs", False)
+            fill_paddle_tensor(self.share_inputs, "top_p_normalized_logprobs", False)
+            fill_paddle_tensor(self.share_inputs, "min_dec_len", self.model_config.min_length)
+            fill_paddle_tensor(self.share_inputs, "max_dec_len", self.model_config.max_model_len)
+
+            # Reset sequence length related buffers
+            fill_paddle_tensor(self.share_inputs, "seq_lens_this_time", 0)
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                fill_paddle_tensor(self.share_inputs, "seq_lens_this_time", 0)
+            fill_paddle_tensor(self.share_inputs, "seq_lens_encoder", 0)
+            fill_paddle_tensor(self.share_inputs, "seq_lens_decoder", 0)
+            fill_paddle_tensor(self.share_inputs, "step_seq_lens_encoder", 0)
+            fill_paddle_tensor(self.share_inputs, "step_seq_lens_decoder", 0)
+            fill_paddle_tensor(self.share_inputs, "prompt_lens", 0)
+            fill_paddle_tensor(self.share_inputs, "step_idx", 0)
+            fill_paddle_tensor(self.share_inputs, "not_need_stop", False)
+            fill_paddle_tensor(self.share_inputs, "not_need_stop_device", False)
+            fill_paddle_tensor(self.share_inputs, "sampled_token_ids", -1)
+            fill_paddle_tensor(self.share_inputs, "stop_flags", True)
+
+            fill_paddle_tensor(self.share_inputs, "bad_tokens", -1)
+            fill_paddle_tensor(self.share_inputs, "bad_tokens_len", 1)
+            fill_paddle_tensor(self.share_inputs, "next_tokens", -1)
+            fill_paddle_tensor(self.share_inputs, "is_block_step", False)
+            fill_paddle_tensor(self.share_inputs, "is_chunk_step", False)
+            fill_paddle_tensor(self.share_inputs, "encoder_block_lens", 0)
+            fill_paddle_tensor(self.share_inputs, "step_block_list", -1)
+            fill_paddle_tensor(self.share_inputs, "step_lens", 0)
+            fill_paddle_tensor(self.share_inputs, "recover_block_list", -1)
+            fill_paddle_tensor(self.share_inputs, "recover_lens", 0)
+            fill_paddle_tensor(self.share_inputs, "need_block_list", -1)
+            fill_paddle_tensor(self.share_inputs, "need_block_len", 0)
+            fill_paddle_tensor(self.share_inputs, "used_list_len", 0)
+            fill_paddle_tensor(self.share_inputs, "infer_seed", 0)
+            fill_paddle_tensor(self.share_inputs, "first_token_ids", -1)
+            fill_paddle_tensor(self.share_inputs, "system_lens", 0)
+            fill_paddle_tensor(self.share_inputs, "system_ids", -1)
+
+            fill_paddle_tensor(self.share_inputs, "ids_remove_padding", 0)
+            fill_paddle_tensor(self.share_inputs, "batch_id_per_token", 0)
+            fill_paddle_tensor(self.share_inputs, "cu_seqlens_q", 0)
+            fill_paddle_tensor(self.share_inputs, "cu_seqlens_k", 0)
+
+            # Reset thinking related buffers
+            fill_paddle_tensor(self.share_inputs, "enable_thinking", True)
+            fill_paddle_tensor(self.share_inputs, "max_think_lens", -1)
+            fill_paddle_tensor(self.share_inputs, "limit_think_status", 0)
+
+            # Reset reasoning buffers
+            fill_paddle_tensor(self.share_inputs, "reasoning_status", 0)
+
+            # Reset block tables
+            fill_paddle_tensor(self.share_inputs, "block_tables", -1)
+
+            # Reset free list
+            fill_paddle_tensor(self.share_inputs, "free_list_len", self.free_list_len)
+
+            # Reset stop sequences
+            fill_paddle_tensor(self.share_inputs, "stop_seqs_len", 0)
+            fill_paddle_tensor(self.share_inputs, "stop_seqs", -1)
+
+            # Reset lists
+            self.share_inputs["req_ids"] = [""] * max_num_seqs
+            self.share_inputs["entropy_list"] = [[] for _ in range(max_num_seqs)]
+
+            # Reset speculative decoding tensors if enabled
+            if self.speculative_decoding:
+                fill_paddle_tensor(self.share_inputs, "input_ids_cpu", 1)
+                fill_paddle_tensor(self.share_inputs, "accept_tokens", 0)
+                fill_paddle_tensor(self.share_inputs, "accept_num", 0)
+                fill_paddle_tensor(self.share_inputs, "draft_tokens", 0)
+                fill_paddle_tensor(
+                    self.share_inputs, "actual_draft_token_num", self.speculative_config.num_speculative_tokens
+                )
+                fill_paddle_tensor(self.share_inputs, "output_cum_offsets", 0)
+                fill_paddle_tensor(self.share_inputs, "output_padding_offset", 0)
+                fill_paddle_tensor(self.share_inputs, "step_draft_tokens", 0)
+                fill_paddle_tensor(self.share_inputs, "step_seq_lens_this_time", 0)
+                fill_paddle_tensor(self.share_inputs, "draft_logits", -1)
+                fill_paddle_tensor(self.share_inputs, "cu_batch_token_offset", 0)
+
+            # Reset multimodal related tensors
+            if self.enable_mm:
+                fill_paddle_tensor(self.share_inputs, "rope_emb", 0)
+                self.share_inputs["image_features"] = None
+
+            # Reset logits processors args
+            self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
+
+            # Reset other miscellaneous tensors
+            fill_paddle_tensor(self.share_inputs, "mask_rollback", 0)
+            fill_paddle_tensor(self.share_inputs, "preempted_idx", 0)
+
+            # Reset existing prefill flag
+            self.exist_prefill_flag = False
+
+            if self.fd_config.speculative_config.method == "mtp":
+                self.proposer.reset_model_inputs()
+
+            logger.info("share_inputs reset completed")
+        except Exception as e:
+            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+
     def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1472,18 +1602,21 @@ class GPUModelRunner(ModelRunnerBase):
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
 
-        # 1.1 Load RL dynamic model
-        if self.fd_config.load_config.dynamic_load_weight:
-            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
-
-            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
-
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
 
         # 4. Init proposer for speculative method
         self._init_speculative_proposer()
+
+        # Load RL dynamic model
+        if self.fd_config.load_config.dynamic_load_weight:
+            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
+
+            if self.fd_config.speculative_config.method == "mtp":
+                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, [self.model, self.proposer.model])
+            else:
+                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model)
 
     def get_model(self) -> nn.Layer:
         """Get current model"""
@@ -1539,7 +1672,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
             if self.speculative_decoding:
-                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                self.proposer.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1600,10 +1733,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
-
-        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
-        # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
 
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
@@ -2020,9 +2149,6 @@ class GPUModelRunner(ModelRunnerBase):
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.clear_routing_table()
-
     def _update_chunked_prefill(self, tasks):
         """
         Update chunked prefill related parameters
@@ -2243,6 +2369,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         self._prepare_inputs()
         self.sampler.pre_process(p_done_idxs)
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.positions = self.routing_replay_manager.get_token_positions(
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.seq_lens_this_time_buffer,
+            )
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
@@ -2497,14 +2628,19 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Routing replay
         if self.fd_config.routing_replay_config.enable_routing_replay:
-            if (
-                not self.exist_prefill()
-                and not self.exist_decode()
-                and self.share_inputs["is_block_step"].sum() == 0
-                and self.share_inputs["is_chunk_step"].sum() == 0
-            ):
-                self.routing_replay_manager.put_table_to_store()
-            return None
+            # Update host cache
+            slot_mapping = self.routing_replay_manager.compute_slot_mapping(positions=self.positions)
+            self.routing_replay_manager.update_host_cache(positions=self.positions, slot_mapping=slot_mapping)
+
+            # Put routing of finished requests to store
+            finished_batch_ids = paddle.isin(sampler_output.sampled_token_ids, self.share_inputs["eos_token_id"])[:, 0]
+            self.routing_replay_manager.put_finished_batch(
+                finished_batch_ids=finished_batch_ids,
+                seq_lens_decoder=self.seq_lens_routing_buffer,
+            )
+            paddle.assign(self.share_inputs["seq_lens_decoder"], self.seq_lens_routing_buffer)
+
+        return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
@@ -2707,8 +2843,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.prompt_logprobs_reqs.clear()
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.routing_replay_manager.put_table_to_store()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2716,6 +2850,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # reset share inputs
+        self.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
@@ -2992,3 +3129,12 @@ class GPUModelRunner(ModelRunnerBase):
             del self.prompt_logprobs_reqs[req.request_id]
             del self.in_progress_prompt_logprobs[req.request_id]
         return prompt_logprobs_list
+
+    def initialize_routing_replay_manager(self):
+        """Initialize the routing replay manager after initialize the KVCache"""
+        # Use updated block number
+        self.routing_replay_manager = RoutingReplayManager(
+            fd_config=self.fd_config,
+            block_table=self.share_inputs["block_tables"],
+            total_block_num=self.num_gpu_blocks,
+        )

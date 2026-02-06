@@ -454,7 +454,8 @@ class DataProcessor:
 
     def _add_text(self, tokens, outputs: Dict) -> None:
         if isinstance(tokens, str):
-            tokens = self.tokenizer.encode(tokens, add_special_tokens=False)["input_ids"]
+            tokens = self.tokenizer.tokenize(tokens)
+            tokens = self.tokenizer.convert_tokens_to_ids(tokens)
         outputs["input_ids"].extend(tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * len(tokens))
 

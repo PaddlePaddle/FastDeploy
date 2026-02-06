@@ -18,8 +18,10 @@ import copy
 from typing import Dict
 
 import paddle
+import paddle.distributed as dist
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_moe import (
@@ -33,6 +35,10 @@ from fastdeploy.model_executor.models.ernie4_5_vl.ernie4_5_vl_moe import (
 from fastdeploy.model_executor.models.glm4_moe import (
     Glm4MoeForCausalLM,
     Glm4MoePretrainedModel,
+)
+from fastdeploy.model_executor.models.glm4_mtp import (
+    Glm4MTPForCausalLM,
+    Glm4MTPPretrainedModel,
 )
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 from fastdeploy.model_executor.models.qwen2 import (
@@ -574,11 +580,51 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             fd_config (FDConfig): Configurations for the LLM model.
         """
         super(Glm4MoeForCausalLMRL, self).__init__(fd_config)
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.speculative_method = fd_config.speculative_config.method
+
+        if self.speculative_decoding and self.speculative_method == "mtp":
+            fd_config.parallel_config.tp_group = None
+            fd_config.parallel_config.ep_group = None
+            self.mtp_fd_config = copy.deepcopy(fd_config)
+            fd_config.parallel_config.tp_group = dist.get_group(
+                fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+            )
+            fd_config.parallel_config.ep_group = dist.get_group(
+                fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
+            )
+            self.fd_config.parallel_config.tp_group = dist.get_group(
+                fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+            )
+            self.fd_config.parallel_config.ep_group = dist.get_group(
+                fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
+            )
+            self.update_mtp_config(self.mtp_fd_config)
+            self.mtp_layers = Glm4MTPForCausalLMRL(self.mtp_fd_config)
 
     @classmethod
     def name(self) -> str:
         """name"""
         return "Glm4MoeForCausalLMRL"
+
+    def update_mtp_config(self, mtp_fd_config):
+        mtp_fd_config.model_config.architectures[0] = mtp_fd_config.model_config.architectures[0].replace("Moe", "MTP")
+        mtp_fd_config.speculative_config.sharing_model = None
+        mtp_fd_config.model_config.num_hidden_layers = 1
+        mtp_fd_config.model_config.model = mtp_fd_config.speculative_config.model
+        if mtp_fd_config.speculative_config.quantization != "":
+            mtp_fd_config.model_config.quantization = mtp_fd_config.speculative_config.quantization
+        mtp_fd_config.model_config.start_layer_index = mtp_fd_config.model_config.num_hidden_layers
+        mtp_fd_config.speculative_config.model_type = "mtp"
+
+    def state_dict(self):
+        """state_dict"""
+        main_state_dict = super().state_dict()
+        state_dict = {k: v for k, v in main_state_dict.items() if not k.startswith("mtp_layers")}
+        if self.speculative_decoding and self.speculative_method == "mtp":
+            mtp_state_dict = self.mtp_layers.state_dict()
+            state_dict.update(mtp_state_dict)
+        return state_dict
 
     def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
         """Generate mapping between inference and training parameter for RL(donot delete!)."""
@@ -633,9 +679,106 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             _add_layer_mappings(layer_idx)
 
         self._complete_missing_mappings()
+
+        # extra for mtp
+        if self.speculative_decoding and self.speculative_method == "mtp":
+            mtp_infer_to_train_mapping = self.mtp_layers.get_name_mappings_to_training(trainer_degree)
+            self.infer_to_train_mapping.update(mtp_infer_to_train_mapping)
+
         infer_to_train_mapping_copy = copy.deepcopy(self.infer_to_train_mapping)
         for key in infer_to_train_mapping_copy.keys():
             if "mlp.experts.gate_correction_bias" in key:
                 self.infer_to_train_mapping.pop(key)
+
+        return self.infer_to_train_mapping
+
+
+class Glm4MTPForCausalLMRL(Glm4MTPForCausalLM, BaseRLModel):
+    """
+    Glm4MTPForCausalLMRL
+    """
+
+    _get_tensor_parallel_mappings = Glm4MTPPretrainedModel._get_tensor_parallel_mappings
+
+    def __init__(self, fd_config: FDConfig):
+        """
+        Args:
+            fd_config (FDConfig): Configurations for the LLM model.
+        """
+        super(Glm4MTPForCausalLMRL, self).__init__(fd_config)
+
+    @classmethod
+    def name(self) -> str:
+        """name"""
+        return "Glm4MTPForCausalLMRL"
+
+    def get_name_mappings_to_training(self, trainer_degree=None) -> Dict[str, str]:
+        """Generate mapping between inference and training parameter for RL(donot delete!)."""
+        if self._mappings_built:
+            return self.infer_to_train_mapping
+
+        self.infer_to_train_mapping = {}
+        self._mappings_built = True
+
+        # Prepare placeholders
+        place_holders = ["weight"]
+
+        base_name = "model.layers"
+
+        # Helper function to add layer mappings
+        def _add_layer_mappings(layer_idx: int):
+            # MTP specific mappings
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.shared_head.head.weight"] = (
+                f"{base_name}.{layer_idx}.shared_head.head.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.shared_head.norm.weight"] = (
+                f"{base_name}.{layer_idx}.shared_head.norm.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.eh_proj.weight"] = (
+                f"{base_name}.{layer_idx}.eh_proj.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.enorm.weight"] = (
+                f"{base_name}.{layer_idx}.enorm.weight"
+            )
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.hnorm.weight"] = (
+                f"{base_name}.{layer_idx}.hnorm.weight"
+            )
+
+            # MoE specific mappings
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.weight"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.weight"
+            )
+
+            self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"] = (
+                f"{base_name}.{layer_idx}.mlp.gate.e_score_correction_bias"
+            )
+
+            # MoE experts mappings
+            for expert_idx in range(self.fd_config.model_config.n_routed_experts):
+                for ph in place_holders:
+                    # up_gate_proj (up_gate_proj)
+                    up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
+                    if up_gate_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[up_gate_proj_key] = []
+                    self.infer_to_train_mapping[up_gate_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.up_gate_proj.{ph}"
+                    )
+
+                    # down_proj (down_proj)
+                    down_proj_key = f"{base_name}.{layer_idx}.mlp.experts.down_proj_weight"
+                    if down_proj_key not in self.infer_to_train_mapping:
+                        self.infer_to_train_mapping[down_proj_key] = []
+                    self.infer_to_train_mapping[down_proj_key].append(
+                        f"{base_name}.{layer_idx}.mlp.experts.{expert_idx}.down_proj.{ph}"
+                    )
+
+        # Process MoE layers
+        for layer_idx in range(
+            self.fd_config.model_config.start_layer_index,
+            self.fd_config.model_config.start_layer_index + self.fd_config.model_config.num_nextn_predict_layers,
+        ):
+            _add_layer_mappings(layer_idx)
+
+        self._complete_missing_mappings()
 
         return self.infer_to_train_mapping

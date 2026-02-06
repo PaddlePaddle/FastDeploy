@@ -14,18 +14,21 @@
 # limitations under the License.
 """
 
-from .input_processor import load_input_processor_plugins
-from .model_register import load_model_register_plugins
-from .model_runner import load_model_runner_plugins
-from .reasoning_parser import load_reasoning_parser_plugins
-from .token_processor import load_token_processor_plugins
-from .tool_parser import load_tool_parser_plugins
+from fastdeploy.plugins.utils import load_plugins_by_group
 
-__all__ = [
-    "load_model_register_plugins",
-    "load_model_runner_plugins",
-    "load_input_processor_plugins",
-    "load_reasoning_parser_plugins",
-    "load_token_processor_plugins",
-    "load_tool_parser_plugins",
-]
+# make sure one process only loads plugins once
+plugins_loaded = False
+PLUGINS_GROUP = "fastdeploy.tool_parser_plugins"
+
+
+def load_tool_parser_plugins():
+    """load_tool_parser_plugins"""
+    global plugins_loaded
+    if plugins_loaded:
+        return
+    plugins_loaded = True
+
+    plugins = load_plugins_by_group(group=PLUGINS_GROUP)
+    # general plugins, we only need to execute the loaded functions
+    for func in plugins.values():
+        func()
