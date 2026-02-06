@@ -566,7 +566,7 @@ class PrefixCacheManager:
         """
         while True:
             flag = self.task_swapping_event[transfer_task_id].wait(timeout=0.1)
-            if flag or self.prefix_tree_status_signal.value != PrefixTreeStatus.NORMAL:
+            if flag or self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                 if not flag:
                     logger.info(f"swap task timeout because prefix tree status is not normal: {transfer_task_id}")
                 break
@@ -696,7 +696,7 @@ class PrefixCacheManager:
                 self.req_to_radix_tree_info[req_id] = [leaf_node, can_cache_computed_tokens]
                 task.num_cached_blocks = can_cache_computed_tokens // block_size
         except Exception as e:
-            if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+            if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                 logger.warning(
                     f"update_cache_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
                 )
@@ -884,7 +884,7 @@ class PrefixCacheManager:
                 task.num_cached_blocks = len(common_block_ids)
                 return common_block_ids, match_token_num, metrics
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"request_match_blocks: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -991,7 +991,7 @@ class PrefixCacheManager:
                 )
                 return common_block_ids, unique_block_ids, hit_info
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"request_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -1052,7 +1052,7 @@ class PrefixCacheManager:
                 )
                 return
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"release_block_ids: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -1182,7 +1182,7 @@ class PrefixCacheManager:
                     else:
                         break
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"free_nodes_directly: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -1380,7 +1380,7 @@ class PrefixCacheManager:
                 else:
                     self.gpu_free_task_future = None
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"free_block_ids_async: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -1968,7 +1968,7 @@ class PrefixCacheManager:
                         + f"task_cpu_block_id {task_cpu_block_id} event_type {event_type} done"
                     )
             except Exception as e:
-                if self.prefix_tree_status_signal != PrefixTreeStatus.NORMAL:
+                if self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL:
                     logger.warning(
                         f"recv_data_transfer_result: an error occured while prefix tree status is not normal, ignore it. {e}"
                     )
@@ -1987,10 +1987,6 @@ class PrefixCacheManager:
         logger.info("wait for recv_data_transfer_result done")
         while not self.cache_task_queue.result_queue_empty():
             time.sleep(0.1)
-
-        # if len(self.node_map) == 0:
-        #     logger.info("node map is empty!")
-        #     return
 
         logger.info(f"Resetting the RadixTree! node_map len {len(self.node_map)}")
 
