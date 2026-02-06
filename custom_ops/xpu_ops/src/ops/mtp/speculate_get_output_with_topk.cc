@@ -18,26 +18,11 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "paddle/extension.h"
+#include "speculate_msg.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
-
-#define MAX_BSZ 512
-#define K 20
-#define MAX_DRAFT_TOKEN_NUM 6
-
-struct batch_msgdata {
-  int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  float scores[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  int ranks[MAX_DRAFT_TOKEN_NUM];
-};
-
-struct msgdata {
-  long mtype;
-  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
-  batch_msgdata mtext[MAX_BSZ];
-};
 
 void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              const paddle::Tensor& output_scores,
@@ -45,7 +30,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              int real_k,
                              int64_t rank_id,
                              bool wait_flag) {
-  struct msgdata msg_rcv;
+  static struct msgdata msg_rcv;
   int msg_queue_id = 1;
 
   if (const char* inference_msg_queue_id_env_p =
@@ -98,9 +83,9 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
     output_tokens_data[3 + i] = (int64_t)cur_token_num;  // batch_token_nums
 
     auto* cur_output_token = output_tokens_data + output_tokens_offset +
-                             i * (MAX_DRAFT_TOKEN_NUM * (K + 1));
+                             i * (MAX_DRAFT_TOKENS * (K + 1));
     auto* cur_output_score =
-        output_scores_data + i * (MAX_DRAFT_TOKEN_NUM * (K + 1));
+        output_scores_data + i * (MAX_DRAFT_TOKENS * (K + 1));
     auto* cur_batch_msg_rcv = &msg_rcv.mtext[i];
     for (int j = 0; j < cur_token_num; j++) {
       for (int k = 0; k < real_k + 1; k++) {
@@ -109,7 +94,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
         cur_output_score[j * (K + 1) + k] =
             cur_batch_msg_rcv->scores[j * (K + 1) + k];
       }
-      output_ranks_data[i * MAX_DRAFT_TOKEN_NUM + j] =
+      output_ranks_data[i * MAX_DRAFT_TOKENS + j] =
           (int64_t)cur_batch_msg_rcv->ranks[j];
     }
   }
@@ -125,19 +110,19 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
       std::cout << "tokens: ";
       for (int k = 0; k < K + 1; k++) {
         std::cout << output_tokens_data[output_tokens_offset +
-                                        i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+                                        i * MAX_DRAFT_TOKENS * (K + 1) +
                                         j * (K + 1) + k]
                   << " ";
       }
       std::cout << std::endl;
       std::cout << "scores: ";
       for (int k = 0; k < K + 1; k++) {
-        std::cout << output_scores_data[i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+        std::cout << output_scores_data[i * MAX_DRAFT_TOKENS * (K + 1) +
                                         j * (K + 1) + k]
                   << " ";
       }
       std::cout << std::endl;
-      std::cout << "ranks: " << output_ranks_data[i * MAX_DRAFT_TOKEN_NUM + j]
+      std::cout << "ranks: " << output_ranks_data[i * MAX_DRAFT_TOKENS + j]
                 << std::endl;
     }
   }
