@@ -206,9 +206,9 @@ class TokenProcessor:
                 llm_logger.info(
                     f"Request: {task_id} finished, number of " f"generated tokens: {self.tokens_counter[task_id]}."
                 )
-                llm_logger.info(
-                    f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
-                )
+                token_ratio = self.tokens_counter[task_id] / (time.time() - task.inference_start_time)
+                llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                main_process_metrics.request_token_ratio.observe(token_ratio)
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
@@ -683,7 +683,9 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                if len(token_ids) > 0 and token_ids[-1] <= 0:
+                    llm_logger.warning(f"Invalid token is generated! token_id {token_ids[-1]} at task {task_id}")
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] < 0):
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             self.resource_manager.reschedule_preempt_task(task_id)
@@ -812,9 +814,9 @@ class TokenProcessor:
                         f"Request: {task_id} finished, number of "
                         f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
                     )
-                    llm_logger.info(
-                        f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
-                    )
+                    token_ratio = self.tokens_counter[task_id] / (time.time() - task.inference_start_time)
+                    llm_logger.info(f"Request: {task_id} token ratio: {token_ratio}")
+                    main_process_metrics.request_token_ratio.observe(token_ratio)
                     llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)

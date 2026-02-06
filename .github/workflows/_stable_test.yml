@@ -147,7 +147,7 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm --ipc=host --pid=host --net=host \
+          docker run --rm --net=host \
           --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \
@@ -164,7 +164,9 @@ jobs:
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+          # Avoid using pip cache to ensure the wheel is updated to the latest version
+          wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+          python -m pip install paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -176,7 +178,27 @@ jobs:
           TEST_EXIT_CODE=0
           pushd tests/ce/stable_cases
           bash launch_model.sh /MODELDATA
-          bash run.sh || TEST_EXIT_CODE=1
+          TEST_EXIT_CODE=0
+          bash run.sh || {
+            TEST_EXIT_CODE=1
+            echo "==================== run.sh FAILED ===================="
+
+            if [ -d log ]; then
+              echo ">>> grep error in ./log/"
+              grep -Rni --color=auto "error" log || true
+            else
+              echo "log/ directory not found"
+            fi
+
+            if [ -f log/workerlog.0 ]; then
+              echo ">>> tail -n 100 log/workerlog.0"
+              tail -n 100 log/workerlog.0
+            else
+              echo "log/workerlog.0 not found"
+            fi
+
+            echo "======================================================="
+          }
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
           '

@@ -67,13 +67,6 @@ class ExpertService:
         else:
             self.do_profile = False
 
-        if cfg.scheduler_config.splitwise_role != "mixed":
-            if len(self.cfg.cache_config.pd_comm_port) == 1:
-                self.cfg.cache_config.pd_comm_port[0] = (
-                    int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
-                )
-            else:
-                self.cfg.cache_config.pd_comm_port = [self.cfg.cache_config.pd_comm_port[local_data_parallel_id]]
         self.cfg.parallel_config.local_data_parallel_id = local_data_parallel_id
         self.engine = EngineService(self.cfg, start_queue)
         if self.cfg.scheduler_config.name == "splitwise":

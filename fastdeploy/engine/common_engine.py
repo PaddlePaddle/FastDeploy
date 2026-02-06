@@ -1257,6 +1257,8 @@ class EngineService:
             self.llm_logger.info("[Engine] start clearing data")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
+            if hasattr(self, "cache_task_queue"):
+                self.cache_task_queue.clear_transfer_task()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
             self.scheduler.reset()

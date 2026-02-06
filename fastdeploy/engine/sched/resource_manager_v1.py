@@ -182,7 +182,7 @@ class ResourceManagerV1(ResourceManager):
             name="need_block_num_signal",
             array=need_block_num_data,
             dtype=np.int32,
-            suffix=self.config.parallel_config.engine_worker_queue_port,
+            suffix=self.config.parallel_config.engine_worker_queue_port[local_data_parallel_id],
             create=True,
         )
 
@@ -386,9 +386,14 @@ class ResourceManagerV1(ResourceManager):
                     position.offset // self.config.cache_config.block_size
                 ) * self.config.cache_config.block_size
                 position_idx -= 1
-            elif matched_token_num < position.offset:
+            elif matched_token_num <= position.offset:
                 position_idx -= 1
             elif matched_token_num >= position.offset + position.length:
+                break
+            else:
+                llm_logger.error(
+                    f"revert_chunked_mm_input error, matched_token_num:{matched_token_num} position:{position}, {mm_inputs['mm_positions']}"
+                )
                 break
         return matched_token_num
 
@@ -414,6 +419,18 @@ class ResourceManagerV1(ResourceManager):
                 start_patch_idx = inputs["patch_idx"][-1]
             else:
                 start_patch_idx = inputs["patch_idx"][pre_end_idx]
+                if (
+                    pre_end_idx > 0
+                    and request.prompt_token_ids[pre_end_idx]
+                    in [
+                        inputs["image_patch_id"],
+                        inputs["video_patch_id"],
+                        inputs["audio_patch_id"],
+                    ]
+                    and request.prompt_token_ids[pre_end_idx] != request.prompt_token_ids[pre_end_idx - 1]
+                ):
+                    # It just hit the starting position of the image / video / audio
+                    start_patch_idx -= 1
             start_patch_map = inputs["patch_map"][start_patch_idx]
             request.image_start = start_patch_map["image_num"]
             request.video_start = start_patch_map["video_num"]
@@ -1176,8 +1193,10 @@ class ResourceManagerV1(ResourceManager):
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
+        self.update_metrics(verbose=True)
         try:
             with self.lock:
+                llm_logger.info(f"[lock] recycle resources for requests: {request_ids}")
                 if isinstance(request_ids, str):
                     request_ids = (request_ids,)
                 else:
@@ -1185,9 +1204,11 @@ class ResourceManagerV1(ResourceManager):
                 for req_id in request_ids:
                     request = self.requests.get(req_id)
                     if request is None:
+                        llm_logger.warning(f"invalid request id: {req_id} self.requests: {self.requests}")
                         # Invalid request ID.
                         continue
                     if request in self.running:  # normally run and finished
+                        llm_logger.info(f"finish running request: {req_id}")
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
                         try:
@@ -1197,6 +1218,7 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
+                        llm_logger.info(f"finish preempeted request: {req_id}")
                         self.to_be_rescheduled_request_id_set.remove(
                             request.request_id
                         )  # just remove from to_be_rescheduled_request_id_set
@@ -1213,7 +1235,7 @@ class ResourceManagerV1(ResourceManager):
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
-            self.update_metrics()
+            self.update_metrics(verbose=True)
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
@@ -1228,13 +1250,16 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.num_requests_waiting.set(0)
         main_process_metrics.num_requests_preempted.set(0)
 
-    def update_metrics(self):
+    def update_metrics(self, verbose=False):
         used_blocks = set()
         for task in self.tasks_list:
             used_blocks.union(task.block_tables) if task else None
+        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(used_blocks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
         main_process_metrics.num_requests_running.set(len(self.running))
         main_process_metrics.num_requests_waiting.set(len(self.waiting))
         main_process_metrics.num_requests_preempted.set(len(self.to_be_rescheduled_request_id_set))
+        if verbose:
+            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")

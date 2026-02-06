@@ -51,6 +51,7 @@ def llguidance_checker_with_options():
     return LLGuidanceChecker(disable_any_whitespace=True)
 
 
+sys.modules["torch"] = None
 from fastdeploy.model_executor.guided_decoding.guidance_backend import LLGuidanceChecker
 
 

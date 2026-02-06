@@ -147,7 +147,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         """
         super(Qwen2_5_VLForConditionalGeneration, self).__init__(fd_config)
         # ----------- vision model ------------
-        self.visual = self._init_vision_model(fd_config.model_config)
+        self.visual = self._init_vision_model(fd_config)
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
 
