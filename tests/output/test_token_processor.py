@@ -106,6 +106,9 @@ class _DummyResourceManager:
     def clear_data(self):
         self.cleared = True
 
+    def update_metrics(self):
+        return
+
 
 class _DummyQueue:
     def get_finished_req(self):
