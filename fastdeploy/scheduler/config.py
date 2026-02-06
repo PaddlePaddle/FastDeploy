@@ -272,6 +272,7 @@ class SchedulerConfig:
         self.max_extra_num_batched_tokens = 16384  # extra token_num for multimodal inputs
         self.max_num_seqs = 34
         self.splitwise_role = "mixed"
+        self.enable_overlap_schedule = False
         self.config = None
 
         for key, value in args.items():

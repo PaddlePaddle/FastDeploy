@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import gc
 import json
+import os
 import queue
 import threading
 import time
@@ -26,6 +27,7 @@ from typing import List
 
 import numpy as np
 import paddle
+import yaml
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
@@ -41,11 +43,15 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_layout,
     unset_data_ipc,
 )
-from fastdeploy.cache_manager.transfer_factory import AttentionStore, MooncakeStore
+from fastdeploy.cache_manager.transfer_factory import (
+    AttentionStore,
+    FileStore,
+    MooncakeStore,
+)
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import console_logger, get_logger
 
 
 def parse_args():
@@ -59,7 +65,6 @@ def parse_args():
         default="mixed",
         help="splitwise role, can be decode, prefill or mixed",
     )
-    parser.add_argument("--model_id", type=str, default="default", help="model id")
     parser.add_argument("--rank", type=int, default=0, help="local tp rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--max_model_len", type=int, default=32768, help="max model length")
@@ -111,7 +116,7 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         default=None,
-        choices=["mooncake", "attention_store", "none"],
+        choices=["mooncake", "attention_store", "file"],
         help="The storage backend for kvcache storage. If not set, storage backend is disabled.",
     )
     parser.add_argument(
@@ -121,9 +126,20 @@ def parse_args():
         default="write_through",
         help="KVCache write policy",
     )
+    parser.add_argument("--model_path", type=str, help="The path of model")
 
     args = parser.parse_args()
     return args
+
+
+def get_key_prefix_from_version(version_file_path):
+    # the format of version string is RL-STEP{xx}-{timestamp}-{uuid4}
+    with open(version_file_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+        version = data["version"]
+        parts = version.split("-", 2)
+        key_prefix = "-".join(parts[:2])
+        return key_prefix
 
 
 class CacheTransferManager:
@@ -157,10 +173,14 @@ class CacheTransferManager:
 
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
-        self.cache_bytes = self._get_cache_bytes(self.cache_dtype)
+        self.cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
+        self.scale_item_bytes = self._get_cache_item_bytes(paddle.get_default_dtype())
+        self.has_cache_scale = self.cache_dtype == "block_wise_fp8"
+        if self.has_cache_scale:
+            self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
 
         # extract other arg values
-        self.model_id = args.model_id
+        self.model_id = os.path.basename(args.model_path.rstrip("/"))
         self.n_ranks = args.mp_num
         self.rank = args.rank
         self.device = args.device_id
@@ -210,6 +230,7 @@ class CacheTransferManager:
         self._init_gpu_cache(args)
         if self.num_cpu_blocks > 0:
             self._init_cpu_cache(args)
+        self._init_storage(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -231,34 +252,6 @@ class CacheTransferManager:
             create=False,
         )
 
-        if args.kvcache_storage_backend is None or args.kvcache_storage_backend == "none":
-            self.storage_backend = None
-        elif args.kvcache_storage_backend == "mooncake":
-            logger.info("Start initialize mooncake store...")
-            self.storage_backend = MooncakeStore(tp_rank=self.rank)
-            self._init_storage_buffer(args)
-            logger.info("Initialized mooncake store successfully")
-        elif args.kvcache_storage_backend == "attention_store":
-            logger.info("Start initialize attention store...")
-            self.storage_backend = AttentionStore(
-                namespace=self.model_id,
-                shard_id=self.rank,
-                shard_num=self.n_ranks,
-                layer_num=self.num_layers + self.num_extra_layers,
-                block_token_size=self.block_size,
-                bytes_per_shard_layer_per_block=self.head_num * self.block_size * self.head_dim * self.cache_bytes,
-                device_id=self.device,
-                dp_id=self.local_data_parallel_id,
-            )
-            logger.info("Initialized attention store successfully!")
-        else:
-            raise NotImplementedError(f"Unsupported storage backend: {args.kvcache_storage_backend}")
-        self.storage_backend_type = args.kvcache_storage_backend
-
-        if args.write_policy not in ["write_through"]:
-            raise ValueError(f"Invalid write policy: {args.write_policy}")
-        self.write_policy = args.write_policy
-
         # Initialize update/clear signals for RL
         self.kv_cache_status_signal = IPCSignal(
             name="kv_cache_status",
@@ -269,11 +262,88 @@ class CacheTransferManager:
         )
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
+        cache_transfer_inited_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+        self.cache_transfer_inited_signal.value[self.rank] = 1
+
+    def _init_storage(self, args):
+        self.storage_backend_type = args.kvcache_storage_backend
+
+        try:
+            # TODO: support cache scale for other backend
+            if self.has_cache_scale:
+                if self.storage_backend_type not in ["mooncake"]:
+                    raise ValueError(
+                        f"Unsupported storage backend ({self.storage_backend_type}) "
+                        "when cache quantization is block_wise_fp8"
+                    )
+
+            if self.storage_backend_type is None:
+                self.storage_backend = None
+            elif self.storage_backend_type == "mooncake":
+                logger.info("Start initialize mooncake store...")
+                self.storage_backend = MooncakeStore(tp_rank=self.rank)
+                self._init_storage_buffer(args)
+                logger.info("Initialized mooncake store successfully")
+            elif self.storage_backend_type == "attention_store":
+                logger.info("Start initialize attention store...")
+                # TODO: support different model version in rl
+                self.storage_backend = AttentionStore(
+                    namespace=self.model_id,
+                    shard_id=self.rank,
+                    shard_num=self.n_ranks,
+                    layer_num=self.num_layers + self.num_extra_layers,
+                    block_token_size=self.block_size,
+                    bytes_per_shard_layer_per_block=self.head_num
+                    * self.block_size
+                    * self.head_dim
+                    * self.cache_item_bytes,
+                    device_id=self.device,
+                    dp_id=self.local_data_parallel_id,
+                )
+                logger.info("Initialized attention store successfully!")
+            elif args.kvcache_storage_backend == "file":
+                logger.info("Start initialize file store...")
+                self.storage_backend = FileStore(
+                    namespace=self.model_id,
+                    tp_rank=self.rank,
+                    tp_size=self.n_ranks,
+                )
+                self._init_storage_buffer(args)
+                logger.info("Initialized file store successfully")
+            else:
+                raise NotImplementedError(f"Unsupported storage backend: {self.storage_backend_type}")
+        except Exception as e:
+            err_msg = f"Fail to initialize storage backend, {e}, traceback: {traceback.format_exc()}"
+            logger.error(err_msg)
+            console_logger.error(err_msg)  # print error message to console
+            raise
+
+        if args.write_policy not in ["write_through"]:
+            raise ValueError(f"Invalid write policy: {args.write_policy}")
+        self.write_policy = args.write_policy
+
+        self.key_prefix = ""
+        version_file_path = os.path.join(args.model_path, "version.yaml")
+        if os.path.exists(version_file_path):
+            self.key_prefix = get_key_prefix_from_version(version_file_path)
+        logger.info(f"The key_prefix of cache storage is {self.key_prefix}")
+
+        logger.info("Initialize cache storage successfully")
+
     def _init_storage_buffer(self, args):
         """
         Initialize pinned memory buffer that can hold the cache for a longest request
         cache layout: layer_num * [block_num, head_num, block_size, head_dim]
-        buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+        scale layout: layer_num * [block_num, head_num, block_size]
+        cache buffer layout: [block_num, layer_num, head_num, block_size, head_dim]
+        scale buffer layout: [block_num, layer_num, head_num, block_size]
         """
         layer_num = self.num_layers + self.num_extra_layers
         block_num = (args.max_model_len + self.block_size - 1) // self.block_size
@@ -282,21 +352,38 @@ class CacheTransferManager:
             f"[{block_num}, {layer_num}, {self.head_num}, {self.block_size}, {self.head_dim}]"
         )
 
-        self.storage_buffer_stride_bytes = (
-            layer_num * self.head_num * self.block_size * self.head_dim * self.cache_bytes
+        self.cache_buffer_stride_bytes = (
+            layer_num * self.head_num * self.block_size * self.head_dim * self.cache_item_bytes
         )
-        total_bytes = block_num * self.storage_buffer_stride_bytes * 2  # key and value
+        cache_buffer_total_bytes = block_num * self.cache_buffer_stride_bytes * 2  # key and value
 
-        logger.info(f"Creating cpu buffer cache for alllayers: {total_bytes / 1024 ** 3:.2f}GB")
-        read_buffer = cuda_host_alloc(total_bytes)
+        logger.info(f"Creating cache cpu buffer for all layers: {cache_buffer_total_bytes / 1024 ** 3:.2f}GB")
+        read_buffer = cuda_host_alloc(cache_buffer_total_bytes)
         self.storage_key_read_buffer = read_buffer
-        self.storage_value_read_buffer = read_buffer + total_bytes // 2
-        self.storage_backend.register_buffer(read_buffer, total_bytes)
+        self.storage_value_read_buffer = read_buffer + cache_buffer_total_bytes // 2
+        self.storage_backend.register_buffer(read_buffer, cache_buffer_total_bytes)
 
-        write_buffer = cuda_host_alloc(total_bytes)
+        write_buffer = cuda_host_alloc(cache_buffer_total_bytes)
         self.storage_key_write_buffer = write_buffer
-        self.storage_value_write_buffer = write_buffer + total_bytes // 2
-        self.storage_backend.register_buffer(write_buffer, total_bytes)
+        self.storage_value_write_buffer = write_buffer + cache_buffer_total_bytes // 2
+        self.storage_backend.register_buffer(write_buffer, cache_buffer_total_bytes)
+
+        if self.has_cache_scale:
+            self.scale_buffer_stride_bytes = layer_num * self.head_num * self.block_size * self.scale_item_bytes
+            scale_buffer_total_bytes = block_num * self.scale_buffer_stride_bytes * 2
+            logger.info(
+                f"Creating scale cpu buffer cache for all layers: {scale_buffer_total_bytes / 1024 ** 3:.2f}GB"
+            )
+
+            read_buffer = cuda_host_alloc(scale_buffer_total_bytes)
+            self.storage_key_scale_read_buffer = read_buffer
+            self.storage_value_scale_read_buffer = read_buffer + scale_buffer_total_bytes // 2
+            self.storage_backend.register_buffer(read_buffer, scale_buffer_total_bytes)
+
+            write_buffer = cuda_host_alloc(scale_buffer_total_bytes)
+            self.storage_key_scale_write_buffer = write_buffer
+            self.storage_value_scale_write_buffer = write_buffer + scale_buffer_total_bytes // 2
+            self.storage_backend.register_buffer(write_buffer, scale_buffer_total_bytes)
 
     def _init_gpu_cache(self, args):
 
@@ -314,6 +401,7 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing kv cache for all layers.")
         set_device(self.device)
         for i in range(self.num_layers + self.num_extra_layers):
+            # NOTE: num_extra_layer_gpu_blocks is usually equal to num_gpu_blocks
             num_gpu_blocks = self.num_gpu_blocks if i < self.num_layers else self.num_extra_layer_gpu_blocks
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
@@ -411,9 +499,9 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        cache_bytes = self._get_cache_bytes(self.cache_dtype)
-        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
-        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
+        cache_item_bytes = self._get_cache_item_bytes(self.cache_dtype)
+        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * key_cache_size
+        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_item_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
             cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
             cache_scales_size = self.key_cache_shape[1] * self.key_cache_shape[2]
@@ -454,14 +542,16 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 
-    def _get_cache_bytes(self, cache_dtype):
-        if cache_dtype == "bfloat16":
-            cache_bytes = 2
+    def _get_cache_item_bytes(self, cache_dtype):
+        if cache_dtype == "float32":
+            bytes = 4
+        elif cache_dtype in ("bfloat16", "float16"):
+            bytes = 2
         elif cache_dtype in ["uint8", "block_wise_fp8"]:
-            cache_bytes = 1
+            bytes = 1
         else:
             raise ValueError(f"Unsupported cache dtype: {cache_dtype}")
-        return cache_bytes
+        return bytes
 
     def _run_read_storage(
         self,
@@ -470,6 +560,8 @@ class CacheTransferManager:
         start_read_block_idx: int,
         k_cache_keys: List[str],
         v_cache_keys: List[str],
+        k_scale_keys: List[str],
+        v_scale_keys: List[str],
         gpu_block_ids: List[int],
         cpu_block_ids: List[int],
         timeout: float,
@@ -478,27 +570,49 @@ class CacheTransferManager:
         Read storage data from the given blocks to the corresponding cache tensors on the current rank's GPU.
         """
         try:
-            if self.storage_backend_type == "mooncake":
+            if self.storage_backend_type in ("mooncake", "file"):
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
-                    self.storage_key_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_key_read_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 v_cache_ptrs = [
-                    self.storage_value_read_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_value_read_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
-                kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
-                kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+                target_locations = k_cache_ptrs + v_cache_ptrs
+                target_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
+                if k_scale_keys and v_scale_keys:
+                    keys.extend(k_scale_keys + v_scale_keys)
+                    k_scale_ptrs = [
+                        self.storage_key_scale_read_buffer + i * self.scale_buffer_stride_bytes for i in cpu_block_ids
+                    ]
+                    v_scale_ptrs = [
+                        self.storage_value_scale_read_buffer + i * self.scale_buffer_stride_bytes
+                        for i in cpu_block_ids
+                    ]
+                    target_locations.extend(k_scale_ptrs + v_scale_ptrs)
+                    target_sizes.extend([self.scale_buffer_stride_bytes] * block_num * 2)
+
                 start_time = time.time()
                 result = self.storage_backend.batch_get(
-                    keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes
+                    keys=keys, target_locations=target_locations, target_sizes=target_sizes
                 )
                 read_cost_time = time.time() - start_time
 
-                k_result, v_result = result[:block_num], result[block_num:]
-                success_block_num = 0
-                for k, v in zip(k_result, v_result):
-                    if k > 0 and v > 0:
+                if k_scale_keys and v_scale_keys:
+                    k_result, v_result = result[:block_num], result[block_num : 2 * block_num]
+                    k_scale_result, v_scale_result = result[2 * block_num : 3 * block_num], result[3 * block_num :]
+                    success_block_num = 0
+                    for k, v, k_scale, v_scale in zip(k_result, v_result, k_scale_result, v_scale_result):
+                        if not (k > 0 and v > 0 and k_scale > 0 and v_scale > 0):
+                            break
+                        success_block_num += 1
+                else:
+                    k_result, v_result = result[:block_num], result[block_num : 2 * block_num]
+                    success_block_num = 0
+                    for k, v in zip(k_result, v_result):
+                        if not (k > 0 and v > 0):
+                            break
                         success_block_num += 1
                 logger.debug(f"_run_read_storage, success_block_num: {success_block_num}")
                 valid_gpu_block_ids = gpu_block_ids[:success_block_num]
@@ -524,6 +638,25 @@ class CacheTransferManager:
                     self.device,
                     mode,
                 )
+                if k_scale_keys and v_scale_keys:
+                    swap_cache_layout(
+                        self.gpu_cache_scales_k_tensors,
+                        self.storage_key_scale_read_buffer,
+                        self.cache_scale_shape,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
+                    swap_cache_layout(
+                        self.gpu_cache_scales_v_tensors,
+                        self.storage_value_scale_read_buffer,
+                        self.cache_scale_shape,
+                        valid_gpu_block_ids,
+                        valid_cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
                 swap_cost_time = time.time() - start_time
                 logger.debug(
                     f"_run_read_storage, swap_cost_time: {swap_cost_time:.6f}s, read_cost_time: {read_cost_time:.6f}s"
@@ -554,14 +687,27 @@ class CacheTransferManager:
 
     def read_storage_task(self, task: ReadStorageTask):
         """Read cache from the storage backend to the GPU memory."""
+        assert (
+            self.storage_backend
+        ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
+            if not self.has_cache_scale:
+                k_scale_keys = None
+                v_scale_keys = None
+            else:
+                k_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key_scale" for key in task.keys]
+                v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
+
             match_block_num = 0
-            if self.storage_backend_type == "mooncake":
-                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys)
+            if self.storage_backend_type in ("mooncake", "file"):
+                match_block_num = self.storage_backend.query(
+                    k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
+                )
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(
                     task.task_id, task.token_ids, task.start_read_block_idx, task.timeout
@@ -570,6 +716,8 @@ class CacheTransferManager:
 
             k_cache_keys = k_cache_keys[:match_block_num]
             v_cache_keys = v_cache_keys[:match_block_num]
+            k_scale_keys = k_scale_keys[:match_block_num] if k_scale_keys else None
+            v_scale_keys = v_scale_keys[:match_block_num] if v_scale_keys else None
             gpu_block_ids = gpu_block_ids[:match_block_num]
             cpu_block_ids = cpu_block_ids[:match_block_num]
             valid_gpu_block_ids = []
@@ -582,6 +730,8 @@ class CacheTransferManager:
                         task.start_read_block_idx,
                         k_cache_keys,
                         v_cache_keys,
+                        k_scale_keys,
+                        v_scale_keys,
                         gpu_block_ids,
                         cpu_block_ids,
                         task.timeout,
@@ -590,8 +740,19 @@ class CacheTransferManager:
                         f"Successfully read {len(valid_gpu_block_ids)} blocks from cache storage for task {task.task_id}"
                     )
                 except Exception as e:
-                    logger.error(f"Failed to read cache for task {task.task_id}, error: {e}")
+                    logger.error(
+                        f"Failed to read cache for task {task.task_id}, error: {e}, traceback: {traceback.format_exc()}"
+                    )
                     valid_gpu_block_ids = []
+                finally:
+                    try:
+                        if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, True)
+                        logger.info(f"Report cache index in HBM to cache storage for task {task.task_id}")
+                    except Exception as e:
+                        logger.info(
+                            f"Failed to report cache index in HBM to cache storage for task {task.task_id}, error: {e}"
+                        )
 
             result = (CacheStatus.STORAGE2GPU, task.task_id, task.keys, valid_gpu_block_ids)
             self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
@@ -612,24 +773,20 @@ class CacheTransferManager:
         start_write_block_idx,
         k_cache_keys,
         v_cache_keys,
+        k_scale_keys,
+        v_scale_keys,
         gpu_block_ids,
         cpu_block_ids,
         timeout,
     ):
         try:
-            if self.storage_backend_type == "mooncake":
-                key_cache_size = [
-                    self.key_cache_shape[0],
-                    self.key_cache_shape[1],
-                    self.key_cache_shape[2],
-                    self.key_cache_shape[3],
-                ]
+            if self.storage_backend_type in ("mooncake", "file"):
                 mode = 0  # gpu ==> cpu
                 start_time = time.time()
                 swap_cache_layout(
                     self.gpu_cache_k_tensors,
                     self.storage_key_write_buffer,
-                    key_cache_size,
+                    self.key_cache_shape,
                     gpu_block_ids,
                     cpu_block_ids,
                     self.device,
@@ -638,27 +795,57 @@ class CacheTransferManager:
                 swap_cache_layout(
                     self.gpu_cache_v_tensors,
                     self.storage_value_write_buffer,
-                    key_cache_size,
+                    self.key_cache_shape,
                     gpu_block_ids,
                     cpu_block_ids,
                     self.device,
                     mode,
                 )
+                if k_scale_keys and v_scale_keys:
+                    swap_cache_layout(
+                        self.gpu_cache_scales_k_tensors,
+                        self.storage_key_scale_write_buffer,
+                        self.cache_scale_shape,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
+                    swap_cache_layout(
+                        self.gpu_cache_scales_v_tensors,
+                        self.storage_value_scale_write_buffer,
+                        self.cache_scale_shape,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        mode,
+                    )
                 swap_cost_time = time.time() - start_time
 
                 block_num = len(gpu_block_ids)
                 keys = k_cache_keys + v_cache_keys
                 k_cache_ptrs = [
-                    self.storage_key_write_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_key_write_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
                 v_cache_ptrs = [
-                    self.storage_value_write_buffer + i * self.storage_buffer_stride_bytes for i in cpu_block_ids
+                    self.storage_value_write_buffer + i * self.cache_buffer_stride_bytes for i in cpu_block_ids
                 ]
-                kv_cache_ptrs = k_cache_ptrs + v_cache_ptrs
-                kv_block_sizes = [self.storage_buffer_stride_bytes] * block_num * 2  # key and value
+                target_locations = k_cache_ptrs + v_cache_ptrs
+                target_sizes = [self.cache_buffer_stride_bytes] * block_num * 2  # key and value
+                if k_scale_keys and v_scale_keys:
+                    keys.extend(k_scale_keys + v_scale_keys)
+                    k_scale_ptrs = [
+                        self.storage_key_scale_write_buffer + i * self.scale_buffer_stride_bytes for i in cpu_block_ids
+                    ]
+                    v_scale_ptrs = [
+                        self.storage_value_scale_write_buffer + i * self.scale_buffer_stride_bytes
+                        for i in cpu_block_ids
+                    ]
+                    target_locations.extend(k_scale_ptrs + v_scale_ptrs)
+                    target_sizes.extend([self.scale_buffer_stride_bytes] * block_num * 2)
 
                 start_time = time.time()
-                self.storage_backend.batch_set(keys, target_locations=kv_cache_ptrs, target_sizes=kv_block_sizes)
+                self.storage_backend.batch_set(keys=keys, target_locations=target_locations, target_sizes=target_sizes)
                 write_cost_time = time.time() - start_time
 
                 logger.debug(
@@ -691,15 +878,27 @@ class CacheTransferManager:
         """
         Write cache to the storage backend from the GPU memory.
         """
+        assert (
+            self.storage_backend
+        ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
             cpu_block_ids = [i for i in range(len(gpu_block_ids))]
-            k_cache_keys = [f"{key}_key_{self.rank}" for key in task.keys]
-            v_cache_keys = [f"{key}_value_{self.rank}" for key in task.keys]
+            k_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key" for key in task.keys]
+            v_cache_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value" for key in task.keys]
+            if not self.has_cache_scale:
+                k_scale_keys = None
+                v_scale_keys = None
+            else:
+                k_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_key_scale" for key in task.keys]
+                v_scale_keys = [f"prefix{self.key_prefix}_{key}_{self.rank}_value_scale" for key in task.keys]
 
             match_block_num = 0
-            if self.storage_backend_type == "mooncake":
-                match_block_num = self.storage_backend.query(k_cache_keys, v_cache_keys, task.timeout)
+            if self.storage_backend_type == ("mooncake", "file"):
+                match_block_num = self.storage_backend.query(
+                    k_cache_keys, v_cache_keys, k_scale_keys, v_scale_keys, task.timeout
+                )
             elif self.storage_backend_type == "attention_store":
                 match_block_num = self.storage_backend.query(task.task_id, task.token_ids, 0, task.timeout)
             logger.info(f"Matched {match_block_num} blocks in cache storage for write task {task.task_id}")
@@ -711,6 +910,8 @@ class CacheTransferManager:
                 try:
                     k_cache_keys = k_cache_keys[match_block_num:]
                     v_cache_keys = v_cache_keys[match_block_num:]
+                    k_scale_keys = k_scale_keys[match_block_num:] if k_scale_keys else None
+                    v_scale_keys = v_scale_keys[match_block_num:] if v_scale_keys else None
                     gpu_block_ids = gpu_block_ids[match_block_num:]
                     cpu_block_ids = cpu_block_ids[match_block_num:]
                     # TODO: support timeout with actual block count
@@ -720,6 +921,8 @@ class CacheTransferManager:
                         match_block_num,
                         k_cache_keys,
                         v_cache_keys,
+                        k_scale_keys,
+                        v_scale_keys,
                         gpu_block_ids,
                         cpu_block_ids,
                         task.timeout,
@@ -728,8 +931,17 @@ class CacheTransferManager:
                         f"Successfully wrote {write_block_num} blocks to cache storage for task {task.task_id}"
                     )
                 except Exception as e:
-                    logger.error(f"Error in write back storage task: {e}")
+                    logger.error(f"Error in write back storage task: {e}, traceback:{traceback.format_exc()}")
                     gpu_block_ids = []
+                finally:
+                    try:
+                        if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                            self.storage_backend.flush_token_index(task.task_id, task.token_ids, 0, False)
+                        logger.info(f"Report cache index out HBM to cache storage for task {task.task_id}")
+                    except Exception as e:
+                        logger.info(
+                            f"Failed to report cache index out HBM to cache storage for task {task.task_id}, error: {e}"
+                        )
 
             result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, gpu_block_ids)
             self.cache_task_queue.swap_to_storage_barrier.wait()
@@ -1111,6 +1323,13 @@ class CacheTransferManager:
                     logger.debug("[RL] start restoring gpu caches")
                     self._init_gpu_cache(args)
                     logger.debug("[RL] successfully restored gpu caches")
+
+                    if self.storage_backend_type is not None:
+                        # use key_prefix to distinguish cache for different version of weight in rl
+                        version_file_path = os.path.join(args.model_path, "version.yaml")
+                        assert os.path.exists(version_file_path), f"version.yaml not found at {version_file_path}"
+                        self.key_prefix = get_key_prefix_from_version(version_file_path)
+                        logger.info(f"Update key_prefix of cache storage to {self.key_prefix}")
 
                     # wait for all ranks caches to be ready
                     while np.sum(self.cache_ready_signal.value) != args.mp_num:

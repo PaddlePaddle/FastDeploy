@@ -28,8 +28,6 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
-from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
-from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.mtp_linear import ParallelEHProjection
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.glm4_moe import Glm4MoeDecoderLayer
@@ -119,12 +117,8 @@ class SharedHead(nn.Module):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.shared_head.norm",
         )
-        self.head = ParallelLMHead(
-            fd_config,
-            embedding_dim=fd_config.model_config.hidden_size,
-            num_embeddings=fd_config.model_config.vocab_size,
-            prefix=f"{prefix}.shared_head.head",
-        )
+        if fd_config.speculative_config.sharing_model is not None:
+            self.head = fd_config.speculative_config.sharing_model.lm_head
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         # NOTE(wangyanpeng04): Just for compute logits
@@ -216,15 +210,8 @@ class Glm4MTPModel(nn.Layer):
 
         assert self.num_mtp_layers == 1, f"Currently only supports single MTP layer, but got {self.num_mtp_layers}"
 
-        self.embed_tokens = VocabParallelEmbedding(
-            fd_config=fd_config,
-            num_embeddings=fd_config.model_config.vocab_size,
-            embedding_dim=fd_config.model_config.hidden_size,
-            params_dtype=paddle.get_default_dtype(),
-            prefix=(
-                f"{fd_config.model_config.pretrained_config.prefix_name}.layers.{self.mtp_start_layer_idx}.embed_tokens"
-            ),
-        )
+        if fd_config.speculative_config.sharing_model is not None:
+            self.embed_tokens = fd_config.speculative_config.sharing_model.model.embed_tokens
 
         self.layers = nn.LayerDict(
             {

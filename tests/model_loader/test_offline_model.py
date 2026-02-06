@@ -24,7 +24,7 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from tests.model_loader.utils import (
+from model_loader.utils import (
     form_model_get_output_topp0,
     get_torch_model_path,
     run_with_timeout,

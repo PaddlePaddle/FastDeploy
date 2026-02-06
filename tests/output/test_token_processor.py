@@ -186,6 +186,7 @@ class _Metrics:
         self.available_gpu_block_num = _Metric()
         self.batch_size = _Metric()
         self.available_batch_size = _Metric()
+        self.request_token_ratio = _Metric()
 
     def _init_speculative_metrics(self, method, num_speculative_tokens):
         return None
@@ -197,6 +198,21 @@ def test_init_allocates_expected_buffers():
 
     processor_logprob, _, _, _ = _make_processor(enable_logprob=True)
     assert list(processor_logprob.output_scores.shape) == [MAX_BSZ * (K + 1), 1]
+
+
+def test_is_decode_stage():
+    processor, _, _, _ = _make_processor()
+
+    assert processor._is_decode_stage(None) is False
+
+    task = types.SimpleNamespace(need_prefill_tokens=None, num_computed_tokens=0)
+    assert processor._is_decode_stage(task) is False
+
+    task = types.SimpleNamespace(need_prefill_tokens=4, num_computed_tokens=3)
+    assert processor._is_decode_stage(task) is False
+
+    task = types.SimpleNamespace(need_prefill_tokens=4, num_computed_tokens=4)
+    assert processor._is_decode_stage(task) is True
 
     processor_spec, _, _, _ = _make_processor(speculative_method="mtp", enable_logprob=False)
     assert processor_spec.output_tokens.shape[0] == SPECULATE_MAX_BSZ * MAX_DRAFT_TOKENS + SPECULATE_MAX_BSZ + 2

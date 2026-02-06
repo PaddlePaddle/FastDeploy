@@ -49,6 +49,7 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.scheduler_metrics_logger import SchedulerMetricsLogger
 from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
@@ -145,6 +146,13 @@ class EngineService:
             split_connector=self.split_connector,
         )
         self.token_processor.set_resource_manager(self.resource_manager)
+
+        self.scheduler_metrics_logger = SchedulerMetricsLogger(
+            enabled=True,
+            dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+        )
+        self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
+        self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
 
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
@@ -298,6 +306,15 @@ class EngineService:
             create=True,
         )
 
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
@@ -323,6 +340,17 @@ class EngineService:
         self.swap_space_ready_signal = IPCSignal(
             name="swap_space_ready_signal",
             array=swap_space_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        cache_transfer_inited_signal_data = np.zeros(
+            shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32
+        )
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -911,6 +939,7 @@ class EngineService:
                                                 )
                                             ]
                                         )
+                                        need_check_req_ids.remove(task.request_id)
                                         delete_tasks_list.append(task)
                                     elif result is False:
                                         if task.request_id in finished_ids:
@@ -948,26 +977,23 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if self.engine_worker_queue.exist_tasks():
-                    time.sleep(0.001)
-                    continue
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if not is_fetching:
+                if not is_fetching:
+                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                    try:
                         is_fetching = True
                         get_request_pool.submit(_fetch_request)
-
-                else:
-                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
-                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                        try:
-                            is_fetching = True
-                            get_request_pool.submit(_fetch_request)
-                        except RuntimeError as e:
-                            if "shutdown" in str(e):
-                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                                break
-                            else:
-                                raise
+                    except RuntimeError as e:
+                        if "shutdown" in str(e):
+                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                            break
+                        else:
+                            raise
+                # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
+                # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
+                # more efficient batches.
+                if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                    time.sleep(0.001)
+                    continue
 
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
@@ -1017,6 +1043,13 @@ class EngineService:
                             else:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                else:
+                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
+                    # This helps EP workers barrier for syncing tasks not hang.
+                    if self.cfg.parallel_config.enable_expert_parallel:
+                        self.engine_worker_queue.put_tasks(
+                            ([], self.resource_manager.real_bsz)
+                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1674,10 +1707,10 @@ class EngineService:
                             f"Send server info to router failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
-                        time.sleep(sleep_seconds)
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
-                    time.sleep(sleep_seconds)
+
+                time.sleep(sleep_seconds)
 
         if self.cfg.router_config.router is None:
             self.llm_logger.info("Router is not enabled, skip registering to router")
@@ -1750,6 +1783,7 @@ class EngineService:
         self.worker_healthy_live_signal.clear()
         self.cache_ready_signal.clear()
         self.swap_space_ready_signal.clear()
+        self.cache_transfer_inited_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
         self.prefix_tree_status_signal.clear()
@@ -1976,6 +2010,7 @@ class EngineService:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -1983,6 +2018,7 @@ class EngineService:
 
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+            "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:
