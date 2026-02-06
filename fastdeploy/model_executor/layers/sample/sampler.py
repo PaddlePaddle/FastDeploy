@@ -945,7 +945,7 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["max_dec_len"],
             sampling_metadata.eos_token_ids,
             share_inputs["is_block_step"],
-            share_inputs["cu_seqlens_q_output"],
+            share_inputs["output_cum_offsets"],
             actual_candidate_len,
             share_inputs["actual_draft_token_num"],
             sampling_metadata.top_p,
