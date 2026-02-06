@@ -36,7 +36,7 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from tests.model_loader.utils import get_torch_model_path
+from model_loader.utils import get_torch_model_path
 
 test_model_configs = {
     "Qwen3-0.6B": {
