@@ -1559,10 +1559,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &TextImageGatherScatter,
         "text_image_gather_scatter function");
 
-#ifdef ENABLE_BF16
+  // tritonmoe_preprocess_func does not depend on BF16, keep it unconditionally
+  // available
   m.def("count_tokens_per_expert_func", &count_tokens_per_expert_func);
 
   m.def("tritonmoe_preprocess_func", &tritonmoe_preprocess_kernel);
+
+#ifdef ENABLE_BF16
   m.def("MoeWna16MarlinGemmApi",
         &MoeWna16MarlinGemmApi,
         py::arg("a"),
