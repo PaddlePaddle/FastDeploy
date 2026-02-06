@@ -195,6 +195,14 @@ std::vector<paddle::Tensor> MoeTopkSelect(
     const int moe_topk,
     const bool apply_norm_weight);
 
+std::vector<paddle::Tensor> FusedNoAuxTc(const paddle::Tensor& gating_logits,
+                                         const paddle::Tensor& bias,
+                                         const int n_group,
+                                         const int topk_group,
+                                         const int top_k,
+                                         const bool apply_norm_weight,
+                                         const float routed_scaling_factor);
+
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& draft_tokens,
                       const paddle::Tensor& pre_ids,
@@ -973,6 +981,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("bias") = py::none(),
         py::arg("moe_topk"),
         py::arg("apply_norm_weight"));
+
+  m.def("fused_noaux_tc",
+        &FusedNoAuxTc,
+        "noaux_tc for Deepseekv3 MoE compute with sigmoid and bias",
+        py::arg("gating_logits"),
+        py::arg("bias"),
+        py::arg("n_group"),
+        py::arg("topk_group"),
+        py::arg("top_k"),
+        py::arg("apply_norm_weight"),
+        py::arg("routed_scaling_factor"));
 
   m.def("prof_start", &prof_start, "prof_start");
 
