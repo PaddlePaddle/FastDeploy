@@ -104,7 +104,9 @@ def get_moe_scores(
             routed_scaling_factor,
         )
     else:
-        scores, topk_values, topk_idx = noaux_tc_redundant(
+        # noaux_tc_redundant returns 4 values: scores, topk_values, topk_idx,
+        # and tokens_per_expert_stats_list_out (inplace updated)
+        scores, topk_values, topk_idx, _ = noaux_tc_redundant(
             scores,
             scores_with_bias,
             expert_id_to_ep_rank_array,
