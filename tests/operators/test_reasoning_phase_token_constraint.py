@@ -95,6 +95,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         logits = np.random.randn(self.token_num, self.vocab_size).astype("float32")
         self.logits = paddle.to_tensor(logits, dtype="float32")
 
+        self.enable_thinking = paddle.to_tensor([True, True], dtype="bool")
+
     def test_reasoning_status_and_logits_enforce(self):
         logits_before = self.logits.numpy().copy()
 
@@ -112,6 +114,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             self.reasoning_status,
             self.output_padding_offset,
             self.output_cum_offsets,
+            self.enable_thinking,
             self.think_end_id,
             self.line_break_id,
         )
@@ -189,6 +192,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             self.reasoning_status,
             self.output_padding_offset,
             self.output_cum_offsets,
+            self.enable_thinking,
             self.think_end_id,
             self.line_break_id,
         )
@@ -232,6 +236,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             self.reasoning_status,
             self.output_padding_offset,
             self.output_cum_offsets,
+            self.enable_thinking,
             self.think_end_id,
             self.line_break_id,
         )
@@ -267,6 +272,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             self.reasoning_status,
             self.output_padding_offset,
             self.output_cum_offsets,
+            self.enable_thinking,
             self.think_end_id,
             self.line_break_id,
         )
@@ -296,6 +302,58 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             )
         np.testing.assert_equal(self.reasoning_status.numpy(), [2, 3])
 
+    def test_status_0_to_2(self):
+        # batch 0 enforce，batch 1 not enforce
+        self.reasoning_status = paddle.to_tensor([0, 0], dtype="int32")
+        self.enable_thinking = paddle.to_tensor([False, False], dtype="bool")
+
+        self.step_idx = paddle.to_tensor([0, 0], dtype="int64")
+
+        self.seq_lens_this_time = paddle.to_tensor([15, 15], dtype="int32")
+        self.seq_lens_encoder = paddle.to_tensor([15, 15], dtype="int32")
+
+        logits_before = self.logits.numpy().copy()
+
+        reasoning_phase_token_constraint(
+            self.logits,
+            self.pre_ids,
+            self.stop_flags,
+            self.seq_lens_this_time,
+            self.seq_lens_encoder,
+            self.step_idx,
+            self.allowed_tokens,
+            self.reasoning_status,
+            self.output_padding_offset,
+            self.output_cum_offsets,
+            self.enable_thinking,
+            self.think_end_id,
+            self.line_break_id,
+        )
+
+        logits_after = self.logits.numpy()
+        # Find batch 0's token_idx
+        token_idx_batch0 = 0
+
+        # batch 0 first token should be enforced
+        for vid in range(self.vocab_size):
+            if vid in self.allowed_tokens.numpy():
+                self.assertAlmostEqual(
+                    logits_after[token_idx_batch0, vid],
+                    logits_before[token_idx_batch0, vid],
+                    places=5,
+                )
+            else:
+                self.assertLess(logits_after[token_idx_batch0, vid], -1e9)
+
+        if self.token_num > 1:
+            np.testing.assert_allclose(
+                logits_after[token_idx_batch0 + 1],
+                logits_before[token_idx_batch0 + 1],
+                rtol=1e-5,
+                atol=1e-6,
+            )
+        np.testing.assert_equal(self.reasoning_status.numpy(), [2, 2])
+
     def test_empty_allowed_tokens(self):
         empty_allowed = paddle.empty([0], dtype="int64")
 
@@ -312,6 +370,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             self.reasoning_status,
             self.output_padding_offset,
             self.output_cum_offsets,
+            self.enable_thinking,
             self.think_end_id,
             self.line_break_id,
         )
@@ -400,6 +459,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # ------------------------
         logits = paddle.randn([token_num, vocab_size], dtype="float32")
 
+        enable_thinking = paddle.ones(shape=[bs, 1], dtype="int32").astype("bool")
+
         # ------------------------
         # warmup
         # ------------------------
@@ -415,6 +476,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
                 reasoning_status,
                 output_padding_offset,
                 output_cum_offsets,
+                enable_thinking,
                 think_end_id,
                 line_break_id,
             )
@@ -441,6 +503,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
                 reasoning_status,
                 output_padding_offset,
                 output_cum_offsets,
+                enable_thinking,
                 think_end_id,
                 line_break_id,
             )

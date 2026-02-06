@@ -101,15 +101,20 @@ def update_value_by_repeat_times(
             logits_now[i] = logit_now / temperatures[bi]
 
 
-def ban_bad_words(logits, bad_words_list, output_padding_offset, token_num, bs, length, bad_words_length, max_seq_len):
+def ban_bad_words(
+    logits, bad_words_list, bad_words_len, output_padding_offset, token_num, bs, length, bad_words_length, max_seq_len
+):
     for token_idx in range(token_num):
         bi = (token_idx + output_padding_offset[token_idx]) / max_seq_len
         bi = bi.astype(paddle.int32)
         if bi >= bs:
             continue
         logits_now = logits[token_idx]
-        for i in range(bad_words_length):
-            bad_words_token_id = bad_words_list[i]
+        # Get bad tokens for current batch
+        bad_tokens_for_batch = bad_words_list[bi]
+        bad_tokens_len = bad_words_len[bi]
+        for i in range(bad_tokens_len):
+            bad_words_token_id = bad_tokens_for_batch[i].item()  # Convert to scalar
             if bad_words_token_id >= length or bad_words_token_id < 0:
                 continue
             logits_now[bad_words_token_id] = -1e10
@@ -123,6 +128,7 @@ def speculate_get_token_penalty_multi_scores_ref(
     presence_score,
     temperatures,
     bad_tokens,
+    bad_tokens_len,
     cur_len,
     min_len,
     eos_token_id,
@@ -173,7 +179,9 @@ def speculate_get_token_penalty_multi_scores_ref(
         max_seq_len,
     )
 
-    ban_bad_words(logits, bad_tokens, output_padding_offset, token_num, bs, length, length_bad_words, max_seq_len)
+    ban_bad_words(
+        logits, bad_tokens, bad_tokens_len, output_padding_offset, token_num, bs, length, length_bad_words, max_seq_len
+    )
 
 
 class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
@@ -215,7 +223,8 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         frequency_scores = paddle.to_tensor(np.random.random([bs])).astype(data_type)
         presence_scores = paddle.to_tensor(np.random.random([bs])).astype(data_type)
         temperatures = paddle.to_tensor(np.random.random([bs])).astype("float32")
-        bad_tokens = paddle.to_tensor(np.random.randint(1, 2, size=([bs, 1]))).astype("int64")
+        bad_tokens = paddle.to_tensor(np.ones([bs, 2])).astype("int64")
+        bad_tokens_len = paddle.to_tensor(np.zeros([bs, 1])).astype("int64")
         cur_len = paddle.to_tensor(np.random.randint(1, 50, size=(bs))).astype("int64")
         min_len = paddle.to_tensor(np.random.randint(1, 50, size=(bs))).astype("int64")
         eos_token_id = paddle.to_tensor(np.random.randint(1, 64, size=(bs))).astype("int64")
@@ -231,6 +240,7 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
             presence_scores,
             temperatures,
             bad_tokens,
+            bad_tokens_len,
             cur_len,
             min_len,
             eos_token_id,
