@@ -713,7 +713,9 @@ def test_logprobs_with_prompt_logprobs_diff():
 
 
 def test_prompt_logprobs_accuracy():
-
+    """
+    测试prompt_logprobs的精度,计算一致
+    """
     data1 = {
         "stream": False,
         "messages": [
