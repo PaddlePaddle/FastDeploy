@@ -389,6 +389,9 @@ async def benchmark(
 
     print("test_output:", test_output)
 
+    if args.multi_turn:
+        test_output = test_output[0]
+
     if not test_output.success:
         raise ValueError(
             f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
@@ -568,6 +571,10 @@ async def benchmark(
                 tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
 
         outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+
+    # 多轮对话需要flatten后统计
+    if args.multi_turn:
+        outputs = [x for sub in outputs for x in sub]
 
     outputs.sort(key=lambda x: x.end_timestamp)
 
@@ -1040,6 +1047,9 @@ def main(args: argparse.Namespace):
     np.random.seed(args.seed)
 
     backend = args.backend
+    # 支持多轮对话方式请求，仅支持chat接口
+    if args.multi_turn:
+        backend = "openai-chat-multi-turn"
     model_id = args.model
     model_name = args.served_model_name
     tokenizer_id = args.tokenizer if args.tokenizer is not None else args.model
@@ -1344,6 +1354,11 @@ if __name__ == "__main__":
         "--pd-metrics",
         action="store_true",
         help="请求时增加PD分离参数，metrics: True",
+    )
+    parser.add_argument(
+        "--multi-turn",
+        action="store_true",
+        help="按多轮对话方式请求",
     )
     parser.add_argument(
         "--drop-ratio",

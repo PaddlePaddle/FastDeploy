@@ -176,7 +176,29 @@ jobs:
           TEST_EXIT_CODE=0
           pushd tests/ce/stable_cases
           bash launch_model.sh /MODELDATA
-          bash run.sh || TEST_EXIT_CODE=1
+
+          TEST_EXIT_CODE=0
+          bash run.sh || {
+            TEST_EXIT_CODE=1
+            echo "==================== run.sh FAILED ===================="
+
+            if [ -d log ]; then
+              echo ">>> grep error in ./log/"
+              grep -Rni --color=auto "error" log || true
+            else
+              echo "log/ directory not found"
+            fi
+
+            if [ -f log/workerlog.0 ]; then
+              echo ">>> tail -n 100 log/workerlog.0"
+              tail -n 100 log/workerlog.0
+            else
+              echo "log/workerlog.0 not found"
+            fi
+
+            echo "======================================================="
+          }
+
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env
           '

@@ -132,7 +132,10 @@ void SpeculateLimitThinkingContentLengthV2(
   const int batch_size = next_tokens.shape()[0];
   const int tokens_per_step = next_tokens.shape()[1];
 
-  speculate_limit_thinking_content_length_kernel_v2<<<1, 1024>>>(
+  speculate_limit_thinking_content_length_kernel_v2<<<1,
+                                                      1024,
+                                                      0,
+                                                      next_tokens.stream()>>>(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int64_t*>(step_idx.data<int64_t>()),
