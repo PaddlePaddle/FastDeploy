@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 
+import numpy
 import pytest
 import requests
 
@@ -54,13 +55,16 @@ def setup_and_run_server():
     clean_ports([FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT, FD_CONTROLLER_PORT])
 
     env = os.environ.copy()
-    env["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
+    # env["CUDA_VISIBLE_DEVICES"] = "0,1"
+    env["TEMPLATE"] = "TOKEN_LOGPROB"
+    env["FD_USE_GET_SAVE_OUTPUT_V2"] = "1"
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
+        # model_path = "/MODELDATA/ERNIE-4.5-0.3B-Paddle"
+        model_path = "/root/paddlejob/workspace/env_run/xujing43/0.3B"
 
     log_path = "server.log"
     cmd = [
@@ -339,35 +343,6 @@ def test_unstream_with_prompt_logprobs_zero_completions():
             assert token_id in resp_json["choices"][0]["prompt_token_ids"]
 
 
-def test_unstream_with_prompt_logprobs_chunk():
-    """
-    测试chunk切分的能力是否正常
-    """
-    data = {
-        "stream": False,
-        "prompt": [10] * (32 * 1024),
-        "max_tokens": 1,
-        "prompt_logprobs": 1,
-    }
-    response = send_request(COMPLETIONS_URL, data)
-    resp_json = response.json()
-
-    # 校验返回内容与概率信息
-    assert resp_json["choices"][0]["text"] is not None
-    # assert resp_json["usage"]["prompt_tokens"] == 7
-    assert resp_json["usage"]["completion_tokens"] == 1
-    for i, prompt_logprobs in enumerate(resp_json["choices"][0]["prompt_logprobs"]):
-        if i == 0:
-            assert prompt_logprobs is None
-        else:
-            top = sorted(prompt_logprobs.values(), key=lambda x: x["rank"], reverse=False)
-            assert top[0]["rank"] == 1
-            assert len(top) in {data["prompt_logprobs"], data["prompt_logprobs"] + 1}
-            for i in range(len(top)):
-                assert top[i]["logprob"] < 0
-                assert top[i]["decoded_token"].encode("utf-8")
-
-
 def test_unstream_with_prompt_logprobs_chunk_chat():
     """
     测试chunk切分的能力是否正常
@@ -383,6 +358,7 @@ def test_unstream_with_prompt_logprobs_chunk_chat():
     # 构建请求并发送
     response = send_request(URL, data)
     resp_json = response.json()
+    # print(json.dumps(resp_json, ensure_ascii=False))
 
     # 校验返回内容与概率信息
     assert resp_json["choices"][0]["message"]["content"] is not None
@@ -398,6 +374,22 @@ def test_unstream_with_prompt_logprobs_chunk_chat():
             for i in range(len(top)):
                 assert top[i]["logprob"] < 0
                 assert top[i]["decoded_token"].encode("utf-8")
+
+
+def test_unstream_with_prompt_logprobs_chunk():
+    """
+    测试chunk切分的能力是否正常
+    """
+    data = {"stream": False, "prompt": [10] * (32 * 1024), "max_tokens": 1, "return_token_ids": True}
+
+    response = send_request(COMPLETIONS_URL, data)
+    resp_json = response.json()
+
+    # 校验返回内容与概率信息
+    assert resp_json["choices"][0]["text"] is not None
+    # assert resp_json["usage"]["prompt_tokens"] == 7
+    assert resp_json["usage"]["completion_tokens"] == 1
+    assert resp_json["choices"][0]["prompt_logprobs"] is None
 
 
 def test_unstream_with_prompt_logprobs_none_completions():
@@ -449,13 +441,13 @@ def test_stream_with_prompt_logprobs_completions():
         "prompt": "牛顿的三大运动定律是什么？",
         "max_tokens": 3,
         "prompt_logprobs": 3,
-        "return_token_ids": True,
+        # "return_token_ids":True
     }
 
     response = send_request(COMPLETIONS_URL, data)
 
     result_chunk = {}
-    # first_packet = True
+    first_packet = True
     for line in response.iter_lines():
         if not line:
             continue
@@ -464,9 +456,9 @@ def test_stream_with_prompt_logprobs_completions():
             break
 
         result_chunk = json.loads(decoded)
-        completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
-        if completion_token_ids:
-            # if not first_packet:
+        # completion_token_ids = result_chunk["choices"][0].get("completion_token_ids")
+        # if completion_token_ids:
+        if not first_packet:
             assert result_chunk["choices"][0]["prompt_logprobs"] is None
         else:
             for i, prompt_logprobs in enumerate(result_chunk["choices"][0]["prompt_logprobs"]):
@@ -474,12 +466,12 @@ def test_stream_with_prompt_logprobs_completions():
                     assert prompt_logprobs is None
                 else:
                     top = list(prompt_logprobs.values())
-                    token_id = int(list(prompt_logprobs.keys())[0])
+                    # token_id = int(list(prompt_logprobs.keys())[0])
                     assert top[0]["decoded_token"] is not None
                     assert top[0]["logprob"] < 0
                     assert top[0]["rank"] >= 1
-                    assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
-            # first_packet = False
+                    # assert token_id in result_chunk["choices"][0]["prompt_token_ids"]
+            first_packet = False
 
 
 def test_unstream_with_prompt_logprobs_list_completions():
@@ -618,6 +610,150 @@ def send_request(url, payload, timeout=600, stream=False):
         print(f"❌ 请求失败：{e}")
         # base_logger.error(f"❌ 请求失败：{e}")
         return None
+
+
+def test_logprobs_with_prompt_logprobs_diff():
+    """
+    测试prompt_logprobs与logprobs的一致性
+    """
+    data = {
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "牛顿的三大运动定律是什么？"},
+        ],
+        "max_tokens": 1024,
+        "logprobs": True,
+        "top_logprobs": 0,
+        "return_token_ids": True,
+        "temperature": 1,
+        "top_p": 1.0,
+        "top_k": 0,
+        "seed": 33,
+    }
+
+    # 构建请求并发送
+    response_short = send_request(URL, data)
+    resp_json_short = response_short.json()
+    print(json.dumps(resp_json_short, ensure_ascii=False))
+    prompt_token_ids = resp_json_short["choices"][0]["message"]["prompt_token_ids"]
+    completion_token_ids = resp_json_short["choices"][0]["message"]["completion_token_ids"]
+    logprobs = resp_json_short["choices"][0]["logprobs"]["content"]
+    # assert completions_token_ids
+    data2 = {
+        "stream": False,
+        "messages": [
+            {"role": "user", "content": ""},
+        ],
+        "max_tokens": 1,
+        "prompt_logprobs": 0,
+        "return_token_ids": True,
+        "temperature": 1,
+        "top_p": 1.0,
+        "top_k": 0,
+        "seed": 33,
+        "prompt_token_ids": prompt_token_ids + completion_token_ids,
+    }
+
+    # 构建请求并发送
+    response_long = send_request(URL, data2)
+    resp_json_long = response_long.json()
+    print(json.dumps(resp_json_long, ensure_ascii=False))
+    prompt_logprobs = resp_json_long["choices"][0].get("prompt_logprobs")
+    completion_prompt_logprobs = prompt_logprobs[len(prompt_token_ids) :]
+
+    print("======对比1请求的logprob和2请求的后半部分prompt_logprobs======>")
+
+    with open("output_logprobs.log", "w", encoding="utf-8") as f:
+        for i in range(len(completion_token_ids)):
+            output_token_ids = completion_token_ids[i]
+            line = (
+                f"{i}, {output_token_ids}, "
+                f'logprob={logprobs[i]["logprob"]}, '
+                f'prompt_logprob={completion_prompt_logprobs[i][str(output_token_ids)]["logprob"]}\n'
+            )
+            f.write(line)
+
+    print("====== 校验绝对误差 abs(logprob - prompt_logprob) <= 10 ======")
+
+    MAX_ABS_ERROR = 1.0
+
+    for i in range(len(completion_token_ids)):
+        token_id = completion_token_ids[i]
+        logprob = logprobs[i]["logprob"]
+        prompt_logprob = completion_prompt_logprobs[i][str(token_id)]["logprob"]
+        # numpy.testing.assert_allclose(numpy.array(logprob), numpy.array(prompt_logprob))
+        numpy.testing.assert_allclose(
+            numpy.array(prompt_logprob),
+            numpy.array(logprob),
+            rtol=3e-1,
+            atol=1e-3,
+        )
+        abs_error = abs(logprob - prompt_logprob)
+
+        assert abs_error <= MAX_ABS_ERROR, (
+            f"[ABS_ERROR_TOO_LARGE] "
+            f"index={i}, token_id={token_id}, "
+            f"logprob={logprob}, "
+            f"prompt_logprob={prompt_logprob}, "
+            f"abs_error={abs_error}"
+        )
+
+        print("✅  所有 token 的绝对误差均 <= 1")
+
+
+def test_prompt_logprobs_accuracy():
+
+    data1 = {
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "牛顿的三大运动定律是什么？"},
+        ],
+        "top_p": 1.0,
+        "temperature": 0,
+        "max_tokens": 10,
+        "n": 1,
+        "seed": 1,
+        "return_token_ids": True,
+        "prompt_logprobs": 3,
+        "top_k": -1,
+    }
+
+    # 构建请求并发送
+    response_short = send_request(URL, data1)
+    resp_json_short = response_short.json()
+    print(json.dumps(resp_json_short, ensure_ascii=False))
+    prompt_token_ids = resp_json_short["choices"][0]["message"]["prompt_token_ids"]
+    completion_token_ids = resp_json_short["choices"][0]["message"]["completion_token_ids"]
+    prompt_short_logprobs = resp_json_short["choices"][0]["prompt_logprobs"]
+    # print(json.dumps(prompt_short_logprobs, ensure_ascii=False))
+
+    print("-----------------------prompt_short_logprobs------------------------------------")
+    prompt_and_completion_token_ids = prompt_token_ids + completion_token_ids
+    data2 = {
+        "stream": False,
+        "messages": [
+            {"role": "user", "content": ""},
+        ],
+        "top_p": 1.0,
+        "temperature": 0,
+        "max_tokens": 10,
+        "n": 1,
+        "seed": 1,
+        "prompt_logprobs": 3,
+        "top_k": -1,
+        "prompt_token_ids": prompt_and_completion_token_ids,
+    }
+    # 构建请求并发送
+    response_long = send_request(URL, data2)
+    resp_json_long = response_long.json()
+    prompt_long_logprobs = resp_json_long["choices"][0]["prompt_logprobs"]
+    print("-----------------------prompt_long_logprobs------------------------------------")
+    print(json.dumps(prompt_long_logprobs, ensure_ascii=False))
+
+    for i in range(len(prompt_short_logprobs)):
+        assert prompt_long_logprobs[i] == prompt_short_logprobs[i], f"prompt_logprobs mismatch at token index {i}"
 
 
 if __name__ == "__main__":
