@@ -229,7 +229,7 @@ def pre_process(
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, token_num_cpu
+            input_ids, seq_lens_this_time, None, None, token_num_cpu
         )
         return (
             ids_remove_padding,
