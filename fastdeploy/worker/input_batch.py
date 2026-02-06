@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-from platform import platform
-
 import paddle
 from paddleformers.utils.log import logger
 
@@ -414,7 +412,7 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            if self.current_platform.is_cuda():
+            if current_platform.is_cuda():
                 swap_data(self.cu_seqlens_q_output, i1, i2)
             else:
                 swap_data(self.output_cum_offsets, i1, i2)
@@ -525,7 +523,7 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-        if platform.is_cuda():
+        if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
         else:
@@ -676,7 +674,7 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        if platform.is_cuda():
+        if current_platform.is_cuda():
             swap_data(self.cu_seqlens_q_output, i1, i2)
             swap_data(self.batch_id_per_token_output, i1, i2)
         else:
