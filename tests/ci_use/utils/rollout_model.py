@@ -26,6 +26,9 @@ parser.add_argument("--model_path", type=str, required=True, help="Path to the m
 parser.add_argument("--baseline_path", type=str, required=True, help="Path to the baseline path")
 parser.add_argument("--quantization", type=str, default=None, help="Quantization")
 parser.add_argument("--enable_mm", action="store_true", required=False, help="Flags to enable multi-modal model")
+parser.add_argument(
+    "--enable_speculative_decoding", action="store_true", required=False, help="Flags to enable speculative decoding"
+)
 args = parser.parse_args()
 
 # base result
@@ -42,6 +45,9 @@ init_kwargs = {
 }
 if args.enable_mm:
     init_kwargs["enable_mm"] = True
+if args.enable_speculative_decoding:
+    init_kwargs["speculative_method"] = "mtp"
+    init_kwargs["num_nextn_predict_layers"] = 1
 
 
 rollout_config = RolloutModelConfig(**init_kwargs)

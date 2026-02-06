@@ -19,6 +19,7 @@ import re
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any, List, Optional, Union
 
 import paddle
@@ -547,3 +548,11 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+@cache
+def get_sm_version():
+    if paddle.cuda.is_available():
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor
+    return 0

@@ -243,7 +243,11 @@ def xpu_process_output(
 ) -> paddle.Tensor:
     """ """
 
-    output_padding_offset = share_inputs.get("output_padding_offset", None)
+    if isinstance(share_inputs, dict):
+        output_padding_offset = share_inputs.get("output_padding_offset", None)
+    else:
+        output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
+
     hiddden_states = gather_next_token(
         forward_output,
         cum_offsets,
