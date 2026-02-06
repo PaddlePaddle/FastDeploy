@@ -18,12 +18,12 @@ import numpy as np
 
 from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
+from fastdeploy.input.utils import check_mm_limits, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
 _SAMPLING_EPS = 1e-5
-from fastdeploy.input.utils import process_stop_token_ids
 
 
 class PaddleOCRVLProcessor(TextProcessor):
@@ -171,26 +171,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         Raises:
             ValueError: If input exceeds configured limits
         """
-        if isinstance(item, dict):
-            # 请求包含prompt和multi_modal_data
-            mm_data = item
-        else:
-            # 请求包含messages
-            mm_data = {"image": [], "video": []}
-
-            for message in item:
-                if isinstance(message.get("content"), list):
-                    for part in message["content"]:
-                        if part.get("type") in ["image_url", "image"]:
-                            mm_data["image"].append(part)
-                        elif part.get("type") in ["video_url", "video"]:
-                            mm_data["video"].append(part)
-
-        for modality, data in mm_data.items():
-            if modality in self.limit_mm_per_prompt:
-                limit = self.limit_mm_per_prompt[modality]
-                if len(data) > limit:
-                    raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
+        check_mm_limits(item, self.limit_mm_per_prompt, type_check_mode="in")
 
     def process_request_dict(self, request, max_model_len=None):
         """

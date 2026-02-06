@@ -16,12 +16,62 @@
 
 __all__ = [
     "IDS_TYPE_FLAG",
+    "check_mm_limits",
 ]
 
 IDS_TYPE_FLAG = {"text": 0, "image": 1, "video": 2, "audio": 3}
 
 
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple, Union
+
+
+def check_mm_limits(
+    item: Union[Dict[str, Any], List[Dict[str, Any]]],
+    limit_mm_per_prompt: Dict[str, int],
+    type_check_mode: str = "in",
+) -> None:
+    """
+    Validate multimodal inputs against configured limits.
+
+    Args:
+        item: Input request item to validate. Can be either:
+            - dict: Contains prompt and multi_modal_data
+            - list: Contains messages with multimodal content
+        limit_mm_per_prompt: Dictionary mapping modality names to their limits
+        type_check_mode: How to check content types:
+            - "in": Check if type is in ["image_url", "image"] (default)
+            - "eq": Check if type equals "image" exactly
+
+    Raises:
+        ValueError: If input exceeds configured limits
+    """
+    if isinstance(item, dict):
+        # Request contains prompt and multi_modal_data
+        mm_data = item
+    else:
+        # Request contains messages
+        mm_data = {"image": [], "video": []}
+
+        for message in item:
+            if isinstance(message.get("content"), list):
+                for part in message["content"]:
+                    part_type = part.get("type")
+                    if type_check_mode == "in":
+                        if part_type in ["image_url", "image"]:
+                            mm_data["image"].append(part)
+                        elif part_type in ["video_url", "video"]:
+                            mm_data["video"].append(part)
+                    else:  # type_check_mode == "eq"
+                        if part_type == "image":
+                            mm_data["image"].append(part)
+                        elif part_type == "video":
+                            mm_data["video"].append(part)
+
+    for modality, data in mm_data.items():
+        if modality in limit_mm_per_prompt:
+            limit = limit_mm_per_prompt[modality]
+            if len(data) > limit:
+                raise ValueError(f"Too many {modality} items in prompt, got {len(data)} but limit is {limit}")
 
 
 def process_stop_token_ids(

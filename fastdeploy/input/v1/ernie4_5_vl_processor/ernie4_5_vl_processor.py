@@ -20,7 +20,7 @@ import numpy as np
 from paddleformers.generation import GenerationConfig
 
 from fastdeploy.engine.request import Request
-from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
+from fastdeploy.input.utils import IDS_TYPE_FLAG, check_mm_limits, process_stop_token_ids
 from fastdeploy.input.v1.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.utils import data_processor_logger
 
@@ -166,26 +166,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             return DEFAULT_LIMITS
 
     def _check_mm_limits(self, item):
-        if isinstance(item, dict):
-            # 请求包含prompt和multi_modal_data
-            mm_data = item
-        else:
-            # 请求包含messages
-            mm_data = {"image": [], "video": []}
-
-            for message in item:
-                if isinstance(message.get("content"), list):
-                    for part in message["content"]:
-                        if part.get("type") == "image":
-                            mm_data["image"].append(part)
-                        elif part.get("type") == "video":
-                            mm_data["video"].append(part)
-
-        for modality, data in mm_data.items():
-            if modality in self.limit_mm_per_prompt:
-                limit = self.limit_mm_per_prompt[modality]
-                if len(data) > limit:
-                    raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
+        check_mm_limits(item, self.limit_mm_per_prompt, type_check_mode="eq")
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
