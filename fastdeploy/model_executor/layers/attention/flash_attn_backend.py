@@ -20,64 +20,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
 import paddle
-from paddle import _C_ops
 from paddle.nn.functional.flash_attention import flash_attn_unpadded
 from paddleformers.utils.log import logger
 
-
-def flash_attention_v3_varlen(
-    query,
-    key,
-    value,
-    cu_seqlens_q,
-    cu_seqlens_k,
-    max_seqlen_q,
-    max_seqlen_k,
-    seqused_q=None,
-    seqused_k=None,
-    softmax_scale=None,
-    causal=False,
-    qv=None,
-    q_descale=None,
-    k_descale=None,
-    v_descale=None,
-    window_size=(-1, -1),
-    softcap=0.0,
-    num_splits=1,
-    pack_gqa=None,
-    sm_margin=0,
-):
-
-    assert len(query.shape) == 3
-    if softmax_scale is None:
-        softmax_scale = (query.shape[-1] + (qv.shape[-1] if qv is not None else 0)) ** (-0.5)
-
-    out, softmax_lse = _C_ops.flash_attn_v3_varlen(
-        query,
-        key,
-        value,
-        cu_seqlens_q,
-        cu_seqlens_k,
-        seqused_q,
-        seqused_k,
-        qv,
-        q_descale,
-        k_descale,
-        v_descale,
-        max_seqlen_q,
-        max_seqlen_k,
-        softmax_scale,
-        causal,
-        window_size[0],
-        window_size[1],
-        softcap,
-        num_splits,
-        pack_gqa is not None,
-        pack_gqa if pack_gqa is not None else False,
-        sm_margin,
-    )
-    return out, softmax_lse
-
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
 
 try:
     from paddle.nn.functional.flash_attention import flashmask_attention
@@ -210,6 +159,7 @@ def flash_attn_func(
         )
     else:
         if version == 3:
+            paddle.set_flags({"FLAGS_flash_attn_version": 3})
             out = flash_attention_v3_varlen(
                 q,
                 k,
