@@ -24,7 +24,7 @@ if project_root not in sys.path:
 
 os.environ["FD_USE_MACHETE"] = "0"
 
-from tests.model_loader.utils import (
+from model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
     get_paddle_model_path,

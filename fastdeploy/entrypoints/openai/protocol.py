@@ -556,6 +556,7 @@ class CompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
+        req_dict["metrics"] = {}
 
         # parse request model into dict
         if self.suffix is not None:
@@ -568,7 +569,13 @@ class CompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
         if prompt is not None:
-            req_dict["prompt"] = prompt
+            if isinstance(prompt, list) and isinstance(prompt[0], int):
+                # List[int]
+                req_dict["prompt_token_ids"] = prompt
+                req_dict["prompt"] = None
+            else:
+                # str
+                req_dict["prompt"] = prompt
 
         # if "prompt_token_ids" in req_dict:
         #     if "prompt" in req_dict:
@@ -739,6 +746,7 @@ class ChatCompletionRequest(BaseModel):
         req_dict["prompt_logprobs"] = self.prompt_logprobs
         req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
         req_dict["top_p_normalized_logprobs"] = self.top_p_normalized_logprobs
+        req_dict["metrics"] = {}
 
         # parse request model into dict, priority: request params > metadata params
         if self.metadata is not None:

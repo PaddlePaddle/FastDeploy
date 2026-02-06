@@ -92,13 +92,19 @@ class CudaGraphPiecewiseBackend:
     def __init__(
         self,
         fd_config: FDConfig,
+        dy_runnable: Callable,
         runnable: Callable,
     ):
         self.fd_config = fd_config
+        self.dy_runnable = dy_runnable
         self.runnable = runnable
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
+        self.cudagraph_capture_sizes_prefill = fd_config.graph_opt_config.cudagraph_capture_sizes_prefill
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
+        self.real_shape_to_captured_size_prefill = fd_config.graph_opt_config.real_shape_to_captured_size_prefill
+        self.full_cuda_graph = fd_config.graph_opt_config.full_cuda_graph
+        self.dy2st = fd_config.graph_opt_config.graph_opt_level > 0
         self.unique_memory_pool_id = None
         if self.fd_config.graph_opt_config.use_unique_memory_pool:
             # TODO(gongshaotian): Optimize code
@@ -144,25 +150,40 @@ class CudaGraphPiecewiseBackend:
             return entry.runnable(**kwargs)
 
     def __call__(self, **kwargs) -> List[paddle.Tensor] | paddle.Tensor:
-        # Get real shape(all num tokens)
+        # Get real shape (total num tokens)
         ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
         real_shape = ids_remove_padding.shape[0]
-        padding_real_shape = self.real_shape_to_captured_size[real_shape]
+
+        exist_prefill = kwargs["forward_meta"].exist_prefill
+        # Static split graph mode: use Static + CUDAGraph for prefill/mixed phase
+        static_cudagraph_for_prefill = exist_prefill and not self.full_cuda_graph and self.dy2st
+        # Static full graph mode: use Static + CUDAGraph for decode phase only
+        static_cudagraph_for_decode = not exist_prefill and self.full_cuda_graph and self.dy2st
+
+        if static_cudagraph_for_prefill:
+            padding_real_shape = self.real_shape_to_captured_size_prefill[real_shape]
+        else:
+            padding_real_shape = self.real_shape_to_captured_size[real_shape]
+
         logger.debug(
             f"[CUDA GRAPH][ID:{id(self)}] The actual real shape obtained by CUDAGraph is :{real_shape}, "
             f"The padded shape is :{padding_real_shape}, If Padding :{real_shape != padding_real_shape}"
         )
-
-        entry = self.concrete_size_entries.get(padding_real_shape)
+        entry = self.concrete_size_entries.get((padding_real_shape, static_cudagraph_for_prefill))
         assert entry is not None, f"real shape:{padding_real_shape} is not in cuda graph capture list."
         if entry.runnable is None:
-            entry.runnable = self.runnable
+            # Static prefill uses static graph runnable, others use dynamic graph runnable
+            entry.runnable = self.runnable if static_cudagraph_for_prefill else self.dy_runnable
             logger.debug(f"[CUDA GRAPH][ID:{id(self)}] New entry lazy initialize with real shape {padding_real_shape}")
 
         if not entry.use_cudagraph:
             return entry.runnable(**kwargs)
 
-        if self.fd_config.graph_opt_config.graph_opt_level > 0:
+        # Execution modes with CUDAGraph:
+        # - Static split graph mode: Static + CUDAGraph for prefill/mixed, Dynamic + CUDAGraph for decode
+        # - Static full graph mode: Dynamic for prefill/mixed, Static + CUDAGraph for decode
+        # - Dynamic mode: Dynamic + CUDAGraph for decode only
+        if static_cudagraph_for_prefill or static_cudagraph_for_decode:
             return self.run_static_model(entry, **kwargs)
 
         # Capture a new cuda graph
@@ -198,7 +219,7 @@ class CudaGraphPiecewiseBackend:
                 if output is not None:
                     output_buffer = paddle.zeros_like(output)
                     output._share_buffer_to(output_buffer)
-                    output._clear
+                    output._clear()
                     entry.output_buffers.append(output_buffer)
                 else:
                     entry.output_buffers.append(None)
@@ -222,7 +243,10 @@ class CudaGraphPiecewiseBackend:
         self.concrete_size_entries: Dict[int, ConcreteSizeEntry] = {}
 
         for shape in self.cudagraph_capture_sizes:
-            self.concrete_size_entries[shape] = ConcreteSizeEntry(real_shape=shape)
+            self.concrete_size_entries[shape, False] = ConcreteSizeEntry(real_shape=shape)
+
+        for shape in self.cudagraph_capture_sizes_prefill:
+            self.concrete_size_entries[shape, True] = ConcreteSizeEntry(real_shape=shape)
 
         logger.info(
             f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph capture list {self.cudagraph_capture_sizes}, "
@@ -233,7 +257,7 @@ class CudaGraphPiecewiseBackend:
         """ """
         # Clear graphs
         custom_ar_clear_ipc_handles()
-        for _id, entry in self.concrete_size_entries.items():
+        for (_id, _), entry in self.concrete_size_entries.items():
             if entry.cuda_graph:
                 del entry.cuda_graph
                 logger.debug(f"[CUDA GRAPH][ID:{id(self)}] The CUDAGraph with shape {_id} has been cleared.")
@@ -257,6 +281,6 @@ class CudaGraphPiecewiseBackend:
 
     def check_capture_successful(self):
         """Check whether the shapes are captured or not"""
-        for shape, entry in self.concrete_size_entries.items():
+        for (shape, _), entry in self.concrete_size_entries.items():
             if not entry.captured:
                 raise ValueError(f"[CUDA GRAPH][ID:{id(self)}] Shape {shape} capture failed.")

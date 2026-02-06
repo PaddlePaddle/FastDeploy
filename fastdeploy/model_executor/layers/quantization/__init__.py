@@ -14,8 +14,9 @@
 """
 quantization module
 """
-from typing import Dict, List, Type
+from typing import List, Type
 
+from fastdeploy import envs
 from fastdeploy.utils import parse_quantization
 
 from .quant_base import QuantConfigBase
@@ -33,6 +34,8 @@ QUANTIZATION_METHODS: List[str] = [
     "mix_quant",
     "tensor_wise_fp8",
     "kvcache",
+    "modelopt_fp4",
+    "mxfp4",
 ]
 
 
@@ -131,6 +134,13 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
         has_block_size = "weight_block_size" in quantization_config
         if quant_method == "fp8" and has_block_size:
             quant_config_name = "block_wise_fp8"
+        elif quant_method == "modelopt":
+            if quantization_config.get("quant_algo", "") == "NVFP4":
+                quant_config_name = "modelopt_fp4"
+            else:
+                raise ValueError("modelopt only supports NVFP4 quantization.")
+        elif quant_method == "mxfp4":
+            quant_config_name = "mxfp4"
         else:
             raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
     else:
@@ -148,6 +158,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .block_wise_fp8 import BlockWiseFP8Config
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
+    from .nvfp4 import ModelOptNvFp4Config
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -156,7 +167,10 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
 
-    method_to_config: Dict[str, Type[QuantConfigBase]] = {
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
+        from .mxfp4 import MXFP4Config
+
+    method_to_config = {
         "wint2": WINT2Config,
         "wint4": WINT4Config,
         "wint8": WINT8Config,
@@ -169,6 +183,9 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
+        "modelopt_fp4": ModelOptNvFp4Config,
     }
+    if envs.FD_MOE_MXFP4_BACKEND is not None:
+        method_to_config["mxfp4"] = MXFP4Config
 
     return method_to_config[quantization]

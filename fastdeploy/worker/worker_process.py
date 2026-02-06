@@ -15,9 +15,11 @@
 """
 
 import argparse
+import asyncio
 import json
 import os
 import time
+import traceback
 from typing import Tuple
 
 import numpy as np
@@ -42,7 +44,7 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.engine.request import RequestType
+from fastdeploy.engine.request import ControlRequest, ControlResponse, RequestType
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -57,6 +59,7 @@ from fastdeploy.inter_communicator import (
     ModelWeightsStatus,
     RearrangeExpertStatus,
 )
+from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -163,6 +166,16 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
+
+    def init_control(self):
+        engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
+        queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
+        logger.info(f"Init Control Output Queue: {queue_name}(producer)")
+        self._ctrl_output = FMQ().queue(queue_name, "producer")
 
     def init_health_status(self) -> None:
         """
@@ -270,6 +283,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init engine forward signal
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -297,7 +320,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or self.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -427,9 +450,6 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            # run eplb
-            self._run_eplb(tp_rank)
-
             if self.fd_config.load_config.dynamic_load_weight:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -503,7 +523,7 @@ class PaddleDisWorkerProc:
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
-
+                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
@@ -512,29 +532,56 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
+                # Only EP + DP prefill should barrier for data arrival.
+                # In mixed mode and decoder in D, we should not barrier to influence decoding.
+                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
 
-                req_dicts = []
-                for req_dict, bsz in tasks:
-                    max_occupied_batch_index = int(bsz)
-                    req_dicts.extend(req_dict)
+                req_dicts, control_reqs = [], []
+                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
+                if tasks[0][0]:
+                    for req_dict, bsz in tasks:
+                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                            control_reqs.append(req_dict[0])
+                        else:
+                            max_occupied_batch_index = int(bsz)
+                            req_dicts.extend(req_dict)
 
-                # Count prefill requests in current batch
-                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                num_scheduled_requests = len(req_dicts)
-                scheduled_request_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
-                    f"num_scheduled_requests: {num_scheduled_requests}, "
-                    f"scheduled_request_ids: {scheduled_request_ids}"
-                )
+                    # todo: run control request async
+                    if len(control_reqs) > 0:
+                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                        for control_req in control_reqs:
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                    # Count prefill requests in current batch
+                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(req_dicts)
+                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    logger.info(
+                        f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                        f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                        f"num_scheduled_requests: {num_scheduled_requests}, "
+                        f"scheduled_request_ids: {scheduled_request_ids}"
+                    )
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
+                    # Process prefill inputs
+                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+            else:
+                if self.scheduler_config.splitwise_role == "prefill":
+                    if tp_size > 1:
+                        # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
+
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.enable_overlap_schedule)
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
@@ -546,6 +593,9 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            # run eplb
+            self._run_eplb(tp_rank)
+            self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -654,6 +704,32 @@ class PaddleDisWorkerProc:
         if self.ranks > 1:
             paddle.distributed.barrier()
         self.loaded_model_signal.value[0] = 1
+
+    def run_control_method(self, control_request: ControlRequest) -> None:
+        logger.info(f"Start run control request: {control_request}")
+        request_id = control_request.request_id
+        method = control_request.method
+        kwargs = control_request.args
+
+        handler = getattr(self.worker, method, None)
+        if handler is None or not callable(handler):
+            error_msg = f"Rank-{self.local_rank}: Unknown control method {method}"
+            error_result = ControlResponse(request_id, 400, error_msg)
+            asyncio.run(self._ctrl_output.put(error_result))
+            return
+
+        try:
+            result = handler(**kwargs)
+            succ_result = ControlResponse(request_id, 200, "Success", result)
+            logger.info(
+                f"Rank-{self.local_rank} Success run control request: {control_request}, response: {succ_result}"
+            )
+            asyncio.run(self._ctrl_output.put(succ_result, shm_threshold=100 * 1024 * 1024))
+        except Exception as e:
+            error_msg = f"Rank-{self.local_rank} Failed run control method {method}: {str(e)}"
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            error_result = ControlResponse(request_id, 500, error_msg)
+            asyncio.run(self._ctrl_output.put(error_result))
 
 
 def parse_args():
@@ -813,11 +889,17 @@ def parse_args():
     parser.add_argument(
         "--load_strategy",
         type=str,
-        choices=["ipc", "ipc_snapshot", "meta", "normal"],
+        choices=["ipc", "ipc_snapshot", "meta", "normal", "rsync"],
         default="ipc_snapshot",
         help="Weight loading method when dynamic loading is enabled: "
         "'ipc': real-time IPC streaming with automatic resharding, "
         "'ipc_snapshot': load from disk snapshot of IPC weights.",
+    )
+    parser.add_argument(
+        "--rsync_config",
+        type=json.loads,
+        default=None,
+        help="Rsync weights config",
     )
     parser.add_argument(
         "--enable_logprob",
@@ -853,7 +935,7 @@ def parse_args():
         "--load_choices",
         type=str,
         default="default_v1",
-        help="The format of the model weights to load. default/default_v1.",
+        help="The format of the model weights to load. default/default_v1/dummy.",
     )
 
     parser.add_argument(
@@ -950,6 +1032,17 @@ def parse_args():
         default=0,
         help="Number of cpu blocks.",
     )
+    parser.add_argument(
+        "--kvcache_storage_backend",
+        type=str,
+        help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--enable_overlap_schedule",
+        action="store_true",
+        help="Enable overlap schedule",
+    )
 
     args = parser.parse_args()
     return args
@@ -987,6 +1080,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0] + eplb_config.redundant_experts_num
+        elif hasattr(model_config, "num_local_experts") and model_config.num_local_experts is not None:
+            num_experts = model_config.num_local_experts + eplb_config.redundant_experts_num
         else:
             num_experts = model_config.moe_num_experts + eplb_config.redundant_experts_num
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
@@ -1043,6 +1138,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
+    logger.info(f"- Rsync config: {load_config.rsync_config}, {type(load_config.rsync_config)}")
 
     if not (
         current_platform.is_cuda()
@@ -1110,6 +1206,7 @@ def run_worker_proc() -> None:
         worker_proc = IluvatarPaddleDisWorkerProc(fd_config, ranks, local_rank)
     else:
         worker_proc = PaddleDisWorkerProc(fd_config, ranks, local_rank)
+        worker_proc.init_control()
 
     # Initialize device and create model runner
     worker_proc.init_device()

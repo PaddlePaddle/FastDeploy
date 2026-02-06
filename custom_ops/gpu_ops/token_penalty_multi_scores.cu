@@ -75,6 +75,7 @@ __global__ void update_repeat_times(const int64_t *pre_ids,
   if (alpha == 1.f && beta == 0.f && gamma == 0.f) {
     return;
   }
+
   if (cur_len[bi] < 0) {
     return;
   }
@@ -125,6 +126,7 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
   if (alpha == 1.f && beta == 0.f && gamma == 0.f && temperature == 1.f) {
     return;
   }
+
   for (int i = tid; i < vocab_size; i += blockDim.x) {
     int times = repeat_times_now[i];
     float logit_now = static_cast<float>(logits_now[i]);
@@ -140,15 +142,20 @@ __global__ void update_value_by_repeat_times(const int *repeat_times,
 
 template <typename T>
 __global__ void ban_bad_words(T *logits,
-                              const int64_t *bad_words_list,
+                              const int64_t *bad_tokens,
+                              const int64_t *bad_tokens_len,
                               const int64_t bs,
                               const int64_t vocab_size,
                               const int64_t bad_words_len) {
   const int bi = blockIdx.x;
   int tid = threadIdx.x;
   T *logits_now = logits + bi * vocab_size;
-  for (int i = tid; i < bad_words_len; i += blockDim.x) {
-    const int64_t bad_words_token_id = bad_words_list[i];
+
+  const int64_t *bad_tokens_now = bad_tokens + bi * bad_words_len;
+  const int32_t bad_token_len =
+      static_cast<int32_t>(min(bad_tokens_len[bi], bad_words_len));
+  for (int i = tid; i < bad_token_len; i += blockDim.x) {
+    const int64_t bad_words_token_id = bad_tokens_now[i];
     if (bad_words_token_id >= vocab_size || bad_words_token_id < 0) continue;
     logits_now[bad_words_token_id] = -1e10;
   }
@@ -164,6 +171,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
                                        const paddle::Tensor &presence_score,
                                        const paddle::Tensor &temperatures,
                                        const paddle::Tensor &bad_tokens,
+                                       const paddle::Tensor &bad_tokens_len,
                                        const paddle::Tensor &cur_len,
                                        const paddle::Tensor &min_len,
                                        const paddle::Tensor &eos_token_id) {
@@ -253,6 +261,7 @@ void token_penalty_multi_scores_kernel(const paddle::Tensor &pre_ids,
       reinterpret_cast<DataType_ *>(
           const_cast<data_t *>(logits.data<data_t>())),
       bad_tokens.data<int64_t>(),
+      bad_tokens_len.data<int64_t>(),
       bs,
       vocab_size,
       bad_words_len);
@@ -267,6 +276,7 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
                              const paddle::Tensor &presence_scores,
                              const paddle::Tensor &temperatures,
                              const paddle::Tensor &bad_tokens,
+                             const paddle::Tensor &bad_tokens_len,
                              const paddle::Tensor &cur_len,
                              const paddle::Tensor &min_len,
                              const paddle::Tensor &eos_token_id) {
@@ -282,6 +292,7 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           presence_scores,
           temperatures,
           bad_tokens,
+          bad_tokens_len,
           cur_len,
           min_len,
           eos_token_id);
@@ -297,6 +308,7 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           presence_scores,
           temperatures,
           bad_tokens,
+          bad_tokens_len,
           cur_len,
           min_len,
           eos_token_id);
@@ -312,6 +324,7 @@ void TokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
           presence_scores,
           temperatures,
           bad_tokens,
+          bad_tokens_len,
           cur_len,
           min_len,
           eos_token_id);
@@ -335,6 +348,7 @@ PD_BUILD_STATIC_OP(get_token_penalty_multi_scores)
              "presence_scores",
              "temperatures",
              "bad_tokens",
+             "bad_tokens_len",
              "cur_len",
              "min_len",
              "eos_token_id"})
