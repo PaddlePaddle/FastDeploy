@@ -205,6 +205,7 @@ def test_glm4moe_mapping_removes_gate_correction():
             "model.layers.0.mlp.experts.gate_correction_bias",
         ],
     )
+    dummy.speculative_decoding = False
     mappings = dummy.get_name_mappings_to_training()
     # Cover gate/experts aggregation and dropping gate_correction_bias
     assert "model.layers.0.mlp.experts.up_gate_proj_weight" in mappings
