@@ -256,7 +256,7 @@ def pre_process(
             seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
 
-        useless_input_ids = input_ids + 0
+        useless_input_ids = input_ids
         _, batch_id_per_token_output, cu_seqlens_q_output, _ = get_padding_offset(
             useless_input_ids,
             seq_lens_output,
