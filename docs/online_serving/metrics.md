@@ -37,6 +37,7 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | KV Cache | `fastdeploy:available_gpu_block_num` | Gauge | Available GPU blocks in cache (including unreleased prefix blocks) | count |
 | KV Cache | `fastdeploy:free_gpu_block_num` | Gauge | Number of free GPU blocks in cache | count |
 | KV Cache | `fastdeploy:max_gpu_block_num` | Gauge | Total number of GPU blocks initialized at startup | count |
+| KV Cache | `fastdeploy:max_cpu_block_num` | Gauge | Total number of CPU blocks initialized at startup | count |
 | KV Cache | `fastdeploy:available_gpu_resource` | Gauge | Ratio of available GPU blocks to total GPU blocks | % |
 | KV Cache | `fastdeploy:gpu_cache_usage_perc` | Gauge | GPU KV cache utilization | % |
 | KV Cache | `fastdeploy:send_cache_failed_num` | Counter | Total number of cache send failures | count |
