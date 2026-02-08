@@ -18,7 +18,16 @@ Environment variables used by FastDeploy.
 import os
 from typing import Any, Callable
 
-from fastdeploy.platforms import current_platform
+import paddle
+
+
+# ZKK: Copyied from fastdeploy/platforms/base.py
+def is_cuda() -> bool:
+    """
+    whether platform is cuda
+    """
+    return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
+
 
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
@@ -53,7 +62,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # and "MLA_ATTN" can be set currently.
     "FD_ATTENTION_BACKEND": lambda: (
         os.getenv("FD_ATTENTION_BACKEND", "FLASH_ATTN")
-        if current_platform.is_cuda()
+        if is_cuda()
         else os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN")
     ),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
