@@ -586,7 +586,8 @@ class ModelConfig:
         return None
 
     def _get_download_model(self, model_name, model_type="default"):
-        return retrive_model_from_server(model_name)
+        revision = "master" if model_type == "default" else model_type
+        return retrive_model_from_server(model_name, revision=revision)
 
     def print(self):
         """

@@ -410,8 +410,10 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
       echo -e "${BLUE}[MODE]${NONE} Installing newly built FastDeploy wheel..."
       ${python} -m pip install ./dist/fastdeploy*.whl
       # get Paddle version
-      PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
-      PADDLE_COMMIT=`${python} -c "import paddle; print(paddle.version.commit)"`
+      PADDLE_VERSION=`${python} -c "try: import paddle; print(paddle.version.full_version)
+except: print('Unknown')"`
+      PADDLE_COMMIT=`${python} -c "try: import paddle; print(paddle.version.commit)
+except: print('Unknown')"`
       # get FastDeploy info
       EFFLLM_BRANCH=`git rev-parse --abbrev-ref HEAD`
       EFFLLM_COMMIT=`git rev-parse --short HEAD`
@@ -440,8 +442,10 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   fi
 
   # get Paddle version
-  PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
-  PADDLE_COMMIT=`${python} -c "import paddle; print(paddle.version.commit)"`
+  PADDLE_VERSION=`${python} -c "try: import paddle; print(paddle.version.full_version)
+except: print('Unknown')"`
+  PADDLE_COMMIT=`${python} -c "try: import paddle; print(paddle.version.commit)
+except: print('Unknown')"`
 
   # get fastdeploy version
   EFFLLM_BRANCH=`git rev-parse --abbrev-ref HEAD`
