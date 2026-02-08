@@ -112,21 +112,17 @@ class SamplingParams:
 
     def to_dict(self):
         """convert to dict"""
-        d = self.__dict__.copy()
-        # Shallow copy mutable fields to avoid side effects
-        if self.stop is not None and isinstance(self.stop, list):
-            d["stop"] = self.stop.copy()
-        if self.stop_token_ids is not None:
-            d["stop_token_ids"] = self.stop_token_ids.copy()
-        if self.bad_words is not None:
-            d["bad_words"] = self.bad_words.copy()
-        if self.bad_words_token_ids is not None:
-            d["bad_words_token_ids"] = self.bad_words_token_ids.copy()
-        if self.logits_processors_args is not None:
-            d["logits_processors_args"] = self.logits_processors_args.copy()
-
-        if self.guided_decoding is not None:
-            d["guided_decoding"] = asdict(self.guided_decoding)
+        d = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if f.name == "guided_decoding" and val is not None:
+                d[f.name] = asdict(val)
+            elif f.name == "logits_processors_args" and val is not None:
+                d[f.name] = val.copy()
+            elif isinstance(val, list):
+                d[f.name] = val.copy()
+            else:
+                d[f.name] = val
         return d
 
     @classmethod
