@@ -40,6 +40,7 @@ from fastdeploy.utils import (
     get_host_ip,
     get_logger,
     parse_ports,
+    retrive_model_from_server,
 )
 
 logger = get_logger("config", "config.log")
@@ -585,8 +586,7 @@ class ModelConfig:
         return None
 
     def _get_download_model(self, model_name, model_type="default"):
-        # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
-        pass
+        return retrive_model_from_server(model_name)
 
     def print(self):
         """
