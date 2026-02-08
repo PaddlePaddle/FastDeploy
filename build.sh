@@ -113,14 +113,16 @@ function copy_ops(){
     else
         echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory for cpu ops found in ${tmp_dir}"
     fi
-    is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
+    is_rocm=`$python -c "try: import paddle; print(paddle.is_compiled_with_rocm())
+except: print(False)"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "ROCM ops have been copy to fastdeploy"
       return
     fi
-    is_cuda=`$python -c "import paddle; print(paddle.is_compiled_with_cuda())"`
+    is_cuda=`$python -c "try: import paddle; print(paddle.is_compiled_with_cuda())
+except: print(False)"`
     if [ "$is_cuda" = "True" ]; then
       DEVICE_TYPE="gpu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
@@ -128,7 +130,8 @@ function copy_ops(){
       return
     fi
 
-    is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
+    is_xpu=`$python -c "try: import paddle; print(paddle.is_compiled_with_xpu())
+except: print(False)"`
     if [ "$is_xpu" = "True" ]; then
       DEVICE_TYPE="xpu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/xpu
@@ -136,7 +139,8 @@ function copy_ops(){
       return
     fi
 
-    is_npu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('npu'))"`
+    is_npu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('npu'))
+except: print(False)"`
     if [ "$is_npu" = "True" ]; then
       DEVICE_TYPE="npu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/npu
@@ -144,7 +148,8 @@ function copy_ops(){
       return
     fi
 
-    if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
+    if_corex=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))
+except: print(False)"`
     if [ "$if_corex" = "True" ]; then
       DEVICE_TYPE="iluvatar-gpu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/iluvatar
@@ -152,7 +157,8 @@ function copy_ops(){
       return
     fi
 
-    is_gcu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('gcu'))"`
+    is_gcu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('gcu'))
+except: print(False)"`
     if [ "$is_gcu" = "True" ]; then
       DEVICE_TYPE="gcu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gcu
@@ -160,7 +166,8 @@ function copy_ops(){
       return
     fi
 
-    is_maca=`$python -c "import paddle; print(paddle.device.is_compiled_with_custom_device('metax_gpu'))"`
+    is_maca=`$python -c "try: import paddle; print(paddle.device.is_compiled_with_custom_device('metax_gpu'))
+except: print(False)"`
     if [ "$is_maca" = "True" ]; then
       DEVICE_TYPE="metax_gpu"
       cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
@@ -168,7 +175,8 @@ function copy_ops(){
       return
     fi
 
-    is_intel_hpu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('intel_hpu'))"`
+    is_intel_hpu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('intel_hpu'))
+except: print(False)"`
     if [ "$is_intel_hpu" = "True" ]; then
       DEVICE_TYPE="intel-hpu"
       echo -e "intel_hpu ops have been copy to fastdeploy"
@@ -344,8 +352,10 @@ function build_and_install() {
 function version_info() {
   output_file="fastdeploy/version.txt"
   fastdeploy_git_commit_id=$(git rev-parse HEAD)
-  paddle_version=$(${python} -c "import paddle; print(paddle.__version__)")
-  paddle_git_commit_id=$(${python} -c "import paddle; print(paddle.__git_commit__)")
+  paddle_version=$(${python} -c "try: import paddle; print(paddle.__version__)
+except: print('Unknown')")
+  paddle_git_commit_id=$(${python} -c "try: import paddle; print(paddle.__git_commit__)
+except: print('Unknown')")
   cuda_version="nvcc-not-installed"
   if command -v nvcc &> /dev/null; then
     cuda_version=$(nvcc -V | grep -Po "(?<=release )[\d.]+(?=, V)")

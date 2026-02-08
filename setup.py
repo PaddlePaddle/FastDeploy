@@ -22,7 +22,11 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-import paddle
+try:
+    import paddle
+except ImportError:
+    paddle = None
+
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
@@ -149,12 +153,13 @@ class PostInstallCommand(install):
 def load_requirements():
     """Load dependencies from requirements.txt"""
     requirements_file_name = "requirements.txt"
-    if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-        requirements_file_name = "requirements_iluvatar.txt"
-    elif paddle.is_compiled_with_rocm():
-        requirements_file_name = "requirements_dcu.txt"
-    elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
-        requirements_file_name = "requirements_metaxgpu.txt"
+    if paddle is not None:
+        if paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+            requirements_file_name = "requirements_iluvatar.txt"
+        elif paddle.is_compiled_with_rocm():
+            requirements_file_name = "requirements_dcu.txt"
+        elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
+            requirements_file_name = "requirements_metaxgpu.txt"
     requirements_path = os.path.join(os.path.dirname(__file__), requirements_file_name)
     with open(requirements_path, "r") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
@@ -162,6 +167,8 @@ def load_requirements():
 
 def get_device_type():
     """Get the device type (rocm/gpu/xpu/npu/cpu/metax-gpu) that paddle is compiled with."""
+    if paddle is None:
+        return "cpu"
     if paddle.is_compiled_with_rocm():
         return "rocm"
     elif paddle.is_compiled_with_cuda():
