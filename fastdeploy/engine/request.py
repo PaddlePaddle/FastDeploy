@@ -482,7 +482,10 @@ class Request:
             if getattr(self, param, None) is not None:
                 data[param] = getattr(self, param)
 
-        data.update(self.sampling_params.to_dict())
+        if hasattr(self.sampling_params, "to_dict"):
+            data.update(self.sampling_params.to_dict())
+        else:
+            data.update(asdict(self.sampling_params))
         data.update(asdict(self.metrics))
         return data
 
