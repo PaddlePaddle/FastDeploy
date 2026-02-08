@@ -482,10 +482,13 @@ class Request:
             if getattr(self, param, None) is not None:
                 data[param] = getattr(self, param)
 
+        # Check if sampling_params has a custom to_dict method (optimized path).
+        # Fallback to asdict for compatibility with tests using mocks/stubs.
         if hasattr(self.sampling_params, "to_dict"):
             data.update(self.sampling_params.to_dict())
         else:
             data.update(asdict(self.sampling_params))
+        # Use asdict for metrics to ensure stability and correctness with slots.
         data.update(asdict(self.metrics))
         return data
 
