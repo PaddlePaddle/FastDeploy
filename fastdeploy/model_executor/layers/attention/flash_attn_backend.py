@@ -384,7 +384,7 @@ class FlashAttentionBackend(AttentionBackend):
                         kv_token_num=metadata.kv_token_num_cpu[0].item(),
                     )
 
-        use_fa_do_prefill = forward_meta.use_fa_do_prefill
+        use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
         if use_fa_do_prefill:
             q, k, v, _ = gqa_rope_write_cache(
