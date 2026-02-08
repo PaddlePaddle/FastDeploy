@@ -44,6 +44,8 @@ from fastdeploy.config import (
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import (
+    find_free_shm_ports,
+    is_shm_port_available,
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
@@ -614,14 +616,22 @@ class EngineArgs:
             if envs.FD_ENABLE_MULTI_API_SERVER:
                 num_cur_dp_ports //= self.data_parallel_size
             if ports is None:
-                ports = find_free_ports(num_ports=num_cur_dp_ports)
+                # For engine_worker_queue_port in SHM mode, use find_free_shm_ports
+                if name == "engine_worker_queue_port" and envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                    ports = find_free_shm_ports(num_ports=num_cur_dp_ports)
+                else:
+                    ports = find_free_ports(num_ports=num_cur_dp_ports)
                 console_logger.info(
                     f"Parameter `{name}` is not specified, found available ports for possible use: {ports}"
                 )
             else:
                 num_input_ports = len(ports)
                 if num_input_ports != num_total_ports:
-                    ports = find_free_ports(num_ports=num_cur_dp_ports)
+                    # For engine_worker_queue_port in SHM mode, use find_free_shm_ports
+                    if name == "engine_worker_queue_port" and envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        ports = find_free_shm_ports(num_ports=num_cur_dp_ports)
+                    else:
+                        ports = find_free_ports(num_ports=num_cur_dp_ports)
                     console_logger.warn(
                         f"Parameter `{name}` expects {num_total_ports} ports, but got {num_input_ports}. Ignore them and assign new ones: {ports}"
                     )
@@ -635,7 +645,11 @@ class EngineArgs:
                     * (self.local_data_parallel_id + 1)
                 ]
                 for port in cur_dp_ports:
-                    assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
+                    # For engine_worker_queue_port in SHM mode, check socket file instead of TCP port
+                    if name == "engine_worker_queue_port" and envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        assert is_shm_port_available(port), f"Parameter `{name}`:{port} shared memory file already exists."
+                    else:
+                        assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
             return ports
 

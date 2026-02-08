@@ -636,6 +636,60 @@ def is_port_available(host, port):
             return True
 
 
+
+
+def is_shm_port_available(port):
+    """
+    Check if the shared memory port is available by checking whether
+    the Unix Domain Socket file exists.
+
+    Args:
+        port: The port number used as suffix for shared memory files.
+
+    Returns:
+        bool: True if the port is available (socket file does not exist), False otherwise.
+    """
+    socket_path = f"/dev/shm/fd_task_queue_{port}.sock"
+    return not os.path.exists(socket_path)
+
+
+def find_free_shm_ports(
+    port_range: tuple[int, int] = (8000, 65535),
+    num_ports: int = 1,
+) -> list[int]:
+    """
+    Find available ports for shared memory mode by checking Unix Domain Socket files.
+    Args:
+        port_range: (start, end), inclusive, e.g. (20000, 30000).
+        num_ports: number of ports to find.
+    Returns:
+        List of available ports with length == num_ports.
+    Raises:
+        ValueError: invalid port range or num_ports <= 0.
+        RuntimeError: not enough free ports in the range.
+    """
+    start, end = port_range
+    if start < 0 or end > 65535 or start > end:
+        raise ValueError(f"Invalid port range: {port_range}")
+    if num_ports <= 0:
+        raise ValueError("num_ports must be a positive integer")
+    total_ports = end - start + 1
+    if num_ports > total_ports:
+        raise ValueError("num_ports is larger than range size")
+    # Generate all ports and rotate with a random start index
+    ports = list(range(start, end + 1))
+    offset = random.randint(0, total_ports - 1)
+    ports = ports[offset:] + ports[:offset]
+    free_ports: list[int] = []
+    for port in ports:
+        if is_shm_port_available(port):
+            free_ports.append(port)
+        if len(free_ports) >= num_ports:
+            break
+    if len(free_ports) < num_ports:
+        raise RuntimeError(f"Only found {len(free_ports)} free SHM ports in {port_range}, requested {num_ports}.")
+    return free_ports
+
 def find_free_ports(
     port_range: tuple[int, int] = (8000, 65535),
     num_ports: int = 1,
