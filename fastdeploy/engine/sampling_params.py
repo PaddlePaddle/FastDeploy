@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union
 
@@ -109,6 +109,13 @@ class SamplingParams:
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
     logits_processors_args: Optional[dict[str, Any]] = None
+
+    def to_dict(self):
+        """convert to dict"""
+        d = self.__dict__.copy()
+        if self.guided_decoding is not None:
+            d["guided_decoding"] = asdict(self.guided_decoding)
+        return d
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
