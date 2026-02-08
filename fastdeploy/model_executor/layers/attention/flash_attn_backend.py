@@ -95,6 +95,7 @@ def init_flash_attn_version(fa_version: int = None):
         if FLASH_ATTN_VERSION is None:
             if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
                 FLASH_ATTN_VERSION = 3
+                paddle.set_flags({"FLAGS_flash_attn_version": 3})
                 logger.info("The current platform supports Flash Attention V3.")
             else:
                 FLASH_ATTN_VERSION = 2
@@ -159,7 +160,6 @@ def flash_attn_func(
         )
     else:
         if version == 3:
-            paddle.set_flags({"FLAGS_flash_attn_version": 3})
             out = flash_attention_v3_varlen(
                 q,
                 k,
