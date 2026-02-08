@@ -124,7 +124,7 @@ class SamplingParams:
         if self.bad_words_token_ids is not None:
             d["bad_words_token_ids"] = self.bad_words_token_ids.copy()
         if self.logits_processors_args is not None:
-            d["logits_processors_args"] = copy.deepcopy(self.logits_processors_args)
+            d["logits_processors_args"] = self.logits_processors_args.copy()
 
         if self.guided_decoding is not None:
             d["guided_decoding"] = asdict(self.guided_decoding)
