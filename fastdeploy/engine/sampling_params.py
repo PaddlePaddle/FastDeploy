@@ -16,8 +16,8 @@
 
 from __future__ import annotations
 
-import random
 import copy
+import random
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, List, Optional, TypeVar, Union
