@@ -911,6 +911,7 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
             enable_logprob,
         )
