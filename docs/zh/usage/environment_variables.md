@@ -147,6 +147,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否启用 decode 缓存请求以预分配资源
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
 
+    # EP 中批处理 token 的超时时间
+    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
+
     # PD 中最大预取请求数量
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
 
