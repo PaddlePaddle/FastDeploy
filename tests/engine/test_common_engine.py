@@ -584,6 +584,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         with patch("fastdeploy.engine.common_engine.EngineWorkerQueue", DummyQ):
             eng = EngineService(cfg, start_queue=False, use_async_llm=True)
         eng.data_processor = self._stub_processor()
+        eng.mm_max_tokens_per_item = None
 
         captured = {"cmd": None}
 

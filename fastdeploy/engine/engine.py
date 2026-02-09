@@ -587,8 +587,10 @@ class LLMEngine:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.engine.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
 
-        # TODO (iluvatar): remove aftet paddle fix launch error
+        # TODO (iluvatar): remove after paddle fix launch error
         if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
             arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
 
