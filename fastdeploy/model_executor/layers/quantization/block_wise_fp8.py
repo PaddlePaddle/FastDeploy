@@ -42,14 +42,10 @@ from ..utils import get_sm_version, get_tensor, per_block_cast_to_fp8
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        # SM100 should use PFCC DeepGemm
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        from deep_gemm import fp8_gemm_nt
-    else:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import (
-            gemm_fp8_fp8_bf16_nt as fp8_gemm_nt,
-        )
+    try:
+        fp8_gemm_nt = fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.fp8_gemm_nt
+    except:
+        fp8_gemm_nt = fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.gemm_fp8_fp8_bf16_nt
 else:
     fp8_gemm_nt = None
 
