@@ -66,55 +66,14 @@ class TestAttentionPerformance(unittest.TestCase):
         print("Setting up test environment...")
         paddle.set_device("gpu")
         paddle.set_default_dtype("bfloat16")
+        prop = paddle.device.cuda.get_device_properties()
+        self.sm_version = prop.major * 10 + prop.minor
         init_distributed_environment()
-
-        self.model_dir = self.create_model_config_json()
-        tp_size = paddle.distributed.get_world_size()
-
-        self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=tp_size)
-        self.fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
-
-        # Initialize Attention Layer
-        attn_cls = get_attention_backend()
-        self.attn_backend = attn_cls(
-            self.fd_config,
-            kv_num_heads=self.fd_config.model_config.num_key_value_heads // tp_size,
-            num_heads=self.fd_config.model_config.num_attention_heads // tp_size,
-            head_dim=self.fd_config.model_config.head_dim,
-            encoder_block_shape_q=64,
-            decoder_block_shape_q=16,
-        )
-
-        num_layers = self.fd_config.model_config.num_hidden_layers
-        self.attention_layer = [None] * num_layers
-        for i in range(num_layers):
-            self.attention_layer[i] = Ernie4_5_Attention(self.fd_config, layer_id=i, prefix="test_layer")
-            state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
-            self.attention_layer[i].load_state_dict(state_dict)
-
-        def attn_forward(forward_meta, hidden_states):
-            for i in range(num_layers):
-                hidden_states = self.attention_layer[i](forward_meta, hidden_states)
-
-            return hidden_states
-
-        self.attn_forward = attn_forward
-
-        self.cache_quant_type_str = getattr(self.attention_layer[0].attn, "cache_quant_type_str", "none")
-
-        print("===== Initialization Complete =====")
-
-    def tearDown(self):
-        """
-        Clean up the environment after each test.
-        """
-        print("\nTearing down test environment...")
-        if os.path.exists(self.model_dir):
-            shutil.rmtree(self.model_dir)
-            print(f"Successfully removed temporary directory: {self.model_dir}")
+        self.model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
+        self.create_model_config_json(self.model_dir)
 
     # region Helper Functions
-    def create_model_config_json(self) -> str:
+    def create_model_config_json(self, model_dir) -> str:
         """
         Creates a temporary directory and writes the model configuration to a 'config.json' file.
         """
@@ -129,14 +88,13 @@ class TestAttentionPerformance(unittest.TestCase):
             "num_key_value_heads": 4,
             "num_hidden_layers": 2,
         }
-        model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
         with open(config_path, "w") as f:
             json.dump(config_dict, f, indent=4)
         print(f"Successfully created config.json at: {config_path}")
         return model_dir
 
-    def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1):
+    def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1, quantization: dict = None):
         """Creates a complete FDConfig from a model path."""
         model_args = {"model": model_path, "dtype": "bfloat16"}
         model_config = ModelConfig(model_args)
@@ -156,10 +114,9 @@ class TestAttentionPerformance(unittest.TestCase):
             scheduler_config=SchedulerConfig({}),
             load_config=LoadConfig({}),
             quant_config=MixQuantConfig(
-                dense_quant_type="block_wise_fp8",
-                moe_quant_type="block_wise_fp8",
-                kv_cache_quant_type="float8_e4m3fn",
-                # kv_cache_quant_type=None,
+                dense_quant_type=quantization.get("dense_quant_type", None),
+                moe_quant_type=quantization.get("moe_quant_type", None),
+                kv_cache_quant_type=quantization.get("kv_cache_quant_type", None),
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -207,14 +164,21 @@ class TestAttentionPerformance(unittest.TestCase):
         fd_config: FDConfig,
         attn_backend: AttentionBackend,
         cache_quant_type_str: str = "none",
+        has_attn_mask: bool = False,
     ) -> ForwardMeta:
         """
         Creates a high-fidelity ForwardMeta object.
         """
+        attn_mask_offsets = None
         if mode == ForwardMode.EXTEND:
             seq_lens_encoder = paddle.full([batch_size], seq_len, dtype="int32")
             seq_lens_decoder = paddle.zeros([batch_size], dtype="int32")
             seq_lens_this_time = seq_lens_encoder
+            if has_attn_mask:
+                attn_mask_offsets_numpy = np.zeros([batch_size, seq_len, 2], dtype=np.int32)
+                for i in range(seq_len):
+                    attn_mask_offsets_numpy[:, i, 1] = i + 1
+                attn_mask_offsets = paddle.to_tensor(attn_mask_offsets_numpy.reshape([-1, 2]))
         elif mode == ForwardMode.DECODE:
             seq_lens_encoder = paddle.zeros([batch_size], dtype="int32")
             seq_lens_decoder = paddle.full([batch_size], seq_len, dtype="int32")
@@ -292,31 +256,81 @@ class TestAttentionPerformance(unittest.TestCase):
             attn_backend=attn_backend,
             forward_mode=ForwardMode.MIXED,
             attn_mask=None,
-            attn_mask_offsets=None,
+            attn_mask_offsets=attn_mask_offsets,
             **attn_backend_buffers,
         )
 
-        hidden_states = paddle.randn([token_num, self.fd_config.model_config.hidden_size], dtype="bfloat16")
+        hidden_states = paddle.randn([token_num, fd_config.model_config.hidden_size], dtype="bfloat16")
         return forward_meta, hidden_states
 
-    def test_decode_performance_with_prefill(self):
+    def tearDown(self):
+        """
+        Clean up the environment after each test.
+        """
+        print("\nTearing down test environment...")
+        if os.path.exists(self.model_dir):
+            shutil.rmtree(self.model_dir)
+            print(f"Successfully removed temporary directory: {self.model_dir}")
+
+    def attn_forward(self, attention_layer, forward_meta, hidden_states):
+        for i in range(len(attention_layer)):
+            hidden_states = attention_layer[i](forward_meta, hidden_states)
+
+        return hidden_states
+
+    def test_append_attn_backend_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
 
         prefill_batch_size = 1
         prefill_seq_len = 4096 * 2
 
+        model_dir = self.model_dir
+        tp_size = paddle.distributed.get_world_size()
+        quantization = {
+            "dense_quant_type": "block_wise_fp8",
+            "moe_quant_type": "block_wise_fp8",
+            "kv_cache_quant_type": "float8_e4m3fn",
+        }
+        fd_config = self.create_fd_config_from_model_path(
+            model_dir, tensor_parallel_size=tp_size, quantization=quantization
+        )
+        fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
+            fd_config,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = fd_config.model_config.num_hidden_layers
+        attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
+            attention_layer[i].load_state_dict(state_dict)
+
+        cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
+
+        print("===== Initialization Complete =====")
+
         forward_meta, prefill_hidden_states = self.create_forward_meta(
             batch_size=prefill_batch_size,
             seq_len=prefill_seq_len,
             mode=ForwardMode.EXTEND,
-            fd_config=self.fd_config,
-            attn_backend=self.attn_backend,
-            cache_quant_type_str=self.cache_quant_type_str,
+            fd_config=fd_config,
+            attn_backend=attn_backend,
+            cache_quant_type_str=cache_quant_type_str,
         )
 
-        self.attn_backend.init_attention_metadata(forward_meta)
-        self.attn_forward(forward_meta, prefill_hidden_states)
+        attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
 
         paddle.device.synchronize()
 
@@ -333,7 +347,7 @@ class TestAttentionPerformance(unittest.TestCase):
         for i in range(test_steps):
             start_events[i].record()
 
-            self.attn_forward(forward_meta, prefill_hidden_states)
+            self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
 
             end_events[i].record()
         paddle.device.synchronize()
@@ -357,22 +371,22 @@ class TestAttentionPerformance(unittest.TestCase):
                 batch_size=decode_batch_size,
                 seq_len=10 * 1024,
                 mode=ForwardMode.DECODE,
-                fd_config=self.fd_config,
-                attn_backend=self.attn_backend,
-                cache_quant_type_str=self.cache_quant_type_str,
+                fd_config=fd_config,
+                attn_backend=attn_backend,
+                cache_quant_type_str=cache_quant_type_str,
             )
 
-            self.attn_backend.init_attention_metadata(forward_meta)
+            attn_backend.init_attention_metadata(forward_meta)
 
             paddle.device.synchronize()
 
             # 必须要先预热一次！因为预处理被放到了第一层再做了！
-            self.attn_forward(forward_meta, hidden_states)
+            self.attn_forward(attention_layer, forward_meta, hidden_states)
 
             attn_cuda_graphs = graphs.CUDAGraph()
             attn_cuda_graphs.capture_begin()
 
-            self.attn_forward(forward_meta, hidden_states)
+            self.attn_forward(attention_layer, forward_meta, hidden_states)
 
             attn_cuda_graphs.capture_end()
 
@@ -392,6 +406,219 @@ class TestAttentionPerformance(unittest.TestCase):
             del forward_meta
 
         # p.stop()
+
+    def test_flash_attn_v3(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
+        # Test parameters
+        test_steps = 100
+
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
+
+        model_dir = self.model_dir
+        tp_size = paddle.distributed.get_world_size()
+        quantization = {
+            "dense_quant_type": "block_wise_fp8",
+            "moe_quant_type": "block_wise_fp8",
+        }
+        fd_config = self.create_fd_config_from_model_path(
+            model_dir, tensor_parallel_size=tp_size, quantization=quantization
+        )
+        fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        paddle.set_flags({"FLAGS_flash_attn_version": 3})
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
+            fd_config,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = fd_config.model_config.num_hidden_layers
+        attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
+            attention_layer[i].load_state_dict(state_dict)
+
+        cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
+
+        print("===== flash_attn_v3 Initialization Complete =====")
+
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=fd_config,
+            attn_backend=attn_backend,
+            cache_quant_type_str=cache_quant_type_str,
+        )
+
+        attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+        paddle.device.synchronize()
+
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
+
+            self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+            end_events[i].record()
+        paddle.device.synchronize()
+
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+
+    def test_flash_attn_v3_with_mask(self):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
+        # Test parameters
+        test_steps = 100
+
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
+
+        model_dir = self.model_dir
+        tp_size = paddle.distributed.get_world_size()
+        quantization = {
+            "dense_quant_type": "block_wise_fp8",
+            "moe_quant_type": "block_wise_fp8",
+        }
+        fd_config = self.create_fd_config_from_model_path(
+            model_dir, tensor_parallel_size=tp_size, quantization=quantization
+        )
+        fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        paddle.set_flags({"FLAGS_flash_attn_version": 3})
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
+            fd_config,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = fd_config.model_config.num_hidden_layers
+        attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
+            attention_layer[i].load_state_dict(state_dict)
+
+        cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
+
+        print("===== flash_attn_v3_with_mask Initialization Complete =====")
+
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=fd_config,
+            attn_backend=attn_backend,
+            cache_quant_type_str=cache_quant_type_str,
+            has_attn_mask=True,
+        )
+
+        attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+        paddle.device.synchronize()
+
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
+
+            self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+            end_events[i].record()
+        paddle.device.synchronize()
+
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
+
+    def test_flash_attn_v4(self):
+        if self.sm_version < 100:
+            self.skipTest("Flash Attention V4 requires SM100+.")
+        # Test parameters
+        test_steps = 100
+
+        prefill_batch_size = 1
+        prefill_seq_len = 4096 * 2
+
+        model_dir = self.model_dir
+        tp_size = paddle.distributed.get_world_size()
+        quantization = {
+            "dense_quant_type": "block_wise_fp8",
+            "moe_quant_type": "block_wise_fp8",
+        }
+        fd_config = self.create_fd_config_from_model_path(
+            model_dir, tensor_parallel_size=tp_size, quantization=quantization
+        )
+        fd_config.parallel_config.tp_group = paddle.distributed.new_group(range(tp_size))
+
+        # Initialize Attention Layer
+        os.environ["FD_ATTENTION_BACKEND"] = "FLASH_ATTN"
+        attn_cls = get_attention_backend()
+        attn_backend = attn_cls(
+            fd_config,
+            kv_num_heads=fd_config.model_config.num_key_value_heads // tp_size,
+            num_heads=fd_config.model_config.num_attention_heads // tp_size,
+            head_dim=fd_config.model_config.head_dim,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+        )
+
+        num_layers = fd_config.model_config.num_hidden_layers
+        attention_layer = [None] * num_layers
+        for i in range(num_layers):
+            attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
+            state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
+            attention_layer[i].load_state_dict(state_dict)
+
+        cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
+
+        print("===== flash_attn_v4 Initialization Complete =====")
+
+        forward_meta, prefill_hidden_states = self.create_forward_meta(
+            batch_size=prefill_batch_size,
+            seq_len=prefill_seq_len,
+            mode=ForwardMode.EXTEND,
+            fd_config=fd_config,
+            attn_backend=attn_backend,
+            cache_quant_type_str=cache_quant_type_str,
+        )
+
+        attn_backend.init_attention_metadata(forward_meta)
+        self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+        paddle.device.synchronize()
+
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
+
+            self.attn_forward(attention_layer, forward_meta, prefill_hidden_states)
+
+            end_events[i].record()
+        paddle.device.synchronize()
+
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
 
 
 if __name__ == "__main__":

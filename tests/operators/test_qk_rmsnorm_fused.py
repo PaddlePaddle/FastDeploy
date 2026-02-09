@@ -18,9 +18,9 @@ import unittest
 
 import numpy as np
 import paddle
+from utils import OpPerformanceTester
 
 from fastdeploy.model_executor.ops.triton_ops import qk_rmsnorm_fused
-from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 paddle.seed(99)
