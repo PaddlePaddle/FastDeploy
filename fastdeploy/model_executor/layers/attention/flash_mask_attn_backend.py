@@ -123,9 +123,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
-        self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
-        )
 
     def get_kv_cache_shape(
         self,
@@ -166,9 +163,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
 
-        metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
-        metadata.max_len_tensor_cpu_decoder[1] = 0
-
         forward_meta.attention_metadata = metadata
 
     def forward_mixed(
@@ -183,6 +177,10 @@ class FlashMaskAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ):
         metadata = forward_meta.attention_metadata
+
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -222,6 +220,10 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
             # here we add five members，this is ugly, just for now.
             if forward_meta.max_len_tensor_cpu[1].item() > 0:
+
+                metadata.max_len_tensor_cpu_decoder = paddle.clone(forward_meta.max_len_tensor_cpu)
+                metadata.max_len_tensor_cpu_decoder[1] = 0
+
                 (
                     forward_meta.attn_cu_seqlens_k,
                     forward_meta.pre_cache_batch_ids,
@@ -258,8 +260,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 forward_meta.pre_cache_batch_ids,
                 forward_meta.pre_cache_tile_ids_per_batch,
                 forward_meta.pre_cache_num_blocks_cpu,
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
+                q_norm_weight,
+                k_norm_weight,
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -293,7 +295,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            self.zero_seq_enc_lens_for_decode if use_fa_do_prefill else forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,
@@ -323,8 +325,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
             layer.linear_smooth,
             forward_meta.attn_mask_offsets,
             metadata.kv_signal_data_list[layer.layer_id],
-            getattr(layer, "q_norm_weight", None),
-            getattr(layer, "k_norm_weight", None),
+            q_norm_weight,
+            k_norm_weight,
             getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
