@@ -94,6 +94,7 @@ class InputBatch:
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
+        self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens()
 
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
@@ -104,7 +105,7 @@ class InputBatch:
             dtype="int64",
         )
         self.input_ids = paddle.full(
-            [max_num_seqs, self.scheduler_config.max_num_batched_tokens],
+            [max_num_seqs, self.max_chunk_tokens],
             self.model_config.pad_token_id,
             dtype="int64",
         )
@@ -169,13 +170,11 @@ class InputBatch:
         self.system_ids = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.ids_remove_padding = paddle.full(
-            [max_num_seqs * self.scheduler_config.max_num_batched_tokens],
+            [max_num_seqs * self.max_chunk_tokens],
             0,
             dtype="int64",
         )
-        self.batch_id_per_token = paddle.full(
-            [max_num_seqs * self.scheduler_config.max_num_batched_tokens, 1], 0, dtype="int32"
-        )
+        self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
         self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
 
@@ -535,7 +534,7 @@ class ProposerInputBatch(InputBatch):
 
         self.target_hidden_states = paddle.full(
             [
-                self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                self.max_chunk_tokens + self.scheduler_config.max_extra_num_batched_tokens,
                 self.model_config.hidden_size,
             ],
             0,
