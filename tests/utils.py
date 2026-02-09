@@ -64,6 +64,12 @@ class FakeModelConfig:
         self.architectures = ["test_model"]
 
 
+class FakeLoadConfig:
+    def __init__(self):
+        self.is_pre_sharded: bool = False
+        self.dynamic_load_weight: bool = False
+
+
 def get_default_test_fd_config():
     graph_opt_config = GraphOptimizationConfig(args={})
     scheduler_config = SchedulerConfig(args={})
@@ -72,12 +78,14 @@ def get_default_test_fd_config():
     parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
     model_config = FakeModelConfig()
+    load_config = FakeLoadConfig()
     fd_config = FDConfig(
         graph_opt_config=graph_opt_config,
         parallel_config=parallel_config,
         cache_config=cache_config,
         scheduler_config=scheduler_config,
         model_config=model_config,
+        load_config=load_config,
         test_mode=True,
     )
     return fd_config
