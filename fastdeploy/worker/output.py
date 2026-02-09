@@ -119,9 +119,9 @@ class LogprobsTensors(NamedTuple):
         """
         with paddle.no_grad():
             return LogprobsTensors(
-                paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
-                paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.logprob_token_ids.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.logprobs.cpu()[start:end], place="cpu"),
+                paddle.to_tensor(self.selected_token_ranks.cpu()[start:end], place="cpu"),
             )
 
 
