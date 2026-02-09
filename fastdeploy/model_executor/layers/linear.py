@@ -357,14 +357,26 @@ class MergedReplicatedLinear(ReplicatedLinear):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         if not param._is_initialized():
             param.initialize()
+        # for xpu and other backend
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if loaded_shard_id is None:
-            axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
+            if weight_need_transpose:
+                loaded_weight = get_tensor(loaded_weight)
+                loaded_weight = loaded_weight.transpose([1, 0])
+                axis = -1
+            else:
+                axis = -1 if (self.fd_config.model_config.model_format == "torch") ^ True else 0
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=0, end=loaded_weight.shape[axis])
 
         else:
             assert loaded_shard_id in ["q_a", "kv_a", "gate", "up"]
-
+            if weight_need_transpose:
+                loaded_weight = get_tensor(loaded_weight)
+                loaded_weight = loaded_weight.transpose([1, 0])
+                param_dim = True
+            else:
+                param_dim = (self.fd_config.model_config.model_format == "torch") ^ True
             if loaded_shard_id in ["q_a", "gate"]:
                 param_shard_offset = 0
                 param_shard_size = self.output_sizes[0]
@@ -376,7 +388,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
             param = slice_fn(
                 param,
-                (self.fd_config.model_config.model_format == "torch") ^ True,
+                param_dim,
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
@@ -544,7 +556,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size > 1 and output_dim is not None:
+            if self.tp_size > 1 and output_dim is not None and not self.fd_config.load_config.is_pre_sharded:
                 dim = -1 if output_dim else 0
                 if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
@@ -701,7 +713,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size > 1 and output_dim is not None:
+            if self.tp_size > 1 and output_dim is not None and not self.fd_config.load_config.is_pre_sharded:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
                 shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
                 shard_offset = shard_id * block_size
@@ -896,7 +908,7 @@ class RowParallelLinear(LinearBase):
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]
         token_num_pad = (token_num + self.tp_size - 1) // self.tp_size * self.tp_size
-        if self.fd_config.scheduler_config.splitwise_role == "decode":
+        if self.fd_config.scheduler_config.splitwise_role == "decode" and not current_platform.is_xpu():
             if not (token_num_pad > token_num):
                 x_padded = x
             else:

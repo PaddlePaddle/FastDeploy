@@ -49,6 +49,7 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.scheduler_metrics_logger import SchedulerMetricsLogger
 from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
@@ -146,6 +147,13 @@ class EngineService:
         )
         self.token_processor.set_resource_manager(self.resource_manager)
 
+        self.scheduler_metrics_logger = SchedulerMetricsLogger(
+            enabled=True,
+            dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+        )
+        self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
+        self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
+
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
@@ -155,6 +163,7 @@ class EngineService:
             )
 
         self.bos_client = None
+        self.mm_max_tokens_per_item = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -265,6 +274,12 @@ class EngineService:
             self.cfg.tool_parser,
         )
         self.data_processor = self.input_processor.create_processor()
+        self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
+            self.cfg.model_config.max_model_len
+        )
+        if self.mm_max_tokens_per_item is not None:
+            max_chunk_tokens = self.cfg.get_max_chunk_tokens(self.mm_max_tokens_per_item)
+            self.cfg.cache_config.postprocess(max_chunk_tokens, self.cfg.scheduler_config.max_num_seqs)
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -323,6 +338,17 @@ class EngineService:
         self.swap_space_ready_signal = IPCSignal(
             name="swap_space_ready_signal",
             array=swap_space_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        cache_transfer_inited_signal_data = np.zeros(
+            shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32
+        )
+        self.cache_transfer_inited_signal = IPCSignal(
+            name="cache_transfer_inited_signal",
+            array=cache_transfer_inited_signal_data,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -911,6 +937,7 @@ class EngineService:
                                                 )
                                             ]
                                         )
+                                        need_check_req_ids.remove(task.request_id)
                                         delete_tasks_list.append(task)
                                     elif result is False:
                                         if task.request_id in finished_ids:
@@ -1628,6 +1655,8 @@ class EngineService:
             self.llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
+            if hasattr(self, "cache_task_queue"):
+                self.cache_task_queue.clear_transfer_task()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
             self.llm_logger.info("Clear Data: Successfully")
@@ -1674,10 +1703,10 @@ class EngineService:
                             f"Send server info to router failed: {resp.status_code}, "
                             f"{resp.text}, {self.cfg.register_info}"
                         )
-                        time.sleep(sleep_seconds)
                 except Exception as e:
                     self.llm_logger.exception(f"Unexpected error during router registration: {e}")
-                    time.sleep(sleep_seconds)
+
+                time.sleep(sleep_seconds)
 
         if self.cfg.router_config.router is None:
             self.llm_logger.info("Router is not enabled, skip registering to router")
@@ -1750,6 +1779,7 @@ class EngineService:
         self.worker_healthy_live_signal.clear()
         self.cache_ready_signal.clear()
         self.swap_space_ready_signal.clear()
+        self.cache_transfer_inited_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
         self.prefix_tree_status_signal.clear()
@@ -1962,6 +1992,8 @@ class EngineService:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.mm_max_tokens_per_item)}'"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
@@ -1976,6 +2008,7 @@ class EngineService:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -1983,6 +2016,7 @@ class EngineService:
 
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+            "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:
@@ -2006,6 +2040,9 @@ class EngineService:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)

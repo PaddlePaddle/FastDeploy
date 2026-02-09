@@ -158,6 +158,7 @@ class MetricsManager:
     available_gpu_block_num: "Gauge"
     free_gpu_block_num: "Gauge"
     max_gpu_block_num: "Gauge"
+    max_cpu_block_num: "Gauge"
     available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
@@ -184,6 +185,7 @@ class MetricsManager:
     request_params_max_tokens: "Histogram"
     prompt_tokens_total: "Counter"
     request_prompt_tokens: "Histogram"
+    request_token_ratio: "Histogram"
 
     # 定义所有指标配置
 
@@ -234,7 +236,13 @@ class MetricsManager:
         "max_gpu_block_num": {
             "type": Gauge,
             "name": "fastdeploy:max_gpu_block_num",
-            "description": "Number of total blocks determined when service started",
+            "description": "Number of total GPU blocks determined when service started",
+            "kwargs": {},
+        },
+        "max_cpu_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:max_cpu_block_num",
+            "description": "Number of total CPU blocks determined when service started",
             "kwargs": {},
         },
         "available_gpu_resource": {
@@ -558,6 +566,56 @@ class MetricsManager:
             "name": "fastdeploy:request_prompt_tokens",
             "description": "Number of prefill tokens processed",
             "kwargs": {"buckets": build_1_2_5_buckets(33792)},
+        },
+        "request_token_ratio": {
+            "type": Histogram,
+            "name": "fastdeploy:request_token_ratio",
+            "description": "Ratio of output tokens to input tokens (generation_tokens / prompt_tokens)",
+            "kwargs": {
+                "buckets": [
+                    0,
+                    5,
+                    10,
+                    15,
+                    20,
+                    25,
+                    30,
+                    35,
+                    40,
+                    45,
+                    50,
+                    55,
+                    60,
+                    65,
+                    70,
+                    75,
+                    80,
+                    85,
+                    90,
+                    95,
+                    100,
+                    105,
+                    110,
+                    115,
+                    120,
+                    125,
+                    130,
+                    135,
+                    140,
+                    145,
+                    150,
+                    155,
+                    160,
+                    165,
+                    170,
+                    175,
+                    180,
+                    185,
+                    190,
+                    195,
+                    200,
+                ]
+            },
         },
     }
 

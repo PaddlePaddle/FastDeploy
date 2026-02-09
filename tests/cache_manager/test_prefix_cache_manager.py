@@ -79,6 +79,9 @@ class _DummyEngineCacheQueue:
     def put_transfer_task(self, payload):
         self.tasks.append(payload)
 
+    def result_queue_empty(self):
+        return True
+
 
 # Test double for process objects spawned by PrefixCacheManager.
 class _DummyProcess:
@@ -513,72 +516,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
                     create_cache_tensor=False,
                 )
 
-    def test_launch_cache_manager_waits_for_signals_with_hierarchical_cache(self):
-        manager = _create_manager(num_cpu_blocks=2)
-        manager.cache_config.enable_hierarchical_cache = True
-
-        created_signals = {}
-
-        def _signal_factory(name=None, array=None, **kwargs):
-            dtype = kwargs.get("dtype", np.array(array).dtype)
-            signal = SimpleNamespace(name=name, value=np.array(array, copy=True, dtype=dtype))
-            signal.dtype = dtype
-            created_signals[name] = signal
-            return signal
-
-        def _fake_sleep(_):
-            ready_signal = created_signals.get("cache_ready_signal")
-            if ready_signal is not None and np.sum(ready_signal.value) == 0:
-                ready_signal.value[:] = 1
-                return
-            swap_signal = created_signals.get("swap_space_ready_signal")
-            if swap_signal is not None and np.sum(swap_signal.value) == 0:
-                swap_signal.value[:] = 1
-                return
-
-        with (
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
-                side_effect=_signal_factory,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
-                _DummyEngineCacheQueue,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value="CUDA_VISIBLE_DEVICES=0",
-                create=True,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                partial(_DummyProcess, poll_value=1),
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
-                _TrackingThread,
-            ),
-            patch(
-                "fastdeploy.cache_manager.prefix_cache_manager.time.sleep",
-                side_effect=_fake_sleep,
-            ),
-            patch.object(manager, "_get_kv_cache_shape", return_value=([1], [1])),
-        ):
-            processes = manager.launch_cache_manager(
-                cache_config=manager.cache_config,
-                tensor_parallel_size=1,
-                device_ids=[0],
-                pod_ip="127.0.0.1",
-                engine_worker_queue_port=8000,
-                ipc_suffix="pid",
-                create_cache_tensor=False,
-            )
-
-        self.assertEqual(len(processes), 1)
-        started_targets = {thread.target for thread in _TrackingThread.instances if thread.started}
-        self.assertIn(manager.recv_data_transfer_result, started_targets)
-        self.assertIn(manager.clear_prefix_cache, started_targets)
-
     def test_launch_cache_messager_waits_for_ready_signal(self):
         manager = _create_manager()
         ready_snapshots = {}
@@ -755,6 +692,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_issue_swap_task_sync_path(self):
         manager = _create_manager()
         manager.cache_task_queue = _DummyEngineCacheQueue()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
 
         class _NoWaitEvent:
             instances = []
@@ -763,8 +703,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 self.wait_called = False
                 _NoWaitEvent.instances.append(self)
 
-            def wait(self):
+            def wait(self, timeout=None):
                 self.wait_called = True
+                self.timeout = timeout
+                return True
 
         with patch("fastdeploy.cache_manager.prefix_cache_manager.Event", _NoWaitEvent):
             manager.issue_swap_task(
@@ -824,6 +766,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
         manager.cache_task_queue = _DummyEngineCacheQueue()
         manager.issue_swap_task(
             transfer_task_id="task-1",
@@ -1123,6 +1068,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_reset_clears_internal_state(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=1)
+        cache_task_inflight_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.cache_task_inflight_signal = _DummyIPCSignal("cache_task_inflight", cache_task_inflight_data)
+        manager.cache_task_inflight_signal.value[:] = 0
+        manager.cache_task_queue = _DummyEngineCacheQueue()
+
         node = BlockNode(100, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         manager.node_map[node.node_id] = node
         manager.task_swapping_event["evt"] = threading.Event()

@@ -23,6 +23,11 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.input_batch import (
+    InputBatch,
+    recover_batch_index_for_output,
+    recover_batch_index_for_sampler_output,
+)
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -56,11 +61,21 @@ elif current_platform.is_maca():
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
         save_output,
+        save_output_topk,
         set_stop_value_multi_ends,
+        speculate_get_seq_lens_output,
         speculate_limit_thinking_content_length_v1,
         speculate_limit_thinking_content_length_v2,
+        speculate_save_output,
+        speculate_save_output_topk,
+        speculate_set_stop_value_multi_seqs,
+        speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle,
+        speculate_step_reschedule,
         speculate_step_system_cache,
+        speculate_update,
         step_paddle,
+        step_reschedule,
         step_system_cache,
         update_inputs,
         update_inputs_v1,
@@ -73,8 +88,6 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
         speculate_save_output_topk,
@@ -187,6 +200,7 @@ def speculate_limit_thinking_content_length(
 
 
 def pre_process(
+    token_num_cpu: int,
     input_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
     speculative_decoding: bool,
@@ -209,12 +223,11 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
-    token_num_cpu = seq_lens_this_time.numpy().sum().item()
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, token_num_cpu
+            input_ids, seq_lens_this_time, None, None, token_num_cpu
         )
         return (
             ids_remove_padding,
@@ -225,19 +238,15 @@ def pre_process(
             None,
         )
     # Remove padding
-    max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-    output_padding_offset = None
-    output_cum_offsets = None
     if speculative_decoding:
         (
             ids_remove_padding,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids, draft_tokens, cum_offsets_now, seq_lens_this_time, seq_lens_encoder, token_num_cpu
-        )
+        ) = get_padding_offset(input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, token_num_cpu)
+
+        # compute each batch's output token num
         seq_lens_output = speculate_get_seq_lens_output(
             seq_lens_this_time,
             seq_lens_encoder,
@@ -246,28 +255,23 @@ def pre_process(
         if isinstance(seq_lens_output, list):
             seq_lens_output = seq_lens_output[0]
         output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
+
+        useless_input_ids = input_ids
+        _, batch_id_per_token_output, cu_seqlens_q_output, _ = get_padding_offset(
+            useless_input_ids,
             seq_lens_output,
-            max_len,
+            None,
+            None,
+            output_token_num.item(),
         )
-    else:
-        token_num = paddle.sum(seq_lens_this_time)
-        (
-            ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+
     return (
         ids_remove_padding,
         batch_id_per_token,
         cu_seqlens_q,
         cu_seqlens_k,
-        output_cum_offsets,
-        output_padding_offset,
+        cu_seqlens_q_output,
+        batch_id_per_token_output,
     )
 
 
@@ -313,12 +317,9 @@ def _build_stream_transfer_data(
 def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata,
     block_size: int = 64,
-    save_each_rank: bool = False,
-    skip_save_output: bool = False,
-    async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
     enable_entropy: bool = False,
@@ -388,7 +389,7 @@ def post_process_normal(
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             update_inputs_v1(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
@@ -397,7 +398,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
@@ -405,51 +405,77 @@ def post_process_normal(
         else:
             update_inputs(
                 model_output.stop_flags,
-                model_output.not_need_stop,
+                model_output.not_need_stop_device,
                 model_output.seq_lens_this_time,
                 model_output.seq_lens_encoder,
                 model_output.seq_lens_decoder,
                 model_output.input_ids,
-                model_output.stop_nums,
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-    # 3. Transmit the model's output and stop generation signal via message queue.
-    #    In the future, we will abandon this approach.
-    if not skip_save_output:
-        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(
-                    sampler_output.sampled_token_ids,
-                    logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs_list=model_output.prompt_logprobs_list,
-                )
-                async_output_queue.put(output)
+
+
+def save_output_normal(
+    model_output: ModelOutputData,
+    sampler_output: SamplerOutput,
+    share_inputs: Dict[str, paddle.Tensor],
+    async_output_queue: queue.Queue = None,
+    save_each_rank: bool = False,
+):
+    # Transmit the model's output and stop generation signal via message queue.
+    # In the future, we will abandon this approach.
+    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+        if save_each_rank or model_output.mp_rank == 0:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            output = _build_stream_transfer_data(
+                sampler_output.sampled_token_ids,
+                logprobs=sampler_output.logprobs_tensors,
+                prompt_logprobs_list=model_output.prompt_logprobs_list,
+            )
+            async_output_queue.put(output)
+    else:
+        if sampler_output.logprobs_tensors is None:
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["last_preempted_idx", "sampled_token_ids"],
+            )
+            save_output(
+                recover_share_inputs_map["sampled_token_ids"],
+                model_output.not_need_stop,
+                recover_share_inputs_map["last_preempted_idx"],
+                model_output.mp_rank,
+                save_each_rank,
+            )
         else:
-            if sampler_output.logprobs_tensors is None:
-                save_output(
-                    sampler_output.sampled_token_ids,
-                    model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
-                    model_output.mp_rank,
-                    save_each_rank,
-                )
-            else:
-                save_output_topk(
-                    sampler_output.sampled_token_ids,
-                    sampler_output.logprobs_tensors.logprob_token_ids,
-                    sampler_output.logprobs_tensors.logprobs,
-                    sampler_output.logprobs_tensors.selected_token_ranks,
-                    model_output.not_need_stop,
-                    share_inputs["preempted_idx"],
-                    model_output.mp_rank,
-                )
+            recover_share_inputs_map = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["last_preempted_idx"],
+            )
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            save_output_topk(
+                share_inputs["sampled_token_ids"],
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                model_output.not_need_stop,
+                recover_share_inputs_map["last_preempted_idx"],
+                model_output.mp_rank,
+            )
+    share_inputs["last_preempted_idx"][:] = 0
 
 
 def post_process_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
@@ -497,24 +523,44 @@ def post_process_specualate(
         model_output.stop_flags,
         model_output.seq_lens_this_time,
         model_output.is_block_step,
-        model_output.stop_nums,
         model_output.mask_rollback,
     )
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["accept_tokens", "accept_num", "seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output(
-                model_output.accept_tokens,
-                model_output.accept_num,
+                recover_model_output_map["accept_tokens"],
+                recover_model_output_map["accept_num"],
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 model_output.mp_rank,
                 save_each_rank,
-                envs.ENABLE_V1_KVCACHE_SCHEDULER,
+                bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
             )
         else:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            recover_model_output_map = recover_batch_index_for_output(
+                model_output,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                ["seq_lens_decoder", "prompt_lens"],
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs, model_output.index_to_batch_id, model_output.enable_pd_reorder, ["preempted_idx"]
+            )
             speculate_save_output_topk(
                 sampler_output.sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
@@ -523,9 +569,9 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
-                model_output.seq_lens_decoder,
-                model_output.prompt_lens,
-                share_inputs["preempted_idx"],
+                recover_model_output_map["seq_lens_decoder"],
+                recover_model_output_map["prompt_lens"],
+                recover_share_inputs["preempted_idx"],
                 3,  # mtype
                 model_output.mp_rank,
                 save_each_rank,
@@ -548,7 +594,7 @@ def post_process_specualate(
 def post_process(
     sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     sampling_metadata: SamplingMetadata = None,
     block_size: int = 64,
     save_each_rank: bool = False,
@@ -591,18 +637,16 @@ def post_process(
                 share_inputs,
                 sampling_metadata,
                 block_size,
-                save_each_rank,
-                skip_save_output,
-                async_output_queue,
                 think_end_id,
                 line_break_id,
                 enable_entropy,
             )
+            share_inputs["last_preempted_idx"].copy_(share_inputs["preempted_idx"])
     share_inputs["preempted_idx"][:] = 0
 
 
 def step_cuda(
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int,
     enc_dec_block_num: int,
     speculative_config: SpeculativeConfig,
@@ -794,8 +838,8 @@ def rebuild_padding(
     seq_len_this_time: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
-    output_padding_offset: Optional[paddle.Tensor] = None,
-    max_input_length: Optional[int] = None,
+    batch_id_per_token_output: Optional[paddle.Tensor] = None,
+    cu_seqlens_q_output: Optional[paddle.Tensor] = None,
     first_token_out: Optional[paddle.Tensor] = None,
     enable_logprob: Optional[bool] = False,
 ):
@@ -812,9 +856,9 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
-            max_input_length,
             enable_logprob,
         )
     elif current_platform.is_dcu():
@@ -826,8 +870,7 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
-            max_input_length,
+            batch_id_per_token_output,
         )
     elif current_platform.is_iluvatar():
         from fastdeploy.model_executor.ops.iluvatar import rebuild_padding
@@ -838,9 +881,8 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
+            batch_id_per_token_output,
             first_token_out,
-            max_input_length,
             enable_logprob,
         )
     elif current_platform.is_gcu():
@@ -852,8 +894,7 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
-            max_input_length,
+            batch_id_per_token_output,
         )
     elif current_platform.is_cpu():
         from fastdeploy.model_executor.ops.cpu import rebuild_padding_cpu
@@ -864,8 +905,7 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
-            max_input_length,
+            batch_id_per_token_output,
         )
     elif current_platform.is_maca():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
@@ -876,9 +916,9 @@ def rebuild_padding(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
             first_token_out,
-            max_input_length,
             enable_logprob,
         )
     else:
@@ -889,7 +929,7 @@ def rebuild_padding(
 def post_process_pooling(
     pooler_output: PoolerOutput,
     model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
+    share_inputs: InputBatch,
     block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
@@ -930,7 +970,6 @@ def post_process_pooling(
                 dummy_sampled_tokens,
                 model_output.input_ids,
                 share_inputs["block_tables"],
-                model_output.stop_nums,
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
