@@ -35,7 +35,8 @@ from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 if current_platform.is_cuda():
     if get_sm_version() == 100:
         logger.info("Detected sm100, use PFCC DeepGEMM")
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+        if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
+            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
         from deep_gemm import (
             m_grouped_fp8_gemm_nt_contiguous,
             m_grouped_fp8_gemm_nt_masked,

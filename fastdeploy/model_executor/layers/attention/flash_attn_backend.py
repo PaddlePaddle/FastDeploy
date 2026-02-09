@@ -57,7 +57,8 @@ if TYPE_CHECKING:
 
 from fastdeploy.platforms import current_platform
 
-paddle.compat.enable_torch_proxy(scope={"flash_mask"})
+if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
+    paddle.compat.enable_torch_proxy(scope={"flash_mask"})
 flashmask_attention_v4 = None
 
 if current_platform.is_cuda():
