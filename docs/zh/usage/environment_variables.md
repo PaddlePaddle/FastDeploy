@@ -231,6 +231,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Worker 进程响应等待时的健康检查超时时间（秒），默认 30 秒
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 
+    # 是否启用 PD REORDER，可以设置为 0 或 1
+    "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+
     # 控制是否收集用户信息，默认 0（收集）；1（不收集）
     "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
 

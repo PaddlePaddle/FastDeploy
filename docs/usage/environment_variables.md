@@ -231,6 +231,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Worker process health check timeout when waiting for responses in seconds (default: 30)
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
 
+    # Whether to use PD REORDER, can set 0 or 1
+    "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+
     # Whether to collect user information, default 0 (collect); 1 (do not collect)
     "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
 
