@@ -79,6 +79,9 @@ class _DummyEngineCacheQueue:
     def put_transfer_task(self, payload):
         self.tasks.append(payload)
 
+    def result_queue_empty(self):
+        return True
+
 
 # Test double for process objects spawned by PrefixCacheManager.
 class _DummyProcess:
@@ -689,6 +692,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
     def test_issue_swap_task_sync_path(self):
         manager = _create_manager()
         manager.cache_task_queue = _DummyEngineCacheQueue()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
 
         class _NoWaitEvent:
             instances = []
@@ -697,8 +703,10 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 self.wait_called = False
                 _NoWaitEvent.instances.append(self)
 
-            def wait(self):
+            def wait(self, timeout=None):
                 self.wait_called = True
+                self.timeout = timeout
+                return True
 
         with patch("fastdeploy.cache_manager.prefix_cache_manager.Event", _NoWaitEvent):
             manager.issue_swap_task(
@@ -758,6 +766,9 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_issue_and_sync_swap_tasks(self):
         manager = _create_manager()
+        prefix_tree_status_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.prefix_tree_status_signal = _DummyIPCSignal("prefix_tree_status", prefix_tree_status_data)
+        manager.prefix_tree_status_signal.value[:] = 0
         manager.cache_task_queue = _DummyEngineCacheQueue()
         manager.issue_swap_task(
             transfer_task_id="task-1",
@@ -1057,6 +1068,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
     def test_reset_clears_internal_state(self):
         manager = _create_manager(num_gpu_blocks=2, num_cpu_blocks=1)
+        cache_task_inflight_data = np.zeros([manager.config.parallel_config.tensor_parallel_size], dtype=np.int32)
+        manager.cache_task_inflight_signal = _DummyIPCSignal("cache_task_inflight", cache_task_inflight_data)
+        manager.cache_task_inflight_signal.value[:] = 0
+        manager.cache_task_queue = _DummyEngineCacheQueue()
+
         node = BlockNode(100, [1], 0, 1, 0, 1, get_hash_str([1]), 0, parent=manager.radix_tree_root)
         manager.node_map[node.node_id] = node
         manager.task_swapping_event["evt"] = threading.Event()

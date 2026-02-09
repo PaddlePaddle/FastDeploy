@@ -43,7 +43,7 @@ def draft_model_update_kernel(
     seq_lens_encoder,
     seq_lens_decoder,
     step_idx,
-    output_cum_offsets,
+    cu_seqlens_q_output,
     stop_flags,
     not_need_stop,
     max_dec_len,
@@ -64,7 +64,7 @@ def draft_model_update_kernel(
         draft_token_now = draft_tokens[tid]
         pre_ids_now = pre_ids[tid]
         base_model_draft_tokens_now = base_model_draft_tokens[tid]
-        next_tokens_start_id = tid * max_seq_len - output_cum_offsets[tid]
+        next_tokens_start_id = cu_seqlens_q_output[tid]
         # next_tokens_start =
         seq_len_this_time = seq_lens_this_time[tid]
         seq_len_encoder = seq_lens_encoder[tid]
@@ -130,7 +130,7 @@ def draft_model_update_ref(
     seq_lens_encoder,
     seq_lens_decoder,
     step_idx,
-    output_cum_offsets,
+    cu_seqlens_q_output,
     stop_flags,
     not_need_stop,
     max_dec_len,
@@ -161,7 +161,7 @@ def draft_model_update_ref(
         seq_lens_encoder,
         seq_lens_decoder,
         step_idx,
-        output_cum_offsets,
+        cu_seqlens_q_output,
         stop_flags,
         not_need_stop,
         max_dec_len,
@@ -200,8 +200,8 @@ class TestDraftModelUpdate(unittest.TestCase):
         seq_lens_encoder = paddle.randint(1, 10, shape=(max_bsz,), dtype="int32")
         seq_lens_decoder = paddle.randint(1, 10, shape=(max_bsz,), dtype="int32")
         step_idx = paddle.randint(1, 10, shape=(max_bsz,), dtype="int64")
-        output_cum_offsets = paddle.randint(0, 2, shape=(max_bsz,), dtype="int32")
-        output_cum_offsets[0] = 0
+        cu_seqlens_q_output = paddle.randint(0, 2, shape=(max_bsz,), dtype="int32")
+        cu_seqlens_q_output[0] = 0
         stop_flags = paddle.zeros([max_bsz], dtype="bool")
         not_need_stop = paddle.zeros([1], dtype="bool").to(device=paddle.CPUPlace())
         max_dec_len = paddle.randint(100, 102, shape=(max_bsz,), dtype="int64")
@@ -216,7 +216,7 @@ class TestDraftModelUpdate(unittest.TestCase):
             seq_lens_encoder,
             seq_lens_decoder,
             step_idx,
-            output_cum_offsets,
+            cu_seqlens_q_output,
             stop_flags,
             not_need_stop,
             max_dec_len,

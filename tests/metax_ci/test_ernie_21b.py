@@ -10,6 +10,7 @@ os.environ["FLAGS_weight_only_linear_arch"] = "80"
 os.environ["FD_METAX_KVCACHE_MEM"] = "8"
 os.environ["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
 os.environ["FD_ENC_DEC_BLOCK_NUM"] = "2"
+os.environ["FD_SAMPLING_CLASS"] = "rejection"
 
 
 MODEL_PATH = "/data/models/PaddlePaddle/ERNIE-4.5-21B-A3B-Thinking"
@@ -28,9 +29,9 @@ class TestErnie21B(unittest.TestCase):
             max_model_len=256,
             quantization="wint8",
             load_choices="default_v1",
-            enable_prefix_caching=False,
+            # enable_prefix_caching=False,
             disable_custom_all_reduce=True,
-            graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
+            # graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
         )
 
         cls.sampling_params = fastdeploy.SamplingParams(top_p=0.95, max_tokens=256, temperature=0.6)
