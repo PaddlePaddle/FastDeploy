@@ -62,10 +62,10 @@ if current_platform.is_iluvatar():
         set_value_by_flags_and_idx,
     )
 
-    def get_stop(tensor):
+    def get_stop(tensor):  # pragma: no cover
         return tensor.cpu()
 
-    def set_stop(tensor, value):
+    def set_stop(tensor, value):  # pragma: no cover
         tensor[0] = value
 
     share_external_data = None
