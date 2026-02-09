@@ -636,8 +636,6 @@ def is_port_available(host, port):
             return True
 
 
-
-
 def is_shm_port_available(port):
     """
     Check if the shared memory port is available by checking whether
