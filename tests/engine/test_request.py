@@ -214,7 +214,7 @@ class TestRequestMetricsCorrectness(unittest.TestCase):
             accept_ratio=0.8,
             average_accept_length=1.5,
             accepted_tokens_per_head=[1, 2],
-            accept_ratio_per_head=[0.5, 0.5]
+            accept_ratio_per_head=[0.5, 0.5],
         )
 
         # Original way (using asdict directly on the object)
