@@ -227,5 +227,21 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Worker process health check timeout when waiting for responses in seconds (default: 30)
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+
+    # Whether to collect user information, default 0 (collect); 1 (do not collect)
+    "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+
+    # Usage statistics report server address
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
+
+    # Usage statistics source information, can be set by user
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+
+    # FastDeploy configuration root directory
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
 }
 ```
