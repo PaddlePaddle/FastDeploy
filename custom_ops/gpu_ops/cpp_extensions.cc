@@ -761,12 +761,6 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
-std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
-    const paddle::Tensor& output_cum_offsets_tmp,
-    const paddle::Tensor& out_token_num,
-    const paddle::Tensor& seq_lens_output,
-    const int max_seq_len);
-
 void SpecTokenPenaltyMultiScores(const paddle::Tensor& pre_ids,
                                  const paddle::Tensor& logits,
                                  const paddle::Tensor& penalty_scores,
@@ -1725,10 +1719,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_seq_lens_output",
         &SpeculateGetSeqLensOutput,
         "speculate_get_seq_lens_output function");
-
-  m.def("speculate_get_output_padding_offset",
-        &SpeculateGetOutputPaddingOffset,
-        "speculate_get_output_padding_offset function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
