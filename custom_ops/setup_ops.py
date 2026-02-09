@@ -448,8 +448,7 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
         sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
 
-    if cc >= 75:
-        cc_compile_args += ["-DENABLE_SM75_EXT_OPS"]
+    if cc >= 70:  # Changed from 75 to 70 for V100 support
         nvcc_compile_args += [
             "-DENABLE_SM75_EXT_OPS",
             "-DENABLE_SCALED_MM_C2X=1",
@@ -463,12 +462,28 @@ elif paddle.is_compiled_with_cuda():
             "gpu_ops/moe/moe_deepgemm_permute.cu",
             "gpu_ops/moe/moe_deepgemm_depermute.cu",
         ]
+        # gemm_dequant works on SM70
+        sources += ["gpu_ops/int8_gemm_with_cutlass/gemm_dequant.cu"]
+        nvcc_compile_args += ["-DENABLE_BF16"]
+        # moe template instantiation (skip fp8 for SM70)
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen --skip-fp8"
+        )
+        sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
+        sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
+        sources += find_end_files("gpu_ops/moe/template_instantiation", ".cu")
+        # These MOE files work on SM70
+        sources += [
+            "gpu_ops/moe/moe_fast_hardamard_kernel.cu",
+            "gpu_ops/moe/swigluoai.cu",
+        ]
+        nvcc_compile_args += ["-Igpu_ops/moe"]
 
     if cc >= 80:
-        # append_attention (requires SM80+ due to cp.async instructions)
+        # append_attention (requires SM80+ due to cp.async, ldmatrix instructions - NO fallback)
         cc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
         os.system(
-            "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen --skip-fp8"
         )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
@@ -476,25 +491,11 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files("gpu_ops/sparse_indexer", ".cu")
         # mla
         sources += ["gpu_ops/multi_head_latent_attention.cu"]
-        # gemm_dequant
-        sources += ["gpu_ops/int8_gemm_with_cutlass/gemm_dequant.cu"]
-        # speculate_decoding already added in cc >= 70 block
-        nvcc_compile_args += ["-DENABLE_BF16"]
-        # moe (generate_kernels.py already called in cc >= 70 block)
-        os.system(
-            "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen"
-        )
-        sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
-        sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
-        # Add remaining moe files not already added in cc >= 70 block
-        sources += find_end_files("gpu_ops/moe/template_instantiation", ".cu")
+        # These MOE files require SM80+
         sources += [
             "gpu_ops/moe/gptq_marlin_repack.cu",
-            "gpu_ops/moe/moe_fast_hardamard_kernel.cu",
-            "gpu_ops/moe/swigluoai.cu",
             "gpu_ops/moe/winx_unzip.cu",
         ]
-        nvcc_compile_args += ["-Igpu_ops/moe"]
 
     if cc >= 89:
         # Running generate fp8 gemm codes.
