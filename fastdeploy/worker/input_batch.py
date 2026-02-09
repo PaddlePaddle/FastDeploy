@@ -534,7 +534,7 @@ class InputBatch:
             fill_paddle_tensor(self, "step_seq_lens_decoder", 0)
             fill_paddle_tensor(self, "prompt_lens", 0)
             fill_paddle_tensor(self, "step_idx", 0)
-            fill_paddle_tensor(self, "not_need_stop", False)
+            # fill_paddle_tensor(self, "not_need_stop", False)
             fill_paddle_tensor(self, "not_need_stop_device", False)
             fill_paddle_tensor(self, "sampled_token_ids", -1)
             fill_paddle_tensor(self, "stop_flags", True)
