@@ -1301,8 +1301,8 @@ class GPUModelRunner(ModelRunnerBase):
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-            output_cum_offsets,
-            output_padding_offset,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
         ) = pre_process(
             token_num,
             self.share_inputs["input_ids"],
@@ -1321,8 +1321,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # For speculative decoding
         if self.speculative_decoding:
-            self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-            self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+            self.share_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
+            self.share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1939,10 +1939,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.model_config.max_model_len,
+                    (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                    (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
@@ -2401,8 +2399,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.model_config.max_model_len,
+                (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
             )
 
             # 4. Compute logits, Sample
