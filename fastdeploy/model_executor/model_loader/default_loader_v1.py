@@ -20,6 +20,7 @@ from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
+    get_model_path,
     get_weight_iterator,
     is_weight_cache_enabled,
     load_weights_from_cache,
@@ -51,7 +52,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @save_model()
     @measure_time()
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
-        weights_iterator = get_weight_iterator(fd_config.model_config.model)
+        model_path = get_model_path(fd_config)
+        weights_iterator = get_weight_iterator(model_path)
         if enable_cache:
             load_weights_from_cache(model, weights_iterator)
         else:

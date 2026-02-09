@@ -4,11 +4,19 @@
 
 FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router) for request scheduling. The Router supports both centralized deployment and Prefill/Decode (PD) disaggregated deployment.。
 
+![go-router](images/go-router-workflow.png)
+
 ## Installation
 
 ### 1. Prebuilt Binaries
 
 Starting from FastDeploy v2.5.0, the official Docker images include the Go language environment required to build the Golang Router and also provide a precompiled Router binary. The Router binary is located by default in the `/usr/local/bin` directory and can be used directly without additional compilation. For installation details, please refer to the [FastDeploy Installation Guide](../get_started/installation/nvidia_gpu.md)
+
+If you need to download the Golang-based router binary separately, it can be installed using the following steps:
+```
+wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+mv fd-router /usr/local/bin/fd-router
+```
 
 ### 2. Build from Source
 
@@ -33,7 +41,7 @@ bash build.sh
 
 Start the Router service. The `--port` parameter specifies the scheduling port for centralized deployment.
 ```
-./fd-router --port 30000
+/usr/local/bin/fd-router --port 30000
 ```
 
 Start a mixed inference instance. Compared to standalone deployment, specify the Router endpoint via `--router`. Other parameters remain unchanged.
@@ -50,7 +58,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 Start the Router service with PD disaggregation enabled using the `--splitwise` flag.
 ```
-./fd-router \
+/usr/local/bin/fd-router \
   --port 30000 \
   --splitwise
 ```
@@ -105,7 +113,7 @@ popd
 
 Launch the Router with the custom configuration specified via `--config_path`:
 ```
-./fd-router \
+/usr/local/bin/fd-router \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml

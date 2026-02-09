@@ -19,6 +19,7 @@ import re
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any, List, Optional, Union
 
 import paddle
@@ -317,7 +318,12 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if (
+            output_dim is not None
+            and fd_config is not None
+            and fd_config.parallel_config.tensor_parallel_size > 1
+            and not fd_config.load_config.is_pre_sharded
+        ):
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -547,3 +553,11 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+@cache
+def get_sm_version():
+    if paddle.cuda.is_available():
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor
+    return 0

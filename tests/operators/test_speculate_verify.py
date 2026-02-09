@@ -62,7 +62,7 @@ def speculate_verify_ref(
     max_dec_len,
     end_tokens,
     is_block_step,
-    output_cum_offsets,
+    cu_seqlens_q_output,
     actual_candidate_len,
     actual_draft_token_nums,
     topp,
@@ -106,7 +106,7 @@ def speculate_verify_ref(
     verify_tokens_flat = verify_tokens.reshape(-1)
     verify_scores_flat = verify_scores.reshape(-1)
     for bid in range(real_bsz):
-        start_token_id = bid * max_seq_len - output_cum_offsets[bid]
+        start_token_id = cu_seqlens_q_output[bid]
         accept_num_now = 1
         stop_flag_now_int = 0
 
@@ -274,11 +274,11 @@ def gen_speculate_verify_inputs(
     end_tokens = rng.integers(1, 1000, size=end_length, dtype=np.int64)
     is_block_step = rng.integers(0, 2, size=real_bsz, dtype=bool)
 
-    # output_cum_offsets      = np.zeros_like(seq_lens_this_time)
-    # output_cum_offsets[1:]  = np.cumsum(seq_lens_this_time[:-1])
+    # cu_seqlens_q_output      = np.zeros_like(seq_lens_this_time)
+    # cu_seqlens_q_output[1:]  = np.cumsum(seq_lens_this_time[:-1])
     blank_lengths = max_seq_len - seq_lens_this_time
-    output_cum_offsets = np.concatenate([[0], np.cumsum(blank_lengths[:-1])])
-    output_cum_offsets = output_cum_offsets.astype("int32")
+    cu_seqlens_q_output = np.concatenate([[0], np.cumsum(blank_lengths[:-1])])
+    cu_seqlens_q_output = cu_seqlens_q_output.astype("int32")
     actual_candidate_len = rng.integers(1, max_candidate_len + 1, size=sum_seq_this_time, dtype=np.int32)
 
     topp = (
@@ -309,7 +309,7 @@ def gen_speculate_verify_inputs(
         "max_dec_len": max_dec_len,
         "end_tokens": end_tokens,
         "is_block_step": is_block_step,
-        "output_cum_offsets": output_cum_offsets,
+        "cu_seqlens_q_output": cu_seqlens_q_output,
         "actual_candidate_len": actual_candidate_len,
         "actual_draft_token_nums": actual_draft_token_nums,
         "topp": topp,

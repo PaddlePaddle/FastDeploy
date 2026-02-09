@@ -125,8 +125,8 @@ __global__ void apply_token_enforce_generation_scores_kernel(
     T* __restrict__ logits_dst,                  // logits (output)
     const int64_t* __restrict__ allowed_tokens,  // [allowed_len]
     const int32_t* __restrict__ reasoning_status,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int max_bsz,
     const int max_seq_len,
     const int vocab_size,
@@ -134,10 +134,8 @@ __global__ void apply_token_enforce_generation_scores_kernel(
   int token_idx = blockIdx.x;
   int tid = threadIdx.x;
 
-  const int bs_idx =
-      (token_idx + output_padding_offset[token_idx]) / max_seq_len;
-  const int query_start_token_idx =
-      bs_idx * max_seq_len - output_cum_offsets[bs_idx];
+  const int bs_idx = batch_id_per_token_output[token_idx];
+  const int query_start_token_idx = cu_seqlens_q_output[bs_idx];
   bool is_batch_first_token = (token_idx == query_start_token_idx);
 
   if (allowed_tokens_len == 0 || !is_batch_first_token) {
@@ -177,8 +175,8 @@ void reasoning_phase_token_constraint(
     const paddle::Tensor& step_idx,
     const paddle::Tensor& allowed_tokens,
     const paddle::Tensor& reasoning_status,
-    const paddle::Tensor& output_padding_offset,
-    const paddle::Tensor& output_cum_offsets,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
     const paddle::Tensor& enable_thinking,
     int64_t think_end_id,
     int64_t line_break_id) {
@@ -233,27 +231,28 @@ void reasoning_phase_token_constraint(
       reinterpret_cast<DataType_*>(const_cast<data_t*>(logits.data<data_t>())),
       allowed_tokens.data<int64_t>(),
       reasoning_status.data<int32_t>(),
-      output_padding_offset.data<int32_t>(),
-      output_cum_offsets.data<int32_t>(),
+      batch_id_per_token_output.data<int32_t>(),
+      cu_seqlens_q_output.data<int32_t>(),
       bs,
       max_seq_len,
       vocab_size,
       allowed_tokens_len);
 }
 
-void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
-                                   const paddle::Tensor& pre_ids,
-                                   const paddle::Tensor& stop_flags,
-                                   const paddle::Tensor& seq_lens_this_time,
-                                   const paddle::Tensor& seq_lens_encoder,
-                                   const paddle::Tensor& step_idx,
-                                   const paddle::Tensor& allowed_tokens,
-                                   const paddle::Tensor& reasoning_status,
-                                   const paddle::Tensor& output_padding_offset,
-                                   const paddle::Tensor& output_cum_offsets,
-                                   const paddle::Tensor& enable_thinking,
-                                   int64_t think_end_id,
-                                   int64_t line_break_id) {
+void ReasoningPhaseTokenConstraint(
+    const paddle::Tensor& logits,
+    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& allowed_tokens,
+    const paddle::Tensor& reasoning_status,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& enable_thinking,
+    int64_t think_end_id,
+    int64_t line_break_id) {
   switch (logits.type()) {
     case paddle::DataType::FLOAT16:
       return reasoning_phase_token_constraint<paddle::DataType::FLOAT16>(
@@ -265,8 +264,8 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
           step_idx,
           allowed_tokens,
           reasoning_status,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           enable_thinking,
           think_end_id,
           line_break_id);
@@ -280,8 +279,8 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
           step_idx,
           allowed_tokens,
           reasoning_status,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           enable_thinking,
           think_end_id,
           line_break_id);
@@ -295,8 +294,8 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
           step_idx,
           allowed_tokens,
           reasoning_status,
-          output_padding_offset,
-          output_cum_offsets,
+          batch_id_per_token_output,
+          cu_seqlens_q_output,
           enable_thinking,
           think_end_id,
           line_break_id);
@@ -317,8 +316,8 @@ PD_BUILD_STATIC_OP(reasoning_phase_token_constraint)
              "step_idx",
              "allowed_tokens",
              "reasoning_status",
-             "output_padding_offset",
-             "output_cum_offsets",
+             "batch_id_per_token_output",
+             "cu_seqlens_q_output",
              "enable_thinking"})
     .Outputs({"logits_out", "reasoning_status_out"})
     .Attrs({"think_end_id: int64_t", "line_break_id: int64_t"})
