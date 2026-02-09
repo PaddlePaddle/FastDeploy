@@ -146,6 +146,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.engine_worker_queue = Mock()
         processor.split_connector = Mock()
         processor.resource_manager = MockResourceManager()
+        processor.scheduler_metrics_logger = None
         task1 = MockTask()
         task2 = MockTask()
         processor.resource_manager.tasks_list = [task1, task2]

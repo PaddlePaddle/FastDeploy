@@ -49,6 +49,7 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.scheduler_metrics_logger import SchedulerMetricsLogger
 from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
@@ -145,6 +146,13 @@ class EngineService:
             split_connector=self.split_connector,
         )
         self.token_processor.set_resource_manager(self.resource_manager)
+
+        self.scheduler_metrics_logger = SchedulerMetricsLogger(
+            enabled=True,
+            dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+        )
+        self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
+        self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
 
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
@@ -1653,6 +1661,8 @@ class EngineService:
             self.llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
+            if hasattr(self, "cache_task_queue"):
+                self.cache_task_queue.clear_transfer_task()
             self.send_response_server.req_dict.clear()
             self.recv_request_server.req_dict.clear()
             self.llm_logger.info("Clear Data: Successfully")
@@ -2034,6 +2044,9 @@ class EngineService:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)

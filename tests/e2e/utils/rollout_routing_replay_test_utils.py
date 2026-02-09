@@ -154,9 +154,11 @@ def check_routing_replay_chat_completion(openai_client, moe_layer_num: int, mode
     cur_save_routing_path = f"./R3_tmp/routing_replay_output_{model_name}/"
     model_path = os.getenv("MODEL_PATH")
     if model_path:
-        baseline_path = os.path.join(model_path, f"R3_BaseLine_dev_uint8/routing_replay_output_baseline_{model_name}")
+        baseline_path = os.path.join(
+            model_path, f"R3_BaseLine_dev_uint8_0205/routing_replay_output_baseline_{model_name}"
+        )
     else:
-        baseline_path = f"./R3_BaseLine_dev_uint8/routing_replay_output_baseline_{model_name}"
+        baseline_path = f"./R3_BaseLine_dev_uint8_0205/routing_replay_output_baseline_{model_name}"
     stream_baseline_path = os.path.join(baseline_path, "r3_chat_completion_stream")
 
     nonstream_baseline_path = os.path.join(baseline_path, "r3_chat_completion_nonstream")

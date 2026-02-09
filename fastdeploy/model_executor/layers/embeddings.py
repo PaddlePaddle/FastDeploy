@@ -255,7 +255,7 @@ class VocabParallelEmbedding(nn.Layer):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
 
-        if output_dim is None:
+        if output_dim is None or self.fd_config.load_config.is_pre_sharded:
             assert (
                 param.shape == loaded_weight.shape
             ), f"Shape mismatch: param {param.shape} vs loaded_weight {loaded_weight.shape}"
