@@ -2277,8 +2277,7 @@ class GPUModelRunner(ModelRunnerBase):
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
-        prompt_token_ids = paddle.clone(self.share_inputs["token_ids_all"])
-        prompt_token_ids[self.share_inputs["prompt_lens"] :] = -1
+        prompt_token_ids = self.share_inputs["token_ids_all"]
 
         pooling_metadata = PoolingMetadata(
             prompt_lens=prompt_lens,

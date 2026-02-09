@@ -54,6 +54,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         pre_ids[1, 3] = self.think_end_id
 
         self.pre_ids = paddle.to_tensor(pre_ids, dtype="int64")
+        self.prompt_lens = paddle.zeros([self.bs, 1], dtype="int64")
 
         # ------------------------
         # reasoning_status (init)
@@ -107,6 +108,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -185,6 +187,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -229,6 +232,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -265,6 +269,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -318,6 +323,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
@@ -363,6 +369,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         reasoning_phase_token_constraint(
             self.logits,
             self.pre_ids,
+            self.prompt_lens,
             self.stop_flags,
             self.seq_lens_this_time,
             self.seq_lens_encoder,
