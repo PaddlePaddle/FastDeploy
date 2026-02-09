@@ -63,6 +63,35 @@ function python_version_check() {
   fi
 }
 
+function print_device_type() {
+    is_rocm=`$python -c "try: import paddle; print(paddle.is_compiled_with_rocm())
+except: print(False)"`
+    is_cuda=`$python -c "try: import paddle; print(paddle.is_compiled_with_cuda())
+except: print(False)"`
+    is_xpu=`$python -c "try: import paddle; print(paddle.is_compiled_with_xpu())
+except: print(False)"`
+    if_corex=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))
+except: print(False)"`
+    is_npu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('npu'))
+except: print(False)"`
+    is_gcu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('gcu'))
+except: print(False)"`
+    is_maca=`$python -c "try: import paddle; print(paddle.device.is_compiled_with_custom_device('metax_gpu'))
+except: print(False)"`
+    is_intel_hpu=`$python -c "try: import paddle; print(paddle.is_compiled_with_custom_device('intel_hpu'))
+except: print(False)"`
+
+    echo -e "${BLUE}[info]${NONE} Device Detection:"
+    echo -e "  ROCM: ${is_rocm}"
+    echo -e "  CUDA: ${is_cuda}"
+    echo -e "  XPU: ${is_xpu}"
+    echo -e "  Iluvatar: ${if_corex}"
+    echo -e "  NPU: ${is_npu}"
+    echo -e "  GCU: ${is_gcu}"
+    echo -e "  MACA: ${is_maca}"
+    echo -e "  Intel HPU: ${is_intel_hpu}"
+}
+
 function init() {
     echo -e "${BLUE}[init]${NONE} removing building directory..."
     rm -rf $BUILD_DIR $EGG_DIR $PRE_WHEEL_DIR
@@ -399,6 +428,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   set -e
 
   init
+  print_device_type
   version_info
   # Whether to enable precompiled wheel
   if [ "$FD_USE_PRECOMPILED" -eq 1 ]; then
