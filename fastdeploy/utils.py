@@ -1161,3 +1161,14 @@ def to_tensor(tasks: List[Any]):
                     multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
     except Exception as e:
         llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
+
+
+def fill_paddle_tensor(shared_inputs, key, value):
+    try:
+        if key not in shared_inputs:
+            return
+
+        if isinstance(shared_inputs[key], paddle.Tensor):
+            shared_inputs[key].fill_(value)
+    except Exception as e:
+        llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")

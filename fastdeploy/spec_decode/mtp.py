@@ -411,6 +411,125 @@ class MTPProposer(Proposer):
         if self.forward_meta is not None:
             del self.forward_meta.caches
 
+    def reset_model_inputs(self) -> None:
+        """
+        Reset all paddle tensors in self.model_inputs to their initial state.
+        This method clears the content of the model input buffers while preserving
+        their shapes and data types.
+        """
+        if not hasattr(self, "model_inputs") or not self.model_inputs:
+            logger.warning("model_inputs is not initialized, skipping reset")
+            return
+
+        try:
+            logger.info("Resetting model_inputs to initial state...")
+            from fastdeploy.utils import fill_paddle_tensor
+
+            # Reset all paddle tensors to their default values
+            # Clone the target model inputs to restore initial values
+            self.model_inputs["block_tables"] = paddle.clone(self.target_model_inputs["block_tables"])
+            self.model_inputs["input_ids"] = paddle.clone(self.target_model_inputs["input_ids"])
+            fill_paddle_tensor(self.model_inputs, "input_ids_cpu", -1)
+            self.seq_lens_this_time_buffer = paddle.clone(self.target_model_inputs["seq_lens_this_time"])
+
+            self.model_inputs["seq_lens_encoder"] = paddle.clone(self.target_model_inputs["seq_lens_encoder"])
+            self.model_inputs["seq_lens_decoder"] = paddle.clone(self.target_model_inputs["seq_lens_decoder"])
+            self.model_inputs["prompt_lens"] = paddle.clone(self.target_model_inputs["prompt_lens"])
+            self.model_inputs["step_idx"] = paddle.clone(self.target_model_inputs["step_idx"])
+            self.model_inputs["stop_flags"] = paddle.clone(self.target_model_inputs["stop_flags"])
+            fill_paddle_tensor(self.model_inputs, "not_need_stop_cpu", False)
+            self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
+            self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
+            self.model_inputs["output_padding_offset"] = paddle.clone(
+                self.target_model_inputs["output_padding_offset"]
+            )
+            self.model_inputs["ids_remove_padding"] = paddle.clone(self.target_model_inputs["ids_remove_padding"])
+            self.model_inputs["batch_id_per_token"] = paddle.clone(self.target_model_inputs["batch_id_per_token"])
+            self.model_inputs["cu_seqlens_q"] = paddle.clone(self.target_model_inputs["cu_seqlens_q"])
+            self.model_inputs["cu_seqlens_k"] = paddle.clone(self.target_model_inputs["cu_seqlens_k"])
+            self.model_inputs["decoder_batch_ids"] = paddle.clone(self.target_model_inputs["decoder_batch_ids"])
+            self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
+                self.target_model_inputs["decoder_tile_ids_per_batch"]
+            )
+
+            # Reset target hidden states
+            fill_paddle_tensor(self.model_inputs, "target_hidden_states", 0)
+
+            # Reset rope embedding by recreating with default position_ids
+            tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+            self.model_inputs["rope_emb"] = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
+            )
+
+            # Reset generation hyperparameters from the main model
+            self.model_inputs["top_p"] = self.target_model_inputs["top_p"]
+            self.model_inputs["top_k"] = self.target_model_inputs["top_k"]
+            self.model_inputs["temperature"] = self.target_model_inputs["temperature"]
+            self.model_inputs["eos_token_id"] = self.target_model_inputs["eos_token_id"]
+            self.model_inputs["penalty_score"] = self.target_model_inputs["penalty_score"]
+            self.model_inputs["frequency_score"] = self.target_model_inputs["frequency_score"]
+            self.model_inputs["presence_score"] = self.target_model_inputs["presence_score"]
+            self.model_inputs["infer_seed"] = self.target_model_inputs["infer_seed"]
+            self.model_inputs["max_dec_len"] = self.target_model_inputs["max_dec_len"]
+            self.model_inputs["min_dec_len"] = self.target_model_inputs["min_dec_len"]
+            self.model_inputs["bad_tokens"] = self.target_model_inputs["bad_tokens"]
+            self.model_inputs["bad_tokens_len"] = self.target_model_inputs["bad_tokens_len"]
+
+            # Reset speculative decoding specific tensors
+            self.model_inputs["base_model_draft_tokens"] = self.target_model_inputs["draft_tokens"]
+            self.model_inputs["substep"] = 0
+
+            # Reset draft tokens
+            fill_paddle_tensor(self.model_inputs, "draft_tokens", -1)
+
+            # Reset encoder block lens
+            self.model_inputs["encoder_block_lens"] = paddle.clone(self.target_model_inputs["encoder_block_lens"])
+
+            # Reset free list
+            self.model_inputs["free_list"] = paddle.to_tensor(self.free_list, dtype="int32")
+            fill_paddle_tensor(self.model_inputs, "free_list_len", self.free_list_len)
+
+            # Reset step and drop flags
+            fill_paddle_tensor(self.model_inputs, "is_block_step", False)
+            fill_paddle_tensor(self.model_inputs, "batch_drop", False)
+            fill_paddle_tensor(self.model_inputs, "used_list_len", 0)
+
+            # Reset last sequence lengths if applicable
+            if self.num_model_steps > 1:
+                fill_paddle_tensor(self.model_inputs, "last_seq_lens_this_time", -1)
+
+            # Reset input IDs length
+            fill_paddle_tensor(self.model_inputs, "input_ids_len", 0)
+
+            # Reset various scores and flags
+            self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
+            self.model_inputs["top_p_normalized_logprobs"] = self.target_model_inputs["top_p_normalized_logprobs"]
+            self.model_inputs["accept_num"] = self.target_model_inputs["accept_num"]
+            self.model_inputs["accept_tokens"] = self.target_model_inputs["accept_tokens"]
+            self.model_inputs["draft_logits"] = self.target_model_inputs["draft_logits"]
+            fill_paddle_tensor(self.model_inputs, "first_token_hidden_states", -1)
+            fill_paddle_tensor(self.model_inputs, "batch_token_num", 0)
+            fill_paddle_tensor(self.model_inputs, "next_token_num", 0)
+            fill_paddle_tensor(self.model_inputs, "cu_batch_token_offset", 0)
+            fill_paddle_tensor(self.model_inputs, "cu_next_token_offset", 0)
+            fill_paddle_tensor(self.model_inputs, "mask_rollback", 0)
+            fill_paddle_tensor(self.model_inputs, "recompute_token_num", self.num_model_steps - 1)
+
+            # Reset multimodal attention masks if enabled
+            if self.enable_mm:
+                fill_paddle_tensor(self.model_inputs, "attn_mask_offsets", -1)
+                fill_paddle_tensor(self.model_inputs, "attn_mask_offsets_full", -1)
+                fill_paddle_tensor(self.model_inputs, "attn_mask_offsets_decoder", -1)
+                fill_paddle_tensor(self.model_inputs, "decode_states", -1)
+
+            logger.info("model_inputs reset completed")
+        except Exception as e:
+            logger.error(f"Resetting mtp model inputs failed, skipping reset, error message is {e}")
+
     def update_mtp_block_num(self, num_gpu_blocks) -> None:
         """
         Update MTP block num by theoretical calculation

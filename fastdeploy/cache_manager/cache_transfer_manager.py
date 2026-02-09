@@ -184,6 +184,25 @@ class CacheTransferManager:
             create=False,
         )
 
+        # NOTE: `cache_task_is_paused_signal` indicates if do_data_transfer thread
+        # of the FIRST rank (rank#0) has received a pause signal
+        self.cache_task_is_paused_signal = IPCSignal(
+            name="cache_task_is_paused",
+            array=np.zeros([1], dtype=np.int32),
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+        # NOTE: `cache_task_inflight_signal` indicates if do_data_transfer thread
+        # of each rank has finished remaining tasks and finally paused
+        self.cache_task_inflight_signal = IPCSignal(
+            name="cache_task_inflight",
+            array=np.zeros([self.n_ranks], dtype=np.int32),
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         array_size = min(max_chips_per_node, args.mp_num)
         worker_healthy_live_array = np.zeros(shape=[array_size], dtype=np.int32)
@@ -204,7 +223,6 @@ class CacheTransferManager:
         )
         threading.Thread(target=self.check_cache_status, args=[args], daemon=True).start()
 
-        self._pause_cond = threading.Condition()
         self.is_paused = False  # transfer manager state
         self.inflight = 0  # number of inflight transfer tasks
 
@@ -443,15 +461,9 @@ class CacheTransferManager:
             try:
                 return fn(*args)
             finally:
-                with self._pause_cond:
-                    self.inflight -= 1
-                    if self.inflight == 0:
-                        self._pause_cond.notify_all()
+                self.inflight -= 1
 
-        with self._pause_cond:
-            self._pause_cond.wait_for(lambda: not self.is_paused)
-            self.inflight += 1
-            thread_pool.submit(inflight_task, task_fn, *args)
+        thread_pool.submit(inflight_task, task_fn, *args)
 
     def do_data_transfer(self):
         """
@@ -466,13 +478,36 @@ class CacheTransferManager:
         while True:
             try:
                 if self.rank == 0:
+                    self.cache_task_is_paused_signal.value[0] = 1 if self.is_paused else 0
+                if self.n_ranks > 1:
+                    self.cache_task_queue.barrier0.wait()
+                    if self.rank == 0:
+                        self.cache_task_queue.barrier0.reset()
+
+                # Ensure all ranks synchronically do one of the following things:
+                # (1) If rank#0 is paused, wait for a short time and check out rank#0 status again;
+                # (2) otherwise, all ranks are allowed to pull tasks from cache task queue
+                if self.cache_task_is_paused_signal.value[0] == 1:
+                    # wait for inflight tasks to finish first
+                    while self.inflight != 0:
+                        time.sleep(0.1)
+                    # mark the current rank as not having inflight tasks
+                    self.cache_task_inflight_signal.value[self.rank] = 0
+                    time.sleep(1)
+                    continue
+                else:
+                    self.cache_task_inflight_signal.value[self.rank] = 1
+
+                if self.rank == 0:
                     if not self.cache_task_queue.empty():
                         self.cache_task_broadcast_signal.value[0] = 1
                 if self.n_ranks > 1:
                     self.cache_task_queue.barrier1.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier1.reset()
+
                 if self.cache_task_broadcast_signal.value[0] == 1:
+                    self.inflight += 1
                     data, read_finish = self.cache_task_queue.get_transfer_task()
                     logger.debug(f"transfer data: get_transfer_task {data}")
                     if read_finish:
@@ -757,13 +792,13 @@ class CacheTransferManager:
                         time.sleep(0.1)
                     logger.info("[RL] all ranks restored caches!")
 
+                    # resume transfer
+                    self.resume()
+
                     # set kv_cache_status_signal
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.NORMAL
 
                     self._log_memory("after restoring caches")
-
-                    # resume transfer
-                    self.resume()
 
                 except Exception as e:
                     logger.error(f"[RL] failed to restore caches: {e}")
@@ -771,16 +806,25 @@ class CacheTransferManager:
             time.sleep(0.1)
 
     def pause(self):
-        logger.info("[RL] wait for inflight transfer tasks to finish and pause transfer manager 🔴")
-        with self._pause_cond:
-            self.is_paused = True
-            self._pause_cond.wait_for(lambda: self.inflight == 0)
+        if self.n_ranks > 1:
+            self.cache_task_queue.pause_barrier.wait()
+            if self.rank == 0:
+                self.cache_task_queue.pause_barrier.reset()
+        logger.info("[RL] 🟠 wait for inflight transfer tasks to finish")
+        self.is_paused = True
+        while np.sum(self.cache_task_inflight_signal.value) != 0:
+            time.sleep(0.1)
+        logger.info("[RL] 🔴 pause transfer manager and stop do transfer tasks")
 
     def resume(self):
-        logger.info("[RL] resume transfer manager and start to do transfer tasks 🟢")
-        with self._pause_cond:
-            self.is_paused = False
-            self._pause_cond.notify_all()
+        if self.n_ranks > 1:
+            self.cache_task_queue.resume_barrier.wait()
+            if self.rank == 0:
+                self.cache_task_queue.resume_barrier.reset()
+        self.is_paused = False
+        while np.sum(self.cache_task_inflight_signal.value) != self.n_ranks:
+            time.sleep(0.1)
+        logger.info("[RL] 🟢 resume transfer manager and start to do transfer tasks")
 
     def _log_memory(self, context: str):
         """Log current GPU memory usage."""
