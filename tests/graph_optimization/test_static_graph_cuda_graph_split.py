@@ -98,6 +98,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         model_config = Mock()
         model_config.max_model_len = 512
         model_config.architectures = ["test_model"]
+        model_config.mm_max_tokens_per_item = None
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,

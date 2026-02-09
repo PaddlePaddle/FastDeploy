@@ -61,6 +61,7 @@ class FakeModelConfig:
         self.enable_mm = False
         self.max_model_len = 512
         self.architectures = ["test_model"]
+        self.mm_max_tokens_per_item = None
 
 
 def get_default_test_fd_config():
