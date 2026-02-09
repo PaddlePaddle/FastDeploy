@@ -1159,62 +1159,11 @@ void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
                                    int64_t think_end_id,
                                    int64_t line_break_id);
 
-std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
-    const paddle::Tensor& x,
-    const paddle::Tensor& scale,
-    const paddle::Tensor& topk_ids,
-    const int num_local_experts,
-    const int max_token_num);
-
-std::vector<paddle::Tensor> DepermutePrefillCombine(
-    const paddle::Tensor& x,
-    const paddle::Tensor& indice_map,
-    const paddle::Tensor& topk_weights,
-    const int num_worst_tokens);
-
-void RadixTopkRaggedTransform(
-    paddle::Tensor& input,
-    paddle::Tensor& output_indices,
-    const paddle::Tensor& offsets,
-    paddle::Tensor& lengths,
-    paddle::optional<paddle::Tensor>& seq_len_decoder,
-    paddle::optional<paddle::Tensor>& batch_id_per_token,
-    paddle::optional<paddle::Tensor>& block_tables,
-    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int max_block_num,
-    int top_k,
-    int q_num_heads = 0);
-
-std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& slot_mapping,
-    const paddle::optional<paddle::Tensor>& scale,
-    const std::string& cache_quant_type_str);
-
-std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
-    const paddle::Tensor& k,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& slot_mapping,
-    const int64_t quant_block_size,
-    const std::string& scale_fmt);
-
-std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
-    const paddle::Tensor& kv_cache,
-    paddle::Tensor& dst_k,
-    paddle::Tensor& dst_scale,
-    const paddle::Tensor& block_table,
-    const paddle::Tensor& cu_seq_lens);
-
-void PerTokenGroupQuantFp8(const paddle::Tensor& input,
-                           paddle::Tensor& output_q,
-                           paddle::Tensor& output_s,
-                           int64_t group_size,
-                           double eps,
-                           double fp8_min,
-                           double fp8_max,
-                           bool scale_ue8m0);
+std::vector<paddle::Tensor> get_attn_mask_q(
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& cu_seqlens_k,
+    const paddle::optional<paddle::Tensor>& attn_mask_kv,
+    const int kv_token_num);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 #ifdef ENABLE_SM80_EXT_OPS
@@ -1841,6 +1790,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("reasoning_phase_token_constraint",
         &ReasoningPhaseTokenConstraint,
         "reasoning_phase_token_constraint function");
+
+  m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
   m.def("get_stop", &GetStop, "get_stop function");
 
