@@ -41,7 +41,7 @@ jobs:
 
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
-    timeout-minutes: 90
+    timeout-minutes: 120
     needs: check_cov_skip
     if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
@@ -201,6 +201,7 @@ jobs:
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
+
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
           python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
