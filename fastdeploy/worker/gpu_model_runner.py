@@ -2081,7 +2081,7 @@ class GPUModelRunner(ModelRunnerBase):
                         num_tokens=(
                             self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
                             if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
+                            else self.fd_config.get_max_chunk_tokens()
                         ),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
@@ -2094,11 +2094,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2179,11 +2175,7 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
+                num_tokens=self.fd_config.get_max_chunk_tokens(),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -2704,12 +2696,12 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
+        num_tokens = self.fd_config.get_max_chunk_tokens()
+        logger.info(
+            f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
+        )
         self._dummy_run(
-            num_tokens=(
-                self.scheduler_config.max_num_seqs
-                if self.scheduler_config.splitwise_role == "decode"
-                else self.scheduler_config.max_num_batched_tokens
-            ),
+            num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
         )
 
@@ -3146,6 +3138,8 @@ class GPUModelRunner(ModelRunnerBase):
             token_ids, logprobs, ranks = self.sampler.gather_logprobs(
                 raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
             )
+            # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
+            paddle.device.synchronize()
             chunk_slice = slice(start_idx, start_idx + num_logits)
             logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
             logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)

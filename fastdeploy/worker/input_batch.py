@@ -755,6 +755,28 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
+def _recover_tensor(recover_tensor, index_to_batch_id_list):
+    """
+    Reorder recover_tensor according to index_to_batch_id_list mapping.
+
+    Args:
+        recover_tensor: paddle.Tensor to be reordered.
+        index_to_batch_id_list: List mapping current indices to original batch IDs.
+
+    Returns:
+        A paddle.Tensor with elements restored to the original batch order.
+    """
+    sort_len = len(index_to_batch_id_list)
+    if isinstance(recover_tensor.place, paddle.CUDAPinnedPlace):
+        recover_res_tensor = paddle.empty_like(recover_tensor, device="cpu")
+    else:
+        recover_res_tensor = paddle.empty_like(recover_tensor)
+    recover_res_tensor[:sort_len] = recover_tensor[:sort_len][index_to_batch_id_list]
+    if sort_len < recover_res_tensor.shape[0]:
+        recover_res_tensor[sort_len:] = recover_tensor[sort_len:]
+    return recover_res_tensor
+
+
 def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reorder, recover_list):
     """
     Reorder model_output according to index_to_batch_id mapping.
@@ -769,10 +791,8 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     res_map = {}
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
     if not is_not_swapped:
-        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+        src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
@@ -784,9 +804,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
 
         if isinstance(recover_tensor, paddle.Tensor):
             # Create a new tensor to store the reordered results
-            res_map[recover_name] = paddle.scatter_nd(
-                paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), recover_tensor, recover_tensor.shape
-            )
+            res_map[recover_name] = _recover_tensor(recover_tensor, src_order)
         elif isinstance(recover_tensor, list):
             real_recover_tensor = recover_tensor.copy()
             for i1, i2 in enumerate(index_to_batch_id):
@@ -814,48 +832,31 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
 
     sampled_token_ids = sampler_output.sampled_token_ids
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
-
-    real_token_ids = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
-    )
+    src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
+    real_token_ids = _recover_tensor(sampled_token_ids, src_order)
     sampler_output.sampled_token_ids = real_token_ids
-
     if sampler_output.logprobs_tensors is not None:
         logprob_token_ids = sampler_output.logprobs_tensors.logprob_token_ids
         logprobs = sampler_output.logprobs_tensors.logprobs
         selected_token_ranks = sampler_output.logprobs_tensors.selected_token_ranks
-        real_logprob_token_ids = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprob_token_ids, sampled_token_ids.shape
-        )
-
-        real_logprobs = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprobs, sampled_token_ids.shape
-        )
-        real_selected_token_ranks = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), selected_token_ranks, sampled_token_ids.shape
-        )
+        real_logprob_token_ids = _recover_tensor(logprob_token_ids, src_order)
+        real_logprobs = _recover_tensor(logprobs, src_order)
+        real_selected_token_ranks = _recover_tensor(selected_token_ranks, src_order)
         sampler_output.logprobs_tensors.logprob_token_ids = real_logprob_token_ids
         sampler_output.logprobs_tensors.logprobs = real_logprobs
         sampler_output.logprobs_tensors.sampled_token_ranks = real_selected_token_ranks
 
     if sampler_output.token_num_per_batch is not None:
         token_num_per_batch = sampler_output.token_num_per_batch
-        real_token_num_per_batch = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), token_num_per_batch, sampled_token_ids.shape
-        )
+        real_token_num_per_batch = _recover_tensor(token_num_per_batch, src_order)
         sampler_output.token_num_per_batch = real_token_num_per_batch
 
     if sampler_output.cu_batch_token_offset is not None:
         cu_batch_token_offset = sampler_output.cu_batch_token_offset
-        real_cu_batch_token_offset = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), cu_batch_token_offset, sampled_token_ids.shape
-        )
+        real_cu_batch_token_offset = _recover_tensor(cu_batch_token_offset, src_order)
         sampler_output.cu_batch_token_offset = real_cu_batch_token_offset
 
     if sampler_output.logits is not None:
         logits = sampler_output.logits
-        real_logits = paddle.gather(logits, index_to_batch_id_tensor, axis=0)
+        real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
