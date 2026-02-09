@@ -1318,6 +1318,8 @@ class GPUModelRunner(ModelRunnerBase):
             token_num = self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
         else:
             token_num = launch_token_num
+        if token_num <= 0:
+            return token_num, token_num_event
         (
             ids_remove_padding,
             batch_id_per_token,
