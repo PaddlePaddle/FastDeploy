@@ -112,6 +112,7 @@ class SamplingParams:
 
     def to_dict(self):
         """convert to dict"""
+        # Manual copy for performance
         d = self.__dict__.copy()
         # Shallow copy mutable fields to avoid side effects
         if self.stop is not None and isinstance(self.stop, list):
