@@ -441,9 +441,9 @@ paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor& seq_len_this_time,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_encoder,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    const paddle::optional<paddle::Tensor>& batch_id_per_token_output,
+    const paddle::optional<paddle::Tensor>& cu_seqlens_q_output,
     const paddle::optional<paddle::Tensor>& first_token_out,
-    int max_input_length,
     bool enable_logprob);
 
 void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
