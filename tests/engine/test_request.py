@@ -16,6 +16,7 @@
 
 import json
 import unittest
+from dataclasses import asdict
 from unittest.mock import Mock
 
 import numpy as np
@@ -33,6 +34,7 @@ from fastdeploy.engine.request import (
     StructuralTagResponseFormat,
 )
 from fastdeploy.entrypoints.openai.protocol import ResponseFormat, StructuralTag
+from fastdeploy.worker.output import SpeculateMetrics
 
 
 class TestRequestInit(unittest.TestCase):
@@ -199,6 +201,39 @@ class TestRequestInit(unittest.TestCase):
         request = Request(request_id="test_existing_metrics", metrics=metrics)
         self.assertEqual(request.metrics, metrics)
         self.assertEqual(request.metrics.arrival_time, 1000.0)
+
+
+class TestRequestMetricsCorrectness(unittest.TestCase):
+    def test_to_dict_matches_asdict(self):
+        # Create a RequestMetrics with some data
+        metrics = RequestMetrics()
+        metrics.arrival_time = 123456789.0
+        metrics.speculate_metrics = SpeculateMetrics(
+            accepted_tokens=10,
+            rejected_tokens=2,
+            accept_ratio=0.8,
+            average_accept_length=1.5,
+            accepted_tokens_per_head=[1, 2],
+            accept_ratio_per_head=[0.5, 0.5]
+        )
+
+        # Original way (using asdict directly on the object)
+        expected = {k: v for k, v in asdict(metrics).items()}
+
+        # New way (using to_dict method)
+        actual = metrics.to_dict()
+
+        self.assertEqual(expected, actual)
+
+    def test_to_dict_matches_asdict_no_speculate(self):
+        metrics = RequestMetrics()
+        metrics.arrival_time = 123456789.0
+        metrics.speculate_metrics = None
+
+        expected = {k: v for k, v in asdict(metrics).items()}
+        actual = metrics.to_dict()
+
+        self.assertEqual(expected, actual)
 
 
 class TestRequestProperties(unittest.TestCase):

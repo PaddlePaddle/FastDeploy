@@ -483,7 +483,7 @@ class Request:
                 data[param] = getattr(self, param)
 
         data.update(asdict(self.sampling_params))
-        data.update(asdict(self.metrics))
+        data.update(self.metrics.to_dict())
         return data
 
     def get(self, key: str, default_value=None):
@@ -892,7 +892,10 @@ class RequestMetrics:
         """
         Convert the RequestMetrics object to a dictionary.
         """
-        return {k: v for k, v in asdict(self).items()}
+        data = {k: getattr(self, k) for k in self.__slots__}
+        if self.speculate_metrics is not None:
+            data["speculate_metrics"] = asdict(self.speculate_metrics)
+        return data
 
     def record_recv_first_token(self):
         cur_time = time.time()
