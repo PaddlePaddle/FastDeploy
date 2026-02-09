@@ -147,9 +147,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 是否启用 decode 缓存请求以预分配资源
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
 
-    # EP 中批处理 token 的超时时间
-    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
-
     # PD 中最大预取请求数量
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
 
@@ -230,5 +227,20 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Worker 进程响应等待时的健康检查超时时间（秒），默认 30 秒
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+
+    # 控制是否收集用户信息，默认 0（收集）；1（不收集）
+    "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+
+    # 使用情况统计报告服务地址
+    "FD_USAGE_STATS_SERVER": lambda: os.getenv(
+        "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
+    ),
+
+    # 使用情况统计的来源信息，用户可主动设置
+    "FD_USAGE_SOURCE": lambda: os.getenv("FD_USAGE_SOURCE", "Unknown"),
+
+    # FastDeploy 配置根目录
+    "FD_CONFIG_ROOT": lambda: os.path.expanduser(
+        os.getenv("FD_CONFIG_ROOT", os.path.join(os.path.expanduser("~"), ".config", "fastdeploy"))
+    ),
 }
-```

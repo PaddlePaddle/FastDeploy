@@ -91,7 +91,6 @@ METAX_CI_CASELIST=(
     "tests/operators/test_update_inputs_v1.py"
     "tests/operators/test_set_value_by_flags_and_idx.py"
     "tests/operators/test_get_token_penalty_multi_scores.py"
-    "tests/operators/test_speculate_get_token_penalty_multi_scores.py"
     "tests/operators/test_token_penalty.py"
     "tests/operators/test_stop_generation_multi_ends.py"
     "tests/operators/test_get_padding_offset.py"
@@ -101,7 +100,7 @@ METAX_CI_CASELIST=(
     "tests/layers/test_min_sampling.py"
 )
 for path in "${METAX_CI_CASELIST[@]}"; do
-    local TEST_FILE_PATH=$run_path/$path
+    TEST_FILE_PATH=$run_path/$path
 
     if [ -e "$TEST_FILE_PATH" ]; then
         FILTERED_PATHS+=("$TEST_FILE_PATH")

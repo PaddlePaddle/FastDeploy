@@ -142,7 +142,7 @@ func extractPromptFromCompletionsRequest(rawReq map[string]any) string {
 }
 
 // PostToPD sends requests to both Prefill and Decode instances, only returns Decode node response
-func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isStream bool, completionEndpoint string) (*http.Response, error) {
+func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isStream bool, message string, completionEndpoint string) (*http.Response, error) {
 	ctx := c.Request.Context()
 
 	decodeEndpoint := fmt.Sprintf("%s/v1/%s", decodeURL, completionEndpoint)
@@ -206,13 +206,13 @@ func PostToPD(c *gin.Context, decodeURL, prefillURL string, reqBody []byte, isSt
 	}
 
 	if prefillRes.resp != nil {
-		go readPrefillRecv(ctx, prefillURL, isStream, prefillRes.resp)
+		go readPrefillRecv(ctx, prefillURL, isStream, message, prefillRes.resp)
 	}
 
 	return decodeRes.resp, nil
 }
 
-func readPrefillRecv(ctx context.Context, url string, isStream bool, backendResp *http.Response) {
+func readPrefillRecv(ctx context.Context, url string, isStream bool, message string, backendResp *http.Response) {
 	if backendResp == nil || backendResp.Body == nil {
 		return
 	}
@@ -231,21 +231,22 @@ func readPrefillRecv(ctx context.Context, url string, isStream bool, backendResp
 			// Fallback to ensure release
 			if !released {
 				scheduler_handler.Release(ctx, url)
+				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				logger.Debug("[prefill] release in defer (fallback) url=%s", url)
 			}
 		}()
 
 		for scanner.Scan() {
-			line := scanner.Text()
+			_ = scanner.Text()
 
 			// First read that returns data
 			if !released {
 				scheduler_handler.Release(ctx, url)
+				scheduler_handler.ReleasePrefillTokens(ctx, url, message)
 				released = true
 
 				logger.Debug("[prefill] first chunk received, release scheduler url=%s", url)
 			}
-			logger.Debug("[prefill] recv result: %s", line)
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -295,11 +296,12 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		requestBodyData []byte
 		prefillURL      string
 		decodeURL       string
+		message         string
 	)
 
 	if isSplitwise {
 		// PD mode: select instances for Prefill/Decode separately
-		message := extractor(rawReq)
+		message = extractor(rawReq)
 
 		prefillURL, decodeURL, err = manager.SelectWorkerPair(ctx, message)
 		if err != nil {
@@ -312,9 +314,6 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 			c.Writer.Write([]byte(`{"error": "No available prefill/decode workers"}`))
 			return
 		}
-
-		// Prefill node token count was added in SelectWorker, release when request ends
-		defer scheduler_handler.ReleasePrefillTokens(ctx, prefillURL, message)
 
 		// Construct disaggregate_info to ensure selected P/D work in pairs within FastDeploy
 		disagg, err := manager.BuildDisaggregateInfo(ctx, prefillURL, decodeURL)
@@ -340,7 +339,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 		}
 
 		destURL = decodeURL
-		releaseTargets = []string{prefillURL, decodeURL}
+		releaseTargets = []string{decodeURL}
 
 		// Expose scheduling results to caller for debugging/validating scheduling strategy
 		c.Writer.Header().Set("X-Router-Prefill-URL", prefillURL)
@@ -376,7 +375,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	// Send request
 	var backendResp *http.Response
 	if isSplitwise {
-		backendResp, err = PostToPD(c, decodeURL, prefillURL, requestBodyData, isStream, completionEndpoint)
+		backendResp, err = PostToPD(c, decodeURL, prefillURL, requestBodyData, isStream, message, completionEndpoint)
 	} else {
 		backendResp, err = GetClientWithRetry(c, requestBodyData, destURL)
 	}
@@ -389,7 +388,7 @@ func CommonCompletions(c *gin.Context, extractor PromptExtractor, completionEndp
 	defer backendResp.Body.Close()
 
 	if isSplitwise {
-		metrics.InferenceRequests.WithLabelValues("", releaseTargets[0], destURL, strconv.Itoa(backendResp.StatusCode)).Inc()
+		metrics.InferenceRequests.WithLabelValues("", prefillURL, decodeURL, strconv.Itoa(backendResp.StatusCode)).Inc()
 	} else {
 		metrics.InferenceRequests.WithLabelValues(destURL, "", "", strconv.Itoa(backendResp.StatusCode)).Inc()
 	}

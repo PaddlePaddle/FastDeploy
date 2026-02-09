@@ -20,6 +20,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
+from fastdeploy.platforms import current_platform
 
 
 class InputBatch:
@@ -134,23 +135,29 @@ class InputBatch:
         self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         if self.enable_expert_parallel:
             self.seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
         self.seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.step_seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+        if current_platform.is_maca():
+            self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").cpu()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").cpu()
+        else:
+            self.not_need_stop = paddle.full([1], False, dtype="bool").pin_memory()
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
         self.not_need_stop_device = paddle.full([1], False, dtype="bool")
-        self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
         self.stop_flags = paddle.full([max_num_seqs, 1], True, dtype="bool")
 
         self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
         self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
         self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
-        self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
         self.is_chunk_step = paddle.full([max_num_seqs], False, dtype="bool").cpu()
         self.encoder_block_lens = paddle.full([max_num_seqs], 0, dtype="int32")
         self.step_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
@@ -265,12 +272,20 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.output_padding_offset = paddle.full(
-                shape=[max_num_seqs * (max_draft_token_num + 1)],
-                fill_value=0,
-                dtype="int32",
-            )
+            if current_platform.is_cuda():
+                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+                self.batch_id_per_token_output = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
+            else:
+                self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+                self.output_padding_offset = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -397,7 +412,10 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            swap_data(self.output_cum_offsets, i1, i2)
+            if current_platform.is_cuda():
+                swap_data(self.cu_seqlens_q_output, i1, i2)
+            else:
+                swap_data(self.output_cum_offsets, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
@@ -505,8 +523,12 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-        self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-        self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+        if current_platform.is_cuda():
+            self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
+            self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
+        else:
+            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
+            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -652,8 +674,12 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        swap_data(self.output_cum_offsets, i1, i2)
-        swap_data(self.output_padding_offset, i1, i2)
+        if current_platform.is_cuda():
+            swap_data(self.cu_seqlens_q_output, i1, i2)
+            swap_data(self.batch_id_per_token_output, i1, i2)
+        else:
+            swap_data(self.output_cum_offsets, i1, i2)
+            swap_data(self.output_padding_offset, i1, i2)
         swap_data(self.ids_remove_padding, i1, i2)
         swap_data(self.batch_id_per_token, i1, i2)
         swap_data(self.cu_seqlens_q, i1, i2)
@@ -744,8 +770,9 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
     sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+    if not is_not_swapped:
+        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
+        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
