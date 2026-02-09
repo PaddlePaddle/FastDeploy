@@ -84,7 +84,7 @@ jobs:
             '
 
             wget -q --no-proxy ${fd_archive_url}
-            tar -xf FastDeploy.tar.gz
+            tar -xf FastDeploy.tar.gz --no-same-owner
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
             git config --global user.name "FastDeployCI"
