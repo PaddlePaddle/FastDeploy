@@ -52,30 +52,37 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import get_stop, set_stop
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        get_stop,
         recover_decode_task,
         set_data_ipc,
+        set_stop,
         set_value_by_flags_and_idx,
     )
 
     share_external_data = None
 elif current_platform.is_dcu():
-    from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
+    from fastdeploy.model_executor.ops.gpu import (
+        get_stop,
+        set_stop,
+        set_value_by_flags_and_idx,
+    )
 
     recover_decode_task = None
     share_external_data = None
 else:
     from fastdeploy.model_executor.ops.gpu import (
+        get_stop,
         recover_decode_task,
+        set_data_ipc,
+        set_stop,
         set_value_by_flags_and_idx,
         share_external_data,
         speculate_schedule_cache,
-        set_data_ipc,
         unset_data_ipc,
     )
 
