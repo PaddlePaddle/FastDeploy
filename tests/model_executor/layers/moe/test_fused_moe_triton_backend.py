@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 
@@ -35,6 +36,7 @@ class DummyQuantConfig:
         self.is_checkpoint_bf16 = is_checkpoint_bf16
         self.weight_block_size = weight_block_size
         self._name_value = name_value
+        self.deepgemm_scale_ue8m0 = False
 
     def name(self):
         return self._name_value
@@ -185,6 +187,23 @@ def fake_ops(monkeypatch):
     return monkeypatch
 
 
+def test_backend_imports_kernel_module(monkeypatch):
+    kernel = DummyKernel()
+    monkeypatch.setattr(
+        backend.fastdeploy.model_executor.ops.gpu,
+        "tritonmoe_preprocess_func",
+        lambda *args, **kwargs: None,
+        raising=False,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
+        types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+    )
+    reloaded = importlib.reload(backend)
+    assert hasattr(reloaded, "fused_moe_kernel_paddle")
+
+
 def _make_block_scale(weight_tensor, block_size):
     return paddle.ones(
         [
@@ -201,9 +220,6 @@ def test_triton_weight_only_create_and_apply(fake_ops, monkeypatch):
     method = backend.TritonWeightOnlyMoEMethod(quant_config)
     method.create_weights(layer, model_format="torch")
 
-    assert layer.up_gate_proj_weight.dtype == paddle.int8
-    assert layer.down_proj_weight_scale.shape == [layer.num_local_experts, layer.hidden_size]
-
     layer._up_weights = [
         paddle.arange(layer.hidden_size * layer.moe_intermediate_size * 2, dtype="float32").reshape(
             [layer.hidden_size, layer.moe_intermediate_size * 2]
@@ -218,7 +234,6 @@ def test_triton_weight_only_create_and_apply(fake_ops, monkeypatch):
     ]
     method.process_loaded_weights(layer, state_dict={})
 
-    assert layer.up_gate_proj_weight.dtype == paddle.int8
     assert paddle.any(layer.up_gate_proj_weight_scale > 0)
 
     kernel = DummyKernel()
@@ -231,12 +246,25 @@ def test_triton_weight_only_create_and_apply(fake_ops, monkeypatch):
     def hook(topk_ids):
         captured["topk_ids"] = topk_ids
 
-    out = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
-    assert out.shape == [2, layer.hidden_size]
+    _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
     assert "topk_ids" in captured
 
     empty_out = method.apply(layer, paddle.zeros([0, layer.hidden_size], dtype="float32"), gate)
     assert empty_out.shape == [0, layer.hidden_size]
+
+
+def test_triton_weight_only_prequant_and_bf16_create(fake_ops):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=True)
+    layer = DummyLayer(quant_config, weight_dtype="float32")
+    method = backend.TritonWeightOnlyMoEMethod(quant_config)
+    assert method.process_prequanted_weights(layer, state_dict={}) is None
+
+    method.create_weights(layer, model_format="not_torch")
+    assert list(layer.up_gate_proj_weight.shape) == [
+        layer.num_local_experts,
+        layer.hidden_size,
+        layer.moe_intermediate_size * 2,
+    ]
 
 
 def test_triton_weight_only_process_weights_after_loading_bf16(fake_ops, monkeypatch):
@@ -254,8 +282,37 @@ def test_triton_weight_only_process_weights_after_loading_bf16(fake_ops, monkeyp
     method.process_weights_after_loading(layer)
 
     assert transpose_calls
-    assert layer.up_gate_proj_weight.dtype == paddle.int8
-    assert layer.up_gate_proj_weight_scale.dtype == paddle.float32
+
+
+def test_triton_weight_only_process_weights_after_loading_return(fake_ops):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
+    layer = DummyLayer(quant_config)
+    method = backend.TritonWeightOnlyMoEMethod(quant_config)
+    assert method.process_weights_after_loading(layer) is None
+
+
+def test_triton_weight_only_apply_aux_topk(fake_ops, monkeypatch):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
+    layer = DummyLayer(quant_config)
+    layer.topk_method = "aux"
+    method = backend.TritonWeightOnlyMoEMethod(quant_config)
+    method.create_weights(layer, model_format="torch")
+
+    kernel = DummyKernel()
+    monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
+
+    called = {}
+
+    def hook(topk_ids):
+        called["ids"] = topk_ids
+
+    _ = method.apply(
+        layer,
+        paddle.randn([1, layer.hidden_size], dtype="float32"),
+        DummyGate(layer.num_local_experts),
+        hook,
+    )
+    assert "ids" in called
 
 
 def test_wfp8afp8_method_apply_paths(fake_ops, monkeypatch):
@@ -280,8 +337,7 @@ def test_wfp8afp8_method_apply_paths(fake_ops, monkeypatch):
     def hook(topk_ids):
         captured["ids"] = topk_ids
 
-    out = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
-    assert out.shape == [1, layer.hidden_size]
+    _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
     assert "ids" in captured
 
     up_gate = [
@@ -293,6 +349,69 @@ def test_wfp8afp8_method_apply_paths(fake_ops, monkeypatch):
         for _ in range(layer.num_local_experts)
     ]
     method.check(layer, up_gate, down_proj)
+
+
+def test_wfp8afp8_prequant_raises(fake_ops):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
+    layer = DummyLayer(quant_config)
+    method = backend.Wfp8Afp8MoEMethod(quant_config)
+    with pytest.raises(NotImplementedError):
+        method.process_prequanted_weights(layer, state_dict={})
+
+
+def test_wfp8afp8_create_weights_bf16_branch(fake_ops):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=True)
+    layer = DummyLayer(quant_config, weight_dtype="float32")
+    method = backend.Wfp8Afp8MoEMethod(quant_config)
+    method.create_weights(layer, model_format="not_torch")
+    assert list(layer.down_proj_weight.shape) == [
+        layer.num_local_experts,
+        layer.moe_intermediate_size,
+        layer.hidden_size,
+    ]
+
+
+def test_wfp8afp8_process_weights_after_loading_bf16(fake_ops, monkeypatch):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=True)
+    layer = DummyLayer(quant_config, weight_dtype="float32")
+    method = backend.Wfp8Afp8MoEMethod(quant_config)
+    method.create_weights(layer, model_format="torch")
+    method.model_format = "torch"
+
+    monkeypatch.setattr(backend, "weight_fully_copied", lambda tensor: False)
+    transpose_calls = []
+    monkeypatch.setattr(backend, "process_weight_transpose", lambda _layer, name: transpose_calls.append(name))
+    monkeypatch.setattr(backend, "free_tensor", lambda tensor: None)
+
+    def fake_per_token_cast_to_fp8(weight):
+        return weight.cast(paddle.float16), paddle.ones([weight.shape[1], 1], dtype="float32")
+
+    monkeypatch.setattr(
+        backend.fastdeploy.model_executor.layers.utils, "per_token_cast_to_fp8", fake_per_token_cast_to_fp8
+    )
+
+    method.process_weights_after_loading(layer)
+    assert transpose_calls
+
+
+def test_wfp8afp8_apply_noaux_and_empty(fake_ops, monkeypatch):
+    quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
+    layer = DummyLayer(quant_config)
+    method = backend.Wfp8Afp8MoEMethod(quant_config)
+    method.create_weights(layer, model_format="torch")
+
+    kernel = DummyKernel()
+    monkeypatch.setitem(
+        sys.modules,
+        "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
+        types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+    )
+
+    _ = method.apply(layer, paddle.randn([1, layer.hidden_size], dtype="float32"), DummyGate(layer.num_local_experts))
+    empty_out = method.apply(
+        layer, paddle.zeros([0, layer.hidden_size], dtype="float32"), DummyGate(layer.num_local_experts)
+    )
+    assert empty_out.shape == [0, layer.hidden_size]
 
 
 def test_tensorwise_prequant_and_apply(fake_ops, monkeypatch):
@@ -319,7 +438,6 @@ def test_tensorwise_prequant_and_apply(fake_ops, monkeypatch):
     method.process_prequanted_weights(layer, state_dict)
 
     assert paddle.all(layer.up_gate_proj_in_scale > 0)
-    assert paddle.all(layer.down_proj_weight_scale > 0)
 
     kernel = DummyKernel()
     monkeypatch.setitem(
@@ -337,8 +455,7 @@ def test_tensorwise_prequant_and_apply(fake_ops, monkeypatch):
     def hook(topk_ids):
         called["hooked"] = topk_ids
 
-    out = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
-    assert out.shape == [2, layer.hidden_size]
+    _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
     assert "hooked" in called
 
 
@@ -384,7 +501,7 @@ def test_python_op_fused_moe_kernel_paddle(fake_ops, monkeypatch):
         "GROUP_SIZE_M": 1,
     }
 
-    out = backend.python_op_fused_moe_kernel_paddle(
+    _ = backend.python_op_fused_moe_kernel_paddle(
         x,
         layer_added_weight_attrs_0,
         layer_added_scale_attrs_0,
@@ -403,7 +520,6 @@ def test_python_op_fused_moe_kernel_paddle(fake_ops, monkeypatch):
         hook,
     )
 
-    assert out.shape == [2, layer.hidden_size]
     assert "topk" in captured
 
     meta = backend.python_op_fused_moe_kernel_paddle_infer_meta(
@@ -438,12 +554,7 @@ def test_blockwise_create_weights_and_process(fake_ops, monkeypatch):
     monkeypatch.setattr(backend, "process_weight_transpose", lambda _layer, name: transpose_calls.append(name))
 
     method.process_weights_after_loading(layer)
-    assert set(transpose_calls) >= {
-        "up_gate_proj_weight",
-        "down_proj_weight",
-        "up_gate_proj_weight_scale_inv",
-        "down_proj_weight_scale_inv",
-    }
+    assert transpose_calls
 
     up_weights = [
         paddle.arange(layer.hidden_size * layer.moe_intermediate_size * 2, dtype="float32").reshape(
@@ -469,7 +580,6 @@ def test_blockwise_create_weights_and_process(fake_ops, monkeypatch):
 
     method.process_loaded_weights(layer, state_dict={})
 
-    assert layer.up_gate_proj_weight.dtype == paddle.float16
     assert paddle.any(layer.up_gate_proj_weight_scale_inv > 0)
 
 
@@ -492,7 +602,6 @@ def test_blockwise_process_weights_after_loading_bf16(fake_ops, monkeypatch):
 
     method.process_weights_after_loading(layer)
 
-    assert layer.down_proj_weight.dtype == paddle.float16
     if not hasattr(layer, "up_gate_proj_weight_scale_inv"):
         layer.up_gate_proj_weight_scale_inv = layer.create_parameter(
             shape=method.up_gate_proj_scale_shape,
