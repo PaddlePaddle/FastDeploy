@@ -69,6 +69,7 @@ class PrefixCacheManager:
         self.tensor_parallel_size = tensor_parallel_size
         self.cache_config = config.cache_config
         self.speculative_config = config.speculative_config
+        self.data_parallel_rank = config.parallel_config.data_parallel_rank
         self.local_data_parallel_id = local_data_parallel_id
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -316,6 +317,7 @@ class PrefixCacheManager:
                     + f" --ipc_suffix {ipc_suffix}"
                     + f" --protocol {cache_config.cache_transfer_protocol}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
+                    + f" --data_parallel_rank {self.data_parallel_rank}"
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"

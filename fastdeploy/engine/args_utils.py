@@ -308,7 +308,7 @@ class EngineArgs:
 
     data_parallel_size: int = 1
     """
-    Number of data parallelism.
+    Global number of data parallelism.
     """
 
     local_data_parallel_id: int = 0

@@ -104,6 +104,7 @@ def parse_args():
         help="cache transfer protocol, only support ipc now",
     )
     parser.add_argument("--local_data_parallel_id", type=int, default=0)
+    parser.add_argument("--data_parallel_rank", type=int, default=0)
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
     parser.add_argument(
         "--speculative_config",
@@ -187,6 +188,7 @@ class CacheTransferManager:
         self.num_layers = args.num_layers
         self.ipc_suffix = args.ipc_suffix
         self.local_data_parallel_id = args.local_data_parallel_id
+        self.data_parallel_rank = args.data_parallel_rank
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
         paddle.set_default_dtype(args.default_dtype)
@@ -316,8 +318,23 @@ class CacheTransferManager:
             elif self.storage_backend_type == "attention_store":
                 logger.info("Start initialize attention store...")
                 # TODO: support different model version in rl
+                pod_name = "default_pod"
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    pod_name = (
+                        os.getenv("POD_NAMESPACE", "None")
+                        + "_"
+                        + os.getenv("FD_POD_NAME", "None")
+                        + "_"
+                        + os.getenv("HOST_IP", "None")
+                        + "_"
+                        + args.splitwise_role
+                        + "_"
+                        + str(args.data_parallel_rank)
+                    )
                 self.storage_backend = AttentionStore(
                     namespace=self.model_id,
+                    pod_name=pod_name,
+                    model_version=self.model_id,
                     shard_id=self.rank,
                     shard_num=self.n_ranks,
                     layer_num=self.num_layers + self.num_extra_layers,
@@ -328,6 +345,7 @@ class CacheTransferManager:
                     * self.cache_item_bytes,
                     device_id=self.device,
                     dp_id=self.local_data_parallel_id,
+                    enable_as_kv_rw=True,
                 )
                 logger.info("Initialized attention store successfully!")
             elif args.kvcache_storage_backend == "file":
