@@ -579,8 +579,8 @@ class PaddleDisWorkerProc:
 
             if (
                 (not self.parallel_config.use_ep)
-                and (not self.worker.model_runner.not_need_stop())
                 and (not current_platform.is_cuda())
+                and (not self.worker.model_runner.not_need_stop())
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
                 self.engine_forward_signal.value[0] = 0

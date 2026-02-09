@@ -1318,8 +1318,6 @@ class GPUModelRunner(ModelRunnerBase):
             token_num = self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
         else:
             token_num = launch_token_num
-        if token_num <= 0:
-            return token_num, token_num_event
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -2315,8 +2313,9 @@ class GPUModelRunner(ModelRunnerBase):
         launch_token_num, token_num_event = self._prepare_inputs(launch_token_num)
 
         # NOTE(sunxin):
-        # If launch_token_num is 0, it means the current worker is in an idle state, and no further processing is required.
-        if launch_token_num == 0:
+        # If launch_token_num is 0, it means the current worker is in an idle state, and no further processing is required in TP mode.
+        # However, in EP (Expert Parallelism) mode, there is data on other runner, the current runner is required to execute part of the model.
+        if launch_token_num == 0 and not self.parallel_config.use_ep:
             return None, None, token_num_event
 
         self.sampler.pre_process(p_done_idxs)
@@ -2350,11 +2349,6 @@ class GPUModelRunner(ModelRunnerBase):
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
     ) -> None:
-        if model_output is None:
-            return None, None, None, -1
-
-        if self.use_cudagraph:
-            model_output = model_output[: self.real_token_num]
 
         # NOTE(sunxin):
         # token_num_event synchronizes the async DtoH copies of seq_lens_this_time_cpu and is_block_step_cpu,
@@ -2367,6 +2361,12 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time_cpu"].numpy().sum().item()
                 + self.share_inputs["is_block_step_cpu"].numpy().sum().item()
             )
+
+        if token_num == 0 or model_output is None:
+            return None, None, None, -1
+
+        if self.use_cudagraph:
+            model_output = model_output[: self.real_token_num]
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
         if self.is_pooling_model:
