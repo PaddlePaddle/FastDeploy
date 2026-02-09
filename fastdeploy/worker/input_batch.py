@@ -267,7 +267,7 @@ class InputBatch:
             self.accept_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
             self.draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=-1,
+                fill_value=0,
                 dtype="int64",
             )
 
