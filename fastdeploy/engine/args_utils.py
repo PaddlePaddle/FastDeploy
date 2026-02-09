@@ -647,7 +647,10 @@ class EngineArgs:
                 for port in cur_dp_ports:
                     # For engine_worker_queue_port in SHM mode, check socket file instead of TCP port
                     if name == "engine_worker_queue_port" and envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-                        assert is_shm_port_available(port), f"Parameter `{name}`:{port} shared memory file already exists."
+                        assert is_shm_port_available(port), (
+                            f"Parameter `{name}`:{port} shared memory file already exists. "
+                            f"Please remove the leftover socket file `/dev/shm/fd_task_queue_{port}.sock` and try again."
+                        )
                     else:
                         assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
