@@ -52,25 +52,11 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @measure_time()
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
         weights_iterator = get_weight_iterator(fd_config.model_config.model)
-
-        def weight_adapter(iterator):
-            for name, tensor in iterator:
-                yield name, tensor
-                # Fix quantized weight name: replace .quant_weight with .weight
-                if name.endswith(".quant_weight"):
-                    new_name = name.replace(".quant_weight", ".weight")
-                    yield new_name, tensor
-                elif name.endswith(".weight_scale"):
-                    inv_name = name.replace(".weight_scale", ".weight_scale_inv")
-                    yield inv_name, tensor
-
-        # Apply weight adaptation to get processed weight iterator
-        adapted_iterator = weight_adapter(weights_iterator)
         # Choose different weight loading methods based on cache enablement
         if enable_cache:
-            load_weights_from_cache(model, adapted_iterator)
+            load_weights_from_cache(model, weights_iterator)
         else:
-            model.load_weights(adapted_iterator)
+            model.load_weights(weights_iterator)
         # Execute post-processing after weight loading
         process_final_after_loading(model, fd_config)
 
