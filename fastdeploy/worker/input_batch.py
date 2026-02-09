@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import List, Union
+
 import paddle
 from paddleformers.utils.log import logger
 
@@ -21,6 +23,7 @@ from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeCon
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.platforms import current_platform
+from fastdeploy.worker.output import ModelOutputData, SamplerOutput
 
 
 class InputBatch:
@@ -755,7 +758,7 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
-def _recover_tensor(recover_tensor, index_to_batch_id_list):
+def _recover_tensor(recover_tensor: paddle.Tensor, index_to_batch_id_list: List[int]):
     """
     Reorder recover_tensor according to index_to_batch_id_list mapping.
 
@@ -777,7 +780,12 @@ def _recover_tensor(recover_tensor, index_to_batch_id_list):
     return recover_res_tensor
 
 
-def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reorder, recover_list):
+def recover_batch_index_for_output(
+    output_cls: Union[ModelOutputData, InputBatch, dict],
+    index_to_batch_id: dict,
+    enable_pd_reorder: bool,
+    recover_list: List[str],
+):
     """
     Reorder model_output according to index_to_batch_id mapping.
 
@@ -816,7 +824,9 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     return res_map
 
 
-def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, enable_pd_reorder):
+def recover_batch_index_for_sampler_output(
+    sampler_output: SamplerOutput, index_to_batch_id: dict, enable_pd_reorder: bool
+):
     """
     Reorder sampled_token_ids according to index_to_batch_id mapping.
 
