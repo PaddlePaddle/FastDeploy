@@ -17,9 +17,6 @@
 import argparse
 import asyncio
 import json
-
-# Set up logger interceptor before importing paddle
-import logging
 import os
 import time
 import traceback
@@ -27,36 +24,12 @@ from typing import Tuple
 
 import numpy as np
 
-_original_getLogger = logging.getLogger
+from tools.logger_patch import intercept_paddle_loggers
 
-
-def _patched_getLogger(name=None):
-    """Intercept paddle-related logger creation and configure format immediately"""
-    logger = _original_getLogger(name)
-    if name and str(name).startswith("paddle"):
-        # Configure paddle logger immediately
-        formatter = logging.Formatter(
-            "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        logger.setLevel(logging.INFO)
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(formatter)
-        logger.addHandler(stream_handler)
-        logger.propagate = False
-    return logger
-
-
-logging.getLogger = _patched_getLogger
-
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
-
-# Restore original getLogger
-logging.getLogger = _original_getLogger
+with intercept_paddle_loggers():
+    import paddle
+    import paddle.distributed as dist
+    from paddle.distributed import fleet
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -91,6 +64,7 @@ from fastdeploy.inter_communicator import (
     RearrangeExpertStatus,
 )
 from fastdeploy.inter_communicator.fmq import FMQ
+from fastdeploy.logger.setup_logging import configure_third_party_loggers
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -99,42 +73,6 @@ from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
-
-
-def _configure_third_party_loggers():
-    """Unify third-party library (paddleformers, paddle) logger formats.
-    Should be called after these libraries are imported."""
-    import logging
-
-    # Create standard format (without color)
-    formatter = logging.Formatter(
-        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    # Handle paddleformers-specific loggers
-    for name in ["paddleformers", "paddleformers.utils", "paddleformers.utils.log"]:
-        pf_logger = logging.getLogger(name)
-        pf_logger.setLevel(logging.INFO)
-        for handler in pf_logger.handlers[:]:
-            pf_logger.removeHandler(handler)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(formatter)
-        pf_logger.addHandler(stream_handler)
-        pf_logger.propagate = False
-
-    # Handle all related paddle loggers (including submodules)
-    # Iterate through all existing loggers, reconfigure if paddle-related
-    for name in list(logging.Logger.manager.loggerDict.keys()):
-        if name.startswith("paddle"):
-            pd_logger = logging.getLogger(name)
-            pd_logger.setLevel(logging.INFO)
-            for handler in pd_logger.handlers[:]:
-                pd_logger.removeHandler(handler)
-            stream_handler = logging.StreamHandler()
-            stream_handler.setFormatter(formatter)
-            pd_logger.addHandler(stream_handler)
-            pd_logger.propagate = False
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
@@ -146,37 +84,37 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_cuda():
         from fastdeploy.worker.gpu_worker import GpuWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_iluvatar():
         from fastdeploy.worker.iluvatar_worker import IluvatarWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return IluvatarWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_gcu():
         from fastdeploy.worker.gcu_worker import GcuWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_maca():
         from fastdeploy.worker.metax_worker import MetaxWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_intel_hpu():
         from fastdeploy.worker.hpu_worker import HpuWorker
 
-        _configure_third_party_loggers()
+        configure_third_party_loggers()
         return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
@@ -240,6 +178,10 @@ class PaddleDisWorkerProc:
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.speculative_decoding = fd_config.speculative_config.method is not None
+        self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule and (
+            not self.speculative_decoding
+        )
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -353,6 +295,16 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        # init engine forward signal
+        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
+        self.engine_forward_signal = IPCSignal(
+            name="engine_forward_signal",
+            array=engine_forward_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -380,7 +332,7 @@ class PaddleDisWorkerProc:
         return int(value)
 
     def _tp_barrier_wait(self):
-        if current_platform.is_xpu():
+        if current_platform.is_xpu() or self.enable_overlap_schedule:
             self.task_queue.worker_process_tp_barrier.wait()
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
@@ -510,9 +462,6 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            # run eplb
-            self._run_eplb(tp_rank)
-
             if self.fd_config.load_config.dynamic_load_weight:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -586,7 +535,7 @@ class PaddleDisWorkerProc:
 
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
-
+                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
@@ -595,39 +544,56 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
+                # Only EP + DP prefill should barrier for data arrival.
+                # In mixed mode and decoder in D, we should not barrier to influence decoding.
+                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
+                    paddle.distributed.barrier(self.parallel_config.ep_group)
 
                 req_dicts, control_reqs = [], []
-                for req_dict, bsz in tasks:
-                    if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                        control_reqs.append(req_dict[0])
-                    else:
-                        max_occupied_batch_index = int(bsz)
-                        req_dicts.extend(req_dict)
+                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
+                if tasks[0][0]:
+                    for req_dict, bsz in tasks:
+                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
+                            control_reqs.append(req_dict[0])
+                        else:
+                            max_occupied_batch_index = int(bsz)
+                            req_dicts.extend(req_dict)
 
-                # todo: run control request async
-                if len(control_reqs) > 0:
-                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                    for control_req in control_reqs:
-                        self.run_control_method(control_req)
-                        self._tp_barrier_wait() if tp_size > 1 else None
+                    # todo: run control request async
+                    if len(control_reqs) > 0:
+                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                        for control_req in control_reqs:
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                # Count prefill requests in current batch
-                num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                num_scheduled_requests = len(req_dicts)
-                scheduled_request_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
-                    f"max_occupied_batch_index: {max_occupied_batch_index}, "
-                    f"num_scheduled_requests: {num_scheduled_requests}, "
-                    f"scheduled_request_ids: {scheduled_request_ids}"
-                )
+                    # Count prefill requests in current batch
+                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(req_dicts)
+                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    logger.info(
+                        f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
+                        f"max_occupied_batch_index: {max_occupied_batch_index}, "
+                        f"num_scheduled_requests: {num_scheduled_requests}, "
+                        f"scheduled_request_ids: {scheduled_request_ids}"
+                    )
 
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                    # Process prefill inputs
+                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+            else:
+                if self.scheduler_config.splitwise_role == "prefill":
+                    if tp_size > 1:
+                        # Synchronize the signal for other workers
+                        self._tp_barrier_wait()
+                    continue
 
-            if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
+            if (
+                (not self.parallel_config.use_ep)
+                and (not self.worker.model_runner.not_need_stop())
+                and (not self.enable_overlap_schedule)
+            ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-
+                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
@@ -639,6 +605,9 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
+            # run eplb
+            self._run_eplb(tp_rank)
+            self.engine_forward_signal.value[0] = 0
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -1079,6 +1048,12 @@ def parse_args():
         "--kvcache_storage_backend",
         type=str,
         help="KVCache storage backend.",
+    )
+
+    parser.add_argument(
+        "--enable_overlap_schedule",
+        action="store_true",
+        help="Enable overlap schedule",
     )
 
     args = parser.parse_args()

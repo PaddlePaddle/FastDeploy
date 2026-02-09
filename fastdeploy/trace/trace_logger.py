@@ -36,6 +36,8 @@ def print(event, request_id, user):
         trace_info = get_trace_info_for_request(request_id)
         if trace_info:
             attributes["trace_id"] = trace_info["trace_id"]
+        else:
+            attributes["trace_id"] = "unknown"
 
         trace_logger.info(
             "",

@@ -55,10 +55,10 @@ FastDeploy提供[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop
 - Router接收实例的生成结果，返回给用户
 
 上手示例：
-- 启动Router服务，日志信息输出在`log_router/router.log`。
+- 启动Router服务，日志信息输出在`log_router/router.log`。`fd-router`的安装方法参考[Router说明文档](../online_serving/router.md)。
 ```
 export FD_LOG_DIR="log_router"
-python -m fastdeploy.router.launch \
+/usr/local/bin/fd-router \
     --host 0.0.0.0 \
     --port 30000 \
 ```

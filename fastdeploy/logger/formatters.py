@@ -103,6 +103,12 @@ class CustomFormatter(logging.Formatter):
                 "timestamp": int(time.time() * 1000),
             }
 
+            # Add thread information if available
+            if hasattr(record, "thread") and record.thread is not None:
+                log_fields["thread"] = record.thread
+            if hasattr(record, "threadName") and record.threadName is not None:
+                log_fields["thread_name"] = record.threadName
+
             if hasattr(record, "attributes") and isinstance(record.attributes, dict):
                 for k, v in record.attributes.items():
                     log_fields[self._camel_to_snake(k)] = v

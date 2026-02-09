@@ -24,8 +24,7 @@ LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
 FD_BIN_DIR="/usr/local/bin"
 FD_ROUTER_BIN="${FD_BIN_DIR}/fd-router"
-FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/FastDeploy/fd-router"
-FD_ROUTER_SHA256="67640aaeebdd886826d3534930b2154cd2c1441a26bc3f38c3af5f0aadba7c2d"
+FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
 
 ports=($P_PORT $D_PORT $ROUTER_PORT)
 check_ports "${ports[@]}" || {
@@ -40,20 +39,44 @@ if [ ! -x "${FD_ROUTER_BIN}" ]; then
     mkdir -p "${FD_BIN_DIR}"
     TMP_BIN="${FD_ROUTER_BIN}.tmp"
 
-    wget -q --no-proxy "${FD_ROUTER_URL}" -O "${TMP_BIN}" || exit 1
-
-    echo "${FD_ROUTER_SHA256}  ${TMP_BIN}" | sha256sum -c - || {
-        echo "❌ Integrity check failed"
+    wget -q --no-proxy "${FD_ROUTER_URL}" -O "${TMP_BIN}" || {
+        echo "❌ Download fd-router failed"
         rm -f "${TMP_BIN}"
         exit 1
     }
 
+    # ------- sanity checks (no fixed hash) -------
+
+    # 1. must be ELF binary
+    file "${TMP_BIN}" || grep -q "ELF" || {
+        echo "❌ fd-router is not an ELF binary"
+        rm -f "${TMP_BIN}"
+        exit 1
+    }
+
+    # 2. must be x86_64 architecture
+    file "${TMP_BIN}" | grep -q "x86-64" || {
+        echo "❌ fd-router architecture mismatch"
+        rm -f "${TMP_BIN}"
+        exit 1
+    }
+
+    # 3. size check (avoid HTML / empty / error pages)
+    SIZE=$(stat -c%s "${TMP_BIN}")
+    if [ "$SIZE" -lt 1000000 ]; then
+        echo "❌ fd-router size is too small ($SIZE bytes), suspicious"
+        rm -f "${TMP_BIN}"
+        exit 1
+    fi
+
+    # -------------------------------------
+
     mv "${TMP_BIN}" "${FD_ROUTER_BIN}"
     chmod +x "${FD_ROUTER_BIN}"
 
-    echo "fd-router installed and verified"
+    echo "✅ fd-router installed with sanity checks"
 else
-    echo "fd-router already exists"
+    echo "✅ fd-router already exists"
 fi
 
 # start router

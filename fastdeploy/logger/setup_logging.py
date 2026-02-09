@@ -151,3 +151,27 @@ def setup_logging(log_dir=None, config_file=None):
 
     # 返回fastdeploy的logger
     return logging.getLogger("fastdeploy")
+
+
+def configure_third_party_loggers():
+    """Unify third-party library (paddleformers, paddle) logger formats.
+    Should be called after these libraries are imported."""
+
+    # Create standard format (without color)
+    formatter = logging.Formatter(
+        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Handle all related paddle loggers (including submodules)
+    # Iterate through all existing loggers, reconfigure if paddle-related
+    for name in list(logging.Logger.manager.loggerDict.keys()):
+        if name.startswith("paddle"):
+            pd_logger = logging.getLogger(name)
+            pd_logger.setLevel(logging.INFO)
+            for handler in pd_logger.handlers[:]:
+                pd_logger.removeHandler(handler)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            pd_logger.addHandler(stream_handler)
+            pd_logger.propagate = False

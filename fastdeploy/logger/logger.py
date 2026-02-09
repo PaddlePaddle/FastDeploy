@@ -194,7 +194,7 @@ class FastDeployLogger:
         LOG_FILE = f"{log_dir}/{file_name}"
         backup_count = int(envs.FD_LOG_BACKUP_COUNT)
         # handler = LazyFileHandler(filename=LOG_FILE, backupCount=backup_count, level=hanlder_level)
-        handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
+        handler = LazyFileHandler(LOG_FILE, backupCount=backup_count)
 
         # Create ERROR log file handler (new feature)
         if not file_name.endswith(".log"):
