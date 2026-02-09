@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.config import SpeculativeConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
@@ -36,7 +35,6 @@ if current_platform.is_iluvatar():
         limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
-        step_paddle,
         update_inputs,
         update_inputs_v1,
     )
@@ -52,7 +50,6 @@ elif current_platform.is_dcu():
         get_padding_offset,
         save_output,
         set_stop_value_multi_ends,
-        step_paddle,
         update_inputs,
     )
 elif current_platform.is_maca():
@@ -70,13 +67,7 @@ elif current_platform.is_maca():
         speculate_save_output_topk,
         speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
-        speculate_step_paddle,
-        speculate_step_reschedule,
-        speculate_step_system_cache,
         speculate_update,
-        step_paddle,
-        step_reschedule,
-        step_system_cache,
         update_inputs,
         update_inputs_v1,
     )
@@ -92,16 +83,10 @@ else:
         speculate_save_output,
         speculate_save_output_topk,
         speculate_set_value_by_flags_and_idx,
-        speculate_step_paddle,
-        speculate_step_system_cache,
         speculate_update,
         speculate_set_stop_value_multi_seqs,
-        step_paddle,
-        step_system_cache,
         update_inputs,
-        step_reschedule,
         update_inputs_v1,
-        speculate_step_reschedule,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
         speculate_limit_thinking_content_length_v1,
@@ -364,7 +349,8 @@ def post_process_normal(
             model_output.seq_lens_this_time,
             model_output.eos_token_id,
             model_output.next_tokens,
-            model_output.pre_ids,
+            model_output.token_ids_all,
+            model_output.prompt_lens,
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
@@ -493,7 +479,8 @@ def post_process_specualate(
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
         model_output.accept_num,
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.step_idx,
         model_output.stop_flags,
         model_output.seq_lens_this_time,
@@ -571,10 +558,11 @@ def post_process_specualate(
                 save_each_rank,
             )
 
-    # Update pre_ids through accept tokens
+    # Update token_ids_all through accept tokens
 
     speculate_set_value_by_flags_and_idx(
-        model_output.pre_ids,
+        model_output.token_ids_all,
+        model_output.prompt_lens,
         model_output.accept_tokens,
         model_output.accept_num,
         model_output.stop_flags,
@@ -637,193 +625,6 @@ def post_process(
             )
             share_inputs["last_preempted_idx"].copy_(share_inputs["preempted_idx"])
     share_inputs["preempted_idx"][:] = 0
-
-
-def step_cuda(
-    share_inputs: InputBatch,
-    block_size: int,
-    enc_dec_block_num: int,
-    speculative_config: SpeculativeConfig,
-    enable_prefix_caching: bool = False,
-) -> None:
-    """
-    TODO(gongshaotian): normalization name
-    """
-
-    if speculative_config.method is not None:
-        if DISABLE_RECOVER:
-            speculate_step_reschedule(
-                share_inputs["stop_flags"],
-                share_inputs["seq_lens_this_time"],
-                share_inputs["step_seq_lens_encoder"],
-                share_inputs["seq_lens_encoder"],
-                share_inputs["seq_lens_decoder"],
-                share_inputs["block_tables"],
-                share_inputs["encoder_block_lens"],
-                share_inputs["is_block_step"],
-                share_inputs["step_block_list"],
-                share_inputs["step_lens"],
-                share_inputs["recover_block_list"],
-                share_inputs["recover_lens"],
-                share_inputs["need_block_list"],
-                share_inputs["need_block_len"],
-                share_inputs["used_list_len"],
-                share_inputs["free_list"],
-                share_inputs["free_list_len"],
-                share_inputs["input_ids"],
-                share_inputs["pre_ids"],
-                share_inputs["step_idx"],
-                share_inputs["next_tokens"],
-                share_inputs["first_token_ids"],
-                share_inputs["accept_num"],
-                block_size,
-                enc_dec_block_num,
-                speculative_config.num_speculative_tokens,
-            )
-        else:
-            if enable_prefix_caching:
-                speculate_step_system_cache(
-                    share_inputs["stop_flags"],
-                    share_inputs["seq_lens_this_time"],
-                    share_inputs["step_seq_lens_encoder"],
-                    share_inputs["step_seq_lens_decoder"],
-                    share_inputs["seq_lens_encoder"],
-                    share_inputs["seq_lens_decoder"],
-                    share_inputs["block_tables"],
-                    share_inputs["encoder_block_lens"],
-                    share_inputs["is_block_step"],
-                    share_inputs["step_block_list"],
-                    share_inputs["step_lens"],
-                    share_inputs["recover_block_list"],
-                    share_inputs["recover_lens"],
-                    share_inputs["need_block_list"],
-                    share_inputs["need_block_len"],
-                    share_inputs["used_list_len"],
-                    share_inputs["free_list"],
-                    share_inputs["free_list_len"],
-                    share_inputs["input_ids"],
-                    share_inputs["pre_ids"],
-                    share_inputs["step_idx"],
-                    share_inputs["next_tokens"],
-                    share_inputs["first_token_ids"],
-                    share_inputs["accept_num"],
-                    block_size,
-                    enc_dec_block_num,
-                    speculative_config.num_speculative_tokens,
-                )
-            else:
-                speculate_step_paddle(
-                    share_inputs["stop_flags"],
-                    share_inputs["seq_lens_this_time"],
-                    share_inputs["step_seq_lens_encoder"],
-                    share_inputs["seq_lens_encoder"],
-                    share_inputs["seq_lens_decoder"],
-                    share_inputs["block_tables"],
-                    share_inputs["encoder_block_lens"],
-                    share_inputs["is_block_step"],
-                    share_inputs["step_block_list"],
-                    share_inputs["step_lens"],
-                    share_inputs["recover_block_list"],
-                    share_inputs["recover_lens"],
-                    share_inputs["need_block_list"],
-                    share_inputs["need_block_len"],
-                    share_inputs["used_list_len"],
-                    share_inputs["free_list"],
-                    share_inputs["free_list_len"],
-                    share_inputs["input_ids"],
-                    share_inputs["pre_ids"],
-                    share_inputs["step_idx"],
-                    share_inputs["next_tokens"],
-                    share_inputs["first_token_ids"],
-                    share_inputs["accept_num"],
-                    block_size,
-                    enc_dec_block_num,
-                    speculative_config.num_speculative_tokens,
-                )
-    else:
-        if DISABLE_RECOVER:
-            step_reschedule(
-                share_inputs["stop_flags"],
-                share_inputs["seq_lens_this_time"],
-                share_inputs["step_seq_lens_encoder"],
-                share_inputs["seq_lens_encoder"],
-                share_inputs["seq_lens_decoder"],
-                share_inputs["block_tables"],
-                share_inputs["encoder_block_lens"],
-                share_inputs["is_block_step"],
-                share_inputs["step_block_list"],
-                share_inputs["step_lens"],
-                share_inputs["recover_block_list"],
-                share_inputs["recover_lens"],
-                share_inputs["need_block_list"],
-                share_inputs["need_block_len"],
-                share_inputs["used_list_len"],
-                share_inputs["free_list"],
-                share_inputs["free_list_len"],
-                share_inputs["input_ids"],
-                share_inputs["pre_ids"],
-                share_inputs["step_idx"],
-                share_inputs["next_tokens"],
-                share_inputs["first_token_ids"],
-                block_size,
-                enc_dec_block_num,
-            )
-        else:
-            if enable_prefix_caching:
-                step_system_cache(
-                    share_inputs["stop_flags"],
-                    share_inputs["seq_lens_this_time"],
-                    share_inputs["step_seq_lens_encoder"],
-                    share_inputs["step_seq_lens_decoder"],
-                    share_inputs["seq_lens_encoder"],
-                    share_inputs["seq_lens_decoder"],
-                    share_inputs["block_tables"],
-                    share_inputs["encoder_block_lens"],
-                    share_inputs["is_block_step"],
-                    share_inputs["step_block_list"],
-                    share_inputs["step_lens"],
-                    share_inputs["recover_block_list"],
-                    share_inputs["recover_lens"],
-                    share_inputs["need_block_list"],
-                    share_inputs["need_block_len"],
-                    share_inputs["used_list_len"],
-                    share_inputs["free_list"],
-                    share_inputs["free_list_len"],
-                    share_inputs["input_ids"],
-                    share_inputs["pre_ids"],
-                    share_inputs["step_idx"],
-                    share_inputs["next_tokens"],
-                    share_inputs["first_token_ids"],
-                    block_size,
-                    enc_dec_block_num,
-                )
-            else:
-                step_paddle(
-                    share_inputs["stop_flags"],
-                    share_inputs["seq_lens_this_time"],
-                    share_inputs["step_seq_lens_encoder"],
-                    share_inputs["seq_lens_encoder"],
-                    share_inputs["seq_lens_decoder"],
-                    share_inputs["block_tables"],
-                    share_inputs["encoder_block_lens"],
-                    share_inputs["is_block_step"],
-                    share_inputs["step_block_list"],
-                    share_inputs["step_lens"],
-                    share_inputs["recover_block_list"],
-                    share_inputs["recover_lens"],
-                    share_inputs["need_block_list"],
-                    share_inputs["need_block_len"],
-                    share_inputs["used_list_len"],
-                    share_inputs["free_list"],
-                    share_inputs["free_list_len"],
-                    share_inputs["input_ids"],
-                    share_inputs["pre_ids"],
-                    share_inputs["step_idx"],
-                    share_inputs["next_tokens"],
-                    share_inputs["first_token_ids"],
-                    block_size,
-                    enc_dec_block_num,
-                )
 
 
 def rebuild_padding(

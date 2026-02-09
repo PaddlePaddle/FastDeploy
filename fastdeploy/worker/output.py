@@ -207,11 +207,6 @@ class ModelOutputData:
     max_dec_len: int
 
     """
-        Previous ids used for decoding
-    """
-    pre_ids: paddle.Tensor
-
-    """
         Sequence lengths for this step
     """
     seq_lens_this_time: paddle.Tensor
@@ -286,6 +281,16 @@ class ModelOutputData:
         the number of accepted tokens in current step
     """
     accept_num: paddle.Tensor
+
+    """
+        Tokens including prompts and generated tokens
+    """
+    token_ids_all: Optional[paddle.Tensor] = None
+
+    """
+        Previous generated tokens
+    """
+    pre_ids: Optional[paddle.Tensor] = None
 
     """
         the token ids of stop sequence
