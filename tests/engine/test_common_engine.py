@@ -1471,7 +1471,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.task_type = RequestType.PREEMPTED
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
         eng._send_error_response = Mock()
 
         class DummyRM:
