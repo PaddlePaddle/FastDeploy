@@ -1225,6 +1225,7 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
+        self.is_pre_sharded: bool = False
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal", "rsync"]] = "normal"
         self.rsync_config: Optional[Dict[str, Any]] = None
