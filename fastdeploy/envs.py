@@ -202,6 +202,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
+    # Whether to use PD REORDER, can set 0 or 1
+    "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 }
 
 
