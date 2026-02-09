@@ -272,12 +272,20 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.output_padding_offset = paddle.full(
-                shape=[max_num_seqs * (max_draft_token_num + 1)],
-                fill_value=0,
-                dtype="int32",
-            )
+            if current_platform.is_cuda():
+                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+                self.batch_id_per_token_output = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
+            else:
+                self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+                self.output_padding_offset = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)],
+                    fill_value=0,
+                    dtype="int32",
+                )
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -404,7 +412,10 @@ class InputBatch:
             swap_data(self.accept_num, i1, i2)
             swap_data(self.draft_tokens, i1, i2)
             swap_data(self.actual_draft_token_num, i1, i2)
-            swap_data(self.output_cum_offsets, i1, i2)
+            if current_platform.is_cuda():
+                swap_data(self.cu_seqlens_q_output, i1, i2)
+            else:
+                swap_data(self.output_cum_offsets, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
@@ -512,8 +523,12 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-        self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-        self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+        if current_platform.is_cuda():
+            self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
+            self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
+        else:
+            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
+            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -659,8 +674,12 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.stop_flags, i1, i2)
         swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        swap_data(self.output_cum_offsets, i1, i2)
-        swap_data(self.output_padding_offset, i1, i2)
+        if current_platform.is_cuda():
+            swap_data(self.cu_seqlens_q_output, i1, i2)
+            swap_data(self.batch_id_per_token_output, i1, i2)
+        else:
+            swap_data(self.output_cum_offsets, i1, i2)
+            swap_data(self.output_padding_offset, i1, i2)
         swap_data(self.ids_remove_padding, i1, i2)
         swap_data(self.batch_id_per_token, i1, i2)
         swap_data(self.cu_seqlens_q, i1, i2)
@@ -736,6 +755,28 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
             right -= 1
 
 
+def _recover_tensor(recover_tensor, index_to_batch_id_list):
+    """
+    Reorder recover_tensor according to index_to_batch_id_list mapping.
+
+    Args:
+        recover_tensor: paddle.Tensor to be reordered.
+        index_to_batch_id_list: List mapping current indices to original batch IDs.
+
+    Returns:
+        A paddle.Tensor with elements restored to the original batch order.
+    """
+    sort_len = len(index_to_batch_id_list)
+    if isinstance(recover_tensor.place, paddle.CUDAPinnedPlace):
+        recover_res_tensor = paddle.empty_like(recover_tensor, device="cpu")
+    else:
+        recover_res_tensor = paddle.empty_like(recover_tensor)
+    recover_res_tensor[:sort_len] = recover_tensor[:sort_len][index_to_batch_id_list]
+    if sort_len < recover_res_tensor.shape[0]:
+        recover_res_tensor[sort_len:] = recover_tensor[sort_len:]
+    return recover_res_tensor
+
+
 def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reorder, recover_list):
     """
     Reorder model_output according to index_to_batch_id mapping.
@@ -750,10 +791,8 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
     res_map = {}
     is_not_swapped = all(i == v for i, v in index_to_batch_id.items()) or not enable_pd_reorder
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
     if not is_not_swapped:
-        index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-        index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
+        src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
     for recover_name in recover_list:
         if isinstance(output_cls, dict):
             recover_tensor = output_cls[recover_name]
@@ -765,9 +804,7 @@ def recover_batch_index_for_output(output_cls, index_to_batch_id, enable_pd_reor
 
         if isinstance(recover_tensor, paddle.Tensor):
             # Create a new tensor to store the reordered results
-            res_map[recover_name] = paddle.scatter_nd(
-                paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), recover_tensor, recover_tensor.shape
-            )
+            res_map[recover_name] = _recover_tensor(recover_tensor, src_order)
         elif isinstance(recover_tensor, list):
             real_recover_tensor = recover_tensor.copy()
             for i1, i2 in enumerate(index_to_batch_id):
@@ -795,48 +832,31 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
 
     sampled_token_ids = sampler_output.sampled_token_ids
     # Create a new tensor to store the reordered results
-    sorted_keys = sorted(index_to_batch_id.keys())
-    index_to_batch_id_tmp = [index_to_batch_id[key] for key in sorted_keys]
-    index_to_batch_id_tensor = paddle.to_tensor(index_to_batch_id_tmp, dtype="int64")
-
-    real_token_ids = paddle.scatter_nd(
-        paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), sampled_token_ids, sampled_token_ids.shape
-    )
+    src_order = [k for k, v in sorted(index_to_batch_id.items(), key=lambda x: x[1])]
+    real_token_ids = _recover_tensor(sampled_token_ids, src_order)
     sampler_output.sampled_token_ids = real_token_ids
-
     if sampler_output.logprobs_tensors is not None:
         logprob_token_ids = sampler_output.logprobs_tensors.logprob_token_ids
         logprobs = sampler_output.logprobs_tensors.logprobs
         selected_token_ranks = sampler_output.logprobs_tensors.selected_token_ranks
-        real_logprob_token_ids = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprob_token_ids, sampled_token_ids.shape
-        )
-
-        real_logprobs = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), logprobs, sampled_token_ids.shape
-        )
-        real_selected_token_ranks = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), selected_token_ranks, sampled_token_ids.shape
-        )
+        real_logprob_token_ids = _recover_tensor(logprob_token_ids, src_order)
+        real_logprobs = _recover_tensor(logprobs, src_order)
+        real_selected_token_ranks = _recover_tensor(selected_token_ranks, src_order)
         sampler_output.logprobs_tensors.logprob_token_ids = real_logprob_token_ids
         sampler_output.logprobs_tensors.logprobs = real_logprobs
         sampler_output.logprobs_tensors.sampled_token_ranks = real_selected_token_ranks
 
     if sampler_output.token_num_per_batch is not None:
         token_num_per_batch = sampler_output.token_num_per_batch
-        real_token_num_per_batch = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), token_num_per_batch, sampled_token_ids.shape
-        )
+        real_token_num_per_batch = _recover_tensor(token_num_per_batch, src_order)
         sampler_output.token_num_per_batch = real_token_num_per_batch
 
     if sampler_output.cu_batch_token_offset is not None:
         cu_batch_token_offset = sampler_output.cu_batch_token_offset
-        real_cu_batch_token_offset = paddle.scatter_nd(
-            paddle.unsqueeze(index_to_batch_id_tensor, axis=-1), cu_batch_token_offset, sampled_token_ids.shape
-        )
+        real_cu_batch_token_offset = _recover_tensor(cu_batch_token_offset, src_order)
         sampler_output.cu_batch_token_offset = real_cu_batch_token_offset
 
     if sampler_output.logits is not None:
         logits = sampler_output.logits
-        real_logits = paddle.gather(logits, index_to_batch_id_tensor, axis=0)
+        real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
