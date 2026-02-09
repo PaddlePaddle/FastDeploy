@@ -897,8 +897,9 @@ class RequestMetrics:
     def to_dict(self):
         """
         Convert the RequestMetrics object to a dictionary.
+        Using asdict ensures compatibility with nested dataclasses and slots.
         """
-        return {k: v for k, v in asdict(self).items()}
+        return asdict(self)
 
     def record_recv_first_token(self):
         cur_time = time.time()
