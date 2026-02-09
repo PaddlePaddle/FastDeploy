@@ -123,9 +123,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
-        self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
-        )
 
     def get_kv_cache_shape(
         self,
