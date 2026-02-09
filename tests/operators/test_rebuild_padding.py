@@ -49,21 +49,21 @@ def RebuildAppendPaddingKernel(
     seq_len_this_time,
     seq_lens_decoder,
     seq_lens_encoder,
-    output_padding_offset,
-    max_input_length,
+    batch_id_per_token_output,
+    cu_seqlens_q_output,
     token_num,
     need_delete_token_num,
 ):
     for token_id in range(token_num - need_delete_token_num):
-        bi = int(token_id / max_input_length)
+        bi = batch_id_per_token_output[token_id]
         if seq_len_this_time[bi] == 0 or (seq_lens_decoder[bi] == 0 and seq_lens_encoder[bi] == 0):
             continue
-        ori_token_id = token_id + output_padding_offset[token_id]
         seq_id = 0
         if seq_lens_encoder[bi] > 0:
             seq_id = seq_lens_encoder[bi] - 1
-        cum_offset_bi = bi * max_input_length - cu_seqlens_q[bi]
-        input_token_id = ori_token_id - cum_offset_bi + seq_id
+        else:
+            seq_id = token_id - cu_seqlens_q_output[bi]
+        input_token_id = cu_seqlens_q[bi] + seq_id
         out[token_id] = tmp_out[input_token_id][:]
 
 
@@ -73,8 +73,8 @@ def rebuild_padding_ref(
     seq_len_this_time,
     seq_lens_decoder,
     seq_lens_encoder,
-    output_padding_offset,
-    max_input_length,
+    batch_id_per_token_output,
+    cu_seqlens_q_output,
 ):
 
     tmp_out_shape = tmp_out.shape
@@ -83,7 +83,7 @@ def rebuild_padding_ref(
     bsz = cu_seqlens_q.shape[0] - 1
 
     out = np.zeros([bsz, dim_embed])
-    if output_padding_offset is not None:
+    if batch_id_per_token_output is not None:
         need_delete_token_num = 0
         for i in range(bsz):
             if seq_lens_encoder[i] > 0:
@@ -92,7 +92,7 @@ def rebuild_padding_ref(
     else:
         out = np.zeros([bsz, dim_embed])
 
-    if output_padding_offset is not None:
+    if batch_id_per_token_output is not None:
         RebuildAppendPaddingKernel(
             out,
             tmp_out,
@@ -100,8 +100,8 @@ def rebuild_padding_ref(
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
-            max_input_length,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
             token_num,
             need_delete_token_num,
         )
@@ -124,7 +124,6 @@ class TestRebuildPadding(unittest.TestCase):
         token_num = 100
         dim_embed = 256
         # bsz = 4
-        max_input_length = 512
         # tmp_out: [token_num, dim_embed]
         tmp_out = np.random.randn(token_num, dim_embed).astype(np.float32)
         # cu_seqlens_q: [bsz + 1]，accumulate the number of tokens for each batch.
@@ -142,8 +141,8 @@ class TestRebuildPadding(unittest.TestCase):
             seq_len_this_time=seq_len_this_time,
             seq_lens_decoder=seq_lens_decoder,
             seq_lens_encoder=seq_lens_encoder,
-            output_padding_offset=None,
-            max_input_length=max_input_length,
+            batch_id_per_token_output=None,
+            cu_seqlens_q_output=None,
         )
 
         tmp_out = paddle.to_tensor(tmp_out)
@@ -160,7 +159,7 @@ class TestRebuildPadding(unittest.TestCase):
             seq_lens_encoder,
             None,
             None,
-            max_input_length,
+            None,
             False,
         )
         np.testing.assert_allclose(out_no_offset.numpy(), out_no_offset_ref)
@@ -171,7 +170,6 @@ class TestRebuildPadding(unittest.TestCase):
         token_num = 84
         dim_embed = 256
         # bsz = 4
-        max_input_length = 512
         # tmp_out: [token_num, dim_embed]
         tmp_out = np.random.randn(token_num, dim_embed).astype(np.float32)
         # cu_seqlens_q: [bsz + 1]，accumulate the number of tokens for each batch.
@@ -184,16 +182,19 @@ class TestRebuildPadding(unittest.TestCase):
         seq_lens_encoder = np.array([0, 20, 0, 20, 0, 20, 0, 20], dtype=np.int32)
         seq_lens_decoder = np.array([21, 0, 21, 0, 21, 0, 21, 0], dtype=np.int32)
 
-        num_output_tokens = 8
-        output_padding_offset = np.random.randint(0, 10, [num_output_tokens], dtype=np.int32)
+        batch_id_per_token_output = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=np.int32)
+        batch_id_per_token_output = paddle.to_tensor(batch_id_per_token_output)
+        cu_seqlens_q_output = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
+        cu_seqlens_q_output = paddle.to_tensor(cu_seqlens_q_output)
+
         out_with_offset_ref = rebuild_padding_ref(
             tmp_out=tmp_out,
             cu_seqlens_q=cu_seqlens_q,
             seq_len_this_time=seq_len_this_time,
             seq_lens_decoder=seq_lens_decoder,
             seq_lens_encoder=seq_lens_encoder,
-            output_padding_offset=output_padding_offset,
-            max_input_length=max_input_length,
+            batch_id_per_token_output=batch_id_per_token_output,
+            cu_seqlens_q_output=cu_seqlens_q_output,
         )
 
         tmp_out = paddle.to_tensor(tmp_out)
@@ -201,16 +202,16 @@ class TestRebuildPadding(unittest.TestCase):
         seq_len_this_time = paddle.to_tensor(seq_len_this_time)
         seq_lens_decoder = paddle.to_tensor(seq_lens_decoder)
         seq_lens_encoder = paddle.to_tensor(seq_lens_encoder)
-        output_padding_offset = paddle.to_tensor(output_padding_offset)
+        batch_id_per_token_output = paddle.to_tensor(batch_id_per_token_output)
         out_with_offset = rebuild_padding(
             tmp_out,
             cu_seqlens_q,
             seq_len_this_time,
             seq_lens_decoder,
             seq_lens_encoder,
-            output_padding_offset,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
             None,
-            max_input_length,
             False,
         )
         np.testing.assert_allclose(out_with_offset.numpy(), out_with_offset_ref)

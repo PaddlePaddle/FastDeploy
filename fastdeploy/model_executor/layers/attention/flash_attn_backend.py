@@ -261,9 +261,6 @@ class FlashAttentionBackend(AttentionBackend):
         )
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
-        self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
-        )
 
     def get_attention_meta(self):
         """get_attention_meta"""
