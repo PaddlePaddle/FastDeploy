@@ -260,7 +260,7 @@ class TokenProcessor:
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
-            if token_ids is not None and token_ids[-1] <= 0:
+            if token_ids is not None and token_ids[-1] < 0:
                 if task_id in self.resource_manager.abort_req_ids_set:
                     if (
                         envs.ENABLE_V1_KVCACHE_SCHEDULER and token_ids[-1] == PREEMPTED_TOKEN_ID
