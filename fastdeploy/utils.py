@@ -50,7 +50,7 @@ from fastapi.responses import JSONResponse
 from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
-from fastdeploy import envs
+import fastdeploy.envs as envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 from fastdeploy.worker.output import PromptLogprobs
