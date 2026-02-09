@@ -455,7 +455,7 @@ def save_output_normal(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
             save_output_topk(
-                sampler_output.sampled_token_ids,
+                share_inputs["sampled_token_ids"],
                 sampler_output.logprobs_tensors.logprob_token_ids,
                 sampler_output.logprobs_tensors.logprobs,
                 sampler_output.logprobs_tensors.selected_token_ranks,

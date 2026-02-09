@@ -3117,6 +3117,8 @@ class GPUModelRunner(ModelRunnerBase):
             token_ids, logprobs, ranks = self.sampler.gather_logprobs(
                 raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
             )
+            # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
+            paddle.device.synchronize()
             chunk_slice = slice(start_idx, start_idx + num_logits)
             logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
             logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
