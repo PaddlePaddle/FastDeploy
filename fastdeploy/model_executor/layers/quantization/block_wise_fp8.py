@@ -44,8 +44,7 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 if current_platform.is_cuda():
     if get_sm_version() == 100:
         # SM100 should use PFCC DeepGemm
-        if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
-            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
         from deep_gemm import fp8_gemm_nt
     else:
         from fastdeploy.model_executor.ops.gpu.deep_gemm import (
