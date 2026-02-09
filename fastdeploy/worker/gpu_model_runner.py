@@ -57,12 +57,16 @@ from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
-        get_stop,
         recover_decode_task,
         set_data_ipc,
-        set_stop,
         set_value_by_flags_and_idx,
     )
+
+    def get_stop(tensor):
+        return tensor.cpu()
+
+    def set_stop(tensor, value):
+        tensor[0] = value
 
     share_external_data = None
 elif current_platform.is_dcu():
