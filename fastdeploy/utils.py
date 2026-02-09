@@ -667,7 +667,7 @@ def find_free_shm_ports(
         RuntimeError: not enough free ports in the range.
     """
     start, end = port_range
-    if start < 0 or end > 65535 or start > end:
+    if start < 1 or end < 1 or end > 65535 or start > end:
         raise ValueError(f"Invalid port range: {port_range}")
     if num_ports <= 0:
         raise ValueError("num_ports must be a positive integer")
