@@ -227,6 +227,7 @@ class ModelConfig:
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
+        self.mm_max_tokens_per_item = None
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -1834,7 +1835,7 @@ class FDConfig:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
+        self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
         if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
@@ -2146,6 +2147,31 @@ class FDConfig:
             "return_full_hidden_states",
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
+
+    def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
+        """
+        get max chunk tokens
+
+        The maximum tokens size of a single inference in a multimodal model is influenced by the logic of chunking
+        """
+        if mm_max_tokens_per_item is None:
+            mm_max_tokens_per_item = self.model_config.mm_max_tokens_per_item
+
+        if self.scheduler_config.splitwise_role == "decode":
+            if paddle.is_compiled_with_xpu():
+                num_tokens = self.scheduler_config.max_num_batched_tokens
+            else:
+                num_tokens = self.scheduler_config.max_num_seqs
+        else:
+            num_tokens = self.scheduler_config.max_num_batched_tokens
+            if mm_max_tokens_per_item is not None:
+                max_mm_tokens = max(
+                    mm_max_tokens_per_item.get("image", 0),
+                    mm_max_tokens_per_item.get("video", 0),
+                    mm_max_tokens_per_item.get("audio", 0),
+                )
+                num_tokens = min(num_tokens + max_mm_tokens, self.model_config.max_model_len)
+        return num_tokens
 
     def _check_master(self):
         return self.is_master

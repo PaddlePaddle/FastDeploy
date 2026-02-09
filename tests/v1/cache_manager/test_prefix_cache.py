@@ -34,6 +34,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     model_cfg.architectures = ["test_model"]
+    model_cfg.mm_max_tokens_per_item = None
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
     scheduler_cfg = SchedulerConfig(args)

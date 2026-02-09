@@ -163,6 +163,7 @@ class EngineService:
             )
 
         self.bos_client = None
+        self.mm_max_tokens_per_item = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -273,6 +274,12 @@ class EngineService:
             self.cfg.tool_parser,
         )
         self.data_processor = self.input_processor.create_processor()
+        self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
+            self.cfg.model_config.max_model_len
+        )
+        if self.mm_max_tokens_per_item is not None:
+            max_chunk_tokens = self.cfg.get_max_chunk_tokens(self.mm_max_tokens_per_item)
+            self.cfg.cache_config.postprocess(max_chunk_tokens, self.cfg.scheduler_config.max_num_seqs)
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -1998,6 +2005,8 @@ class EngineService:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.mm_max_tokens_per_item)}'"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
