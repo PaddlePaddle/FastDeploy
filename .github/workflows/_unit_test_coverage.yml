@@ -223,6 +223,9 @@ jobs:
           fi
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          # remove flash_mask to avoid conflicts
+          python -m pip uninstall -y flash_mask || true
+
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
