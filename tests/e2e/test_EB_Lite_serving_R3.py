@@ -39,6 +39,7 @@ def setup_and_run_server():
         model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
 
     log_path = "server.log"
+    os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
     cmd = [
         sys.executable,
         "-m",
