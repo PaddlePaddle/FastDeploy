@@ -25,8 +25,6 @@ from pathlib import Path
 try:
     import paddle
 except ImportError as e:
-    import sys
-
     print(f"Warning: Failed to import paddle: {e}", file=sys.stderr)
     paddle = None
 
