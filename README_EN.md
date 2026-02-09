@@ -81,6 +81,7 @@ Learn how to download models, enable using the torch format, and more:
 - [Speculative Decoding](./docs/features/speculative_decoding.md)
 - [Prefix Caching](./docs/features/prefix_caching.md)
 - [Chunked Prefill](./docs/features/chunked_prefill.md)
+- [Load-Balancing Scheduling Router](./docs/online_serving/router.md)
 
 ## Acknowledgement
 

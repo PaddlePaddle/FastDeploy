@@ -19,6 +19,10 @@ import unittest
 import numpy as np
 import paddle
 
+from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
+    flash_attn_func,
+)
+from fastdeploy.model_executor.layers.attention.ops import get_attn_mask_q
 from fastdeploy.model_executor.ops.gpu import flash_mask_attention
 
 
@@ -31,6 +35,8 @@ class TestFlashMaskAttention(unittest.TestCase):
         self.k_len = 1024
         self.head_dim = 128
         np.random.seed(self.q_len)
+        prop = paddle.device.cuda.get_device_properties()
+        self.sm_version = prop.major * 10 + prop.minor
 
     def naive_attn(self, q_input, k_input, v_input, mask):
 
@@ -97,6 +103,132 @@ class TestFlashMaskAttention(unittest.TestCase):
 
         paddle_attn_out = paddle.empty(q_input.shape, dtype="bfloat16")
         self.paddle_flash_attn_mask(q_input, k_input, v_input, paddle_attn_out, mask)
+
+        max_diff = (paddle_attn_out - naive_attn_out).abs().max().item()
+        self.assertLessEqual(max_diff, 0.05)
+
+    def test_fa4(
+        self,
+    ):
+        if self.sm_version < 100:
+            self.skipTest("Flash Attention V4 requires SM100+.")
+        q_input = paddle.randn([self.q_len, self.num_head * self.head_dim], dtype="bfloat16")
+        k_input = paddle.randn([self.q_len + self.k_len, self.num_kv_head, self.head_dim], dtype="bfloat16")
+        v_input = paddle.randn(k_input.shape, dtype="bfloat16")
+
+        mask_start = paddle.zeros([self.q_len], dtype="int32")
+        mask_end = paddle.zeros([self.q_len], dtype="int32") + self.q_len + self.k_len
+        mask = paddle.stack([mask_start, mask_end], axis=-1).reshape([-1])
+
+        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask)
+
+        bsz = self.bsz
+        cu_seq_q = paddle.arange(bsz + 1) * self.q_len
+        cu_seq_k = paddle.arange(bsz + 1) * (self.q_len + self.k_len)
+        cu_seq_q = cu_seq_q.astype("int32")
+        cu_seq_k = cu_seq_k.astype("int32")
+
+        attn_mask_q = get_attn_mask_q(
+            cu_seqlens_q=cu_seq_q,
+            cu_seqlens_k=cu_seq_k,
+            attn_mask_kv=mask,
+            kv_token_num=self.q_len + self.k_len,
+        )
+
+        paddle_attn_out = flash_attn_func(
+            q_input,
+            k_input,
+            v_input,
+            attn_mask_q=attn_mask_q,
+            num_heads=self.num_head,
+            kv_num_heads=self.num_kv_head,
+            head_dim=self.head_dim,
+            version=4,
+        )[0].reshape([self.q_len, self.num_head * self.head_dim])
+
+        max_diff = (paddle_attn_out - naive_attn_out).abs().max().item()
+        self.assertLessEqual(max_diff, 0.05)
+
+    def test_fa3_with_mask(
+        self,
+    ):
+        if self.sm_version < 89 or self.sm_version >= 100:
+            self.skipTest("Flash Attention V3 requires SM89+ but less than SM100.")
+        q_input = paddle.randn([self.q_len, self.num_head * self.head_dim], dtype="bfloat16")
+        k_input = paddle.randn([self.q_len + self.k_len, self.num_kv_head, self.head_dim], dtype="bfloat16")
+        v_input = paddle.randn(k_input.shape, dtype="bfloat16")
+
+        mask_start = paddle.zeros([self.q_len], dtype="int32")
+        mask_end = paddle.zeros([self.q_len], dtype="int32") + self.q_len + self.k_len
+        mask = paddle.stack([mask_start, mask_end], axis=-1).reshape([-1])
+
+        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask)
+
+        bsz = self.bsz
+        cu_seq_q = paddle.arange(bsz + 1) * self.q_len
+        cu_seq_k = paddle.arange(bsz + 1) * (self.q_len + self.k_len)
+        cu_seq_q = cu_seq_q.astype("int32")
+        cu_seq_k = cu_seq_k.astype("int32")
+
+        attn_mask_q = get_attn_mask_q(
+            cu_seqlens_q=cu_seq_q,
+            cu_seqlens_k=cu_seq_k,
+            attn_mask_kv=mask,
+            kv_token_num=self.q_len + self.k_len,
+        )
+
+        paddle.set_flags({"FLAGS_flash_attn_version": 3})
+        paddle_attn_out = flash_attn_func(
+            q_input,
+            k_input,
+            v_input,
+            attn_mask_q=attn_mask_q,
+            num_heads=self.num_head,
+            kv_num_heads=self.num_kv_head,
+            head_dim=self.head_dim,
+            version=3,
+        )[0].reshape([self.q_len, self.num_head * self.head_dim])
+
+        max_diff = (paddle_attn_out - naive_attn_out).abs().max().item()
+        self.assertLessEqual(max_diff, 0.05)
+
+    def test_fa2_with_mask(
+        self,
+    ):
+        q_input = paddle.randn([self.q_len, self.num_head * self.head_dim], dtype="bfloat16")
+        k_input = paddle.randn([self.q_len + self.k_len, self.num_kv_head, self.head_dim], dtype="bfloat16")
+        v_input = paddle.randn(k_input.shape, dtype="bfloat16")
+
+        mask_start = paddle.zeros([self.q_len], dtype="int32")
+        mask_end = paddle.zeros([self.q_len], dtype="int32") + self.q_len + self.k_len
+        mask = paddle.stack([mask_start, mask_end], axis=-1).reshape([-1])
+
+        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask)
+
+        bsz = self.bsz
+        cu_seq_q = paddle.arange(bsz + 1) * self.q_len
+        cu_seq_k = paddle.arange(bsz + 1) * (self.q_len + self.k_len)
+        cu_seq_q = cu_seq_q.astype("int32")
+        cu_seq_k = cu_seq_k.astype("int32")
+
+        attn_mask_q = get_attn_mask_q(
+            cu_seqlens_q=cu_seq_q,
+            cu_seqlens_k=cu_seq_k,
+            attn_mask_kv=mask,
+            kv_token_num=self.q_len + self.k_len,
+        )
+
+        paddle.set_flags({"FLAGS_flash_attn_version": 2})
+        paddle_attn_out = flash_attn_func(
+            q_input,
+            k_input,
+            v_input,
+            attn_mask_q=attn_mask_q,
+            num_heads=self.num_head,
+            kv_num_heads=self.num_kv_head,
+            head_dim=self.head_dim,
+            version=2,
+        )[0].reshape([self.q_len, self.num_head * self.head_dim])
 
         max_diff = (paddle_attn_out - naive_attn_out).abs().max().item()
         self.assertLessEqual(max_diff, 0.05)

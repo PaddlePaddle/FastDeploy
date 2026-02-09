@@ -15,20 +15,42 @@
 """
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_sm_version
 
-if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        # SM100 should use PFCC DeepGemm
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        import deep_gemm
+
+def load_deep_gemm():
+    """
+    Load DeepGemm module according to FastDeploy env switch.
+
+    Returns:
+        Imported deep_gemm module object.
+    """
+
+    if current_platform.is_cuda():
+        if get_sm_version() == 100:
+            # SM100 should use PFCC DeepGemm
+            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+            try:
+                from paddlefleet.ops import deep_gemm
+
+                logger.info("Detected sm100, use PaddleFleet DeepGEMM")
+            except:
+                import deep_gemm
+
+                logger.info("Detected sm100, use PFCC DeepGEMM")
+        else:
+            logger.info("use FastDeploy DeepGEMM")
+            from fastdeploy.model_executor.ops.gpu import deep_gemm
     else:
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
-else:
-    deep_gemm = None
+        deep_gemm = None
+    return deep_gemm
+
+
+deep_gemm = load_deep_gemm()
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -38,41 +60,41 @@ def ceil_div(x: int, y: int) -> int:
 def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
     x: paddle.Tensor,
 ):
-    """将FP32张量转换为TMA对齐的packed UE8M0格式张量"""
+    """Convert FP32 tensor to TMA-aligned packed UE8M0 format tensor"""
 
     from deep_gemm.utils import align, get_tma_aligned_size
 
-    # 输入验证：必须是FP32类型的2D或3D张量
+    # Input validation: must be FP32 type 2D or 3D tensor
     assert x.dtype == paddle.float and x.dim() in (2, 3)
 
-    # 第一步：将FP32转换为UE8M0格式的uint8张量
-    # 通过位移操作提取FP32的指数部分，转换为无符号8位整数
+    # Step 1: Convert FP32 to UE8M0 format uint8 tensor
+    # Extract FP32 exponent part through bit shift operation, convert to unsigned 8-bit integer
     ue8m0_tensor = (x.view(paddle.int) >> 23).to(paddle.uint8)
 
-    # 第二步：创建padding并打包张量
-    # 获取输入张量的最后两个维度尺寸
+    # Step 2: Create padding and pack tensor
+    # Get the last two dimensions of the input tensor
     mn, k = x.shape[-2], x.shape[-1]
     remove_dim = False
-    # 如果是2D张量，添加batch维度以便统一处理
+    # If it's a 2D tensor, add batch dimension for unified processing
     if x.dim() == 2:
         x, remove_dim = x.unsqueeze(0), True
     b = x.shape[0]
-    # 计算TMA对齐的尺寸（对齐到4字节边界）
+    # Calculate TMA-aligned dimensions (aligned to 4-byte boundary)
     aligned_mn = get_tma_aligned_size(mn, 4)
     aligned_k = align(k, 4)
-    # 创建对齐后的padded张量，并填充有效数据
+    # Create padded tensor with alignment and fill with valid data
     padded = paddle.zeros((b, aligned_mn, aligned_k), device=x.device, dtype=paddle.uint8)
     padded[:, :mn, :k] = ue8m0_tensor
-    # 将uint8数据打包成int32（每4个uint8打包成1个int32）
+    # Pack uint8 data into int32 (pack 4 uint8 into 1 int32)
     padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
 
-    # 第三步：转置张量以满足TMA的内存访问模式要求
-    # 转置张量维度以便TMA能够以MN主序高效访问
+    # Step 3: Transpose tensor to meet TMA memory access pattern requirements
+    # Transpose tensor dimensions for TMA to efficiently access in MN-major order
     transposed = paddle.zeros((b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int).mT
     transposed[:, :, :] = padded
-    # 截取原始非padding部分
+    # Extract original non-padded part
     aligned_x = transposed[:, :mn, :]
-    # 如果输入是2D张量，移除batch维度
+    # If input was 2D tensor, remove batch dimension
     return aligned_x.squeeze(0) if remove_dim else aligned_x
 
 
