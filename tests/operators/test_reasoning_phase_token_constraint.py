@@ -4,8 +4,8 @@ import numpy as np
 import paddle
 
 from fastdeploy.model_executor.ops.gpu import (
+    get_padding_offset,
     reasoning_phase_token_constraint,
-    speculate_get_output_padding_offset,
 )
 
 
@@ -76,13 +76,14 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         seq_lens_output = paddle.to_tensor([2, 2], dtype="int32")
         output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(self.max_seq_len - seq_lens_output, dtype="int32")
 
-        self.output_padding_offset, self.output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
+        useless_inputs = paddle.zeros([self.bs, self.max_seq_len], dtype="int64")
+        _, self.output_padding_offset, self.output_cum_offsets, _ = get_padding_offset(
+            useless_inputs,
             seq_lens_output,
-            self.max_seq_len,
+            None,
+            None,
+            output_token_num.item(),
         )
 
         # self.output_padding_offset = paddle.zeros([self.token_num], dtype="int32")
@@ -445,13 +446,14 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         seq_lens_output = paddle.full(bs, 2, dtype="int32")
         output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_seq_len - seq_lens_output, dtype="int32")
 
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
+        useless_inputs = paddle.zeros([self.bs, self.max_seq_len], dtype="int64")
+        _, output_padding_offset, output_cum_offsets, _ = get_padding_offset(
+            useless_inputs,
             seq_lens_output,
-            max_seq_len,
+            None,
+            None,
+            output_token_num.item(),
         )
 
         # ------------------------

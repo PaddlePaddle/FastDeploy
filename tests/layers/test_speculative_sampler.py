@@ -107,10 +107,11 @@ def _create_fd_config(max_model_len):
 def _create_share_inputs(max_num_seqs, max_draft_token_num, max_model_len, vocab_size):
     share_inputs = {}
     share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 2, dtype="int32")
-    share_inputs["output_cum_offsets"] = paddle.concat(
-        [(max_model_len - share_inputs["seq_lens_this_time"][i]) * i for i in range(max_num_seqs)]
-    )
-    share_inputs["output_padding_offset"] = paddle.repeat_interleave(share_inputs["output_cum_offsets"], 2)
+
+    cu_seqlens_q_output = [0] + paddle.cumsum(share_inputs["seq_lens_this_time"]).numpy().tolist()
+    share_inputs["cu_seqlens_q_output"] = paddle.to_tensor(cu_seqlens_q_output).cast("int32")
+    share_inputs["batch_id_per_token_output"] = paddle.arange(max_num_seqs, dtype="int32") * 2
+
     share_inputs["accept_tokens"] = paddle.full(
         shape=[max_num_seqs, max_draft_token_num + 1], fill_value=0, dtype="int64"
     )
