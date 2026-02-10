@@ -147,12 +147,17 @@ class _CompletedFuture:
 
 # Fake transfer queue returning preset payloads then raising SystemExit.
 class _FakeTransferQueue:
-    def __init__(self, payloads, include_none=False):
+    def __init__(self, payloads, include_none=False, max_calls=10):
         self.payloads = payloads
         self.include_none = include_none
         self.returned_none = False
+        self.call_count = 0
+        self.max_calls = max_calls
 
     def get_transfer_done_signal(self):
+        self.call_count += 1
+        if self.call_count > self.max_calls:
+            raise SystemExit("Max calls exceeded")
         if self.include_none and not self.returned_none:
             self.returned_none = True
             return None
@@ -1091,6 +1096,76 @@ class PrefixCacheManagerTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             manager.recv_data_transfer_result()
         self.assertTrue(manager.task_swapping_event["task"].is_set())
+
+    def test_recv_data_transfer_result_storage_operations(self):
+        """Test recv_data_transfer_result with storage operations."""
+        manager = _create_manager()
+        manager.kvcache_storage_backend = "test_backend"
+
+        # Mock storage prefetch results - include None to trigger sleep and SystemExit
+        payloads = [
+            (CacheStatus.STORAGE2GPU, "task1", ["key1"], [1, 2]),
+            (CacheStatus.GPU2STORAGE, "task2", ["key2"], [3]),
+        ]
+        manager.cache_task_queue = _FakeTransferQueue(payloads, include_none=True, max_calls=5)
+
+        with (
+            patch.object(manager, "task_prefetch_event"),
+            patch.object(manager, "task_write_back_event"),
+            patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep"),
+        ):
+            with self.assertRaises(SystemExit):
+                manager.recv_data_transfer_result()
+
+    def test_recv_data_transfer_result_unexpected_event(self):
+        """Test recv_data_transfer_result with unexpected event type."""
+        manager = _create_manager()
+
+        # Create a mock event that will cause an exception in _handle_swap_result
+        class UnexpectedEvent:
+            value = CacheStatus.SWAP2GPU.value  # Valid value but invalid data
+
+        # Invalid data that will cause unpacking error in _handle_swap_result
+        payloads = [(UnexpectedEvent(), "task", ["invalid"], ["data"])]  # Wrong number of elements
+        manager.cache_task_queue = _FakeTransferQueue(payloads, include_none=True, max_calls=5)
+
+        with (
+            patch("fastdeploy.cache_manager.prefix_cache_manager.logger") as mock_logger,
+            patch("fastdeploy.cache_manager.prefix_cache_manager.time.sleep"),
+        ):
+            with self.assertRaises(SystemExit):
+                manager.recv_data_transfer_result()
+            # Should log warning when exception occurs
+            mock_logger.warning.assert_called()
+
+    def test_get_block_hash_extra_keys_invalid_assertions(self):
+        """Test get_block_hash_extra_keys with invalid inputs."""
+        manager = _create_manager()
+
+        # When multimodal_inputs is None, method returns early without assertions
+        request = SimpleNamespace(num_total_tokens=4, multimodal_inputs=None)
+        result = manager.get_block_hash_extra_keys(request, 2, 2, 0)
+        self.assertEqual(result, (0, []))  # Should return early
+
+        # Test assertions with valid mm_inputs
+        mm_inputs = {"mm_positions": [SimpleNamespace(offset=0, length=2)], "mm_hashes": ["hash1"]}
+        request.multimodal_inputs = mm_inputs
+
+        # Test start_idx >= end_idx
+        with self.assertRaises(AssertionError):
+            manager.get_block_hash_extra_keys(request, 2, 2, 0)
+
+        # Test start_idx out of range
+        with self.assertRaises(AssertionError):
+            manager.get_block_hash_extra_keys(request, 5, 6, 0)
+
+        # Test end_idx out of range
+        with self.assertRaises(AssertionError):
+            manager.get_block_hash_extra_keys(request, 2, 6, 0)
+
+        # Test mm_idx out of range
+        with self.assertRaises(AssertionError):
+            manager.get_block_hash_extra_keys(request, 0, 2, 5)  # mm_idx=5 out of range
 
     def test_clear_prefix_cache_resets_on_signal(self):
         manager = _create_manager()
