@@ -125,7 +125,7 @@ class PrefixCacheManager:
 
         logger.info(
             f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
-            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer: "
+            f"and {self.num_cpu_blocks} cpu blocks, bytes_per_token_per_layer for each rank: "
             f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
