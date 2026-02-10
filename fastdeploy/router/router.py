@@ -101,7 +101,7 @@ class Router:
     async def startup(self):
         """Initialize resources"""
         if self.session is None:
-            self.session = aiohttp.ClientSession()
+            self.session = aiohttp.ClientSession(trust_env=True)
             logger.info("Router session initialized")
 
     async def shutdown(self):
@@ -240,7 +240,8 @@ class Router:
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ) -> ORJSONResponse:
         if self.session is None:
-            raise RuntimeError("Router session not initialized")
+            logger.warning("Router session not initialized, creating a new one")
+            self.session = aiohttp.ClientSession(trust_env=True)
 
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls]
@@ -273,7 +274,8 @@ class Router:
     ):
         async def stream_results():
             if self.session is None:
-                raise RuntimeError("Router session not initialized")
+                logger.warning("Router session not initialized, creating a new one")
+                self.session = aiohttp.ClientSession(trust_env=True)
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls]
