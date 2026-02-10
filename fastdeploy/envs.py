@@ -107,6 +107,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_GET_SAVE_OUTPUT_V1": lambda: bool(int(os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0"))),
     # Whether to enable model cache feature
     "FD_ENABLE_MODEL_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_CACHE", "0"))),
+    # Whether to print scheduler prefill/decode batch logs.
+    "FD_CONSOLE_SCHEDULER_METRICS": lambda: bool(int(os.getenv("FD_CONSOLE_SCHEDULER_METRICS", "1"))),
+    # Decode log interval for scheduler metrics logs.
+    "FD_CONSOLE_DECODE_LOG_INTERVAL": lambda: int(os.getenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "5")),
     # enable internal module to access LLMEngine.
     "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
     # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1

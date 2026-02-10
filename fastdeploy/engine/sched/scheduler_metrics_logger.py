@@ -19,16 +19,25 @@ import threading
 import time
 from typing import Iterable
 
+from fastdeploy import envs
+
 
 class SchedulerMetricsLogger:
     """
     Lightweight console logger for scheduler-level prefill/decode metrics.
     """
 
+    DEFAULT_DECODE_LOG_INTERVAL = 5
+
     def __init__(self, enabled: bool = True, dp_rank: int = 0) -> None:
         self.enabled = enabled
         self.dp_rank = dp_rank
+        decode_log_interval = envs.FD_CONSOLE_DECODE_LOG_INTERVAL
+        if decode_log_interval <= 0:
+            decode_log_interval = self.DEFAULT_DECODE_LOG_INTERVAL
         self._lock = threading.Lock()
+        self._decode_log_interval = decode_log_interval
+        self._decode_batch_count = 0
         self._last_decode_tic = time.perf_counter()
         self._decode_tokens_since_last = 0
         self._logger = self._get_logger()
@@ -102,6 +111,9 @@ class SchedulerMetricsLogger:
         if not self.enabled:
             return
         with self._lock:
+            self._decode_batch_count += 1
+            if self._decode_batch_count % self._decode_log_interval != 0:
+                return
             now = time.perf_counter()
             elapsed = now - self._last_decode_tic
             if elapsed > 0:
