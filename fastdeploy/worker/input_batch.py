@@ -526,10 +526,10 @@ class ProposerInputBatch(InputBatch):
             -1,
             dtype="int64",
         )
-        for bsz in range(self.scheduler_config.max_num_seqs):
-            prompt_len = self.target_model_input_batch["prompt_len"][bsz]
+        for bs_idx in range(self.scheduler_config.max_num_seqs):
+            prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
             pre_ids_len = self.model_config.max_model_len - prompt_len
-            self.pre_ids[bsz, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][bsz, prompt_len:]
+            self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][bs_idx, prompt_len:]
         if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
