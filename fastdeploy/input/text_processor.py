@@ -16,6 +16,7 @@
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -168,6 +169,15 @@ class BaseDataProcessor(ABC):
             tokenizer (AutoTokenizer)
         """
         raise NotImplementedError
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+        """
+        return None
 
 
 class DataProcessor(BaseDataProcessor):

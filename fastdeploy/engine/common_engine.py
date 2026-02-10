@@ -163,6 +163,7 @@ class EngineService:
             )
 
         self.bos_client = None
+        self.mm_max_tokens_per_item = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -273,6 +274,12 @@ class EngineService:
             self.cfg.tool_parser,
         )
         self.data_processor = self.input_processor.create_processor()
+        self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
+            self.cfg.model_config.max_model_len
+        )
+        if self.mm_max_tokens_per_item is not None:
+            max_chunk_tokens = self.cfg.get_max_chunk_tokens(self.mm_max_tokens_per_item)
+            self.cfg.cache_config.postprocess(max_chunk_tokens, self.cfg.scheduler_config.max_num_seqs)
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = self.cfg.parallel_config.local_engine_worker_queue_port
@@ -301,15 +308,6 @@ class EngineService:
         self.exist_prefill_task_signal = IPCSignal(
             name="exist_prefill_task_signal",
             array=exist_prefill_task_signal_data,
-            dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -977,23 +975,26 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if not is_fetching:
-                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                    try:
-                        is_fetching = True
-                        get_request_pool.submit(_fetch_request)
-                    except RuntimeError as e:
-                        if "shutdown" in str(e):
-                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                            break
-                        else:
-                            raise
-                # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
-                # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
-                # more efficient batches.
-                if not (self.engine_worker_queue.num_tasks() == 0 and self.engine_forward_signal.value[0] == 0):
+                if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    if not is_fetching:
+                        is_fetching = True
+                        get_request_pool.submit(_fetch_request)
+
+                else:
+                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
+                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                        try:
+                            is_fetching = True
+                            get_request_pool.submit(_fetch_request)
+                        except RuntimeError as e:
+                            if "shutdown" in str(e):
+                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                                break
+                            else:
+                                raise
 
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
@@ -1043,13 +1044,6 @@ class EngineService:
                             else:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                else:
-                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
-                    # This helps EP workers barrier for syncing tasks not hang.
-                    if self.cfg.parallel_config.enable_expert_parallel:
-                        self.engine_worker_queue.put_tasks(
-                            ([], self.resource_manager.real_bsz)
-                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -2021,6 +2015,8 @@ class EngineService:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.mm_max_tokens_per_item)}'"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
@@ -2067,6 +2063,9 @@ class EngineService:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
