@@ -142,16 +142,15 @@ jobs:
                 NEW_TITLE="[Cherry-Pick] $PR_TITLE($PR_NUMBER)"
               fi
 
-              NEW_BODY=$(cat <<EOF
-Cherry-pick of #$PR_NUMBER (authored by @${PR_AUTHOR}) to \`$TARGET_BRANCH\`.
+              NEW_BODY="Cherry-pick of #$PR_NUMBER (authored by @${PR_AUTHOR}) to \`$TARGET_BRANCH\`.
 
-devPR:https://github.com/PaddlePaddle/FastDeploy/pull/$PR_NUMBER <!-- For pass CI -->
+              devPR:https://github.com/PaddlePaddle/FastDeploy/pull/$PR_NUMBER <!-- For pass CI -->
 
----
+              ---
 
-$PR_BODY
-EOF
-)
+              $PR_BODY"
+              # Remove leading whitespace
+              NEW_BODY=$(echo "$NEW_BODY" | sed 's/^[ \t]*//')
 
               # Prepare head ref for PR creation (owner:branch)
               HEAD_REF="${BOT_USERNAME}:${NEW_BRANCH}"
