@@ -543,7 +543,7 @@ class ProposerInputBatch(InputBatch):
 
         self.target_hidden_states = paddle.full(
             [
-                self.max_chunk_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
                 self.model_config.hidden_size,
             ],
             0,
