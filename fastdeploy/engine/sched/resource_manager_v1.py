@@ -1186,6 +1186,10 @@ class ResourceManagerV1(ResourceManager):
             ):
                 self.tasks_list[req.idx] = None
                 self.stop_flags[req.idx] = True
+            if req in self.running:
+                self.running.remove(req)
+            if req in self.waiting:
+                self.waiting.remove(req)
             del self.requests[req.request_id]
             if req.request_id in self.req_dict:
                 del self.req_dict[req.request_id]
@@ -1193,7 +1197,8 @@ class ResourceManagerV1(ResourceManager):
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
-                self.running.append(request)
+                if request.request_id in self.requests:
+                    self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
         """

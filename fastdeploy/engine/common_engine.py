@@ -2284,7 +2284,7 @@ class EngineService:
                     )
                     self.llm_logger.info(f"req_id:{req_id} has been aborted from to_be_rescheduled_request_id_set")
                 else:
-                    if self.cfg.scheduler_config.splitwise_role == "decode":
+                    if self.cfg.scheduler_config.splitwise_role != "mixed":
                         self.resource_manager.abort_recycle_resource(req)
                     self.scheduler.put_results(
                         [
