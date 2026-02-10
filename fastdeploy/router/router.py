@@ -243,9 +243,7 @@ class Router:
             raise RuntimeError("Router session not initialized")
 
         timeout = aiohttp.ClientTimeout(total=self.timeout)
-        tasks = [
-            self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls
-        ]
+        tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         num_results = len(results)
@@ -278,9 +276,7 @@ class Router:
                 raise RuntimeError("Router session not initialized")
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
-            tasks = [
-                self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls
-            ]
+            tasks = [self.session.post(f"{url}/{endpoint}", json=modified_request, timeout=timeout) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Release unused responses
@@ -443,6 +439,7 @@ class Router:
         """
         Continuously check the health of prefill, decode, and mixed instances and remove unhealthy ones.
         """
+
         async def check(inst):
             try:
                 if self.session is None:
