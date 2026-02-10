@@ -2083,15 +2083,10 @@ class GPUModelRunner(ModelRunnerBase):
             elif self.speculative_decoding:
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
-                    if self.fd_config.scheduler_config.splitwise_role == "decode":
-                        num_tokens_dummy_run = int(capture_size)
-                    else:
-                        num_tokens_dummy_run = self.scheduler_config.max_num_batched_tokens
                     expected_decode_len = self.speculative_config.num_speculative_tokens * 2 + 1
-                    dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
                     self._dummy_run(
-                        num_tokens=num_tokens_dummy_run,
-                        batch_size=dummy_batch_size,
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
+                        batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
                         accept_all_drafts=True,
