@@ -25,6 +25,33 @@
 - `thinking_budget`（int，启用所需）：`<think>` 之后允许的最大 token 数。
 - `think_stop_sentence`（string，可选）：CPU 侧会将该字符串编码为 token ids，并在预算边界附近强制输出。
 
+## 算子级限制 vs LogitsProcessor
+
+FastDeploy 当前有两种思考长度控制方式：
+
+- **算子级限制**（`enable_thinking=true` + `reasoning_max_tokens`）：
+  - 由内置后处理算子完成。
+  - 高并发下开销更低、吞吐更稳定。
+  - 适合“只限制思考长度”的简单场景。
+- **`ThinkingBudgetLogitsProcessor`**（`logits_processors_args.thinking_budget`）：
+  - 由每步 Python 侧 logits 处理实现。
+  - 支持更灵活的行为，例如 `think_stop_sentence`（在结束前插入自定义话术）。
+  - 相比算子级限制，在高并发下通常有更高开销。
+
+可按以下原则选择：
+
+- 仅需限制思考长度：优先用 `reasoning_max_tokens`。
+- 需要更灵活控制（如插入自定义话术）：使用 `ThinkingBudgetLogitsProcessor`。
+
+## 建议实践
+
+当前实现中，`reasoning_max_tokens` 与 `thinking_budget` 不是互斥关系。
+同一请求如果同时配置，两套约束都可能生效，谁先触发就先结束思考段。
+
+- **只用算子级限制**：这是请求级配置。仅在请求中设置 `enable_thinking=true` + `reasoning_max_tokens`，不要传 `thinking_budget`。
+- **只用 LogitsProcessor**（尤其要用 `think_stop_sentence`）：这是“服务启动 + 请求参数”两级配置。服务启动时必须加 `--logits-processors ThinkingBudgetLogitsProcessor`，并在请求里通过 `logits_processors_args` 传 `thinking_budget`（以及可选的 `think_stop_sentence`）；同时不要设置 `reasoning_max_tokens`。
+- 如果业务要求“必须完整插入自定义话术”，不建议与算子级限制同时开启，否则可能被算子级提前截断。
+
 ## 在线使用
 
 ### 1. 启动服务
@@ -56,6 +83,19 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ```
 
 如果某个请求不需要思考限制，直接省略 `thinking_budget` 即可。
+
+### 3. 仅使用算子级思考长度限制（不启用 logits processor）
+
+```bash
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "你好！"}],
+    "max_completion_tokens": 512,
+    "enable_thinking": true,
+    "reasoning_max_tokens": 200
+  }'
+```
 
 ## 离线使用
 

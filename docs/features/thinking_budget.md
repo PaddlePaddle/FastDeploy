@@ -25,6 +25,33 @@
 - `thinking_budget` (int, required to enable): maximum number of tokens after `<think>` before forced termination.
 - `think_stop_sentence` (string, optional): a stop sentence that will be tokenized on the CPU side and enforced near the budget boundary.
 
+## Operator-Level vs LogitsProcessor
+
+FastDeploy has two ways to limit thinking length:
+
+- **Operator-level limit** (`enable_thinking=true` + `reasoning_max_tokens`):
+  - Implemented in built-in post-processing kernels.
+  - Lower overhead and better throughput under high concurrency.
+  - Best for simple "cap the thinking length" use cases.
+- **`ThinkingBudgetLogitsProcessor`** (`logits_processors_args.thinking_budget`):
+  - Implemented in per-step Python logits processing.
+  - Supports flexible controls, such as `think_stop_sentence` (custom inserted sentence before ending thinking).
+  - Higher runtime overhead under high concurrency compared with operator-level limit.
+
+In short:
+
+- If you only need a hard cap on thinking length, prefer `reasoning_max_tokens`.
+- If you need custom behavior (for example, injecting custom sentence tokens), use `ThinkingBudgetLogitsProcessor`.
+
+## Practical guidance
+
+`reasoning_max_tokens` and `thinking_budget` are not mutually exclusive in current implementation.
+If both are configured for the same request, both constraints can take effect, and whichever triggers first will end the thinking phase.
+
+- To use **operator-level-only** behavior: this is request-level config only. Set `enable_thinking=true` and `reasoning_max_tokens` in request, and do not set `thinking_budget`.
+- To use **logits-processor-only** behavior (especially with `think_stop_sentence`): this requires service-level + request-level config. Start service with `--logits-processors ThinkingBudgetLogitsProcessor`, and set `thinking_budget` (and optional `think_stop_sentence`) in `logits_processors_args`; leave `reasoning_max_tokens` unset.
+- Avoid enabling both for strict custom sentence insertion requirements, because operator-level termination may cut the custom sentence path earlier.
+
 ## Online Usage
 
 ### 1. Start service
@@ -56,6 +83,19 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ```
 
 If you do not need thinking control for a request, simply omit `thinking_budget`.
+
+### 3. Operator-level thinking cap only (no logits processor)
+
+```bash
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_completion_tokens": 512,
+    "enable_thinking": true,
+    "reasoning_max_tokens": 200
+  }'
+```
 
 ## Offline Usage
 
