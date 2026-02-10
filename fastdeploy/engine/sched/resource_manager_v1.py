@@ -1061,7 +1061,20 @@ class ResourceManagerV1(ResourceManager):
             result_list = []
             for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
-                    llm_logger.info(f"request {request.request_id} async download feature: {len(feature)}")
+                    start_download_time = time.time()
+                    if isinstance(feature, np.ndarray):
+                        feature_info = f"type=np.ndarray, shape={feature.shape}, dtype={feature.dtype}"
+                    elif isinstance(feature, list):
+                        feature_info = f"type=list, len={len(feature)}"
+                    else:
+                        feature_info = f"type={type(feature).__name__}"
+
+                    elapsed_time = round((time.time() - start_download_time) * 1000, 2)
+                    llm_logger.info(
+                        f"request {request.request_id} async download feature success: {feature_info}, "
+                        f"elapsed time: {elapsed_time} ms"
+                    )
+
                     result_list.append(feature)
                 else:
                     error_msg = f"request {request.request_id} download features error: {feature}"
