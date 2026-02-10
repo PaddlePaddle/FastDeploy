@@ -1409,7 +1409,7 @@ class CacheConfig:
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
 
-            self.head_num = getattr(self.model_cfg, "num_key_value_heads") or self.num_attention_heads
+            self.head_num = getattr(self.model_cfg, "num_key_value_heads") or self.model_cfg.num_attention_heads
             self.head_dim = self.model_cfg.head_dim
             self.byte_size = self.get_cache_bytes(self.cache_dtype)
             self.kv_factor = 1 if self.use_mla_cache else 2
