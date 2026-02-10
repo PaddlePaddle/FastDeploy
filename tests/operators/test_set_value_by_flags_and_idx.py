@@ -54,7 +54,7 @@ class TestSetValueByFlagsAndIdxRandom(unittest.TestCase):
         max_length = 10
         max_input_length = 15
 
-        # Generate random inputs 
+        # Generate random inputs
         self.pre_ids_all_np = np.random.randint(0, 1000, size=(batch_size, max_length), dtype="int64")
         self.prompt_lens_np = np.zeros([batch_size, 1], dtype="int64")
         self.input_ids_np = np.random.randint(0, 1000, size=(batch_size, max_input_length), dtype="int64")
