@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -115,6 +116,7 @@ class AppendAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: AppendAttentionMetadata
+    enable_ids_reorder: bool = envs.FD_PD_REORDER
 
     def __init__(
         self,
