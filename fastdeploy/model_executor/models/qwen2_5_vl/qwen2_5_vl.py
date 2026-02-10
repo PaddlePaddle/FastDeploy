@@ -213,6 +213,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+            logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue

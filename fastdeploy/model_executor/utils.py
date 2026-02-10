@@ -318,7 +318,12 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if (
+            output_dim is not None
+            and fd_config is not None
+            and fd_config.parallel_config.tensor_parallel_size > 1
+            and not fd_config.load_config.is_pre_sharded
+        ):
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -539,8 +544,6 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
             fd_suffix_map = fp8_suffix_map
         if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
             fd_suffix_map = tensor_wise_fp8_suffix_map
-        else:
-            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)

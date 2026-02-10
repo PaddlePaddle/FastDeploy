@@ -80,6 +80,7 @@ def _build_manager(
     model_cfg.print = print
     model_cfg.max_model_len = max_model_len
     model_cfg.architectures = architectures or ["test_model"]
+    model_cfg.mm_max_tokens_per_item = None
     cache_cfg.bytes_per_layer_per_block = 1
     cache_cfg.kv_cache_ratio = 1.0
     parallel_cfg = ParallelConfig(args)
@@ -140,6 +141,7 @@ class TestResourceManagerV1(unittest.TestCase):
         model_cfg.print = print
         model_cfg.max_model_len = 3200
         model_cfg.architectures = ["test_model"]
+        model_cfg.mm_max_tokens_per_item = None
         cache_cfg.bytes_per_layer_per_block = 1
         cache_cfg.kv_cache_ratio = 1.0
         parallel_cfg = ParallelConfig(args)
@@ -301,6 +303,7 @@ class TestRevertChunkedMMInput(unittest.TestCase):
         model_cfg.print = print
         model_cfg.max_model_len = 3200
         model_cfg.architectures = ["test_model"]
+        model_cfg.mm_max_tokens_per_item = None
         cache_cfg.bytes_per_layer_per_block = 1
         cache_cfg.kv_cache_ratio = 1.0
         cache_cfg.block_size = 64
