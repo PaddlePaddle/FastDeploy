@@ -354,7 +354,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            del permute_input
 
             # swiglu
             ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
@@ -373,7 +372,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 )
                 ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
 
-            del ffn_out
             ffn_out = paddle.empty(
                 (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
                 dtype=paddle.bfloat16,
@@ -385,7 +383,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 ffn_out,
                 m_indices,
             )
-            del ffn_in_x
 
             # prmt back per rank
             tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
@@ -397,7 +394,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # norm_topk_prob
                 1.0,
             )
-            del ffn_out
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
