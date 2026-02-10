@@ -21,16 +21,36 @@ from fastdeploy.platforms import current_platform
 
 from ..utils import get_sm_version
 
-if current_platform.is_cuda():
-    if get_sm_version() == 100:
-        # SM100 should use PFCC DeepGemm
-        logger.info("Detected sm100, use PFCC DeepGEMM")
-        paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
-        import deep_gemm
+
+def load_deep_gemm():
+    """
+    Load DeepGemm module according to FastDeploy env switch.
+
+    Returns:
+        Imported deep_gemm module object.
+    """
+
+    if current_platform.is_cuda():
+        if get_sm_version() == 100:
+            # SM100 should use PFCC DeepGemm
+            paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
+            try:
+                from paddlefleet.ops import deep_gemm
+
+                logger.info("Detected sm100, use PaddleFleet DeepGEMM")
+            except:
+                import deep_gemm
+
+                logger.info("Detected sm100, use PFCC DeepGEMM")
+        else:
+            logger.info("use FastDeploy DeepGEMM")
+            from fastdeploy.model_executor.ops.gpu import deep_gemm
     else:
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
-else:
-    deep_gemm = None
+        deep_gemm = None
+    return deep_gemm
+
+
+deep_gemm = load_deep_gemm()
 
 
 def ceil_div(x: int, y: int) -> int:
