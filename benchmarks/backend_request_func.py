@@ -413,6 +413,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     outputs = []
 
     tool_call_count = 0
+    llm_time = 0.0
     tool_time = 0.0
     input_tokens = 0
     output_tokens = 0
@@ -445,18 +446,28 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                 round_input.history_QA = history
                 round_input.no = f"{round_input.no}_{prompt_no}"
                 # 复用 session
-                # s0 = time.perf_counter()
+                s0 = time.perf_counter()
                 output = await async_request_eb_openai_chat_completions(
                     round_input,
                     pbar=None,
                     session=session,
                 )
-                # s1 = time.perf_counter()
+                s1 = time.perf_counter()
+                llm_time += s1 - s0
 
                 outputs.append(output)
 
                 if not output.success:
-                    return outputs
+                    session_end = time.perf_counter()
+                    metrics = SessionMetrics(
+                        session_no=request_func_input.no,
+                        session_e2e_time=session_end - session_start,
+                        pure_llm_time=llm_time,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tool_calls=tool_call_count,
+                    )
+                    return outputs, metrics
 
                 # llm_cost = s1 - s0
                 input_tokens += output.prompt_tokens
@@ -477,7 +488,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                         t1 = time.perf_counter()
                         tool_time += t1 - t0
                         # print(f"#### tool_time: {t1 - t0:.3f}")
-                        #
                         # print(f"#### tool_result: {tool_result}")
                         # print(f"#### is_tool_result: {is_tool_result}")
 
@@ -494,7 +504,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             metrics = SessionMetrics(
                                 session_no=request_func_input.no,
                                 session_e2e_time=session_e2e_time,
-                                pure_llm_time=session_e2e_time - tool_time,
+                                pure_llm_time=llm_time,
                                 input_tokens=input_tokens,
                                 output_tokens=output_tokens,
                                 tool_calls=tool_call_count,
@@ -529,16 +539,30 @@ async def async_request_eb_openai_chat_completions_multi_turn(
 
                         round_input.history_QA = history
 
+                        s0 = time.perf_counter()
                         output = await async_request_eb_openai_chat_completions(
                             round_input,
                             pbar=None,
                             session=session,
                         )
+                        s1 = time.perf_counter()
+                        llm_time += s1 - s0
 
                         outputs.append(output)
+                        input_tokens += output.prompt_tokens
+                        output_tokens += output.output_tokens
 
                         if not output.success:
-                            return outputs
+                            session_end = time.perf_counter()
+                            metrics = SessionMetrics(
+                                session_no=request_func_input.no,
+                                session_e2e_time=session_end - session_start,
+                                pure_llm_time=llm_time,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                tool_calls=tool_call_count,
+                            )
+                            return outputs, metrics
                     else:
                         print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
 
@@ -558,7 +582,6 @@ async def async_request_eb_openai_chat_completions_multi_turn(
 
     session_end = time.perf_counter()
     session_e2e_time = session_end - session_start
-    pure_llm_time = session_e2e_time - tool_time
 
     if pbar:
         pbar.update(1)
@@ -566,7 +589,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     metrics = SessionMetrics(
         session_no=request_func_input.no,
         session_e2e_time=session_e2e_time,
-        pure_llm_time=pure_llm_time,
+        pure_llm_time=llm_time,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         tool_calls=tool_call_count,
