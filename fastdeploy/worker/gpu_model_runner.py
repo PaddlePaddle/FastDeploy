@@ -2812,7 +2812,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # Reset share_inputs
+        self.share_inputs.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
+            self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
