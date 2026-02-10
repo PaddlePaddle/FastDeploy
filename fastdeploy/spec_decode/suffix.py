@@ -174,12 +174,8 @@ class SuffixProposer(Proposer):
                 self.max_model_len - num_tokens - 1,
             )
             if max_spec_tokens <= 1:
-                spec_logger.debug(
-                    f"[SuffixDecoding] Skipped request {req_id} (bid {bid}) due to max_spec_token: {max_spec_tokens} <= 1"
-                )
                 continue
             if req_id is None:
-                spec_logger.debug(f"[SuffixDecoding] Skipped request (bid {bid}) as req_id is None.")
                 continue
 
             # 3. Add accept tokens to context
@@ -213,9 +209,6 @@ class SuffixProposer(Proposer):
                 min_token_prob=self.min_token_prob,
             )
             token_ids = draft.token_ids
-            spec_logger.debug(
-                f"[SuffixDecoding] Speculate {len(token_ids)} tokens for request {req_id} (bid {bid}), draft_tokens: {token_ids}."
-            )
 
             counter = 0
             for token in token_ids:
