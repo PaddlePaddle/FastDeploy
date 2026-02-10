@@ -5,6 +5,7 @@ flake8
 ruamel.yaml
 zmq
 aiozmq
+aiohttp
 openai>=1.93.0
 tqdm
 pynvml
