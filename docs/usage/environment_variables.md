@@ -147,6 +147,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to enable the decode caches requests for preallocating resource
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
 
+    # Batched token timeout in EP
+    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
+
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
 
@@ -227,6 +230,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Worker process health check timeout when waiting for responses in seconds (default: 30)
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
+
+    # Whether to use PD REORDER, can set 0 or 1
+    "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
 
     # Whether to collect user information, default 0 (collect); 1 (do not collect)
     "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",

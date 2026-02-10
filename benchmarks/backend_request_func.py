@@ -55,6 +55,7 @@ class RequestFuncInput:
     pd_metrics: bool = False
     response_format: Optional[dict] = None
     random_flag: bool = False
+    json_data: Optional[dict] = None
 
 
 @dataclass
@@ -79,6 +80,18 @@ class RequestFuncOutput:
     res_ttft: int = 0  # 包含思考首token时延
     error: str = ""
     metrics: dict = field(default_factory=dict)
+
+
+@dataclass
+class SessionMetrics:
+    """多轮对话指标"""
+
+    session_no: int
+    session_e2e_time: float
+    pure_llm_time: float
+    input_tokens: int
+    output_tokens: int
+    tool_calls: int
 
 
 def safe_cost(a, b):
@@ -184,6 +197,7 @@ async def async_request_eb_openai_chat_completions(
     content = [{"type": "text", "text": request_func_input.prompt}]
     if request_func_input.multi_modal_content:
         content.append(request_func_input.multi_modal_content)
+    # print("######json_data:", request_func_input.json_data)
     payload = {
         "model": request_func_input.model,
         "messages": request_func_input.history_QA,
@@ -195,6 +209,14 @@ async def async_request_eb_openai_chat_completions(
         "max_tokens": request_func_input.output_len,
         "collect_metrics": request_func_input.pd_metrics,
     }
+    if request_func_input.json_data:
+        json_data = request_func_input.json_data
+
+        if json_data.get("max_tokens"):
+            payload["max_tokens"] = json_data["max_tokens"]
+
+        if json_data.get("min_tokens"):
+            payload["min_tokens"] = json_data["min_tokens"]
     if request_func_input.response_format:
         payload["response_format"] = request_func_input.response_format
 
@@ -341,18 +363,69 @@ async def async_request_eb_openai_chat_completions(
     return output
 
 
+async def simple_tool_call(model_text: str, tool_url: str, timeout=60):
+    """调用工具函数"""
+    import re
+
+    import httpx
+
+    match = re.search(r"<tool_call>(.*?)</tool_call>", model_text, re.S)
+    if not match:
+        return "", False, ""
+
+    block = match.group(1).strip()
+    lines = block.splitlines()
+    tool_name = lines[0].strip()
+
+    key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+    val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+
+    args = {key.group(1): val.group(1)} if key and val else {}
+
+    browsecomp_plus_headers = {"Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                tool_url,
+                headers=browsecomp_plus_headers,
+                json={"tool_name": tool_name, "arguments": args},
+            )
+
+        resp.raise_for_status()
+        obj = resp.json()
+
+        return obj.get("result", resp.text), "result" in obj, tool_name
+
+    except Exception as e:
+        print(f"[TOOL ERROR] {tool_name}: {repr(e)}")
+        return str(e), False, tool_name
+
+
 async def async_request_eb_openai_chat_completions_multi_turn(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
 ):
+    # yaml中带tools才走工具调用逻辑
+    hyper = request_func_input.hyper_parameters or {}
+    enable_tools = bool(hyper.get("tools"))
+
     outputs = []
+
+    tool_call_count = 0
+    tool_time = 0.0
+    input_tokens = 0
+    output_tokens = 0
+
     ori_history = request_func_input.history_QA
+    json_data = request_func_input.json_data
     user_count = sum(msg.get("role") == "user" for msg in ori_history)
-    print("START", request_func_input.no, "对话轮数:", user_count, flush=True)
+    print("START", request_func_input.no, "user对话轮数:", user_count, flush=True)
     history = []
     prompt_no = 0
 
     # 只创建一次 session
+    session_start = time.perf_counter()
     connector = aiohttp.TCPConnector(
         limit=0,
         limit_per_host=0,
@@ -366,40 +439,140 @@ async def async_request_eb_openai_chat_completions_multi_turn(
         timeout=AIOHTTP_TIMEOUT,
     ) as session:
         for i, message in enumerate(ori_history):
-            if message["role"] == "user":
+            if message["role"] == "user" or message["role"] == "tool":
                 history.append(message)
                 round_input = copy.deepcopy(request_func_input)
                 round_input.history_QA = history
                 round_input.no = f"{round_input.no}_{prompt_no}"
                 # 复用 session
+                # s0 = time.perf_counter()
                 output = await async_request_eb_openai_chat_completions(
                     round_input,
                     pbar=None,
                     session=session,
                 )
+                # s1 = time.perf_counter()
 
                 outputs.append(output)
 
                 if not output.success:
                     return outputs
 
-                prompt_no += 1
+                # llm_cost = s1 - s0
+                input_tokens += output.prompt_tokens
+                output_tokens += output.output_tokens
 
-                history.append(
-                    {
-                        "role": "assistant",
-                        "content": output.generated_text,
-                    }
-                )
+                if enable_tools:
+                    # 循环调用工具
+                    max_loop = json_data.get("max_loop", 10)
+                    tool_url = json_data.get("tool_url", "")
+                    if not tool_url:
+                        raise ValueError("tool_url is empty.")
+                    for _ in range(max_loop):
+                        t0 = time.perf_counter()
+                        tool_result, is_tool_result, tool_name = await simple_tool_call(
+                            output.generated_text,
+                            tool_url,
+                        )
+                        t1 = time.perf_counter()
+                        tool_time += t1 - t0
+                        # print(f"#### tool_time: {t1 - t0:.3f}")
+                        #
+                        # print(f"#### tool_result: {tool_result}")
+                        # print(f"#### is_tool_result: {is_tool_result}")
+
+                        # 工具调用失败
+                        if tool_name and not is_tool_result:
+                            print(f"[SESSION FAIL] tool call failed: {tool_name}")
+
+                            output.success = False
+                            outputs.append(output)
+
+                            session_end = time.perf_counter()
+                            session_e2e_time = session_end - session_start
+
+                            metrics = SessionMetrics(
+                                session_no=request_func_input.no,
+                                session_e2e_time=session_e2e_time,
+                                pure_llm_time=session_e2e_time - tool_time,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                tool_calls=tool_call_count,
+                            )
+
+                            return outputs, metrics
+
+                        if not is_tool_result:
+                            history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": output.generated_text,
+                                }
+                            )
+                            break
+
+                        history.append(
+                            {
+                                "role": "assistant",
+                                "content": output.generated_text,
+                            }
+                        )
+
+                        history.append(
+                            {
+                                "role": "tool",
+                                "content": json.dumps(tool_result, ensure_ascii=False),
+                                "tool_call_id": tool_name,
+                            }
+                        )
+                        tool_call_count += 1
+
+                        round_input.history_QA = history
+
+                        output = await async_request_eb_openai_chat_completions(
+                            round_input,
+                            pbar=None,
+                            session=session,
+                        )
+
+                        outputs.append(output)
+
+                        if not output.success:
+                            return outputs
+                    else:
+                        print(f"Warning exceed max_loop={max_loop}, force stop tool loop")
+
+                    prompt_no += 1
+                else:
+                    # 无tools
+                    history.append(
+                        {
+                            "role": "assistant",
+                            "content": output.generated_text,
+                        }
+                    )
             elif message["role"] == "assistant":
                 continue
             else:
                 history.append(message)
 
+    session_end = time.perf_counter()
+    session_e2e_time = session_end - session_start
+    pure_llm_time = session_e2e_time - tool_time
+
     if pbar:
         pbar.update(1)
 
-    return outputs
+    metrics = SessionMetrics(
+        session_no=request_func_input.no,
+        session_e2e_time=session_e2e_time,
+        pure_llm_time=pure_llm_time,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        tool_calls=tool_call_count,
+    )
+
+    return outputs, metrics
 
 
 async def async_request_eb_openai_completions(
