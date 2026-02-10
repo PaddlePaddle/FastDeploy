@@ -54,8 +54,9 @@ class TestSetValueByFlagsAndIdxRandom(unittest.TestCase):
         max_length = 10
         max_input_length = 15
 
-        # Generate random inputs
+        # Generate random inputs 
         self.pre_ids_all_np = np.random.randint(0, 1000, size=(batch_size, max_length), dtype="int64")
+        self.prompt_lens_np = np.zeros([batch_size, 1], dtype="int64")
         self.input_ids_np = np.random.randint(0, 1000, size=(batch_size, max_input_length), dtype="int64")
         self.seq_lens_this_time_np = np.random.randint(0, max_input_length, size=(batch_size,), dtype="int32")
         self.seq_lens_encoder_np = np.random.randint(0, max_input_length, size=(batch_size,), dtype="int32")
@@ -76,7 +77,7 @@ class TestSetValueByFlagsAndIdxRandom(unittest.TestCase):
         )
         # custom op
         pre_ids_all = paddle.to_tensor(self.pre_ids_all_np)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all,
             prompt_lens,
@@ -108,7 +109,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
             prompt_lens,
@@ -135,7 +136,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
             prompt_lens,
@@ -162,7 +163,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
             pre_ids_all, input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, step_idx, stop_flags
         )
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
             prompt_lens,
@@ -187,7 +188,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
 
         expected = pre_ids_all.copy()
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
             prompt_lens,
@@ -212,7 +213,7 @@ class TestSetValueByFlagsAndIdxCornerCases(unittest.TestCase):
 
         expected = pre_ids_all.copy()
         pre_ids_all_tensor = paddle.to_tensor(pre_ids_all)
-        prompt_lens = paddle.to_tensor([0], dtype="int64")
+        prompt_lens = paddle.to_tensor(self.prompt_lens_np)
         set_value_by_flags_and_idx(
             pre_ids_all_tensor,
             prompt_lens,

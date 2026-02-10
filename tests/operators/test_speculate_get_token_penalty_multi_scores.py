@@ -229,11 +229,11 @@ class TestSpeculateGetTokenPenaltyMultiScores(unittest.TestCase):
         token_ids_all_len = 122
         logits_len = 110
         token_ids_all = np.random.randint(1, logits_len, size=(bs, token_ids_all_len))
-        prompt_lens = np.zeros([bs, 1])
         negative_start = np.random.randint(1, token_ids_all_len + 1, size=(bs))
         for i in range(bs):
-            token_ids_all[:, negative_start[i] :] = -1
+            token_ids_all[i, negative_start[i] :] = -1
         token_ids_all = paddle.to_tensor(token_ids_all).astype("int64")
+        prompt_lens = paddle.zeros([bs, 1], dtype="int64")
         logits = paddle.zeros([token_num, logits_len]).astype(data_type)
         # prepare other params
         penalty_scores = paddle.to_tensor(np.random.random([bs])).astype(data_type)
