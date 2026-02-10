@@ -164,6 +164,9 @@ jobs:
               echo "Custom FastDeploy version: ${FASTDEPLOY_VERSION}"
             fi
 
+            export LD_LIBRARY_PATH=/opt/_internal/cpython-3.11.0/lib/:${LD_LIBRARY_PATH}
+            export PATH=/opt/_internal/cpython-3.11.0/bin/:${PATH}
+
             git config --global --add safe.directory /workspace/FastDeploy
             chown -R $(whoami) /workspace/FastDeploy
             cd FastDeploy
