@@ -266,7 +266,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 except json.JSONDecodeError as e:
                     self.fail(f"Cannot parser {i + 1} chunk, JSON: {e}\n origin string: {repr(chunk_str)}")
             else:
-                self.fail(f"{i + 1} chunk is unexcepted 'data: JSON\\n\\n': {repr(chunk_str)}")
+                self.fail(f"{i + 1} chunk is unexpected 'data: JSON\\n\\n': {repr(chunk_str)}")
         for chunk_dict in parsed_chunks:
             choices_list = chunk_dict["choices"]
             if choices_list[-1].get("finish_reason") is not None:
@@ -374,7 +374,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 except json.JSONDecodeError as e:
                     self.fail(f"Cannot parser {i + 1} chunk, JSON: {e}\n origin string: {repr(chunk_str)}")
             else:
-                self.fail(f"{i + 1} chunk is unexcepted 'data: JSON\\n\\n': {repr(chunk_str)}")
+                self.fail(f"{i + 1} chunk is unexpected 'data: JSON\\n\\n': {repr(chunk_str)}")
         self.assertEqual(len(parsed_chunks), 1)
         for chunk_dict in parsed_chunks:
             choices_list = chunk_dict["choices"]

@@ -371,7 +371,7 @@ public:
                     int tb_offset_k,
                     int warp_k_compute_offset) {
         if constexpr (kUnpackInterval != 1) {
-            // unsupport now
+            // unsupported now
             arch::device_breakpoint();
         }
 
