@@ -628,10 +628,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 expert_routemap_topk=topk_ids,
                 expert_prob_topk=topk_weights,
                 num_experts=layer.num_experts,
-                tokens_per_expert=tmp[0].tolist(),
+                tokens_per_expert=[],
                 padding_alignment=128,
                 return_expert_indices=True,
-                using_tp_alloc=True,
+                override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1),
                 do_gather=True,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
