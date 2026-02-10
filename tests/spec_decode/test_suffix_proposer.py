@@ -18,10 +18,10 @@ import unittest
 
 import numpy as np
 import paddle
+from utils import FakeModelConfig, get_default_test_fd_config
 
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.spec_decode.suffix import SuffixProposer
-from tests.utils import FakeModelConfig, get_default_test_fd_config
 
 
 class TestSuffixProposer(unittest.TestCase):
