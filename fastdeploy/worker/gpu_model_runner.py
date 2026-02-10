@@ -1301,8 +1301,8 @@ class GPUModelRunner(ModelRunnerBase):
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-            output_cum_offsets,
-            output_padding_offset,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
         ) = pre_process(
             token_num,
             self.share_inputs["input_ids"],
@@ -1321,8 +1321,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # For speculative decoding
         if self.speculative_decoding:
-            self.share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-            self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+            self.share_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
+            self.share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1382,18 +1382,23 @@ class GPUModelRunner(ModelRunnerBase):
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
 
-        # 1.1 Load RL dynamic model
-        if self.fd_config.load_config.dynamic_load_weight:
-            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
-
-            self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
-
         # 2. Load lora model
 
         # 3. Load drafter model(for speculative decoding)
 
         # 4. Init proposer for speculative method
         self._init_speculative_proposer()
+
+        # Load RL dynamic model
+        if self.fd_config.load_config.dynamic_load_weight:
+            from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
+
+            if self.fd_config.speculative_config.method == "mtp":
+                self.dynamic_weight_manager = DynamicWeightManager(
+                    self.fd_config, [self.model, self.proposer.model], self.local_rank
+                )
+            else:
+                self.dynamic_weight_manager = DynamicWeightManager(self.fd_config, self.model, self.local_rank)
 
     def get_model(self) -> nn.Layer:
         """Get current model"""
@@ -1934,10 +1939,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_this_time"],
                     self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["seq_lens_encoder"],
-                    (
-                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                    ),  # speculative decoding requires
-                    self.model_config.max_model_len,
+                    (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                    (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
                 )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
@@ -2056,7 +2059,7 @@ class GPUModelRunner(ModelRunnerBase):
                         num_tokens=(
                             self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
                             if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
+                            else self.fd_config.get_max_chunk_tokens()
                         ),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
@@ -2069,11 +2072,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2154,11 +2153,7 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
+                num_tokens=self.fd_config.get_max_chunk_tokens(),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -2396,8 +2391,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_this_time"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.model_config.max_model_len,
+                (self.share_inputs["batch_id_per_token_output"] if self.speculative_decoding else None),
+                (self.share_inputs["cu_seqlens_q_output"] if self.speculative_decoding else None),
             )
 
             # 4. Compute logits, Sample
@@ -2672,12 +2667,12 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
+        num_tokens = self.fd_config.get_max_chunk_tokens()
+        logger.info(
+            f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
+        )
         self._dummy_run(
-            num_tokens=(
-                self.scheduler_config.max_num_seqs
-                if self.scheduler_config.splitwise_role == "decode"
-                else self.scheduler_config.max_num_batched_tokens
-            ),
+            num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
         )
 
@@ -2817,7 +2812,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # Reset share_inputs
+        self.share_inputs.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
+            self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
@@ -3114,6 +3113,8 @@ class GPUModelRunner(ModelRunnerBase):
             token_ids, logprobs, ranks = self.sampler.gather_logprobs(
                 raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
             )
+            # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
+            paddle.device.synchronize()
             chunk_slice = slice(start_idx, start_idx + num_logits)
             logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
             logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)

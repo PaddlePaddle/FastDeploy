@@ -23,6 +23,7 @@ from paddle import Tensor, nn
 from paddle.framework import in_dynamic_mode
 from scipy.linalg import block_diag
 
+import fastdeploy
 from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
 
@@ -254,10 +255,7 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     Only used in deep_gemm block wise quant weight.
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
     """
-    try:
-        from deep_gemm import ceil_div
-    except ModuleNotFoundError:
-        from fastdeploy.model_executor.ops.gpu.deep_gemm import ceil_div
+    ceil_div = fastdeploy.model_executor.layers.quantization.fp8_utils.deep_gemm.ceil_div
 
     assert x.dim() == 2
     m, n = x.shape

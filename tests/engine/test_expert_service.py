@@ -155,6 +155,7 @@ class TestExpertService(unittest.TestCase):
     def test_exit_sub_services(self, mock_signal, mock_os, mock_engine_service):
         """测试退出子服务功能"""
         local_data_parallel_id = 0
+        pgid = 5678
 
         # 创建 ExpertService 实例
         expert_service = ExpertService(self.mock_cfg, local_data_parallel_id)
@@ -164,6 +165,7 @@ class TestExpertService(unittest.TestCase):
         mock_process = Mock()
         mock_process.pid = 1234
         expert_service.cache_manager_processes = [mock_process]
+        mock_os.getpgid.return_value = pgid
 
         # 设置模拟引擎资源管理器
         expert_service.engine = Mock()
@@ -179,7 +181,8 @@ class TestExpertService(unittest.TestCase):
 
         # 验证缓存管理器清理
         expert_service.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear.assert_called_once()
-        mock_os.killpg.assert_called_once_with(1234, mock_signal.SIGTERM)
+        mock_os.getpgid.assert_called_once_with(1234)
+        mock_os.killpg.assert_called_once_with(pgid, mock_signal.SIGTERM)
 
         # 验证ZMQ服务器关闭
         expert_service.zmq_server.close.assert_called_once()
