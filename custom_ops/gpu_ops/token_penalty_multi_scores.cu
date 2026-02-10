@@ -85,7 +85,7 @@ __global__ void update_repeat_times(const int64_t *token_ids_all,
     int64_t id = token_ids_now[i];
     if (id < 0) continue;
     if (i < prompt_len_now) {
-      atomicOr(&repeat_times_now[id], -1);
+      atomicCAS(&repeat_times_now[id], 0, -1);
     } else {
       atomicMax(&repeat_times_now[id], 0);
       atomicAdd(&repeat_times_now[id], 1);
