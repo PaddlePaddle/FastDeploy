@@ -22,7 +22,7 @@
 | ```use_warmup```                   | `int`      | 是否在启动时进行warmup，会自动生成极限长度数据进行warmup，默认0（不启用） |
 | ```limit_mm_per_prompt```          | `dict[str]` | 限制每个prompt中多模态数据的数量，如：{"image": 10, "video": 3}，默认都为1 |
 | ```enable_mm```                    | `bool`      | __[已废弃]__ 是否支持多模态数据（仅针对多模模型），模型架构会自动检测是否为多模态模型，无需手动设置 |
-| ```quantization```                 | `str`       | 模型量化策略，当在加载BF16 CKPT时，指定wint4或wint8时，支持无损在线4bit/8bit量化 |
+| ```quantization```                 | `str`       | 模型量化策略，当在加载BF16 CKPT时，指定wint4、wint8、block_wise_fp8、wfp8afp8时，支持权重无损在线4bit/8bit量化，默认不量化KVCache。如果该参数会被解析为dict，可指定`mix_quant`混合量化，其中`dense_quant_type`、`moe_quant_type`和`kv_cache_quant_type`分别指定DenseGEMM、MOE和KVCache量化类型，缺省时不量化，如`'{"quantization":"mix_quant","dense_quant_type":"wint8","moe_quant_type":"wint4","kv_cache_quant_type":"block_wise_fp8"}'`，注：仅AppendAttn后端支持KVCache在线量化`block_wise_fp8` |
 | ```gpu_memory_utilization```       | `float`     | GPU显存利用率，默认0.9 |
 | ```num_gpu_blocks_override```      | `int`       | 预分配KVCache块数，此参数可由FastDeploy自动根据显存情况计算，无需用户配置，默认为None |
 | ```max_num_batched_tokens```       | `int`       | Prefill阶段最大Batch的Token数量，默认为None(与max_model_len一致) |

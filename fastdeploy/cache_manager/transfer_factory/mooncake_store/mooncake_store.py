@@ -237,19 +237,43 @@ class MooncakeStore(KVCacheStorage):
         logger.debug(f"The exists fun processes {len(keys)} objects, cost_time: {cost_time:.3f}ms")
         return result
 
-    def query(self, k_keys: List[str], v_keys: List[str], timeout: float = 1.0):
+    def query(
+        self,
+        k_keys: List[str],
+        v_keys: List[str],
+        k_scale_keys: List[str] = None,
+        v_scale_keys: List[str] = None,
+        timeout: float = 1.0,
+    ):
         """
-        Given the k_keys and v_keys, get the valid blocks number that
+        Given the k_keys, v_keys, k_scale_keys and v_scale_keys, get the valid blocks number that
         can be prefetched from storage backend.
         """
         assert len(k_keys) == len(v_keys), "k_keys and v_keys must have the same length."
-        result = self.exists(k_keys + v_keys)
+
+        all_keys = k_keys + v_keys
+        has_scale = k_scale_keys is not None and v_scale_keys is not None
+        if has_scale:
+            assert (
+                len(k_scale_keys) == len(v_scale_keys) == len(k_keys) == len(v_keys)
+            ), "k_scale_keys and v_scale_keys must have the same length as k_keys and v_keys."
+            all_keys.extend(k_scale_keys + v_scale_keys)
+
+        result = self.exists(all_keys)
 
         # only consider the case when both key and value exist
         num = 0
-        for k, v in zip(k_keys, v_keys):
-            if result[k] and result[v]:
+        if has_scale:
+            for k, v, k_scale, v_scale in zip(k_keys, v_keys, k_scale_keys, v_scale_keys):
+                if not (result[k] and result[v] and result[k_scale] and result[v_scale]):
+                    break
                 num += 1
+        else:
+            for k, v in zip(k_keys, v_keys):
+                if not (result[k] and result[v]):
+                    break
+                num += 1
+
         return num
 
     def delete(self, key, timeout=5) -> bool:
@@ -287,12 +311,12 @@ class MooncakeStore(KVCacheStorage):
             success_num = result.count(0)
             if success_num == total_num:
                 logger.debug(
-                    f"Put all data into Mooncake Store successfully."
+                    f"Put all data into Mooncake Store successfully. "
                     f"success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             else:
                 logger.error(
-                    f"Some of the data was not put into Mooncake Store."
+                    f"Some of the data was not put into Mooncake Store. "
                     f"total_num: {total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
@@ -322,7 +346,7 @@ class MooncakeStore(KVCacheStorage):
                 )
             else:
                 logger.error(
-                    f"Some of the data was not get from Mooncake Store."
+                    f"Some of the data was not get from Mooncake Store. "
                     f"total_num:{total_num}, success_num: {success_num}, cost_time: {cost_time:.6f}s"
                 )
             if success_num > 0:
