@@ -299,26 +299,36 @@ class TestCacheTransferManager(unittest.TestCase):
     # 工具函数与存储相关测试
     # ==========================
     def test_get_cache_bytes_and_invalid(self):
-        self.assertEqual(self.manager._get_cache_bytes("bfloat16"), 2)
+        self.assertEqual(self.manager._get_cache_item_bytes("bfloat16"), 2)
+        self.assertEqual(self.manager._get_cache_item_bytes("float32"), 4)
         with self.assertRaises(ValueError):
-            self.manager._get_cache_bytes("float32")
+            self.manager._get_cache_item_bytes("int32")
 
     def test_run_read_storage_swaps_valid_blocks(self):
         self.manager.storage_backend = MagicMock()
         self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_read_buffer = 1000
         self.manager.storage_value_read_buffer = 2000
-        self.manager.storage_buffer_stride_bytes = 10
+        self.manager.cache_buffer_stride_bytes = 10
         self.manager.key_cache_shape = [2, 1, 1, 1]
         self.manager.value_cache_shape = [2, 1, 1, 1]
         self.manager.device = 0
         self.manager.gpu_cache_k_tensors = [paddle.zeros([1])]
         self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
-        self.manager.storage_backend.batch_get.return_value = [1, 0, 1, 0]
+        self.manager.storage_backend.batch_get.return_value = [1, 1, 1, 0]
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.swap_cache_layout"):
             valid_ids = self.manager._run_read_storage(
-                "test_task", [1, 2, 3, 4], 0, ["k1", "k2"], ["v1", "v2"], [5, 6], [0, 1], 30.0
+                "test_task",
+                [1, 2, 3, 4],
+                0,
+                ["k1", "k2"],
+                ["v1", "v2"],
+                None,
+                None,
+                [5, 6],
+                [0, 1],
+                30.0,
             )
 
         self.assertEqual(valid_ids, [5])
@@ -328,7 +338,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_read_buffer = 100
         self.manager.storage_value_read_buffer = 200
-        self.manager.storage_buffer_stride_bytes = 10
+        self.manager.cache_buffer_stride_bytes = 10
         self.manager.key_cache_shape = [1, 1, 1, 1]
         self.manager.value_cache_shape = [1, 1, 1, 1]
         self.manager.device = 0
@@ -337,7 +347,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.storage_backend.batch_get.side_effect = RuntimeError("read error")
 
         with self.assertRaises(RuntimeError):
-            self.manager._run_read_storage("task", [1], 0, ["k1"], ["v1"], [0], [0], 0.1)
+            self.manager._run_read_storage("task", [1], 0, ["k1"], ["v1"], None, None, [0], [0], 0.1)
 
     def test_read_storage_task_reports_result(self):
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier = MagicMock()
@@ -367,6 +377,8 @@ class TestCacheTransferManager(unittest.TestCase):
             0,
             ["prefix_a_0_key", "prefix_b_0_key"],
             ["prefix_a_0_value", "prefix_b_0_value"],
+            None,
+            None,
             [3, 4],
             [0, 1],
             0.2,
@@ -478,6 +490,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         class LocalArgs(Args):
             cache_dtype = "block_wise_fp8"
+            kvcache_storage_backend = "mooncake"
             create_cache_tensor = True
             num_layers = 1
             key_cache_shape = "2,1,1,1"
@@ -486,6 +499,8 @@ class TestCacheTransferManager(unittest.TestCase):
         with (
             patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
             patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
+            patch.object(CacheTransferManager, "_init_storage_buffer"),
         ):
             manager = CacheTransferManager(LocalArgs())
 
@@ -513,6 +528,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         class LocalArgs(Args):
             cache_dtype = "block_wise_fp8"
+            kvcache_storage_backend = "mooncake"
             create_cache_tensor = False
             num_layers = 1
             key_cache_shape = "2,1,1,1"
@@ -521,6 +537,8 @@ class TestCacheTransferManager(unittest.TestCase):
         with (
             patch.object(CacheTransferManager, "_init_cpu_cache", lambda self, args: None),
             patch.object(CacheTransferManager, "_init_gpu_cache", lambda self, args: None),
+            patch("fastdeploy.cache_manager.cache_transfer_manager.MooncakeStore"),
+            patch.object(CacheTransferManager, "_init_storage_buffer"),
         ):
             manager = CacheTransferManager(LocalArgs())
 
@@ -640,7 +658,7 @@ class TestCacheTransferManager(unittest.TestCase):
             bytes_per_shard_layer_per_block=manager.head_num
             * manager.block_size
             * manager.head_dim
-            * manager.cache_bytes,
+            * manager.cache_item_bytes,
             device_id=manager.device,
             dp_id=manager.local_data_parallel_id,
         )
@@ -668,7 +686,16 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.write_back_storage_task(task)
 
         self.manager._run_write_back_storage.assert_called_once_with(
-            "9", [1, 2], 0, ["prefix_k1_1_key"], ["prefix_k1_1_value"], [0], [0], 0.1
+            "9",
+            [1, 2],
+            0,
+            ["prefix_k1_1_key"],
+            ["prefix_k1_1_value"],
+            None,
+            None,
+            [0],
+            [0],
+            0.1,
         )
         self.manager.cache_task_queue.put_transfer_done_signal.assert_not_called()
 
@@ -685,19 +712,19 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_write_buffer = 3000
         self.manager.storage_value_write_buffer = 4000
-        self.manager.storage_buffer_stride_bytes = 8
+        self.manager.cache_buffer_stride_bytes = 8
         self.manager.key_cache_shape = [2, 1, 1, 1]
         self.manager.gpu_cache_k_tensors = [paddle.zeros([1])]
         self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
         self.manager.device = 0
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.swap_cache_layout"):
-            self.manager._run_write_back_storage("test_task", [1, 2], 0, ["k1"], ["v1"], [2], [0], 30.0)
+            self.manager._run_write_back_storage("test_task", [1, 2], 0, ["k1"], ["v1"], None, None, [2], [0], 30.0)
 
         self.manager.storage_backend.batch_set.assert_called_once_with(
-            ["k1", "v1"],
+            keys=["k1", "v1"],
             target_locations=[3000, 4000],
-            target_sizes=[self.manager.storage_buffer_stride_bytes] * 2,
+            target_sizes=[self.manager.cache_buffer_stride_bytes] * 2,
         )
 
     def test_run_write_back_storage_error_returns_zero(self):
@@ -705,7 +732,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.storage_backend_type = "mooncake"
         self.manager.storage_key_write_buffer = 3000
         self.manager.storage_value_write_buffer = 4000
-        self.manager.storage_buffer_stride_bytes = 8
+        self.manager.cache_buffer_stride_bytes = 8
         self.manager.key_cache_shape = [2, 1, 1, 1]
         self.manager.gpu_cache_k_tensors = [paddle.zeros([1])]
         self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
@@ -713,7 +740,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.storage_backend.batch_set.side_effect = RuntimeError("write error")
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.swap_cache_layout"):
-            result = self.manager._run_write_back_storage("task", [1, 2], 0, ["k1"], ["v1"], [0], [0], 0.1)
+            result = self.manager._run_write_back_storage("task", [1, 2], 0, ["k1"], ["v1"], None, None, [0], [0], 0.1)
 
         self.assertEqual(result, 0)
 
@@ -736,6 +763,8 @@ class TestCacheTransferManager(unittest.TestCase):
             0,
             ["k1"],
             ["v1"],
+            None,
+            None,
             [9],
             [0],
             0.1,
@@ -763,6 +792,8 @@ class TestCacheTransferManager(unittest.TestCase):
             0,
             ["k1"],
             ["v1"],
+            None,
+            None,
             [9],
             [0],
             0.1,
@@ -934,11 +965,16 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
         self.manager.num_cpu_blocks = 0
 
+        def maybe_stop_cleared(*_):
+            if self.manager.kv_cache_status_signal.value[0] == cache_transfer_manager.KVCacheStatus.CLEARED:
+                raise StopIteration
+
         with (
             patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc") as mock_unset,
+            patch.object(self.manager, "pause"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", False),
-            patch("time.sleep", side_effect=StopIteration),
+            patch("time.sleep", side_effect=maybe_stop_cleared),
         ):
             with self.assertRaises(StopIteration):
                 self.manager.check_cache_status(args)
@@ -962,14 +998,19 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.gpu_cache_v_tensors = [paddle.zeros([1])]
         self.manager.num_cpu_blocks = 0
 
+        def maybe_stop_cleared_with_tensor(*_):
+            if self.manager.kv_cache_status_signal.value[0] == cache_transfer_manager.KVCacheStatus.CLEARED:
+                raise StopIteration
+
         with (
             patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc"),
+            patch.object(self.manager, "pause"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", False),
             patch("paddle.device.cuda.empty_cache") as mock_empty,
             patch("paddle.set_device"),
             patch.object(self.manager, "_log_memory"),
-            patch("time.sleep", side_effect=StopIteration),
+            patch("time.sleep", side_effect=maybe_stop_cleared_with_tensor),
         ):
             with self.assertRaises(StopIteration):
                 self.manager.check_cache_status(args)
@@ -1015,6 +1056,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         with (
             patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc"),
+            patch.object(self.manager, "pause"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.cuda_host_free"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.paddle.set_device"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", True),
@@ -1040,12 +1082,17 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.swap_space_ready_signal = DummySignal(1)
         self.manager.num_cpu_blocks = 0
 
+        def maybe_stop_normal(*_):
+            if self.manager.kv_cache_status_signal.value[0] == cache_transfer_manager.KVCacheStatus.NORMAL:
+                raise StopIteration
+
         with (
             patch.object(self.manager, "_init_cpu_cache"),
             patch.object(self.manager, "_init_gpu_cache"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc"),
+            patch.object(self.manager, "resume"),
             patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", False),
-            patch("time.sleep", side_effect=StopIteration),
+            patch("time.sleep", side_effect=maybe_stop_normal),
         ):
             with self.assertRaises(StopIteration):
                 self.manager.check_cache_status(args)
@@ -1087,6 +1134,7 @@ class TestCacheTransferManager(unittest.TestCase):
                 patch("fastdeploy.cache_manager.cache_transfer_manager.unset_data_ipc"),
                 patch.object(self.manager, "_init_cpu_cache"),
                 patch.object(self.manager, "_init_gpu_cache"),
+                patch.object(self.manager, "resume"),
                 patch("fastdeploy.cache_manager.cache_transfer_manager.envs.FD_ENABLE_SWAP_SPACE_CLEARING", True),
                 patch.object(self.manager, "_log_memory"),
                 patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep),
