@@ -293,6 +293,7 @@ class ResourceManagerV1(ResourceManager):
                 if request_id in self.req_dict:
                     del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.remove(request_id)
+                llm_logger.info(f"Recycle slot resource for aborted request_id: {request_id}")
 
     def _info_each_block(self):
         """
