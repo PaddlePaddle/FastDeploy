@@ -27,7 +27,7 @@
 
 ## 最新活动
 
-**[2026-01] **FastDeploy v2.4 全新发布!** 新增 DeepSeek V3 与 Qwen3-MoE 模型的 PD 分离部署，增强 Ernie-4.5 思考模型推理与 MTP 投机解码能力，全面优化多硬件平台上的 MoE 推理与多模态前缀缓存性能，升级全部内容参阅 [v2.4 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.4.0).
+**[2026-01] FastDeploy v2.4 全新发布!** 新增 DeepSeek V3 与 Qwen3-MoE 模型的 PD 分离部署，增强 Ernie-4.5 思考模型推理与 MTP 投机解码能力，全面优化多硬件平台上的 MoE 推理与多模态前缀缓存性能，升级全部内容参阅 [v2.4 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.4.0).
 
 **[2025-11] FastDeploy v2.3** 新增[ERNIE-4.5-VL-28B-A3B-Thinking](docs/zh/get_started/ernie-4.5-vl-thinking.md)与[PaddleOCR-VL-0.9B](docs/zh/best_practices/PaddleOCR-VL-0.9B.md)两大重磅模型在多硬件平台上的部署支持，进一步优化全方位推理性能，以及带来更多部署功能和易用性的提升，升级全部内容参阅[v2.3 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0)。
 
