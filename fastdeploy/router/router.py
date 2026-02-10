@@ -441,33 +441,21 @@ class Router:
         """
         Continuously check the health of prefill, decode, and mixed instances and remove unhealthy ones.
         """
-
-        async def check(inst):
-            try:
-                if self.session is None:
-                    return inst, False
-                async with self.session.get(f"{inst.url()}/health") as resp:
-                    if resp.status != 200:
-                        logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
-                        return inst, False
-                    return inst, True
-            except Exception as e:
-                logger.warning(f"Instance {inst.url()} check failed: {e}")
-                return inst, False
-
         while True:
             try:
                 prefill_to_remove = []
                 decode_to_remove = []
                 mixed_to_remove = []
 
-                # check  servers
+                # check servers
                 all_instances = self.prefill_servers + self.decode_servers + self.mixed_servers
                 if all_instances:
-                    tasks = [check(inst) for inst in all_instances]
+                    # Use check_service_health_async which uses a fresh session for robustness
+                    tasks = [check_service_health_async(inst.url()) for inst in all_instances]
                     results = await asyncio.gather(*tasks)
 
-                    for inst, is_healthy in results:
+                    for i, is_healthy in enumerate(results):
+                        inst = all_instances[i]
                         if not is_healthy:
                             if inst in self.prefill_servers:
                                 prefill_to_remove.append(inst)
