@@ -213,7 +213,7 @@ class YaRNScaledEmbedding(RopeEmbedding):
         return pos_emb
 
 
-def create_attn_mask(mask_type, batch_size, seq_lens, pre_cache_length=0, sliding_window=0):
+def create_attn_mask(mask_type, batch_size, seq_lens, pre_cache_length=0, sliding_window=0, sink_size=128):
     max_seq_len = max(seq_lens)
     mask = paddle.zeros(
         # [batch_size, 1, max_seq_len, max_seq_len + pre_cache_length],
@@ -227,8 +227,39 @@ def create_attn_mask(mask_type, batch_size, seq_lens, pre_cache_length=0, slidin
         if sliding_window <= 0:
             mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) - 1) * 1e4
         else:
-            tmp_triu = paddle.triu(ones_tensor, -(sliding_window - 1))
-            mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) * tmp_triu - 1) * 1e4
+            if sink_size > 0:  # sliding_window + sink
+                # 创建基础掩码（全为-1e4）
+                base_mask = paddle.ones_like(ones_tensor) * -1e4
+
+                # 设置为可见的位置
+                for row in range(seq_len):
+                    # sink_token 总是能看到前sink个token
+                    visible_cols = list(range(min(sink_size, seq_len)))
+
+                    # 添加sliding_window范围内的token
+                    if sliding_window > 0:
+                        window_start = max(0, row - sliding_window + 1)
+                        window_cols = list(range(window_start, row + 1))
+                        visible_cols.extend(window_cols)
+
+                    # 去重并排序
+                    visible_cols = sorted(set(visible_cols))
+
+                    # 设置可见位置为0
+                    for col in visible_cols:
+                        if col < seq_len:  # 确保不越界
+                            base_mask[row, col] = 0
+
+                # 应用因果约束：不能看到未来的token（row < col）
+                for row in range(seq_len):
+                    for col in range(row + 1, seq_len):
+                        if base_mask[row, col] == 0:
+                            base_mask[row, col] = -1e4
+
+                mask[i, 0, :seq_len, :seq_len] = base_mask
+            else:  # sliding_window > 0
+                tmp_triu = paddle.triu(ones_tensor, -(sliding_window - 1))
+                mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) * tmp_triu - 1) * 1e4
     return mask
 
 
@@ -459,6 +490,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 128
+        self.sink_size = 0  # Only supports sinksize = 0 or 128.
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
@@ -785,6 +817,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             ]
             * self.batch_size,
             sliding_window=self.sliding_window,
+            sink_size=self.sink_size,
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)
@@ -859,6 +892,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 128
+        self.sink_size = 0
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
@@ -888,12 +922,43 @@ class TestAppendGroupQueryAttnWithRopeDyCfp8(TestAppendGroupQueryAttnWithRope):
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
         self.sliding_window = 0
+        self.sink_size = 0  # Only supports sinksize = 0 or 128.
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
         self.use_sinks = False
         self.use_yarn = False
         self.use_dynamic_quant = True
+        self.init_tensor()
+
+
+class TestAppendGroupQueryAttnWithRopeAboutSinkSwa(TestAppendGroupQueryAttnWithRope):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestAppendGroupQueryAttnWithRopeAboutSinkSwa"
+        self.place = paddle.CUDAPlace(0)
+        self.batch_size = 1
+        self.q_num_head = 16
+        self.kv_num_head = 2
+        self.seq_len = 256
+        self.max_dec_len = 32
+        self.dim_head = 128
+        self.q_hid_dim = self.q_num_head * self.dim_head
+        self.kv_hid_dim = self.kv_num_head * self.dim_head
+        self.blocksize = 64
+        self.use_neox_rotary_style = False
+        # max_seq_len = self.seq_len + self.max_dec_len
+        self.max_seq_len = self.seq_len + self.max_dec_len
+        self.softmax_scale = self.dim_head**-0.5
+        self.rope_theta = 10000
+        self.sliding_window = 8
+        self.sink_size = 128  # Only supports sinksize = 0 or 128.
+        self.dtype = "bfloat16"
+        self.use_qk_norm = True
+        self.use_mask_offset = True
+        self.use_sinks = True
+        self.use_yarn = False
+        self.use_dynamic_quant = False
         self.init_tensor()
 
 
