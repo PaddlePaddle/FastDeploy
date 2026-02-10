@@ -197,7 +197,7 @@ class CacheTransferManager:
         self.write_back_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.timeout_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
-        self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
+        self.transfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
