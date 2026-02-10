@@ -68,6 +68,7 @@ class Qwen3MoeBlock(nn.Layer):
             top_k=fd_config.model_config.num_experts_per_tok,
             layer_idx=layer_id,
             weight_key_map=weight_key_map,
+            prefix=f"{prefix}.experts",
         )
 
         self.gate = ReplicatedLinear(

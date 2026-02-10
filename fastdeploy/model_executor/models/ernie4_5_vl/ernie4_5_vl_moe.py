@@ -157,6 +157,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             moe_tag=moe_tag,
             weight_key_map=weight_key_map,
             gate_correction_bias=gate_correction_bias,
+            prefix=f"{prefix}.experts",
         )
 
         self.gate = ReplicatedLinear(
