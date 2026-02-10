@@ -726,9 +726,7 @@ class OpenAIServingChat:
             usage=usage,
         )
         trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
-        api_server_logger.info(
-            f"Chat response: id={request_id} model={model_name} choices={len(res.choices)}"
-        )
+        api_server_logger.info(f"Chat response: id={request_id} model={model_name} choices={len(res.choices)}")
         return res
 
     async def _create_chat_completion_choice(

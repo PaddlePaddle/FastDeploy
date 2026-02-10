@@ -34,7 +34,6 @@ from fastdeploy.utils import get_logger
 logger = get_logger("cudagraph_piecewise_backend", "worker_process.log")
 
 
-
 @dataclass
 class ConcreteSizeEntry:
     """Record the concrete information corresponding to the current shape(num_tokens)"""

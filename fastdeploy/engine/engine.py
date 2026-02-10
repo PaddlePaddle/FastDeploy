@@ -43,7 +43,13 @@ from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, console_logger, ensure_workerlog_alias, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    ensure_workerlog_alias,
+    envs,
+    llm_logger,
+)
 
 
 class LLMEngine:

@@ -68,7 +68,14 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, console_logger, ensure_workerlog_alias, envs, get_logger, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    ensure_workerlog_alias,
+    envs,
+    get_logger,
+    llm_logger,
+)
 
 try:
     TokenProcessor = load_token_processor_plugins()

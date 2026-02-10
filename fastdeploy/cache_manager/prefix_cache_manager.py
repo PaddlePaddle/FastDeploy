@@ -346,9 +346,7 @@ class PrefixCacheManager:
             if exit_code is None:
                 logger.info("Launch cache transfer manager successful")
         else:
-            logger.info(
-                "Launch cache transfer manager failed, see cache_manager.log for more information"
-            )
+            logger.info("Launch cache transfer manager failed, see cache_manager.log for more information")
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:

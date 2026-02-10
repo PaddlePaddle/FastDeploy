@@ -39,7 +39,6 @@ from fastdeploy.utils import get_logger
 logger = get_logger("cudagraph_piecewise_backend", "worker_process.log")
 
 
-
 P = ParamSpec("P")
 T = TypeVar("T")
 

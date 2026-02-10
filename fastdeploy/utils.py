@@ -160,6 +160,7 @@ def _output_with_pager(text: str):
 
 def ensure_workerlog_alias(log_dir: str, paddle_log_dir: str) -> None:
     try:
+
         def ensure_alias_for_target(target_path: str) -> None:
             if not target_path:
                 return
