@@ -85,7 +85,7 @@ def _create_default_sampling_metadata(
         bad_words_token_ids=paddle.full(shape=[batch_size], fill_value=-1, dtype="int64"),
         bad_words_token_len=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
-        min_p=paddle.randn([batch_size]),
+        min_p=paddle.randn([batch_size], dtype="float32"),
         seed=paddle.to_tensor([[2025]]),
         logits_processors=None,
     )
@@ -702,6 +702,8 @@ def test_mtp_sampler_forward_cuda(monkeypatch):
         "cu_batch_token_offset": paddle.zeros([2], dtype="int64"),
         "output_padding_offset": paddle.zeros([2, 1], dtype="int64"),
         "output_cum_offsets": paddle.zeros([2, 1], dtype="int64"),
+        "batch_id_per_token_output": paddle.zeros([2], dtype="int64"),
+        "cu_seqlens_q_output": paddle.zeros([3], dtype="int32"),
     }
     sampling_metadata.share_inputs = share_inputs
 
@@ -807,6 +809,8 @@ def test_mtp_sampler_forward_cuda_raw_logprobs(monkeypatch):
         "cu_batch_token_offset": paddle.zeros([1], dtype="int64"),
         "output_padding_offset": paddle.zeros([1, 1], dtype="int64"),
         "output_cum_offsets": paddle.zeros([1, 1], dtype="int64"),
+        "batch_id_per_token_output": paddle.zeros([1], dtype="int64"),
+        "cu_seqlens_q_output": paddle.zeros([2], dtype="int32"),
     }
     sampling_metadata.share_inputs = share_inputs
 
