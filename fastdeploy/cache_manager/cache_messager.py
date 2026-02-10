@@ -771,13 +771,11 @@ class CacheMessagerV1:
 
                                 src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
                                 dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
-                                src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
-                                dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
 
                                 logger.info(
                                     f"start write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx}, block_id_start {block_id_start} block_id_end {block_id_end}"
                                 )
-                                tic = time.time()
+                                tic = time.perf_counter()
                                 return_code = self.messager[current_transfer_protocol].write_cache(
                                     decode_ip,
                                     decode_idx,
@@ -790,7 +788,7 @@ class CacheMessagerV1:
                                     logger.error(
                                         f"write cache failed, layer_idx: {layer_idx}, req_id: {req_id}, dest_ip: {decode_ip}, block_id_start {block_id_start} block_id_end {block_id_end}"
                                     )
-                                tok = time.time()
+                                tok = time.perf_counter()
                                 cost_time = tok - tic
                                 block_num = len(src_block_ids)
                                 avg_time_per_block = cost_time * 1000 / block_num  # ms
