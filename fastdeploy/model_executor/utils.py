@@ -420,7 +420,7 @@ def v1_loader_support(fd_config):
 
     def _get_unsupported_quant():
         if current_platform.is_cuda():
-            return {"w4a8", "wint2"}
+            return {"w4a8"}
         elif current_platform.is_xpu():
             return {"w4a8", "w8a8"}
         return set()
