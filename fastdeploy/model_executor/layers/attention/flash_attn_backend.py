@@ -118,9 +118,9 @@ def flash_attn_func(
     head_dim: int = 128,
     version: Optional[int] = None,
 ):
+    if FLASH_ATTN_VERSION is None:
+        init_flash_attn_version()
     if version is None:
-        if FLASH_ATTN_VERSION is None:
-            init_flash_attn_version()
         version = FLASH_ATTN_VERSION
     if version == 4:
         assert (
