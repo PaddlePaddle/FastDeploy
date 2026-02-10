@@ -52,7 +52,7 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import custom_numpy_to_tensor, get_stop, set_stop
+from fastdeploy.model_executor.ops.gpu import custom_numpy_to_tensor
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
@@ -723,7 +723,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.initialize_kv_cache()
 
         req_len = len(req_dicts)
-        has_prefill_task = False
 
         batch_pooling_params = []
         self.share_inputs["num_running_requests"] = num_running_requests
@@ -814,7 +813,6 @@ class GPUModelRunner(ModelRunnerBase):
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
                 self.forward_batch_reqs_list[idx] = request
-                has_prefill_task = True
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
@@ -913,8 +911,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
         self._process_mm_features(req_dicts)
-        if has_prefill_task:
-            set_stop(self.share_inputs["not_need_stop"], True)
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.speculative_method in ["mtp"]:
@@ -1133,8 +1129,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
-
-        set_stop(self.share_inputs["not_need_stop"], True)
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
 
@@ -2408,7 +2402,6 @@ class GPUModelRunner(ModelRunnerBase):
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
-            self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], True)
 
             return None, None, None, -1
         else:
@@ -2591,7 +2584,6 @@ class GPUModelRunner(ModelRunnerBase):
             post_process_event = paddle.device.cuda.create_event()
             if not self.speculative_decoding:
                 self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
-                self.share_inputs["not_need_stop"].copy_(self.share_inputs["not_need_stop_device"], False)
                 post_process_event.record()
 
         self.exist_prefill_flag = False
@@ -2614,7 +2606,7 @@ class GPUModelRunner(ModelRunnerBase):
         skip_save_output=False,
     ):
         # NOTE(sunxin):
-        # post_process_event synchronizes the async DtoH copies of not_need_stop and sampled_token_ids.
+        # post_process_event synchronizes the async DtoH copies of sampled_token_ids.
         if not skip_save_output:
             post_process_event.synchronize()
             save_output_normal(
@@ -2784,11 +2776,6 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
-
-    # TODO(sunxin): Remove not_need_stop!!!
-    def not_need_stop(self) -> bool:
-        """Stop decoding if the tensor meets the termination condition"""
-        return get_stop(self.share_inputs["not_need_stop"]).item()
 
     def clear_cache(self, profile=False):
         """Clear cached data from shared inputs and forward metadata"""
