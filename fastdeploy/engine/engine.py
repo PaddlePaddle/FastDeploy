@@ -719,14 +719,14 @@ class LLMEngine:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-    def check_health(self, time_interval_threashold=30):
+    def check_health(self, time_interval_threshold=30):
         """
         Check the health of the model server by checking whether all workers are alive.
 
         """
         if self.engine.worker_healthy_live_signal.value[0]:
             elapsed_time = time.time() - self.engine.worker_healthy_live_signal.value[0]
-            if elapsed_time > time_interval_threashold:
+            if elapsed_time > time_interval_threshold:
                 return False, "Worker Service Not Healthy"
 
         return True, ""

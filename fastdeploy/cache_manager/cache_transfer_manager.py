@@ -1032,14 +1032,14 @@ class CacheTransferManager:
             logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal {result}")
             logger.info(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
 
-    def check_work_status(self, time_interval_threashold=envs.FD_CACHE_PROC_EXIT_TIMEOUT):
+    def check_work_status(self, time_interval_threshold=envs.FD_CACHE_PROC_EXIT_TIMEOUT):
         """
         Check the health of the model server by checking whether all workers are alive.
 
         """
         if self.worker_healthy_live_signal.value[0]:
             elapsed_time = time.time() - self.worker_healthy_live_signal.value[0]
-            if elapsed_time > time_interval_threashold:
+            if elapsed_time > time_interval_threshold:
                 return False, "Worker Service Not Healthy"
 
         return True, ""

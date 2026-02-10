@@ -77,7 +77,7 @@ class EngineCacheQueue:
         if is_server:
             # Server-side initialization for shared resources
             self.transfer_task_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
-            self.tansfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
+            self.transfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.cache_sync_value_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
             self.transfer_task_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
@@ -123,8 +123,8 @@ class EngineCacheQueue:
                 proxytype=ListProxy,
             )
             QueueManager.register(
-                "get_tansfer_done_queue",
-                callable=lambda idx: self.tansfer_done_queue_init[idx],
+                "get_transfer_done_queue",
+                callable=lambda idx: self.transfer_done_queue_init[idx],
                 proxytype=ListProxy,
             )
             QueueManager.register(
@@ -187,7 +187,7 @@ class EngineCacheQueue:
                 0 <= self.client_id < self.num_client
             ), f"client_id must be between 0 and {self.num_client-1}, got {self.client_id}"
             QueueManager.register("get_transfer_task_queue")
-            QueueManager.register("get_tansfer_done_queue")
+            QueueManager.register("get_transfer_done_queue")
             QueueManager.register("get_cache_sync_value")
             QueueManager.register("get_transfer_task_lock")
             QueueManager.register("get_transfer_task_done_lock")
@@ -209,7 +209,7 @@ class EngineCacheQueue:
 
         # Get proxy objects for shared resources
         self.transfer_task_queue = self.manager.get_transfer_task_queue(self.local_data_parallel_id)
-        self.tansfer_done_queue = self.manager.get_tansfer_done_queue(self.local_data_parallel_id)
+        self.transfer_done_queue = self.manager.get_transfer_done_queue(self.local_data_parallel_id)
         self.task_sync_value = self.manager.get_cache_sync_value(self.local_data_parallel_id)
         self.task_lock = self.manager.get_transfer_task_lock(self.local_data_parallel_id)
         self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
@@ -315,7 +315,7 @@ class EngineCacheQueue:
         put swap result
         """
         self.task_done_lock.acquire()
-        self.tansfer_done_queue.append(item)
+        self.transfer_done_queue.append(item)
         self.task_done_lock.release()
         logger.info(f"put_transfer_done_signal: put swap task {item[-1]} finished signal to queue successful")
 
@@ -325,8 +325,8 @@ class EngineCacheQueue:
         """
         data = None
         self.task_done_lock.acquire()
-        if len(self.tansfer_done_queue) > 0:
-            data = self.tansfer_done_queue.pop(0)
+        if len(self.transfer_done_queue) > 0:
+            data = self.transfer_done_queue.pop(0)
             logger.info(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
         self.task_done_lock.release()
         return data
@@ -346,7 +346,7 @@ class EngineCacheQueue:
         check if result queue is empty
         """
         try:
-            return len(self.tansfer_done_queue) == 0
+            return len(self.transfer_done_queue) == 0
         except Exception as e:
             logger.error(f"result_queue_empty function meets error: {e}, {str(traceback.format_exc())}")
             raise e

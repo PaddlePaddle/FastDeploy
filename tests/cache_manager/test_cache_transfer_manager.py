@@ -154,7 +154,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
     def test_check_work_status_unhealthy(self):
         self.manager.worker_healthy_live_signal.value[0] = int(time.time()) - 1000
-        healthy, msg = self.manager.check_work_status(time_interval_threashold=10)
+        healthy, msg = self.manager.check_work_status(time_interval_threshold=10)
         self.assertFalse(healthy)
         self.assertIn("Not Healthy", msg)
 

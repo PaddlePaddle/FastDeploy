@@ -278,7 +278,7 @@ class OpenAIServingChat:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
                         status, msg = self.engine_client.check_health(
-                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                            time_interval_threshold=envs.FD_WORKER_ALIVE_TIMEOUT
                         )
                         if not status:
                             if choices:
@@ -590,7 +590,7 @@ class OpenAIServingChat:
                     current_waiting_time += 10
                     if current_waiting_time == 300:
                         status, msg = self.engine_client.check_health(
-                            time_interval_threashold=envs.FD_WORKER_ALIVE_TIMEOUT
+                            time_interval_threshold=envs.FD_WORKER_ALIVE_TIMEOUT
                         )
                         if not status:
                             raise ValueError(f"Engine is not healthy: {msg}")

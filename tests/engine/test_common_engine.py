@@ -147,7 +147,7 @@ class TestCommonEngine(unittest.TestCase):
     def test_check_health(self):
         """Test check_health method (lines 1533-1544)"""
         if hasattr(self.engine, "worker_healthy_live_signal"):
-            is_healthy, message = self.engine.check_health(time_interval_threashold=30)
+            is_healthy, message = self.engine.check_health(time_interval_threshold=30)
 
             # Should return tuple of (bool, str)
             self.assertIsInstance(is_healthy, bool)
@@ -634,7 +634,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         # set worker live time far past threshold
         eng.worker_healthy_live_signal = Sig(int(time.time()) - 1000)
-        ok, msg = eng.check_health(time_interval_threashold=1)
+        ok, msg = eng.check_health(time_interval_threshold=1)
         self.assertFalse(ok)
         self.assertIn("Not Healthy".lower(), msg.lower())
         if hasattr(eng, "_finalizer"):

@@ -520,14 +520,14 @@ class EngineClient:
                     api_server_logger.error(err_msg)
                     raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
-    def check_health(self, time_interval_threashold=30):
+    def check_health(self, time_interval_threshold=30):
         """
         Check the health of the model server by checking whether all workers are alive.
 
         """
         if self.worker_healthy_live_signal.value[0]:
             elapsed_time = time.time() - self.worker_healthy_live_signal.value[0]
-            if elapsed_time > time_interval_threashold:
+            if elapsed_time > time_interval_threshold:
                 return False, "Worker Service Not Healthy"
 
         return True, ""

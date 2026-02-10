@@ -209,7 +209,7 @@ class HpuWorker(WorkerBase):
         else:
             logger.info("Skipping warmup bucket, please set HPU_WARMUP_BUCKET=1 to enable it.")
 
-        # 2. Triger cuda grpah capture
+        # 2. Trigger cuda grpah capture
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:

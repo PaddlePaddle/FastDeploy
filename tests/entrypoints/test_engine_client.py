@@ -901,7 +901,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         old_time = time.time() - 60
         self.engine_client.worker_healthy_live_signal.value = np.array([old_time])
 
-        result, message = self.engine_client.check_health(time_interval_threashold=30)
+        result, message = self.engine_client.check_health(time_interval_threshold=30)
 
         self.assertFalse(result)
         self.assertEqual(message, "Worker Service Not Healthy")
