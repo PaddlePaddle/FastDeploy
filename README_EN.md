@@ -27,7 +27,7 @@ English | [简体中文](README_CN.md)
 
 ## News
 
-**[2026-01] FastDeploy v2.4 has been newly released!** It now supports PD-disaggregated deployment of DeepSeek V3 and Qwen3-MoE models. The reasoning capability of the ERNIE-4.5 contemplative model and MTP speculative decoding performance have been improved. The MoE inference performance and multimodal prefix caching performance across multiple hardware platforms have been comprehensively optimized. For details on all upgrades, please refer to the [v2.4 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.4.0).
+**[2026-01] FastDeploy v2.4 has been newly released!** It now supports PD-disaggregated deployment of DeepSeek V3 and Qwen3-MoE models. The capability of the ERNIE-4.5 reasoning model parser and MTP speculative decoding performance have been improved. The MoE inference performance and multimodal prefix caching performance across multiple hardware platforms have been comprehensively optimized. For details on all upgrades, please refer to the [v2.4 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.4.0).
 
 **[2025-11] FastDeploy v2.3** It adds deployment support for two major models, [ERNIE-4.5-VL-28B-A3B-Thinking](docs/get_started/ernie-4.5-vl-thinking.md) and [PaddleOCR-VL-0.9B](docs/best_practices/PaddleOCR-VL-0.9B.md), across multiple hardware platforms. It further optimizes comprehensive inference performance and brings more deployment features and usability enhancements. For all the upgrade details, refer to the [v2.3 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0).
 
