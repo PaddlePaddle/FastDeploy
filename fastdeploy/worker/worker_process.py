@@ -64,7 +64,6 @@ from fastdeploy.inter_communicator import (
     RearrangeExpertStatus,
 )
 from fastdeploy.inter_communicator.fmq import FMQ
-from fastdeploy.logger.setup_logging import configure_third_party_loggers
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -84,37 +83,30 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
-        configure_third_party_loggers()
         return DcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_cuda():
         from fastdeploy.worker.gpu_worker import GpuWorker
 
-        configure_third_party_loggers()
         return GpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_xpu():
         from fastdeploy.worker.xpu_worker import XpuWorker
 
-        configure_third_party_loggers()
         return XpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_iluvatar():
         from fastdeploy.worker.iluvatar_worker import IluvatarWorker
 
-        configure_third_party_loggers()
         return IluvatarWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_gcu():
         from fastdeploy.worker.gcu_worker import GcuWorker
 
-        configure_third_party_loggers()
         return GcuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_maca():
         from fastdeploy.worker.metax_worker import MetaxWorker
 
-        configure_third_party_loggers()
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
     if current_platform.is_intel_hpu():
         from fastdeploy.worker.hpu_worker import HpuWorker
 
-        configure_third_party_loggers()
         return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 

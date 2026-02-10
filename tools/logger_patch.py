@@ -27,8 +27,7 @@ def intercept_paddle_loggers():
         logger = _original(name)
         if name and str(name).startswith("paddle"):
             formatter = logging.Formatter(
-                "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
+                "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
             )
             logger.setLevel(logging.INFO)
             for handler in logger.handlers[:]:

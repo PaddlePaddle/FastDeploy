@@ -20,7 +20,7 @@ import logging
 
 # Create standard format (without color)
 _root_formatter = logging.Formatter(
-    "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
 )
 
 # Configure root logger
@@ -76,9 +76,7 @@ for handler in _paddleformers_logger.handlers[:]:
     _paddleformers_logger.removeHandler(handler)
 
 # Create standard format (without color)
-_formatter = logging.Formatter(
-    "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
+_formatter = logging.Formatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
 
 # Add new StreamHandler
 _stream_handler = logging.StreamHandler()

@@ -176,8 +176,7 @@ async def lifespan(app: FastAPI):
     uvicorn_access.handlers.clear()
 
     formatter = logging.Formatter(
-        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
     )
 
     handler = logging.StreamHandler()
