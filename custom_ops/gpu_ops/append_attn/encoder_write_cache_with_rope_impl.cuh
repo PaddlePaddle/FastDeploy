@@ -58,6 +58,7 @@ __global__ void IntVariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -145,6 +146,7 @@ __global__ void VariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -223,6 +225,7 @@ __global__ void IntNeoxVariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -319,6 +322,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int qkv_id = bias / hidden_size;
@@ -400,6 +404,7 @@ __global__ void IntGQAVariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
@@ -583,6 +588,7 @@ __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
     ;
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
@@ -662,6 +668,7 @@ __global__ void IntGQAVariableLengthRotaryQuantKVKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
@@ -765,6 +772,7 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
@@ -874,6 +882,7 @@ __global__ void IntGQANeoxVariableLengthRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / half_lastdim;
@@ -968,6 +977,7 @@ __global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / half_lastdim;
@@ -1044,6 +1054,7 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
        linear_index += step) {
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens && seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / rotary_dim_half;

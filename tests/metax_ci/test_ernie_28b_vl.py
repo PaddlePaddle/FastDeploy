@@ -16,6 +16,7 @@ os.environ["FLAGS_weight_only_linear_arch"] = "80"
 os.environ["FD_METAX_KVCACHE_MEM"] = "8"
 os.environ["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
 os.environ["FD_ENC_DEC_BLOCK_NUM"] = "2"
+os.environ["FD_SAMPLING_CLASS"] = "rejection"
 
 
 MATERIAL_PATH = "/data/material"
@@ -35,8 +36,8 @@ class TestErnie28BVL(unittest.TestCase):
             max_model_len=32768,
             quantization="wint8",
             disable_custom_all_reduce=True,
-            enable_prefix_caching=False,
-            graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
+            # enable_prefix_caching=False,
+            # graph_optimization_config={"use_cudagraph": False, "graph_opt_level": 0},
             limit_mm_per_prompt={"image": 100},
             reasoning_parser="ernie-45-vl",
             load_choices="default_v1",

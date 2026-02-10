@@ -104,7 +104,9 @@ def get_moe_scores(
             routed_scaling_factor,
         )
     else:
-        scores, topk_values, topk_idx = noaux_tc_redundant(
+        # noaux_tc_redundant returns 4 values: scores, topk_values, topk_idx,
+        # and tokens_per_expert_stats_list_out (inplace updated)
+        scores, topk_values, topk_idx, _ = noaux_tc_redundant(
             scores,
             scores_with_bias,
             expert_id_to_ep_rank_array,
@@ -254,7 +256,12 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(
-        self, param, loaded_weight, expert_id, shard_id: Optional[str] = None, source: Optional[str] = None
+        self,
+        param,
+        loaded_weight,
+        expert_id,
+        shard_id: Optional[str] = None,
+        source: Optional[str] = None,
     ):
         """
         source:Avoid redundant transpose of fused weights when weight_loader is called iteratively
@@ -309,7 +316,7 @@ class FusedMoE(nn.Layer):
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
-        if self.tp_size > 1 and not is_sharded:
+        if self.tp_size > 1 and not is_sharded and not self.fd_config.load_config.is_pre_sharded:
             tp_shard_dim = shard_dim
             weight_dim = -1 if tp_shard_dim else 0
             size = loaded_weight.shape[weight_dim]
@@ -320,10 +327,10 @@ class FusedMoE(nn.Layer):
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
-        if shard_id == "gate":
+        switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
+        if (shard_id == "gate" and not switch_w13) or (shard_id == "up" and switch_w13):
             param_shard_offset = 0
         else:
-            # shard_id == "up":
             param_shard_offset = param_shard_size
         expert_param = slice_fn(
             expert_param, shard_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size
@@ -337,8 +344,22 @@ class FusedMoE(nn.Layer):
             )
 
         # To ensure compatibility across backends, apply an extra transpose for GCU and XPU
+
         if expert_param.shape != loaded_weight.shape:
-            loaded_weight = loaded_weight.transpose([1, 0])
+            if len(expert_param.shape) != len(loaded_weight.shape):
+                logger.warning(
+                    "[MoE] Expert weight rank mismatch detected "
+                    f"(loaded: {loaded_weight.shape}, expected: {expert_param.shape}). "
+                    "Reshaping loaded weight for compatibility."
+                )
+                loaded_weight = loaded_weight.reshape(expert_param.shape)
+            else:
+                logger.warning(
+                    "[MoE] Expert weight layout mismatch detected "
+                    f"(loaded: {loaded_weight.shape}, expected: {expert_param.shape}). "
+                    "Applying transpose to match parameter layout."
+                )
+                loaded_weight = loaded_weight.transpose([1, 0])
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
@@ -350,7 +371,7 @@ class FusedMoE(nn.Layer):
         h2d_copy(dst=expert_param, src=loaded_weight)
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
-        if self.tp_size > 1 and shard_dim is not None:
+        if self.tp_size > 1 and shard_dim is not None and not self.fd_config.load_config.is_pre_sharded:
             tp_shard_dim = shard_dim
             dim = -1 if tp_shard_dim else 0
             size = loaded_weight.shape[dim]
@@ -376,7 +397,7 @@ class FusedMoE(nn.Layer):
         h2d_copy(dst=expert_param, src=loaded_weight)
 
     def _load_fused_experts_weight(self, param, loaded_weight):
-        if self.tp_size > 1:
+        if self.tp_size > 1 and self.moe_quant_type != "mxfp4" and not self.fd_config.load_config.is_pre_sharded:
             dim = -1
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[dim]
@@ -386,14 +407,42 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
+
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
+
         h2d_copy(dst=param, src=loaded_weight)
 
         if hasattr(param, "tensor_track"):
             for i in range(self.num_local_experts):
                 param.tensor_track.mark(start=0, batch_id=i)
+
+    def _load_per_tensor_weight_scale(
+        self,
+        param,
+        expert_id,
+        loaded_weight,
+        shard_id,
+    ):
+        loaded_weight = get_tensor(loaded_weight)
+        expert_param = param[expert_id - self.expert_id_offset]
+        if shard_id in ["gate", "up"]:
+            idx = 0 if shard_id == "gate" else 1
+            if expert_param[idx].shape != loaded_weight.shape:
+                if len(expert_param[idx].shape) != len(loaded_weight.shape):
+                    loaded_weight = loaded_weight.reshape(expert_param[idx].shape)
+                else:
+                    loaded_weight = loaded_weight.transpose([1, 0])
+
+            expert_param[idx].set_value(loaded_weight)
+        elif shard_id == "down":
+            if expert_param.shape != loaded_weight.shape:
+                if len(expert_param.shape) != len(loaded_weight.shape):
+                    loaded_weight = loaded_weight.reshape(expert_param.shape)
+                else:
+                    loaded_weight = loaded_weight.transpose([1, 0])
+            expert_param.set_value(loaded_weight)
 
     def _load_expert_weight(
         self,
@@ -403,7 +452,10 @@ class FusedMoE(nn.Layer):
         shard_id,
         shard_dim=None,
     ):
-        if shard_id == "down":
+        weight_type = getattr(param, "weight_type", None)
+        if weight_type in ["weight_scale_2", "input_scale"]:
+            self._load_per_tensor_weight_scale(param, expert_id, loaded_weight, shard_id)
+        elif shard_id == "down":
             self._load_down_weight(param, expert_id, loaded_weight, shard_id, shard_dim)
         elif shard_id in ["gate", "up"]:
             self._load_gate_up_weight(param, expert_id, loaded_weight, shard_id, shard_dim)

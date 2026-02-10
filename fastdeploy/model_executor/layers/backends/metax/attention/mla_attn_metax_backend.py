@@ -209,8 +209,8 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         self.tile_scheduler_metadata = None
         self.num_splits = None
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

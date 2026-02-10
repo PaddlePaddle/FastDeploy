@@ -75,6 +75,14 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -83,6 +91,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& v_zeros,
     const paddle::optional<paddle::Tensor>& shift,
     const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
     const bool use_neox_rotary_style,
@@ -184,6 +194,14 @@ std::vector<paddle::Tensor> MoeTopkSelect(
     const paddle::optional<paddle::Tensor>& bias,
     const int moe_topk,
     const bool apply_norm_weight);
+
+std::vector<paddle::Tensor> FusedNoAuxTc(const paddle::Tensor& gating_logits,
+                                         const paddle::Tensor& bias,
+                                         const int n_group,
+                                         const int topk_group,
+                                         const int top_k,
+                                         const bool apply_norm_weight,
+                                         const float routed_scaling_factor);
 
 void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& draft_tokens,
@@ -632,6 +650,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("decoder_context_len_cache_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("prefix_len_cpu"),
+        py::arg("encoder_seq_lod_xpu"),
+        py::arg("decoder_seq_lod_xpu"),
+        py::arg("encoder_kv_lod_xpu"),
+        py::arg("encoder_batch_map_xpu"),
+        py::arg("decoder_context_len_xpu"),
+        py::arg("decoder_context_len_cache_xpu"),
+        py::arg("decoder_batch_map_xpu"),
+        py::arg("prefix_len_xpu"),
         py::arg("k_scales"),
         py::arg("v_scales"),
         py::arg("k_scales_inv"),
@@ -640,6 +666,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("v_zeros"),
         py::arg("shift"),
         py::arg("smooth"),
+        py::arg("q_norm_weight"),
+        py::arg("k_norm_weight"),
         py::arg("kv_signal_data_cpu"),
         py::arg("cachekv_signal_thread_cpu"),
         py::arg("use_neox_rotary_style"),
@@ -953,6 +981,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("bias") = py::none(),
         py::arg("moe_topk"),
         py::arg("apply_norm_weight"));
+
+  m.def("fused_noaux_tc",
+        &FusedNoAuxTc,
+        "noaux_tc for Deepseekv3 MoE compute with sigmoid and bias",
+        py::arg("gating_logits"),
+        py::arg("bias"),
+        py::arg("n_group"),
+        py::arg("topk_group"),
+        py::arg("top_k"),
+        py::arg("apply_norm_weight"),
+        py::arg("routed_scaling_factor"));
 
   m.def("prof_start", &prof_start, "prof_start");
 

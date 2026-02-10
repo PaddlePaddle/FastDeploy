@@ -109,6 +109,7 @@ class GraphOptBackend:
         self.dy_runnable = self.runnable
         self.fd_config = fd_config
         self.max_captre_size = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
+        self.max_captre_size_prefill = fd_config.graph_opt_config.max_capture_shape_prefill
         self._debug_count_cudagraph_replay = 0
         self._debug_count_total_step = 0
 
@@ -125,16 +126,12 @@ class GraphOptBackend:
                 backend,
             ).__get__(self.runnable.__self__)
 
-        self.cudagraph_switch_threshold = (
-            1024 if self.fd_config.graph_opt_config.graph_opt_level > 0 else self.max_captre_size
-        )
-
     def __call__(self, **kwargs):
         if not self.fd_config.graph_opt_config.use_cudagraph:
             return self.runnable(**kwargs)
         if self.cudagraph_piecewise_backend is None:
             self.cudagraph_piecewise_backend = CudaGraphPiecewiseBackend(
-                fd_config=self.fd_config, runnable=self.runnable
+                fd_config=self.fd_config, dy_runnable=self.dy_runnable, runnable=self.runnable
             )
 
         assert kwargs["forward_meta"].ids_remove_padding is not None
@@ -143,14 +140,39 @@ class GraphOptBackend:
             # only count the actual load.
             self._debug_count_total_step += 1
 
-        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.cudagraph_switch_threshold):
+        exist_prefill = kwargs["forward_meta"].exist_prefill
+        is_dy2st = self.fd_config.graph_opt_config.graph_opt_level > 0
+        is_split_cudagraph = not self.fd_config.graph_opt_config.full_cuda_graph
+
+        # Determine whether to fallback to dynamic graph (skip CUDAGraph)
+        # Execution modes:
+        # | Mode                              | Prefill + Mixed          | Decode                   |
+        # |-----------------------------------|--------------------------|--------------------------|
+        # | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
+        # | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
+        # | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
+        should_skip_cudagraph = not kwargs["forward_meta"].step_use_cudagraph
+        if not should_skip_cudagraph:
+            if exist_prefill:
+                # Prefill + Mixed phase
+                if is_dy2st and is_split_cudagraph:
+                    # Static split graph mode: use Static + CUDAGraph for prefill
+                    should_skip_cudagraph = real_shape > self.max_captre_size_prefill
+                else:
+                    # Dynamic mode or Static full graph mode: always skip CUDAGraph for prefill
+                    should_skip_cudagraph = True
+            else:
+                # Decode phase: always use CUDAGraph (either Dynamic+CUDAGraph or Static+CUDAGraph)
+                should_skip_cudagraph = real_shape > self.max_captre_size
+
+        if should_skip_cudagraph:
             return self.dy_runnable(**kwargs)
-        else:
-            self._debug_count_cudagraph_replay += 1
-            logger.debug(
-                f"[CUDA GRAPH][ID:{id(self.cudagraph_piecewise_backend)}] Total step count: {self._debug_count_total_step}, CUDAGraph replay count: {self._debug_count_cudagraph_replay}"
-            )
-            return self.cudagraph_piecewise_backend.__call__(**kwargs)
+
+        self._debug_count_cudagraph_replay += 1
+        logger.debug(
+            f"[CUDA GRAPH][ID:{id(self.cudagraph_piecewise_backend)}] Total step count: {self._debug_count_total_step}, CUDAGraph replay count: {self._debug_count_cudagraph_replay}"
+        )
+        return self.cudagraph_piecewise_backend.__call__(**kwargs)
 
     def clear_cudagraph_piecewise_backend(self):
         """ """

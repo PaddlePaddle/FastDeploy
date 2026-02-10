@@ -195,6 +195,10 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
+    rsync_config: Optional[Dict[str, Any]] = None
+    """
+    rsync weights config info
+    """
     quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
@@ -436,6 +440,10 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
+    enable_overlap_schedule: bool = False
+    """
+    Flag to enable overlapping schedule. Default is False (disabled).
+    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -629,7 +637,6 @@ class EngineArgs:
                 for port in cur_dp_ports:
                     assert is_port_available("0.0.0.0", port), f"Parameter `{name}`:{port} is already in use."
 
-            console_logger.debug(f"post init {name}: {ports}")
             return ports
 
         num_nodes = len(self.ips) if self.ips else 1
@@ -812,6 +819,12 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_strategy,
             help="Flag to dynamic load strategy.",
+        )
+        model_group.add_argument(
+            "--rsync-config",
+            type=json.loads,
+            default=EngineArgs.rsync_config,
+            help="Rsync weights config",
         )
         model_group.add_argument(
             "--engine-worker-queue-port",
@@ -1037,7 +1050,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group
@@ -1077,7 +1090,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake"],
+            choices=["mooncake", "attention_store", "file"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )
@@ -1302,6 +1315,13 @@ class EngineArgs:
             default=EngineArgs.scheduler_writer_batch_size,
             help=f"SplitWise Use, Results Writer Batch Size, "
             f"Default is {EngineArgs.scheduler_writer_batch_size}. (global)",
+        )
+
+        scheduler_group.add_argument(
+            "--enable-overlap-schedule",
+            action="store_true",
+            default=EngineArgs.enable_overlap_schedule,
+            help="Enable overlapping schedule.",
         )
 
         return parser

@@ -15,6 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 
 import numpy as np
 from paddleformers.generation import GenerationConfig
@@ -146,6 +147,15 @@ class BaseDataProcessor(ABC):
             tokenizer (AutoTokenizer)
         """
         raise NotImplementedError
+
+    def get_mm_max_tokens_per_item(
+        self,
+        seq_len: int,
+    ) -> Mapping[str, int]:
+        """
+        Return the maximum number of tokens per item for each modality.
+        """
+        return None
 
 
 class DataProcessor(BaseDataProcessor):
@@ -313,17 +323,10 @@ class DataProcessor(BaseDataProcessor):
         # processing prompt_token_ids
         if not request.get("prompt_token_ids"):
             if request.get("prompt"):
-                prompt = request.get("prompt")
                 add_special_tokens = request.get("add_special_tokens", False)
-                assert isinstance(prompt, str) or (
-                    isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
-                ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
-                if isinstance(prompt, list):  # if prompt is a token id list
-                    request["prompt_token_ids"] = prompt
-                else:
-                    request["prompt_token_ids"] = self.text2ids(
-                        request["prompt"], max_model_len, add_special_tokens=add_special_tokens
-                    ).tolist()
+                request["prompt_token_ids"] = self.text2ids(
+                    request["prompt"], max_model_len, add_special_tokens=add_special_tokens
+                ).tolist()
             elif request.get("messages"):
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
@@ -442,7 +445,7 @@ class DataProcessor(BaseDataProcessor):
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
-                    response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
+                    response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -463,13 +466,19 @@ class DataProcessor(BaseDataProcessor):
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
+        response_dict["outputs"]["enable_parser"] = False
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+        response_dict["outputs"]["text"] = delta_text
         response_dict["outputs"]["completion_tokens"] = delta_text
+        response_dict["outputs"]["skipped"] = False
+        response_dict["outputs"]["tool_calls"] = None
+        response_dict["outputs"]["reasoning_content"] = ""
         if self.reasoning_parser:
+            response_dict["outputs"]["enable_parser"] = True
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -479,15 +488,21 @@ class DataProcessor(BaseDataProcessor):
                 token_ids,
                 self.model_status_dict[req_id],
             )
-            response_dict["outputs"]["delta_message"] = reasoning_delta_message
-            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
-            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
-            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+            if reasoning_delta_message:
+                reasoning_content = reasoning_delta_message.reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+                response_dict["outputs"]["reasoning_content"] = reasoning_content or ""
+                response_dict["outputs"]["text"] = reasoning_delta_message.content or ""
+            else:
+                if not is_end:
+                    response_dict["outputs"]["skipped"] = True
         if self.tool_parser_obj:
+            response_dict["outputs"]["enable_parser"] = True
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
-            tool_call = tool_parser.extract_tool_calls_streaming(
+            tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
                 previous_texts,
                 previous_texts + delta_text,
                 delta_text,
@@ -496,9 +511,15 @@ class DataProcessor(BaseDataProcessor):
                 token_ids,
                 response_dict,
             )
-            if tool_call is None or tool_call.tool_calls:
-                response_dict["outputs"]["delta_message"] = tool_call
-        response_dict["outputs"]["text"] = delta_text
+            if tool_call_delta_message:
+                if tool_call_delta_message.tool_calls:
+                    response_dict["outputs"]["text"] = tool_call_delta_message.content
+                    response_dict["outputs"]["tool_calls"] = tool_call_delta_message.tool_calls
+                    response_dict["outputs"]["skipped"] = False
+            else:
+                if not is_end:
+                    response_dict["outputs"]["skipped"] = True
+
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -538,7 +559,7 @@ class DataProcessor(BaseDataProcessor):
             List[int]: token ids list
         """
 
-        add_special_tokens = kwargs.get("add_special_tokens")
+        add_special_tokens = kwargs.get("add_special_tokens", False)
         if envs.FD_USE_HF_TOKENIZER:
             tokens = self.tokenizer(
                 text,

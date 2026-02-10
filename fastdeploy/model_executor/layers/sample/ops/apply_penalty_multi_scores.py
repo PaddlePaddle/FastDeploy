@@ -29,6 +29,7 @@ def apply_penalty_multi_scores(
     presence_penalties: paddle.Tensor,
     temperature: paddle.Tensor,
     bad_words_token_ids: paddle.Tensor,
+    bad_words_token_len: paddle.Tensor,
     step_idx: paddle.Tensor,
     min_dec_lens: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
@@ -49,6 +50,7 @@ def apply_penalty_multi_scores(
             presence_penalties,
             temperature,
             bad_words_token_ids,
+            bad_words_token_len,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -132,6 +134,7 @@ def apply_penalty_multi_scores(
             presence_penalties,
             temperature,
             bad_words_token_ids,
+            bad_words_token_len,
             step_idx,
             min_dec_lens,
             eos_token_ids,
@@ -167,44 +170,65 @@ def apply_speculative_penalty_multi_scores(
     presence_penalties: paddle.Tensor,
     temperature: paddle.Tensor,
     bad_words_token_ids: paddle.Tensor,
+    bad_tokens_len: paddle.Tensor,
     step_idx: paddle.Tensor,
     min_dec_lens: paddle.Tensor,
     eos_token_ids: paddle.Tensor,
     seq_lens_this_time: paddle.Tensor,
-    output_padding_offset: paddle.Tensor,
-    output_cum_offsets: paddle.Tensor,
+    batch_id_per_token_output: paddle.Tensor,
+    cu_seqlens_q_output: paddle.Tensor,
     max_len: int,
 ):
     """
     apply_speculative_penalty_multi_scores
     """
-    if current_platform.is_cuda():
+    if current_platform.is_cuda() or current_platform.is_maca():
         from fastdeploy.model_executor.ops.gpu import (
             speculate_get_token_penalty_multi_scores,
+        )
+
+        speculate_get_token_penalty_multi_scores(
+            pre_token_ids,
+            logits,
+            repetition_penalties,
+            frequency_penalties,
+            presence_penalties,
+            temperature,
+            bad_words_token_ids,
+            bad_tokens_len,
+            step_idx,
+            min_dec_lens,
+            eos_token_ids,
+            seq_lens_this_time,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
+            max_len,
         )
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.ops.xpu import (
             speculate_get_token_penalty_multi_scores,
         )
 
+        speculate_get_token_penalty_multi_scores(
+            pre_token_ids,
+            logits,
+            repetition_penalties,
+            frequency_penalties,
+            presence_penalties,
+            temperature,
+            bad_words_token_ids,
+            step_idx,
+            min_dec_lens,
+            eos_token_ids,
+            seq_lens_this_time,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
+            max_len,
+        )
+
     else:
         raise NotImplementedError
-    speculate_get_token_penalty_multi_scores(
-        pre_token_ids,
-        logits,
-        repetition_penalties,
-        frequency_penalties,
-        presence_penalties,
-        temperature,
-        bad_words_token_ids,
-        step_idx,
-        min_dec_lens,
-        eos_token_ids,
-        seq_lens_this_time,
-        output_padding_offset,
-        output_cum_offsets,
-        max_len,
-    )
+
     # inplace
     return logits
 
@@ -218,8 +242,9 @@ def reasoning_phase_token_constraint(
     step_idx: paddle.Tensor,
     reasoning_allowed_tokens: paddle.Tensor,
     reasoning_status: paddle.Tensor,
-    output_padding_offset: paddle.Tensor,
-    output_cum_offsets: paddle.Tensor,
+    batch_id_per_token_output: paddle.Tensor,
+    cu_seqlens_q_output: paddle.Tensor,
+    enable_thinking: paddle.Tensor,
     think_end_id: int,
     line_break_id: int,
 ):
@@ -238,8 +263,9 @@ def reasoning_phase_token_constraint(
             step_idx,
             reasoning_allowed_tokens,
             reasoning_status,
-            output_padding_offset,
-            output_cum_offsets,
+            batch_id_per_token_output,
+            cu_seqlens_q_output,
+            enable_thinking,
             think_end_id,
             line_break_id,
         )
