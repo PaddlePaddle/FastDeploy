@@ -1469,7 +1469,7 @@ class TestFastDeployBatch(unittest.TestCase):
                 "--max-num-seqs",
                 "64",
                 "--load-choices",
-                "default_v1",
+                "dummy",
                 "--engine-worker-queue-port",
                 str(FD_ENGINE_QUEUE_PORT),
             ]
@@ -1498,7 +1498,7 @@ class TestFastDeployBatch(unittest.TestCase):
                     "--max-num-seqs",
                     "64",
                     "--load-choices",
-                    "default_v1",
+                    "dummy",
                     "--engine-worker-queue-port",
                     str(FD_ENGINE_QUEUE_PORT),
                 ]
