@@ -76,10 +76,10 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
-        custom_numpy_to_tensor,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
+    async_set_value,
     post_process,
     pre_process,
     rebuild_padding,
@@ -107,31 +107,6 @@ from fastdeploy.worker.model_runner_base import (
     ModelRunnerBase,
 )
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
-
-
-def async_set_value(tgt, src):
-    if isinstance(src, (int, float, bool)):
-        src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
-    elif isinstance(src, (list, np.array)):
-        dtype_str = str(tgt.dtype).split(".")[1]
-        if isinstance(src, list):
-            src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
-        if str(src.dtype) != dtype_str:
-            srt_tensor = paddle.empty(tgt.shape, dtype=str(src.dtype))
-            src = custom_numpy_to_tensor(src, srt_tensor)
-        else:
-            return custom_numpy_to_tensor(src, tgt)
-    elif isinstance(src, paddle.Tensor):
-        pass
-    else:
-        raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
-    if src.shape != tgt.shape:
-        src = src.reshape(tgt.shape)
-    if src.dtype != tgt.dtype:
-        src = src.cast(tgt.dtype)
-    if src.place != tgt.place:
-        src = src.to(tgt.place)
-    tgt.copy_(src, blocking=False)
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -829,9 +804,14 @@ class GPUModelRunner(ModelRunnerBase):
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                async_set_value(
-                    self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
-                )
+                if current_platform.is_cuda():
+                    async_set_value(
+                        self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
+                    )
+                else:
+                    self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
+                        request.block_tables, dtype="int32"
+                    )
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
