@@ -202,18 +202,28 @@ class ResourceManagerV1(ResourceManager):
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
-        self.init_reserve_output_block_num = (
-            envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
-        )  # int
-        self.decay_output_block_num = (
-            envs.FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
-        )  # float
-        self.min_reserve_output_block_num = (
-            envs.FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
-        )  # int
-        self.current_reserve_output_block_num = self.init_reserve_output_block_num
-        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
-        self.can_relax_prefill_strategy = True
+        # New token ratio mechanism for dynamic decode reservation (inspired by SGLang)
+        # This replaces the fixed per-request block reservation with a ratio-based approach
+        schedule_conservativeness = 1.0  # Can be made configurable via SchedulerConfig later
+        self.init_new_token_ratio = min(
+            envs.FD_INIT_NEW_TOKEN_RATIO * schedule_conservativeness,
+            1.0,
+        )
+        self.min_new_token_ratio = min(
+            self.init_new_token_ratio * envs.FD_MIN_NEW_TOKEN_RATIO_FACTOR,
+            1.0,
+        )
+        self.new_token_ratio_decay = (
+            self.init_new_token_ratio - self.min_new_token_ratio
+        ) / envs.FD_NEW_TOKEN_RATIO_DECAY_STEPS
+        self.current_new_token_ratio = self.init_new_token_ratio
+        self.clip_max_new_tokens_estimation = envs.FD_CLIP_MAX_NEW_TOKENS_ESTIMATION
+
+        llm_logger.info(
+            f"NewTokenRatio initialized: init={self.init_new_token_ratio:.3f}, "
+            f"min={self.min_new_token_ratio:.3f}, decay_per_step={self.new_token_ratio_decay:.6f}, "
+            f"clip_max_tokens={self.clip_max_new_tokens_estimation}"
+        )
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -246,8 +256,8 @@ class ResourceManagerV1(ResourceManager):
                 request = self.requests[request_id]
                 if process_func is not None:
                     process_func(request)
-                llm_logger.debug(f"self.waiting append request:{request.request_id},req.type:{request.status}")
-                self.waiting.appendleft(request)
+                llm_logger.debug(f"self.waiting append request to end:{request.request_id},req.type:{request.status}")
+                self.waiting.append(request)  # Append to end of queue (FIFO order)
                 self.to_be_rescheduled_request_id_set.remove(request_id)
 
     def _info_each_block(self):
@@ -303,64 +313,294 @@ class ResourceManagerV1(ResourceManager):
 
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
-        If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
+        If the request cannot be scheduled, preempt running decode requests one by one until it can be scheduled.
+        Only preempt decode requests (num_computed_tokens >= need_prefill_tokens).
+
+        SGLang-aligned strategy:
+        - Sort by (output_len asc, input_len desc) to prioritize retracting short-output, long-input requests
+        - Keep at least 1 request in running
+        - After preemption, update current_new_token_ratio based on remaining requests
         """
-        can_schedule = False
-        while self._can_preempt():
-            if not self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
-                preempted_req = self.running.pop()
-                if preempted_req.use_extend_tables:
-                    self.running.insert(0, preempted_req)
-                    continue
-                preempted_req.status = RequestStatus.PREEMPTED
-                preempted_req.num_computed_tokens = 0
-                if self.config.scheduler_config.splitwise_role == "decode":
-                    self.tasks_list[preempted_req.idx] = None
-                    self.stop_flags[preempted_req.idx] = True
-                    if preempted_req.request_id in self.requests:
-                        del self.requests[preempted_req.request_id]
-                    if preempted_req.request_id in self.req_dict:
-                        del self.req_dict[preempted_req.request_id]
-                    self._free_blocks(preempted_req)
-                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
-                else:
-                    self._free_blocks(preempted_req)
-                    preempted_req.num_cached_blocks = 0
-                    self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
-                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
-                preempted_reqs.append(preempted_req)
-                scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+        # Collect decode requests (num_computed_tokens >= need_prefill_tokens)
+        decode_requests = [
+            req for req in self.running
+            if req.num_computed_tokens >= req.need_prefill_tokens
+        ]
 
-                llm_logger.debug(
-                    f"preempt {preempted_req.request_id} in idx {preempted_req.idx} with generated ids {preempted_req.output_token_ids}"
-                )
-                llm_logger.debug(self.info())
-                self._info_each_block()
+        # SGLang-aligned sort: prioritize retracting requests with shorter output
+        # If output_len is equal, prioritize retracting requests with longer input
+        decode_requests.sort(
+            key=lambda r: (len(r.output_token_ids), -len(r.origin_input_ids)),
+            reverse=True,  # pop from end: shorter output first
+        )
 
-                if preempted_req == request:
-                    # No more request to preempt.
-                    can_schedule = False
-                    break
-            else:
-                # The request can be scheduled.
-                can_schedule = True
+        # If only 1 decode request, cannot preempt (need to keep at least 1)
+        if len(decode_requests) <= 1:
+            can_schedule = self.cache_manager.can_allocate_gpu_blocks(num_new_blocks)
+            return can_schedule
+
+        preempted_count = 0
+        remaining_req_count = len(decode_requests) - 1  # Count for KV eviction (decreases after each preempt)
+
+        for preempted_req in decode_requests[:-1]:  # Skip last one to keep at least 1
+            if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
                 break
-        self.current_reserve_output_block_num = self.init_reserve_output_block_num
-        self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
-        self.can_relax_prefill_strategy = False
+
+            # Remove from running list
+            self.running.remove(preempted_req)
+            preempted_req.status = RequestStatus.PREEMPTED
+            preempted_req.num_computed_tokens = 0
+
+            # Mark as retracted for SGLang alignment
+            preempted_req.is_retracted = True
+
+            if self.config.scheduler_config.splitwise_role == "decode":
+                self.tasks_list[preempted_req.idx] = None
+                self.stop_flags[preempted_req.idx] = True
+                if preempted_req.request_id in self.requests:
+                    del self.requests[preempted_req.request_id]
+                if preempted_req.request_id in self.req_dict:
+                    del self.req_dict[preempted_req.request_id]
+                self._free_blocks(preempted_req)
+                llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+            else:
+                self._free_blocks(preempted_req)
+                preempted_req.num_cached_blocks = 0
+                self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+
+            preempted_reqs.append(preempted_req)
+            scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
+            preempted_count += 1
+
+            # Evict KV cache from tree (SGLang-aligned: retract_decode_steps * remaining_req_count)
+            self._evict_decode_kv_cache(remaining_req_count)
+            remaining_req_count -= 1
+
+            llm_logger.debug(
+                f"preempt {preempted_req.request_id} in idx {preempted_req.idx} "
+                f"with output_len={len(preempted_req.output_token_ids)}, "
+                f"input_len={len(preempted_req.origin_input_ids)}"
+            )
+
+        if preempted_count > 0:
+            llm_logger.debug(self.info())
+            self._info_each_block()
+
+            # Update new_token_ratio based on remaining requests (SGLang style)
+            self._update_new_token_ratio_after_preemption()
+
+        # Check if we can schedule now
+        can_schedule = self.cache_manager.can_allocate_gpu_blocks(num_new_blocks)
         return can_schedule
 
-    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
-        if self.can_relax_prefill_strategy:
-            can_schedule_block_num_threshold = num_chunk_new_block
+    def _evict_decode_kv_cache(self, remaining_req_count: int):
+        """
+        Evict KV cache from tree cache after retracting a decode request.
+
+        SGLang-aligned strategy:
+        - Each retraction triggers eviction of retract_decode_steps * remaining_req_count tokens
+        - This frees up space for new requests immediately
+
+        Args:
+            remaining_req_count: Number of requests that will remain in running after eviction
+        """
+        # Default retract_decode_steps = 20 (SGLang default)
+        retract_decode_steps = getattr(self, 'retract_decode_steps', 20)
+
+        num_tokens_to_evict = remaining_req_count * retract_decode_steps
+
+        llm_logger.debug(
+            f"Evicting {num_tokens_to_evict} KV cache tokens "
+            f"(retract_decode_steps={retract_decode_steps}, remaining_req_count={remaining_req_count})"
+        )
+
+        # Convert tokens to blocks for FD's cache manager
+        # FD's PrefixCacheManager uses block-based eviction
+        if self.cache_manager is not None:
+            block_size = self.config.cache_config.block_size
+            num_blocks_to_evict = (num_tokens_to_evict + block_size - 1) // block_size
+
+            llm_logger.debug(
+                f"Evicting {num_blocks_to_evict} blocks "
+                f"(={num_tokens_to_evict} tokens) from GPU cache "
+                f"(block_size={block_size})"
+            )
+
+            # Use FD's existing cache eviction API
+            # free_block_ids_async will handle the LRU eviction logic
+            # including GPU -> CPU swap and GPU -> Storage persistence
+            self.cache_manager.free_block_ids_async(num_blocks_to_evict)
         else:
-            can_schedule_block_num_threshold = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + len(self.running) * self.current_reserve_output_block_num
-            if self.config.speculative_config.method is not None:
-                can_schedule_block_num_threshold = min(
-                    can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
+            llm_logger.warning("cache_manager is None, cannot evict KV cache")
+
+    def _update_new_token_ratio_after_preemption(self):
+        """
+        Update current_new_token_ratio based on remaining running decode requests.
+        Mimics SGLang's logic:
+        new_ratio = (total_decoded_tokens + retract_decode_steps * num_decode_reqs) / (total_max_new_tokens + 1)
+
+        Note: Only count decode requests (num_computed_tokens >= need_prefill_tokens),
+        not prefill requests.
+
+        SGLang-aligned behavior:
+        - If no decode requests running, keep the current ratio unchanged
+          (matching SGLang: ratio remains continuous when only prefill requests are running)
+        - Ratio reset only happens when the system is completely idle
+          (no prefill and no decode requests)
+        """
+        # Filter to only decode requests (matching SGLang's self.reqs)
+        decode_reqs = [
+            req for req in self.running
+            if req.num_computed_tokens >= req.need_prefill_tokens
+        ]
+
+        if len(decode_reqs) == 0:
+            # No decode requests running, keep current ratio unchanged
+            # (matching SGLang: ratio remains continuous when only prefill requests are running)
+            llm_logger.debug(
+                f"No decode requests after preemption, keeping current_new_token_ratio={self.current_new_token_ratio:.3f}"
+            )
+            return
+
+        total_decoded_tokens = 0
+        total_max_new_tokens = 0
+
+        for req in decode_reqs:
+            # Count decoded tokens
+            already_decoded = len(req.output_token_ids)
+            total_decoded_tokens += already_decoded
+
+            # Get max_new_tokens for this request
+            if req.sampling_params and req.sampling_params.max_tokens is not None:
+                max_new_tokens = req.sampling_params.max_tokens
+            else:
+                max_new_tokens = self.config.model_config.max_model_len - req.need_prefill_tokens
+            total_max_new_tokens += max_new_tokens
+
+        # SGLang's formula with retract_decode_steps (SGLang default: 20)
+        retract_decode_steps = getattr(self, 'retract_decode_steps', 20)
+        num_decode_reqs = len(decode_reqs)
+
+        new_ratio = (
+            total_decoded_tokens + retract_decode_steps * num_decode_reqs
+        ) / (total_max_new_tokens + 1)
+
+        # Clamp to [min_ratio, init_ratio]
+        new_ratio = max(self.min_new_token_ratio, min(self.init_new_token_ratio, new_ratio))
+
+        llm_logger.debug(
+            f"Update new_token_ratio after preemption: "
+            f"decode_reqs={num_decode_reqs}, decoded={total_decoded_tokens}, "
+            f"max_new={total_max_new_tokens}, ratio={new_ratio:.3f} "
+            f"(was {self.current_new_token_ratio:.3f})"
+        )
+
+        self.current_new_token_ratio = new_ratio
+
+    def reset_new_token_ratio_on_idle(self):
+        """
+        Reset new_token_ratio to init_new_token_ratio when system is completely idle.
+
+        SGLang alignment: Only reset when both running and waiting queues are empty.
+        This mimics SGLang's self_check_during_idle behavior.
+        """
+        if len(self.running) == 0 and len(self.waiting) == 0:
+            if self.current_new_token_ratio != self.init_new_token_ratio:
+                llm_logger.debug(
+                    f"System completely idle, resetting new_token_ratio "
+                    f"from {self.current_new_token_ratio:.3f} to {self.init_new_token_ratio:.3f}"
                 )
+                self.current_new_token_ratio = self.init_new_token_ratio
+
+    def _calculate_decode_reserved_tokens_by_ratio(self):
+        """
+        Calculate total reserved tokens for all running decode requests based on current_new_token_ratio.
+
+        For each request in decode phase, calculate:
+            remaining_tokens = min(max_new_tokens - already_decoded, clip_estimation)
+            reserved_tokens = remaining_tokens * current_new_token_ratio
+
+        Returns:
+            int: Total number of tokens to reserve for decode requests
+        """
+        total_reserved_tokens = 0
+        num_decode_reqs = 0
+
+        for req in self.running:
+            # Only calculate reservation for requests in decode phase
+            if req.num_computed_tokens < req.need_prefill_tokens:
+                continue  # Still in prefill, skip
+
+            num_decode_reqs += 1
+
+            # Get max_new_tokens for this request
+            if req.sampling_params and req.sampling_params.max_tokens is not None:
+                max_new_tokens = req.sampling_params.max_tokens
+            else:
+                # Fallback: use max_model_len - prompt_len
+                max_new_tokens = self.config.model_config.max_model_len - req.need_prefill_tokens
+
+            # Calculate remaining tokens to generate
+            already_decoded = len(req.output_token_ids)
+            remaining_tokens = max(0, max_new_tokens - already_decoded)
+
+            # Clip to reasonable upper bound to avoid single long request dominating budget
+            remaining_tokens = min(remaining_tokens, self.clip_max_new_tokens_estimation)
+
+            # Calculate reservation based on current ratio (no rounding here, keep precision)
+            reserved_tokens = remaining_tokens * self.current_new_token_ratio
+            total_reserved_tokens += reserved_tokens
+
+        llm_logger.debug(
+            f"Decode reservation: {num_decode_reqs} decode reqs, "
+            f"{total_reserved_tokens:.1f} tokens, ratio={self.current_new_token_ratio:.3f}"
+        )
+
+        return total_reserved_tokens
+
+    def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
+        """
+        Calculate the total tokens needed for scheduling a new prefill request.
+
+        Total tokens includes:
+        1. Tokens needed for current prefill
+        2. Tokens reserved for this request's future decode (max_new_tokens)
+        3. Tokens reserved for all existing decode requests (ratio-based)
+
+        Returns:
+            int: Total blocks needed (ceiled once at the end) to safely admit this request
+        """
+        # 1. Tokens needed for current prefill
+        required_tokens_for_prefill = request.need_prefill_tokens
+
+        # 2. Tokens reserved for this request's future decode (full max_new_tokens)
+        if hasattr(request, 'sampling_params') and request.sampling_params and request.sampling_params.max_tokens:
+            max_new_tokens_for_request = request.sampling_params.max_tokens
+        else:
+            max_new_tokens_for_request = self.config.model_config.max_model_len - request.need_prefill_tokens
+        max_new_tokens_for_request = min(max_new_tokens_for_request, self.clip_max_new_tokens_estimation)
+
+        # 3. Tokens reserved for all existing decode requests (ratio-based)
+        decode_reserved_tokens = self._calculate_decode_reserved_tokens_by_ratio()
+
+        # Sum all tokens and convert to blocks once at the end
+        total_tokens = required_tokens_for_prefill + max_new_tokens_for_request + decode_reserved_tokens
+        can_schedule_block_num_threshold = (
+            total_tokens + self.config.cache_config.block_size - 1
+        ) // self.config.cache_config.block_size
+
+        if self.config.speculative_config.method is not None:
+            can_schedule_block_num_threshold = min(
+                can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
+            )
+
+        llm_logger.debug(
+            f"Prefill threshold: tokens={total_tokens:.1f} -> blocks={can_schedule_block_num_threshold} "
+            f"(prefill={required_tokens_for_prefill}, future_decode={max_new_tokens_for_request:.1f}, "
+            f"decode_reserved={decode_reserved_tokens:.1f})"
+        )
+
         return can_schedule_block_num_threshold
 
     def _update_mm_hashes(self, request):
@@ -948,14 +1188,15 @@ class ResourceManagerV1(ResourceManager):
 
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
-                self.current_reserve_output_block_num_float -= self.decay_output_block_num
-                self.current_reserve_output_block_num = max(
-                    int(self.current_reserve_output_block_num_float),
-                    self.min_reserve_output_block_num,
-                    0,
-                )
-                if self.current_reserve_output_block_num == 0:
-                    self.can_relax_prefill_strategy = True
+
+                # New mechanism: decay new_token_ratio only when there are decode requests
+                has_decode_reqs = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
+                if has_decode_reqs:
+                    self.current_new_token_ratio = max(
+                        self.current_new_token_ratio - self.new_token_ratio_decay,
+                        self.min_new_token_ratio,
+                    )
+                    llm_logger.debug(f"NewTokenRatio decayed to {self.current_new_token_ratio:.4f}")
 
             if (
                 hasattr(self, "scheduler_metrics_logger")
@@ -1007,6 +1248,10 @@ class ResourceManagerV1(ResourceManager):
                         token_usage=token_usage,
                         use_cudagraph=use_decode_cudagraph,
                     )
+
+            # SGLang-aligned: reset new_token_ratio when completely idle
+            if not scheduled_reqs:
+                self.reset_new_token_ratio_on_idle()
 
             self.update_metrics()
 
@@ -1383,7 +1628,6 @@ class ResourceManagerV1(ResourceManager):
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
-        self.update_metrics(verbose=True)
         try:
             if isinstance(request_ids, str):
                 request_ids = (request_ids,)
