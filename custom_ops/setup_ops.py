@@ -482,6 +482,7 @@ elif paddle.is_compiled_with_cuda():
     if cc >= 80:
         # append_attention (requires SM80+ due to cp.async, ldmatrix instructions - NO fallback)
         cc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
+        nvcc_compile_args += ["-DENABLE_APPEND_ATTENTION"]
         os.system(
             "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen --skip-fp8"
         )
