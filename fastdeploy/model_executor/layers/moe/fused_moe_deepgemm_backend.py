@@ -54,6 +54,10 @@ else:
 
 def dump_tensor(*args):
     """打印张量的关键信息（类型、形状、 dtype、步长），用于调试精度问题"""
+    if not paddle.cuda.is_current_stream_capturing():
+        paddle.cuda.synchronize()
+
+
     import inspect
 
     frame = inspect.currentframe().f_back
@@ -609,12 +613,14 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             )
 
         dump_tensor(recv_x, recv_x_scale, topk_ids, topk_weights, tmp[1])
-        print()
+        override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
+        print('override_buffer_size:',override_buffer_size)
         if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             topk_ids = topk_ids.astype(paddle.int32)
             print("tp_phi_moe_permute")
 
             print("layer.num_experts:", layer.num_experts)
+            
             (
                 permute_input,
                 permute_indices_per_token,  # == zipped_expertwise_rowmap
@@ -630,8 +636,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 tokens_per_expert=[],
                 padding_alignment=128,
                 return_expert_indices=True,
-                override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1),
-                do_gather=True,
+                override_buffer_size = override_buffer_size,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
         else:
@@ -655,8 +660,34 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # use_in_ep
                 -1,
             )
-        dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
+        # 生成 mask
+        mask = m_indices > layer.num_experts
 
+        # 替换
+        m_indices = paddle.where(
+            mask,
+            paddle.full_like(m_indices, -1),
+            m_indices
+        )
+        dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
+        # if override_buffer_size == 8896:
+        #     # 同步一下，防止读到未完成的结果
+        #     paddle.device.cuda.synchronize()
+
+        #     # 拷到 CPU
+        #     m_indices_cpu = m_indices.cpu().numpy()
+
+        #     # 存成 csv（一行一个数字）
+        #     import numpy as np
+        #     np.savetxt(
+        #         "m_indices_8896_right.csv",
+        #         m_indices_cpu.reshape(-1),
+        #         fmt="%d",
+        #         delimiter=","
+        #     )
+
+        #     print("m_indices saved to m_indices_8896.csv, aborting.")
+        #     raise RuntimeError("Stop after dumping m_indices")
         ffn_out = m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
             permute_input,
             permute_scale,
@@ -675,7 +706,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             print("total_zipped_tokens:", ffn_out.shape[0])
             print("num_experts:", layer.num_experts)
-
             tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
                 hidden_states_unzipped=ffn_out,
                 zipped_expertwise_rowmap=permute_indices_per_token,
