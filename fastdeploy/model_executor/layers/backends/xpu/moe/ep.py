@@ -24,6 +24,8 @@ import fastdeploy
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
 
+from .utils import get_moe_scores
+
 
 class DeepEPEngineBase:
     """
@@ -268,24 +270,50 @@ class XPUEPRunner:
                 tokens_per_expert_stats_list,
             ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
 
-            topk_idx, topk_weights = fastdeploy.model_executor.ops.xpu.moe_redundant_topk_select(
-                gating_logits=gate_out,
-                expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
-                expert_in_rank_num_list=expert_in_rank_num_list,
-                tokens_per_expert_stats_list=tokens_per_expert_stats_list,
-                bias=layer.gate_correction_bias,
-                moe_topk=self.top_k,
-                apply_norm_weight=True,  # apply_norm_weight
-                enable_softmax_top_k_fused=False,
-                redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
-            )
+            if layer.topk_method == "noaux_tc":
+                _, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    layer.renormalize,
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.xpu.moe_redundant_topk_select(
+                    gating_logits=gate_out,
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    bias=layer.gate_correction_bias,
+                    moe_topk=self.top_k,
+                    apply_norm_weight=True,  # apply_norm_weight
+                    enable_softmax_top_k_fused=False,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                )
         else:
-            topk_idx, topk_weights = fastdeploy.model_executor.ops.xpu.moe_topk_select(
-                gate_out,
-                layer.gate_correction_bias,
-                self.top_k,
-                True,  # apply_norm_weight,
-            )
+            if layer.topk_method == "noaux_tc":
+                _, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    layer.renormalize,
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.xpu.moe_topk_select(
+                    gate_out,
+                    layer.gate_correction_bias,
+                    self.top_k,
+                    True,  # apply_norm_weight,
+                )
         return topk_idx, topk_weights
 
     @abstractmethod
