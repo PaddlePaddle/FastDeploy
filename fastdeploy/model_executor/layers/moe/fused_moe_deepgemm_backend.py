@@ -17,7 +17,6 @@
 import os
 from typing import Callable
 
-import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -32,32 +31,6 @@ from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
-
-
-def dump_moe_inputs(
-    recv_x,
-    recv_x_scale,
-    recv_topk_idx,
-    recv_topk_weights,
-    save_path="last_moe_inputs.npz",
-):
-    try:
-        # 强制同步，提前暴露 CUDA 错误
-        paddle.device.cuda.synchronize()
-
-        np.savez(
-            save_path,
-            recv_x=recv_x.astype("float32").detach().cpu().numpy(),
-            recv_x_scale=recv_x_scale.detach().cpu().numpy(),
-            recv_topk_idx=recv_topk_idx.detach().cpu().numpy(),
-            recv_topk_weights=recv_topk_weights.detach().cpu().numpy(),
-        )
-
-        print(f"[DUMP OK] saved to {save_path}")
-
-    except Exception as e:
-        print("[DUMP FAIL]", e)
-
 
 if current_platform.is_cuda():
     try:
@@ -77,38 +50,6 @@ if current_platform.is_cuda():
 else:
     m_grouped_fp8_gemm_nt_contiguous = None
     m_grouped_fp8_gemm_nt_masked = None
-
-
-def dump_tensor(*args, save=0):
-    """打印张量的关键信息（类型、形状、 dtype、步长），用于调试精度问题"""
-    paddle.cuda.synchronize()
-    import inspect
-
-    frame = inspect.currentframe().f_back
-    try:
-        call = inspect.getframeinfo(frame).code_context[0]
-        names = call[call.find("(") + 1 : call.rfind(")")].split(",")
-    except Exception:
-        names = [f"arg{i}" for i in range(len(args))]
-
-    print(100 * "*")
-    for i, x in enumerate(args):
-        name = names[i].strip() if i < len(names) else f"arg{i}"
-        print(
-            f"[{name:<60}] "
-            f"type={type(x).__name__:<12} "
-            f"shape={tuple(x.shape)!s:<18} "
-            f"dtype={str(x.dtype):<20} "
-            f"strides={x.strides}"
-        )
-        if not save:
-            continue
-        # save tensor as plain txt with original type,such as int32
-        arr = x.numpy()
-        fmt = "%d" if np.issubdtype(arr.dtype, np.integer) else "%.18e"
-        print(f"{name}保存了")
-        id = paddle.get_device()
-        np.savetxt(f"fanxiangyu_logs/{name}_{id}.txt", arr, fmt=fmt)
 
 
 def m_grouped_fp8_gemm_nt_contiguous_custom_python_op_infermeta(
@@ -162,7 +103,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     if permute_scale.strides[0] != 1:
         permute_scale = permute_scale.transpose([1, 0]).contiguous()
         permute_scale = permute_scale.transpose([1, 0])
-    dump_tensor(permute_input, permute_scale, m_indices)
+
     # disable_ue8m0_cast is False for SM100
     m_grouped_fp8_gemm_nt_contiguous(
         (permute_input, permute_scale),
@@ -196,7 +137,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     )
     # disable_ue8m0_cast is False for SM100
 
-    dump_tensor(ffn_in_x, ffn_in_x_scale_tensor)
     m_grouped_fp8_gemm_nt_contiguous(
         (ffn_in_x, ffn_in_x_scale_tensor),
         (layer_added_weight_attrs_1, layer_added_scale_attrs_1),
@@ -204,7 +144,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         m_indices,
     )
 
-    dump_tensor(ffn_out)
     return ffn_out
 
 
@@ -321,7 +260,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
-        print("apply_ep_prefill")
         """
         Apply the EP prefill method.
         """
@@ -382,22 +320,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             logger.debug(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
-            token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            print("num_experts:", layer.num_local_experts)
-            print("override_buffer_size:", token_all_num)
-            dump_tensor(recv_x, recv_x_scale, recv_topk_idx, recv_topk_weights, token_nums_this_rank[1])
-            dump_tensor(recv_topk_idx, token_nums_this_rank[1], save=False)
-            over_ride = sum(token_nums_this_rank[1])
-            print("override_buffer_size 2:", over_ride)
-            print(token_nums_this_rank)
             if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
                 recv_topk_idx = recv_topk_idx.astype(paddle.int32)
-                # dump_moe_inputs(
-                #         recv_x,
-                #         recv_x_scale,
-                #         recv_topk_idx,
-                #         recv_topk_weights,
-                #     )
                 (
                     permute_input,
                     permute_indices_per_token,  # == zipped_expertwise_rowmap
@@ -413,10 +337,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     tokens_per_expert=[],
                     padding_alignment=128,
                     return_expert_indices=True,
-                    override_buffer_size=over_ride,
+                    override_buffer_size=token_all_num,
                     using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                 )
             else:
+                token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
                 (
                     permute_input,
                     permute_scale,
@@ -438,9 +363,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     token_all_num,
                 )
 
-            # assert permute_input.shape[0] == token_all_num
-
-            dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
+            assert permute_input.shape[0] == token_all_num
 
             if permute_scale.strides[0] != 1:
                 permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
@@ -490,7 +413,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             )
             del ffn_in_x
             if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
-                print("use_phi_moe_permute", 60 * "*")
                 tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
                     hidden_states_unzipped=ffn_out,
                     zipped_expertwise_rowmap=permute_indices_per_token,
@@ -516,7 +438,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             del ffn_out
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
-        dump_tensor(tmp_ffn_out)
         # 5. EP combine
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
@@ -537,7 +458,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        print("apply_ep_decode")
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
@@ -614,7 +534,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Paddle Use DeepGemm compute Fused MoE.
         below is TP compute method.
         """
-        print("apply_tp")
         gate_out = gate(x.cast("float32"))
 
         if layer.topk_method == "noaux_tc":
@@ -639,8 +558,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_ids)
 
-        tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
-
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
         else:
@@ -656,14 +573,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 else recv_x_scale.T[: recv_x.shape[0]]
             )
 
-        dump_tensor(recv_x, recv_x_scale, topk_ids, topk_weights, tmp[1])
-        override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
-        print("override_buffer_size:", override_buffer_size)
         if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             topk_ids = topk_ids.astype(paddle.int32)
-            print("tp_phi_moe_permute")
-
-            print("layer.num_experts:", layer.num_experts)
+            override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
 
             (
                 permute_input,
@@ -684,6 +596,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
         else:
+            tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
             (
                 permute_input,
                 permute_scale,
@@ -704,30 +617,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # use_in_ep
                 -1,
             )
-        # 生成 mask
-        mask = m_indices > layer.num_experts
 
-        # 替换
-        m_indices = paddle.where(mask, paddle.full_like(m_indices, -1), m_indices)
-        dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
-        # if override_buffer_size == 8896:
-        #     # 同步一下，防止读到未完成的结果
-        #     paddle.device.cuda.synchronize()
-
-        #     # 拷到 CPU
-        #     m_indices_cpu = m_indices.cpu().numpy()
-
-        #     # 存成 csv（一行一个数字）
-        #     import numpy as np
-        #     np.savetxt(
-        #         "m_indices_8896_right.csv",
-        #         m_indices_cpu.reshape(-1),
-        #         fmt="%d",
-        #         delimiter=","
-        #     )
-
-        #     print("m_indices saved to m_indices_8896.csv, aborting.")
-        #     raise RuntimeError("Stop after dumping m_indices")
         ffn_out = m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
             permute_input,
             permute_scale,
@@ -741,11 +631,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         # prmt back per rank
-        print("tp_phi_moe_unpermute")
-        dump_tensor(ffn_out, permute_indices_per_token, topk_ids, dst_weights)
         if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
-            print("total_zipped_tokens:", ffn_out.shape[0])
-            print("num_experts:", layer.num_experts)
             tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
                 hidden_states_unzipped=ffn_out,
                 zipped_expertwise_rowmap=permute_indices_per_token,
@@ -753,7 +639,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_prob_unzipped=dst_weights,
                 total_zipped_tokens=recv_x.shape[0],
                 num_experts=layer.num_experts,
-                # use_mix_precision =False,
                 using_weighted_combine=True,
             )
         else:
@@ -766,5 +651,4 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 False,  # norm_topk_prob
                 1.0,
             )
-        dump_tensor(tmp_ffn_out)
         return tmp_ffn_out
