@@ -50,10 +50,6 @@ void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
-paddle::Tensor GetStop(paddle::Tensor& not_need_stop);
-
-void SetStop(paddle::Tensor& not_need_stop, bool flag);
-
 paddle::Tensor CustomNumpyToTensor(py::array numpy_array,
                                    paddle::Tensor tensor) {
   py::buffer_info buf_info = numpy_array.request();
@@ -1736,10 +1732,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "reasoning_phase_token_constraint function");
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
-
-  m.def("get_stop", &GetStop, "get_stop function");
-
-  m.def("set_stop", &SetStop, "set_stop function");
 
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,
