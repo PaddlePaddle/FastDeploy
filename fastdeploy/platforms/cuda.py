@@ -136,19 +136,22 @@ class CUDAPlatform(Platform):
         # Check for SM70 (V100) compatibility and apply fallbacks
         if not cls.supports_async_copy():
             # APPEND_ATTN, MLA_ATTN, and FLASH_ATTN all require SM80+ (cp.async or dependent ops)
-            # V100 must use NATIVE_ATTN which is the only fully compatible backend
+            # V100 can use V100_FLASH_ATTN which is optimized for SM70
             if selected_backend in (_Backend.APPEND_ATTN, _Backend.MLA_ATTN, _Backend.FLASH_ATTN):
                 logger.warning(
                     f"{selected_backend} backend requires SM{cls.SM_ASYNC_COPY_MIN}+ "
                     f"(cp.async instructions or dependent ops), "
                     f"but current GPU is SM{sm_version}. "
-                    f"Automatically falling back to NATIVE_ATTN backend."
+                    f"Automatically falling back to V100_FLASH_ATTN backend."
                 )
-                selected_backend = _Backend.NATIVE_ATTN
+                selected_backend = _Backend.V100_FLASH_ATTN
 
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using NATIVE ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
+        elif selected_backend == _Backend.V100_FLASH_ATTN:
+            logger.info("Using V100 FLASH ATTN backend (SM70 compatible).")
+            return "fastdeploy.model_executor.layers.attention.V100FlashAttentionBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
@@ -170,5 +173,5 @@ class CUDAPlatform(Platform):
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
-                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
+                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN, V100_FLASH_ATTN] in cuda place."
             )
