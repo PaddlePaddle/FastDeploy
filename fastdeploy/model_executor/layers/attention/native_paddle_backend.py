@@ -36,8 +36,31 @@ class PaddleNativeAttnBackend(AttentionBackend):
     Which is used only for testing purpose.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        fd_config=None,
+        kv_num_heads: int = None,
+        num_heads: int = None,
+        head_dim: int = None,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ) -> None:
         super().__init__()
+        self._kv_num_heads = kv_num_heads or 8
+        self._head_dim = head_dim or 128
+        self._block_size = 64
+        if fd_config is not None:
+            self._block_size = fd_config.cache_config.block_size
+
+    def get_kv_cache_shape(
+        self,
+        max_num_blocks: int,
+        kv_cache_quant_type: str = None,
+    ):
+        """Calculate KV cache shape."""
+        key_cache_shape = [max_num_blocks, self._kv_num_heads, self._block_size, self._head_dim]
+        value_cache_shape = key_cache_shape
+        return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Init the metadata for a forward pass."""
