@@ -27,9 +27,9 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    deep_gemm,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
-    deep_gemm,
 )
 from fastdeploy.model_executor.utils import (
     TensorTracker,
