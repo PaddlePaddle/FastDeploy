@@ -62,7 +62,8 @@ def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
 ):
     """Convert FP32 tensor to TMA-aligned packed UE8M0 format tensor"""
 
-    from deep_gemm.utils import align, get_tma_aligned_size
+    align = deep_gemm.utils.align
+    get_tma_aligned_size = deep_gemm.utils.get_tma_aligned_size
 
     # Input validation: must be FP32 type 2D or 3D tensor
     assert x.dtype == paddle.float and x.dim() in (2, 3)
