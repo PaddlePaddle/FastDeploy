@@ -195,9 +195,6 @@ class CudaGraphPiecewiseBackend:
 
         # Capture a new cuda graph
         if entry.cuda_graph is None:
-            assert (
-                real_shape == padding_real_shape
-            ), f"real_shape:{real_shape} is not equal to padding_real_shape:{padding_real_shape} when capture new graph."
             # Warmup the model
             for n in range(entry.num_finished_warmup, self.warm_up_size):
                 entry.num_finished_warmup += 1
