@@ -340,9 +340,8 @@ class InputBatch:
             tensor[idx2] = temp
 
         self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
-        swap_data(self.pre_ids, i1, i2)
+        swap_data(self.token_ids_all, i1, i2)
         swap_data(self.input_ids, i1, i2)
-        swap_data(self.prompt_ids, i1, i2)
         swap_data(self.top_p, i1, i2)
         swap_data(self.top_k, i1, i2)
         swap_data(self.min_p, i1, i2)
@@ -500,9 +499,8 @@ class InputBatch:
             max_num_seqs = self.scheduler_config.max_num_seqs
 
             # Reset basic tensors to their default values
-            fill_paddle_tensor(self, "pre_ids", -1)
+            fill_paddle_tensor(self, "token_ids_all", -1)
             fill_paddle_tensor(self, "input_ids", self.model_config.pad_token_id)
-            fill_paddle_tensor(self, "prompt_ids", self.model_config.pad_token_id)
             fill_paddle_tensor(self, "eos_token_id", 0)
             fill_paddle_tensor(self, "top_p", self.model_config.top_p)
             fill_paddle_tensor(self, "top_k", 0)
@@ -668,6 +666,7 @@ class ProposerInputBatch(InputBatch):
         self.index_to_batch_id = getattr(self.target_model_input_batch, "index_to_batch_id", {})
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
+        self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
         self.input_ids_cpu = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -835,6 +834,7 @@ class ProposerInputBatch(InputBatch):
 
         swap_data(self.block_tables, i1, i2)
         swap_data(self.input_ids, i1, i2)
+        swap_data(self.token_ids_all, i1, i2)
         swap_data(self.input_ids_cpu, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
@@ -896,6 +896,7 @@ class ProposerInputBatch(InputBatch):
             # Clone the target model inputs to restore initial values
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
+            self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
             fill_paddle_tensor(self, "input_ids_cpu", -1)
             self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
@@ -905,7 +906,18 @@ class ProposerInputBatch(InputBatch):
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
-            self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+            # TODO: delete pre_ids in mtp
+            self.pre_ids = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                -1,
+                dtype="int64",
+            )
+            for bs_idx in range(self.scheduler_config.max_num_seqs):
+                prompt_len = self.target_model_input_batch["prompt_lens"][bs_idx]
+                pre_ids_len = self.model_config.max_model_len - prompt_len
+                self.pre_ids[bs_idx, :pre_ids_len] = self.target_model_input_batch["token_ids_all"][
+                    bs_idx, prompt_len:
+                ]
             self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
             self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
             self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])

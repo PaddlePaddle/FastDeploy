@@ -2078,6 +2078,8 @@ class GPUModelRunner(ModelRunnerBase):
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
 
+            logger.info(f"========>[debug] {self.sampling_metadata.token_ids_all}")
+
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
                     self.share_inputs["token_ids_all"],
