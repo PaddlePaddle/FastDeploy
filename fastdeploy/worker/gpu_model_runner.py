@@ -52,7 +52,6 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
-from fastdeploy.model_executor.ops.gpu import custom_numpy_to_tensor
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
 
@@ -77,6 +76,7 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
+        custom_numpy_to_tensor,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -2828,7 +2828,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.update_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
+
+        # Reset share_inputs
+        self.share_inputs.reset_share_inputs()
         if self.speculative_method in ["mtp"]:
+            self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
         # Recapture CUDAGraph
