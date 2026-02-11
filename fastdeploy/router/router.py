@@ -273,6 +273,7 @@ class Router:
         self, modified_request, urls, return_result_url_index=-1, endpoint="v1/chat/completions"
     ):
         async def stream_results():
+            # Lazy init session if needed (e.g. in test environments)
             if self.session is None:
                 logger.warning("Router session not initialized, creating a new one")
                 self.session = aiohttp.ClientSession(trust_env=True)
