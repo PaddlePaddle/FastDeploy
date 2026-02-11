@@ -17,6 +17,7 @@
 import os
 from typing import Callable
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -31,6 +32,32 @@ from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
+
+
+def dump_moe_inputs(
+    recv_x,
+    recv_x_scale,
+    recv_topk_idx,
+    recv_topk_weights,
+    save_path="last_moe_inputs.npz",
+):
+    try:
+        # 强制同步，提前暴露 CUDA 错误
+        paddle.device.cuda.synchronize()
+
+        np.savez(
+            save_path,
+            recv_x=recv_x.astype("float32").detach().cpu().numpy(),
+            recv_x_scale=recv_x_scale.detach().cpu().numpy(),
+            recv_topk_idx=recv_topk_idx.detach().cpu().numpy(),
+            recv_topk_weights=recv_topk_weights.detach().cpu().numpy(),
+        )
+
+        print(f"[DUMP OK] saved to {save_path}")
+
+    except Exception as e:
+        print("[DUMP FAIL]", e)
+
 
 if current_platform.is_cuda():
     try:
@@ -52,12 +79,9 @@ else:
     m_grouped_fp8_gemm_nt_masked = None
 
 
-def dump_tensor(*args):
+def dump_tensor(*args, save=0):
     """打印张量的关键信息（类型、形状、 dtype、步长），用于调试精度问题"""
-    if not paddle.cuda.is_current_stream_capturing():
-        paddle.cuda.synchronize()
-
-
+    paddle.cuda.synchronize()
     import inspect
 
     frame = inspect.currentframe().f_back
@@ -70,14 +94,21 @@ def dump_tensor(*args):
     print(100 * "*")
     for i, x in enumerate(args):
         name = names[i].strip() if i < len(names) else f"arg{i}"
-        name_len = min(20, len(name))
         print(
-            f"[{name[:name_len]:<23}] "
+            f"[{name:<60}] "
             f"type={type(x).__name__:<12} "
             f"shape={tuple(x.shape)!s:<18} "
             f"dtype={str(x.dtype):<20} "
             f"strides={x.strides}"
         )
+        if not save:
+            continue
+        # save tensor as plain txt with original type,such as int32
+        arr = x.numpy()
+        fmt = "%d" if np.issubdtype(arr.dtype, np.integer) else "%.18e"
+        print(f"{name}保存了")
+        id = paddle.get_device()
+        np.savetxt(f"fanxiangyu_logs/{name}_{id}.txt", arr, fmt=fmt)
 
 
 def m_grouped_fp8_gemm_nt_contiguous_custom_python_op_infermeta(
@@ -353,9 +384,20 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
             print("num_experts:", layer.num_local_experts)
-            dump_tensor(recv_x, recv_x_scale, recv_topk_weights, token_nums_this_rank[1])
+            print("override_buffer_size:", token_all_num)
+            dump_tensor(recv_x, recv_x_scale, recv_topk_idx, recv_topk_weights, token_nums_this_rank[1])
+            dump_tensor(recv_topk_idx, token_nums_this_rank[1], save=False)
+            over_ride = sum(token_nums_this_rank[1])
+            print("override_buffer_size 2:", over_ride)
+            print(token_nums_this_rank)
             if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
                 recv_topk_idx = recv_topk_idx.astype(paddle.int32)
+                # dump_moe_inputs(
+                #         recv_x,
+                #         recv_x_scale,
+                #         recv_topk_idx,
+                #         recv_topk_weights,
+                #     )
                 (
                     permute_input,
                     permute_indices_per_token,  # == zipped_expertwise_rowmap
@@ -368,10 +410,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     expert_routemap_topk=recv_topk_idx,
                     expert_prob_topk=recv_topk_weights,
                     num_experts=layer.num_local_experts,
-                    tokens_per_expert=token_nums_this_rank[1].tolist(),
+                    tokens_per_expert=[],
                     padding_alignment=128,
                     return_expert_indices=True,
-                    do_gather=True,
+                    override_buffer_size=over_ride,
                     using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                 )
             else:
@@ -396,7 +438,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     token_all_num,
                 )
 
-            assert permute_input.shape[0] == token_all_num
+            # assert permute_input.shape[0] == token_all_num
+
+            dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
 
             if permute_scale.strides[0] != 1:
                 permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
@@ -614,13 +658,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         dump_tensor(recv_x, recv_x_scale, topk_ids, topk_weights, tmp[1])
         override_buffer_size = recv_x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
-        print('override_buffer_size:',override_buffer_size)
+        print("override_buffer_size:", override_buffer_size)
         if bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "1"))):
             topk_ids = topk_ids.astype(paddle.int32)
             print("tp_phi_moe_permute")
 
             print("layer.num_experts:", layer.num_experts)
-            
+
             (
                 permute_input,
                 permute_indices_per_token,  # == zipped_expertwise_rowmap
@@ -636,7 +680,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 tokens_per_expert=[],
                 padding_alignment=128,
                 return_expert_indices=True,
-                override_buffer_size = override_buffer_size,
+                override_buffer_size=override_buffer_size,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
         else:
@@ -664,11 +708,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         mask = m_indices > layer.num_experts
 
         # 替换
-        m_indices = paddle.where(
-            mask,
-            paddle.full_like(m_indices, -1),
-            m_indices
-        )
+        m_indices = paddle.where(mask, paddle.full_like(m_indices, -1), m_indices)
         dump_tensor(permute_input, permute_indices_per_token, dst_weights, permute_scale, m_indices)
         # if override_buffer_size == 8896:
         #     # 同步一下，防止读到未完成的结果
