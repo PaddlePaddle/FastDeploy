@@ -54,7 +54,7 @@ def setup_and_run_server():
     if base_path:
         model_path = os.path.join(base_path, "GLM-4.5-Air")
     else:
-        model_path = "./GLM-4.5-Air-Fake"
+        model_path = "/root/paddlejob/tmpspace/models/paddle/GLM-4.5-Air-Fake"
 
     log_path = "server.log"
     cmd = [
@@ -84,6 +84,7 @@ def setup_and_run_server():
         "--load-choices",
         "default_v1",
         "--lm_head-fp32",
+        "--gate-fp32",
         "--routing-replay-config",
         '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./R3_tmp/routing_replay_output_glm45air_tp4"}',
     ]
