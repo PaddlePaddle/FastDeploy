@@ -90,6 +90,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
     # enbale max prefill of one execute step
     "FD_ENABLE_MAX_PREFILL": lambda: int(os.getenv("FD_ENABLE_MAX_PREFILL", "0")),
+    # Whether to enable ViT cudagraph for multimodal vision encoders.
+    "FD_VIT_ENABLE_CUDAGRAPH": lambda: bool(int(os.getenv("FD_VIT_ENABLE_CUDAGRAPH", "0"))),
+    # Maximum number of cached ViT cudagraph entries per model instance.
+    "FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES": lambda: int(os.getenv("FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES", "32")),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.

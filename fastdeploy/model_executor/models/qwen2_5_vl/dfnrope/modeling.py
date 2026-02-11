@@ -28,8 +28,13 @@ from paddle.nn.functional.flash_attention import (
     flash_attn_unpadded as flash_attn_varlen_func,
 )
 from paddleformers.transformers.model_utils import PretrainedModel
+from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.graph_optimization.vit_cudagraph_runner import (
+    Qwen25ViTCudaGraphRunner,
+)
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.linear import MergedColumnParallelLinear
 from fastdeploy.model_executor.layers.linear import (
@@ -578,6 +583,19 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             prefix=f"{self.prefix_name}.merger",
         )
 
+        self.enable_vit_cudagraph = paddle.is_compiled_with_cuda() and bool(envs.FD_VIT_ENABLE_CUDAGRAPH)
+        self.vit_cudagraph_runner: Optional[Qwen25ViTCudaGraphRunner] = None
+        if self.enable_vit_cudagraph:
+            self.vit_cudagraph_runner = Qwen25ViTCudaGraphRunner(
+                self,
+                max_graph_entries=int(envs.FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES),
+            )
+        logger.info(
+            f"[ViT CG][Qwen2.5] FD_VIT_ENABLE_CUDAGRAPH={bool(envs.FD_VIT_ENABLE_CUDAGRAPH)}, "
+            f"FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES={int(envs.FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES)}, "
+            f"enable_vit_cudagraph={self.enable_vit_cudagraph}",
+        )
+
     @property
     def device(self) -> paddle.device:
         return self.patch_embed.proj.weight.device
@@ -701,24 +719,36 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
         max_seqlen_full = self.compute_attn_mask_seqlen(cu_seqlens)
         max_seqlen_window = self.compute_attn_mask_seqlen(cu_window_seqlens)
-
-        for layer_num, blk in enumerate(self.blocks):
-            if layer_num in self.fullatt_block_indexes:
-                cu_seqlens_now = cu_seqlens
-                max_seqlen_now = max_seqlen_full
-            else:
-                cu_seqlens_now = cu_window_seqlens
-                max_seqlen_now = max_seqlen_window
-
-            hidden_states = blk(
-                hidden_states,
-                cu_seqlens=cu_seqlens_now,
-                max_seqlen=max_seqlen_now,
+        use_vit_cudagraph = (
+            self.enable_vit_cudagraph and self.vit_cudagraph_runner is not None and hidden_states.place.is_gpu_place()
+        )
+        if use_vit_cudagraph:
+            hidden_states = self.vit_cudagraph_runner.run(
+                hidden_states=hidden_states,
                 rotary_pos_emb=rotary_pos_emb,
+                cu_full=cu_seqlens,
+                cu_window=cu_window_seqlens,
+                max_seqlen_full=max_seqlen_full,
+                max_seqlen_window=max_seqlen_window,
             )
+        else:
+            for layer_num, blk in enumerate(self.blocks):
+                if layer_num in self.fullatt_block_indexes:
+                    cu_seqlens_now = cu_seqlens
+                    max_seqlen_now = max_seqlen_full
+                else:
+                    cu_seqlens_now = cu_window_seqlens
+                    max_seqlen_now = max_seqlen_window
 
-        # adapter
-        hidden_states = self.merger(hidden_states)
+                hidden_states = blk(
+                    hidden_states,
+                    cu_seqlens=cu_seqlens_now,
+                    max_seqlen=max_seqlen_now,
+                    rotary_pos_emb=rotary_pos_emb,
+                )
+
+            # adapter
+            hidden_states = self.merger(hidden_states)
         reverse_indices = paddle.argsort(window_index)
         hidden_states = hidden_states[reverse_indices, :]
         return hidden_states
