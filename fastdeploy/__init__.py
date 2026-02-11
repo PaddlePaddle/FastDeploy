@@ -64,6 +64,8 @@ paddle.compat.enable_torch_proxy(scope={"triton"})
 #
 # Note: Ensure that any torch APIs used in 'new_module' are already implemented in Paddle.
 
+if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
+    paddle.compat.enable_torch_proxy(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     import logging
