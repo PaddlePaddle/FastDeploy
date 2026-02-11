@@ -181,9 +181,20 @@ class LLMEngine:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
-        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
-            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
-            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            assert (
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None or envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_RECV_REQUEST_SERVER_PORTS or FD_ZMQ_RECV_REQUEST_SERVER_PORT when enabling internal adapter."
+            assert (
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None or envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT is not None
+            ), "Please set FD_ZMQ_SEND_RESPONSE_SERVER_PORTS or FD_ZMQ_SEND_RESPONSE_SERVER_PORT when enabling internal adapter."
+            if envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS is not None:
+                envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            if envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS is not None:
+                envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+        llm_logger.info(
+            f"envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT:{envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT},envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT:{envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT}"
+        )
 
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
@@ -576,8 +587,10 @@ class LLMEngine:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.engine.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
 
-        # TODO (iluvatar): remove aftet paddle fix launch error
+        # TODO (iluvatar): remove after paddle fix launch error
         if current_platform.is_iluvatar() and "CUDA_VISIBLE_DEVICES" in os.environ:
             arguments = arguments.replace(f"--devices {self.cfg.parallel_config.device_ids}", "")
 
@@ -596,6 +609,7 @@ class LLMEngine:
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
+            "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -603,6 +617,7 @@ class LLMEngine:
 
         worker_default_none_flag = {
             "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+            "kvcache_storage_backend": self.cfg.cache_config.kvcache_storage_backend,
         }
         for worker_flag, value in worker_default_none_flag.items():
             if value:
@@ -692,6 +707,9 @@ class LLMEngine:
         """
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
+            if hasattr(self, "worker_proc") and self.worker_proc is not None:
+                if self.worker_proc.poll() is not None:
+                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)

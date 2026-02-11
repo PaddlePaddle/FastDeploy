@@ -20,6 +20,7 @@ import unittest
 os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 import paddle
+from utils import OpPerformanceTester
 
 from fastdeploy.config import (
     CacheConfig,
@@ -38,7 +39,6 @@ from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT8Config,
 )
 from fastdeploy.scheduler import SchedulerConfig
-from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 paddle.seed(1024)

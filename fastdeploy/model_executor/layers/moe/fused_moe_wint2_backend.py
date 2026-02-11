@@ -21,6 +21,7 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
+from fastdeploy.model_executor.utils import set_weight_attrs
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -154,6 +155,22 @@ class Wint2MoeMethod(QuantMethodBase):
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
         )
+        for weight_name in [
+            "up_gate_proj_weight",
+            "down_proj_weight",
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+            "up_gate_proj_super_scales",
+            "down_proj_super_scales",
+            "up_gate_proj_code_scale",
+            "down_proj_code_scale",
+            "up_gate_proj_code_zp",
+            "down_proj_code_zp",
+        ]:
+            set_weight_attrs(
+                getattr(layer, weight_name),
+                extra_weight_attrs,
+            )
 
 
 class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
@@ -163,6 +180,24 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
 
     def __init__(self, quant_config):
         super().__init__(quant_config)
+
+    def process_weights_after_loading(self, layer):
+        if self.quant_config.is_checkpoint_bf16:
+            # dynamic quantize
+            return
+        w1_shape = layer.up_gate_proj_weight.shape
+        up_gate_proj_weight = layer.up_gate_proj_weight.reshape(
+            [w1_shape[0], w1_shape[1] // 16, 16, w1_shape[2] // 8, 8]
+        )
+        up_gate_proj_weight = paddle.transpose(up_gate_proj_weight, perm=[0, 3, 1, 4, 2])
+        up_gate_proj_weight = up_gate_proj_weight.reshape(w1_shape)
+        layer.up_gate_proj_weight.data = up_gate_proj_weight
+
+        w2_shape = layer.down_proj_weight.shape
+        down_proj_weight = layer.down_proj_weight.reshape([w2_shape[0], w2_shape[1] // 16, 16, w2_shape[2] // 8, 8])
+        down_proj_weight = paddle.transpose(down_proj_weight, perm=[0, 3, 1, 4, 2])
+        down_proj_weight = down_proj_weight.reshape(w2_shape)
+        layer.down_proj_weight.data = down_proj_weight
 
     def process_loaded_weights(self, layer, weights) -> None:
         """

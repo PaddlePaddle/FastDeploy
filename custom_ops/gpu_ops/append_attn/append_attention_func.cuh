@@ -1034,10 +1034,21 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                   8 * (reg_id / 4) + reg_id % 2;
           bool out_of_boundary;
           if (mask_offset) {
-            out_of_boundary = q_idx < qo_len
-                                  ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
-                                     kv_idx < mask_offset[q_idx * 2])
-                                  : true;
+            if (sliding_window > 0) {
+              int swa_part = mask_offset[q_idx * 2 + 1] - sliding_window;
+              if (swa_part < 0) swa_part = 0;
+              int sink_part = mask_offset[q_idx * 2] + 128;  // sink_size = 128
+              out_of_boundary =
+                  q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                    kv_idx < mask_offset[q_idx * 2] ||
+                                    (kv_idx >= sink_part && kv_idx < swa_part))
+                                 : true;
+            } else {
+              out_of_boundary = q_idx < qo_len
+                                    ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                       kv_idx < mask_offset[q_idx * 2])
+                                    : true;
+            }
           } else if (sliding_window > 0) {
             bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx -
                                                     (int)qo_len -
@@ -2037,6 +2048,7 @@ __global__ void merge_multi_chunks_kernel(
   const int vid = threadIdx.x, hid = threadIdx.y;
   const int qid = blockIdx.x;
   const uint32_t bid = batch_id_per_token[qid];
+  if (bid == -1) return;
   if (seq_lens_q[bid] <= 0 || seq_lens_kv[bid] <= 0) {
     return;
   }

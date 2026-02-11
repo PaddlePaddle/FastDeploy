@@ -440,6 +440,10 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
+    enable_overlap_schedule: bool = False
+    """
+    Flag to enable overlapping schedule. Default is False (disabled).
+    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -1046,7 +1050,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/default_v1.",
+                 default/default_v1/dummy.",
         )
 
         # CacheConfig parameters group
@@ -1086,7 +1090,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--kvcache-storage-backend",
             type=nullable_str,
-            choices=["mooncake", "attention_store"],
+            choices=["mooncake", "attention_store", "file"],
             default=EngineArgs.kvcache_storage_backend,
             help="The storage backend for kvcache storage. Leave empty to disable.",
         )
@@ -1311,6 +1315,13 @@ class EngineArgs:
             default=EngineArgs.scheduler_writer_batch_size,
             help=f"SplitWise Use, Results Writer Batch Size, "
             f"Default is {EngineArgs.scheduler_writer_batch_size}. (global)",
+        )
+
+        scheduler_group.add_argument(
+            "--enable-overlap-schedule",
+            action="store_true",
+            default=EngineArgs.enable_overlap_schedule,
+            help="Enable overlapping schedule.",
         )
 
         return parser
