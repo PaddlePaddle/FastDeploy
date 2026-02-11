@@ -54,7 +54,7 @@ def setup_and_run_server():
     if base_path:
         model_path = os.path.join(base_path, "GLM-4.5-Air")
     else:
-        model_path = "/root/paddlejob/tmpspace/models/paddle/GLM-4.5-Air-Fake"
+        model_path = "./GLM-4.5-Air-Fake"
 
     log_path = "server.log"
     cmd = [
