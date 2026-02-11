@@ -1114,9 +1114,13 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
     """
 
     def _bos_download(bos_client, link):
-        if link.startswith("bos://"):
-            link = link.replace("bos://", "")
-
+        try:
+            if isinstance(link, list) and len(link) > 0:
+                link = link[0]
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+        except Exception as e:
+            raise Exception(f"Bos Download link Error, Please check your links: {link} \n" f"{str(e)}")
         bucket_name = "/".join(link.split("/")[1:-1])
         object_key = link.split("/")[-1]
         return bos_client.get_object_as_string(bucket_name, object_key)

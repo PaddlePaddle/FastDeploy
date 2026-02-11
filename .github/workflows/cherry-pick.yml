@@ -149,6 +149,8 @@ jobs:
               ---
 
               $PR_BODY"
+              # Remove leading whitespace
+              NEW_BODY=$(echo "$NEW_BODY" | sed 's/^[ \t]*//')
 
               # Prepare head ref for PR creation (owner:branch)
               HEAD_REF="${BOT_USERNAME}:${NEW_BRANCH}"
