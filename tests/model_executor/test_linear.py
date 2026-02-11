@@ -65,9 +65,10 @@ def make_fd_config(
 
 
 class TinyParam:
-    def __init__(self, tensor, initialized=True, with_track=False):
+    def __init__(self, tensor, initialized=True, with_track=False, write_back=None):
         self._tensor = tensor if isinstance(tensor, paddle.Tensor) else paddle.to_tensor(tensor)
         self._initialized = initialized
+        self._write_back = write_back
         if with_track:
             self.tensor_track = SimpleNamespace(calls=[])
             self.tensor_track.mark = lambda start, end: self.tensor_track.calls.append((start, end))
@@ -90,13 +91,18 @@ class TinyParam:
         value_tensor = value if isinstance(value, paddle.Tensor) else paddle.to_tensor(value)
         if value_tensor.dtype != self._tensor.dtype:
             value_tensor = value_tensor.cast(self._tensor.dtype)
+        if self._write_back is not None:
+            self._write_back(value_tensor)
         self._tensor = value_tensor
 
     def copy_(self, src, blocking=True):
         self.set_value(src)
 
     def __getitem__(self, item):
-        return TinyParam(self._tensor[item], initialized=True)
+        def _write_back(value_tensor):
+            self._tensor[item] = value_tensor
+
+        return TinyParam(self._tensor[item], initialized=True, write_back=_write_back)
 
 
 @pytest.fixture(autouse=True)
@@ -180,9 +186,12 @@ def test_merged_and_column_weight_paths():
     loaded_weight = paddle.ones([2, 4], dtype="float16")
     layer_merge.weight_loader(param, loaded_weight, loaded_shard_id=None)
     assert param.tensor_track.calls == [(0, loaded_weight.shape[-1])]
-    param_shard = TinyParam(paddle.zeros([2, 2], dtype=paddle.float8_e4m3fn), initialized=False)
+    np.testing.assert_allclose(param._tensor.numpy(), np.ones((2, 4), dtype="float32"))
+    param_shard = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=False)
     layer_merge.weight_loader(param_shard, paddle.ones([2, 2], dtype="int8"), loaded_shard_id="gate")
     assert param_shard._is_initialized() is True
+    assert not np.allclose(param_shard._tensor.numpy()[..., :2], 0)
+    assert np.allclose(param_shard._tensor.numpy()[..., 2:], 0)
     layer_mc = MergedColumnParallelLinear.__new__(MergedColumnParallelLinear)
     layer_mc.__dict__.update(
         fd_config=make_fd_config(model_format="paddle", tensor_parallel_size=1), tp_size=1, local_rank=0
@@ -195,12 +204,14 @@ def test_merged_and_column_weight_paths():
     layer_mc.__dict__.update(
         fd_config=make_fd_config(model_format="paddle", tensor_parallel_size=2), tp_size=2, local_rank=0
     )
-    param_gate = TinyParam(paddle.zeros([4, 4], dtype=paddle.float8_e4m3fn), initialized=True)
+    param_gate = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=True)
     param_gate.output_dim = True
     param_gate.weight_need_transpose = True
-    layer_mc.weight_loader(param_gate, paddle.ones([4, 4], dtype="int8"), loaded_shard_id="gate")
+    layer_mc.weight_loader(param_gate, paddle.ones([4, 2], dtype="int8"), loaded_shard_id="gate")
+    assert not np.allclose(param_gate._tensor.numpy()[..., :2], 0)
+    assert np.allclose(param_gate._tensor.numpy()[..., 2:], 0)
     layer_mc.local_rank = 1
-    param_shape = TinyParam(paddle.zeros([4, 4], dtype="float32"), initialized=True)
+    param_shape = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=True)
     param_shape.output_dim = True
     param_shape.weight_need_transpose = False
 
@@ -218,7 +229,9 @@ def test_merged_and_column_weight_paths():
         def __getitem__(self, item):
             return paddle.to_tensor(self._array[item])
 
-    layer_mc.weight_loader(param_shape, _Wrapper(np.ones((4, 4), dtype="float32")), loaded_shard_id="up")
+    layer_mc.weight_loader(param_shape, _Wrapper(np.ones((2, 4), dtype="float32")), loaded_shard_id="up")
+    assert np.allclose(param_shape._tensor.numpy()[..., :2], 0)
+    assert np.allclose(param_shape._tensor.numpy()[..., 2:], 1)
     layer_merge_t = MergedReplicatedLinear.__new__(MergedReplicatedLinear)
     layer_merge_t.__dict__.update(fd_config=make_fd_config(model_format="paddle"), output_sizes=[1, 1])
     param_t = TinyParam(paddle.zeros([2, 2], dtype="float32"), initialized=False, with_track=True)
@@ -228,6 +241,8 @@ def test_merged_and_column_weight_paths():
     layer_merge_t.weight_loader(param_t, np.arange(4, dtype="float32").reshape(2, 2), loaded_shard_id=None)
     layer_merge_t.weight_loader(param_up, np.arange(2, dtype="float32").reshape(1, 2), loaded_shard_id="up")
     assert param_t.tensor_track.calls and param_up.tensor_track.calls
+    assert np.allclose(param_up._tensor.numpy()[..., :1], 0)
+    assert not np.allclose(param_up._tensor.numpy()[..., 1:], 0)
     layer_bias = MergedColumnParallelLinear(
         fd_config=make_fd_config(), prefix="mlp.up_gate_proj", input_size=4, output_size=4, with_bias=True
     )
@@ -272,12 +287,19 @@ def test_qkv_paths():
     param_fused = TinyParam(paddle.zeros([4, 8], dtype="float32"), initialized=True)
     param_fused.output_dim = True
     param_fused.weight_need_transpose = True
-    layer_w.weight_loader(param_fused, np.arange(48, dtype="float32").reshape(12, 4), loaded_shard_id=None)
-    param_shard = TinyParam(paddle.zeros([4, 8], dtype=paddle.float8_e4m3fn), initialized=False)
-    param_shard.output_dim = True
-    param_shard.weight_need_transpose = True
-    layer_w.weight_loader(param_shard, paddle.ones([12, 4], dtype="int8"), loaded_shard_id="q")
-    assert param_shard._is_initialized() is True
+    layer_w.weight_loader(param_fused, np.ones((12, 4), dtype="float32"), loaded_shard_id=None)
+    np.testing.assert_allclose(param_fused._tensor.numpy(), np.ones((4, 8), dtype="float32"))
+
+    param_split = TinyParam(paddle.zeros([4, 8], dtype="float32"), initialized=True)
+    param_split.output_dim = True
+    param_split.weight_need_transpose = True
+    layer_w.weight_loader(param_split, np.ones((8, 4), dtype="float32"), loaded_shard_id="q")
+    layer_w.weight_loader(param_split, np.ones((2, 4), dtype="float32"), loaded_shard_id="k")
+    layer_w.weight_loader(param_split, np.full((2, 4), 2.0, dtype="float32"), loaded_shard_id="v")
+    param_split_np = param_split._tensor.numpy()
+    np.testing.assert_allclose(param_split_np[..., :4], np.ones((4, 4), dtype="float32"))
+    np.testing.assert_allclose(param_split_np[..., 4:6], np.ones((4, 2), dtype="float32"))
+    np.testing.assert_allclose(param_split_np[..., 6:8], np.full((4, 2), 2.0, dtype="float32"))
     layer_parts = QKVParallelLinear(fd_config=cfg_tp2, prefix=prefix, with_bias=False)
     layer_parts.load_weight(
         {
