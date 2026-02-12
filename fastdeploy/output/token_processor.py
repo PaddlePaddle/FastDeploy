@@ -232,7 +232,7 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
-            if token_ids is not None and token_ids[-1] <= 0:
+            if token_ids is not None and token_ids[-1] < 0:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                         self.resource_manager.reschedule_preempt_task(task_id)

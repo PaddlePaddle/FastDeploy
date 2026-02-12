@@ -1179,7 +1179,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.seq_lens_routing_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
@@ -2241,11 +2240,7 @@ class GPUModelRunner(ModelRunnerBase):
                 # Capture Target Model without bsz 1
                 for capture_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
                         in_capturing=True,
                         expected_decode_len=self.speculative_config.num_speculative_tokens * 2 + 1,
@@ -2257,11 +2252,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=(
-                            self.scheduler_config.max_num_seqs
-                            if self.scheduler_config.splitwise_role == "decode"
-                            else self.scheduler_config.max_num_batched_tokens
-                        ),
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2294,11 +2285,7 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
+                num_tokens=self.fd_config.get_max_chunk_tokens(),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -2370,7 +2357,7 @@ class GPUModelRunner(ModelRunnerBase):
         self._prepare_inputs()
         self.sampler.pre_process(p_done_idxs)
         if self.fd_config.routing_replay_config.enable_routing_replay:
-            self.positions = self.routing_replay_manager.get_token_positions(
+            self.routing_replay_manager.pending_update_positions = self.routing_replay_manager.get_token_positions(
                 seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
                 seq_lens_this_time=self.seq_lens_this_time_buffer,
             )
@@ -2450,6 +2437,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                routing_replay_manager=self.routing_replay_manager,
             )
 
             return None
@@ -2579,6 +2567,7 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 line_break_id=self.model_config.line_break_id,
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+                routing_replay_manager=self.routing_replay_manager,
             )
             if self.guided_backend is not None and sampler_output is not None:
                 self.sampler.post_process(sampler_output.sampled_token_ids)
@@ -2625,20 +2614,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.cache_config.block_size,
                     self.speculative_config.num_speculative_tokens,
                 )
-
-        # Routing replay
-        if self.fd_config.routing_replay_config.enable_routing_replay:
-            # Update host cache
-            slot_mapping = self.routing_replay_manager.compute_slot_mapping(positions=self.positions)
-            self.routing_replay_manager.update_host_cache(positions=self.positions, slot_mapping=slot_mapping)
-
-            # Put routing of finished requests to store
-            finished_batch_ids = paddle.isin(sampler_output.sampled_token_ids, self.share_inputs["eos_token_id"])[:, 0]
-            self.routing_replay_manager.put_finished_batch(
-                finished_batch_ids=finished_batch_ids,
-                seq_lens_decoder=self.seq_lens_routing_buffer,
-            )
-            paddle.assign(self.share_inputs["seq_lens_decoder"], self.seq_lens_routing_buffer)
 
         return None
 
@@ -2710,12 +2685,12 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
+        num_tokens = self.fd_config.get_max_chunk_tokens()
+        logger.info(
+            f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
+        )
         self._dummy_run(
-            num_tokens=(
-                self.scheduler_config.max_num_seqs
-                if self.scheduler_config.splitwise_role == "decode"
-                else self.scheduler_config.max_num_batched_tokens
-            ),
+            num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
         )
 

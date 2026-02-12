@@ -173,6 +173,7 @@ class RoutingReplayManager:
         num_experts = fd_config.model_config.moe_num_experts + fd_config.model_config.moe_num_shared_experts
         self.routing_dtype = self.get_routing_dtype(num_experts=num_experts)
         self._init_routing_cache(dtype=self.routing_dtype, total_block_num=total_block_num)
+        self.pending_update_positions = None
 
         # Initialize routing store wrapper
         if self.tp_rank == 0:
@@ -397,7 +398,7 @@ class StoreWrapper(object):
         # Initialize task queue
         moe_layer_num = fd_config.model_config.num_hidden_layers - fd_config.model_config.moe_layer_start_index
         max_num_seqs = fd_config.scheduler_config.max_num_seqs
-        self.queue_max_size = moe_layer_num * max_num_seqs * 10
+        self.queue_max_size = moe_layer_num * max_num_seqs * 1000
 
         self.manager = multiprocessing.Manager()
         self._task_queue = self.manager.Queue(maxsize=self.queue_max_size)

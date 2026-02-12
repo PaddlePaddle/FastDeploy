@@ -947,6 +947,13 @@ def parse_args():
         help="Number of cpu blocks.",
     )
 
+    parser.add_argument(
+        "--mm_max_tokens_per_item",
+        type=json.loads,
+        default=None,
+        help="Maximum tokens per item in mm input.",
+    )
+
     args = parser.parse_args()
     return args
 

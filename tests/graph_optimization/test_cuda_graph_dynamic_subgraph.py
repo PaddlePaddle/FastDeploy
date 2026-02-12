@@ -159,6 +159,7 @@ class TestCUDAGrpahSubgraph(unittest.TestCase):
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
         model_config.max_model_len = 512
+        model_config.mm_max_tokens_per_item = None
         # Initialize cuda graph capture list
         graph_opt_config._set_cudagraph_sizes(max_capture_size=scheduler_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)

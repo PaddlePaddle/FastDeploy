@@ -167,7 +167,7 @@ jobs:
       COMPILE_ARCH: "80,90"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
-      PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Paddle-RL-Compile-test/release/3.3/cbf3469113cd76b7d5f4cba7b8d7d5f55d9e9911/7/paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
+      PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Paddle-RL-Compile/release/3.3/latest/paddlepaddle_gpu-3.3.0.dev-cp310-cp310-linux_x86_64.whl
 
   build_sm8689:
     name: BUILD_SM8689

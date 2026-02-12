@@ -16,8 +16,12 @@ failed_tests_file="failed_tests.log"
 # 执行 pytest，每个文件单独跑
 ##################################
 # 收集 pytest 文件
-TEST_FILES=$(python -m pytest --collect-only -q -c ${PYTEST_INI} ${tests_path} --rootdir=${run_path} --disable-warnings | grep -Eo '^.*test_.*\.py' | sort | uniq)
-
+TEST_FILES=$(
+  python -m pytest --collect-only -q -c "${PYTEST_INI}" "${tests_path}" --rootdir="${run_path}" --disable-warnings 2>&1 \
+    | grep -E 'tests/.+\/test_.*\.py' \
+    | sed -E 's@.*(tests/[^: ]*test_[^: ]*\.py).*@\1@' \
+    | sort -u
+)
 
 failed_pytest=0
 success_pytest=0

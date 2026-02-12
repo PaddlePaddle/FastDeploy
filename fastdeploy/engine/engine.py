@@ -570,6 +570,8 @@ class LLMEngine:
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
+        if self.engine.mm_max_tokens_per_item is not None:
+            arguments += f" --mm_max_tokens_per_item '{json.dumps(self.engine.mm_max_tokens_per_item)}'"
 
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
