@@ -137,9 +137,9 @@ jobs:
               # Create PR
               # If PR_TITLE starts with "[", don't insert an extra space.
               if [ "${PR_TITLE:0:1}" = "[" ]; then
-                NEW_TITLE="[Cherry-Pick]$PR_TITLE($PR_NUMBER)"
+                NEW_TITLE="[Cherry-Pick]$PR_TITLE(#$PR_NUMBER)"
               else
-                NEW_TITLE="[Cherry-Pick] $PR_TITLE($PR_NUMBER)"
+                NEW_TITLE="[Cherry-Pick] $PR_TITLE(#$PR_NUMBER)"
               fi
 
               NEW_BODY="Cherry-pick of #$PR_NUMBER (authored by @${PR_AUTHOR}) to \`$TARGET_BRANCH\`.
@@ -149,6 +149,8 @@ jobs:
               ---
 
               $PR_BODY"
+              # Remove leading whitespace
+              NEW_BODY=$(echo "$NEW_BODY" | sed 's/^[ \t]*//')
 
               # Prepare head ref for PR creation (owner:branch)
               HEAD_REF="${BOT_USERNAME}:${NEW_BRANCH}"

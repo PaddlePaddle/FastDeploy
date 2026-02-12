@@ -1114,9 +1114,13 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
     """
 
     def _bos_download(bos_client, link):
-        if link.startswith("bos://"):
-            link = link.replace("bos://", "")
-
+        try:
+            if isinstance(link, list) and len(link) > 0:
+                link = link[0]
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+        except Exception as e:
+            raise Exception(f"Bos Download link Error, Please check your links: {link} \n" f"{str(e)}")
         bucket_name = "/".join(link.split("/")[1:-1])
         object_key = link.split("/")[-1]
         return bos_client.get_object_as_string(bucket_name, object_key)
@@ -1158,6 +1162,7 @@ zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
 trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
 router_logger = get_logger("router", "router.log")
 fmq_logger = get_logger("fmq", "fmq.log")
+obj_logger = get_logger("obj", "obj.log")  # debug内存问题
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
