@@ -1415,13 +1415,15 @@ class CacheConfig:
             self.kv_factor = 1 if self.use_mla_cache else 2
 
             self.bytes_per_token_per_layer = int(self.head_num * self.head_dim * self.byte_size * self.kv_factor)
-            self.bytes_per_block = int(self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers)
+            self.bytes_per_block = int(
+                self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers
+            )
 
         if self.num_cpu_blocks is None:
             if self.swap_space is None:
                 self.num_cpu_blocks = 0
             else:
-                self.num_cpu_blocks = int(self.swap_space * 1024 ** 3 / self.bytes_per_block)
+                self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
 
         self._verify_args()
 
