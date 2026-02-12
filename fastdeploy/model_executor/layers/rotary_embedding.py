@@ -32,6 +32,7 @@ from .utils import CpuGuard
 
 @functools.lru_cache(maxsize=128)
 def get_inv_freq(rotary_dim, base, device_str):
+    # Calculate inverse frequency for rotary embedding
     inv_freq = base ** (-paddle.arange(0, rotary_dim, 2, dtype="float32") / rotary_dim)
     if str(inv_freq.place) != device_str:
         return inv_freq.to(device_str)
