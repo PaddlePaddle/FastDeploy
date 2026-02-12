@@ -105,6 +105,9 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_k =
       paddle::empty({bsz + 1}, paddle::DataType::INT32, input_ids.place());
+  if (token_num_data == 0) {
+    return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
+  }
 #ifdef PADDLE_WITH_COREX
   int blockSize =
       std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
