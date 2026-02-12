@@ -35,16 +35,16 @@ def load_deep_gemm():
             # SM100 should use PFCC DeepGemm
             paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
             try:
-                from paddlefleet.ops import deep_gemm
+                import paddlefleet.ops.deep_gemm as deep_gemm
 
                 logger.info("Detected sm100, use PaddleFleet DeepGEMM")
             except:
-                import deep_gemm
+                import deep_gemm as deep_gemm
 
                 logger.info("Detected sm100, use PFCC DeepGEMM")
         else:
             logger.info("use FastDeploy DeepGEMM")
-            from fastdeploy.model_executor.ops.gpu import deep_gemm
+            import fastdeploy.model_executor.ops.gpu.deep_gemm as deep_gemm
     else:
         deep_gemm = None
     return deep_gemm
