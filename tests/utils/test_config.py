@@ -230,61 +230,73 @@ class TestConfig(unittest.TestCase):
         model_config.quantization_config = None
 
         # Test case 1: swap_space is None -> num_cpu_blocks = 0
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "bfloat16",
-            "swap_space": None,
-        })
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "bfloat16",
+                "swap_space": None,
+            }
+        )
         assert cache_config.num_cpu_blocks == 0
 
         # Test case 2: swap_space = 1GB
         # bytes_per_block = head_num * head_dim * byte_size * kv_factor * block_size * num_hidden_layers
         #                 = 32 * 128 * 2 * 2 * 64 * 24 = 25165824 bytes
         # num_cpu_blocks = 1 * 1024^3 / 25165824 = 42
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "bfloat16",
-            "swap_space": 1,
-        })
-        expected_blocks = int(1 * 1024 ** 3 / (32 * 128 * 2 * 2 * 64 * 24))
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "bfloat16",
+                "swap_space": 1,
+            }
+        )
+        expected_blocks = int(1 * 1024**3 / (32 * 128 * 2 * 2 * 64 * 24))
         assert cache_config.num_cpu_blocks == expected_blocks
         assert cache_config.num_cpu_blocks == 42
 
         # Test case 3: swap_space = 2GB
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "bfloat16",
-            "swap_space": 2,
-        })
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "bfloat16",
+                "swap_space": 2,
+            }
+        )
         assert cache_config.num_cpu_blocks == 85
 
         # Test case 4: with fp32 dtype (4 bytes)
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "float32",
-            "swap_space": 1,
-        })
-        expected_blocks = int(1 * 1024 ** 3 / (32 * 128 * 4 * 2 * 64 * 24))
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "float32",
+                "swap_space": 1,
+            }
+        )
+        expected_blocks = int(1 * 1024**3 / (32 * 128 * 4 * 2 * 64 * 24))
         assert cache_config.num_cpu_blocks == expected_blocks
         assert cache_config.num_cpu_blocks == 21
 
         # Test case 5: with int8 dtype (1 byte)
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "int8",
-            "swap_space": 1,
-        })
-        expected_blocks = int(1 * 1024 ** 3 / (32 * 128 * 1 * 2 * 64 * 24))
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "int8",
+                "swap_space": 1,
+            }
+        )
+        expected_blocks = int(1 * 1024**3 / (32 * 128 * 1 * 2 * 64 * 24))
         assert cache_config.num_cpu_blocks == expected_blocks
         assert cache_config.num_cpu_blocks == 85
 
         # Test case 6: num_cpu_blocks is explicitly set (not affected by swap_space)
-        cache_config = CacheConfig({
-            "model_cfg": model_config,
-            "cache_dtype": "bfloat16",
-            "swap_space": 10,
-            "num_cpu_blocks": 100,
-        })
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config,
+                "cache_dtype": "bfloat16",
+                "swap_space": 10,
+                "num_cpu_blocks": 100,
+            }
+        )
         assert cache_config.num_cpu_blocks == 100
 
         # Test case 7: with num_key_value_heads (GQA)
@@ -296,14 +308,16 @@ class TestConfig(unittest.TestCase):
         model_config_with_gqa.quantization = None
         model_config_with_gqa.quantization_config = None
 
-        cache_config = CacheConfig({
-            "model_cfg": model_config_with_gqa,
-            "cache_dtype": "bfloat16",
-            "swap_space": 1,
-        })
+        cache_config = CacheConfig(
+            {
+                "model_cfg": model_config_with_gqa,
+                "cache_dtype": "bfloat16",
+                "swap_space": 1,
+            }
+        )
         # bytes_per_block = 8 * 128 * 2 * 2 * 64 * 24 = 6291456 bytes
         # num_cpu_blocks = 1 * 1024^3 / 6291456 = 170
-        expected_blocks = int(1 * 1024 ** 3 / (8 * 128 * 2 * 2 * 64 * 24))
+        expected_blocks = int(1 * 1024**3 / (8 * 128 * 2 * 2 * 64 * 24))
         assert cache_config.num_cpu_blocks == expected_blocks
         assert cache_config.num_cpu_blocks == 170
 
