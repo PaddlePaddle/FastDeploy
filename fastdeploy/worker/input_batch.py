@@ -890,7 +890,8 @@ class ProposerInputBatch(InputBatch):
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
             fill_paddle_tensor(self, "input_ids_cpu", -1)
-            self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
+            # acceptance rate decline when reset seq_lens_this_time
+            # self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
             self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
             self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
