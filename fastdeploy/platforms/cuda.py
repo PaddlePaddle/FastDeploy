@@ -127,6 +127,15 @@ class CUDAPlatform(Platform):
             return False
 
     @classmethod
+    def supports_cudagraph_with_attention(cls) -> bool:
+        """
+        Check if the current GPU supports CUDA graph with the attention backend.
+        V100 (SM70) uses a Python-based attention implementation that is not
+        compatible with CUDA graph capture/replay.
+        """
+        return cls.supports_async_copy()  # SM80+ supports CUDA graph with fused kernels
+
+    @classmethod
     def get_attention_backend_cls(cls, selected_backend: _Backend):
         """
         get_attention_backend_cls with automatic fallback for SM70 (V100)
@@ -135,12 +144,18 @@ class CUDAPlatform(Platform):
 
         # Check for SM70 (V100) compatibility and apply fallbacks
         if not cls.supports_async_copy():
-            # APPEND_ATTN, MLA_ATTN, and FLASH_ATTN all require SM80+ (cp.async or dependent ops)
-            # V100 can use V100_FLASH_ATTN which is optimized for SM70
-            if selected_backend in (_Backend.APPEND_ATTN, _Backend.MLA_ATTN, _Backend.FLASH_ATTN):
+            # APPEND_ATTN, MLA_ATTN, FLASH_ATTN require SM80+
+            # - APPEND_ATTN/MLA_ATTN: require cp.async instructions
+            # - FLASH_ATTN: flash_attn_unpadded requires SM80+
+            # V100 (SM70) should use V100_FLASH_ATTN which uses scaled_dot_product_attention
+            if selected_backend in (
+                _Backend.APPEND_ATTN,
+                _Backend.MLA_ATTN,
+                _Backend.FLASH_ATTN,
+            ):
                 logger.warning(
                     f"{selected_backend} backend requires SM{cls.SM_ASYNC_COPY_MIN}+ "
-                    f"(cp.async instructions or dependent ops), "
+                    f"(flash_attn_unpadded or cp.async instructions), "
                     f"but current GPU is SM{sm_version}. "
                     f"Automatically falling back to V100_FLASH_ATTN backend."
                 )
@@ -150,7 +165,7 @@ class CUDAPlatform(Platform):
             logger.info("Using NATIVE ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
         elif selected_backend == _Backend.V100_FLASH_ATTN:
-            logger.info("Using V100 FLASH ATTN backend (SM70 compatible).")
+            logger.info("Using V100 FLASH ATTN backend (SM70 compatible, using scaled_dot_product_attention).")
             return "fastdeploy.model_executor.layers.attention.V100FlashAttentionBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")

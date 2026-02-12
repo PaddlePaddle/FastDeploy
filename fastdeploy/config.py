@@ -2139,6 +2139,16 @@ class FDConfig:
                 "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"
             )
 
+        # Disable CUDA graph for V100 (SM70) as it uses Python-based attention
+        # that is not compatible with CUDA graph capture/replay
+        if current_platform.is_cuda() and hasattr(current_platform, "supports_cudagraph_with_attention"):
+            if not current_platform.supports_cudagraph_with_attention() and self.graph_opt_config.use_cudagraph:
+                self.graph_opt_config.use_cudagraph = False
+                logger.warning(
+                    "V100 (SM70) uses Python-based attention backend that is not compatible with CUDA graph. "
+                    "Automatically disabling CUDA graph for correct results."
+                )
+
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
