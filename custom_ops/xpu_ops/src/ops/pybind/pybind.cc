@@ -239,7 +239,7 @@ void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& output_cum_offsets,
     const int max_seq_len);
 
-void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
+void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                        const paddle::Tensor& seq_lens_decoder,
                        const paddle::Tensor& not_need_stop,
                        const paddle::Tensor& draft_tokens,
@@ -249,7 +249,7 @@ void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
                        const paddle::Tensor& stop_flags,
                        const paddle::Tensor& seq_lens_this_time,
                        const paddle::Tensor& is_block_step,
-                       const paddle::Tensor& stop_nums);
+                       const paddle::Tensor& mask_rollback);
 
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
@@ -632,6 +632,28 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
                     const int block_size);
+
+void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
+                                      const paddle::Tensor& accept_num,
+                                      const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
+                                      const paddle::Tensor& preempted_idx,
+                                      int64_t rank_id,
+                                      bool save_each_rank,
+                                      bool skip_prefill);
+
+void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
+                                       const paddle::Tensor& accept_num,
+                                       const paddle::Tensor& not_need_stop,
+                                       const paddle::Tensor& seq_lens_decoder,
+                                       const paddle::Tensor& prompt_lens,
+                                       const paddle::Tensor& preempted_idx,
+                                       int64_t rank_id,
+                                       int msg_queue_id,
+                                       bool save_each_rank,
+                                       bool skip_prefill);
+
 
 std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor& x,
                                            const std::string& algo,
@@ -1100,6 +1122,23 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("stop_nums"),
         "Update speculative decoding states (V3)");
 
+
+  m.def("speculate_update",
+        &SpeculateUpdate,
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("not_need_stop"),
+        py::arg("draft_tokens"),
+        py::arg("actual_draft_token_nums"),
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("is_block_step"),
+        py::arg("mask_rollback"),
+        "Update speculative decoding states (V3)");
+
+
   m.def("speculate_verify",
         &SpeculateVerify,
         py::arg("sampled_token_ids"),
@@ -1311,6 +1350,33 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),
         "speculate insert first token function");
 
+
+  m.def("speculate_save_output",
+        &SpeculateSaveWithOutputMsgStatic,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("rank_id"),
+        py::arg("save_each_rank"),
+        py::arg("skip_prefill"),
+        "speculate save output function");
+
+  m.def("speculate_save_output",
+        &SpeculateSaveWithOutputMsgStatic,
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("not_need_stop"),
+        py::arg("seq_lens_decoder"),
+        py::arg("prompt_lens"),
+        py::arg("preempted_idx"),
+        py::arg("rank_id"),
+        py::arg("save_each_rank"),
+        py::arg("skip_prefill"),
+        "speculate save output function");
+        
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,
         py::arg("input"),

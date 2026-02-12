@@ -87,6 +87,8 @@ class LocalScheduler:
         self.requests_not_empty = threading.Condition(self.mutex)
         self.responses_not_empty = threading.Condition(self.mutex)
 
+        self.unfinished_requests = []
+
     def reset(self):
         """
         Reset the local scheduler to its initial empty state by:
@@ -382,8 +384,13 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    self.unfinished_requests.remove(request_id)
+                else:
+                    if request_id not in self.unfinished_requests:
+                        self.unfinished_requests.append(request_id)
 
             if results:
+                scheduler_logger.debug(f"Scheduler self.unfinished_requests:{self.unfinished_requests}")
                 scheduler_logger.debug(f"get responses, {results}")
 
             if envs.FD_ENABLE_INTERNAL_ADAPTER:

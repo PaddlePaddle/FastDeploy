@@ -1087,6 +1087,7 @@ class XPUModelRunner(ModelRunnerBase):
                 shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
             )
         self.max_num_seqs = max_num_seqs
+        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
@@ -1572,7 +1573,7 @@ class XPUModelRunner(ModelRunnerBase):
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
             else:
-                self.sampler(
+                sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.model_config.max_model_len,
@@ -1611,18 +1612,27 @@ class XPUModelRunner(ModelRunnerBase):
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
+                prompt_lens=self.share_inputs["prompt_lens"],
                 prompt_logprobs_list=prompt_logprobs_list,
+                mask_rollback=self.share_inputs["mask_rollback"],
             )
+            
+            skip_save_output = is_dummy_run
+            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+                skip_save_output = True
+            else:
+                skip_save_output = False
+                
             if self.speculative_decoding:
                 # base model post process
-                xpu_post_process_specualate(model_output_data, False, is_dummy_run)
+                xpu_post_process_specualate(sampler_output, model_output_data, self.share_inputs, self.parallel_config.data_parallel_size > 0, skip_save_output)
             else:
                 xpu_post_process_normal(
                     sampler_output=sampler_output,
                     model_output=model_output_data,
                     share_inputs=self.share_inputs,
                     block_size=self.cache_config.block_size,
-                    skip_save_output=is_dummy_run,
+                    skip_save_output=skip_save_output,
                     save_each_rank=self.parallel_config.data_parallel_size > 0,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,

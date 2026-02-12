@@ -90,6 +90,7 @@ class TokenProcessor:
                 )
                 self.output_ranks = paddle.full(shape=[MAX_BSZ * MAX_DRAFT_TOKENS], fill_value=0, dtype="int64")
             else:
+                #  256 * 6 + 256 + 2 => max_tokens_num + accept_num + batch
                 self.output_tokens = paddle.full(
                     shape=[SPECULATE_MAX_BSZ * MAX_DRAFT_TOKENS + SPECULATE_MAX_BSZ + 2],
                     fill_value=2,
@@ -708,7 +709,6 @@ class TokenProcessor:
         for i in range(batch):
             if self.resource_manager.stop_flags[i]:
                 continue
-
             recovery_stop = False
             task = self.resource_manager.tasks_list[i]
             task_id = task.request_id
@@ -758,6 +758,8 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
+                if accept_num[i] == 0:
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
