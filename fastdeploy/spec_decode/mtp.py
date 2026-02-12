@@ -430,7 +430,8 @@ class MTPProposer(Proposer):
             self.model_inputs["block_tables"] = paddle.clone(self.target_model_inputs["block_tables"])
             self.model_inputs["input_ids"] = paddle.clone(self.target_model_inputs["input_ids"])
             fill_paddle_tensor(self.model_inputs, "input_ids_cpu", -1)
-            self.seq_lens_this_time_buffer = paddle.clone(self.target_model_inputs["seq_lens_this_time"])
+            # acceptance rate decline when reset seq_lens_this_time
+            # self.seq_lens_this_time_buffer = paddle.clone(self.target_model_inputs["seq_lens_this_time"])
 
             self.model_inputs["seq_lens_encoder"] = paddle.clone(self.target_model_inputs["seq_lens_encoder"])
             self.model_inputs["seq_lens_decoder"] = paddle.clone(self.target_model_inputs["seq_lens_decoder"])
