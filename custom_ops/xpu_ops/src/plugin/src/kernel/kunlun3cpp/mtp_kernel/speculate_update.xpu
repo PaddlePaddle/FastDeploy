@@ -68,7 +68,7 @@ __global__ void speculate_update(
     const bool *stop_flags,         // 输入 [B_max, ]
     const int *seq_lens_this_time,  // 输入 [B_real,]
     const bool *is_block_step,      // 输入 [B_max, ]
-    int *mask_rollback,       // 输入 [1,]
+    int *mask_rollback,             // 输入 [1,]
     const int real_bsz,
     const int max_bsz,
     const int max_draft_tokens) {
@@ -116,13 +116,14 @@ __global__ void speculate_update(
     int stop_flag_now_int = 0;
     if (!is_block_step_sm[bid] && bid < real_bsz) {
       if (stop_flags_sm[bid]) {
+        seq_lens_decoder_sm[bid] += accept_num_now;
         stop_flag_now_int = 1;
         mask_rollback_sm[bid] = 0;
 
-      }else if (seq_lens_encoder_sm[bid] == 0) {
+      } else if (seq_lens_encoder_sm[bid] == 0) {
         seq_lens_decoder_sm[bid] += accept_num_now;
         mask_rollback_sm[bid] = seq_lens_this_time_sm[bid] - accept_num_now;
-      }else{
+      } else {
         mask_rollback_sm[bid] = 0;
       }
 
@@ -156,7 +157,7 @@ __global__ void speculate_update(
       // 这里试下编译器的新特性
       draft_tokens[bid * max_draft_tokens] =
           accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
-          
+
     } else if (bid >= real_bsz && bid < max_bsz) {
       stop_flag_now_int = 1;
     }
@@ -185,19 +186,19 @@ __global__ void speculate_update(
 }
 
 template __global__ void speculate_update<512>(int *seq_lens_encoder,
-                                                  int *seq_lens_decoder,
-                                                  bool *not_need_stop,
-                                                  int64_t *draft_tokens,
-                                                  int *actual_draft_token_nums,
-                                                  const int64_t *accept_tokens,
-                                                  const int *accept_num,
-                                                  const bool *stop_flags,
-                                                  const int *seq_lens_this_time,
-                                                  const bool *is_block_step,
-                                                  int *mask_rollback,
-                                                  const int real_bsz,
-                                                  const int max_bsz,
-                                                  const int max_draft_tokens);
+                                               int *seq_lens_decoder,
+                                               bool *not_need_stop,
+                                               int64_t *draft_tokens,
+                                               int *actual_draft_token_nums,
+                                               const int64_t *accept_tokens,
+                                               const int *accept_num,
+                                               const bool *stop_flags,
+                                               const int *seq_lens_this_time,
+                                               const bool *is_block_step,
+                                               int *mask_rollback,
+                                               const int real_bsz,
+                                               const int max_bsz,
+                                               const int max_draft_tokens);
 
 }  // namespace plugin
 }  // namespace xpu3

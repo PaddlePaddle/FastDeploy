@@ -404,7 +404,11 @@ def xpu_post_process_normal(
 
 
 def xpu_post_process_specualate(
-    sampler_output: SamplerOutput, model_output: ModelOutputData, share_inputs: Dict[str, paddle.Tensor], save_each_rank: bool = False, skip_save_output: bool = False
+    sampler_output: SamplerOutput,
+    model_output: ModelOutputData,
+    share_inputs: Dict[str, paddle.Tensor],
+    save_each_rank: bool = False,
+    skip_save_output: bool = False,
 ):
     """"""
 
@@ -449,7 +453,7 @@ def xpu_post_process_specualate(
             )
         else:
             # TODO(chenhuan09): support speculate_save_output_topk
-            raise NotImplementedError(f"Not support speculate_save_output_topk now.")
+            raise NotImplementedError("Not support speculate_save_output_topk now.")
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
 

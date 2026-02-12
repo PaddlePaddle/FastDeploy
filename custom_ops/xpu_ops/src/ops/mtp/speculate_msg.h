@@ -31,7 +31,6 @@ struct speculate_msgdata {
             2];  // stop_flag, bsz, tokens
 };
 
-
 struct batch_msgdata {
   int tokens[MAX_DRAFT_TOKENS * (K + 1)];
   float scores[MAX_DRAFT_TOKENS * (K + 1)];

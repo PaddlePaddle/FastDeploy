@@ -1616,16 +1616,22 @@ class XPUModelRunner(ModelRunnerBase):
                 prompt_logprobs_list=prompt_logprobs_list,
                 mask_rollback=self.share_inputs["mask_rollback"],
             )
-            
+
             skip_save_output = is_dummy_run
             if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
                 skip_save_output = True
             else:
                 skip_save_output = False
-                
+
             if self.speculative_decoding:
                 # base model post process
-                xpu_post_process_specualate(sampler_output, model_output_data, self.share_inputs, self.parallel_config.data_parallel_size > 0, skip_save_output)
+                xpu_post_process_specualate(
+                    sampler_output,
+                    model_output_data,
+                    self.share_inputs,
+                    self.parallel_config.data_parallel_size > 0,
+                    skip_save_output,
+                )
             else:
                 xpu_post_process_normal(
                     sampler_output=sampler_output,

@@ -39,7 +39,7 @@ namespace plugin {
 static int cpu_wrapper(Context *ctx,
                        int64_t *pre_ids_all,          // bs * length
                        const int64_t *accept_tokens,  // bs * max_draft_tokens
-                       int *accept_num,         // bs
+                       int *accept_num,               // bs
                        const bool *stop_flags,
                        const int *seq_lens_encoder,
                        int *seq_lens_decoder,
@@ -48,24 +48,22 @@ static int cpu_wrapper(Context *ctx,
                        int length,
                        int max_draft_tokens) {
   for (int i = 0; i < bs; i++) {
-    if(stop_flags[i]){
+    if (stop_flags[i]) {
       int64_t *pre_ids_all_now = pre_ids_all + i * length;
       const int64_t *accept_tokens_now = accept_tokens + i * max_draft_tokens;
       int accept_num_now = accept_num[i];
       int64_t step_idx_now = step_idx[i];
-      if(seq_lens_encoder[i] == 0 && seq_lens_decoder[i] == 0)
-        continue;
+      if (seq_lens_encoder[i] == 0 && seq_lens_decoder[i] == 0) continue;
       if (step_idx_now >= 0) {
         for (int j = 0; j < accept_num_now; j++) {
           pre_ids_all_now[step_idx_now - j] =
               accept_tokens_now[accept_num_now - 1 - j];
         }
       }
-    }else{
+    } else {
       accept_num[i] = 0;
       seq_lens_decoder[i] = 0;
     }
-
   }
   return SUCCESS;
 }

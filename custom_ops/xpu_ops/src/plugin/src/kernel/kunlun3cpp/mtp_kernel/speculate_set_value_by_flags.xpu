@@ -54,9 +54,7 @@ __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
     GM2LM_ASYNC(accept_num + i, &accept_num_lm, sizeof(int));
     mfence_lm();
 
-
-
-    if(!stop_flags_lm){
+    if (!stop_flags_lm) {
       // Avoid loading large amounts of data
       int pre_ids_start_idx = i * length + step_idx_lm - max_draft_tokens + 1;
       GM2LM_ASYNC(pre_ids_all + pre_ids_start_idx,
@@ -66,8 +64,9 @@ __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
                   accept_tokens_lm,
                   max_draft_tokens * sizeof(int64_t));
       mfence_lm();
-      if(seq_lens_decoder_lm == 0 && seq_lens_encoder_lm == 0) continue; // stoped
-      if(step_idx_lm > 0)
+      if (seq_lens_decoder_lm == 0 && seq_lens_encoder_lm == 0)
+        continue;  // stoped
+      if (step_idx_lm > 0)
         for (int j = 0; j < accept_num_lm; j++) {
           pre_ids_all_lm[max_draft_tokens - 1 - j] =
               accept_tokens_lm[accept_num_lm - 1 - j];
@@ -75,14 +74,13 @@ __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
       LM2GM(&pre_ids_all_lm,
             pre_ids_all + pre_ids_start_idx,
             max_draft_tokens * sizeof(int64_t));
-    }else{
+    } else {
       accept_num_lm = 0;
       seq_lens_decoder_lm = 0;
       LM2GM_ASYNC(&accept_num_lm, accept_num + i, sizeof(int));
       LM2GM_ASYNC(&seq_lens_decoder_lm, seq_lens_decoder + i, sizeof(int));
       mfence_lm();
     }
-
   }
 }
 

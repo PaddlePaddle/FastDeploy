@@ -240,16 +240,16 @@ void SpeculateTokenPenaltyMultiScores(
     const int max_seq_len);
 
 void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
-                       const paddle::Tensor& seq_lens_decoder,
-                       const paddle::Tensor& not_need_stop,
-                       const paddle::Tensor& draft_tokens,
-                       const paddle::Tensor& actual_draft_token_nums,
-                       const paddle::Tensor& accept_tokens,
-                       const paddle::Tensor& accept_num,
-                       const paddle::Tensor& stop_flags,
-                       const paddle::Tensor& seq_lens_this_time,
-                       const paddle::Tensor& is_block_step,
-                       const paddle::Tensor& mask_rollback);
+                     const paddle::Tensor& seq_lens_decoder,
+                     const paddle::Tensor& not_need_stop,
+                     const paddle::Tensor& draft_tokens,
+                     const paddle::Tensor& actual_draft_token_nums,
+                     const paddle::Tensor& accept_tokens,
+                     const paddle::Tensor& accept_num,
+                     const paddle::Tensor& stop_flags,
+                     const paddle::Tensor& seq_lens_this_time,
+                     const paddle::Tensor& is_block_step,
+                     const paddle::Tensor& mask_rollback);
 
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
@@ -653,7 +653,6 @@ void SpeculateSaveWithOutputMsgDynamic(const paddle::Tensor& accept_tokens,
                                        int msg_queue_id,
                                        bool save_each_rank,
                                        bool skip_prefill);
-
 
 std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor& x,
                                            const std::string& algo,
@@ -1122,7 +1121,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("stop_nums"),
         "Update speculative decoding states (V3)");
 
-
   m.def("speculate_update",
         &SpeculateUpdate,
         py::arg("seq_lens_encoder"),
@@ -1137,7 +1135,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_block_step"),
         py::arg("mask_rollback"),
         "Update speculative decoding states (V3)");
-
 
   m.def("speculate_verify",
         &SpeculateVerify,
@@ -1350,7 +1347,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),
         "speculate insert first token function");
 
-
   m.def("speculate_save_output",
         &SpeculateSaveWithOutputMsgStatic,
         py::arg("accept_tokens"),
@@ -1376,7 +1372,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("save_each_rank"),
         py::arg("skip_prefill"),
         "speculate save output function");
-        
+
   m.def("text_image_gather_scatter",
         &TextImageGatherScatter,
         py::arg("input"),

@@ -29,7 +29,7 @@ __attribute__((global)) void speculate_update(
     const bool *stop_flags,         // 输入 [B_max, ]
     const int *seq_lens_this_time,  // 输入 [B_real,]
     const bool *is_block_step,      // 输入 [B_max, ]
-    int *mask_rollback,       // 输入 [1,]
+    int *mask_rollback,             // 输入 [1,]
     const int real_bsz,
     const int max_bsz,
     const int max_draft_tokens);
@@ -52,7 +52,7 @@ static int cpu_wrapper(Context *ctx,
                        const bool *stop_flags,         // [B_max, ]
                        const int *seq_lens_this_time,  // [B_real,]
                        const bool *is_block_step,      // [B_max, ]
-                       int *mask_rollback,       // [1,]
+                       int *mask_rollback,             // [1,]
                        const int real_bsz,
                        const int max_bsz,
                        const int max_draft_tokens) {
@@ -65,14 +65,14 @@ static int cpu_wrapper(Context *ctx,
     const bool block_step = (!inactive && is_block_step[bid]);
 
     if (!block_step && !inactive) {
-      if (stop_flags[bid]){
+      if (stop_flags[bid]) {
         stop_flag_now_int = 1;
         mask_rollback[bid] = 0;
-      }else if(seq_lens_encoder[bid] == 0){
+      } else if (seq_lens_encoder[bid] == 0) {
         // decoder
         seq_lens_decoder[bid] += accept_num[bid];
         mask_rollback[bid] = seq_lens_this_time[bid] - accept_num[bid];
-      }else{
+      } else {
         // encoder
         mask_rollback[bid] = 0;
       }
@@ -119,23 +119,24 @@ static int cpu_wrapper(Context *ctx,
 }
 
 static int xpu3_wrapper(Context *ctx,
-                       int *seq_lens_encoder,          // 输入 [B_max, ]
-                       int *seq_lens_decoder,          // 输出 [B_max, ]
-                       bool *not_need_stop,            // [1,]
-                       int64_t *draft_tokens,          // [B_max, T_max]
-                       int *actual_draft_token_nums,   // [B_max, ]
-                       const int64_t *accept_tokens,   // [B_max, T_max]
-                       const int *accept_num,          // [B_max, ]
-                       const bool *stop_flags,         // [B_max, ]
-                       const int *seq_lens_this_time,  // [B_real,]
-                       const bool *is_block_step,      // [B_max, ]
-                       int *mask_rollback,       // [1,]
-                       const int real_bsz,
-                       const int max_bsz,
-                       const int max_draft_tokens) {
+                        int *seq_lens_encoder,          // 输入 [B_max, ]
+                        int *seq_lens_decoder,          // 输出 [B_max, ]
+                        bool *not_need_stop,            // [1,]
+                        int64_t *draft_tokens,          // [B_max, T_max]
+                        int *actual_draft_token_nums,   // [B_max, ]
+                        const int64_t *accept_tokens,   // [B_max, T_max]
+                        const int *accept_num,          // [B_max, ]
+                        const bool *stop_flags,         // [B_max, ]
+                        const int *seq_lens_this_time,  // [B_real,]
+                        const bool *is_block_step,      // [B_max, ]
+                        int *mask_rollback,             // [1,]
+                        const int real_bsz,
+                        const int max_bsz,
+                        const int max_draft_tokens) {
   constexpr int BlockSize = 512;
   using XPU_TI = typename XPUIndexType<int64_t>::type;
-  xpu3::plugin::speculate_update<BlockSize><<<1, 64, ctx->xpu_stream>>>(seq_lens_encoder,
+  xpu3::plugin::speculate_update<BlockSize>
+      <<<1, 64, ctx->xpu_stream>>>(seq_lens_encoder,
                                    seq_lens_decoder,
                                    not_need_stop,
                                    reinterpret_cast<XPU_TI *>(draft_tokens),
@@ -153,20 +154,20 @@ static int xpu3_wrapper(Context *ctx,
 }
 
 int speculate_update(Context *ctx,
-                       int *seq_lens_encoder,          // 输入 [B_max, ]
-                       int *seq_lens_decoder,          // 输出 [B_max, ]
-                       bool *not_need_stop,            // [1,]
-                       int64_t *draft_tokens,          // [B_max, T_max]
-                       int *actual_draft_token_nums,   // [B_max, ]
-                       const int64_t *accept_tokens,   // [B_max, T_max]
-                       const int *accept_num,          // [B_max, ]
-                       const bool *stop_flags,         // [B_max, ]
-                       const int *seq_lens_this_time,  // [B_real,]
-                       const bool *is_block_step,      // [B_max, ]
-                       int *mask_rollback,       // [1,]
-                       const int real_bsz,
-                       const int max_bsz,
-                       const int max_draft_tokens) {
+                     int *seq_lens_encoder,          // 输入 [B_max, ]
+                     int *seq_lens_decoder,          // 输出 [B_max, ]
+                     bool *not_need_stop,            // [1,]
+                     int64_t *draft_tokens,          // [B_max, T_max]
+                     int *actual_draft_token_nums,   // [B_max, ]
+                     const int64_t *accept_tokens,   // [B_max, T_max]
+                     const int *accept_num,          // [B_max, ]
+                     const bool *stop_flags,         // [B_max, ]
+                     const int *seq_lens_this_time,  // [B_real,]
+                     const bool *is_block_step,      // [B_max, ]
+                     int *mask_rollback,             // [1,]
+                     const int real_bsz,
+                     const int max_bsz,
+                     const int max_draft_tokens) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_update_v3", int);
   WRAPPER_DUMP_PARAM4(
