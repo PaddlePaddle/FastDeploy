@@ -39,6 +39,7 @@ def make_fd_config(
     splitwise_role="prefill",
     use_sequence_parallel_moe=False,
     load_choices="default_v0",
+    is_pre_sharded=False,
 ):
     return SimpleNamespace(
         model_config=SimpleNamespace(
@@ -59,7 +60,11 @@ def make_fd_config(
             use_sequence_parallel_moe=use_sequence_parallel_moe,
         ),
         scheduler_config=SimpleNamespace(splitwise_role=splitwise_role, max_num_seqs=1),
-        load_config=SimpleNamespace(dynamic_load_weight=False, load_choices=load_choices),
+        load_config=SimpleNamespace(
+            dynamic_load_weight=False,
+            load_choices=load_choices,
+            is_pre_sharded=is_pre_sharded,
+        ),
         quant_config=None,
     )
 
@@ -283,6 +288,7 @@ def test_qkv_paths():
         num_kv_head_replicas=2,
         tp_size=2,
         local_rank=0,
+        fd_config=cfg_tp2,
     )
     param_fused = TinyParam(paddle.zeros([4, 8], dtype="float32"), initialized=True)
     param_fused.output_dim = True
