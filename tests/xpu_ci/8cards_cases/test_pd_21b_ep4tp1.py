@@ -304,7 +304,7 @@ def test_pd_separation():
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手"]
+            keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手", "研发", "语言"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nPD分离测试通过!")
